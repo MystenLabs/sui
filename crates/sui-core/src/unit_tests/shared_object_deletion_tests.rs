@@ -53,7 +53,7 @@ impl TestRunner {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_shared_object_deletion(true);
+        protocol_config.set_shared_object_deletion_for_testing(true);
         let authority_state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()
@@ -112,7 +112,7 @@ impl TestRunner {
 
     pub fn get_object_latest_version(&mut self, obj_id: ObjectID) -> SequenceNumber {
         self.authority_state
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(obj_id)
             .unwrap()
             .unwrap()
@@ -559,7 +559,7 @@ impl TestRunner {
         epoch: EpochId,
     ) -> Option<TransactionDigest> {
         self.authority_state
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_deleted_shared_object_previous_tx_digest(object_id, *version, epoch)
             .unwrap()
     }

@@ -56,7 +56,7 @@ title: Module `0x3::validator_wrapper`
 
 
 
-<pre><code><b>const</b> <a href="validator_wrapper.md#0x3_validator_wrapper_EInvalidVersion">EInvalidVersion</a>: u64 = 0;
+<pre><code><b>const</b> <a href="validator_wrapper.md#0x3_validator_wrapper_EInvalidVersion">EInvalidVersion</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -173,7 +173,7 @@ Destroy the wrapper and retrieve the inner validator object.
 
 
 
-<pre><code><b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_version">version</a>(self: &<a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>): u64
+<pre><code><b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_version">version</a>(self: &<a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -182,7 +182,7 @@ Destroy the wrapper and retrieve the inner validator object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_version">version</a>(self: &<a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): u64 {
+<pre><code><b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_version">version</a>(self: &<a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner)
 }
 </code></pre>

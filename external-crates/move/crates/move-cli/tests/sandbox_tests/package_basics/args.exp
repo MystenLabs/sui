@@ -5,12 +5,12 @@ Command `test --coverage --threads 1`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModule::double_three
-[ PASS    ] 0x1::AModule::double_two
-[ PASS    ] 0x1::AModuleTests::double_one_one
-[ PASS    ] 0x1::AModuleTests::double_three
-[ PASS    ] 0x1::AModuleTests::double_zero_zero
-[ PASS    ] 0x1::AModuleTests::double_zero_zero_wrong
+[ PASS    ] std::AModule::double_three
+[ PASS    ] std::AModule::double_two
+[ PASS    ] std::AModuleTests::double_one_one
+[ PASS    ] std::AModuleTests::double_three
+[ PASS    ] std::AModuleTests::double_zero_zero
+[ PASS    ] std::AModuleTests::double_zero_zero_wrong
 Test result: OK. Total tests: 6; passed: 6; failed: 0
 Command `coverage summary --summarize-functions`:
 +-------------------------+
@@ -52,6 +52,8 @@ Command `coverage bytecode --module AModule`:
 module 1.AModule {
 
 
+
+
 public double_except_three(x#0#0: u64): u64 {
 B0:
 [6]	0: CopyLoc[0](x#0#0: u64)
@@ -61,22 +63,25 @@ B0:
 B1:
 [4]	4: Branch(7)
 B2:
-[2]	5: LdConst[0](U64: 00000000..)
+[2]	5: LdConst[0](u64: 0)
 [2]	6: Abort
 B3:
 [4]	7: CopyLoc[0](x#0#0: u64)
 [4]	8: MoveLoc[0](x#0#0: u64)
 [4]	9: Mul
 [4]	10: Ret
+
 }
 
 Constants [
-	0 => u64: 0000000000000000
+	0 => u64: 0
 ]
 }
 Command `disassemble --package MoveStdlib --name signer`:
 // Move bytecode v6
 module 1.signer {
+
+
 
 
 native public borrow_address(s#0#0: &signer): &address
@@ -86,9 +91,9 @@ B0:
 	1: Call borrow_address(&signer): &address
 	2: ReadRef
 	3: Ret
+
 }
 }
-Command `errmap`:
 Command `info`:
 PackageBasics
 ├── std:0x1
@@ -99,11 +104,11 @@ Command `test double_two`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModule::double_two
+[ PASS    ] std::AModule::double_two
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 Command `test one_one`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING PackageBasics
 Running Move unit tests
-[ PASS    ] 0x1::AModuleTests::double_one_one
+[ PASS    ] std::AModuleTests::double_one_one
 Test result: OK. Total tests: 1; passed: 1; failed: 0

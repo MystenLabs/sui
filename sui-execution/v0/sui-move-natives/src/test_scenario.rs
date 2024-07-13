@@ -732,5 +732,6 @@ fn visit_structs_impl<FVisitTypes>(
                 visit_structs_impl(v, visit_with_types, next_depth)
             }
         }
+        MoveValue::Variant(_) => unreachable!("Enums not supported in v0"),
     }
 }

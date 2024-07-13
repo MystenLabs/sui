@@ -11,7 +11,7 @@ Transactions that access one or more shared objects require consensus to sequenc
 
 Transactions that access multiple shared objects, or particularly popular objects, might have increases in latency due to contention. However, the advantage of using shared objects lies in the flexibility of allowing multiple addresses to access the same object in a coordinated manner.
 
-To summarize, applications that are extremely sensitive to latency or gas costs, that do not need to handle complex multi-party transactions, or that already require an off-chain service could benefit from a design that only uses owned objects. Applications that require coordination between multiple parties will likely benefit from using shared objects.
+To summarize, applications that are extremely sensitive to latency or gas costs, that do not need to handle complex multi-party transactions, or that already require an off-chain service could benefit from a design that only uses owned objects. Applications that require coordination between multiple parties typically benefit from using shared objects.
 
 For more information on the types of objects that Sui supports, see [Object Ownership](/concepts/object-ownership.mdx).
 
@@ -20,6 +20,7 @@ For more information on the types of objects that Sui supports, see [Object Owne
 The Escrow example demonstrates the trade-offs between shared objects and owned objects by implementing the same application in both styles. It implements a service that allows two addresses to perform a trustless swap of objects with each other (a "trade") with the service holding their objects in escrow.
 
 ### `Locked<T>` and `Key`
+
 [Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/lock.move)
 
 Both implementations use a primitive for locking values, which offers the following interface:
@@ -37,7 +38,12 @@ The important property that this interface provides is that locked values cannot
 
 ### Owned objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/owned.move)
+<details>
+<summary>
+Toggle code sample
+</summary>
+{@inject: examples/trading/contracts/escrow/sources/owned.move}
+</details>
 
 The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. 
 
@@ -67,27 +73,7 @@ flowchart LR
 
 A third party acts as custodian. The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
 
-```move
-public fun create<T: key + store>(
-    key: Key,
-    locked: Locked<T>,
-    exchange_key: ID,
-    recipient: address,
-    custodian: address,
-    ctx: &mut TxContext,
-) {
-    let escrow = Escrow {
-        id: object::new(ctx),
-        sender: tx_context::sender(ctx),
-        recipient,
-        exchange_key,
-        escrowed_key: object::id(&key),
-        escrowed: lock::unlock(locked, key),
-    };
-
-    transfer::transfer(escrow, custodian);
-}
-```
+{@inject: examples/trading/contracts/escrow/sources/owned.move#fun=create noComments}
 
 ```mermaid
 flowchart TB
@@ -133,53 +119,18 @@ flowchart TB
     Third_Party--fa:fa-coins B-->Seller
 ```
 
-
-```move
-public fun swap<T: key + store, U: key + store>(
-    obj1: Escrow<T>,
-    obj2: Escrow<U>,
-) {
-    let Escrow {
-        id: id1,
-        sender: sender1,
-        recipient: recipient1,
-        exchange_key: exchange_key1,
-        escrowed_key: escrowed_key1,
-        escrowed: escrowed1,
-    } = obj1;
-
-    let Escrow {
-        id: id2,
-        sender: sender2,
-        recipient: recipient2,
-        exchange_key: exchange_key2,
-        escrowed_key: escrowed_key2,
-        escrowed: escrowed2,
-    } = obj2;
-
-    object::delete(id1);
-    object::delete(id2);
-
-    // Make sure the sender and recipient match each other
-    assert!(sender1 == recipient2, EMismatchedSenderRecipient);
-    assert!(sender2 == recipient1, EMismatchedSenderRecipient);
-
-    // Make sure the objects match each other and haven't been modified
-    // (they remain locked).
-    assert!(escrowed_key1 == exchange_key2, EMismatchedExchangeObject);
-    assert!(escrowed_key2 == exchange_key1, EMismatchedExchangeObject);
-
-    // Do the actual swap
-    transfer::public_transfer(escrowed1, recipient1);
-    transfer::public_transfer(escrowed2, recipient2);
-}
-```
+{@inject: examples/trading/contracts/escrow/sources/owned.move#fun=swap}
 
 The `swap` function checks that senders and recipients match and that each party wants the object that the other party is offering, by comparing their respective key IDs.  If the custodian tried to match together two unrelated escrow requests to swap, the transaction would not succeed.
 
 ### Shared objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/shared.move)
+<details>
+<summary>
+Toggle code sample
+</summary>
+{@inject: examples/trading/contracts/escrow/sources/shared.move}
+</details>
 
 The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they want to swap. 
 ```mermaid
@@ -209,24 +160,7 @@ flowchart TB
     end
 ```
 
-```move
-public fun create<T: key + store>(
-    escrowed: T,
-    exchange_key: ID,
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    let escrow = Escrow {
-        id: object::new(ctx),
-        sender: tx_context::sender(ctx),
-        recipient,
-        exchange_key,
-        escrowed,
-    };
-
-    transfer::public_share_object(escrow);
-}
-```
+{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=create noComments}
 
 This time the `create` request accepts the object being escrowed directly (not locked), and creates a shared `Escrow` object.  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
 
@@ -243,32 +177,8 @@ flowchart TB
     swap--fa:fa-coins B-->Seller
 ```
 
+{@inject: examples/trading/contracts/escrow/sources/shared.move#fun=swap}
 
-```move
-public fun swap<T: key + store, U: key + store>(
-    escrow: Escrow<T>,
-    key: Key,
-    locked: Locked<U>,
-    ctx: &TxContext,
-): T {
-    let Escrow {
-        id,
-        sender,
-        recipient,
-        exchange_key,
-        escrowed,
-    } = escrow;
-
-    assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
-    assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
-
-    // Do the actual swap
-    transfer::public_transfer(lock::unlock(locked, key), sender);
-    object::delete(id);
-
-    escrowed
-}
-```
 
 Even though the `Escrow` object is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
 

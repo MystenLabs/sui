@@ -13,7 +13,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    effects::{ChangeSet, Event},
+    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
@@ -22,13 +22,13 @@ use move_core_types::{
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedTypeIndex, CachedDatatype, Type},
 };
 use std::{borrow::Borrow, sync::Arc};
 
 pub struct Session<'r, 'l, S> {
     pub(crate) runtime: &'l VMRuntime,
-    pub(crate) data_cache: TransactionDataCache<'l, S>,
+    pub(crate) data_cache: TransactionDataCache<S>,
     pub(crate) native_extensions: NativeContextExtensions<'r>,
 }
 
@@ -164,16 +164,12 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .publish_module_bundle(modules, sender, &mut self.data_cache, gas_meter)
     }
 
-    pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
-        self.data_cache.num_mutated_accounts(sender)
-    }
-
     /// Finish up the session and produce the side effects.
     ///
     /// This function should always succeed with no user errors returned, barring invariant violations.
     ///
     /// This MUST NOT be called if there is a previous invocation that failed with an invariant violation.
-    pub fn finish(self) -> (VMResult<(ChangeSet, Vec<Event>)>, S) {
+    pub fn finish(self) -> (VMResult<ChangeSet>, S) {
         let (res, remote) = self.data_cache.into_effects();
         (res.map_err(|e| e.finish(Location::Undefined)), remote)
     }
@@ -186,7 +182,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     pub fn finish_with_extensions(
         self,
     ) -> (
-        VMResult<(ChangeSet, Vec<Event>, NativeContextExtensions<'r>)>,
+        VMResult<(ChangeSet, NativeContextExtensions<'r>)>,
         S,
     ) {
         let Session {
@@ -196,7 +192,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         } = self;
         let (res, remote) = data_cache.into_effects();
         (
-            res.map(|(change_set, events)| (change_set, events, native_extensions))
+            res.map(|change_set| (change_set, native_extensions))
                 .map_err(|e| e.finish(Location::Undefined)),
             remote,
         )
@@ -225,7 +221,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.runtime
             .loader()
             .load_struct_by_name(struct_name, module_id, &self.data_cache)
@@ -273,7 +269,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
 
     /// Fetch a struct type from cache, if the index is in bounds
     /// Helpful when paired with load_type, or any other API that returns 'Type'
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
+    pub fn get_struct_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.runtime.loader().get_struct_type(index)
     }
 

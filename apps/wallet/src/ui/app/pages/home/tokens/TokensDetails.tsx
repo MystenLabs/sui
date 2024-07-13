@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
@@ -36,12 +37,11 @@ import {
 	useCoinMetadata,
 	useFormatCoin,
 	useGetDelegatedStake,
-	useResolveSuiNSName,
 } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
-import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { formatAddress, parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type CoinBalance as CoinBalanceType } from '@mysten/sui/client';
+import { formatAddress, parseStructTag, SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -152,6 +152,7 @@ export function TokenRow({
 									ampli.selectedCoin({
 										coinType: coinBalance.coinType,
 										totalBalance: Number(formatted),
+										sourceFlow: 'TokenDetails',
 									})
 								}
 							>
@@ -312,7 +313,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
+	const domainName = useResolveSuiNSName(activeAccountAddress);
+
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
@@ -486,7 +488,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												coinBalance?.coinType
 													? `?${new URLSearchParams({
 															type: coinBalance.coinType,
-													  }).toString()}`
+														}).toString()}`
 													: ''
 											}`}
 											disabled={!tokenBalance}
@@ -501,7 +503,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												coinBalance?.coinType
 													? `?${new URLSearchParams({
 															type: coinBalance.coinType,
-													  }).toString()}`
+														}).toString()}`
 													: ''
 											}`}
 											onClick={() => {

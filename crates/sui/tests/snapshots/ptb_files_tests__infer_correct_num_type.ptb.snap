@@ -1,0 +1,70 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                             │
+├───────────────┬─────────────────────────────────────────────────────────────────────────────────────────┤
+│ command       │ values                                                                                  │
+├───────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│ make-move-vec │ <u8> [1, 2, 3, 4]                                                                       │
+│ make-move-vec │ <u16> [1, 2, 3, 4]                                                                      │
+│ make-move-vec │ <u32> [1, 2, 3, 4]                                                                      │
+│ make-move-vec │ <u64> [1, 2, 3, 4]                                                                      │
+│ make-move-vec │ <u128> [1, 2, 3, 4]                                                                     │
+│ make-move-vec │ <u256> [1, 2, 3, 4]                                                                     │
+│ make-move-vec │ <vector<u8>> [vector[1, 2, 3, 4]]                                                       │
+│ make-move-vec │ <vector<u16>> [vector[1, 2, 3, 4]]                                                      │
+│ make-move-vec │ <vector<u32>> [vector[1, 2, 3, 4]]                                                      │
+│ make-move-vec │ <vector<u64>> [vector[1, 2, 3, 4]]                                                      │
+│ make-move-vec │ <vector<u128>> [vector[1, 2, 3, 4]]                                                     │
+│ make-move-vec │ <vector<u256>> [vector[1, 2, 3, 4]]                                                     │
+│ make-move-vec │ <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1, 2, 3, 4]))] │
+│ gas-budget    │ 100000000                                                                               │
+╰───────────────┴─────────────────────────────────────────────────────────────────────────────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([1])
+Input 1: Pure([2])
+Input 2: Pure([3])
+Input 3: Pure([4])
+Input 4: Pure([1, 0])
+Input 5: Pure([2, 0])
+Input 6: Pure([3, 0])
+Input 7: Pure([4, 0])
+Input 8: Pure([1, 0, 0, 0])
+Input 9: Pure([2, 0, 0, 0])
+Input 10: Pure([3, 0, 0, 0])
+Input 11: Pure([4, 0, 0, 0])
+Input 12: Pure([1, 0, 0, 0, 0, 0, 0, 0])
+Input 13: Pure([2, 0, 0, 0, 0, 0, 0, 0])
+Input 14: Pure([3, 0, 0, 0, 0, 0, 0, 0])
+Input 15: Pure([4, 0, 0, 0, 0, 0, 0, 0])
+Input 16: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 17: Pure([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 18: Pure([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 19: Pure([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 20: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 21: Pure([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 22: Pure([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 23: Pure([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 24: Pure([4, 1, 2, 3, 4])
+Input 25: Pure([4, 1, 0, 2, 0, 3, 0, 4, 0])
+Input 26: Pure([4, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0])
+Input 27: Pure([4, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0])
+Input 28: Pure([4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 29: Pure([4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Input 30: Pure([1, 1, 4, 1, 2, 3, 4])
+Command 0: MakeMoveVec(Someu8,[Input(0),Input(1),Input(2),Input(3)])
+Command 1: MakeMoveVec(Someu16,[Input(4),Input(5),Input(6),Input(7)])
+Command 2: MakeMoveVec(Someu32,[Input(8),Input(9),Input(10),Input(11)])
+Command 3: MakeMoveVec(Someu64,[Input(12),Input(13),Input(14),Input(15)])
+Command 4: MakeMoveVec(Someu128,[Input(16),Input(17),Input(18),Input(19)])
+Command 5: MakeMoveVec(Someu256,[Input(20),Input(21),Input(22),Input(23)])
+Command 6: MakeMoveVec(Somevector<u8>,[Input(24)])
+Command 7: MakeMoveVec(Somevector<u16>,[Input(25)])
+Command 8: MakeMoveVec(Somevector<u32>,[Input(26)])
+Command 9: MakeMoveVec(Somevector<u64>,[Input(27)])
+Command 10: MakeMoveVec(Somevector<u128>,[Input(28)])
+Command 11: MakeMoveVec(Somevector<u256>,[Input(29)])
+Command 12: MakeMoveVec(Some0x1::option::Option<0x1::option::Option<vector<u8>>>,[Input(30)])

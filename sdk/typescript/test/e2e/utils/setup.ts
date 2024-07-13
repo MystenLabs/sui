@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { mkdtemp } from 'fs/promises';
+import { tmpdir } from 'os';
+import path, { resolve } from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -16,7 +19,7 @@ import {
 	requestSuiFromFaucetV0,
 } from '../../../src/faucet/index.js';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
-import { TransactionBlock, UpgradePolicy } from '../../../src/transactions/index.js';
+import { Transaction, UpgradePolicy } from '../../../src/transactions/index.js';
 import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
@@ -31,13 +34,47 @@ export const DEFAULT_RECIPIENT_2 =
 export const DEFAULT_GAS_BUDGET = 10000000;
 export const DEFAULT_SEND_AMOUNT = 1000;
 
+class TestPackageRegistry {
+	static registries: Map<string, TestPackageRegistry> = new Map();
+
+	static forUrl(url: string) {
+		if (!this.registries.has(url)) {
+			this.registries.set(url, new TestPackageRegistry());
+		}
+		return this.registries.get(url)!;
+	}
+
+	#packages: Map<string, string>;
+
+	constructor() {
+		this.#packages = new Map();
+	}
+
+	async getPackage(path: string, toolbox?: TestToolbox) {
+		if (!this.#packages.has(path)) {
+			this.#packages.set(path, (await publishPackage(path, toolbox)).packageId);
+		}
+
+		return this.#packages.get(path)!;
+	}
+}
+
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	registry: TestPackageRegistry;
+	configPath: string;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, url: string = DEFAULT_FULLNODE_URL, configPath: string) {
 		this.keypair = keypair;
-		this.client = client;
+		this.client = new SuiClient({
+			transport: new SuiHTTPTransport({
+				url,
+				WebSocketConstructor: WebSocket as never,
+			}),
+		});
+		this.registry = TestPackageRegistry.forUrl(url);
+		this.configPath = configPath;
 	}
 
 	address() {
@@ -54,6 +91,20 @@ export class TestToolbox {
 	public async getActiveValidators() {
 		return (await this.client.getLatestSuiSystemState()).activeValidators;
 	}
+
+	public async getPackage(path: string) {
+		return this.registry.getPackage(path, this);
+	}
+
+	async mintNft(name: string = 'Test NFT') {
+		const packageId = await this.getPackage(resolve(__dirname, '../data/demo-bear'));
+		return (tx: Transaction) => {
+			return tx.moveCall({
+				target: `${packageId}::demo_bear::new`,
+				arguments: [tx.pure.string(name)],
+			});
+		};
+	}
 }
 
 export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
@@ -68,12 +119,16 @@ export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address, options);
+	const tmpDirPath = path.join(tmpdir(), 'config-');
+	const tmpDir = await mkdtemp(tmpDirPath);
+	const configPath = path.join(tmpDir, 'client.yaml');
+	return setupWithFundedAddress(keypair, address, configPath, options);
 }
 
 export async function setupWithFundedAddress(
 	keypair: Ed25519Keypair,
 	address: string,
+	configPath: string,
 	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
 ) {
 	const client = getClient(rpcURL);
@@ -95,12 +150,14 @@ export async function setupWithFundedAddress(
 			}
 		},
 		{
-			backoff: () => 1000,
-			timeout: 30 * 1000,
+			backoff: () => 3000,
+			timeout: 60 * 1000,
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, client);
+
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
+	return new TestToolbox(keypair, rpcURL, configPath);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
@@ -120,31 +177,30 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			{ encoding: 'utf-8' },
 		),
 	);
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const cap = tx.publish({
 		modules,
 		dependencies,
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], tx.pure.address(await toolbox.address()));
 
-	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const { digest } = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
-		options: {
-			showEffects: true,
-			showObjectChanges: true,
-		},
 	});
 
-	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+	const publishTxn = await toolbox.client.waitForTransaction({
+		digest: digest,
+		options: { showObjectChanges: true, showEffects: true },
+	});
 
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
 		(a) => a.type === 'published',
-	) as SuiObjectChangePublished[]) ?? [])[0].packageId.replace(/^(0x)(0+)/, '0x') as string;
+	) as SuiObjectChangePublished[]) ?? [])[0]?.packageId.replace(/^(0x)(0+)/, '0x') as string;
 
 	expect(packageId).toBeTypeOf('string');
 
@@ -176,18 +232,18 @@ export async function upgradePackage(
 		),
 	);
 
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
 		target: '0x2::package::authorize_upgrade',
-		arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
 	});
 
 	const receipt = tx.upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	});
 
@@ -196,8 +252,8 @@ export async function upgradePackage(
 		arguments: [cap, receipt],
 	});
 
-	const result = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const result = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
 		options: {
 			showEffects: true,
@@ -225,7 +281,7 @@ export async function paySui(
 	amounts?: number[],
 	coinId?: string,
 ) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	recipients = recipients ?? getRandomAddresses(numRecipients);
 	amounts = amounts ?? Array(numRecipients).fill(DEFAULT_SEND_AMOUNT);
@@ -242,17 +298,21 @@ export async function paySui(
 		).data[0].coinObjectId;
 
 	recipients.forEach((recipient, i) => {
-		const coin = tx.splitCoins(coinId!, [tx.pure(amounts![i])]);
-		tx.transferObjects([coin], tx.pure(recipient));
+		const coin = tx.splitCoins(coinId!, [amounts![i]]);
+		tx.transferObjects([coin], tx.pure.address(recipient));
 	});
 
-	const txn = await client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const txn = await client.signAndExecuteTransaction({
+		transaction: tx,
 		signer,
 		options: {
 			showEffects: true,
 			showObjectChanges: true,
 		},
+	});
+
+	await client.waitForTransaction({
+		digest: txn.digest,
 	});
 	expect(txn.effects?.status.status).toEqual('success');
 	return txn;

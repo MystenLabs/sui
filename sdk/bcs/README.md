@@ -147,10 +147,15 @@ const struct = MyStruct.serialize({ id: 1, name: 'name' }).toBytes();
 const tuple = bcs.tuple([bcs.u8(), bcs.string()]).serialize([1, 'name']).toBytes();
 
 // Map
-const map = bcs.map(bcs.u8(), bcs.string()).serialize(.toBytes()[
-	[1, 'one'],
-	[2, 'two'],
-]);
+const map = bcs
+	.map(bcs.u8(), bcs.string())
+	.serialize(
+		new Map([
+			[1, 'one'],
+			[2, 'two'],
+		]),
+	)
+	.toBytes();
 
 // Parsing data back into original types
 
@@ -253,7 +258,7 @@ when calling `serialize`. The `output` type can generally be inferred from the d
 input type will need to be provided explicitly. In some cases, for complex transforms, you'll need
 to manually type the return
 
-transforms can also handle more complex types. For instance, `@mysten/sui.js` uses the following
+transforms can also handle more complex types. For instance, `@mysten/sui` uses the following
 definition to transform enums into a more TypeScript friends format:
 
 ```ts

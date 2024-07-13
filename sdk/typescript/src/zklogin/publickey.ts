@@ -6,7 +6,6 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { PublicKey } from '../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
-import type { SerializedSignature } from '../cryptography/signature.js';
 import { SuiGraphQLClient } from '../graphql/client.js';
 import { graphql } from '../graphql/schemas/2024.4/index.js';
 import { extractClaimValue } from './jwt-utils.js';
@@ -69,13 +68,11 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided PersonalMessage
 	 */
-	verifyPersonalMessage(
-		message: Uint8Array,
-		signature: Uint8Array | SerializedSignature,
-	): Promise<boolean> {
+	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
+		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
 		return graphqlVerifyZkLoginSignature({
-			address: parsedSignature.zkLogin!.address,
+			address: address,
 			bytes: toB64(message),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'PERSONAL_MESSAGE',
@@ -84,16 +81,14 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	}
 
 	/**
-	 * Verifies that the signature is valid for for the provided TransactionBlock
+	 * Verifies that the signature is valid for for the provided Transaction
 	 */
-	verifyTransactionBlock(
-		transactionBlock: Uint8Array,
-		signature: Uint8Array | SerializedSignature,
-	): Promise<boolean> {
+	verifyTransaction(transaction: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
+		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
 		return graphqlVerifyZkLoginSignature({
-			address: parsedSignature.zkLogin!.address,
-			bytes: toB64(transactionBlock),
+			address: address,
+			bytes: toB64(transaction),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'TRANSACTION_DATA',
 			client: this.#client,
@@ -167,7 +162,7 @@ async function graphqlVerifyZkLoginSignature({
 	);
 }
 
-export function parseSerializedZkLoginSignature(signature: Uint8Array | SerializedSignature) {
+export function parseSerializedZkLoginSignature(signature: Uint8Array | string) {
 	const bytes = typeof signature === 'string' ? fromB64(signature) : signature;
 
 	if (bytes[0] !== SIGNATURE_SCHEME_TO_FLAG.ZkLogin) {
@@ -179,7 +174,6 @@ export function parseSerializedZkLoginSignature(signature: Uint8Array | Serializ
 	const { issBase64Details, addressSeed } = inputs;
 	const iss = extractClaimValue<string>(issBase64Details, 'iss');
 	const publicIdentifer = toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
-	const address = publicIdentifer.toSuiAddress();
 	return {
 		serializedSignature: toB64(bytes),
 		signatureScheme: 'ZkLogin' as const,
@@ -188,7 +182,6 @@ export function parseSerializedZkLoginSignature(signature: Uint8Array | Serializ
 			maxEpoch,
 			userSignature,
 			iss,
-			address,
 			addressSeed: BigInt(addressSeed),
 		},
 		signature: bytes,

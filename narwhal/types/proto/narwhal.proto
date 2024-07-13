@@ -6,7 +6,7 @@ syntax = "proto3";
 package narwhal;
 
 message Transaction {
-    bytes transaction = 1;
+    repeated bytes transactions = 1;
 }
 
 // Empty message for when we don't have anything to return

@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/matching/incr_in_container.move:6:17
-  │
-6 │     public enum AB<T> has drop {
-  │                 ^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

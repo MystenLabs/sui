@@ -20,20 +20,22 @@ use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
-use sui_core::execution_cache::ExecutionCacheMetrics;
-use sui_core::execution_cache::NotifyReadWrapper;
+use sui_core::execution_cache::build_execution_cache;
+use sui_core::state_accumulator::StateAccumulatorMetrics;
+use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
-use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
+use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -66,6 +68,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
+use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -84,9 +87,9 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::execution_cache::{ExecutionCache, ExecutionCacheReconfigAPI};
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
+use sui_core::rest_index::RestIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -109,7 +112,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
-use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_snapshot::uploader::StateSnapshotUploader;
 use sui_storage::{
     http_key_value_store::HttpKVStore,
@@ -122,12 +125,13 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction,
+    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction,
 };
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
@@ -224,7 +228,7 @@ pub struct SuiNode {
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    accumulator: Arc<StateAccumulator>,
+    accumulator: Mutex<Option<Arc<StateAccumulator>>>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
@@ -428,7 +432,7 @@ impl SuiNode {
         DBMetrics::init(&prometheus_registry);
         mysten_metrics::init_metrics(&prometheus_registry);
 
-        let genesis = config.genesis()?;
+        let genesis = config.genesis()?.clone();
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let genesis_committee = genesis.committee()?;
@@ -446,18 +450,9 @@ impl SuiNode {
         let is_genesis = perpetual_tables
             .database_is_empty()
             .expect("Database read should not fail at init.");
-        let store = AuthorityStore::open(
-            perpetual_tables,
-            genesis,
-            config.indirect_objects_threshold,
-            config
-                .expensive_safety_check_config
-                .enable_epoch_sui_conservation_check(),
-            &prometheus_registry,
-        )
-        .await?;
-        let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(&prometheus_registry));
-        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), execution_cache_metrics));
+
+        let store =
+            AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -469,6 +464,9 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
+        let cache_traits =
+            build_execution_cache(&epoch_start_configuration, &prometheus_registry, &store);
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -477,12 +475,15 @@ impl SuiNode {
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
-            execution_cache.clone(),
+            cache_traits.backing_package_store.clone(),
+            cache_traits.object_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
         );
+
+        info!("created epoch store");
 
         replay_log!(
             "Beginning replay run. Epoch: {:?}, Protocol config: {:?}",
@@ -492,11 +493,13 @@ impl SuiNode {
 
         // the database is empty at genesis time
         if is_genesis {
+            info!("checking SUI conservation at genesis");
             // When we are opening the db table, the only time when it's safe to
             // check SUI conservation is at genesis. Otherwise we may be in the middle of
             // an epoch and the SUI conservation check will fail. This also initialize
             // the expected_network_sui_amount table.
-            execution_cache
+            cache_traits
+                .reconfig_api
                 .expensive_check_sui_conservation(&epoch_store)
                 .expect("SUI conservation check cannot fail at genesis");
         }
@@ -513,6 +516,8 @@ impl SuiNode {
             );
         }
 
+        info!("creating checkpoint store");
+
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -520,19 +525,37 @@ impl SuiNode {
             &epoch_store,
         );
 
+        info!("creating state sync store");
         let state_sync_store = RocksDbStore::new(
-            execution_cache.clone(),
+            cache_traits.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
         );
 
         let index_store = if is_full_node && config.enable_index_processing {
+            info!("creating index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
                 &prometheus_registry,
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                config.remove_deprecated_tables,
+            )))
+        } else {
+            None
+        };
+
+        let rest_index = if is_full_node
+            && config.enable_experimental_rest_api
+            && config.enable_index_processing
+        {
+            Some(Arc::new(RestIndexStore::new(
+                config.db_path().join("rest_index"),
+                &store,
+                &checkpoint_store,
+                &epoch_store,
+                &cache_traits.backing_package_store,
             )))
         } else {
             None
@@ -542,6 +565,7 @@ impl SuiNode {
         // It's ok if the value is already set due to data races.
         let _ = CHAIN_IDENTIFIER.set(chain_identifier);
 
+        info!("creating archive reader");
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
@@ -576,40 +600,46 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
+        info!("start state archival");
         // Start archiving local state to remote store
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
                 .await?;
 
+        info!("start snapshot upload");
         // Start uploading state snapshot to remote store
         let state_snapshot_handle =
             Self::start_state_snapshot(&config, &prometheus_registry, checkpoint_store.clone())?;
 
         // Start uploading db checkpoints to remote store
+        info!("start db checkpoint");
         let (db_checkpoint_config, db_checkpoint_handle) = Self::start_db_checkpoint(
             &config,
             &prometheus_registry,
             state_snapshot_handle.is_some(),
         )?;
 
-        let mut pruning_config = config.authority_store_pruning_config;
         if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
             // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
-            pruning_config.set_killswitch_tombstone_pruning(true);
+            config
+                .authority_store_pruning_config
+                .set_killswitch_tombstone_pruning(true);
         }
 
+        info!("create authority state");
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
-            execution_cache.clone(),
+            cache_traits.clone(),
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
+            rest_index,
             checkpoint_store.clone(),
             &prometheus_registry,
             genesis.objects(),
@@ -667,7 +697,7 @@ impl SuiNode {
                     end_of_epoch_receiver,
                     &config.db_path(),
                     &prometheus_registry,
-                )?,
+                ),
             ))
         } else {
             None
@@ -684,7 +714,11 @@ impl SuiNode {
         )
         .await?;
 
-        let accumulator = Arc::new(StateAccumulator::new(execution_cache));
+        let accumulator = Arc::new(StateAccumulator::new(
+            cache_traits.accumulator_store.clone(),
+            &epoch_store,
+            StateAccumulatorMetrics::new(&prometheus_registry),
+        ));
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
@@ -720,7 +754,7 @@ impl SuiNode {
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
                 randomness_handle.clone(),
-                accumulator.clone(),
+                Arc::downgrade(&accumulator),
                 connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
@@ -750,7 +784,7 @@ impl SuiNode {
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
-            accumulator,
+            accumulator: Mutex::new(Some(accumulator)),
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
@@ -924,7 +958,7 @@ impl SuiNode {
                         .prune_and_compact_before_upload
                         .unwrap_or(true),
                     config.indirect_objects_threshold,
-                    config.authority_store_pruning_config,
+                    config.authority_store_pruning_config.clone(),
                     prometheus_registry,
                     state_snapshot_enabled,
                 )?;
@@ -1082,7 +1116,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1172,7 +1206,7 @@ impl SuiNode {
         randomness_handle: randomness::Handle,
         consensus_manager: ConsensusManager,
         consensus_epoch_data_remover: EpochDataRemover,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -1200,13 +1234,15 @@ impl SuiNode {
         if epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
-                consensus_adapter.clone(),
+                Box::new(consensus_adapter.clone()),
                 randomness_handle,
                 config.protocol_key_pair(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
-                epoch_store.set_randomness_manager(randomness_manager)?;
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await?;
             }
         }
 
@@ -1276,7 +1312,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        accumulator: Arc<StateAccumulator>,
+        accumulator: Weak<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> (Arc<CheckpointService>, watch::Sender<()>) {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
@@ -1303,12 +1339,11 @@ impl SuiNode {
         let max_checkpoint_size_bytes =
             epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
 
-        let notify_read: NotifyReadWrapper<_> = state.get_effects_notify_read().clone();
         CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store,
-            Arc::new(notify_read),
+            state.get_transaction_cache_reader().clone(),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1427,17 +1462,23 @@ impl SuiNode {
     /// This function awaits the completion of checkpoint execution of the current epoch,
     /// after which it iniitiates reconfiguration of the entire system.
     pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
-        let mut checkpoint_executor = CheckpointExecutor::new(
-            self.state_sync_handle.subscribe_to_synced_checkpoints(),
-            self.checkpoint_store.clone(),
-            self.state.clone(),
-            self.accumulator.clone(),
-            self.config.checkpoint_executor_config.clone(),
-            &self.registry_service.default_registry(),
-        );
+        let checkpoint_executor_metrics =
+            CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
-        let run_with_range = self.config.run_with_range;
         loop {
+            let mut accumulator_guard = self.accumulator.lock().await;
+            let accumulator = accumulator_guard.take().unwrap();
+            let mut checkpoint_executor = CheckpointExecutor::new(
+                self.state_sync_handle.subscribe_to_synced_checkpoints(),
+                self.checkpoint_store.clone(),
+                self.state.clone(),
+                accumulator.clone(),
+                self.config.checkpoint_executor_config.clone(),
+                checkpoint_executor_metrics.clone(),
+            );
+
+            let run_with_range = self.config.run_with_range;
+
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
             // Advertise capabilities to committee, if we are a validator.
@@ -1447,8 +1488,8 @@ impl SuiNode {
 
                 let config = cur_epoch_store.protocol_config();
                 let binary_config = to_binary_config(config);
-                let transaction =
-                    ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
+                let transaction = ConsensusTransaction::new_capability_notification(
+                    AuthorityCapabilitiesV1::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
@@ -1456,7 +1497,8 @@ impl SuiNode {
                         self.state
                             .get_available_system_packages(&binary_config)
                             .await,
-                    ));
+                    ),
+                );
                 info!(?transaction, "submitting capabilities to consensus");
                 components
                     .consensus_adapter
@@ -1466,6 +1508,7 @@ impl SuiNode {
             let stop_condition = checkpoint_executor
                 .run_epoch(cur_epoch_store.clone(), run_with_range)
                 .await;
+            drop(checkpoint_executor);
 
             if stop_condition == StopReason::RunWithRangeCondition {
                 SuiNode::shutdown(&self).await;
@@ -1478,7 +1521,7 @@ impl SuiNode {
             // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
@@ -1536,6 +1579,7 @@ impl SuiNode {
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
+
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
                 validator_overload_monitor_handle,
@@ -1559,9 +1603,22 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
-                        &checkpoint_executor,
+                        accumulator.clone(),
                     )
                     .await;
+
+                // No other components should be holding a strong reference to state accumulator
+                // at this point. Confirm here before we swap in the new accumulator.
+                let accumulator_metrics = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no other references at this point")
+                    .metrics();
+                let new_accumulator = Arc::new(StateAccumulator::new(
+                    self.state.get_accumulator_store().clone(),
+                    &new_epoch_store,
+                    accumulator_metrics,
+                ));
+                let weak_accumulator = Arc::downgrade(&new_accumulator);
+                *accumulator_guard = Some(new_accumulator);
 
                 consensus_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1580,7 +1637,7 @@ impl SuiNode {
                             self.randomness_handle.clone(),
                             consensus_manager,
                             consensus_epoch_data_remover,
-                            self.accumulator.clone(),
+                            weak_accumulator,
                             validator_server_handle,
                             validator_overload_monitor_handle,
                             checkpoint_metrics,
@@ -1600,9 +1657,22 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
-                        &checkpoint_executor,
+                        accumulator.clone(),
                     )
                     .await;
+
+                // No other components should be holding a strong reference to state accumulator
+                // at this point. Confirm here before we swap in the new accumulator.
+                let accumulator_metrics = Arc::into_inner(accumulator)
+                    .expect("Accumulator should have no other references at this point")
+                    .metrics();
+                let new_accumulator = Arc::new(StateAccumulator::new(
+                    self.state.get_accumulator_store().clone(),
+                    &new_epoch_store,
+                    accumulator_metrics,
+                ));
+                let weak_accumulator = Arc::downgrade(&new_accumulator);
+                *accumulator_guard = Some(new_accumulator);
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
@@ -1616,7 +1686,7 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
-                            self.accumulator.clone(),
+                            weak_accumulator,
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
@@ -1665,7 +1735,7 @@ impl SuiNode {
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
-        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -1679,7 +1749,7 @@ impl SuiNode {
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             state.get_object_store().as_ref(),
-            None,
+            EpochFlag::default_flags_for_new_epoch(&state.config),
         )
         .expect("EpochStartConfiguration construction cannot fail");
 
@@ -1690,8 +1760,7 @@ impl SuiNode {
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
                 epoch_start_configuration,
-                checkpoint_executor,
-                self.accumulator.clone(),
+                accumulator,
                 &self.config.expensive_safety_check_config,
             )
             .await
@@ -1821,8 +1890,6 @@ pub async fn build_http_server(
         return Ok(None);
     }
 
-    let chain_id = state.get_chain_identifier().unwrap();
-
     let mut router = axum::Router::new();
 
     let json_rpc_router = {
@@ -1886,23 +1953,31 @@ pub async fn build_http_server(
             metrics,
             config.indexer_max_subscriptions,
         ))?;
-        server.register_module(MoveUtils::new(state))?;
+        server.register_module(MoveUtils::new(state.clone()))?;
 
-        let server_type = if config.websocket_only {
-            Some(ServerType::WebSocket)
-        } else {
-            None
-        };
+        let server_type = config.jsonrpc_server_type();
+
         server.to_router(server_type).await?
     };
 
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router =
-            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
-                .into_router();
-        router = router.nest("/rest", rest_router);
+        let mut rest_service = sui_rest_api::RestService::new(
+            Arc::new(RestReadStore::new(state, store)),
+            software_version,
+        );
+
+        rest_service.with_metrics(RestMetrics::new(prometheus_registry));
+
+        if let Some(transaction_orchestrator) = transaction_orchestrator {
+            rest_service.with_executor(transaction_orchestrator.clone())
+        }
+
+        let rest_router = rest_service.into_router();
+        router = router
+            .nest("/rest", rest_router.clone())
+            .nest("/v2", rest_router);
     }
 
     let server = axum::Server::bind(&config.json_rpc_address)

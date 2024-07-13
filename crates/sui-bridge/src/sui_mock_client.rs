@@ -12,7 +12,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::bridge::BridgeSummary;
+use sui_types::bridge::{BridgeSummary, MoveTypeParsedTokenTransferMessage};
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -187,6 +187,10 @@ impl SuiClientInner for SuiMockClient {
         Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+        Ok(1000)
+    }
+
     async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
         Ok(BridgeSummary {
             bridge_version: 0,
@@ -222,6 +226,15 @@ impl SuiClientInner for SuiMockClient {
         _source_chain_id: u8,
         _seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
+        unimplemented!()
+    }
+
+    async fn get_parsed_token_transfer_message(
+        &self,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
         unimplemented!()
     }
 

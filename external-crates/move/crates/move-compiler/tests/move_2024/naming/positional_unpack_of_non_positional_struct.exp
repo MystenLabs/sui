@@ -1,8 +1,11 @@
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:7:13
   │
+2 │     public struct Foo { field: u64 } has copy, drop;
+  │                   --- 'Foo' is declared here
+  ·
 7 │         let Foo(_) = x;
-  │             ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+  │             ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:7:13
@@ -19,8 +22,11 @@ error[E03010]: unbound field
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:14:9
    │
+ 2 │     public struct Foo { field: u64 } has copy, drop;
+   │                   --- 'Foo' is declared here
+   ·
 14 │         Foo(_) = x;
-   │         ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │         ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_unpack_of_non_positional_struct.move:14:9

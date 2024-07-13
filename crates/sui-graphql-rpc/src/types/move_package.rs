@@ -32,9 +32,6 @@ pub(crate) struct MovePackage {
     /// Move-object-specific data, extracted from the native representation at
     /// `graphql_object.native_object.data`.
     pub native: NativeMovePackage,
-
-    /// The checkpoint sequence number this package was viewed at.
-    pub checkpoint_viewed_at: u64,
 }
 
 /// Information used by a package to link to a specific version of its dependency.
@@ -276,7 +273,8 @@ impl MovePackage {
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
+        let checkpoint_viewed_at =
+            cursor_viewed_at.unwrap_or_else(|| self.checkpoint_viewed_at_impl());
 
         let parsed = self.parsed_package()?;
         let module_range = parsed.modules().range::<String, _>((
@@ -364,7 +362,7 @@ impl MovePackage {
             .iter()
             .map(|origin| TypeOrigin {
                 module: origin.module_name.clone(),
-                struct_: origin.struct_name.clone(),
+                struct_: origin.datatype_name.clone(),
                 defining_id: origin.package.into(),
             })
             .collect();
@@ -391,6 +389,12 @@ impl MovePackage {
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
+    /// This package was viewed at a snapshot of the chain state at this checkpoint (identified by
+    /// its sequence number).
+    fn checkpoint_viewed_at_impl(&self) -> u64 {
+        self.super_.checkpoint_viewed_at
+    }
+
     pub(crate) fn module_impl(&self, name: &str) -> Result<Option<MoveModule>, Error> {
         use PackageCacheError as E;
         match (
@@ -401,7 +405,7 @@ impl MovePackage {
                 storage_id: self.super_.address,
                 native: native.clone(),
                 parsed: parsed.clone(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+                checkpoint_viewed_at: self.checkpoint_viewed_at_impl(),
             })),
 
             (None, _) | (_, Err(E::ModuleNotFound(_, _))) => Ok(None),
@@ -438,7 +442,6 @@ impl TryFrom<&Object> for MovePackage {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
-                checkpoint_viewed_at: object.checkpoint_viewed_at,
             })
         } else {
             Err(MovePackageDowncastError)

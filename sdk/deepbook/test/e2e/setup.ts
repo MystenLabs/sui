@@ -7,11 +7,11 @@ import type {
 	SuiObjectChangeCreated,
 	SuiObjectChangePublished,
 	SuiTransactionBlockResponse,
-} from '@mysten/sui.js/client';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+} from '@mysten/sui/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -51,7 +51,7 @@ export function getClient(): SuiClient {
 	});
 }
 
-// TODO: expose these testing utils from @mysten/sui.js
+// TODO: expose these testing utils from @mysten/sui
 export async function setupSuiClient() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
@@ -67,7 +67,7 @@ export async function setupSuiClient() {
 	return new TestToolbox(keypair, client);
 }
 
-// TODO: expose these testing utils from @mysten/sui.js
+// TODO: expose these testing utils from @mysten/sui
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
 	// TODO: We create a unique publish address per publish, but we really could share one for all publishes.
 	if (!toolbox) {
@@ -85,28 +85,30 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			{ encoding: 'utf-8' },
 		),
 	);
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const cap = tx.publish({
 		modules,
 		dependencies,
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], await toolbox.address());
 
-	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const { digest } = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
-		options: {
-			showEffects: true,
-			showObjectChanges: true,
-		},
 	});
+
+	const publishTxn = await toolbox.client.waitForTransaction({
+		digest: digest,
+		options: { showObjectChanges: true, showEffects: true },
+	});
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
 		(a) => a.type === 'published',
-	) as SuiObjectChangePublished[]) ?? [])[0].packageId.replace(/^(0x)(0+)/, '0x') as string;
+	) as SuiObjectChangePublished[]) ?? [])[0]?.packageId.replace(/^(0x)(0+)/, '0x') as string;
 
 	expect(packageId).toBeTypeOf('string');
 
@@ -121,8 +123,8 @@ export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
 	const baseAsset = `${packageId}::test::TEST`;
 	const quoteAsset = NORMALIZED_SUI_COIN_TYPE;
 	const deepbook = new DeepBookClient(toolbox.client);
-	const txb = deepbook.createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
-	const resp = await executeTransactionBlock(toolbox, txb);
+	const tx = deepbook.createPool(baseAsset, quoteAsset, DEFAULT_TICK_SIZE, DEFAULT_LOT_SIZE);
+	const resp = await executeTransaction(toolbox, tx);
 	const event = resp.events?.find((e) => e.type.includes('PoolCreated')) as any;
 	return {
 		poolId: event.parsedJson.pool_id,
@@ -133,8 +135,8 @@ export async function setupPool(toolbox: TestToolbox): Promise<PoolSummary> {
 
 export async function setupDeepbookAccount(toolbox: TestToolbox): Promise<string> {
 	const deepbook = new DeepBookClient(toolbox.client);
-	const txb = deepbook.createAccount(toolbox.address());
-	const resp = await executeTransactionBlock(toolbox, txb);
+	const tx = deepbook.createAccount(toolbox.address());
+	const resp = await executeTransaction(toolbox, tx);
 
 	const accountCap = ((resp.objectChanges?.filter(
 		(a) => a.type === 'created',
@@ -142,13 +144,13 @@ export async function setupDeepbookAccount(toolbox: TestToolbox): Promise<string
 	return accountCap;
 }
 
-export async function executeTransactionBlock(
+export async function executeTransaction(
 	toolbox: TestToolbox,
-	txb: TransactionBlock,
+	tx: Transaction,
 ): Promise<SuiTransactionBlockResponse> {
-	const resp = await toolbox.client.signAndExecuteTransactionBlock({
+	const resp = await toolbox.client.signAndExecuteTransaction({
 		signer: toolbox.keypair,
-		transactionBlock: txb,
+		transaction: tx,
 		options: {
 			showEffects: true,
 			showEvents: true,
@@ -159,12 +161,12 @@ export async function executeTransactionBlock(
 	return resp;
 }
 
-export async function devInspectTransactionBlock(
+export async function devInspectTransaction(
 	toolbox: TestToolbox,
-	txb: TransactionBlock,
+	tx: Transaction,
 ): Promise<DevInspectResults> {
 	return await toolbox.client.devInspectTransactionBlock({
-		transactionBlock: txb,
+		transactionBlock: tx,
 		sender: toolbox.address(),
 	});
 }

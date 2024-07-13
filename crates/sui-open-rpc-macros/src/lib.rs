@@ -20,9 +20,6 @@ use unescape::unescape;
 
 const SUI_RPC_ATTRS: [&str; 2] = ["deprecated", "version"];
 
-/// List of methods that should be skipped when generating OpenRPC documentation.
-const SPEC_SKIPLIST: [&str; 1] = ["monitoredExecuteTransactionBlock"];
-
 /// Add a [Service name]OpenRpc struct and implementation providing access to Open RPC doc builder.
 /// This proc macro must be use in conjunction with `jsonrpsee_proc_macro::rpc`
 ///
@@ -45,7 +42,10 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let tag = attr.find_attr("tag").to_quote();
 
-    let methods = rpc_definition.methods.iter().map(|method|{
+    let methods = rpc_definition.methods.iter().flat_map(|method|{
+        if method.deprecated {
+            return None;
+        }
         let name = &method.name;
         let deprecated = method.deprecated;
         let doc = &method.doc;
@@ -72,19 +72,19 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         if method.is_pubsub {
-            quote! {
+            Some(quote! {
                 let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
                 #(#inputs)*
                 let result = #returns_ty
                 builder.add_subscription(#namespace, #name, inputs, result, #doc, #tag, #deprecated);
-            }
+            })
         } else {
-            quote! {
+            Some(quote! {
                 let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
                 #(#inputs)*
                 let result = #returns_ty
                 builder.add_method(#namespace, #name, inputs, result, #doc, #tag, #deprecated);
-            }
+            })
         }
     }).collect::<Vec<_>>();
 
@@ -217,10 +217,6 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                 };
                 let mut attributes = parse::<Attributes>(token)?;
                 let method_name = attributes.get_value("name");
-
-                if SPEC_SKIPLIST.contains(&method_name.as_str()) {
-                    continue;
-                }
 
                 let deprecated = attributes.find("deprecated").is_some();
 

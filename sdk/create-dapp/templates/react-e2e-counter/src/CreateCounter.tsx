@@ -1,9 +1,6 @@
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
-import {
-  useSignAndExecuteTransactionBlock,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useNetworkVariable } from "./networkConfig";
 
 export function CreateCounter({
@@ -11,9 +8,20 @@ export function CreateCounter({
 }: {
   onCreated: (id: string) => void;
 }) {
-  const client = useSuiClient();
   const counterPackageId = useNetworkVariable("counterPackageId");
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+  const suiClient = useSuiClient();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
+    execute: async ({ bytes, signature }) =>
+      await suiClient.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature,
+        options: {
+          // Raw effects are required so the effects can be reported back to the wallet
+          showRawEffects: true,
+          showEffects: true,
+        },
+      }),
+  });
 
   return (
     <Container>
@@ -29,34 +37,23 @@ export function CreateCounter({
   );
 
   function create() {
-    const txb = new TransactionBlock();
+    const tx = new Transaction();
 
-    txb.moveCall({
+    tx.moveCall({
       arguments: [],
       target: `${counterPackageId}::counter::create`,
     });
 
     signAndExecute(
       {
-        transactionBlock: txb,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
+        transaction: tx,
       },
       {
-        onSuccess: (tx) => {
-          client
-            .waitForTransactionBlock({
-              digest: tx.digest,
-            })
-            .then(() => {
-              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-
-              if (objectId) {
-                onCreated(objectId);
-              }
-            });
+        onSuccess: (result) => {
+          const objectId = result.effects?.created?.[0]?.reference?.objectId;
+          if (objectId) {
+            onCreated(objectId);
+          }
         },
       },
     );

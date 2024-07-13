@@ -3,6 +3,7 @@
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
+    config::ConfigReadSettingImplCostParams,
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
         bls12381::{Bls12381Bls12381MinPkVerifyCostParams, Bls12381Bls12381MinSigVerifyCostParams},
@@ -40,6 +41,7 @@ use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
+use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A,
@@ -62,6 +64,7 @@ use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
 
 mod address;
+mod config;
 mod crypto;
 mod dynamic_field;
 mod event;
@@ -81,6 +84,9 @@ pub struct NativesCostTable {
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Config
+    pub config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -152,6 +158,9 @@ pub struct NativesCostTable {
     // group ops
     pub group_ops_cost_params: GroupOpsCostParams,
 
+    // vdf
+    pub vdf_cost_params: VDFCostParams,
+
     // zklogin
     pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
     pub check_zklogin_issuer_cost_params: CheckZkloginIssuerCostParams,
@@ -171,6 +180,15 @@ impl NativesCostTable {
             },
             address_from_u256_cost_params: AddressFromU256CostParams {
                 address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
+            },
+
+            config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams {
+                config_read_setting_impl_cost_base: protocol_config
+                    .config_read_setting_impl_cost_base_as_option()
+                    .map(Into::into),
+                config_read_setting_impl_cost_per_byte: protocol_config
+                    .config_read_setting_impl_cost_per_byte_as_option()
+                    .map(Into::into),
             },
 
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
@@ -610,6 +628,14 @@ impl NativesCostTable {
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),
             },
+            vdf_cost_params: VDFCostParams {
+                vdf_verify_cost: protocol_config
+                    .vdf_verify_vdf_cost_as_option()
+                    .map(Into::into),
+                hash_to_input_cost: protocol_config
+                    .vdf_hash_to_input_cost_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -634,6 +660,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "dynamic_field",
             "hash_type_and_key",
             make_native!(dynamic_field::hash_type_and_key),
+        ),
+        (
+            "config",
+            "read_setting_impl",
+            make_native!(config::read_setting_impl),
         ),
         (
             "dynamic_field",
@@ -697,6 +728,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(ed25519::ed25519_verify),
         ),
         ("event", "emit", make_native!(event::emit)),
+        (
+            "event",
+            "events_by_type",
+            make_native!(event::get_events_by_type),
+        ),
+        ("event", "num_events", make_native!(event::num_events)),
         (
             "groth16",
             "verify_groth16_proof_internal",
@@ -876,6 +913,26 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "poseidon",
             "poseidon_bn254_internal",
             make_native!(poseidon::poseidon_bn254_internal),
+        ),
+        (
+            "vdf",
+            "vdf_verify_internal",
+            make_native!(vdf::vdf_verify_internal),
+        ),
+        (
+            "vdf",
+            "hash_to_input_internal",
+            make_native!(vdf::hash_to_input_internal),
+        ),
+        (
+            "ecdsa_k1",
+            "secp256k1_sign",
+            make_native!(ecdsa_k1::secp256k1_sign),
+        ),
+        (
+            "ecdsa_k1",
+            "secp256k1_keypair_from_seed",
+            make_native!(ecdsa_k1::secp256k1_keypair_from_seed),
         ),
     ];
     let sui_framework_natives_iter =

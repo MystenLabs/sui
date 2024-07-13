@@ -68,30 +68,30 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
-            validator_state.get_cache_reader(),
+            validator_state.get_object_cache_reader(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
-        )?;
+        );
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
-            validator_state.get_cache_reader().clone(),
+            validator_state.get_object_cache_reader().clone(),
             validator_state.clone_committee_store(),
             safe_client_metrics_base,
             auth_agg_metrics,
         );
-        Ok(TransactiondOrchestrator::new(
+        TransactiondOrchestrator::new(
             Arc::new(validators),
             validator_state,
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
     }
 }
 
@@ -147,7 +147,12 @@ where
             metrics,
         }
     }
+}
 
+impl<A> TransactiondOrchestrator<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all,
     fields(
         tx_digest = ?request.transaction.digest(),
@@ -378,7 +383,7 @@ where
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
         // to form a certificate for us again, to serve this request.
-        let cache_reader = self.validator_state.get_cache_reader().clone();
+        let cache_reader = self.validator_state.get_transaction_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
             let digests = [tx_digest];
@@ -799,5 +804,22 @@ impl TransactionOrchestratorMetrics {
     pub fn new_for_tests() -> Self {
         let registry = Registry::new();
         Self::new(&registry)
+    }
+}
+
+#[async_trait::async_trait]
+impl<A> sui_rest_api::TransactionExecutor for TransactiondOrchestrator<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn execute_transaction(
+        &self,
+        request: sui_types::quorum_driver_types::ExecuteTransactionRequestV3,
+        client_addr: Option<std::net::SocketAddr>,
+    ) -> Result<
+        sui_types::quorum_driver_types::ExecuteTransactionResponseV3,
+        sui_types::quorum_driver_types::QuorumDriverError,
+    > {
+        self.execute_transaction_v3(request, client_addr).await
     }
 }

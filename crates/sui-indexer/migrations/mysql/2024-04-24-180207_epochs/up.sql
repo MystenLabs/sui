@@ -7,7 +7,7 @@ CREATE TABLE epochs
     protocol_version                BIGINT      NOT NULL,
     total_stake                     BIGINT      NOT NULL,
     storage_fund_balance            BIGINT      NOT NULL,
-    system_state                    MEDIUMBLOB       NOT NULL,
+    system_state                    MEDIUMBLOB  NOT NULL,
     -- The following fields are nullable because they are filled in
     -- only at the end of an epoch.
     epoch_total_transactions        BIGINT,

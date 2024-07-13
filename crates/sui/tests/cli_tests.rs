@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::io::Read;
+use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -12,7 +13,10 @@ use std::str::FromStr;
 use expect_test::expect;
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
+use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
+#[cfg(feature = "indexer")]
+use sui::sui_commands::IndexerFeatureArgs;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -28,7 +32,7 @@ use sui::{
         estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
         SwitchResponse,
     },
-    sui_commands::SuiCommand,
+    sui_commands::{parse_host_port, SuiCommand},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
@@ -65,8 +69,14 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Start network without authorities
     let start = SuiCommand::Start {
-        config: Some(config),
+        config_dir: Some(config),
+        force_regenesis: false,
+        with_faucet: None,
+        fullnode_rpc_port: 9000,
+        epoch_duration_ms: None,
         no_full_node: false,
+        #[cfg(feature = "indexer")]
+        indexer_feature_args: IndexerFeatureArgs::for_testing(),
     }
     .execute()
     .await;
@@ -314,6 +324,31 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         .execute(context)
         .await?;
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_ptb_publish() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("ptb_complex_args_test_functions");
+
+    let publish_ptb_string = format!(
+        r#"
+         --move-call sui::tx_context::sender
+         --assign sender
+         --publish {}
+         --assign upgrade_cap
+         --transfer-objects "[upgrade_cap]" sender
+        "#,
+        package_path.display()
+    );
+    let args = shlex::split(&publish_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
     Ok(())
 }
 
@@ -1482,7 +1517,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a published-at field).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
+                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
             },
         )
     "#]];
@@ -1577,7 +1612,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for published-at field.",
+                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for 'published-at' field in Move.toml or 'published-id' in Move.lock file.",
             },
         )
     "#]];
@@ -1829,6 +1864,139 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
+    let mut build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config: build_config.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // We will upgrade the package in a `tmp_dir` using the `Move.lock` resulting from publish,
+    // so as not to clobber anything.
+    // The `Move.lock` needs to point to the root directory of the package-to-be-upgraded.
+    // The core implementation does not use support an arbitrary `lock_file` path specified in
+    // `BuildConfig` when the `Move.lock` file is an input for upgrades, so we change the `BuildConfig`
+    // `lock_file` to point to the root directory of package-to-be-upgraded.
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    upgrade_pkg_path.pop();
+    // Place the `Move.lock` after publishing in the tmp dir for upgrading.
+    let published_lock_file_path = build_config.lock_file.clone().unwrap();
+    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
+    upgrade_lock_file_path.push("Move.lock");
+    std::fs::copy(
+        published_lock_file_path.clone(),
+        upgrade_lock_file_path.clone(),
+    )?;
+    // Point the `BuildConfig` lock_file to the package root.
+    build_config.lock_file = Some(upgrade_pkg_path.join("Move.lock"));
+
+    // Now run the upgrade
+    let upgrade_response = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config: build_config.clone(),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Get Original Package ID and version
+    let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
+        .ok_or_else(|| anyhow::anyhow!("No package object response"))?;
+
+    // Get Upgraded Package ID and version
+    let (expect_upgrade_latest_id, expect_upgrade_version, _) =
+        if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
+            assert_eq!(
+                response.effects.as_ref().unwrap().gas_object().object_id(),
+                gas_obj_id
+            );
+            get_new_package_obj_from_response(&response)
+                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
+        } else {
+            unreachable!("Invalid response");
+        };
+
+    // Get lock file that recorded Package ID and version
+    let lock_file = build_config.lock_file.expect("Lock file for testing");
+    let mut lock_file = std::fs::File::open(lock_file).unwrap();
+    let envs = ManagedPackage::read(&mut lock_file).unwrap();
+    let localnet = envs.get("localnet").unwrap();
+    // Original ID should correspond to first published package.
+    assert_eq!(
+        expect_original_id.to_string(),
+        localnet.original_published_id,
+    );
+    // Upgrade ID should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_latest_id.to_string(),
+        localnet.latest_published_id,
+    );
+    // Version should correspond to upgraded package.
+    assert_eq!(
+        expect_upgrade_version.value(),
+        localnet.version.parse::<u64>().unwrap(),
+    );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
     let build_config_publish = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
@@ -1860,8 +2028,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
         .unwrap();
 
-    // Hacky for now: we need to add the correct `published-at` field to the Move toml file.
-    // In the future once we have automated address management replace this logic!
+    // Set up a temporary working directory  for upgrading.
     let tmp_dir = tempfile::tempdir().unwrap();
     fs_extra::dir::copy(
         &package_path,
@@ -1877,25 +2044,16 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         .open(&upgrade_pkg_path)
         .unwrap();
     upgrade_pkg_path.pop();
-
     let mut buf = String::new();
     move_toml.read_to_string(&mut buf).unwrap();
-
-    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
     let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
     let idx = lines.iter().position(|s| s == "[package]").unwrap();
-    lines.insert(
-        idx + 1,
-        format!(
-            "published-at = \"{}\"",
-            package.reference.object_id.to_hex_uncompressed()
-        ),
-    );
+    // Purposely add a conflicting `published-at` address to the Move manifest.
+    lines.insert(idx + 1, "published-at = \"0xbad\"".to_string());
     let new = lines.join("\n");
     move_toml.write_at(new.as_bytes(), 0).unwrap();
 
-    // Create a new build config for the upgrade. Initialize its lock file
-    // to the package we published.
+    // Create a new build config for the upgrade. Initialize its lock file to the package we published.
     let build_config_upgrade = BuildConfig::new_for_testing().config;
     let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
     upgrade_lock_file_path.push("Move.lock");
@@ -1915,47 +2073,19 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         with_unpublished_dependencies: false,
     }
     .execute(context)
-    .await?;
+    .await;
 
-    // Get Original Package ID and version
-    let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
-        .ok_or_else(|| anyhow::anyhow!("No package object response"))?;
+    let err_string = upgrade_response.unwrap_err().to_string();
+    let err_string = err_string.replace(&package.object_id().to_string(), "<elided-for-test>");
 
-    // Get Upgraded Package ID and version
-    let (expect_upgrade_latest_id, expect_upgrade_version, _) =
-        if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
-            assert_eq!(
-                response.effects.as_ref().unwrap().gas_object().object_id(),
-                gas_obj_id
-            );
-            get_new_package_obj_from_response(&response)
-                .ok_or_else(|| anyhow::anyhow!("No package object response"))?
-        } else {
-            unreachable!("Invalid response");
-        };
+    let expect = expect![[r#"
+        Conflicting published package address: `Move.toml` contains published-at address 0xbad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
 
-    // Get lock file that recorded Package ID and version
-    let lock_file = build_config_upgrade
-        .lock_file
-        .expect("Lock file for testing");
-    let mut lock_file = std::fs::File::open(lock_file).unwrap();
-    let envs = ManagedPackage::read(&mut lock_file).unwrap();
-    let localnet = envs.get("localnet").unwrap();
-    // Original ID should correspond to first published package.
-    assert_eq!(
-        expect_original_id.to_string(),
-        localnet.original_published_id,
-    );
-    // Upgrade ID should correspond to upgraded package.
-    assert_eq!(
-        expect_upgrade_latest_id.to_string(),
-        localnet.latest_published_id,
-    );
-    // Version should correspond to upgraded package.
-    assert_eq!(
-        expect_upgrade_version.value(),
-        localnet.version.parse::<u64>().unwrap(),
-    );
+                         - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+                         - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+                         - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+                         - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
+    expect.assert_eq(&err_string);
     Ok(())
 }
 
@@ -2803,6 +2933,28 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+
+    let ptb_args = vec![
+        "--split-coins".to_string(),
+        "gas".to_string(),
+        "[1000]".to_string(),
+        "--assign".to_string(),
+        "new_coin".to_string(),
+        "--transfer-objects".to_string(),
+        "[new_coin]".to_string(),
+        format!("@{}", address1),
+        "--gas-budget".to_string(),
+        "50000000".to_string(),
+    ];
+    let mut args = ptb_args.clone();
+    args.push("--serialize-signed-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+    let mut args = ptb_args.clone();
+    args.push("--serialize-unsigned-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+
     Ok(())
 }
 
@@ -3645,4 +3797,172 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         panic!("TransferSui test failed");
     }
     Ok(())
+}
+
+#[sim_test]
+async fn test_clever_errors() -> Result<(), anyhow::Error> {
+    // Publish the package
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("clever_errors");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let elide_transaction_digest = |s: String| -> String {
+        let mut x = s.splitn(5, '\'').collect::<Vec<_>>();
+        x[1] = "ELIDED_TRANSACTION_DIGEST";
+        let tmp = format!("ELIDED_ADDRESS{}", &x[3][66..]);
+        x[3] = &tmp;
+        x.join("'")
+    };
+
+    // Normal abort
+    let non_clever_abort = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "aborter".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Line-only abort
+    let line_only_abort = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "aborter_line_no".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Full clever error with utf-8 string
+    let clever_error_utf8 = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "clever_aborter".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    // Full clever error with non-utf-8 string
+    let clever_error_non_utf8 = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "clever_errors".to_string(),
+        function: "clever_aborter_not_a_string".to_string(),
+        type_args: vec![],
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        gas_price: None,
+        args: vec![],
+    }
+    .execute(context)
+    .await
+    .unwrap_err();
+
+    let error_string = format!(
+        "Non-clever-abort\n---\n{}\n---\nLine-only-abort\n---\n{}\n---\nClever-error-utf8\n---\n{}\n---\nClever-error-non-utf8\n---\n{}\n---\n",
+        elide_transaction_digest(non_clever_abort.to_string()),
+        elide_transaction_digest(line_only_abort.to_string()),
+        elide_transaction_digest(clever_error_utf8.to_string()),
+        elide_transaction_digest(clever_error_non_utf8.to_string())
+    );
+
+    insta::assert_snapshot!(error_string);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_host_port() {
+    let input = "127.0.0.0";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let input = "127.0.0.5:9124";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.5:9124".parse::<SocketAddr>().unwrap());
+
+    let input = "9090";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9090".parse::<SocketAddr>().unwrap());
+
+    let input = "";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let result = parse_host_port("localhost".to_string(), 9899).unwrap();
+    assert_eq!(result, "127.0.0.1:9899".parse::<SocketAddr>().unwrap());
+
+    let input = "asg";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0:900";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.9.0.1:asb";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
 }

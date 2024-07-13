@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-	CreateSponsoredTransactionBlockApiInput,
-	CreateSponsoredTransactionBlockApiResponse,
+	CreateSponsoredTransactionApiInput,
+	CreateSponsoredTransactionApiResponse,
 	CreateZkLoginNonceApiInput,
 	CreateZkLoginNonceApiResponse,
 	CreateZkLoginZkpApiInput,
 	CreateZkLoginZkpApiResponse,
-	ExecuteSponsoredTransactionBlockApiInput,
-	ExecuteSponsoredTransactionBlockApiResponse,
+	ExecuteSponsoredTransactionApiInput,
+	ExecuteSponsoredTransactionApiResponse,
 	GetAppApiInput,
 	GetAppApiResponse,
 	GetZkLoginApiInput,
@@ -104,26 +104,26 @@ export class EnokiClient {
 		});
 	}
 
-	createSponsoredTransactionBlock(input: CreateSponsoredTransactionBlockApiInput) {
-		return this.#fetch<CreateSponsoredTransactionBlockApiResponse>('transaction-blocks/sponsor', {
+	createSponsoredTransaction(input: CreateSponsoredTransactionApiInput) {
+		return this.#fetch<CreateSponsoredTransactionApiResponse>('transaction-blocks/sponsor', {
 			method: 'POST',
 			headers: input.jwt
 				? {
 						[ZKLOGIN_HEADER]: input.jwt,
-				  }
+					}
 				: {},
 			body: JSON.stringify({
 				sender: input.sender,
 				network: input.network,
-				transactionBlockKindBytes: input.transactionBlockKindBytes,
+				transactionBlockKindBytes: input.transactionKindBytes,
 				allowedAddresses: input.allowedAddresses,
 				allowedMoveCallTargets: input.allowedMoveCallTargets,
 			}),
 		});
 	}
 
-	executeSponsoredTransactionBlock(input: ExecuteSponsoredTransactionBlockApiInput) {
-		return this.#fetch<ExecuteSponsoredTransactionBlockApiResponse>(
+	executeSponsoredTransaction(input: ExecuteSponsoredTransactionApiInput) {
+		return this.#fetch<ExecuteSponsoredTransactionApiResponse>(
 			`transaction-blocks/sponsor/${input.digest}`,
 			{
 				method: 'POST',

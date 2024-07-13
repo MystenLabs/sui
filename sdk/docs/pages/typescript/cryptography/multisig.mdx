@@ -5,7 +5,7 @@ The Sui TypeScript SDK provides a `MultiSigPublicKey` class to support
 transaction and personal message signing.
 
 This class implements the same interface as the `PublicKey` classes that [Keypairs](./keypairs) uses
-and you call the same methods to verify signatures for `PersonalMessages` and `TransactionBlocks`.
+and you call the same methods to verify signatures for `PersonalMessages` and `Transactions`.
 
 ## Creating a MultiSigPublicKey
 
@@ -15,8 +15,8 @@ transaction is equal to or greater than the threshold value, then the Sui networ
 transdaction valid.
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
 
 const kp1 = new Ed25519Keypair();
 const kp2 = new Ed25519Keypair();
@@ -68,7 +68,7 @@ const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedS
 ## Creating a MultiSigSigner
 
 The `MultiSigSigner` class allows you to create a Signer that can be used to sign personal messages
-and TransactionBlocks like any other keypair or signer class. This is often easier than manually
+and Transactions like any other keypair or signer class. This is often easier than manually
 combining signatures, since many methods accept Signers and handle signing directly.
 
 A `MultiSigSigner` is created by providing the underlying Signers to the `getSigner` method on the
@@ -76,8 +76,8 @@ A `MultiSigSigner` is created by providing the underlying Signers to the `getSig
 their combined weight is equal to or greater than the threshold.
 
 ```typescript
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
 
 const kp1 = new Ed25519Keypair();
 const kp2 = new Ed25519Keypair();
@@ -100,7 +100,7 @@ const signer = multiSigPublicKey.getSigner(kp1);
 
 const message = new TextEncoder().encode('hello world');
 const { signature } = await signer.signPersonalMessage(message);
-const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
+const isValid = await multiSigPublicKey.verifyPersonalMessage(message, signature);
 ```
 
 ## Multisig with zkLogin

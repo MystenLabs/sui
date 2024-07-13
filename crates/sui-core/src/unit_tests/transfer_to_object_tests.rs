@@ -237,10 +237,7 @@ impl TestRunner {
             .authority_state
             .execute_certificate(&ct, &epoch_store)
             .await
-            .unwrap()
-            .inner()
-            .clone()
-            .into_data();
+            .unwrap();
 
         if self.aggressive_pruning_enabled {
             self.authority_state
@@ -1745,7 +1742,7 @@ async fn test_have_deleted_owned_object() {
 
         let (new_parent, new_child) = get_parent_and_child(effects.mutated());
 
-        let cache = runner.authority_state.get_cache_reader().clone();
+        let cache = runner.authority_state.get_object_cache_reader().clone();
 
         assert!(cache.get_object(&new_child.0.0).unwrap().is_some());
         // Should not show as deleted for either versions

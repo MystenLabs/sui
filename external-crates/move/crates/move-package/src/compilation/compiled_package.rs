@@ -17,19 +17,15 @@ use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
-use move_command_line_common::{
-    env::get_bytecode_version_from_env,
-    files::{
-        extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-        SOURCE_MAP_EXTENSION,
-    },
+use move_command_line_common::files::{
+    extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    SOURCE_MAP_EXTENSION,
 };
 use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
-    diagnostics::FilesSourceText,
     editions::Flavor,
     linters,
-    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
+    shared::{files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     sui_mode::{self},
     Compiler,
 };
@@ -250,6 +246,7 @@ impl OnDiskCompiledPackage {
             name: module_name,
             module,
             source_map,
+            address_name: None,
         };
         Ok(CompiledUnitWithSource { unit, source_path })
     }
@@ -315,10 +312,7 @@ impl OnDiskCompiledPackage {
             category_dir
                 .join(&file_path)
                 .with_extension(MOVE_COMPILED_EXTENSION),
-            compiled_unit
-                .unit
-                .serialize(get_bytecode_version_from_env())
-                .as_slice(),
+            compiled_unit.unit.serialize().as_slice(),
         )?;
         self.save_under(
             CompiledPackageLayout::SourceMaps
@@ -537,7 +531,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+        compiler_driver: impl FnMut(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let BuildResult {
             root_package_name,
@@ -557,7 +551,13 @@ impl CompiledPackage {
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
-            let source_path = PathBuf::from(file_map[&annot_unit.loc().file_hash()].0.as_str());
+            let source_path = PathBuf::from(
+                file_map
+                    .get(&annot_unit.loc().file_hash())
+                    .unwrap()
+                    .0
+                    .as_str(),
+            );
             let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
                 unit: annot_unit.into_compiled_unit(),

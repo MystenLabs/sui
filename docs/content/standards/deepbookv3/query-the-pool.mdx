@@ -1,0 +1,120 @@
+---
+title: Query the Pool
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBook Design](./design.mdx#pool) to learn more about the structure of pools.
+
+To perform trades, you pass a `BalanceManager` and `TradeProof` into the relvant `Pool`. Unlike `Pool`s, `BalanceManager` shared objects can contain any type of token, such that the same `BalanceManager` can access multiple `Pool`s to interact with many different trade pairings. See [BalanceManager](./balance-manager.mdx) to learn more.
+
+## API 
+
+DeepBook exposes a set of endpoints that can be used to query any pool.
+
+### Check whitelist status
+
+Accessor to check whether the pool is whitelisted.
+
+```move
+public fun whitelisted<BaseAsset, QuoteAsset>(self: &Pool<BaseAsset, QuoteAsset>): bool
+```
+
+### Check quote quantity against base
+
+Dry run to determine the quote quantity out for a given base quantity.
+
+```move
+public fun get_quote_quantity_out<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    base_quantity: u64,
+    clock: &Clock,
+): (u64, u64, u64)
+```
+
+### Check quote quantity against quote
+
+Dry run to determine the base quantity out for a given quote quantity.
+
+```move
+public fun get_base_quantity_out<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    quote_quantity: u64,
+    clock: &Clock,
+): (u64, u64, u64)
+```
+
+### Check quote quantity against quote or base
+
+Dry run to determine the quantity out for a given base or quote quantity. Only one out of base or quote quantity should be non-zero. Returns the (`base_quantity_out`, `quote_quantity_out`, `deep_quantity_required`).
+
+```move
+public fun get_quantity_out<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    base_quantity: u64,
+    quote_quantity: u64,
+    clock: &Clock,
+): (u64, u64, u64)
+```
+
+### Retrieve mid price for a pool 
+
+Returns the mid price of the pool.
+
+```move
+public fun mid_price<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    clock: &Clock,
+): u64
+```
+
+### Retrieve order IDs
+
+Returns the `order_id` for all open orders for the `balance_manager` in the pool.
+
+```move
+public fun account_open_orders<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    balance_manager: ID,
+): VecSet<u128>
+```
+
+### Retrieve prices and quantities for an order book
+
+Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`) for the level2 order book. The `price_low` and `price_high` are inclusive, all orders within the range are returned. `is_bid` is `true` for bids and `false` for asks.
+
+```move
+public fun get_level2_range<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    price_low: u64,
+    price_high: u64,
+    is_bid: bool,
+): (vector<u64>, vector<u64>)
+```
+
+Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`) for the level2 order book. `ticks` are the maximum number of ticks to return starting from best bid and best ask. (`bid_price`, `bid_quantity`, `ask_price`, `ask_quantity`) are returned as four vectors. The price vectors are sorted in descending order for bids and ascending order for asks.
+
+```move
+public fun get_level2_ticks_from_mid<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+    ticks: u64,
+): (vector<u64>, vector<u64>, vector<u64>, vector<u64>)
+```
+
+### Retrieve balances
+
+Get all balances held in this pool.
+
+```move
+public fun vault_balances<BaseAsset, QuoteAsset>(
+    self: &Pool<BaseAsset, QuoteAsset>,
+): (u64, u64, u64)
+```
+
+### Retrieve Pool ID
+
+Get the ID of the pool given the asset types.
+
+```move
+public fun get_pool_id_by_asset<BaseAsset, QuoteAsset>(registry: &Registry): ID
+```

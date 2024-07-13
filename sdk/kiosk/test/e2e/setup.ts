@@ -6,11 +6,11 @@ import type {
 	DevInspectResults,
 	SuiObjectChangePublished,
 	SuiTransactionBlockResponse,
-} from '@mysten/sui.js/client';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+} from '@mysten/sui/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -49,7 +49,7 @@ export function getClient(): SuiClient {
 	});
 }
 
-// TODO: expose these testing utils from @mysten/sui.js
+// TODO: expose these testing utils from @mysten/sui
 export async function setupSuiClient() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
@@ -65,7 +65,7 @@ export async function setupSuiClient() {
 	return new TestToolbox(keypair, client);
 }
 
-// TODO: expose these testing utils from @mysten/sui.js
+// TODO: expose these testing utils from @mysten/sui
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {
 	// TODO: We create a unique publish address per publish, but we really could share one for all publishes.
 	if (!toolbox) {
@@ -83,28 +83,30 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			{ encoding: 'utf-8' },
 		),
 	);
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const cap = tx.publish({
 		modules,
 		dependencies,
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], await toolbox.address());
 
-	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const { digest } = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
-		options: {
-			showEffects: true,
-			showObjectChanges: true,
-		},
 	});
+
+	const publishTxn = await toolbox.client.waitForTransaction({
+		digest: digest,
+		options: { showObjectChanges: true, showEffects: true },
+	});
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
 		(a) => a.type === 'published',
-	) as SuiObjectChangePublished[]) ?? [])[0].packageId.replace(/^(0x)(0+)/, '0x') as string;
+	) as SuiObjectChangePublished[]) ?? [])[0]?.packageId.replace(/^(0x)(0+)/, '0x') as string;
 
 	expect(packageId).toBeTypeOf('string');
 
@@ -132,44 +134,44 @@ export function print(item: any) {
 }
 
 export async function mintHero(toolbox: TestToolbox, packageId: string): Promise<string> {
-	const txb = new TransactionBlock();
-	const hero = txb.moveCall({
+	const tx = new Transaction();
+	const hero = tx.moveCall({
 		target: `${packageId}::hero::mint_hero`,
 	});
-	txb.transferObjects([hero], txb.pure(await toolbox.address(), 'address'));
+	tx.transferObjects([hero], await toolbox.address());
 
-	const res = await executeTransactionBlock(toolbox, txb);
+	const res = await executeTransaction(toolbox, tx);
 
 	return getCreatedObjectIdByType(res, 'hero::Hero');
 }
 
 export async function mintVillain(toolbox: TestToolbox, packageId: string): Promise<string> {
-	const txb = new TransactionBlock();
-	const hero = txb.moveCall({
+	const tx = new Transaction();
+	const hero = tx.moveCall({
 		target: `${packageId}::hero::mint_villain`,
 	});
-	txb.transferObjects([hero], txb.pure(await toolbox.address(), 'address'));
+	tx.transferObjects([hero], await toolbox.address());
 
-	const res = await executeTransactionBlock(toolbox, txb);
+	const res = await executeTransaction(toolbox, tx);
 
 	return getCreatedObjectIdByType(res, 'hero::Villain');
 }
 
 // create a non-personal kiosk.
 export async function createKiosk(toolbox: TestToolbox, kioskClient: KioskClient) {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 
-	new KioskTransaction({ transactionBlock: txb, kioskClient }).createAndShare(toolbox.address());
+	new KioskTransaction({ transaction: tx, kioskClient }).createAndShare(toolbox.address());
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 // Create a personal Kiosk.
 export async function createPersonalKiosk(toolbox: TestToolbox, kioskClient: KioskClient) {
-	const txb = new TransactionBlock();
-	new KioskTransaction({ transactionBlock: txb, kioskClient }).createPersonal().finalize();
+	const tx = new Transaction();
+	new KioskTransaction({ transaction: tx, kioskClient }).createPersonal().finalize();
 
-	await executeTransactionBlock(toolbox, txb);
+	await executeTransaction(toolbox, tx);
 }
 
 function getCreatedObjectIdByType(res: SuiTransactionBlockResponse, type: string): string {
@@ -193,13 +195,13 @@ export async function getPublisherObject(toolbox: TestToolbox): Promise<string> 
 	return publisherObj ?? '';
 }
 
-export async function executeTransactionBlock(
+export async function executeTransaction(
 	toolbox: TestToolbox,
-	txb: TransactionBlock,
+	tx: Transaction,
 ): Promise<SuiTransactionBlockResponse> {
-	const resp = await toolbox.client.signAndExecuteTransactionBlock({
+	const resp = await toolbox.client.signAndExecuteTransaction({
 		signer: toolbox.keypair,
-		transactionBlock: txb,
+		transaction: tx,
 		options: {
 			showEffects: true,
 			showEvents: true,
@@ -210,12 +212,12 @@ export async function executeTransactionBlock(
 	return resp;
 }
 
-export async function devInspectTransactionBlock(
+export async function devInspectTransaction(
 	toolbox: TestToolbox,
-	txb: TransactionBlock,
+	tx: Transaction,
 ): Promise<DevInspectResults> {
 	return await toolbox.client.devInspectTransactionBlock({
-		transactionBlock: txb,
+		transactionBlock: tx,
 		sender: toolbox.address(),
 	});
 }

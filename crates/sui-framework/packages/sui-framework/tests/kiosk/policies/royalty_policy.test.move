@@ -83,8 +83,8 @@ module sui::royalty_policy_tests {
         let remainder = coin::burn_for_testing(payment);
         let profits = test::wrapup(policy, cap, ctx);
 
-        assert!(remainder == 1000, 0);
-        assert!(profits == 1000, 1);
+        assert!(remainder == 1000);
+        assert!(profits == 1000);
     }
 
     #[test]

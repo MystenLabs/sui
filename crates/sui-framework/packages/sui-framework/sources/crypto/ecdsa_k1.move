@@ -16,6 +16,21 @@ module sui::ecdsa_k1 {
     const EInvalidPubKey: u64 = 2;
 
     #[allow(unused_const)]
+    #[test_only]
+    /// Error if the private key is invalid.
+    const EInvalidPrivKey: u64 = 3;
+
+    #[allow(unused_const)]
+    #[test_only]
+    /// Error if the given hash function does not exist.
+    const EInvalidHashFunction: u64 = 4;
+
+    #[allow(unused_const)]
+    #[test_only]
+    /// Error if the seed is invalid.
+    const EInvalidSeed: u64 = 5;
+
+    #[allow(unused_const)]
     /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
     #[allow(unused_const)]
@@ -49,4 +64,38 @@ module sui::ecdsa_k1 {
     ///
     /// If the signature is valid to the pubkey and hashed message, return true. Else false.
     public native fun secp256k1_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>, hash: u8): bool;
+
+    #[test_only]
+    /// @param private_key: A 32-bytes private key that is used to sign the message.
+    /// @param msg: The message to sign, this is raw message without hashing.
+    /// @param hash: The hash function used to hash the message when signing.
+    /// @param recoverable: A boolean flag to indicate if the produced signature should be recoverable.
+    ///
+    /// Return the signature in form (r, s) that is signed using Secp256k1.
+    /// If `recoverable` is true, the signature will be in form (r, s, v) where v is the recovery id.
+    ///
+    /// This should ONLY be used in tests, because it will reveal the private key onchain.
+    public native fun secp256k1_sign(private_key: &vector<u8>, msg: &vector<u8>, hash: u8, recoverable: bool): vector<u8>;
+
+    #[test_only]
+    public struct KeyPair has drop {
+        private_key: vector<u8>,
+        public_key: vector<u8>,
+    }
+
+    #[test_only]
+    public fun private_key(self: &KeyPair): &vector<u8> {
+        &self.private_key
+    }
+
+    #[test_only]
+    public fun public_key(self: &KeyPair): &vector<u8> {
+        &self.public_key
+    }
+
+    #[test_only]
+    /// @param seed: A 32-bytes seed that is used to generate the keypair.
+    ///
+    /// Returns a Secp256k1 keypair deterministically generated from the seed.
+    public native fun secp256k1_keypair_from_seed(seed: &vector<u8>): KeyPair;
 }

@@ -7,7 +7,7 @@ module sui::verifier_tests {
     public struct VERIFIER_TESTS has drop {}
 
     fun init(otw: VERIFIER_TESTS, _: &mut sui::tx_context::TxContext) {
-        assert!(sui::types::is_one_time_witness(&otw), 0);
+        assert!(sui::types::is_one_time_witness(&otw));
     }
 
     #[test]
@@ -29,7 +29,7 @@ module sui::verifier_tests {
     fun test_otw() {
         // we should be able to construct otw in test code
         let otw = VERIFIER_TESTS{};
-        assert!(is_otw(otw), 0);
+        assert!(is_otw(otw));
     }
 
 }

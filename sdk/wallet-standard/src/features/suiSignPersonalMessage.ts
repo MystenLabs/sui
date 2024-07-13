@@ -33,6 +33,8 @@ export interface SuiSignPersonalMessageInput {
 export interface SuiSignPersonalMessageOutput extends SignedPersonalMessage {}
 
 export interface SignedPersonalMessage {
+	/** Base64 encoded message bytes */
 	bytes: string;
+	/** Base64 encoded signature */
 	signature: string;
 }

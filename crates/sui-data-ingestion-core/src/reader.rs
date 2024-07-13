@@ -213,31 +213,35 @@ impl CheckpointReader {
     async fn sync(&mut self) -> Result<()> {
         let backoff = backoff::ExponentialBackoff::default();
         let mut checkpoints = backoff::future::retry(backoff, || async {
-            self.read_local_files()
-                .await
-                .map_err(backoff::Error::transient)
+            self.read_local_files().await.map_err(|err| {
+                info!("transient local read error {:?}", err);
+                backoff::Error::transient(err)
+            })
         })
         .await?;
 
+        let mut read_source: &str = "local";
         if self.remote_store_url.is_some()
             && (checkpoints.is_empty()
                 || checkpoints[0].checkpoint_summary.sequence_number
                     > self.current_checkpoint_number)
         {
             checkpoints = self.remote_fetch();
+            read_source = "remote";
         } else {
             // cancel remote fetcher execution because local reader has made progress
             self.remote_fetcher_receiver = None;
         }
 
         info!(
-            "Reader. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            "Read from {}. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            read_source,
             self.current_checkpoint_number,
             self.last_pruned_watermark,
             checkpoints.len(),
         );
         for checkpoint in checkpoints {
-            if self.remote_store_url.is_none()
+            if read_source == "local"
                 && checkpoint.checkpoint_summary.sequence_number > self.current_checkpoint_number
             {
                 break;
@@ -323,6 +327,8 @@ impl CheckpointReader {
         watcher
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
+        self.gc_processed_files(self.last_pruned_watermark)
+            .expect("Failed to clean the directory");
 
         loop {
             tokio::select! {

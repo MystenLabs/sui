@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -15,7 +14,7 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::state_accumulator::AccumulatorStore;
+use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
@@ -55,7 +54,10 @@ impl SingleValidator {
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Arc::new(MockConsensusClient::new(validator.clone(), consensus_mode)),
+            Arc::new(MockConsensusClient::new(
+                Arc::downgrade(&validator),
+                consensus_mode,
+            )),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -169,8 +171,6 @@ impl SingleValidator {
                     .execute_certificate(&cert, &self.epoch_store)
                     .await
                     .unwrap()
-                    .into_inner()
-                    .into_data()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 let response = self
@@ -279,7 +279,10 @@ impl SingleValidator {
             ckpt_receiver,
             validator.get_checkpoint_store().clone(),
             validator.clone(),
-            Arc::new(StateAccumulator::new(validator.get_execution_cache())),
+            Arc::new(StateAccumulator::new_for_tests(
+                validator.get_accumulator_store().clone(),
+                self.get_epoch_store(),
+            )),
         );
         (checkpoint_executor, ckpt_sender)
     }
@@ -287,7 +290,7 @@ impl SingleValidator {
     pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
         let objects: HashMap<_, _> = self
             .get_validator()
-            .get_execution_cache()
+            .get_accumulator_store()
             .iter_cached_live_object_set_for_testing(false)
             .map(|o| match o {
                 LiveObject::Normal(object) => (object.id(), object),
@@ -311,7 +314,7 @@ impl SingleValidator {
             .collect();
         self.epoch_store
             .assign_shared_object_versions_idempotent(
-                self.get_validator().get_cache_reader().as_ref(),
+                self.get_validator().get_object_cache_reader().as_ref(),
                 &transactions,
             )
             .await

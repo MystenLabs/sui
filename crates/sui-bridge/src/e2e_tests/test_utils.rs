@@ -5,12 +5,13 @@ use crate::abi::EthBridgeCommittee;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
-use crate::server::APPLICATION_JSON;
-use crate::types::{AddTokensOnSuiAction, BridgeAction};
+use crate::server::BridgeNodePublicMetadata;
+use crate::types::BridgeAction;
 use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
+use prometheus::Registry;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -30,15 +31,11 @@ use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::bridge::{
-    BridgeChainId, BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME,
-};
+use sui_types::bridge::BridgeChainId;
 use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::get_key_pair;
 use sui_types::digests::TransactionDigest;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
-use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::join;
 use tokio::task::JoinHandle;
@@ -53,16 +50,10 @@ use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use ethers::prelude::*;
 use std::process::Child;
 use sui_config::local_ip_utils::get_available_port;
-use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{MoveTypeBridgeMessageKey, MoveTypeBridgeRecord};
-use sui_types::collection_types::LinkedTableNode;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
-use sui_types::dynamic_field::{DynamicFieldName, Field};
-use sui_types::object::Object;
-use sui_types::TypeTag;
 use tempfile::tempdir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -83,16 +74,21 @@ pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1
 /// structs that are needed for testing.
 pub struct BridgeTestCluster {
     pub test_cluster: TestCluster,
+    bridge_client: SuiBridgeClient,
     eth_environment: EthBridgeEnvironment,
     bridge_node_handles: Option<Vec<JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
     bridge_tx_cursor: Option<TransactionDigest>,
+    eth_chain_id: BridgeChainId,
+    sui_chain_id: BridgeChainId,
 }
 
 pub struct BridgeTestClusterBuilder {
     with_eth_env: bool,
     with_bridge_cluster: bool,
     approved_governance_actions: Option<Vec<Vec<BridgeAction>>>,
+    eth_chain_id: BridgeChainId,
+    sui_chain_id: BridgeChainId,
 }
 
 impl Default for BridgeTestClusterBuilder {
@@ -107,6 +103,8 @@ impl BridgeTestClusterBuilder {
             with_eth_env: false,
             with_bridge_cluster: false,
             approved_governance_actions: None,
+            eth_chain_id: BridgeChainId::EthCustom,
+            sui_chain_id: BridgeChainId::SuiCustom,
         }
     }
 
@@ -128,8 +126,20 @@ impl BridgeTestClusterBuilder {
         self
     }
 
+    pub fn with_sui_chain_id(mut self, chain_id: BridgeChainId) -> Self {
+        self.sui_chain_id = chain_id;
+        self
+    }
+
+    pub fn with_eth_chain_id(mut self, chain_id: BridgeChainId) -> Self {
+        self.eth_chain_id = chain_id;
+        self
+    }
+
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
+        std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..=3 {
@@ -154,13 +164,18 @@ impl BridgeTestClusterBuilder {
                     .await,
             );
         }
-
+        let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
         BridgeTestCluster {
             test_cluster,
+            bridge_client,
             eth_environment,
             bridge_node_handles,
             approved_governance_actions_for_next_start: self.approved_governance_actions,
             bridge_tx_cursor: None,
+            sui_chain_id: self.sui_chain_id,
+            eth_chain_id: self.eth_chain_id,
         }
     }
 
@@ -208,16 +223,24 @@ impl BridgeTestCluster {
         Ok((eth_signer, eth_address))
     }
 
-    pub async fn sui_bridge_client(&self) -> anyhow::Result<SuiBridgeClient> {
-        SuiBridgeClient::new(&self.test_cluster.fullnode_handle.rpc_url).await
+    pub fn bridge_client(&self) -> &SuiBridgeClient {
+        &self.bridge_client
     }
 
-    pub fn sui_client(&self) -> SuiClient {
-        self.test_cluster.fullnode_handle.sui_client.clone()
+    pub fn sui_client(&self) -> &SuiClient {
+        &self.test_cluster.fullnode_handle.sui_client
     }
 
     pub fn sui_user_address(&self) -> SuiAddress {
         self.test_cluster.get_address_0()
+    }
+
+    pub fn sui_chain_id(&self) -> BridgeChainId {
+        self.sui_chain_id
+    }
+
+    pub fn eth_chain_id(&self) -> BridgeChainId {
+        self.eth_chain_id
     }
 
     pub fn contracts(&self) -> &DeployedSolContracts {
@@ -232,7 +255,7 @@ impl BridgeTestCluster {
         self.test_cluster.wallet_mut()
     }
 
-    pub fn wallet(&mut self) -> &WalletContext {
+    pub fn wallet(&self) -> &WalletContext {
         &self.test_cluster.wallet
     }
 
@@ -371,108 +394,6 @@ impl BridgeTestCluster {
             .collect();
         events
     }
-}
-
-pub async fn publish_coins_return_add_coins_on_sui_action(
-    wallet_context: &mut WalletContext,
-    bridge_arg: ObjectArg,
-    publish_coin_responses: Vec<SuiTransactionBlockResponse>,
-    token_ids: Vec<u8>,
-    token_prices: Vec<u64>,
-    nonce: u64,
-) -> BridgeAction {
-    assert!(token_ids.len() == publish_coin_responses.len());
-    assert!(token_prices.len() == publish_coin_responses.len());
-    let sender = wallet_context.active_address().unwrap();
-    let rgp = wallet_context.get_reference_gas_price().await.unwrap();
-    let mut token_type_names = vec![];
-    for response in publish_coin_responses {
-        let object_changes = response.object_changes.unwrap();
-        let mut tc = None;
-        let mut type_ = None;
-        let mut uc = None;
-        let mut metadata = None;
-        for object_change in &object_changes {
-            if let o @ sui_json_rpc_types::ObjectChange::Created { object_type, .. } = object_change
-            {
-                if object_type.name.as_str().starts_with("TreasuryCap") {
-                    assert!(tc.is_none() && type_.is_none());
-                    tc = Some(o.clone());
-                    type_ = Some(object_type.type_params.first().unwrap().clone());
-                } else if object_type.name.as_str().starts_with("UpgradeCap") {
-                    assert!(uc.is_none());
-                    uc = Some(o.clone());
-                } else if object_type.name.as_str().starts_with("CoinMetadata") {
-                    assert!(metadata.is_none());
-                    metadata = Some(o.clone());
-                }
-            }
-        }
-        let (tc, type_, uc, metadata) =
-            (tc.unwrap(), type_.unwrap(), uc.unwrap(), metadata.unwrap());
-
-        // register with the bridge
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let bridge_arg = builder.obj(bridge_arg).unwrap();
-        let uc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(uc.object_ref()))
-            .unwrap();
-        let tc_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(tc.object_ref()))
-            .unwrap();
-        let metadata_arg = builder
-            .obj(ObjectArg::ImmOrOwnedObject(metadata.object_ref()))
-            .unwrap();
-        builder.programmable_move_call(
-            BRIDGE_PACKAGE_ID,
-            BRIDGE_MODULE_NAME.into(),
-            BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME.into(),
-            vec![type_.clone()],
-            vec![bridge_arg, tc_arg, uc_arg, metadata_arg],
-        );
-        let pt = builder.finish();
-        let gas = wallet_context
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap()
-            .unwrap();
-        let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
-        let signed_tx = wallet_context.sign_transaction(&tx);
-        let _ = wallet_context
-            .execute_transaction_must_succeed(signed_tx)
-            .await;
-
-        token_type_names.push(type_);
-    }
-
-    BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
-        nonce,
-        chain_id: BridgeChainId::SuiCustom,
-        native: false,
-        token_ids,
-        token_type_names,
-        token_prices,
-    })
-}
-
-pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> anyhow::Result<()> {
-    let now = std::time::Instant::now();
-    loop {
-        if let Ok(true) = reqwest::Client::new()
-            .get(server_url.clone())
-            .header(reqwest::header::ACCEPT, APPLICATION_JSON)
-            .send()
-            .await
-            .map(|res| res.status().is_success())
-        {
-            break;
-        }
-        if now.elapsed().as_secs() > timeout_sec {
-            anyhow::bail!("Server is not up and running after {} seconds", timeout_sec);
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    }
-    Ok(())
 }
 
 pub async fn get_eth_signer_client_e2e_test_only(
@@ -775,17 +696,10 @@ pub(crate) async fn start_bridge_cluster(
         let base64_encoded = kp.encode_base64();
         std::fs::write(authority_key_path.clone(), base64_encoded).unwrap();
 
-        let client_sui_address = SuiAddress::from(kp.public());
-        let sender_address = test_cluster.get_address_0();
-        // send some gas to this address
-        test_cluster
-            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
-            .await;
-
         let config = BridgeNodeConfig {
             server_listen_port: *server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: authority_key_path,
+            bridge_authority_key_path: authority_key_path,
             approved_governance_actions,
             run_client: true,
             db_path: Some(db_path),
@@ -799,14 +713,22 @@ pub(crate) async fn start_bridge_cluster(
             sui: SuiConfig {
                 sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        handles.push(run_bridge_node(config_clone).await.unwrap());
+        handles.push(
+            run_bridge_node(
+                config_clone,
+                BridgeNodePublicMetadata::empty_for_testing(),
+                Registry::new(),
+            )
+            .await
+            .unwrap(),
+        );
     }
     handles
 }
@@ -815,42 +737,11 @@ pub(crate) async fn get_signatures(
     sui_bridge_client: &SuiBridgeClient,
     nonce: u64,
     sui_chain_id: u8,
-    sui_client: &SuiClient,
-    message_type: u8,
 ) -> Vec<Bytes> {
-    // Now collect sigs from the bridge record and submit to eth to claim
-    let summary = sui_bridge_client.get_bridge_summary().await.unwrap();
-    let records_id = summary.bridge_records_id;
-    let key = serde_json::json!(
-        {
-            // u64 is represented as string
-            "bridge_seq_num": nonce.to_string(),
-            "message_type": message_type,
-            "source_chain": sui_chain_id,
-        }
-    );
-    let status_object_id = sui_client.read_api().get_dynamic_field_object(records_id,
-        DynamicFieldName {
-            type_: TypeTag::from_str("0x000000000000000000000000000000000000000000000000000000000000000b::message::BridgeMessageKey").unwrap(),
-            value: key.clone(),
-        },
-    ).await.unwrap().into_object().unwrap().object_id;
-
-    let object_resp = sui_client
-        .read_api()
-        .get_object_with_options(
-            status_object_id,
-            SuiObjectDataOptions::full_content().with_bcs(),
-        )
+    let sigs = sui_bridge_client
+        .get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, nonce)
         .await
         .unwrap();
-
-    let object: Object = object_resp.into_object().unwrap().try_into().unwrap();
-    let record: Field<
-        MoveTypeBridgeMessageKey,
-        LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
-    > = object.to_rust().unwrap();
-    let sigs = record.value.value.verified_signatures.unwrap();
 
     sigs.into_iter()
         .map(|sig: Vec<u8>| Bytes::from(sig))

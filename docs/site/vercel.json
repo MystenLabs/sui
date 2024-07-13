@@ -55,6 +55,7 @@
       { "source": "/build/zk_login", "destination": "/concepts/cryptography/zklogin", "permanent": true },
       { "source": "/build/package-upgrades", "destination": "/concepts/sui-move-concepts/packages/upgrade", "permanent": true },
       { "source": "/build/custom-upgrade-policy", "destination": "/concepts/sui-move-concepts/packages/custom-policies", "permanent": true },
+      { "source": "/build/automated-address-management", "destination": "/concepts/sui-move-concepts/packages/automated-address-management", "permanent": true },
       { "source": "/build/cli-client", "destination": "/references/cli/client", "permanent": true },
       { "source": "/build/connect-sui-network", "destination": "/guides/developer/getting-started/connect", "permanent": true },
       { "source": "/build/prog-trans-ts-sdk", "destination": "/guides/developer/sui-101/building-ptb", "permanent": true },
@@ -93,6 +94,19 @@
       { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
       { "source": "/guides/developer/app-examples/trustless-token-swap/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
       { "source": "/concepts/cryptography/zklogin/zklogin-example", "destination": "/guides/developer/cryptography/zklogin-integration/zklogin-example", "permanent": true},
-      { "source": "/guides/developer/getting-started/sui-environment", "destination": "/references/contribute/sui-environment", "permanent": true}
+      { "source": "/guides/developer/getting-started/sui-environment", "destination": "/references/contribute/sui-environment", "permanent": true},
+      { "source": "/concepts/sui-move-concepts/patterns/capabilities", "destination": "https://move-book.com/programmability/capability.html", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/patterns/witness", "destination": "https://move-book.com/programmability/witness-pattern.html", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/patterns/hot-potato", "destination": "https://examples.sui.io/patterns/hot-potato.html", "permanent": false },
+      { "source": "/concepts/sui-move-concepts/patterns/id-pointer", "destination": "https://move-book.com/storage/uid-and-id.html", "permanent": true },
+      { "source": "/concepts/sui-move-concepts/patterns/transferrable-witness", "destination": "https://move-book.com/programmability/witness-pattern.html", "permanent": true },
+      { "source": "/guides/developer/advanced/asset-tokenization", "destination": "/guides/developer/nft/asset-tokenization", "permanent": true },
+      { "source": "/references/move/move-toml", "destination": "https://move-book.com/concepts/manifest.html", "permanent": true },
+      { "source": "/standards/deepbook-pools", "destination": "/standards/deepbookv2/pools", "permanent": true },
+      { "source": "/standards/routing-a-swap", "destination": "/standards/deepbookv2/routing-a-swap", "permanent": true },
+      { "source": "/standards/trade-and-swap", "destination": "/standards/deepbookv2/trade-and-swap", "permanent": true },
+      { "source": "/standards/query-the-pool", "destination": "/standards/deepbookv2/query-the-pool", "permanent": true },
+      { "source": "/standards/deepbook-design", "destination": "/standards/deepbookv2/design", "permanent": true },
+      { "source": "/standards/deepbook-orders", "destination": "/standards/deepbookv2/orders", "permanent": true }
     ]
   }

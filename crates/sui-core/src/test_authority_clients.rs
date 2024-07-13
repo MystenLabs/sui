@@ -14,8 +14,9 @@ use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+    HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+    ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -39,7 +40,7 @@ pub struct LocalAuthorityClientFaultConfig {
     pub fail_after_handle_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
-    pub overload_retry_after_handle_transaction: bool,
+    pub overload_retry_after_handle_transaction: Option<Duration>,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -76,9 +77,9 @@ impl AuthorityAPI for LocalAuthorityClient {
                 error: "Mock error after handle_transaction".to_owned(),
             });
         }
-        if self.fault_config.overload_retry_after_handle_transaction {
+        if let Some(duration) = self.fault_config.overload_retry_after_handle_transaction {
             return Err(SuiError::ValidatorOverloadedRetryAfter {
-                retry_after_secs: 0,
+                retry_after_secs: duration.as_secs(),
             });
         }
         result
@@ -118,6 +119,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         spawn_monitored_task!(Self::handle_certificate(state, request, fault_config))
             .await
             .unwrap()
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
     }
 
     async fn handle_object_info_request(
@@ -301,6 +310,14 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!()
     }
 
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
+    }
+
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -390,6 +407,14 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: HandleCertificateRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_soft_bundle_certificates_v3(
+        &self,
+        _request: HandleSoftBundleCertificatesRequestV3,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
         unimplemented!()
     }
 

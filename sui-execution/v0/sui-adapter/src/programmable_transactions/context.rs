@@ -183,10 +183,8 @@ mod checked {
             // the session was just used for ability and layout metadata fetching, no changes should
             // exist. Plus, Sui Move does not use these changes or events
             let (res, linkage) = tmp_session.finish();
-            let (change_set, move_events) =
-                res.map_err(|e| crate::error::convert_vm_error(e, vm, &linkage))?;
+            let change_set = res.map_err(|e| crate::error::convert_vm_error(e, vm, &linkage))?;
             assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-            assert_invariant!(move_events.is_empty(), "Events must be empty");
             // make the real session
             let session = new_session(
                 vm,
@@ -681,15 +679,8 @@ mod checked {
             }
 
             let (res, linkage) = session.finish_with_extensions();
-            let (change_set, events, mut native_context_extensions) =
+            let (_, mut native_context_extensions) =
                 res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
-            // Sui Move programs should never touch global state, so resources should be empty
-            assert_invariant!(
-                change_set.resources().next().is_none(),
-                "Change set must be empty"
-            );
-            // Sui Move no longer uses Move's internal event system
-            assert_invariant!(events.is_empty(), "Events must be empty");
             let object_runtime: ObjectRuntime = native_context_extensions.remove();
             let new_ids = object_runtime.new_ids().clone();
             // tell the object runtime what input objects were taken and which were transferred
@@ -841,12 +832,11 @@ mod checked {
             }
 
             let (res, linkage) = tmp_session.finish();
-            let (change_set, move_events) = res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
+            let change_set = res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
 
             // the session was just used for ability and layout metadata fetching, no changes should
             // exist. Plus, Sui Move does not use these changes or events
             assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-            assert_invariant!(move_events.is_empty(), "Events must be empty");
 
             Ok(ExecutionResults::V1(ExecutionResultsV1 {
                 object_changes,
@@ -1096,7 +1086,7 @@ mod checked {
                 }
 
                 if type_params.is_empty() {
-                    Type::Struct(idx)
+                    Type::Datatype(idx)
                 } else {
                     let loaded_type_params = type_params
                         .iter()
@@ -1111,7 +1101,7 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(Box::new((idx, loaded_type_params)))
+                    Type::DatatypeInstantiation(Box::new((idx, loaded_type_params)))
                 }
             }
         })

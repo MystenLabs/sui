@@ -3,25 +3,16 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
-use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
-};
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
-use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 
-use either::Either;
-use futures::{
-    future::{join_all, BoxFuture},
-    FutureExt,
-};
+use futures::{future::BoxFuture, FutureExt};
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::Registry;
 use std::sync::Arc;
-use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::accumulator::Accumulator;
@@ -43,8 +34,8 @@ use typed_store::Map;
 
 use super::{
     implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
-    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper,
-    StateSyncAPI,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI,
+    TransactionCacheRead,
 };
 
 pub struct PassthroughCache {
@@ -69,33 +60,8 @@ impl PassthroughCache {
         Self::new(store, metrics)
     }
 
-    pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
-        NotifyReadWrapper(self)
-    }
-
     pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
         &self.store
-    }
-
-    pub async fn prune_objects_and_compact_for_testing(
-        &self,
-        checkpoint_store: &Arc<CheckpointStore>,
-    ) {
-        let pruning_config = AuthorityStorePruningConfig {
-            num_epochs_to_retain: 0,
-            ..Default::default()
-        };
-        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
-            &self.store.perpetual_tables,
-            checkpoint_store,
-            &self.store.objects_lock_table,
-            pruning_config,
-            AuthorityStorePruningMetrics::new_for_test(),
-            usize::MAX,
-            EPOCH_DURATION_MS_FOR_TESTING,
-        )
-        .await;
-        let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
     }
 
     fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {
@@ -112,7 +78,7 @@ impl PassthroughCache {
     }
 }
 
-impl ExecutionCacheRead for PassthroughCache {
+impl ObjectCacheRead for PassthroughCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.package_cache
             .get_package_object(package_id, &*self.store)
@@ -188,6 +154,37 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.check_owned_objects_are_live(owned_object_refs)
     }
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(self)
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
+    }
+
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>> {
+        self.store.get_marker_value(object_id, &version, epoch_id)
+    }
+
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+        self.store.get_latest_marker(object_id, epoch_id)
+    }
+
+    fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.store.perpetual_tables.get_highest_pruned_checkpoint()
+    }
+}
+
+impl TransactionCacheRead for PassthroughCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -218,25 +215,11 @@ impl ExecutionCacheRead for PassthroughCache {
         &'a self,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
-        async move {
-            let registrations = self
-                .executed_effects_digests_notify_read
-                .register_all(digests);
-
-            let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
-
-            let results = executed_effects_digests
-                .into_iter()
-                .zip(registrations)
-                .map(|(a, r)| match a {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => Either::Right(r),
-                });
-
-            Ok(join_all(results).await)
-        }
-        .boxed()
+        self.executed_effects_digests_notify_read
+            .read(digests, |digests| {
+                self.multi_get_executed_effects_digests(digests)
+            })
+            .boxed()
     }
 
     fn multi_get_events(
@@ -244,31 +227,6 @@ impl ExecutionCacheRead for PassthroughCache {
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         self.store.multi_get_events(event_digests)
-    }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
-        get_sui_system_state(self)
-    }
-
-    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
-        get_bridge(self)
-    }
-
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, &version, epoch_id)
-    }
-
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        self.store.get_latest_marker(object_id, epoch_id)
     }
 }
 

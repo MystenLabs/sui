@@ -173,7 +173,7 @@ module sui::priority_queue {
     #[test_only]
     fun check_pop_max(h: &mut PriorityQueue<u64>, expected_priority: u64, expected_value: u64) {
         let (priority, value) = pop_max(h);
-        assert!(priority == expected_priority, 0);
-        assert!(value == expected_value, 0);
+        assert!(priority == expected_priority);
+        assert!(value == expected_value);
     }
 }

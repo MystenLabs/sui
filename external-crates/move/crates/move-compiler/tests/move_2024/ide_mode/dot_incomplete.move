@@ -1,18 +1,19 @@
 module a::m {
 
-    public struct SomeStruct has drop {
-        some_field: u64
+    public struct A has copy, drop {
+        x: u64
     }
 
-    public struct AnotherStruct has drop {
-        another_field: SomeStruct
+    public struct B has copy, drop {
+        a: A
     }
 
-    fun foo(s: AnotherStruct) {
-        let _tmp1 = s.;                // incomplete with `;` (next line should parse)
-        let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
-        let _tmp3 = s.another_field.   // incomplete without `;` (unexpected `let`)
-        let _tmp4 = s;
-        let _tmp = s.                  // incomplete without `;` (unexpected `}`)
+    public fun foo() {
+        let _s = B { a: A { x: 0 } };
+        let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+        let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+        let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+        let _tmp4 = _s.
+        let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
     }
 }

@@ -336,7 +336,7 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "number too large to fit in target type",
+            message: "Value does not fit within a u64",
             span: Span {
                 start: 13,
                 end: 75,

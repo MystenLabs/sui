@@ -1,10 +1,19 @@
-processed 1 task
+processed 2 tasks
 
 task 0 'publish'. lines 1-42:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Token'. Got VMError: {
     major_status: READREF_WITHOUT_COPY_ABILITY,
     sub_status: None,
     location: 0x1::Token,
+    indices: [(FunctionDefinition, 4)],
+    offsets: [(FunctionDefinitionIndex(4), 13)],
+}
+
+task 1 'publish'. lines 44-85:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::Token'. Got VMError: {
+    major_status: READREF_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x2::Token,
     indices: [(FunctionDefinition, 4)],
     offsets: [(FunctionDefinitionIndex(4), 13)],
 }

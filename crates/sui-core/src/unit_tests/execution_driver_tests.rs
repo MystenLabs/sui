@@ -4,7 +4,6 @@
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
-use crate::authority::EffectsNotifyRead;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
@@ -21,6 +20,7 @@ use crate::test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
     make_transfer_object_move_transaction,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
@@ -264,8 +264,8 @@ pub async fn do_cert_with_shared_objects(
 ) -> TransactionEffects {
     send_consensus(authority, cert).await;
     authority
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -294,6 +294,12 @@ async fn execute_shared_on_first_three_authorities(
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
+
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
 
     // ---- Initialize a network with three accounts, each with 10 gas objects.
 
@@ -437,14 +443,14 @@ async fn test_execution_with_dependencies() {
     }
 
     // All certs should get executed eventually.
-    let digests = executed_shared_certs
+    let digests: Vec<_> = executed_shared_certs
         .iter()
         .chain(executed_owned_certs.iter())
         .map(|cert| *cert.digest())
         .collect();
     authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&digests)
         .await
         .unwrap();
 }
@@ -471,6 +477,12 @@ async fn try_sign_on_first_three_authorities(
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_per_object_overload() {
     telemetry_subscribers::init_for_testing();
+
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
 
     // Initialize a network with 1 account and 2000 gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
@@ -507,8 +519,8 @@ async fn test_per_object_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_effects_notify_read()
-            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -522,8 +534,8 @@ async fn test_per_object_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -594,6 +606,12 @@ async fn test_per_object_overload() {
 async fn test_txn_age_overload() {
     telemetry_subscribers::init_for_testing();
 
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
+
     // Initialize a network with 1 account and 3 gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
     let gas_objects = (0..3)
@@ -636,8 +654,8 @@ async fn test_txn_age_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_effects_notify_read()
-            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -651,8 +669,8 @@ async fn test_txn_age_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()

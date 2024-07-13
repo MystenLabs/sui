@@ -42,7 +42,7 @@ This can be done in two steps:
 as prerequisites for Sui installation - for Linux, macOS and Windows these prerequisites and
 their installation instructions can be found
 [here](https://docs.sui.io/guides/developer/getting-started/sui-install#additional-prerequisites-by-operating-system)
-2. Invoke `cargo install --git https://github.com/MystenLabs/sui move-analyzer` to install the
+2. Invoke `cargo install --git https://github.com/MystenLabs/sui sui-move-lsp` to install the
 `move-analyzer` language server in your Cargo binary directory, which is typically located
 in the `~/.cargo/bin` (macOS/Linux) or `C:\Users\USER\.cargo\bin` (Windows) directory.
 3. Copy the move-analyzer binary to `~/.sui/bin` (macOS/Linux) or `C:\Users\USER\.sui\bin`
@@ -82,6 +82,7 @@ Move source file (a file with a `.move` file extension) and:
 - Place your cursor on a delimiter, such as `<`, `(`, or `{`, and its corresponding delimiter --
   `>`, `)`, or `}` -- will be highlighted.
 - As you type, the editor will offer completion suggestions, in particular:
+  - struct field name and method name suggestions following `.` being typed
   - code snippets to complete `init` function and object type definitions
 - If the opened Move source file is located within a buildable project (a `Move.toml` file can be
   found in one of its parent directories), the following advanced features will also be available:
@@ -91,6 +92,9 @@ Move source file (a file with a `.move` file extension) and:
   - go to references
   - type on hover
   - outline view showing symbol tree for Move source files
+  - inlay hints:
+    - types: local declarations and lambda parameters
+    - parameter names at function calls
 - If the opened Move source file is located within a buildable project you can build and (locally)
   test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
   VSCode's command palette

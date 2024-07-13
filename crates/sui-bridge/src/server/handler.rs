@@ -20,7 +20,6 @@ use sui_types::digests::TransactionDigest;
 use tap::TapFallible;
 use tokio::sync::{oneshot, Mutex};
 use tracing::info;
-use tracing::instrument;
 
 use super::governance_verifier::GovernanceVerifier;
 
@@ -219,21 +218,21 @@ impl BridgeRequestHandler {
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_sui_action_signing_queue"]),
         );
         let (eth_signer_tx, eth_rx) = mysten_metrics::metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_eth_action_signing_queue"]),
         );
         let (governance_signer_tx, governance_rx) = mysten_metrics::metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&["server_governance_action_signing_queue"]),
         );
         let signer = Arc::new(signer);
@@ -256,13 +255,11 @@ impl BridgeRequestHandler {
 
 #[async_trait]
 impl BridgeRequestHandlerTrait for BridgeRequestHandler {
-    #[instrument(level = "info", skip(self))]
     async fn handle_eth_tx_hash(
         &self,
         tx_hash_hex: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-        info!("Received handle eth tx request");
         let tx_hash = TxHash::from_str(&tx_hash_hex).map_err(|_| BridgeError::InvalidTxHash)?;
 
         let (tx, rx) = oneshot::channel();
@@ -276,13 +273,11 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
         Ok(Json(signed_action))
     }
 
-    #[instrument(level = "info", skip(self))]
     async fn handle_sui_tx_digest(
         &self,
         tx_digest_base58: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-        info!("Received handle sui tx request");
         let tx_digest = TransactionDigest::from_str(&tx_digest_base58)
             .map_err(|_e| BridgeError::InvalidTxHash)?;
         let (tx, rx) = oneshot::channel();
@@ -300,7 +295,6 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
         &self,
         action: BridgeAction,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-        info!("Received handle governace action request");
         if !action.is_governace_action() {
             return Err(BridgeError::ActionIsNotGovernanceAction(action));
         }

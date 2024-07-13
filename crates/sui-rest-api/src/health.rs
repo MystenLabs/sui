@@ -1,30 +1,46 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, SystemTime};
-
+use crate::{
+    openapi::{ApiEndpoint, RouteHandler},
+    reader::StateReader,
+    RestService, Result,
+};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use std::time::{Duration, SystemTime};
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::Result;
+pub struct HealthCheck;
 
-pub const HEALTH_PATH: &str = "/health";
+impl ApiEndpoint<RestService> for HealthCheck {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
 
-#[derive(serde::Deserialize)]
-pub struct Threshold {
-    threshold_seconds: Option<u32>,
+    fn path(&self) -> &'static str {
+        "/health"
+    }
+
+    fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
+        RouteHandler::new(self.method(), health)
+    }
 }
 
-pub async fn health<S: ReadStore>(
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct Threshold {
+    pub threshold_seconds: Option<u32>,
+}
+
+async fn health(
     Query(Threshold { threshold_seconds }): Query<Threshold>,
-    State(state): State<S>,
+    State(state): State<StateReader>,
 ) -> Result<impl IntoResponse> {
-    let summary = state.get_latest_checkpoint()?;
+    let summary = state.inner().get_latest_checkpoint()?;
 
     // If we have a provided threshold, check that it's close to the current time
     if let Some(threshold_seconds) = threshold_seconds {

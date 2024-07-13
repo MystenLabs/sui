@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createSuiAddressValidation } from '_components/address-input/validation';
-import { type SuiClient } from '@mysten/sui.js/client';
+import { type SuiClient } from '@mysten/sui/client';
 import * as Yup from 'yup';
 
 export function createValidationSchema(

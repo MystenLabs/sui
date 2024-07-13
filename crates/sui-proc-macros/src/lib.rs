@@ -58,12 +58,12 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 
                     register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    path.extend(["..", "..", "sui_programmability", "examples", "basics"]);
+                    path.extend(["..", "..", "examples", "move", "basics"]);
                     let mut build_config = BuildConfig::default();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
                     let _all_module_bytes = build_config
-                        .build(path)
+                        .build(&path)
                         .unwrap()
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }

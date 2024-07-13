@@ -19,15 +19,17 @@ use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, StateAccumulatorV2EnabledConfig,
+    SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use tempfile::TempDir;
 use tracing::info;
 
@@ -55,6 +57,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_fw_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
+    state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
 }
 
 impl SwarmBuilder {
@@ -82,6 +85,7 @@ impl SwarmBuilder {
             fullnode_fw_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
+            state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(true),
         }
     }
 }
@@ -111,6 +115,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_fw_config: self.fullnode_fw_config,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
+            state_accumulator_v2_enabled_config: self.state_accumulator_v2_enabled_config,
         }
     }
 
@@ -219,6 +224,14 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_state_accumulator_v2_enabled_config(
+        mut self,
+        c: StateAccumulatorV2EnabledConfig,
+    ) -> Self {
+        self.state_accumulator_v2_enabled_config = c;
+        self
+    }
+
     pub fn with_fullnode_supported_protocol_versions_config(
         mut self,
         c: ProtocolVersionsConfig,
@@ -294,6 +307,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             SwarmDirectory::new_temporary()
         };
 
+        let ingest_data = self.data_ingestion_dir.clone();
+
         let network_config = self.network_config.unwrap_or_else(|| {
             let mut config_builder = ConfigBuilder::new(dir.as_ref());
 
@@ -336,6 +351,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .with_supported_protocol_versions_config(
                     self.supported_protocol_versions_config.clone(),
                 )
+                .with_state_accumulator_v2_enabled_config(
+                    self.state_accumulator_v2_enabled_config.clone(),
+                )
                 .build()
         });
 
@@ -356,7 +374,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_db_checkpoint_config(self.db_checkpoint_config.clone())
             .with_run_with_range(self.fullnode_run_with_range)
             .with_policy_config(self.fullnode_policy_config)
+            .with_data_ingestion_dir(ingest_data)
             .with_fw_config(self.fullnode_fw_config);
+
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {
                 ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,

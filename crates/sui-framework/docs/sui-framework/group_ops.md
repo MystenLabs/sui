@@ -66,11 +66,20 @@ Generic Move and native functions for group operations.
 ## Constants
 
 
+<a name="0x2_group_ops_EInvalidInput"></a>
+
+
+
+<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+</code></pre>
+
+
+
 <a name="0x2_group_ops_EInputTooLong"></a>
 
 
 
-<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLong</a>: u64 = 2;
+<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLong</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -79,16 +88,7 @@ Generic Move and native functions for group operations.
 
 
 
-<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidBufferLength">EInvalidBufferLength</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="0x2_group_ops_EInvalidInput"></a>
-
-
-
-<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>: u64 = 1;
+<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidBufferLength">EInvalidBufferLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -97,7 +97,7 @@ Generic Move and native functions for group operations.
 
 
 
-<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_ENotSupported">ENotSupported</a>: u64 = 0;
+<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_ENotSupported">ENotSupported</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -540,7 +540,7 @@ Aborts with <code><a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLo
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_set_as_prefix">set_as_prefix</a>(x: u64, big_endian: bool, buffer: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_set_as_prefix">set_as_prefix</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, big_endian: bool, buffer: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -549,7 +549,7 @@ Aborts with <code><a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLo
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_set_as_prefix">set_as_prefix</a>(x: u64, big_endian: bool, buffer: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<a href="package.md#0x2_package">package</a>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_set_as_prefix">set_as_prefix</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, big_endian: bool, buffer: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>let</b> buffer_len = buffer.length();
     <b>assert</b>!(buffer_len &gt; 7, <a href="group_ops.md#0x2_group_ops_EInvalidBufferLength">EInvalidBufferLength</a>);
     <b>let</b> x_as_bytes = <a href="../move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&x); // little endian

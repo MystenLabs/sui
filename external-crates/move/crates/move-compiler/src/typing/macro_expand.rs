@@ -10,7 +10,7 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{program_info::FunctionInfo, unique_map::UniqueMap},
+    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
     typing::{
         ast as T,
         core::{self, TParamSubst},
@@ -44,6 +44,7 @@ pub struct ExpandedMacro {
     pub body: Box<N::Exp>,
 }
 
+#[derive(Debug)]
 pub enum EvalStrategy<ByValue, ByName> {
     ByValue(ByValue),
     ByName(ByName),
@@ -359,6 +360,7 @@ mod recolor_struct {
         pub fn add_lvalue(&mut self, sp!(_, lvalue_): &N::LValue) {
             match lvalue_ {
                 N::LValue_::Ignore => (),
+                N::LValue_::Error => (),
                 N::LValue_::Var { var, .. } => {
                     self.vars.insert(*var);
                 }
@@ -506,6 +508,7 @@ fn recolor_lvalues(ctx: &mut Recolor, lvalues: &mut N::LValueList) {
 fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
     match lvalue_ {
         N::LValue_::Ignore => (),
+        N::LValue_::Error => (),
         N::LValue_::Var { var, .. } => recolor_var(ctx, var),
         N::LValue_::Unpack(_, _, _, lvalues) => {
             for (_, _, (_, lvalue)) in lvalues {
@@ -677,7 +680,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
             recolor_exp_dotted(ctx, ed)
         }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
@@ -784,6 +787,7 @@ fn lvalues(context: &mut Context, sp!(_, lvs_): &mut N::LValueList) {
 fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     match lv_ {
         N::LValue_::Ignore => (),
+        N::LValue_::Error => (),
         N::LValue_::Var {
             var: sp!(_, v_), ..
         } => {
@@ -1048,11 +1052,19 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 })
                 .collect();
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
-            *e_ = N::Exp_::Block(N::Block {
+
+            let block = N::Exp_::Block(N::Block {
                 name: None,
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
+            if context.core.env.ide_mode() {
+                context
+                    .core
+                    .env
+                    .add_ide_annotation(*eloc, IDEAnnotation::ExpandedLambda);
+            }
+            *e_ = block;
         }
 
         ///////
@@ -1147,7 +1159,9 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+            exp_dotted(context, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {

@@ -8,8 +8,11 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::execution_cache::ExecutionCache;
+use crate::epoch::randomness::RandomnessManager;
+use crate::execution_cache::build_execution_cache;
+use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
+use crate::rest_index::RestIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -23,8 +26,10 @@ use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_network::randomness;
+use sui_protocol_config::ProtocolConfig;
 use sui_storage::IndexStore;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
@@ -34,7 +39,10 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::VerifiedTransaction;
+
+use super::epoch_start_configuration::EpochFlag;
 
 #[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
@@ -53,6 +61,7 @@ pub struct TestAuthorityBuilder<'a> {
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    cache_config: Option<ExecutionCacheConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -115,12 +124,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    /// When providing a network config, we will use the first validator's
+    /// When providing a network config, we will use the \node_idx validator's
     /// key as the keypair for the new node.
-    pub fn with_network_config(self, config: &'a NetworkConfig) -> Self {
+    pub fn with_network_config(self, config: &'a NetworkConfig, node_idx: usize) -> Self {
         self.with_genesis_and_keypair(
             &config.genesis,
-            config.validator_configs()[0].protocol_key_pair(),
+            config.validator_configs()[node_idx].protocol_key_pair(),
         )
     }
 
@@ -146,6 +155,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         assert!(self.authority_overload_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        self.cache_config = Some(config);
         self
     }
 
@@ -185,6 +199,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             }
         };
         let mut config = local_network_config.validator_configs()[0].clone();
+        if let Some(cache_config) = self.cache_config {
+            config.execution_cache = cache_config;
+        }
+
         let keypair = if let Some(keypair) = self.node_keypair {
             keypair
         } else {
@@ -198,32 +216,25 @@ impl<'a> TestAuthorityBuilder<'a> {
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        // Force disable random beacon for tests using this builder, because it doesn't set up the
-        // RandomnessManager.
-        let _guard = if let Some(mut config) = self.protocol_config {
-            config.set_random_beacon_for_testing(false);
-            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
-        } else {
-            ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-                config.set_random_beacon_for_testing(false);
-                config
-            })
-        };
+        let _guard = self
+            .protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
+        let epoch_flags = EpochFlag::default_flags_for_new_epoch(&config);
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
             &genesis.objects(),
-            None,
+            epoch_flags,
         )
         .unwrap();
         let expensive_safety_checks = match self.expensive_safety_checks {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
-        let cache = Arc::new(ExecutionCache::new_for_tests(
-            authority_store.clone(),
-            &registry,
-        ));
+
+        let cache_traits =
+            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -231,7 +242,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            cache.clone(),
+            cache_traits.backing_package_store.clone(),
+            cache_traits.object_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -260,8 +272,21 @@ impl<'a> TestAuthorityBuilder<'a> {
                 epoch_store
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
+                false,
             )))
         };
+        let rest_index = if self.disable_indexer {
+            None
+        } else {
+            Some(Arc::new(RestIndexStore::new(
+                path.join("rest_index"),
+                &authority_store,
+                &checkpoint_store,
+                &epoch_store,
+                &cache_traits.backing_package_store,
+            )))
+        };
+
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();
@@ -284,19 +309,44 @@ impl<'a> TestAuthorityBuilder<'a> {
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
-            cache,
-            epoch_store,
+            cache_traits,
+            epoch_store.clone(),
             committee_store,
             index_store,
+            rest_index,
             checkpoint_store,
             &registry,
             genesis.objects(),
             &DBCheckpointConfig::default(),
-            config,
+            config.clone(),
             usize::MAX,
             ArchiveReaderBalancer::default(),
         )
         .await;
+
+        // Set up randomness with no-op consensus (DKG will not complete).
+        if epoch_store.randomness_state_enabled() {
+            let consensus_client = Box::new(MockConsensusClient::new(
+                Arc::downgrade(&state),
+                ConsensusMode::Noop,
+            ));
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_client,
+                randomness::Handle::new_stub(),
+                config.protocol_key_pair(),
+            )
+            .await;
+            if let Some(randomness_manager) = randomness_manager {
+                // Randomness might fail if test configuration does not permit DKG init.
+                // In that case, skip setting it up.
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await
+                    .unwrap();
+            }
+        }
+
         // For any type of local testing that does not actually spawn a node, the checkpoint executor
         // won't be started, which means we won't actually execute the genesis transaction. In that case,
         // the genesis objects (e.g. all the genesis test coins) won't be accessible. Executing it

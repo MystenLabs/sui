@@ -26,8 +26,6 @@ pub struct BridgeOrchestratorTables {
     pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
 }
 
-// TODO remove after wireup
-#[allow(dead_code)]
 impl BridgeOrchestratorTables {
     pub fn new(path: &Path) -> Arc<Self> {
         Arc::new(Self::open_tables_read_write(

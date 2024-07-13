@@ -61,6 +61,7 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
@@ -80,7 +81,8 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.get_execution_cache().clone());
+    let state_acc =
+        StateAccumulator::new_for_tests(authority.get_accumulator_store().clone(), &epoch_store);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -125,7 +127,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[digest]),
     )
     .await
@@ -142,7 +144,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&digests),
     )
     .await
@@ -189,7 +191,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/basics")
+    compile_example_package("../../examples/move/basics")
 }
 
 pub fn compile_managed_coin_package() -> CompiledPackage {
@@ -201,7 +203,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    BuildConfig::new_for_testing().build(path).unwrap()
+    BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
 async fn init_genesis(

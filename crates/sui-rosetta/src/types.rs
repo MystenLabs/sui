@@ -341,6 +341,10 @@ impl From<SuiPublicKey> for PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::ZkLogin, // inaccurate but added for completeness.
             },
+            SuiPublicKey::Passkey(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(&k.0),
+                curve_type: CurveType::Secp256r1,
+            },
         }
     }
 }
@@ -423,7 +427,8 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionBlockKind::ConsensusCommitPrologue(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_) => {
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_)
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_) => {
                 OperationType::ConsensusCommitPrologue
             }
             SuiTransactionBlockKind::ProgrammableTransaction(_) => {

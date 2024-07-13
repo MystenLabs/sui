@@ -1,4 +1,4 @@
-processed 6 tasks
+processed 12 tasks
 
 task 1 'publish'. lines 10-22:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
@@ -41,6 +41,51 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M9,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 7 'publish'. lines 82-94:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M2'. Got VMError: {
+    major_status: WRITEREF_WITHOUT_DROP_ABILITY,
+    sub_status: None,
+    location: 0x2::M2,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 8 'publish'. lines 96-108:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M3'. Got VMError: {
+    major_status: POP_WITHOUT_DROP_ABILITY,
+    sub_status: None,
+    location: 0x2::M3,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 9 'publish'. lines 110-121:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M4'. Got VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: 0x2::M4,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 10 'publish'. lines 123-133:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M5'. Got VMError: {
+    major_status: COPYLOC_WITHOUT_COPY_ABILITY,
+    sub_status: None,
+    location: 0x2::M5,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 11 'publish'. lines 135-146:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M9'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x2::M9,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }

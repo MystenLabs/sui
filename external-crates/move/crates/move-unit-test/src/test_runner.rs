@@ -9,10 +9,6 @@ use crate::{
     },
 };
 use anyhow::Result;
-use codespan_reporting::{
-    diagnostic::Severity,
-    term::termcolor::{ColorChoice, StandardStream},
-};
 use colored::*;
 
 use move_binary_format::{
@@ -23,28 +19,23 @@ use move_bytecode_utils::Modules;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
-    diagnostics::WarningFilters,
-    shared::{Flags, NumericalAddress, PackagePaths},
-    unit_test::{ExpectedFailure, ModuleTestPlan, MoveErrorType, TestCase, TestPlan},
+    unit_test::{ExpectedFailure, ModuleTestPlan, MoveErrorType, TestArgument, TestCase, TestPlan},
 };
 use move_core_types::{
-    account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
-    language_storage::ModuleId, runtime_value::serialize_values, vm_status::StatusCode,
-};
-use move_model::{
-    model::GlobalEnv, options::ModelBuilderOptions,
-    run_model_builder_with_options_and_compilation_flags,
-};
-use move_stackless_bytecode_interpreter::{
-    concrete::{settings::InterpreterSettings, value::GlobalState},
-    shared::bridge::adapt_move_vm_result,
-    StacklessBytecodeInterpreter,
+    account_address::AccountAddress,
+    effects::ChangeSet,
+    identifier::IdentStr,
+    language_storage::{ModuleId, TypeTag},
+    runtime_value::{serialize_values, MoveValue},
+    u256::U256,
+    vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
 };
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
@@ -57,10 +48,9 @@ pub struct SharedTestingConfig {
     cost_table: CostTable,
     native_function_table: NativeFunctionTable,
     starting_storage_state: InMemoryStorage,
-    source_files: Vec<String>,
-    named_address_values: BTreeMap<String, NumericalAddress>,
-    check_stackless_vm: bool,
-    verbose: bool,
+    prng_seed: Option<u64>,
+    num_iters: u64,
+    deterministic_generation: bool,
 }
 
 pub struct TestRunner {
@@ -120,21 +110,16 @@ impl TestRunner {
     pub fn new(
         execution_bound: u64,
         num_threads: usize,
-        check_stackless_vm: bool,
-        verbose: bool,
         report_stacktrace_on_abort: bool,
+        prng_seed: Option<u64>,
+        num_iters: u64,
+        deterministic_generation: bool,
         tests: TestPlan,
         // TODO: maybe we should require the clients to always pass in a list of native functions so
         // we don't have to make assumptions about their gas parameters.
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
-        named_address_values: BTreeMap<String, NumericalAddress>,
     ) -> Result<Self> {
-        let source_files = tests
-            .files
-            .values()
-            .map(|(filepath, _)| filepath.to_string())
-            .collect();
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state = setup_test_storage(modules)?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
@@ -155,10 +140,9 @@ impl TestRunner {
                 //
                 // From the API standpoint, we should let the client specify the cost table.
                 cost_table: cost_table.unwrap_or_else(unit_cost_schedule),
-                source_files,
-                check_stackless_vm,
-                verbose,
-                named_address_values,
+                prng_seed,
+                num_iters,
+                deterministic_generation,
             },
             num_threads,
             tests,
@@ -211,6 +195,7 @@ impl TestRunner {
 struct TestOutput<'a, 'b, W> {
     test_plan: &'a ModuleTestPlan,
     writer: &'b Mutex<W>,
+    test_info: &'a BTreeMap<ModuleId, NamedCompiledModule>,
 }
 
 impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
@@ -219,7 +204,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {}    ] {}::{}",
             "PASS".bold().bright_green(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name
         )
         .unwrap()
@@ -230,7 +215,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {}    ] {}::{}",
             "FAIL".bold().bright_red(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name,
         )
         .unwrap()
@@ -241,7 +226,7 @@ impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
             self.writer.lock().unwrap(),
             "[ {} ] {}::{}",
             "TIMEOUT".bold().bright_yellow(),
-            format_module_id(&self.test_plan.module_id),
+            format_module_id(self.test_info, &self.test_plan.module_id),
             fn_name,
         )
         .unwrap();
@@ -253,7 +238,7 @@ impl SharedTestingConfig {
         &self,
         test_plan: &ModuleTestPlan,
         function_name: &str,
-        test_info: &TestCase,
+        arguments: Vec<MoveValue>,
     ) -> (
         VMResult<ChangeSet>,
         VMResult<NativeContextExtensions>,
@@ -281,7 +266,7 @@ impl SharedTestingConfig {
             &test_plan.module_id,
             IdentStr::new(function_name).unwrap(),
             vec![], // no ty args, at least for now
-            serialize_values(test_info.arguments.iter()),
+            serialize_values(arguments.iter()),
             &mut gas_meter,
         );
         let mut return_result = serialized_return_values_result.map(|res| {
@@ -296,7 +281,6 @@ impl SharedTestingConfig {
             }
         }
         let test_run_info = TestRunInfo::new(
-            function_name.to_string(),
             now.elapsed(),
             // TODO(Gas): This doesn't look quite right...
             //            We're not computing the number of instructions executed even with a unit gas schedule.
@@ -306,227 +290,232 @@ impl SharedTestingConfig {
                 .into(),
         );
         match session.finish_with_extensions().0 {
-            Ok((cs, _, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
+            Ok((cs, extensions)) => (Ok(cs), Ok(extensions), return_result, test_run_info),
             Err(err) => (Err(err.clone()), Err(err), return_result, test_run_info),
         }
     }
 
-    fn execute_via_stackless_vm(
-        &self,
-        env: &GlobalEnv,
-        test_plan: &ModuleTestPlan,
-        function_name: &str,
-        test_info: &TestCase,
-    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo, Option<String>) {
-        let now = Instant::now();
-
-        let settings = if self.verbose {
-            InterpreterSettings::verbose_default()
-        } else {
-            InterpreterSettings::default()
-        };
-        let interpreter = StacklessBytecodeInterpreter::new(env, None, settings);
-
-        // NOTE: as of now, `self.starting_storage_state` contains modules only and no resources.
-        // The modules are captured by `env: &GlobalEnv` and the default GlobalState captures the
-        // empty-resource state.
-        let global_state = GlobalState::default();
-        let (return_result, _, _) = interpreter.interpret(
-            &test_plan.module_id,
-            IdentStr::new(function_name).unwrap(),
-            &[], // no ty args, at least for now
-            &test_info.arguments,
-            &global_state,
-        );
-        let prop_check_result = interpreter.report_property_checking_results();
-
-        let test_run_info = TestRunInfo::new(
-            function_name.to_string(),
-            now.elapsed(),
-            // NOTE (mengxu) instruction counting on stackless VM might not be very useful because
-            // gas is not charged against stackless VM instruction.
-            0,
-        );
-        (return_result, test_run_info, prop_check_result)
-    }
-
-    fn exec_module_tests_move_vm_and_stackless_vm(
+    fn exec_module_tests_with_move_vm(
         &self,
         test_plan: &ModuleTestPlan,
         global_test_context: &BTreeMap<ModuleId, NamedCompiledModule>,
         output: &TestOutput<impl Write>,
     ) -> TestStatistics {
-        // TODO: Somehow, paths of some temporary Move interface files are being passed in after those files
-        // have been removed. This is a dirty hack to work around the problem while we investigate the root
-        // cause.
-        let filtered_sources = self
-            .source_files
-            .iter()
-            .filter(|s| !s.contains("mv_interfaces"))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        let stackless_model = if self.check_stackless_vm {
-            let model = run_model_builder_with_options_and_compilation_flags(
-                vec![PackagePaths {
-                    name: None,
-                    paths: filtered_sources,
-                    named_address_map: self.named_address_values.clone(),
-                }],
-                vec![],
-                ModelBuilderOptions::default(),
-                Flags::testing(),
-                Some(WarningFilters::unused_warnings_filter_for_test()),
-            )
-            .unwrap_or_else(|e| panic!("Unable to build stackless bytecode: {}", e));
-
-            if model.has_errors() {
-                let mut stderr = StandardStream::stderr(ColorChoice::Always);
-                model.report_diag(&mut stderr, Severity::Error);
-                panic!("Move model has errors");
-            }
-
-            Some(model)
-        } else {
-            None
-        };
-
         let mut stats = TestStatistics::new();
 
         for (function_name, test_info) in &test_plan.tests {
-            let (_cs_result, _ext_result, exec_result, test_run_info) =
-                self.execute_via_move_vm(test_plan, function_name, test_info);
-
-            if self.check_stackless_vm {
-                let (stackless_vm_result, _, prop_check_result) = self.execute_via_stackless_vm(
-                    stackless_model.as_ref().unwrap(),
+            let arguments = if test_info
+                .arguments
+                .iter()
+                .all(|arg| matches!(arg, TestArgument::Value(_)))
+            {
+                let test_arguments = test_info
+                    .arguments
+                    .iter()
+                    .map(|arg| match arg {
+                        TestArgument::Value(v) => v.clone(),
+                        _ => unreachable!(),
+                    })
+                    .collect::<Vec<_>>();
+                vec![(None, test_arguments)]
+            } else {
+                let mut args = vec![];
+                for i in 0..self.num_iters {
+                    let mut iter_args = vec![];
+                    let prng_seed = self.prng_seed.unwrap_or_else(|| {
+                        if self.deterministic_generation {
+                            i
+                        } else {
+                            rand::random::<u64>()
+                        }
+                    });
+                    let mut rng = StdRng::seed_from_u64(prng_seed);
+                    for arg in test_info.arguments.iter() {
+                        match arg {
+                            TestArgument::Value(v) => iter_args.push(v.clone()),
+                            TestArgument::Generate { generated_type } => {
+                                iter_args.push(Self::generate_value_for_typetag(
+                                    &mut rng,
+                                    generated_type,
+                                ));
+                            }
+                        }
+                    }
+                    args.push((Some(prng_seed), iter_args));
+                }
+                args
+            };
+            let len = arguments.len();
+            for (i, (prng_seed, args)) in arguments.into_iter().enumerate() {
+                if !self.exec_test_once(
                     test_plan,
+                    global_test_context,
+                    output,
                     function_name,
                     test_info,
-                );
-                let move_vm_result = adapt_move_vm_result(exec_result.clone());
-                if stackless_vm_result != move_vm_result {
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(
-                            FailureReason::mismatch(move_vm_result, stackless_vm_result),
-                            test_run_info,
-                            None,
-                        ),
-                        test_plan,
-                    );
-                    continue;
-                }
-                if let Some(prop_failure) = prop_check_result {
-                    output.fail(function_name);
-                    stats.test_failure(
-                        TestFailure::new(
-                            FailureReason::property(prop_failure),
-                            test_run_info,
-                            None,
-                        ),
-                        test_plan,
-                    );
-                    continue;
-                }
-            }
-
-            match exec_result {
-                Err(err) => {
-                    let sub_status = err.sub_status().and_then(|status| {
-                        convert_clever_move_abort_error(status, err.location(), global_test_context)
-                    });
-                    let actual_err =
-                        MoveError(err.major_status(), sub_status, err.location().clone());
-                    assert!(err.major_status() != StatusCode::EXECUTED);
-                    match test_info.expected_failure.as_ref() {
-                        Some(ExpectedFailure::Expected) => {
-                            output.pass(function_name);
-                            stats.test_success(test_run_info, test_plan);
-                        }
-                        Some(ExpectedFailure::ExpectedWithError(expected_err))
-                            if expected_err == &actual_err =>
-                        {
-                            output.pass(function_name);
-                            stats.test_success(test_run_info, test_plan);
-                        }
-                        Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(code))
-                            if actual_err.0 == StatusCode::ABORTED
-                                && actual_err.1.is_some()
-                                && actual_err.1.as_ref().unwrap() == code =>
-                        {
-                            output.pass(function_name);
-                            stats.test_success(test_run_info, test_plan);
-                        }
-                        // incorrect cases
-                        Some(ExpectedFailure::ExpectedWithError(expected_err)) => {
-                            output.fail(function_name);
-                            stats.test_failure(
-                                TestFailure::new(
-                                    FailureReason::wrong_error(expected_err.clone(), actual_err),
-                                    test_run_info,
-                                    Some(err),
-                                ),
-                                test_plan,
-                            )
-                        }
-                        Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(expected_code)) => {
-                            output.fail(function_name);
-                            stats.test_failure(
-                                TestFailure::new(
-                                    FailureReason::wrong_abort_deprecated(
-                                        expected_code.clone(),
-                                        actual_err,
-                                    ),
-                                    test_run_info,
-                                    Some(err),
-                                ),
-                                test_plan,
-                            )
-                        }
-                        None if err.major_status() == StatusCode::OUT_OF_GAS => {
-                            // Ran out of ticks, report a test timeout and log a test failure
-                            output.timeout(function_name);
-                            stats.test_failure(
-                                TestFailure::new(
-                                    FailureReason::timeout(),
-                                    test_run_info,
-                                    Some(err),
-                                ),
-                                test_plan,
-                            )
-                        }
-                        None => {
-                            output.fail(function_name);
-                            stats.test_failure(
-                                TestFailure::new(
-                                    FailureReason::unexpected_error(actual_err),
-                                    test_run_info,
-                                    Some(err),
-                                ),
-                                test_plan,
-                            )
-                        }
-                    }
-                }
-                Ok(_) => {
-                    // Expected the test to fail, but it executed
-                    if test_info.expected_failure.is_some() {
-                        output.fail(function_name);
-                        stats.test_failure(
-                            TestFailure::new(FailureReason::no_error(), test_run_info, None),
-                            test_plan,
-                        )
-                    } else {
-                        // Expected the test to execute fully and it did
-                        output.pass(function_name);
-                        stats.test_success(test_run_info, test_plan);
-                    }
+                    args,
+                    &mut stats,
+                    prng_seed,
+                    i == len - 1,
+                ) {
+                    break;
                 }
             }
         }
 
         stats
+    }
+
+    fn generate_value_for_typetag(rng: &mut StdRng, ty: &TypeTag) -> MoveValue {
+        match ty {
+            TypeTag::Address => {
+                MoveValue::Address(AccountAddress::from_bytes(rng.gen::<[u8; 32]>()).unwrap())
+            }
+            TypeTag::U8 => MoveValue::U8(rng.gen::<u8>()),
+            TypeTag::U16 => MoveValue::U16(rng.gen::<u16>()),
+            TypeTag::U32 => MoveValue::U32(rng.gen::<u32>()),
+            TypeTag::U64 => MoveValue::U64(rng.gen::<u64>()),
+            TypeTag::U128 => MoveValue::U128(rng.gen::<u128>()),
+            TypeTag::U256 => MoveValue::U256(rng.gen::<U256>()),
+            TypeTag::Vector(ty) => {
+                let len = rng.gen_range(0..1024);
+                let values = (0..len)
+                    .map(|_| Self::generate_value_for_typetag(rng, ty))
+                    .collect();
+                MoveValue::Vector(values)
+            }
+            TypeTag::Bool => MoveValue::Bool(rng.gen::<bool>()),
+            TypeTag::Struct(_) => {
+                unreachable!("Structs are not supported as generated values in unit tests and cannot get to this point")
+            }
+            TypeTag::Signer => unreachable!("Signer arguments not allowed"),
+        }
+    }
+
+    fn exec_test_once(
+        &self,
+        test_plan: &ModuleTestPlan,
+        global_test_context: &BTreeMap<ModuleId, NamedCompiledModule>,
+        output: &TestOutput<impl Write>,
+        function_name: &str,
+        test_info: &TestCase,
+        arguments: Vec<MoveValue>,
+        stats: &mut TestStatistics,
+        prng_seed: Option<u64>,
+        is_last_execution_of_test: bool,
+    ) -> bool {
+        let (_cs_result, _ext_result, exec_result, test_run_info) =
+            self.execute_via_move_vm(test_plan, function_name, arguments);
+
+        match exec_result {
+            Err(err) => {
+                let sub_status = err.sub_status().and_then(|status| {
+                    convert_clever_move_abort_error(status, err.location(), global_test_context)
+                });
+                let actual_err = MoveError(err.major_status(), sub_status, err.location().clone());
+                assert!(err.major_status() != StatusCode::EXECUTED);
+                match test_info.expected_failure.as_ref() {
+                    Some(ExpectedFailure::Expected) => {
+                        if is_last_execution_of_test {
+                            output.pass(function_name);
+                        }
+                        stats.test_success(function_name.to_string(), test_run_info, test_plan)
+                    }
+                    Some(ExpectedFailure::ExpectedWithError(expected_err))
+                        if expected_err == &actual_err =>
+                    {
+                        if is_last_execution_of_test {
+                            output.pass(function_name);
+                        }
+                        stats.test_success(function_name.to_string(), test_run_info, test_plan)
+                    }
+                    Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(code))
+                        if actual_err.0 == StatusCode::ABORTED
+                            && actual_err.1.is_some()
+                            && actual_err.1.as_ref().unwrap() == code =>
+                    {
+                        if is_last_execution_of_test {
+                            output.pass(function_name);
+                        }
+                        stats.test_success(function_name.to_string(), test_run_info, test_plan)
+                    }
+                    // incorrect cases
+                    Some(ExpectedFailure::ExpectedWithError(expected_err)) => {
+                        output.fail(function_name);
+                        stats.test_failure(
+                            function_name.to_string(),
+                            TestFailure::new(
+                                FailureReason::wrong_error(expected_err.clone(), actual_err),
+                                test_run_info,
+                                Some(err),
+                                prng_seed,
+                            ),
+                            test_plan,
+                        )
+                    }
+                    Some(ExpectedFailure::ExpectedWithCodeDEPRECATED(expected_code)) => {
+                        output.fail(function_name);
+                        stats.test_failure(
+                            function_name.to_string(),
+                            TestFailure::new(
+                                FailureReason::wrong_abort_deprecated(
+                                    expected_code.clone(),
+                                    actual_err,
+                                ),
+                                test_run_info,
+                                Some(err),
+                                prng_seed,
+                            ),
+                            test_plan,
+                        )
+                    }
+                    None if err.major_status() == StatusCode::OUT_OF_GAS => {
+                        // Ran out of ticks, report a test timeout and log a test failure
+                        output.timeout(function_name);
+                        stats.test_failure(
+                            function_name.to_string(),
+                            TestFailure::new(
+                                FailureReason::timeout(),
+                                test_run_info,
+                                Some(err),
+                                prng_seed,
+                            ),
+                            test_plan,
+                        )
+                    }
+                    None => {
+                        output.fail(function_name);
+                        stats.test_failure(
+                            function_name.to_string(),
+                            TestFailure::new(
+                                FailureReason::unexpected_error(actual_err),
+                                test_run_info,
+                                Some(err),
+                                prng_seed,
+                            ),
+                            test_plan,
+                        )
+                    }
+                }
+            }
+            Ok(_) => {
+                // Expected the test to fail, but it executed
+                if test_info.expected_failure.is_some() {
+                    output.fail(function_name);
+                    stats.test_failure(
+                        function_name.to_string(),
+                        TestFailure::new(FailureReason::no_error(), test_run_info, None, prng_seed),
+                        test_plan,
+                    )
+                } else {
+                    // Expected the test to execute fully and it did
+                    if is_last_execution_of_test {
+                        output.pass(function_name);
+                    }
+                    stats.test_success(function_name.to_string(), test_run_info, test_plan)
+                }
+            }
+        }
     }
 
     // TODO: comparison of results via different backends
@@ -537,8 +526,12 @@ impl SharedTestingConfig {
         test_info: &BTreeMap<ModuleId, NamedCompiledModule>,
         writer: &Mutex<impl Write>,
     ) -> TestStatistics {
-        let output = TestOutput { test_plan, writer };
+        let output = TestOutput {
+            test_plan,
+            writer,
+            test_info,
+        };
 
-        self.exec_module_tests_move_vm_and_stackless_vm(test_plan, test_info, &output)
+        self.exec_module_tests_with_move_vm(test_plan, test_info, &output)
     }
 }

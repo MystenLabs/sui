@@ -3,6 +3,8 @@
 
 // tests modules cannot emit events for types not defined in the current module
 
+//# init --addresses test=0x0 test2=0x0
+
 //# publish
 module 0x0.m {
     import 0x2.event;
@@ -48,6 +50,58 @@ module 0x0.m {
     t(x: vector<Self.X>) {
         label l0:
         event.emit<vector<Self.X>>(move(x));
+        return;
+    }
+}
+
+//# publish
+module 0x0.m {
+    import 0x2.event;
+
+    enum X has copy, drop {
+        V { }
+    }
+
+    t(x: vector<Self.X>) {
+        label l0:
+        event.emit<vector<Self.X>>(move(x));
+        return;
+    }
+}
+
+//# publish
+module test.m {
+    struct Y has copy, drop {
+        dummy: bool,
+    }
+
+    enum X has copy, drop {
+        V { }
+    }
+}
+
+//# set-address test object(6,0)
+
+//# publish --dependencies test
+module 0x0.t {
+    import test.m;
+    import 0x2.event;
+
+    t(x: m.X) {
+        label l0:
+        event.emit<m.X>(move(x));
+        return;
+    }
+}
+
+//# publish --dependencies test
+module 0x0.t {
+    import test.m;
+    import 0x2.event;
+
+    t(x: m.Y) {
+        label l0:
+        event.emit<m.Y>(move(x));
         return;
     }
 }

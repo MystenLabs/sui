@@ -186,13 +186,13 @@ fn verify_private_event_emit(
 
 fn is_defined_in_current_module(view: &CompiledModule, type_arg: &SignatureToken) -> bool {
     match type_arg {
-        SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_) => {
+        SignatureToken::Datatype(_) | SignatureToken::DatatypeInstantiation(_) => {
             let idx = match type_arg {
-                SignatureToken::Struct(idx) => *idx,
-                SignatureToken::StructInstantiation(s) => s.0,
+                SignatureToken::Datatype(idx) => *idx,
+                SignatureToken::DatatypeInstantiation(s) => s.0,
                 _ => unreachable!(),
             };
-            let shandle = view.struct_handle_at(idx);
+            let shandle = view.datatype_handle_at(idx);
             view.self_handle_idx() == shandle.module
         }
         SignatureToken::TypeParameter(_)

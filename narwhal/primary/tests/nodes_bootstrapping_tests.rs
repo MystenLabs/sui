@@ -33,7 +33,7 @@ async fn test_response_error_after_shutdown_internal_consensus() {
     let tx_str = "test transaction".to_string();
     let tx = bcs::to_bytes(&tx_str).unwrap();
     let txn = TransactionProto {
-        transaction: Bytes::from(tx),
+        transactions: vec![Bytes::from(tx)],
     };
 
     // Should fail submitting to consensus.

@@ -11,7 +11,7 @@ use crate::{
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     epoch::committee_store::CommitteeStore,
-    execution_cache::ExecutionCacheRead,
+    execution_cache::ObjectCacheRead,
     safe_client::SafeClientMetricsBase,
 };
 
@@ -27,7 +27,7 @@ pub trait ReconfigObserver<A: Clone> {
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
     reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
-    execution_cache: Arc<dyn ExecutionCacheRead>,
+    execution_cache: Arc<dyn ObjectCacheRead>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
     auth_agg_metrics: AuthAggMetrics,
@@ -36,7 +36,7 @@ pub struct OnsiteReconfigObserver {
 impl OnsiteReconfigObserver {
     pub fn new(
         reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
-        execution_cache: Arc<dyn ExecutionCacheRead>,
+        execution_cache: Arc<dyn ObjectCacheRead>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
@@ -59,12 +59,6 @@ impl OnsiteReconfigObserver {
             self.safe_client_metrics_base.clone(),
             self.auth_agg_metrics.clone(),
         )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to create AuthorityAggregator from System State: {:?}",
-                e
-            )
-        })
     }
 }
 
@@ -96,7 +90,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
                     let committee = system_state.get_current_epoch_committee();
                     info!(
                         "Got reconfig message. New committee: {}",
-                        committee.committee
+                        committee.committee()
                     );
                     if committee.epoch() > quorum_driver.current_epoch() {
                         let authority_agg =

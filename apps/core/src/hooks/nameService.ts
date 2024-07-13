@@ -8,10 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 const SUI_NS_FEATURE_FLAG = 'suins';
 
 // This should align with whatever names we want to be able to resolve.
-const SUI_NS_DOMAINS = ['.sui'];
-export function isSuiNSName(name: string) {
-	return SUI_NS_DOMAINS.some((domain) => name.endsWith(domain));
-}
 
 export function useSuiNSEnabled() {
 	return useFeatureIsOn(SUI_NS_FEATURE_FLAG);

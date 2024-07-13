@@ -31,3 +31,36 @@ label b0:
     return;
 }
 }
+
+//# publish
+module 0x43.A {
+    enum Coin has store { V{ value: u64 } }
+    enum T { V{ g: Self.Coin } }
+
+    public zero(): Self.Coin {
+    label b0:
+        return Coin.V { value: 0 };
+    }
+    public new(g: Self.Coin): Self.T {
+    label b0:
+        return T.V {g: move(g)};
+    }
+
+}
+
+//# run
+
+module 0x43.m {
+import 0x43.A;
+
+entry foo() {
+    let zero_resource: A.Coin;
+    let s: A.T;
+label b0:
+    zero_resource = A.zero();
+    // unused resources
+    s = A.new(move(zero_resource));
+
+    return;
+}
+}

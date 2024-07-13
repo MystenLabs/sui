@@ -50,6 +50,8 @@ pub enum FeatureGate {
     CleverAssertions,
     NoParensCast,
     TypeHoles,
+    Lambda,
+    ModuleLabel,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -152,9 +154,12 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::MacroFuns,
     FeatureGate::TypeHoles,
     FeatureGate::CleverAssertions,
+    FeatureGate::Lambda,
+    FeatureGate::ModuleLabel,
+    FeatureGate::Enums,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::Enums];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 
@@ -276,6 +281,8 @@ impl FeatureGate {
             FeatureGate::CleverAssertions => "Clever `assert!`, `abort`, and `#[error]` are",
             FeatureGate::NoParensCast => "'as' without parentheses is",
             FeatureGate::TypeHoles => "'_' placeholders for type inference are",
+            FeatureGate::Lambda => "lambda expressions are",
+            FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
         }
     }
 }

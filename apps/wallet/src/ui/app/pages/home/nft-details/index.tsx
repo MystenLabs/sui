@@ -11,15 +11,14 @@ import { LabelValuesContainer } from '_components/LabelValuesContainer';
 import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
-import { useBuyNLargeAsset } from '_src/ui/app/components/buynlarge/useBuyNLargeAsset';
-import { useConfig } from '_src/ui/app/components/buynlarge/useConfig';
+import { useBuyNLargeAssets } from '_src/ui/app/components/buynlarge/useBuyNLargeAssets';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { Text } from '_src/ui/app/shared/text';
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowRight16, ArrowUpRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cl from 'clsx';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -44,8 +43,7 @@ function NFTDetailsPage() {
 	const kioskItem = data?.list.find((k) => k.data?.objectId === nftId);
 
 	const navigate = useNavigate();
-	const buyNLargeConfig = useConfig();
-	const { objectType } = useBuyNLargeAsset();
+	const bnl = useBuyNLargeAssets();
 
 	// Extract either the attributes, or use the top-level NFT fields:
 	const metaFields =
@@ -80,7 +78,8 @@ function NFTDetailsPage() {
 	const isGuardLoading = useUnlockedGuard();
 	const isPending = isNftLoading || isPendingDisplay || isGuardLoading;
 
-	const isBuyNLarge = objectData?.type === objectType;
+	const buyNLargeConfig = bnl.find((item) => item?.objectType === objectData?.type);
+	const isBuyNLarge = !!buyNLargeConfig;
 
 	return (
 		<div
@@ -165,9 +164,9 @@ function NFTDetailsPage() {
 												value={nftDisplayData?.description}
 												multiline
 											/>
-											<LabelValueItem label="Creator" value={nftDisplayData?.creator} parseUrl />
-											<LabelValueItem label="Link" value={nftDisplayData?.link} parseUrl />
-											<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} parseUrl />
+											<LabelValueItem label="Creator" value={nftDisplayData?.creator} />
+											<LabelValueItem label="Link" value={nftDisplayData?.link} />
+											<LabelValueItem label="Website" value={nftDisplayData?.projectUrl} />
 										</LabelValuesContainer>
 									</Collapsible>
 									{metaKeys.length ? (

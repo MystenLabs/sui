@@ -1,0 +1,29 @@
+[package]
+name = "sui-bridge-cli"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+ethers = "2.0"
+sui-bridge.workspace = true
+sui-sdk.workspace = true
+sui-types.workspace = true
+sui-config.workspace = true
+sui-keys.workspace = true
+sui-json-rpc-types.workspace = true
+shared-crypto.workspace = true
+fastcrypto.workspace = true
+move-core-types.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+serde_json.workspace = true
+telemetry-subscribers.workspace = true
+reqwest.workspace = true
+futures.workspace = true

@@ -92,7 +92,7 @@ async fn commit_one_with_leader_schedule_change() {
             description: "When schedule change is enabled, then authority 0 is bad node and swapped with authority 3".to_string(),
             protocol_config: {
                 let mut config: ProtocolConfig = latest_protocol_version();
-                config.set_consensus_bad_nodes_stake_threshold(33);
+                config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
                 config
             },
             rounds: 11,
@@ -237,7 +237,7 @@ async fn not_enough_support_with_leader_schedule_change() {
     certificates.extend(out);
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
+    config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let gc_depth = 50;
@@ -357,7 +357,7 @@ async fn test_long_period_of_asynchrony_for_leader_schedule_change() {
     certificates.extend(out);
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
+    config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let gc_depth = 50;

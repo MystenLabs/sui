@@ -53,6 +53,18 @@ pub(crate) struct Object {
     pub kind: ObjectKind,
     /// The checkpoint sequence number at which this was viewed at.
     pub checkpoint_viewed_at: u64,
+    /// Root parent object version for dynamic fields.
+    ///
+    /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
+    /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
+    /// `Parent >= DOF1, DOF2` but `DOF1 < DOF2`. Thus, database queries for dynamic fields must
+    /// bound the object versions by the version of the root object of the tree.
+    ///
+    /// Essentially, lamport timestamps of objects are updated for all top-level mutable objects
+    /// provided as inputs to a transaction as well as any mutated dynamic child objects. However,
+    /// any dynamic child objects that were loaded but not actually mutated don't end up having
+    /// their versions updated.
+    root_version: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -462,7 +474,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_field(ctx, name, Some(self.version_impl()))
+            .dynamic_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -479,7 +491,7 @@ impl Object {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_object_field(ctx, name, Some(self.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.root_version()))
             .await
     }
 
@@ -496,7 +508,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before, Some(self.version_impl()))
+            .dynamic_fields(ctx, first, after, last, before, Some(self.root_version()))
             .await
     }
 
@@ -672,15 +684,24 @@ impl Object {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
+    ///
+    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// fields. This should typically be left `None`, unless the object(s) being resolved is a
+    /// dynamic field, or if `root_version` has been explicitly set for this object. If None, then
+    /// we use [`version_for_dynamic_fields`] to infer a root version to then propagate from this
+    /// object down to its dynamic fields.
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
         checkpoint_viewed_at: u64,
+        root_version: Option<u64>,
     ) -> Object {
+        let root_version = root_version.unwrap_or_else(|| version_for_dynamic_fields(&native));
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
             checkpoint_viewed_at,
+            root_version,
         }
     }
 
@@ -700,6 +721,13 @@ impl Object {
             K::NotIndexed(native) | K::Indexed(native, _) => native.version().value(),
             K::WrappedOrDeleted(stored) => stored.object_version as u64,
         }
+    }
+
+    /// Root parent object version for dynamic fields.
+    ///
+    /// Check [`Object::root_version`] for details.
+    pub(crate) fn root_version(&self) -> u64 {
+        self.root_version
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
@@ -766,7 +794,8 @@ impl Object {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
+            let object =
+                Object::try_from_stored_history_object(stored, checkpoint_viewed_at, None)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
@@ -854,9 +883,16 @@ impl Object {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
+    ///
+    /// `root_version` represents the version of the root object in some nested chain of dynamic
+    /// fields. This should typically be left `None`, unless the object(s) being resolved is a
+    /// dynamic field, or if `root_version` has been explicitly set for this object. If None, then
+    /// we use [`version_for_dynamic_fields`] to infer a root version to then propagate from this
+    /// object down to its dynamic fields.
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
         checkpoint_viewed_at: u64,
+        root_version: Option<u64>,
     ) -> Result<Self, Error> {
         let address = addr(&history_object.object_id)?;
 
@@ -881,10 +917,13 @@ impl Object {
                     Error::Internal(format!("Failed to deserialize object {address}"))
                 })?;
 
+                let root_version =
+                    root_version.unwrap_or_else(|| version_for_dynamic_fields(&native_object));
                 Ok(Self {
                     address,
                     kind: ObjectKind::Indexed(native_object, history_object),
                     checkpoint_viewed_at,
+                    root_version,
                 })
             }
             NativeObjectStatus::WrappedOrDeleted => Ok(Self {
@@ -896,9 +935,21 @@ impl Object {
                     checkpoint_sequence_number: history_object.checkpoint_sequence_number,
                 }),
                 checkpoint_viewed_at,
+                root_version: history_object.object_version as u64,
             }),
         }
     }
+}
+
+/// We're deliberately choosing to use a child object's version as the root here, and letting the
+/// caller override it with the actual root object's version if it has access to it.
+///
+/// Using the child object's version as the root means that we're seeing the dynamic field tree
+/// under this object at the state resulting from the transaction that produced this version.
+///
+/// See [`Object::root_version`] for more details on parent/child object version mechanics.
+fn version_for_dynamic_fields(native: &NativeObject) -> u64 {
+    native.as_inner().version().into()
 }
 
 impl ObjectFilter {
@@ -1167,8 +1218,12 @@ impl Loader<HistoricalKey> for Db {
                 continue;
             }
 
-            let object =
-                Object::try_from_stored_history_object(stored.clone(), key.checkpoint_viewed_at)?;
+            let object = Object::try_from_stored_history_object(
+                stored.clone(),
+                key.checkpoint_viewed_at,
+                // This conversion will use the object's own version as the `Object::root_version`.
+                None,
+            )?;
             result.insert(*key, object);
         }
 
@@ -1255,8 +1310,13 @@ impl Loader<LatestAtKey> for Db {
             for (group_key, stored) in
                 group.map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?
             {
-                let object =
-                    Object::try_from_stored_history_object(stored, group_key.checkpoint_viewed_at)?;
+                let object = Object::try_from_stored_history_object(
+                    stored,
+                    group_key.checkpoint_viewed_at,
+                    // If `LatestAtKey::parent_version` is set, it must have been correctly
+                    // propagated from the `Object::root_version` of some object.
+                    group_key.parent_version,
+                )?;
 
                 let key = LatestAtKey {
                     id: object.address,
@@ -1338,20 +1398,61 @@ pub(crate) async fn deserialize_move_struct(
 fn objects_query(filter: &ObjectFilter, range: AvailableRange, page: &Page<Cursor>) -> RawQuery
 where
 {
-    let view = if filter.object_keys.is_some() || !filter.has_filters() {
-        // TODO (RPC-142): Fix handling of filters that contain both object keys and object ids.
-        View::Historical
-    } else {
-        View::Consistent
-    };
+    if let (Some(_), Some(_)) = (&filter.object_ids, &filter.object_keys) {
+        // If both object IDs and object keys are specified, then we need to query in
+        // both historical and consistent views, and then union the results.
+        let ids_only_filter = ObjectFilter {
+            object_keys: None,
+            ..filter.clone()
+        };
+        let (id_query, id_bindings) = build_objects_query(
+            View::Consistent,
+            range,
+            page,
+            move |query| ids_only_filter.apply(query),
+            move |newer| newer,
+        )
+        .finish();
 
-    build_objects_query(
-        view,
-        range,
-        page,
-        move |query| filter.apply(query),
-        move |newer| newer,
-    )
+        let keys_only_filter = ObjectFilter {
+            object_ids: None,
+            ..filter.clone()
+        };
+        let (key_query, key_bindings) = build_objects_query(
+            View::Historical,
+            range,
+            page,
+            move |query| keys_only_filter.apply(query),
+            move |newer| newer,
+        )
+        .finish();
+
+        RawQuery::new(
+            format!(
+                "SELECT * FROM (({id_query}) UNION ALL ({key_query})) AS candidates",
+                id_query = id_query,
+                key_query = key_query,
+            ),
+            id_bindings.into_iter().chain(key_bindings).collect(),
+        )
+        .order_by("object_id")
+        .limit(page.limit() as i64)
+    } else {
+        // Only one of object IDs or object keys is specified, or neither are specified.
+        let view = if filter.object_keys.is_some() || !filter.has_filters() {
+            View::Historical
+        } else {
+            View::Consistent
+        };
+
+        build_objects_query(
+            view,
+            range,
+            page,
+            move |query| filter.apply(query),
+            move |newer| newer,
+        )
+    }
 }
 
 #[cfg(test)]

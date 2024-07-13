@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, Slot, TestBlock, Transaction, VerifiedBlock},
-    commit::{LeaderStatus, DEFAULT_WAVE_LENGTH},
+    commit::{DecidedLeader, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -27,12 +27,12 @@ async fn direct_commit() {
     build_dag(context, dag_state, None, decision_round_wave_0_pipeline_1);
 
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 1);
 
     let leader_round_wave_0_pipeline_1 = committer.committers[1].leader_round(0);
-    if let LeaderStatus::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block) = sequence[0] {
         assert_eq!(block.round(), leader_round_wave_0_pipeline_1);
         assert_eq!(
             block.author(),
@@ -61,11 +61,11 @@ async fn idempotence() {
 
     // Commit one leader.
     let last_decided = Slot::new_for_test(0, 0);
-    let first_sequence = committer.try_commit(last_decided);
+    let first_sequence = committer.try_decide(last_decided);
     assert_eq!(first_sequence.len(), 1);
     tracing::info!("Commit sequence: {first_sequence:#?}");
 
-    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
         assert_eq!(block.round(), leader_round_pipeline_1_wave_0);
         assert_eq!(
             block.author(),
@@ -77,10 +77,10 @@ async fn idempotence() {
 
     // Ensure that if try_commit is called again with the same last decided leader
     // input the commit decision will be the same.
-    let first_sequence = committer.try_commit(last_decided);
+    let first_sequence = committer.try_decide(last_decided);
 
     assert_eq!(first_sequence.len(), 1);
-    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
         assert_eq!(block.round(), leader_round_pipeline_1_wave_0);
         assert_eq!(
             block.author(),
@@ -92,7 +92,7 @@ async fn idempotence() {
 
     // Ensure we don't commit the same leader again once last decided has been updated.
     let last_decided = Slot::new(first_sequence[0].round(), first_sequence[0].authority());
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     assert!(sequence.is_empty());
 }
 
@@ -121,11 +121,11 @@ async fn multiple_direct_commit() {
         ));
 
         // Because of pipelining we are committing a leader every round.
-        let sequence = committer.try_commit(last_decided);
+        let sequence = committer.try_decide(last_decided);
         tracing::info!("Commit sequence: {sequence:#?}");
 
         assert_eq!(sequence.len(), 1);
-        if let LeaderStatus::Commit(ref block) = sequence[0] {
+        if let DecidedLeader::Commit(ref block) = sequence[0] {
             assert_eq!(block.round(), leader_round);
             assert_eq!(
                 block.author(),
@@ -157,14 +157,14 @@ async fn direct_commit_late_call() {
     build_dag(context.clone(), dag_state.clone(), None, decision_round);
 
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), n);
     for (i, leader_block) in sequence.iter().enumerate() {
         // First sequenced leader should be in round 1.
         let leader_round = i as u32 + 1;
-        if let LeaderStatus::Commit(ref block) = leader_block {
+        if let DecidedLeader::Commit(ref block) = leader_block {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {
@@ -188,7 +188,7 @@ async fn no_genesis_commit() {
         ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, r));
 
         let last_decided = Slot::new_for_test(0, 0);
-        let sequence = committer.try_commit(last_decided);
+        let sequence = committer.try_decide(last_decided);
         assert!(sequence.is_empty());
     }
 }
@@ -232,11 +232,11 @@ async fn direct_skip_no_leader() {
     // Ensure no blocks are committed because there are 2f+1 blame (non-votes) for
     // the missing leader.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let LeaderStatus::Skip(leader) = sequence[0] {
+    if let DecidedLeader::Skip(leader) = sequence[0] {
         assert_eq!(leader.authority, leader_pipeline_1_wave_0);
         assert_eq!(leader.round, leader_round_pipeline_1_wave_0);
     } else {
@@ -305,11 +305,11 @@ async fn direct_skip_enough_blame() {
     // Ensure the leader is skipped because there are 2f+1 blame (non-votes) for
     // the wave 0 leader of pipeline 1.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let LeaderStatus::Skip(leader) = sequence[0] {
+    if let DecidedLeader::Skip(leader) = sequence[0] {
         assert_eq!(leader.authority, leader_pipeline_1_wave_0);
         assert_eq!(leader.round, leader_round_pipeline_1_wave_0);
     } else {
@@ -411,13 +411,13 @@ async fn indirect_commit() {
 
     // Ensure we commit the first leaders.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 5);
 
     let committed_leader_round = 1;
     let leader = committer.get_leaders(committed_leader_round)[0];
-    if let LeaderStatus::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block) = sequence[0] {
         assert_eq!(block.round(), committed_leader_round);
         assert_eq!(block.author(), leader);
     } else {
@@ -426,7 +426,7 @@ async fn indirect_commit() {
 
     let skipped_leader_round = 2;
     let leader = committer.get_leaders(skipped_leader_round)[0];
-    if let LeaderStatus::Skip(ref slot) = sequence[1] {
+    if let DecidedLeader::Skip(ref slot) = sequence[1] {
         assert_eq!(slot.round, skipped_leader_round);
         assert_eq!(slot.authority, leader);
     } else {
@@ -491,7 +491,7 @@ async fn indirect_skip() {
 
     // Ensure we commit the first 3 leaders, skip the 4th, and commit the last 2 leaders.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 7);
 
@@ -500,7 +500,7 @@ async fn indirect_skip() {
         // First sequenced leader should be in round 1.
         let leader_round = i + 1;
         let leader = committer.get_leaders(leader_round)[0];
-        if let LeaderStatus::Commit(ref block) = sequence[i as usize] {
+        if let DecidedLeader::Commit(ref block) = sequence[i as usize] {
             assert_eq!(block.author(), leader);
         } else {
             panic!("Expected a committed leader")
@@ -508,7 +508,7 @@ async fn indirect_skip() {
     }
 
     // Ensure we skip the leader of wave 1 (pipeline one) but commit the others.
-    if let LeaderStatus::Skip(leader) = sequence[3] {
+    if let DecidedLeader::Skip(leader) = sequence[3] {
         assert_eq!(leader.authority, committer.get_leaders(leader_round_4)[0]);
         assert_eq!(leader.round, leader_round_4);
     } else {
@@ -519,7 +519,7 @@ async fn indirect_skip() {
     for i in 4..=6 {
         let leader_round = i + 1;
         let leader = committer.get_leaders(leader_round)[0];
-        if let LeaderStatus::Commit(ref block) = sequence[i as usize] {
+        if let DecidedLeader::Commit(ref block) = sequence[i as usize] {
             assert_eq!(block.author(), leader);
         } else {
             panic!("Expected a committed leader")
@@ -569,7 +569,7 @@ async fn undecided() {
 
     // Ensure no blocks are committed.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     assert!(sequence.is_empty());
 }
 
@@ -714,11 +714,11 @@ async fn test_byzantine_validator() {
     // Expect a successful direct commit of A12 and leaders at rounds 1 ~ 11 as
     // pipelining is enabled.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 12);
-    if let LeaderStatus::Commit(ref block) = sequence[11] {
+    if let DecidedLeader::Commit(ref block) = sequence[11] {
         assert_eq!(block.round(), leader_round_12);
         assert_eq!(block.author(), committer.get_leaders(leader_round_12)[0])
     } else {
@@ -737,7 +737,7 @@ async fn test_byzantine_validator() {
     // Ensure B13 is marked as undecided as there is <2f+1 blame and <2f+1 certs
     let last_sequenced = sequence.last().unwrap();
     let last_decided = Slot::new(last_sequenced.round(), last_sequenced.authority());
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     assert!(sequence.is_empty());
 
     // Now build an additional 3 dag layers on top of the existing dag so a commit
@@ -749,7 +749,7 @@ async fn test_byzantine_validator() {
         Some(references_round_15),
         18,
     );
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 4);
 
@@ -757,7 +757,7 @@ async fn test_byzantine_validator() {
     // of the multiple blocks at slot B13.
     let skipped_leader_round = 13;
     let leader = *committer.get_leaders(skipped_leader_round).first().unwrap();
-    if let LeaderStatus::Skip(ref slot) = sequence[0] {
+    if let DecidedLeader::Skip(ref slot) = sequence[0] {
         assert_eq!(slot.round, skipped_leader_round);
         assert_eq!(slot.authority, leader);
     } else {

@@ -3,13 +3,17 @@
 
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel::{ExpressionMethods, OptionalExtension};
 use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::{StoredHistoryObject, StoredObject};
+use sui_indexer::schema::objects;
 use sui_indexer::types::OwnerType;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::available_range::AvailableRange;
 use super::cursor::{Page, Target};
+use super::move_object::MoveObjectDowncastError;
 use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookup};
 use super::type_filter::ExactTypeFilter;
 use super::{
@@ -17,7 +21,7 @@ use super::{
 };
 use crate::consistency::{build_objects_query, View};
 use crate::data::package_resolver::PackageResolver;
-use crate::data::{Db, QueryExecutor};
+use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
 use crate::raw_query::RawQuery;
@@ -94,9 +98,10 @@ impl DynamicField {
         Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
     }
 
-    /// The actual data stored in the dynamic field.
-    /// The returned dynamic field is an object if its return type is MoveObject,
-    /// in which case it is also accessible off-chain via its address.
+    /// The returned dynamic field is an object if its return type is `MoveObject`,
+    /// in which case it is also accessible off-chain via its address. Its contents
+    /// will be from the latest version that is at most equal to its parent object's
+    /// version
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             // If `df_kind` is a DynamicObject, the object we are currently on is the field object,
@@ -107,12 +112,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx,
                 self.df_object_id,
-                Object::under_parent(
-                    // TODO (RPC-131): The dynamic object field value's version should be bounded by
-                    // the field's parent version, not the version of the field object itself.
-                    self.super_.super_.version_impl(),
-                    self.super_.super_.checkpoint_viewed_at,
-                ),
+                Object::under_parent(self.root_version(), self.super_.super_.checkpoint_viewed_at),
             )
             .await
             .extend()?;
@@ -184,6 +184,59 @@ impl DynamicField {
         super_.map(Self::try_from).transpose()
     }
 
+    /// Due to recent performance degradations, the existing `DynamicField::query` method is now
+    /// consistently timing out. This impacts features like `verify_zklogin_signature`, which
+    /// depends on resolving a dynamic field of 0x7 authenticator state. This method is a temporary
+    /// fix by fetching the data from the live `objects` table, and should only be used by
+    /// `verify_zklogin_signature`. Once we have fixed `objects_snapshot` table lag and backfilled
+    /// the `objects_version` table, this will no longer be needed.
+    pub(crate) async fn query_latest_dynamic_field(
+        db: &Db,
+        parent: SuiAddress,
+        name: DynamicFieldName,
+        kind: DynamicFieldType,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<DynamicField>, Error> {
+        let type_ = match kind {
+            DynamicFieldType::DynamicField => name.type_.0,
+            DynamicFieldType::DynamicObject => {
+                DynamicFieldInfo::dynamic_object_field_wrapper(name.type_.0).into()
+            }
+        };
+
+        let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
+            .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
+
+        let object_id = SuiAddress::from(field_id);
+
+        let Some(stored_obj): Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.into_vec()))
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch dynamic field: {e}")))?
+        else {
+            return Ok(None);
+        };
+
+        let history_object = StoredHistoryObject::from(stored_obj);
+        let gql_object =
+            Object::try_from_stored_history_object(history_object, checkpoint_viewed_at, None)?;
+
+        let super_ = match MoveObject::try_from(&gql_object) {
+            Ok(object) => Some(object),
+            Err(MoveObjectDowncastError::WrappedOrDeleted) => None,
+            Err(MoveObjectDowncastError::NotAMoveObject) => {
+                return Err(Error::Internal(format!("{object_id} is not a Move object")));
+            }
+        };
+
+        super_.map(Self::try_from).transpose()
+    }
+
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
     /// returned dynamic fields are bound by the `parent_version` if provided - each field will be
     /// the latest version at or before the provided version. If `parent_version` is not provided,
@@ -228,7 +281,11 @@ impl DynamicField {
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
 
-            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
+            let object = Object::try_from_stored_history_object(
+                stored,
+                checkpoint_viewed_at,
+                parent_version,
+            )?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -242,6 +299,10 @@ impl DynamicField {
         }
 
         Ok(conn)
+    }
+
+    pub(crate) fn root_version(&self) -> u64 {
+        self.super_.root_version()
     }
 }
 

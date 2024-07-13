@@ -109,7 +109,7 @@ pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SyntaxMethod {
     pub loc: Loc,
-    pub public_visibility: Loc,
+    pub visibility: Visibility,
     pub tname: TypeName,
     pub target_function: (ModuleIdent, FunctionName),
     pub kind: SyntaxMethodKind,
@@ -166,6 +166,7 @@ pub struct StructDefinition {
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
+    pub loc: Loc,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTypeParameter>,
@@ -183,6 +184,7 @@ pub struct EnumDefinition {
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
+    pub loc: Loc,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTypeParameter>,
@@ -343,6 +345,7 @@ pub enum LValue_ {
         unused_binding: bool,
     },
     Unpack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<LValue>),
+    Error,
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -356,7 +359,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
-    DotUnresolved(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
+    DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -1154,7 +1157,7 @@ impl AstDebug for SyntaxMethod {
             loc: _,
             tname,
             target_function: (target_m, target_f),
-            public_visibility: _,
+            visibility: _,
             kind,
         } = self;
         let kind_str = format!("{:?}", kind.value);
@@ -1250,6 +1253,7 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
             StructDefinition {
                 warning_filter,
                 index,
+                loc: _,
                 attributes,
                 abilities,
                 type_parameters,
@@ -1286,6 +1290,7 @@ impl AstDebug for (DatatypeName, &EnumDefinition) {
             name,
             EnumDefinition {
                 index,
+                loc: _,
                 attributes,
                 abilities,
                 type_parameters,
@@ -1890,7 +1895,7 @@ impl AstDebug for ExpDotted_ {
                 w.comma(args, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            D::DotUnresolved(_, e) => {
+            D::DotAutocomplete(_, e) => {
                 e.ast_debug(w);
                 w.write(".")
             }
@@ -1996,6 +2001,7 @@ impl AstDebug for LValue_ {
         use LValue_ as L;
         match self {
             L::Ignore => w.write("_"),
+            L::Error => w.write("<_error>"),
             L::Var {
                 mut_,
                 var,

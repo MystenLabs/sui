@@ -12,7 +12,7 @@ import {
 	type SuiObjectChangeWithDisplay,
 } from '@mysten/core';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cx from 'clsx';
 
 import { ExpandableList } from '../../ExpandableList';
@@ -172,7 +172,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 															open
 																? changes.changesWithDisplay.map((change) => (
 																		<ObjectChangeDisplay change={change} />
-																  ))
+																	))
 																: []
 														}
 													/>
@@ -186,7 +186,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 														open
 															? changes.changes.map((change) => (
 																	<ObjectDetail ownerKey={owner} change={change} />
-															  ))
+																))
 															: []
 													}
 												/>

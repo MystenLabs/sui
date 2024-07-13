@@ -1,0 +1,98 @@
+// Tests symbolication of constructs related to dot call syntax.
+{
+  "UseDef": {
+    "project": "tests/move-2024",
+    "file_tests": {
+      "dot_call.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 3,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 3,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 3,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 4,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 4,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 4,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 4,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 27,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 30,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 30,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 30,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 30,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 34,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 34,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 35,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 35,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 35,
+          "use_ndx": 2
+        }
+      ]
+    }
+  }
+}

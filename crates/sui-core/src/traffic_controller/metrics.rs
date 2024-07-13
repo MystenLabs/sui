@@ -16,6 +16,13 @@ pub struct TrafficControllerMetrics {
     pub firewall_delegation_request_fail: IntCounter,
     pub tally_channel_overflow: IntCounter,
     pub num_dry_run_blocked_requests: IntCounter,
+    pub tally_handled: IntCounter,
+    pub error_tally_handled: IntCounter,
+    pub deadmans_switch_enabled: IntGauge,
+    pub highest_direct_spam_rate: IntGauge,
+    pub highest_proxied_spam_rate: IntGauge,
+    pub highest_direct_error_rate: IntGauge,
+    pub highest_proxied_error_rate: IntGauge,
 }
 
 impl TrafficControllerMetrics {
@@ -68,6 +75,49 @@ impl TrafficControllerMetrics {
             num_dry_run_blocked_requests: register_int_counter_with_registry!(
                 "traffic_control_num_dry_run_blocked_requests",
                 "Number of requests blocked in traffic controller dry run mode",
+                registry
+            )
+            .unwrap(),
+            tally_handled: register_int_counter_with_registry!(
+                "traffic_control_tally_handled",
+                "Number of tallies handled",
+                registry
+            )
+            .unwrap(),
+            error_tally_handled: register_int_counter_with_registry!(
+                "traffic_control_error_tally_handled",
+                "Number of error tallies handled",
+                registry
+            )
+            .unwrap(),
+            deadmans_switch_enabled: register_int_gauge_with_registry!(
+                "deadmans_switch_enabled",
+                "If 1, the deadman's switch is enabled and all traffic control
+                should be getting bypassed",
+                registry
+            )
+            .unwrap(),
+            highest_direct_spam_rate: register_int_gauge_with_registry!(
+                "highest_direct_spam_rate",
+                "Highest direct spam rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_proxied_spam_rate: register_int_gauge_with_registry!(
+                "highest_proxied_spam_rate",
+                "Highest proxied spam rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_direct_error_rate: register_int_gauge_with_registry!(
+                "highest_direct_error_rate",
+                "Highest direct error rate seen recently",
+                registry
+            )
+            .unwrap(),
+            highest_proxied_error_rate: register_int_gauge_with_registry!(
+                "highest_proxied_error_rate",
+                "Highest proxied error rate seen recently",
                 registry
             )
             .unwrap(),

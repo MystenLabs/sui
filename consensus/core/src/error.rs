@@ -3,6 +3,7 @@
 
 use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
+use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
@@ -12,8 +13,8 @@ use crate::{
 };
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
-#[derive(Clone, Debug, Error)]
-pub enum ConsensusError {
+#[derive(Clone, Debug, Error, IntoStaticStr)]
+pub(crate) enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
 
@@ -55,6 +56,9 @@ pub enum ConsensusError {
 
     #[error("Too many blocks have been requested from authority {0}")]
     TooManyFetchBlocksRequested(AuthorityIndex),
+
+    #[error("Too many authorities have been provided from authority {0}")]
+    TooManyAuthoritiesProvided(AuthorityIndex),
 
     #[error("Provided size of highest accepted rounds parameter, {0}, is different than committee size, {1}")]
     InvalidSizeOfHighestAcceptedRounds(usize, usize),
@@ -152,8 +156,17 @@ pub enum ConsensusError {
     #[error("Peer {0} is disconnected.")]
     PeerDisconnected(String),
 
-    #[error("Network error: {0:?}")]
-    NetworkError(String),
+    #[error("Network config error: {0:?}")]
+    NetworkConfig(String),
+
+    #[error("Failed to connect as client: {0:?}")]
+    NetworkClientConnection(String),
+
+    #[error("Failed to connect as server: {0:?}")]
+    NetworkServerConnection(String),
+
+    #[error("Failed to send request: {0:?}")]
+    NetworkRequest(String),
 
     #[error("Request timeout: {0:?}")]
     NetworkRequestTimeout(String),

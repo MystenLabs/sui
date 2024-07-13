@@ -263,20 +263,20 @@ impl ArchiveReader {
             .await
     }
 
-    /// Load checkpoints+txns+effects from archive into the input store `S` for the given
-    /// checkpoint range. Summaries are downloaded out of order and inserted without verification
-    pub async fn read_summaries<S>(
+    /// Load checkpoints from archive into the input store `S` for the given checkpoint
+    /// range. Summaries are downloaded out of order and inserted without verification
+    pub async fn read_summaries_for_range_no_verify<S>(
         &self,
         store: S,
         checkpoint_range: Range<CheckpointSequenceNumber>,
         checkpoint_counter: Arc<AtomicU64>,
-        verify: bool,
     ) -> Result<()>
     where
         S: WriteStore + Clone,
     {
-        let (summary_files, start_index, end_index) =
-            self.get_summary_files(checkpoint_range.clone()).await?;
+        let (summary_files, start_index, end_index) = self
+            .get_summary_files_for_range(checkpoint_range.clone())
+            .await?;
         let remote_object_store = self.remote_object_store.clone();
         let stream = futures::stream::iter(summary_files.iter())
             .enumerate()
@@ -290,14 +290,11 @@ impl ArchiveReader {
                 }
             })
             .boxed();
-        if verify {
-            stream
-                .buffered(self.concurrency)
-                .try_for_each(|summary_data| {
-                    let result: Result<(), anyhow::Error> = make_iterator::<
-                        CertifiedCheckpointSummary,
-                        Reader<Bytes>,
-                    >(
+        stream
+            .buffer_unordered(self.concurrency)
+            .try_for_each(|summary_data| {
+                let result: Result<(), anyhow::Error> =
+                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
                         SUMMARY_FILE_MAGIC,
                         summary_data.reader(),
                     )
@@ -308,53 +305,60 @@ impl ArchiveReader {
                                     && s.sequence_number < checkpoint_range.end
                             })
                             .try_for_each(|summary| {
-                                let verified_checkpoint = Self::get_or_insert_verified_checkpoint(
-                                    &store,
-                                    summary.clone(),
-                                    true,
-                                )
-                                .unwrap_or_else(|_| {
-                                    panic!(
-                                        "Checkpoint verification failed for checkpoint {}",
-                                        summary.sequence_number
-                                    )
-                                });
-                                // Update highest synced watermark
-                                store
-                                    .update_highest_verified_checkpoint(&verified_checkpoint)
-                                    .expect("Failed to update watermark");
+                                Self::insert_certified_checkpoint(&store, summary)?;
                                 checkpoint_counter.fetch_add(1, Ordering::Relaxed);
                                 Ok::<(), anyhow::Error>(())
                             })
                     });
-                    futures::future::ready(result)
-                })
-                .await
-        } else {
-            stream
-                .buffer_unordered(self.concurrency)
-                .try_for_each(|summary_data| {
-                    let result: Result<(), anyhow::Error> =
-                        make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
-                            SUMMARY_FILE_MAGIC,
-                            summary_data.reader(),
-                        )
-                        .and_then(|summary_iter| {
-                            summary_iter
-                                .filter(|s| {
-                                    s.sequence_number >= checkpoint_range.start
-                                        && s.sequence_number < checkpoint_range.end
-                                })
-                                .try_for_each(|summary| {
-                                    Self::insert_certified_checkpoint(&store, summary)?;
-                                    checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                                    Ok::<(), anyhow::Error>(())
-                                })
-                        });
-                    futures::future::ready(result)
-                })
-                .await
-        }
+                futures::future::ready(result)
+            })
+            .await
+    }
+
+    /// Load given list of checkpoints from archive into the input store `S`.
+    /// Summaries are downloaded out of order and inserted without verification
+    pub async fn read_summaries_for_list_no_verify<S>(
+        &self,
+        store: S,
+        skiplist: Vec<CheckpointSequenceNumber>,
+        checkpoint_counter: Arc<AtomicU64>,
+    ) -> Result<()>
+    where
+        S: WriteStore + Clone,
+    {
+        let summary_files = self.get_summary_files_for_list(skiplist.clone()).await?;
+        let remote_object_store = self.remote_object_store.clone();
+        let stream = futures::stream::iter(summary_files.iter())
+            .map(|summary_metadata| {
+                let remote_object_store = remote_object_store.clone();
+                async move {
+                    let summary_data =
+                        get(&remote_object_store, &summary_metadata.file_path()).await?;
+                    Ok::<Bytes, anyhow::Error>(summary_data)
+                }
+            })
+            .boxed();
+
+        stream
+            .buffer_unordered(self.concurrency)
+            .try_for_each(|summary_data| {
+                let result: Result<(), anyhow::Error> =
+                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
+                        SUMMARY_FILE_MAGIC,
+                        summary_data.reader(),
+                    )
+                    .and_then(|summary_iter| {
+                        summary_iter
+                            .filter(|s| skiplist.contains(&s.sequence_number))
+                            .try_for_each(|summary| {
+                                Self::insert_certified_checkpoint(&store, summary)?;
+                                checkpoint_counter.fetch_add(1, Ordering::Relaxed);
+                                Ok::<(), anyhow::Error>(())
+                            })
+                    });
+                futures::future::ready(result)
+            })
+            .await
     }
 
     /// Load checkpoints+txns+effects from archive into the input store `S` for the given
@@ -568,7 +572,7 @@ impl ArchiveReader {
             .map_err(|e| anyhow!("Failed to get verified checkpoint: {:?}", e))
     }
 
-    async fn get_summary_files(
+    async fn get_summary_files_for_range(
         &self,
         checkpoint_range: Range<CheckpointSequenceNumber>,
     ) -> Result<(Vec<FileMetadata>, usize, usize)> {
@@ -608,6 +612,52 @@ impl ArchiveReader {
         };
 
         Ok((summary_files, start_index, end_index))
+    }
+
+    async fn get_summary_files_for_list(
+        &self,
+        checkpoints: Vec<CheckpointSequenceNumber>,
+    ) -> Result<Vec<FileMetadata>> {
+        assert!(!checkpoints.is_empty());
+        let manifest = self.manifest.lock().await.clone();
+        let latest_available_checkpoint = manifest
+            .next_checkpoint_seq_num()
+            .checked_sub(1)
+            .context("Checkpoint seq num underflow")?;
+
+        let mut ordered_checkpoints = checkpoints;
+        ordered_checkpoints.sort();
+        if *ordered_checkpoints.first().unwrap() > latest_available_checkpoint {
+            return Err(anyhow!(
+                "Latest available checkpoint is: {}",
+                latest_available_checkpoint
+            ));
+        }
+
+        let summary_files: Vec<FileMetadata> = self
+            .verify_manifest(manifest)
+            .await?
+            .iter()
+            .map(|(s, _)| s.clone())
+            .collect();
+
+        let mut summaries_filtered = vec![];
+        for checkpoint in ordered_checkpoints.iter() {
+            let index = summary_files
+                .binary_search_by(|s| {
+                    if checkpoint < &s.checkpoint_seq_range.start {
+                        std::cmp::Ordering::Greater
+                    } else if checkpoint >= &s.checkpoint_seq_range.end {
+                        std::cmp::Ordering::Less
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                })
+                .expect("Archive does not contain checkpoint {checkpoint}");
+            summaries_filtered.push(summary_files[index].clone());
+        }
+
+        Ok(summaries_filtered)
     }
 
     fn spawn_manifest_sync_task<S: ObjectStoreGetExt + Clone>(

@@ -9,8 +9,9 @@ DIR="$( cd "$( dirname "$0" )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 OCI_OUTPUT="$REPO_ROOT/build/oci"
 DOCKERFILE="$DIR/Dockerfile"
-GIT_REVISION="$(git describe --always --dirty --exclude '*')"
+GIT_REVISION="$(git describe --always --abbrev=12 --dirty --exclude '*')"
 BUILD_DATE="$(date -u +'%Y-%m-%d')"
+PLATFORM="linux/amd64"
 
 # option to build using debug symbols
 if [ "$1" = "--debug-symbols" ]; then
@@ -37,5 +38,6 @@ docker build -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
 	--build-arg BUILD_DATE="$BUILD_DATE" \
 	--build-arg PROFILE="$PROFILE" \
-  --output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/sui-node,name=sui-node \
+	--platform "$PLATFORM" \
+	--output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/sui-node,name=sui-node \
 	"$@"
