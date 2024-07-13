@@ -66,7 +66,7 @@ pub fn program(
         info,
     ));
 
-    extract_macros(&mut context, &nmodules);
+    extract_macros(&mut context, &nmodules, &pre_compiled_lib);
     let mut modules = modules(&mut context, nmodules);
 
     assert!(context.constraints.is_empty());
@@ -92,7 +92,11 @@ pub fn program(
     prog
 }
 
-fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {
+fn extract_macros(
+    context: &mut Context,
+    modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
+    pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
+) {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
         let N::UseFuns {
@@ -118,7 +122,24 @@ fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::Mod
         }
         macro_use_funs
     }
-    let all_macro_definitions = modules.ref_map(|_mident, mdef| {
+
+    // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
+    // should have already produced that error. To avoid unnecessary error handling, we simply
+    // prefer the non-precompiled definitions.
+    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
+        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
+            pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                pre_compiled
+                    .naming
+                    .inner
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !modules.contains_key(mident))
+            }),
+        ))
+        .unwrap();
+
+    let all_macro_definitions = all_modules.map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
             let _macro_loc = f.macro_?;
             if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
@@ -4445,7 +4466,12 @@ fn expand_macro(
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
     {
         None => {
-            assert!(context.env.has_errors() || context.env.ide_mode());
+            if !(context.env.has_errors() || context.env.ide_mode()) {
+                context.env.add_diag(ice!((
+                    call_loc,
+                    "No macro found, but name resolution passed."
+                )));
+            }
             (context.error_type(call_loc), TE::UnresolvedError)
         }
         Some(macro_expand::ExpandedMacro {
