@@ -23,8 +23,15 @@ use tokio::sync::Mutex;
 use tracing::info;
 use uuid::Uuid;
 
+pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
+
 /// Extension factory for adding checks that the query is within configurable limits.
 pub(crate) struct QueryLimitsChecker;
+
+#[derive(Debug, Default)]
+struct QueryLimitsCheckerExt {
+    validation_result: Mutex<Option<ValidationRes>>,
+}
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
@@ -39,12 +46,12 @@ struct ValidationRes {
     query_payload: u32,
 }
 
-#[derive(Debug, Default)]
-struct QueryLimitsCheckerExt {
-    validation_result: Mutex<Option<ValidationRes>>,
+#[derive(Debug)]
+struct ComponentCost {
+    pub input_nodes: u32,
+    pub output_nodes: u32,
+    pub depth: u32,
 }
-
-pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 
 impl ShowUsage {
     pub(crate) fn name() -> &'static HeaderName {
@@ -57,25 +64,6 @@ impl ExtensionFactory for QueryLimitsChecker {
         Arc::new(QueryLimitsCheckerExt {
             validation_result: Mutex::new(None),
         })
-    }
-}
-
-#[derive(Debug)]
-struct ComponentCost {
-    pub input_nodes: u32,
-    pub output_nodes: u32,
-    pub depth: u32,
-}
-
-impl std::ops::Add for ComponentCost {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self {
-            input_nodes: self.input_nodes + rhs.input_nodes,
-            output_nodes: self.output_nodes + rhs.output_nodes,
-            depth: self.depth + rhs.depth,
-        }
     }
 }
 
@@ -207,6 +195,18 @@ impl Extension for QueryLimitsCheckerExt {
             .query_payload_size
             .observe(query.len() as f64);
         Ok(doc)
+    }
+}
+
+impl std::ops::Add for ComponentCost {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            input_nodes: self.input_nodes + rhs.input_nodes,
+            output_nodes: self.output_nodes + rhs.output_nodes,
+            depth: self.depth + rhs.depth,
+        }
     }
 }
 
