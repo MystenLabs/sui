@@ -476,7 +476,7 @@ impl ServerBuilder {
             builder = builder.extension(Logger::default());
         }
         if config.internal_features.query_limits_checker {
-            builder = builder.extension(QueryLimitsChecker::default());
+            builder = builder.extension(QueryLimitsChecker);
         }
         if config.internal_features.query_timeout {
             builder = builder.extension(Timeout);
@@ -864,7 +864,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -922,7 +922,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -1042,7 +1042,7 @@ pub mod tests {
         let server_builder = prep_schema(None, None);
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
-            .extension(QueryLimitsChecker::default()) // QueryLimitsChecker is where we actually set the metrics
+            .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
             .build_schema();
 
         schema
