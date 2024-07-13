@@ -561,8 +561,10 @@ module sui::kiosk {
 
     /// Check whether an `item` is listed (exclusively or non exclusively).
     public fun is_listed(self: &Kiosk, id: ID): bool {
-        df::exists_(&self.id, Listing { id, is_exclusive: false }) ||
-        self.is_listed_exclusively(id)
+        df::exists_(
+            &self.id,
+            Listing { id, is_exclusive: false },
+        ) || self.is_listed_exclusively(id)
     }
 
     /// Check whether there's a `PurchaseCap` issued for an item.

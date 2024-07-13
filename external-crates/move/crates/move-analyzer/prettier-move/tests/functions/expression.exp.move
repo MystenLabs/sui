@@ -121,6 +121,24 @@ module prettier::expression {
         less_than_or_equal_to &&
         say_something_really_long <
         greater_than_or_equal_to;
+
+        (
+            say_something_really_long +
+            say_something_really_long +
+            say_something_really_long,
+        ) && (
+            say_something_really_long +
+            say_something_really_long +
+            say_something_really_long,
+        );
+
+        (
+            say_something +
+            say_something +
+            say_something +
+            say_something +
+            say_something,
+        );
     }
 
     fun break_expression() {
@@ -168,8 +186,43 @@ module prettier::expression {
                 ],
             },
         };
+        PackMyStruct {
+            id: object::new(ctx),
+            point: P(10, 20),
+            name: AnotherStruct {
+                params: vector[
+                    b"world".to_string(),
+                ],
+                haha: Another {
+                    id: object::new(
+                        ctx,
+                    ),
+                    param1: vector[
+                        b"world".to_string(),
+                        b"world".to_string(),
+                        b"world".to_string(),
+                        b"world".to_string(),
+                    ],
+                    param2: vector[
+                        Packy {
+                            x: 100000,
+                            y: 500000,
+                        },
+                        Packy {
+                            x: 100,
+                            y: 200,
+                        },
+                    ],
+                    param3: Positional(
+                        b"very-very-very-long-argument-1",
+                        b"very-very-very-long-argument-2",
+                        b"very-very-very-long-argument-3",
+                    ),
+                },
+            },
+        };
 
-        // bind unpack really
+        // bind unpack
         let Slice {
             mut kek,
             prev: lprev,
@@ -228,6 +281,18 @@ module prettier::expression {
         );
         (
             expr1,
+            expr2,
+            expr3,
+            expr4,
+            expr5,
+            expr6,
+            expr7,
+            expr8,
+            expr9,
+            expr10,
+        );
+        (
+            expr1,
             (expr2, expr3, expr4),
             expr5,
         );
@@ -240,6 +305,10 @@ module prettier::expression {
                 expr5,
             ),
             expr6,
+            expr7,
+            expr8,
+            expr9,
+            expr10,
         );
 
         let request = pool.finish_swap(
@@ -250,8 +319,7 @@ module prettier::expression {
             request,
             swap_impl < CoinIn,
             CoinOut,
-            LpCoin >
-            (
+            LpCoin > (
                 pool,
                 clock,
                 coin_in,

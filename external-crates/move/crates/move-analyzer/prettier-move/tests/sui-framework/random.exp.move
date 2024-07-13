@@ -99,8 +99,9 @@ module sui::random {
         let epoch = ctx.epoch();
         let inner = self.load_inner_mut();
         if (
-            inner.randomness_round == 0 && inner.epoch == 0 &&
-            inner.random_bytes.is_empty()
+            inner.randomness_round == 0 && inner.epoch == 0 && inner
+                .random_bytes
+                .is_empty()
         ) {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
@@ -109,8 +110,9 @@ module sui::random {
             // Note that epoch may increase by more than 1 if an epoch is completed without
             // randomness ever being generated in that epoch.
             assert!(
-                (epoch > inner.epoch && new_round == 0) ||
-                (new_round == inner.randomness_round + 1),
+                (epoch > inner.epoch && new_round == 0) || (
+                    new_round == inner.randomness_round + 1,
+                ),
                 EInvalidRandomnessUpdate,
             );
         };

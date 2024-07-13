@@ -169,8 +169,9 @@ module sui::package {
     public fun from_module<T>(self: &Publisher): bool {
         let tyname = type_name::get_with_original_ids<T>();
 
-        (tyname.get_address() == self.package) &&
-        (tyname.get_module() == self.module_name)
+        (tyname.get_address() == self.package) && (
+            tyname.get_module() == self.module_name,
+        )
     }
 
     /// Read the name of the module.

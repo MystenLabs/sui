@@ -62,8 +62,7 @@ module std::type_name {
         bytes == &b"u64" ||
         bytes == &b"u128" ||
         bytes == &b"u256" ||
-        bytes == &b"address" ||
-        (
+        bytes == &b"address" || (
             bytes.length() >= 6 &&
             bytes[0] == ASCII_V &&
             bytes[1] == ASCII_E &&
