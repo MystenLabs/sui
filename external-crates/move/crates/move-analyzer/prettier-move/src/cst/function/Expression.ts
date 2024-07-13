@@ -165,7 +165,7 @@ function printUnaryExpression(path: AstPath<Node>, options: ParserOptions, print
 function printBinaryExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const rhs = path.node.nonFormattingChildren[2];
 	const shouldBreak = rhs!.startsOnNewLine || false;
-	let breakSymbol: Doc = line;
+	const breakSymbol: Doc = rhs?.isBreakableExpression ? ' ' : line;
 
 	return group(
 		[

@@ -72,13 +72,12 @@ module prettier::let_statement {
             (
                 self.final_unlock_ts_sec -
                 math::min(self.final_unlock_ts_sec, now),
-            ) *
-            self.unlock_per_second;
+            ) * self.unlock_per_second;
 
         let locked_amount_round =
-            balance::value(&self.locked_balance) /
-            self.unlock_per_second *
-            self.unlock_per_second;
+            balance::value(
+                &self.locked_balance,
+            ) / self.unlock_per_second * self.unlock_per_second;
     }
 
     fun misc() {

@@ -17,10 +17,10 @@ module suitears::timelock {
         (
             (
                 (
-                    (acc.amount as u256) * accrued_rewards_per_share /
-                    (stake_factor as u256),
-                ) -
-                acc.reward_debt,
+                    (acc.amount as u256) * accrued_rewards_per_share / (
+                        stake_factor as u256,
+                    ),
+                ) - acc.reward_debt,
             ) as u64,
         )
     }

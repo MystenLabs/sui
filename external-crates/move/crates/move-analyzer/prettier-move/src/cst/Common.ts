@@ -57,8 +57,6 @@ export default function (path: AstPath<Node>): treeFn | null {
 		case Common.BindVar:
 			return printBindVar;
 
-		//
-
 		case Common.Label:
 			return printLabel;
 		case Common.Alias:
@@ -78,6 +76,9 @@ export default function (path: AstPath<Node>): treeFn | null {
 	return null;
 }
 
+/**
+ * Nodes which are used across multiple files, yet can't be categorized.
+ */
 export enum Common {
 	PrimitiveType = 'primitive_type',
 	VariableIdentifier = 'variable_identifier',
@@ -105,14 +106,11 @@ export enum Common {
 	BindVar = 'bind_var',
 	LambdaBindings = 'lambda_bindings',
 
-	// ===
-
 	Label = 'label',
 	Alias = 'alias',
 	UnaryOperator = 'unary_op',
 	FieldInitializeList = 'field_initialize_list',
 	ExpressionField = 'exp_field',
-
 }
 
 /**
@@ -246,25 +244,17 @@ function printBindFields(path: AstPath<Node>, options: ParserOptions, print: pri
 
 /**
  * Print `bind_field` node.
- * TODO: there's something off in the CST with this node, come back to it.
  */
 function printBindField(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const nonFormatting = path.node.nonFormattingChildren;
 	const isMut = !!path.node.children.find((c) => c.text === 'mut');
-	const rename = nonFormatting.length == 2;
+	// const rename = nonFormatting.length == 2;
 
 	if (nonFormatting.length == 1) {
-		return group([
-			isMut ? 'mut ' : '',
-			nonFormatting[0]!.text
-		]);
+		return group([isMut ? 'mut ' : '', nonFormatting[0]!.text]);
 	}
 
-	return group([
-		nonFormatting[0]!.text,
-		isMut ? ': mut ' : ': ',
-		nonFormatting[1]!.text
-	]);
+	return group([nonFormatting[0]!.text, isMut ? ': mut ' : ': ', nonFormatting[1]!.text]);
 }
 
 /**
@@ -418,7 +408,6 @@ function printExpressionField(path: AstPath<Node>, options: ParserOptions, print
 	return group([children[0]!, ': ', children[1]!]);
 }
 
-
 /**
  * Print `lambda_bindings` node
  */
@@ -438,7 +427,6 @@ function printLambdaBindings(path: AstPath<Node>, options: ParserOptions, print:
 		'|',
 	]);
 }
-
 
 /**
  * Print `function_type` node.
