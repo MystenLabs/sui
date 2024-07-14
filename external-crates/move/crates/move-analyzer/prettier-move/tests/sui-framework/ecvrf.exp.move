@@ -4,10 +4,8 @@
 module sui::ecvrf {
     #[allow(unused_const)]
     const EInvalidHashLength: u64 = 1;
-
     #[allow(unused_const)]
     const EInvalidPublicKeyEncoding: u64 = 2;
-
     #[allow(unused_const)]
     const EInvalidProofEncoding: u64 = 3;
 

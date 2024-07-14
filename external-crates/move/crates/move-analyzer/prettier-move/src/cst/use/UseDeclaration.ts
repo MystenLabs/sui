@@ -8,23 +8,23 @@ const { join, group, line, indent, softline, ifBreak } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
 	switch (path.node.type) {
-		case UseDeclarationTree.UseDeclaration:
+		case UseDeclaration.UseDeclaration:
 			return printUseDeclaration;
-		case UseDeclarationTree.UseModule:
+		case UseDeclaration.UseModule:
 			return printUseModule;
-		case UseDeclarationTree.UseMember:
+		case UseDeclaration.UseMember:
 			return printUseMember;
-		case UseDeclarationTree.UseModuleMember:
+		case UseDeclaration.UseModuleMember:
 			return printUseModuleMember;
-		case UseDeclarationTree.UseModuleMembers:
+		case UseDeclaration.UseModuleMembers:
 			return printUseModuleMembers;
-		case UseDeclarationTree.UseFun:
+		case UseDeclaration.UseFun:
 			return printUseFun;
-		case UseDeclarationTree.ModuleIdentity:
+		case UseDeclaration.ModuleIdentity:
 			return printModuleIdentity;
-		case UseDeclarationTree.FriendDeclaration:
+		case UseDeclaration.FriendDeclaration:
 			return printFriendDeclaration;
-		case UseDeclarationTree.FriendAccess:
+		case UseDeclaration.FriendAccess:
 			return printFriendAccess;
 		default:
 			return null;
@@ -47,7 +47,7 @@ export default function (path: AstPath<Node>): treeFn | null {
  * - `identifier` <as `alias`>;
  * )
  */
-export enum UseDeclarationTree {
+export enum UseDeclaration {
 	/**
 	 * Module-level definition
 	 * ```
@@ -66,7 +66,7 @@ export enum UseDeclarationTree {
 }
 
 /**
- * Print @see `UseDeclarationTree.UseDeclaration` node.
+ * Print @see `UseDeclaration.UseDeclaration` node.
  */
 export function printUseDeclaration(
 	path: AstPath<Node>,

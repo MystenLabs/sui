@@ -125,7 +125,6 @@ module foo::bar {
     }
 
     public struct Cup<phantom T> has drop {}
-
     public macro fun foo(
         _: ||,
         _: || -> (),

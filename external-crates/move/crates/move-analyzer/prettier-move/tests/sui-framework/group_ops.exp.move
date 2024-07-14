@@ -9,7 +9,6 @@ module sui::group_ops {
     // Operation is not supported by the network.
     const ENotSupported: u64 = 0;
     const EInvalidInput: u64 = 1;
-
     #[allow(unused_const)]
     const EInputTooLong: u64 = 2;
     const EInvalidBufferLength: u64 = 3;

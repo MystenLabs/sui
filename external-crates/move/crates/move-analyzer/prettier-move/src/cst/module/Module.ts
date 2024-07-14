@@ -5,6 +5,10 @@ import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
 import { FunctionDefinition } from '../function/FunctionDefinition';
+import { StructDefinition } from '../struct/StructDefinition';
+import { Constant } from '../constant/Constant';
+import { UseDeclaration } from '../use/UseDeclaration';
+import { EnumDefinition } from '../EnumDefinition';
 const { join, hardline, indent } = doc.builders;
 
 /**
@@ -62,6 +66,20 @@ function printModuleIdentity(path: AstPath<Node>, options: ParserOptions, print:
 }
 
 /**
+ * Members that must be separated by an empty line if they are next to each other.
+ * For example, a function definition followed by a struct definition.
+ */
+const separatedMembers = [
+	FunctionDefinition.FunctionDefinition,
+	StructDefinition.StructDefinition,
+	Constant.Constant,
+	UseDeclaration.UseDeclaration,
+	UseDeclaration.FriendDeclaration,
+	EnumDefinition.EnumDefinition,
+	,
+] as string[];
+
+/**
  * Print `module_body` node.
  *
  * We need to preserve spacing between members (functions, structs, constants, etc.).
@@ -72,27 +90,23 @@ function printModuleBody(
 	options: ParserOptions & MoveOptions,
 	print: printFn,
 ): Doc {
-	// add empty line between members if it's not already there
 	const nodes = path.node.namedAndEmptyLineChildren;
 	const printed = path.map((path, i) => {
 		const next = nodes[i + 1];
 
-		if (path.node.type === 'empty_line') {
-			return print(path);
-		}
-
-		if (path.node.type === 'annotation') {
-			return print(path);
-		}
-
-		// add empty line between members of different types (e.g., function and struct)
-		// if it's not already there
-		if (next && !next?.isEmptyLine && next?.type != path.node.type) {
+		if (
+			separatedMembers.includes(path.node.type) &&
+			separatedMembers.includes(next?.type || '') &&
+			path.node.type !== next?.type
+		) {
 			return [path.call(print), hardline];
 		}
 
 		// force add empty line after function definitions
-		if (next && path.node.type === FunctionDefinition.FunctionDefinition && next?.type !== 'empty_line') {
+		if (
+			path.node.type === FunctionDefinition.FunctionDefinition &&
+			next?.type === FunctionDefinition.FunctionDefinition
+		) {
 			return [path.call(print), hardline];
 		}
 

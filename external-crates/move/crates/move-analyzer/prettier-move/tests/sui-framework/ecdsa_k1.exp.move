@@ -32,7 +32,6 @@ module sui::ecdsa_k1 {
     #[allow(unused_const)]
     /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
-
     #[allow(unused_const)]
     const SHA256: u8 = 1;
 
