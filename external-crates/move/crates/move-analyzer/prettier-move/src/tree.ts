@@ -1,13 +1,19 @@
 import Parser = require('web-tree-sitter');
 import { isEmptyLine, isFormatting, isNewline } from './cst/Formatting';
 
+export interface Comment {
+	type: 'line_comment' | 'block_comment';
+	text: string;
+}
+
 export class Tree {
 	public type: string;
 	public text: string;
 	public isNamed: boolean;
 	public children: Tree[];
 	public leadingComment: string[];
-	public trailingComment: string | null;
+	public trailingComment: Comment | null;
+	public enableTrailingComment: boolean = true;
 
 	/**
 	 * A reference lock to the parent node. This is a function that returns the
@@ -71,14 +77,21 @@ export class Tree {
 			return true;
 		});
 
-		// assign leading comments to the node. modifies the tree in place.
-		this.children.forEach((child) => child.assignLeadingComments());
-
 		// assign trailing comments to the node. modifies the tree in place.
 		this.children.forEach((child) => child.assignTrailingComments());
 
+		// assign leading comments to the node. modifies the tree in place.
+		this.children.forEach((child) => child.assignLeadingComments());
+
 		// filter out all leading comments.
 		this.children = this.children.filter((child) => !child.isUsedComment);
+	}
+
+	/**
+	 * Special case for lists, where we want to print the trailing comma.
+	 */
+	disableTrailingComment() {
+		this.enableTrailingComment = false;
 	}
 
 	get namedChildCount(): number {
@@ -234,7 +247,11 @@ export class Tree {
 		if (!this.nextNamedSibling?.isComment) return this;
 		if (this.nextNamedSibling.isUsedComment) return this;
 
-		this.trailingComment = this.nextNamedSibling.text;
+		this.trailingComment = {
+			type: this.nextNamedSibling.type as 'line_comment' | 'block_comment',
+			text: this.nextNamedSibling.text
+		};
+
 		this.nextNamedSibling.isUsedComment = true;
 
 		return this;
@@ -273,10 +290,10 @@ export class Tree {
 		// promote trailing comments to leading comments
 		// TODO: once we have a better comment linking mechanism, we can remove this
 		// otherwise trailing line comments break lists and other formatting
-		if (this.nextNamedSibling?.type === 'line_comment') {
-			comments.push(this.nextNamedSibling.text);
-			this.nextNamedSibling.isUsedComment = true;
-		}
+		// if (this.nextNamedSibling?.type === 'line_comment') {
+		// 	comments.push(this.nextNamedSibling.text);
+		// 	this.nextNamedSibling.isUsedComment = true;
+		// }
 
 		this.leadingComment = comments;
 
