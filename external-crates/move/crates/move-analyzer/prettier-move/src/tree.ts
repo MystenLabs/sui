@@ -6,6 +6,8 @@ export class Tree {
 	public text: string;
 	public isNamed: boolean;
 	public children: Tree[];
+    public leadingComment: string[];
+    public trailingComment: string | null;
 
 	/**
 	 * A reference lock to the parent node. This is a function that returns the
@@ -14,12 +16,33 @@ export class Tree {
 	 */
 	private getParent: () => Tree | null;
 
+    /**
+     * Marks if the comment has been used. This is useful to avoid using the same
+     * comment multiple times + filter out comments that are already used.
+     */
+    private isUsedComment: boolean = false;
+
 	constructor(node: Parser.SyntaxNode, parent: Tree | null = null) {
 		this.type = node.type;
 		this.text = node.text;
 		this.isNamed = node.isNamed();
+        this.leadingComment = [];
+        this.trailingComment = null;
 		this.getParent = () => parent;
-		this.children = node.children.map((child) => new Tree(child, this));
+
+        // turn every node into a `Tree` node.
+        this.children = node.children.map((child) => new Tree(child, this));
+
+        this.children = this.children.reduce(shrinkNewlines, []);
+
+        // assign trailing comments to the node.
+        this.children = this.children.map((child) => child.assignTrailingComments());
+
+        // assign leading comments to the node.
+        this.children = this.children.map((child) => child.assignLeadingComments());
+
+        // filter out all leading comments.
+        this.children = this.children.filter((child) => !child.isUsedComment);
 	}
 
 	get namedChildCount(): number {
@@ -70,46 +93,13 @@ export class Tree {
 		return this.children[index] || null;
 	}
 
-	get leadingComment(): string[] {
-		const comments: string[] = [];
-		let node: Tree = this;
-
-		// leading comment must have a newline character before it
-		// except for the case of an empty line (it's a special case)
-		if (
-			!node.isEmptyLine &&
-			(!node.previousSibling?.isNextLine || !node.previousSibling.previousSibling?.isComment)
-		) {
-			return comments;
-		}
-
-		while (
-			(node.previousSibling && node.previousSibling.isComment) ||
-			isNextLine(node.previousSibling)
-		) {
-			node = node.previousSibling!;
-			if (node.isComment) comments.unshift(node.text);
-		}
-
-		// Leading comment is a comment that either is the first node,
-		// or starts with a newline character, or the previous node is
-		// an empty line node.
-		return isNextLine(node) || isEmptyLine(node.previousSibling) || !node.previousSibling
-			? comments
-			: [];
-	}
-
-	get trailingComment(): string | null {
-        // Adding a `trailingComment` property to the `SyntaxNode`. When
-        // `trailingComment` is accessed, it will return the first comment
-        // that is after the node. It is important to note that a traling
-        // comment must not have a new line before it!
-        return this.nextSibling?.type === 'line_comment' ? this.nextSibling.text : null;
-	}
-
 	get isEmptyLine(): boolean {
 		return this.type === 'empty_line';
 	}
+
+    get isNewline(): boolean {
+        return this.type === 'newline';
+    }
 
 	get isComment(): boolean {
 		return this.type === 'line_comment' || this.type === 'block_comment';
@@ -128,6 +118,14 @@ export class Tree {
 
 		return parent.children[index - 1] || null;
 	}
+
+    get previousNamedSibling(): Tree | null {
+        let node = this.previousSibling;
+        while (node && !node.isNamed) {
+            node = node.previousSibling;
+        }
+        return node;
+    }
 
 	get startsOnNewLine(): boolean {
 		return this.previousSibling?.isNextLine || false;
@@ -163,6 +161,14 @@ export class Tree {
 		return parent.children[index + 1] || null;
 	}
 
+    get nextNamedSibling(): Tree | null {
+        let node = this.nextSibling;
+        while (node && !node.isNamed) {
+            node = node.nextSibling;
+        }
+        return node;
+    }
+
 	get parent() {
 		return this.getParent();
 	}
@@ -178,4 +184,62 @@ export class Tree {
 			children: this.children.map((child) => child.toJSON()),
 		};
 	}
+
+    /**
+     *
+     * @returns
+     */
+    private assignTrailingComments(): Tree {
+        if (!this.isNamed) return this;
+        if (this.isFormatting) return this;
+        if (!this.nextNamedSibling?.isComment) return this;
+        if (this.nextNamedSibling.isUsedComment) return this;
+
+        this.trailingComment = this.nextNamedSibling.text;
+        this.nextNamedSibling.isUsedComment = true;
+
+        return this;
+    }
+
+    /**
+     * Walks backwards through the siblings and searches for comments preceding
+     * the current node. If a comment is found, it is assigned to the `leadingComment`
+     * property of the node, and the comment is marked as used.
+     *
+     * Used comments are filtered out and not used again.
+     *
+     * Motivation for this is to avoid duplicate association of a comment both as
+     * a trailing comment and a leading comment.
+     */
+    private assignLeadingComments(): Tree {
+        let comments = [];
+        let prev = this.previousNamedSibling;
+
+        if (!this.isNamed) return this;
+        if (this.isFormatting) return this;
+        if (!prev?.isNewline) return this;
+
+        prev = prev.previousNamedSibling;
+
+        while (prev?.isComment || prev?.isNewline && !prev?.isUsedComment) {
+            if (prev.isUsedComment) break;
+            if (prev.isComment) {
+                comments.unshift(prev.text);
+                prev.isUsedComment = true;
+            }
+
+            prev = prev.previousNamedSibling; // move to the next comment
+        }
+
+        this.leadingComment = comments;
+
+        return this;
+    }
+}
+
+
+function shrinkNewlines(acc: Tree[], node: Tree): Tree[] {
+    if (node.isNewline && node.previousNamedSibling?.isNewline) return acc;
+
+    return [...acc, node];
 }

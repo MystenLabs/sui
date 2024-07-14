@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 /// HEX (Base16) encoding utility.
 module sui::hex {
-
     const EInvalidHexLength: u64 = 0;
     const ENotValidHexCharacter: u64 = 1;
-
     /// Vector of Base16 values from `00` to `FF`
     const HEX: vector<vector<u8>> = vector[
         b"00",
@@ -266,18 +263,13 @@ module sui::hex {
         b"fe",
         b"ff",
     ];
-
     /// Encode `bytes` in lowercase hex
     public fun encode(bytes: vector<u8>): vector<u8> {
         let (mut i, mut r, l) = (0, vector[], bytes.length());
         let hex_vector = HEX;
-        while (i < l) {
-            r.append(hex_vector[bytes[i] as u64]);
-            i = i + 1;
-        };
+        while (i < l) { r.append(hex_vector[bytes[i] as u64]);i = i + 1; };
         r
     }
-
     /// Decode hex into `bytes`
     /// Takes a hex string (no 0x prefix) (e.g. b"0f3a")
     /// Returns vector of `bytes` that represents the hex string (e.g. x"0f3a")
@@ -294,47 +286,37 @@ module sui::hex {
         };
         r
     }
-
     fun decode_byte(hex: u8): u8 {
-        if (48 <= hex && hex < 58) {
-            hex - 48
-        } else if (65 <= hex && hex < 71) {
-            10 + hex - 65
-        } else if (97 <= hex && hex < 103) {
+        if (48 <= hex && hex < 58) { hex - 48 } else if (
+            65 <= hex && hex < 71
+        ) { 10 + hex - 65 } else if (97 <= hex && hex < 103) {
             10 + hex - 97
-        } else {
-            abort ENotValidHexCharacter
-        }
+        } else { abort ENotValidHexCharacter }
     }
-
     #[test]
     fun test_hex_encode_string_literal() {
         assert!(b"30" == encode(b"0"));
         assert!(b"61" == encode(b"a"));
         assert!(b"666666" == encode(b"fff"));
     }
-
     #[test]
     fun test_hex_encode_hex_literal() {
         assert!(b"ff" == encode(x"ff"));
         assert!(b"fe" == encode(x"fe"));
         assert!(b"00" == encode(x"00"));
     }
-
     #[test]
     fun test_hex_decode_string_literal() {
         assert!(x"ff" == decode(b"ff"));
         assert!(x"fe" == decode(b"fe"));
         assert!(x"00" == decode(b"00"));
     }
-
     #[test]
     fun test_hex_decode_string_literal__lowercase_and_uppercase() {
         assert!(x"ff" == decode(b"Ff"));
         assert!(x"ff" == decode(b"fF"));
         assert!(x"ff" == decode(b"FF"));
     }
-
     #[test]
     fun test_hex_decode_string_literal__long_hex() {
         assert!(
@@ -344,22 +326,13 @@ module sui::hex {
             ),
         );
     }
-
     #[test]
     #[expected_failure(abort_code = EInvalidHexLength)]
-    fun test_hex_decode__invalid_length() {
-        decode(b"0");
-    }
-
+    fun test_hex_decode__invalid_length() { decode(b"0"); }
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]
-    fun test_hex_decode__hex_literal() {
-        decode(x"ffff");
-    }
-
+    fun test_hex_decode__hex_literal() { decode(x"ffff"); }
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]
-    fun test_hex_decode__invalid_string_literal() {
-        decode(b"0g");
-    }
+    fun test_hex_decode__invalid_string_literal() { decode(b"0g"); }
 }

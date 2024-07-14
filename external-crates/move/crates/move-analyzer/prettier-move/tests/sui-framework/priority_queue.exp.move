@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 /// Priority queue implemented using a max heap.
 module sui::priority_queue {
-
     /// For when heap is empty and there's no data to pop.
     const EPopFromEmptyHeap: u64 = 0;
-
     /// Struct representing a priority queue. The `entries` vector represents a max
     /// heap structure, where entries[0] is the root, entries[1] and entries[2] are the
     /// left child and right child of the root, etc. More generally, the children of
@@ -15,12 +12,10 @@ module sui::priority_queue {
     public struct PriorityQueue<T: drop> has store, drop {
         entries: vector<Entry<T>>,
     }
-
     public struct Entry<T: drop> has store, drop {
-        priority: u64,
+        priority: u64 // higher value means higher priority and will be popped first,
         value: T,
     }
-
     /// Create a new priority queue from the input entry vectors.
     public fun new<T: drop>(mut entries: vector<Entry<T>>): PriorityQueue<T> {
         let len = entries.length();
@@ -32,7 +27,6 @@ module sui::priority_queue {
         };
         PriorityQueue { entries }
     }
-
     /// Pop the entry with the highest priority value.
     public fun pop_max<T: drop>(pq: &mut PriorityQueue<T>): (u64, T) {
         let len = pq.entries.length();
@@ -44,7 +38,6 @@ module sui::priority_queue {
         max_heapify_recursive(&mut pq.entries, len - 1, 0);
         (priority, value)
     }
-
     /// Insert a new entry into the queue.
     public fun insert<T: drop>(
         pq: &mut PriorityQueue<T>,
@@ -55,11 +48,9 @@ module sui::priority_queue {
         let index = pq.entries.length() - 1;
         restore_heap_recursive(&mut pq.entries, index);
     }
-
     public fun new_entry<T: drop>(priority: u64, value: T): Entry<T> {
         Entry { priority, value }
     }
-
     public fun create_entries<T: drop>(
         mut p: vector<u64>,
         mut v: vector<T>,
@@ -76,14 +67,10 @@ module sui::priority_queue {
         };
         res
     }
-
     // TODO: implement iterative version too and see performance difference.
     fun restore_heap_recursive<T: drop>(v: &mut vector<Entry<T>>, i: u64) {
-        if (i == 0) {
-            return
-        };
+        if (i == 0) { return };
         let parent = (i - 1) / 2;
-
         // If new elem is greater than its parent, swap them and recursively
         // do the restoration upwards.
         if (*&v[i].priority > *&v[parent].priority) {
@@ -91,7 +78,6 @@ module sui::priority_queue {
             restore_heap_recursive(v, parent);
         }
     }
-
     /// Max heapify the subtree whose root is at index `i`. That means after this function
     /// finishes, the subtree should have the property that the parent node has higher priority
     /// than both child nodes.
@@ -102,9 +88,7 @@ module sui::priority_queue {
         len: u64,
         i: u64,
     ) {
-        if (len == 0) {
-            return
-        };
+        if (len == 0) { return };
         assert!(i < len, 1);
         let left = i * 2 + 1;
         let right = left + 1;
@@ -126,7 +110,6 @@ module sui::priority_queue {
             max_heapify_recursive(v, len, max);
         }
     }
-
     public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
         let mut res = vector[];
         let mut i = 0;
@@ -136,7 +119,6 @@ module sui::priority_queue {
         };
         res
     }
-
     #[test]
     fun test_pq() {
         let mut h =
@@ -156,7 +138,6 @@ module sui::priority_queue {
         check_pop_max(&mut h, 2, 60);
         check_pop_max(&mut h, 1, 20);
         check_pop_max(&mut h, 0, 80);
-
         let mut h =
             new(
                 create_entries(
@@ -170,7 +151,6 @@ module sui::priority_queue {
         check_pop_max(&mut h, 2, 40);
         check_pop_max(&mut h, 1, 30);
     }
-
     #[test]
     fun test_swap_remove_edge_case() {
         // This test would fail if `remove` is used incorrectly instead of `swap_remove` in `pop_max`.
@@ -191,7 +171,6 @@ module sui::priority_queue {
         check_pop_max(&mut h, 1, 0);
         check_pop_max(&mut h, 0, 0);
     }
-
     #[test_only]
     fun check_pop_max(
         h: &mut PriorityQueue<u64>,

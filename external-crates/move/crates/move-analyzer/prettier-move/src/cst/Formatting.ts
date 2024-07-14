@@ -35,7 +35,7 @@ export enum Formatting {
 	 * Special node to insert a newline before the next node.
 	 * We use it to make a call to hardline or not.
 	 */
-	NextLine = 'next_line',
+	NextLine = 'newline',
 }
 
 export function startsOnNewLine(path: AstPath<Node>): boolean {

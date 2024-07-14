@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 module sui::ed25519 {
     /// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param public_key: 32-byte signature that is a point on the Ed25519 elliptic curve.

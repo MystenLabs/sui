@@ -1,11 +1,7 @@
 module prettier::simple_function {
     fun say_hello() {}
     /// This is a simple function
-    fun simple_function(): u64 {
-        say_hello();
-        100
-    }
-
+    fun simple_function(): u64 { say_hello();100 }
     fun breakable_parameters(
         first_breakable_parameter: u64,
         second_breakable_parameter: u64,
@@ -18,7 +14,6 @@ module prettier::simple_function {
         fourth_breakable_parameter +
         fifth_breakable_parameter
     }
-
     entry fun private_entry() {}
     public fun public_function() {}
     public entry fun public_entry() {}

@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 /// Defines a fixed-point numeric type with a 32-bit integer part and
 /// a 32-bit fractional part.
-
 module std::fixed_point32 {
-
     /// Define a fixed-point numeric type with 32 fractional bits.
     /// This is just a u64 integer but it is wrapped in a struct to
     /// make a unique type. This is a binary representation, so decimal
@@ -16,10 +13,8 @@ module std::fixed_point32 {
     /// be careful about using floating-point to convert these values to
     /// decimal.
     public struct FixedPoint32 has copy, drop, store { value: u64 }
-
     ///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
     const MAX_U64: u128 = 18446744073709551615;
-
     /// The denominator provided was zero
     const EDENOMINATOR: u64 = 0x10001;
     /// The quotient value would be too large to be held in a `u64`
@@ -30,7 +25,6 @@ module std::fixed_point32 {
     const EDIVISION_BY_ZERO: u64 = 0x10004;
     /// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
     const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
-
     /// Multiply a u64 integer by a fixed-point number, truncating any
     /// fractional part of the product. This will abort if the product
     /// overflows.
@@ -46,7 +40,6 @@ module std::fixed_point32 {
         assert!(product <= MAX_U64, EMULTIPLICATION);
         product as u64
     }
-
     /// Divide a u64 integer by a fixed-point number, truncating any
     /// fractional part of the quotient. This will abort if the divisor
     /// is zero or if the quotient overflows.
@@ -63,7 +56,6 @@ module std::fixed_point32 {
         // with an arithmetic error.
         quotient as u64
     }
-
     /// Create a fixed-point value from a rational number specified by its
     /// numerator and denominator. Calling this function should be preferred
     /// for using `Self::create_from_raw_value` which is also available.
@@ -92,21 +84,14 @@ module std::fixed_point32 {
         assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
         FixedPoint32 { value: quotient as u64 }
     }
-
     /// Create a fixedpoint value from a raw value.
     public fun create_from_raw_value(value: u64): FixedPoint32 {
         FixedPoint32 { value }
     }
-
     /// Accessor for the raw u64 value. Other less common operations, such as
     /// adding or subtracting FixedPoint32 values, can be done using the raw
     /// values directly.
-    public fun get_raw_value(num: FixedPoint32): u64 {
-        num.value
-    }
-
+    public fun get_raw_value(num: FixedPoint32): u64 { num.value }
     /// Returns true if the ratio is zero.
-    public fun is_zero(num: FixedPoint32): bool {
-        num.value == 0
-    }
+    public fun is_zero(num: FixedPoint32): bool { num.value == 0 }
 }

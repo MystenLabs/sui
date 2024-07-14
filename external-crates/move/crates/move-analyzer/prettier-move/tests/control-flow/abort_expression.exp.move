@@ -1,6 +1,5 @@
 // options:
 // printWidth: 20
-
 module prettier::abort_expression {
     fun abort_expression() {
         abort 0;
