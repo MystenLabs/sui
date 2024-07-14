@@ -63,6 +63,7 @@ module std::bit_vector {
                 else bitvector.unset(i - amount);
                 i = i + 1;
             };
+
             i = bitvector.length - amount;
 
             while (i < bitvector.length) {

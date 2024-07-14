@@ -83,9 +83,9 @@ module sui::test_scenario {
         /// The objects deleted this transaction
         deleted: vector<ID>,
         /// The objects transferred to an account this transaction
-        transferred_to_account: VecMap<ID, address>,
+        transferred_to_account: VecMap<ID /* owner */, address>,
         /// The objects transferred to an object this transaction
-        transferred_to_object: VecMap<ID, ID>,
+        transferred_to_object: VecMap<ID /* owner */, ID>,
         /// The objects shared this transaction
         shared: vector<ID>,
         /// The objects frozen this transaction

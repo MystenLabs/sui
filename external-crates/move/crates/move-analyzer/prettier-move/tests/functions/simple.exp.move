@@ -1,5 +1,6 @@
 module prettier::simple_function {
     fun say_hello() {}
+
     /// This is a simple function
     fun simple_function(): u64 {
         say_hello();
@@ -20,8 +21,12 @@ module prettier::simple_function {
     }
 
     entry fun private_entry() {}
+
     public fun public_function() {}
+
     public entry fun public_entry() {}
+
     public(package) fun public_package_function() {}
+
     public(package) entry fun public_package_entry() {}
 }

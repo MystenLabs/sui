@@ -346,7 +346,7 @@ export function printBlock(
 	print: printFn,
 ): Doc {
 	const hasNonEmptyLine = path.node.namedChildren.some(
-		(child) => !child.isEmptyLine && !child.isNextLine,
+		(child) => !child.isEmptyLine && !child.isNewline,
 	);
 
 	if (!hasNonEmptyLine) {

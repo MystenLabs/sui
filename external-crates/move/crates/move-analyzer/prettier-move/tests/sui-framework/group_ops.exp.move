@@ -6,7 +6,8 @@ module sui::group_ops {
     use sui::bcs;
 
     #[allow(unused_const)]
-    const ENotSupported: u64 = 0; // Operation is not supported by the network.
+    // Operation is not supported by the network.
+    const ENotSupported: u64 = 0;
     const EInvalidInput: u64 = 1;
     #[allow(unused_const)]
     const EInputTooLong: u64 = 2;
@@ -167,7 +168,8 @@ module sui::group_ops {
     ) {
         let buffer_len = buffer.length();
         assert!(buffer_len > 7, EInvalidBufferLength);
-        let x_as_bytes = bcs::to_bytes(&x); // little endian
+        // little endian
+        let x_as_bytes = bcs::to_bytes(&x);
         let mut i = 0;
         while (i < 8) {
             let position = if (big_endian) { buffer_len - i - 1 } else { i };

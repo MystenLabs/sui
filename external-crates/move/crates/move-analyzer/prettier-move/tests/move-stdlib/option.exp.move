@@ -144,6 +144,7 @@ module std::option {
         let Option { vec } = t;
         vec.destroy_empty()
     }
+
     /// Convert `t` into a vector of length 1 if it is `Some`,
     /// and an empty vector otherwise
     public fun to_vec<Element>(t: Option<Element>): vector<Element> {

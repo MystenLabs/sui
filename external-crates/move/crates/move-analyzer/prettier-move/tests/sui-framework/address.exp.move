@@ -69,10 +69,13 @@ module sui::address {
     }
 
     fun hex_char_value(c: u8): u8 {
-        if (c >= 48 && c <= 57) c - 48 // 0-9
-        else if (c >= 65 && c <= 70) c - 55 // A-F
-        else if (c >= 97 && c <= 102) c - 87 // a-f
-        else abort EAddressParseError
+        if (c >= 48 && c <= 57) c - 48
+        else // 0-9
+        if (c >= 65 && c <= 70) c - 55
+        else // A-F
+        if (c >= 97 && c <= 102) c - 87
+        else // a-f
+        abort EAddressParseError
     }
 
     /// Length of a Sui address in bytes

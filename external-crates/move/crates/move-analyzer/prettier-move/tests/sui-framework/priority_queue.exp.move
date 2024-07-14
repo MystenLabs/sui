@@ -16,6 +16,7 @@ module sui::priority_queue {
     }
 
     public struct Entry<T: drop> has store, drop {
+        // higher value means higher priority and will be popped first
         priority: u64,
         value: T,
     }

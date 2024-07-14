@@ -15,7 +15,6 @@ module test::structs {
         f: u64,
     } has key, drop;
 
-
     struct TwoField { f1: u64, f2: u64 }
 
     struct SimpleGeneric<T1: key, T2: store + drop + key> {}

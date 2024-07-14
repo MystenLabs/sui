@@ -1,4 +1,6 @@
 module foo::bar {
+    // Imports
+
     use fun Self::foo as X.f1;
     use fun a::m::foo as X.f2;
 

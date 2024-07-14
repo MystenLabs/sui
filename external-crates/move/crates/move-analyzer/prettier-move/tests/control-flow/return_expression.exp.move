@@ -5,10 +5,10 @@ module test::return_expression {
     public fun folding() {
         // this is a return expression
         return very_very > very_very_long_if_condition + 100;
+        // this is a trailing comment for return
         return very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition ||
-            very_very_long_if_condition >
-            very_very_long_if_condition; // this is a trailing comment for return
+            very_very_long_if_condition > very_very_long_if_condition;
         return very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition_very_very_long_if_condition;
         return {
             if (block_expression()) 1
@@ -16,7 +16,8 @@ module test::return_expression {
         };
 
         // and top comment
-        return; // another trailing
+        // another trailing
+        return;
 
         return { a + b };
 
