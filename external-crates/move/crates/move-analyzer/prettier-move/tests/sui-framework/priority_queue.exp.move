@@ -6,6 +6,7 @@ module sui::priority_queue {
     /// For when heap is empty and there's no data to pop.
     const EPopFromEmptyHeap: u64 = 0;
 
+
     /// Struct representing a priority queue. The `entries` vector represents a max
     /// heap structure, where entries[0] is the root, entries[1] and entries[2] are the
     /// left child and right child of the root, etc. More generally, the children of
@@ -15,10 +16,13 @@ module sui::priority_queue {
         entries: vector<Entry<T>>,
     }
 
+
     public struct Entry<T: drop> has store, drop {
-        priority: u64 // higher value means higher priority and will be popped first,
+        // higher value means higher priority and will be popped first
+        priority: u64,
         value: T,
     }
+
 
     /// Create a new priority queue from the input entry vectors.
     public fun new<T: drop>(mut entries: vector<Entry<T>>): PriorityQueue<T> {
@@ -32,6 +36,7 @@ module sui::priority_queue {
         PriorityQueue { entries }
     }
 
+
     /// Pop the entry with the highest priority value.
     public fun pop_max<T: drop>(pq: &mut PriorityQueue<T>): (u64, T) {
         let len = pq.entries.length();
@@ -44,6 +49,7 @@ module sui::priority_queue {
         (priority, value)
     }
 
+
     /// Insert a new entry into the queue.
     public fun insert<T: drop>(
         pq: &mut PriorityQueue<T>,
@@ -55,9 +61,11 @@ module sui::priority_queue {
         restore_heap_recursive(&mut pq.entries, index);
     }
 
+
     public fun new_entry<T: drop>(priority: u64, value: T): Entry<T> {
         Entry { priority, value }
     }
+
 
     public fun create_entries<T: drop>(
         mut p: vector<u64>,
@@ -76,6 +84,7 @@ module sui::priority_queue {
         res
     }
 
+
     // TODO: implement iterative version too and see performance difference.
     fun restore_heap_recursive<T: drop>(v: &mut vector<Entry<T>>, i: u64) {
         if (i == 0) {
@@ -90,6 +99,7 @@ module sui::priority_queue {
             restore_heap_recursive(v, parent);
         }
     }
+
 
     /// Max heapify the subtree whose root is at index `i`. That means after this function
     /// finishes, the subtree should have the property that the parent node has higher priority
@@ -126,6 +136,7 @@ module sui::priority_queue {
         }
     }
 
+
     public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
         let mut res = vector[];
         let mut i = 0;
@@ -136,7 +147,9 @@ module sui::priority_queue {
         res
     }
 
+
     #[test]
+
     fun test_pq() {
         let mut h =
             new(
@@ -170,7 +183,9 @@ module sui::priority_queue {
         check_pop_max(&mut h, 1, 30);
     }
 
+
     #[test]
+
     fun test_swap_remove_edge_case() {
         // This test would fail if `remove` is used incorrectly instead of `swap_remove` in `pop_max`.
         // It's hard to characterize exactly under what condition this bug is triggered but roughly
@@ -191,7 +206,9 @@ module sui::priority_queue {
         check_pop_max(&mut h, 0, 0);
     }
 
+
     #[test_only]
+
     fun check_pop_max(
         h: &mut PriorityQueue<u64>,
         expected_priority: u64,

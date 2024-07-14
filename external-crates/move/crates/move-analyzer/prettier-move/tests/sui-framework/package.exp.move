@@ -9,50 +9,63 @@ module sui::package {
     use std::type_name;
     use sui::types;
 
+
     /// Allows calling `.burn` to destroy a `Publisher`.
     public use fun burn_publisher as Publisher.burn;
+
 
     /// Allows calling `.module_` to access the name of the module a
     /// `Publisher` was derived from.
     public use fun published_module as Publisher.module_;
 
+
     /// Allows calling `.package` to access the address of the package
     /// a `Publisher` was derived from.
     public use fun published_package as Publisher.package;
+
 
     /// Allows calling `.package` to access the package this cap
     /// authorizes upgrades for.
     public use fun upgrade_package as UpgradeCap.package;
 
+
     /// Allows calling `.policy` to access the most permissive kind of
     /// upgrade this cap will authorize.
     public use fun upgrade_policy as UpgradeCap.policy;
 
+
     /// Allows calling `.authorize` to initiate an upgrade.
     public use fun authorize_upgrade as UpgradeCap.authorize;
 
+
     /// Allows calling `.commit` to finalize an upgrade.
     public use fun commit_upgrade as UpgradeCap.commit;
+
 
     /// Allows calling `.package` to access the package this ticket
     /// authorizes an upgrade for.
     public use fun ticket_package as UpgradeTicket.package;
 
+
     /// Allows calling `.policy` to access the kind of upgrade this
     /// ticket authorizes.
     public use fun ticket_policy as UpgradeTicket.policy;
+
 
     /// Allows calling `.digest` to access the digest of the bytecode
     /// used for this upgrade.
     public use fun ticket_digest as UpgradeTicket.digest;
 
+
     /// Allows calling `.cap` to fetch the ID of the cap this receipt
     /// should be applied to.
     public use fun receipt_cap as UpgradeReceipt.cap;
 
+
     /// Allows calling `.package` to fetch the ID of the package after
     /// upgrade.
     public use fun receipt_package as UpgradeReceipt.package;
+
 
     /// Tried to create a `Publisher` using a type that isn't a
     /// one-time witness.
@@ -66,6 +79,7 @@ module sui::package {
     /// Trying to commit an upgrade to the wrong `UpgradeCap`.
     const EWrongUpgradeCap: u64 = 4;
 
+
     /// Update any part of the package (function implementations, add new
     /// functions or types, change dependencies)
     const COMPATIBLE: u8 = 0;
@@ -74,6 +88,7 @@ module sui::package {
     const ADDITIVE: u8 = 128;
     /// Only be able to change dependencies.
     const DEP_ONLY: u8 = 192;
+
 
     /// This type can only be created in the transaction that
     /// generates a module, by consuming its one-time witness, so it
@@ -84,6 +99,7 @@ module sui::package {
         package: String,
         module_name: String,
     }
+
 
     /// Capability controlling the ability to upgrade a package.
     public struct UpgradeCap has key, store {
@@ -96,6 +112,7 @@ module sui::package {
         /// What kind of upgrades are allowed.
         policy: u8,
     }
+
 
     /// Permission to perform a particular upgrade (for a fixed version of
     /// the package, bytecode to upgrade with and transitive dependencies to
@@ -118,6 +135,7 @@ module sui::package {
         digest: vector<u8>,
     }
 
+
     /// Issued as a result of a successful upgrade, containing the
     /// information to be used to update the `UpgradeCap`.  This is a "Hot
     /// Potato" to ensure that it is used to update its `UpgradeCap` before
@@ -128,6 +146,7 @@ module sui::package {
         /// (Immutable) ID of the package after it was upgraded.
         package: ID,
     }
+
 
     /// Claim a Publisher object.
     /// Requires a One-Time-Witness to prove ownership. Due to this
@@ -145,13 +164,16 @@ module sui::package {
         }
     }
 
+
     #[allow(lint(self_transfer))]
+
     /// Claim a Publisher object and send it to transaction sender.
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
     public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
         sui::transfer::public_transfer(claim(otw, ctx), ctx.sender())
     }
+
 
     /// Destroy a Publisher object effectively removing all privileges
     /// associated with it.
@@ -160,10 +182,12 @@ module sui::package {
         id.delete();
     }
 
+
     /// Check whether type belongs to the same package as the publisher object.
     public fun from_package<T>(self: &Publisher): bool {
         type_name::get_with_original_ids<T>().get_address() == self.package
     }
+
 
     /// Check whether a type belongs to the same module as the publisher object.
     public fun from_module<T>(self: &Publisher): bool {
@@ -174,15 +198,18 @@ module sui::package {
         )
     }
 
+
     /// Read the name of the module.
     public fun published_module(self: &Publisher): &String {
         &self.module_name
     }
 
+
     /// Read the package address string.
     public fun published_package(self: &Publisher): &String {
         &self.package
     }
+
 
     /// The ID of the package that this cap authorizes upgrades for.
     /// Can be `0x0` if the cap cannot currently authorize an upgrade
@@ -193,11 +220,13 @@ module sui::package {
         cap.package
     }
 
+
     /// The most recent version of the package, increments by one for each
     /// successfully applied upgrade.
     public fun version(cap: &UpgradeCap): u64 {
         cap.version
     }
+
 
     /// The most permissive kind of upgrade currently supported by this
     /// `cap`.
@@ -205,15 +234,18 @@ module sui::package {
         cap.policy
     }
 
+
     /// The package that this ticket is authorized to upgrade
     public fun ticket_package(ticket: &UpgradeTicket): ID {
         ticket.package
     }
 
+
     /// The kind of upgrade that this ticket authorizes.
     public fun ticket_policy(ticket: &UpgradeTicket): u8 {
         ticket.policy
     }
+
 
     /// ID of the `UpgradeCap` that this `receipt` should be used to
     /// update.
@@ -221,11 +253,13 @@ module sui::package {
         receipt.cap
     }
 
+
     /// ID of the package that was upgraded to: the latest version of
     /// the package, as of the upgrade represented by this `receipt`.
     public fun receipt_package(receipt: &UpgradeReceipt): ID {
         receipt.package
     }
+
 
     /// A hash of the package contents for the new version of the
     /// package.  This ticket only authorizes an upgrade to a package
@@ -243,10 +277,14 @@ module sui::package {
         &ticket.digest
     }
 
+
     /// Expose the constants representing various upgrade policies
     public fun compatible_policy(): u8 { COMPATIBLE }
+
     public fun additive_policy(): u8 { ADDITIVE }
+
     public fun dep_only_policy(): u8 { DEP_ONLY }
+
 
     /// Restrict upgrades through this upgrade `cap` to just add code, or
     /// change dependencies.
@@ -254,17 +292,20 @@ module sui::package {
         cap.restrict(ADDITIVE)
     }
 
+
     /// Restrict upgrades through this upgrade `cap` to just change
     /// dependencies.
     public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
         cap.restrict(DEP_ONLY)
     }
 
+
     /// Discard the `UpgradeCap` to make a package immutable.
     public entry fun make_immutable(cap: UpgradeCap) {
         let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
         id.delete();
     }
+
 
     /// Issue a ticket authorizing an upgrade to a particular new bytecode
     /// (identified by its digest).  A ticket will only be issued if one has
@@ -291,6 +332,7 @@ module sui::package {
         UpgradeTicket { cap: object::id(cap), package, policy, digest }
     }
 
+
     /// Consume an `UpgradeReceipt` to update its `UpgradeCap`, finalizing
     /// the upgrade.
     public fun commit_upgrade(cap: &mut UpgradeCap, receipt: UpgradeReceipt) {
@@ -303,7 +345,9 @@ module sui::package {
         cap.version = cap.version + 1;
     }
 
+
     #[test_only]
+
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
         let tyname = type_name::get_with_original_ids<OTW>();
@@ -315,7 +359,9 @@ module sui::package {
         }
     }
 
+
     #[test_only]
+
     /// Test-only function to simulate publishing a package at address
     /// `ID`, to create an `UpgradeCap`.
     public fun test_publish(package: ID, ctx: &mut TxContext): UpgradeCap {
@@ -327,7 +373,9 @@ module sui::package {
         }
     }
 
+
     #[test_only]
+
     /// Test-only function that takes the role of the actual `Upgrade`
     /// command, converting the ticket for the pending upgrade to a
     /// receipt for a completed upgrade.
@@ -342,6 +390,7 @@ module sui::package {
 
         UpgradeReceipt { cap, package }
     }
+
 
     fun restrict(cap: &mut UpgradeCap, policy: u8) {
         assert!(cap.policy <= policy, ETooPermissive);

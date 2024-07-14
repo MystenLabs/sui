@@ -5,18 +5,22 @@
 module sui::table_vec {
     use sui::table::{Self, Table};
 
+
     public struct TableVec<phantom Element: store> has store {
         /// The contents of the table vector.
         contents: Table<u64, Element>,
     }
 
+
     const EIndexOutOfBound: u64 = 0;
     const ETableNonEmpty: u64 = 1;
+
 
     /// Create an empty TableVec.
     public fun empty<Element: store>(ctx: &mut TxContext): TableVec<Element> {
         TableVec { contents: table::new(ctx) }
     }
+
 
     /// Return a TableVec of size one containing element `e`.
     public fun singleton<Element: store>(
@@ -28,23 +32,28 @@ module sui::table_vec {
         t
     }
 
+
     /// Return the length of the TableVec.
     public fun length<Element: store>(t: &TableVec<Element>): u64 {
         t.contents.length()
     }
+
 
     /// Return if the TableVec is empty or not.
     public fun is_empty<Element: store>(t: &TableVec<Element>): bool {
         t.length() == 0
     }
 
+
     #[syntax(index)]
+
     /// Acquire an immutable reference to the `i`th element of the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow<Element: store>(t: &TableVec<Element>, i: u64): &Element {
         assert!(t.length() > i, EIndexOutOfBound);
         &t.contents[i]
     }
+
 
     /// Add element `e` to the end of the TableVec `t`.
     public fun push_back<Element: store>(
@@ -55,7 +64,9 @@ module sui::table_vec {
         t.contents.add(key, e);
     }
 
+
     #[syntax(index)]
+
     /// Return a mutable reference to the `i`th element in the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow_mut<Element: store>(
@@ -66,6 +77,7 @@ module sui::table_vec {
         &mut t.contents[i]
     }
 
+
     /// Pop an element from the end of TableVec `t`.
     /// Aborts if `t` is empty.
     public fun pop_back<Element: store>(t: &mut TableVec<Element>): Element {
@@ -73,6 +85,7 @@ module sui::table_vec {
         assert!(length > 0, EIndexOutOfBound);
         t.contents.remove(length - 1)
     }
+
 
     /// Destroy the TableVec `t`.
     /// Aborts if `t` is not empty.
@@ -82,12 +95,14 @@ module sui::table_vec {
         contents.destroy_empty();
     }
 
+
     /// Drop a possibly non-empty TableVec `t`.
     /// Usable only if the value type `Element` has the `drop` ability
     public fun drop<Element: drop + store>(t: TableVec<Element>) {
         let TableVec { contents } = t;
         contents.drop()
     }
+
 
     /// Swaps the elements at the `i`th and `j`th indices in the TableVec `t`.
     /// Aborts if `i` or `j` is out of bounds.
@@ -100,6 +115,7 @@ module sui::table_vec {
         t.contents.add(j, element_i);
         t.contents.add(i, element_j);
     }
+
 
     /// Swap the `i`th element of the TableVec `t` with the last element and then pop the TableVec.
     /// This is O(1), but does not preserve ordering of elements in the TableVec.
@@ -114,7 +130,9 @@ module sui::table_vec {
         t.pop_back()
     }
 
+
     #[test]
+
     fun test_swap() {
         let ctx = &mut sui::tx_context::dummy();
         let mut tv = singleton(0, ctx);
@@ -131,7 +149,9 @@ module sui::table_vec {
         tv.drop()
     }
 
+
     #[test_only]
+
     fun check_pop(tv: &mut TableVec<u64>, expected_value: u64) {
         let value = tv.pop_back();
         assert!(value == expected_value, value * 100 + expected_value);

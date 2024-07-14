@@ -3,11 +3,17 @@
 
 module sui::ecvrf {
     #[allow(unused_const)]
+
     const EInvalidHashLength: u64 = 1;
+
     #[allow(unused_const)]
+
     const EInvalidPublicKeyEncoding: u64 = 2;
+
     #[allow(unused_const)]
+
     const EInvalidProofEncoding: u64 = 3;
+
 
     /// @param hash: The hash/output from a ECVRF to be verified.
     /// @param alpha_string: Input/seed to the ECVRF used to generate the output.

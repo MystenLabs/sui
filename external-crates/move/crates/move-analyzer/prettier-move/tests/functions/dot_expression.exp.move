@@ -4,8 +4,10 @@
 
 module prettier::dot_expression {
     fun dot_expression() {
-        board.place(1, 0); // black move
-        board.assert_score(vector[0, 1, 0]); // empty / black / white
+        // black move
+        board.place(1, 0);
+        // empty / black / white
+        board.assert_score(vector[0, 1, 0]);
 
         board.first().second().ultra_long_third();
         board

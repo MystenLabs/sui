@@ -16,12 +16,15 @@ module sui::display {
     use sui::event;
     use std::string::String;
 
+
     /// For when T does not belong to the package `Publisher`.
     const ENotOwner: u64 = 0;
+
 
     /// For when vectors passed into one of the multiple insert functions
     /// don't match in their lengths.
     const EVecLengthMismatch: u64 = 1;
+
 
     /// The Display<T> object. Defines the way a T instance should be
     /// displayed. Display object can only be created and modified with
@@ -53,6 +56,7 @@ module sui::display {
         version: u16,
     }
 
+
     /// Event: emitted when a new Display object has been created for type T.
     /// Type signature of the event corresponds to the type while id serves for
     /// the discovery.
@@ -63,6 +67,7 @@ module sui::display {
         id: ID,
     }
 
+
     /// Version of Display got updated -
     public struct VersionUpdated<phantom T: key> has copy, drop {
         id: ID,
@@ -70,7 +75,9 @@ module sui::display {
         fields: VecMap<String, String>,
     }
 
+
     // === Initializer Methods ===
+
 
     /// Create an empty Display object. It can either be shared empty or filled
     /// with data right away via cheaper `set_owned` method.
@@ -78,6 +85,7 @@ module sui::display {
         assert!(is_authorized<T>(pub), ENotOwner);
         create_internal(ctx)
     }
+
 
     /// Create a new Display<T> object with a set of fields.
     public fun new_with_fields<T: key>(
@@ -99,9 +107,12 @@ module sui::display {
         display
     }
 
+
     // === Entry functions: Create ===
 
+
     #[allow(lint(self_transfer))]
+
     /// Create a new empty Display<T> object and keep it.
     public entry fun create_and_keep<T: key>(
         pub: &Publisher,
@@ -109,6 +120,7 @@ module sui::display {
     ) {
         transfer::public_transfer(new<T>(pub, ctx), ctx.sender())
     }
+
 
     /// Manually bump the version and emit an event with the updated version's contents.
     public entry fun update_version<T: key>(display: &mut Display<T>) {
@@ -120,7 +132,9 @@ module sui::display {
         })
     }
 
+
     // === Entry functions: Add/Modify fields ===
+
 
     /// Sets a custom `name` field with the `value`.
     public entry fun add<T: key>(
@@ -130,6 +144,7 @@ module sui::display {
     ) {
         self.add_internal(name, value)
     }
+
 
     /// Sets multiple `fields` with `values`.
     public entry fun add_multiple<T: key>(
@@ -147,6 +162,7 @@ module sui::display {
         };
     }
 
+
     /// Change the value of the field.
     /// TODO (long run): version changes;
     public entry fun edit<T: key>(
@@ -158,29 +174,36 @@ module sui::display {
         self.add_internal(name, value)
     }
 
+
     /// Remove the key from the Display.
     public entry fun remove<T: key>(self: &mut Display<T>, name: String) {
         self.fields.remove(&name);
     }
 
+
     // === Access fields ===
+
 
     /// Authorization check; can be performed externally to implement protection rules for Display.
     public fun is_authorized<T: key>(pub: &Publisher): bool {
         pub.from_package<T>()
     }
 
+
     /// Read the `version` field.
     public fun version<T: key>(d: &Display<T>): u16 {
         d.version
     }
+
 
     /// Read the `fields` field.
     public fun fields<T: key>(d: &Display<T>): &VecMap<String, String> {
         &d.fields
     }
 
+
     // === Private functions ===
+
 
     /// Internal function to create a new `Display<T>`.
     fun create_internal<T: key>(ctx: &mut TxContext): Display<T> {
@@ -190,6 +213,7 @@ module sui::display {
 
         Display { id: uid, fields: vec_map::empty(), version: 0 }
     }
+
 
     /// Private method for inserting fields without security checks.
     fun add_internal<T: key>(
@@ -208,7 +232,9 @@ module sui::display_tests {
     use sui::package;
     use sui::display;
 
+
     #[allow(unused_field)]
+
     /// An example object.
     /// Purely for visibility.
     public struct Capy has key {
@@ -216,10 +242,13 @@ module sui::display_tests {
         name: String,
     }
 
+
     /// Test witness type to create a Publisher object.
     public struct CAPY has drop {}
 
+
     #[test]
+
     fun capy_init() {
         let mut test = test::begin(@0x2);
         let pub = package::test_claim(CAPY {}, test.ctx());

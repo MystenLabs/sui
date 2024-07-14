@@ -12,12 +12,15 @@ module sui::authenticator_state {
     use sui::dynamic_field;
     use std::string::{String, utf8};
 
+
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
     const EJwksNotSorted: u64 = 2;
 
+
     const CurrentVersion: u64 = 1;
+
 
     /// Singleton shared object which stores the global authenticator state.
     /// The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
@@ -27,13 +30,16 @@ module sui::authenticator_state {
         version: u64,
     }
 
+
     public struct AuthenticatorStateInner has store {
         version: u64,
         /// List of currently active JWKs.
         active_jwks: vector<ActiveJwk>,
     }
 
+
     #[allow(unused_field)]
+
     /// Must match the JWK struct in fastcrypto-zkp
     public struct JWK has store, drop, copy {
         kty: String,
@@ -42,21 +48,27 @@ module sui::authenticator_state {
         alg: String,
     }
 
+
     #[allow(unused_field)]
+
     /// Must match the JwkId struct in fastcrypto-zkp
     public struct JwkId has store, drop, copy {
         iss: String,
         kid: String,
     }
 
+
     #[allow(unused_field)]
+
     public struct ActiveJwk has store, drop, copy {
         jwk_id: JwkId,
         jwk: JWK,
         epoch: u64,
     }
 
+
     #[test_only]
+
     public fun create_active_jwk(
         iss: String,
         kid: String,
@@ -75,10 +87,12 @@ module sui::authenticator_state {
         }
     }
 
+
     fun active_jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
         jwk_equal(&a.jwk, &b.jwk) && jwk_id_equal(&a.jwk_id, &b.jwk_id)
     }
+
 
     fun jwk_equal(a: &JWK, b: &JWK): bool {
         (&a.kty == &b.kty) && (&a.e == &b.e) && (&a.n == &b.n) && (
@@ -86,9 +100,11 @@ module sui::authenticator_state {
         )
     }
 
+
     fun jwk_id_equal(a: &JwkId, b: &JwkId): bool {
         (&a.iss == &b.iss) && (&a.kid == &b.kid)
     }
+
 
     // Compare the underlying byte arrays lexicographically. Since the strings may be utf8 this
     // ordering is not necessarily the same as the string ordering, but we just need some
@@ -118,6 +134,7 @@ module sui::authenticator_state {
         }
     }
 
+
     fun jwk_lt(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
         if (&a.jwk_id.iss != &b.jwk_id.iss) {
@@ -138,7 +155,9 @@ module sui::authenticator_state {
         string_bytes_lt(&a.jwk.alg, &b.jwk.alg)
     }
 
+
     #[allow(unused_function)]
+
     /// Create and share the AuthenticatorState object. This function is call exactly once, when
     /// the authenticator state object is first created.
     /// Can only be called by genesis or change_epoch transactions.
@@ -158,6 +177,7 @@ module sui::authenticator_state {
         transfer::share_object(self);
     }
 
+
     fun load_inner_mut(
         self: &mut AuthenticatorState,
     ): &mut AuthenticatorStateInner {
@@ -173,6 +193,7 @@ module sui::authenticator_state {
         inner
     }
 
+
     fun load_inner(self: &AuthenticatorState): &AuthenticatorStateInner {
         let version = self.version;
 
@@ -186,6 +207,7 @@ module sui::authenticator_state {
         inner
     }
 
+
     fun check_sorted(new_active_jwks: &vector<ActiveJwk>) {
         let mut i = 0;
         while (i < new_active_jwks.length() - 1) {
@@ -196,7 +218,9 @@ module sui::authenticator_state {
         };
     }
 
+
     #[allow(unused_function)]
+
     /// Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
     /// transaction. The new input vector must be sorted and must not contain duplicates.
     /// If a new JWK is already present, but with a previous epoch, then the epoch is updated to
@@ -259,6 +283,7 @@ module sui::authenticator_state {
         inner.active_jwks = res;
     }
 
+
     fun deduplicate(jwks: vector<ActiveJwk>): vector<ActiveJwk> {
         let mut res = vector[];
         let mut i = 0;
@@ -280,7 +305,9 @@ module sui::authenticator_state {
         res
     }
 
+
     #[allow(unused_function)]
+
     // Called directly by rust when constructing the ChangeEpoch transaction.
     fun expire_jwks(
         self: &mut AuthenticatorState,
@@ -349,7 +376,9 @@ module sui::authenticator_state {
         inner.active_jwks = new_active_jwks;
     }
 
+
     #[allow(unused_function)]
+
     /// Get the current active_jwks. Called when the node starts up in order to load the current
     /// JWK state from the chain.
     fun get_active_jwks(
@@ -360,12 +389,16 @@ module sui::authenticator_state {
         self.load_inner().active_jwks
     }
 
+
     #[test_only]
+
     public fun create_for_testing(ctx: &TxContext) {
         create(ctx);
     }
 
+
     #[test_only]
+
     public fun update_authenticator_state_for_testing(
         self: &mut AuthenticatorState,
         new_active_jwks: vector<ActiveJwk>,
@@ -374,7 +407,9 @@ module sui::authenticator_state {
         self.update_authenticator_state(new_active_jwks, ctx);
     }
 
+
     #[test_only]
+
     public fun expire_jwks_for_testing(
         self: &mut AuthenticatorState,
         min_epoch: u64,
@@ -383,7 +418,9 @@ module sui::authenticator_state {
         self.expire_jwks(min_epoch, ctx);
     }
 
+
     #[test_only]
+
     public fun get_active_jwks_for_testing(
         self: &AuthenticatorState,
         ctx: &TxContext,

@@ -73,9 +73,6 @@ export function printUseDeclaration(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	// return ['use_declaration', JSON.stringify(path.node, null, 2)];
-
-
 	const firstChild = path.node.child(0);
 	const isPublic = firstChild && firstChild.type === 'public' ? ['public', ' '] : [];
 	return group([

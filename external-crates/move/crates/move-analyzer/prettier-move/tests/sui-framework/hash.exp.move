@@ -8,6 +8,7 @@ module sui::hash {
     /// Hash the input bytes using Blake2b-256 and returns 32 bytes.
     public native fun blake2b256(data: &vector<u8>): vector<u8>;
 
+
     /// @param data: Arbitrary binary data to hash
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: &vector<u8>): vector<u8>;

@@ -11,6 +11,7 @@ module prettier::let_statement {
         let (mut a, mut b) = (1, 2);
     }
 
+
     fun break_list() {
         let block = {
             let a = 1;
@@ -31,6 +32,7 @@ module prettier::let_statement {
             very_long_list_expression_3,
         );
     }
+
 
     fun break_long_value() {
         let (a, b, c) = (
@@ -79,6 +81,7 @@ module prettier::let_statement {
                 &self.locked_balance,
             ) / self.unlock_per_second * self.unlock_per_second;
     }
+
 
     fun misc() {
         let a =

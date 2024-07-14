@@ -4,6 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
+import { FunctionDefinition } from '../function/FunctionDefinition';
 const { join, hardline, indent } = doc.builders;
 
 /**
@@ -71,8 +72,24 @@ function printModuleBody(
 	options: ParserOptions & MoveOptions,
 	print: printFn,
 ): Doc {
-	// const children = path.node.namedAndEmptyLineChildren;
-	const printed = path.map(print, 'namedAndEmptyLineChildren');
+	// add empty line between members if it's not already there
+	const nodes = path.node.namedAndEmptyLineChildren;
+	const printed = path.map((path, i) => {
+		const next = nodes[i + 1];
+
+		// add empty line between members of different types (e.g., function and struct)
+		// if it's not already there
+		if (next && !next?.isEmptyLine && next?.type != path.node.type) {
+			return [path.call(print), hardline];
+		}
+
+		// force add empty line after function definitions
+		if (next && path.node.type === FunctionDefinition.FunctionDefinition && next?.type !== 'empty_line') {
+			return [path.call(print), hardline];
+		}
+
+		return path.call(print);
+	}, 'namedAndEmptyLineChildren');
 
 	return ['{', indent(hardline), indent(join(hardline, printed)), hardline, '}'];
 }

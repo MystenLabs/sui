@@ -25,7 +25,9 @@ module suitears::timelock {
         )
     }
 
+
     // === Imports ===
+
 
     public fun lock<T: store>(
         data: T,
@@ -36,6 +38,7 @@ module suitears::timelock {
         // It makes no sense to lock in the past
         assert!(unlock_time > c.timestamp_ms(), EInvalidTime);
     }
+
 
     public fun propose<DaoWitness: drop>(
         dao: &mut Dao<DaoWitness>,
@@ -79,9 +82,12 @@ module suitears::timelock {
         proposal
     }
 
+
     public fun inline_fun(): u128 { 1000 }
 
+
     // === Public View Function ===
+
 
     /*
      * @notice Returns the unlock time in milliseconds.
@@ -93,7 +99,9 @@ module suitears::timelock {
         self.unlock_time
     }
 
+
     // === Public Mutative Function ===
+
 
     /*
      * @notice Locks the `data` for `unlock_time` milliseconds.
@@ -117,6 +125,7 @@ module suitears::timelock {
 
         Timelock { id: object::new(ctx), data, unlock_time }
     }
+
 
     /*
      * @notice Unlocks a {Timelock<T>} and returns the locked resource `T`.

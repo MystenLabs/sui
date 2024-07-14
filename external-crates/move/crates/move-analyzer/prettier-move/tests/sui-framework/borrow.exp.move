@@ -12,14 +12,17 @@ module sui::borrow {
     /// An attempt to swap the `Referent.value` with another object of the same type.
     const EWrongValue: u64 = 1;
 
+
     /// An object wrapping a `T` and providing the borrow API.
     public struct Referent<T: key + store> has store {
         id: address,
         value: Option<T>,
     }
 
+
     /// A hot potato making sure the object is put back once borrowed.
     public struct Borrow { ref: address, obj: ID }
+
 
     /// Create a new `Referent` struct
     public fun new<T: key + store>(value: T, ctx: &mut TxContext): Referent<T> {
@@ -29,6 +32,7 @@ module sui::borrow {
         }
     }
 
+
     /// Borrow the `T` from the `Referent` receiving the `T` and a `Borrow`
     /// hot potato.
     public fun borrow<T: key + store>(self: &mut Referent<T>): (T, Borrow) {
@@ -37,6 +41,7 @@ module sui::borrow {
 
         (value, Borrow { ref: self.id, obj: id })
     }
+
 
     /// Put an object and the `Borrow` hot potato back.
     public fun put_back<T: key + store>(
@@ -51,18 +56,23 @@ module sui::borrow {
         self.value.fill(value);
     }
 
+
     /// Unpack the `Referent` struct and return the value.
     public fun destroy<T: key + store>(self: Referent<T>): T {
         let Referent { id: _, value } = self;
         value.destroy_some()
     }
 
+
     #[test_only]
+
     public struct Test has key, store {
         id: object::UID,
     }
 
+
     #[test]
+
     fun test_borrow() {
         let ctx = &mut sui::tx_context::dummy();
         let mut ref = new(Test { id: object::new(ctx) }, ctx);
@@ -74,8 +84,10 @@ module sui::borrow {
         id.delete();
     }
 
+
     #[test]
     #[expected_failure(abort_code = EWrongValue)]
+
     /// The `value` is swapped with another instance of the type `T`.
     fun test_object_swap() {
         let ctx = &mut sui::tx_context::dummy();
@@ -95,8 +107,10 @@ module sui::borrow {
         id.delete();
     }
 
+
     #[test]
     #[expected_failure(abort_code = EWrongBorrow)]
+
     /// The both `borrow` and `value` are swapped with another `Referent`.
     fun test_borrow_fail() {
         let ctx = &mut sui::tx_context::dummy();

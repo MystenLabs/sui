@@ -17,14 +17,17 @@ module prettier::expression {
             to_withdraw;
     }
 
+
     fun identified_expression() {
         'a: { call_something() };
     }
+
 
     fun name_expression() {
         name::expression;
         expression<T>;
     }
+
 
     fun call_expression() {
         call();
@@ -52,6 +55,7 @@ module prettier::expression {
         );
     }
 
+
     fun call_expression_type_arguments() {
         call<InnerTypeArguments>();
         call<
@@ -74,6 +78,7 @@ module prettier::expression {
         );
     }
 
+
     fun binary_expression() {
         lhs != rhs;
         lhs == rhs;
@@ -95,6 +100,7 @@ module prettier::expression {
         lhs ^ rhs;
     }
 
+
     fun binary_expression_folding() {
         // binary_expression
         say_something_really_long &&
@@ -105,7 +111,8 @@ module prettier::expression {
         say_something_really_long ||
         say_something_really_long;
 
-        say_something_really_long && // trailing comment
+        say_something_really_long &&
+        // trailing comment
         say_something_really_long ||
         // leading comment
         say_something_really_long;
@@ -141,6 +148,7 @@ module prettier::expression {
         );
     }
 
+
     fun break_expression() {
         break;
         break 'a;
@@ -150,6 +158,7 @@ module prettier::expression {
         }
     }
 
+
     fun continue_expression() {
         continue;
         continue 'a;
@@ -158,6 +167,7 @@ module prettier::expression {
             continue 'very_long_label;
         }
     }
+
 
     fun pack_expression() {
         Positional();
@@ -232,6 +242,7 @@ module prettier::expression {
         } = left;
     }
 
+
     fun vector_expression() {
         vector[10, 20, 30, 40];
         vector[
@@ -255,9 +266,11 @@ module prettier::expression {
         ];
     }
 
+
     fun unit_expression() {
         ();
     }
+
 
     fun index_expression() {
         say[0];
@@ -268,6 +281,7 @@ module prettier::expression {
             (first_arg, second_arg)
         ];
     }
+
 
     fun expression_list() {
         (expr1, expr2, expr3);
@@ -329,6 +343,7 @@ module prettier::expression {
         )
     }
 
+
     fun annotate_expression() {
         (expr: Type);
         (
@@ -339,11 +354,13 @@ module prettier::expression {
         let a: Type = call_expression();
     }
 
+
     fun cast_expression() {
         100 as u64;
         1000 as u8;
         (say_something as u256);
     }
+
 
     fun dot_expression() {
         a().b().c();
@@ -361,6 +378,7 @@ module prettier::expression {
             .second()
             .ultra_long_third();
     }
+
 
     fun block() {
         {};
@@ -388,6 +406,7 @@ module prettier::expression {
             {};
         };
     }
+
 
     fun macro_module_access() {
         assert!<WithType, MultiEven>(

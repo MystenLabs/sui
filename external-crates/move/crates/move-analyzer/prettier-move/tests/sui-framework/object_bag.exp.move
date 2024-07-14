@@ -8,8 +8,10 @@
 module sui::object_bag {
     use sui::dynamic_object_field as ofield;
 
+
     // Attempted to destroy a non-empty bag
     const EBagNotEmpty: u64 = 0;
+
 
     public struct ObjectBag has key, store {
         /// the ID of this bag
@@ -18,10 +20,12 @@ module sui::object_bag {
         size: u64,
     }
 
+
     /// Creates a new, empty bag
     public fun new(ctx: &mut TxContext): ObjectBag {
         ObjectBag { id: object::new(ctx), size: 0 }
     }
+
 
     /// Adds a key-value pair to the bag `bag: &mut ObjectBag`
     /// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the bag already has an entry with
@@ -35,7 +39,9 @@ module sui::object_bag {
         bag.size = bag.size + 1;
     }
 
+
     #[syntax(index)]
+
     /// Immutably borrows the value associated with the key in the bag `bag: &ObjectBag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -48,7 +54,9 @@ module sui::object_bag {
         ofield::borrow(&bag.id, k)
     }
 
+
     #[syntax(index)]
+
     /// Mutably borrows the value associated with the key in the bag `bag: &mut ObjectBag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -60,6 +68,7 @@ module sui::object_bag {
     ): &mut V {
         ofield::borrow_mut(&mut bag.id, k)
     }
+
 
     /// Mutably borrows the key-value pair in the bag `bag: &mut ObjectBag` and returns the value.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
@@ -75,10 +84,12 @@ module sui::object_bag {
         v
     }
 
+
     /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &ObjectBag`
     public fun contains<K: copy + drop + store>(bag: &ObjectBag, k: K): bool {
         ofield::exists_<K>(&bag.id, k)
     }
+
 
     /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &ObjectBag`
     /// with an assigned value of type `V`
@@ -89,15 +100,18 @@ module sui::object_bag {
         ofield::exists_with_type<K, V>(&bag.id, k)
     }
 
+
     /// Returns the size of the bag, the number of key-value pairs
     public fun length(bag: &ObjectBag): u64 {
         bag.size
     }
 
+
     /// Returns true iff the bag is empty (if `length` returns `0`)
     public fun is_empty(bag: &ObjectBag): bool {
         bag.size == 0
     }
+
 
     /// Destroys an empty bag
     /// Aborts with `EBagNotEmpty` if the bag still contains values
@@ -106,6 +120,7 @@ module sui::object_bag {
         assert!(size == 0, EBagNotEmpty);
         id.delete()
     }
+
 
     /// Returns the ID of the object associated with the key if the bag has an entry with key `k: K`
     /// Returns none otherwise

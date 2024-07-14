@@ -29,6 +29,7 @@ module sui::token {
     use sui::dynamic_field as df;
     use sui::event;
 
+
     /// The action is not allowed (defined) in the policy.
     const EUnknownAction: u64 = 0;
     /// The rule was not approved.
@@ -47,7 +48,9 @@ module sui::token {
     /// of the function must be used instead.
     const EUseImmutableConfirm: u64 = 7;
 
+
     // === Protected Actions ===
+
 
     /// A Tag for the `spend` action.
     const SPEND: vector<u8> = b"spend";
@@ -58,6 +61,7 @@ module sui::token {
     /// A Tag for the `from_coin` action.
     const FROM_COIN: vector<u8> = b"from_coin";
 
+
     /// A single `Token` with `Balance` inside. Can only be owned by an address,
     /// and actions performed on it must be confirmed in a matching `TokenPolicy`.
     public struct Token<phantom T> has key {
@@ -66,12 +70,14 @@ module sui::token {
         balance: Balance<T>,
     }
 
+
     /// A Capability that manages a single `TokenPolicy` specified in the `for`
     /// field. Created together with `TokenPolicy` in the `new` function.
     public struct TokenPolicyCap<phantom T> has key, store {
         id: UID,
         `for`: ID,
     }
+
 
     /// `TokenPolicy` represents a set of rules that define what actions can be
     /// performed on a `Token` and which `Rules` must be satisfied for the
@@ -97,6 +103,7 @@ module sui::token {
         rules: VecMap<String, VecSet<TypeName>>,
     }
 
+
     /// A request to perform an "Action" on a token. Stores the information
     /// about the action to be performed and must be consumed by the `confirm_request`
     /// or `confirm_request_mut` functions when the Rules are satisfied.
@@ -120,12 +127,14 @@ module sui::token {
         approvals: VecSet<TypeName>,
     }
 
+
     /// Dynamic field key for the `TokenPolicy` to store the `Config` for a
     /// specific action `Rule`. There can be only one configuration per
     /// `Rule` per `TokenPolicy`.
     public struct RuleKey<phantom T> has store, copy, drop {
         is_protected: bool,
     }
+
 
     /// An event emitted when a `TokenPolicy` is created and shared. Because
     /// `TokenPolicy` can only be shared (and potentially frozen in the future),
@@ -137,6 +146,7 @@ module sui::token {
         /// (immutable) - TBD.
         is_mutable: bool,
     }
+
 
     /// Create a new `TokenPolicy` and a matching `TokenPolicyCap`.
     /// The `TokenPolicy` must then be shared using the `share_policy` method.
@@ -161,7 +171,9 @@ module sui::token {
         (policy, cap)
     }
 
+
     #[allow(lint(share_owned))]
+
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
@@ -173,7 +185,9 @@ module sui::token {
         transfer::share_object(policy)
     }
 
+
     // === Protected Actions ===
+
 
     /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
     /// "transfer" action. The `ActionRequest` contains the `recipient` field
@@ -195,6 +209,7 @@ module sui::token {
         )
     }
 
+
     /// Spend a `Token` by unwrapping it and storing the `Balance` in the
     /// `ActionRequest` for the "spend" action. The `ActionRequest` contains
     /// the `spent_balance` field to be used in verification.
@@ -213,6 +228,7 @@ module sui::token {
             ctx,
         )
     }
+
 
     /// Convert `Token` into an open `Coin`. Creates an `ActionRequest` for the
     /// "to_coin" action.
@@ -235,6 +251,7 @@ module sui::token {
             ),
         )
     }
+
 
     /// Convert an open `Coin` into a `Token`. Creates an `ActionRequest` for
     /// the "from_coin" action.
@@ -260,7 +277,9 @@ module sui::token {
         )
     }
 
+
     // === Public Actions ===
+
 
     /// Join two `Token`s into one, always available.
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
@@ -268,6 +287,7 @@ module sui::token {
         token.balance.join(balance);
         id.delete();
     }
+
 
     /// Split a `Token` with `amount`.
     /// Aborts if the `Token.balance` is lower than `amount`.
@@ -280,10 +300,12 @@ module sui::token {
         Token { id: object::new(ctx), balance: token.balance.split(amount) }
     }
 
+
     /// Create a zero `Token`.
     public fun zero<T>(ctx: &mut TxContext): Token<T> {
         Token { id: object::new(ctx), balance: balance::zero() }
     }
+
 
     /// Destroy an empty `Token`, fails if the balance is non-zero.
     /// Aborts if the `Token.balance` is not zero.
@@ -294,13 +316,17 @@ module sui::token {
         id.delete();
     }
 
+
     #[allow(lint(self_transfer))]
+
     /// Transfer the `Token` to the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
         transfer::transfer(token, ctx.sender())
     }
 
+
     // === Request Handling ===
+
 
     /// Create a new `ActionRequest`.
     /// Publicly available method to allow for custom actions.
@@ -320,6 +346,7 @@ module sui::token {
             approvals: vec_set::empty(),
         }
     }
+
 
     /// Confirm the request against the `TokenPolicy` and return the parameters
     /// of the request: (Name, Amount, Sender, Recipient).
@@ -363,6 +390,7 @@ module sui::token {
         (name, amount, sender, recipient)
     }
 
+
     /// Confirm the request against the `TokenPolicy` and return the parameters
     /// of the request: (Name, Amount, Sender, Recipient).
     ///
@@ -383,6 +411,7 @@ module sui::token {
 
         confirm_request(policy, request, ctx)
     }
+
 
     /// Confirm an `ActionRequest` as the `TokenPolicyCap` owner. This function
     /// allows `TokenPolicy` owner to perform Capability-gated actions ignoring
@@ -411,6 +440,7 @@ module sui::token {
 
         (name, amount, sender, recipient)
     }
+
 
     /// Confirm an `ActionRequest` as the `TreasuryCap` owner. This function
     /// allows `TreasuryCap` owner to perform Capability-gated actions ignoring
@@ -443,7 +473,9 @@ module sui::token {
         (name, amount, sender, recipient)
     }
 
+
     // === Rules API ===
+
 
     /// Add an "approval" to the `ActionRequest` by providing a Witness.
     /// Intended to be used by Rules to add their own approvals, however, can
@@ -456,6 +488,7 @@ module sui::token {
     ) {
         request.approvals.insert(type_name::get<W>())
     }
+
 
     /// Add a `Config` for a `Rule` in the `TokenPolicy`. Rule configuration is
     /// independent from the `TokenPolicy.rules` and needs to be managed by the
@@ -476,6 +509,7 @@ module sui::token {
         df::add(&mut self.id, key<Rule>(), config)
     }
 
+
     /// Get a `Config` for a `Rule` in the `TokenPolicy`. Requires `Rule`
     /// witness, hence can only be read by the `Rule` itself. This requirement
     /// guarantees safety of the stored `Config` and allows for simpler dynamic
@@ -490,6 +524,7 @@ module sui::token {
         assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
         df::borrow(&self.id, key<Rule>())
     }
+
 
     /// Get mutable access to the `Config` for a `Rule` in the `TokenPolicy`.
     /// Requires `Rule` witness, hence can only be read by the `Rule` itself,
@@ -508,6 +543,7 @@ module sui::token {
         assert!(object::id(self) == cap.`for`, ENotAuthorized);
         df::borrow_mut(&mut self.id, key<Rule>())
     }
+
 
     /// Remove a `Config` for a `Rule` in the `TokenPolicy`.
     /// Unlike the `add_rule_config`, this function does not require a `Rule`
@@ -529,11 +565,13 @@ module sui::token {
         df::remove(&mut self.id, key<Rule>())
     }
 
+
     /// Check if a config for a `Rule` is set in the `TokenPolicy` without
     /// checking the type of the `Config`.
     public fun has_rule_config<T, Rule>(self: &TokenPolicy<T>): bool {
         df::exists_<RuleKey<Rule>>(&self.id, key<Rule>())
     }
+
 
     /// Check if a `Config` for a `Rule` is set in the `TokenPolicy` and that
     /// it matches the type provided.
@@ -543,7 +581,9 @@ module sui::token {
         df::exists_with_type<RuleKey<Rule>, Config>(&self.id, key<Rule>())
     }
 
+
     // === Protected: Setting Rules ===
+
 
     /// Allows an `action` to be performed on the `Token` freely by adding an
     /// empty set of `Rules` for the `action`.
@@ -559,6 +599,7 @@ module sui::token {
         self.rules.insert(action, vec_set::empty());
     }
 
+
     /// Completely disallows an `action` on the `Token` by removing the record
     /// from the `TokenPolicy.rules`.
     ///
@@ -572,6 +613,7 @@ module sui::token {
         assert!(object::id(self) == cap.`for`, ENotAuthorized);
         self.rules.remove(&action);
     }
+
 
     /// Adds a Rule for an action with `name` in the `TokenPolicy`.
     ///
@@ -590,6 +632,7 @@ module sui::token {
         self.rules.get_mut(&action).insert(type_name::get<Rule>())
     }
 
+
     /// Removes a rule for an action with `name` in the `TokenPolicy`. Returns
     /// the config object to be handled by the sender (or a Rule itself).
     ///
@@ -605,7 +648,9 @@ module sui::token {
         self.rules.get_mut(&action).remove(&type_name::get<Rule>())
     }
 
+
     // === Protected: Treasury Management ===
+
 
     /// Mint a `Token` with a given `amount` using the `TreasuryCap`.
     public fun mint<T>(
@@ -617,12 +662,14 @@ module sui::token {
         Token { id: object::new(ctx), balance }
     }
 
+
     /// Burn a `Token` using the `TreasuryCap`.
     public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>) {
         let Token { id, balance } = token;
         cap.supply_mut().decrease_supply(balance);
         id.delete();
     }
+
 
     /// Flush the `TokenPolicy.spent_balance` into the `TreasuryCap`. This
     /// action is only available to the `TreasuryCap` owner.
@@ -636,12 +683,15 @@ module sui::token {
         cap.supply_mut().decrease_supply(balance)
     }
 
+
     // === Getters: `TokenPolicy` and `Token` ===
+
 
     /// Check whether an action is present in the rules VecMap.
     public fun is_allowed<T>(self: &TokenPolicy<T>, action: &String): bool {
         self.rules.contains(action)
     }
+
 
     /// Returns the rules required for a specific action.
     public fun rules<T>(
@@ -651,17 +701,21 @@ module sui::token {
         *self.rules.get(action)
     }
 
+
     /// Returns the `spent_balance` of the `TokenPolicy`.
     public fun spent_balance<T>(self: &TokenPolicy<T>): u64 {
         self.spent_balance.value()
     }
+
 
     /// Returns the `balance` of the `Token`.
     public fun value<T>(t: &Token<T>): u64 {
         t.balance.value()
     }
 
+
     // === Action Names ===
+
 
     /// Name of the Transfer action.
     public fun transfer_action(): String {
@@ -669,11 +723,13 @@ module sui::token {
         transfer_str.to_string()
     }
 
+
     /// Name of the `Spend` action.
     public fun spend_action(): String {
         let spend_str = SPEND;
         spend_str.to_string()
     }
+
 
     /// Name of the `ToCoin` action.
     public fun to_coin_action(): String {
@@ -681,32 +737,40 @@ module sui::token {
         to_coin_str.to_string()
     }
 
+
     /// Name of the `FromCoin` action.
     public fun from_coin_action(): String {
         let from_coin_str = FROM_COIN;
         from_coin_str.to_string()
     }
 
+
     // === Action Request Fields ==
+
 
     /// The Action in the `ActionRequest`.
     public fun action<T>(self: &ActionRequest<T>): String { self.name }
 
+
     /// Amount of the `ActionRequest`.
     public fun amount<T>(self: &ActionRequest<T>): u64 { self.amount }
 
+
     /// Sender of the `ActionRequest`.
     public fun sender<T>(self: &ActionRequest<T>): address { self.sender }
+
 
     /// Recipient of the `ActionRequest`.
     public fun recipient<T>(self: &ActionRequest<T>): Option<address> {
         self.recipient
     }
 
+
     /// Approvals of the `ActionRequest`.
     public fun approvals<T>(self: &ActionRequest<T>): VecSet<TypeName> {
         self.approvals
     }
+
 
     /// Burned balance of the `ActionRequest`.
     public fun spent<T>(self: &ActionRequest<T>): Option<u64> {
@@ -717,7 +781,9 @@ module sui::token {
         }
     }
 
+
     // === Internal ===
+
 
     /// Create a new `RuleKey` for a `Rule`. The `is_protected` field is kept
     /// for potential future use, if Rules were to have a freely modifiable
@@ -727,9 +793,12 @@ module sui::token {
     /// version of their configuration and mutate state on user action.
     fun key<Rule>(): RuleKey<Rule> { RuleKey { is_protected: true } }
 
+
     // === Testing ===
 
+
     #[test_only]
+
     public fun new_policy_for_testing<T>(
         ctx: &mut TxContext,
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
@@ -746,7 +815,9 @@ module sui::token {
         (policy, cap)
     }
 
+
     #[test_only]
+
     public fun burn_policy_for_testing<T>(
         policy: TokenPolicy<T>,
         cap: TokenPolicyCap<T>,
@@ -758,13 +829,17 @@ module sui::token {
         id.delete();
     }
 
+
     #[test_only]
+
     public fun mint_for_testing<T>(amount: u64, ctx: &mut TxContext): Token<T> {
         let balance = balance::create_for_testing(amount);
         Token { id: object::new(ctx), balance }
     }
 
+
     #[test_only]
+
     public fun burn_for_testing<T>(token: Token<T>) {
         let Token { id, balance } = token;
         balance.destroy_for_testing();
