@@ -289,7 +289,8 @@ module sui::bcs {
         let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
         let mut bytes = new(to_bytes(&value));
         let _fail = bytes.peel_vec_length();
-        abort 2 // TODO: make this test fail
+        // TODO: make this test fail
+        abort 2
     }
 
     #[test]

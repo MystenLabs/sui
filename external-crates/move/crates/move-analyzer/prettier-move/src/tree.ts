@@ -286,15 +286,7 @@ export class Tree {
 
 			prev = prev.previousNamedSibling; // move to the next comment
 		}
-
-		// promote trailing comments to leading comments
-		// TODO: once we have a better comment linking mechanism, we can remove this
-		// otherwise trailing line comments break lists and other formatting
-		// if (this.nextNamedSibling?.type === 'line_comment') {
-		// 	comments.push(this.nextNamedSibling.text);
-		// 	this.nextNamedSibling.isUsedComment = true;
-		// }
-
+    
 		this.leadingComment = comments;
 
 		return this;

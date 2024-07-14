@@ -103,7 +103,9 @@ module std::ascii {
 
     /// Returns `true` if `byte` is an printable ASCII character. Returns `false` otherwise.
     public fun is_printable_char(byte: u8): bool {
-        byte >= 0x20 && // Disallow metacharacters
-        byte <= 0x7E // Don't allow DEL metacharacter
+        // Don't allow DEL metacharacter
+        byte >= 0x20 &&
+        // Disallow metacharacters
+        byte <= 0x7E
     }
 }
