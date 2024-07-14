@@ -14,17 +14,17 @@ module tests::formatting {
 
     public fun list() {
         let a = vector[
-            // hahaha
-            100,
-            // hihihi
-            200,
+            100, // hahaha
+            200, // hihihi
         ];
 
+        let b = vector[100, /* hahaha */ 200 /* hihihi */];
+
         let c /* comment in between */: vector<u64> = vector[
-            // hahaha
-            100,
-            // hihihi
-            200,
+            100, // hahaha
+            200, // hihihi
         ];
+
+        let t /* comment */: vector<u64> = vector<u64 /* hahaha */>[100, 200];
     }
 }

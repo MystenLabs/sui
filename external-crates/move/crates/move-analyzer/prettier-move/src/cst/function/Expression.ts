@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { block, shouldBreakFirstChild } from '../../utilities';
+import { block, list, shouldBreakFirstChild } from '../../utilities';
 const { group, join, line, softline, ifBreak, indent } = doc.builders;
 
 // + sign marks nodes that have tests
@@ -264,14 +264,7 @@ function printUnitExpression(path: AstPath<Node>, options: ParserOptions, print:
  */
 function printExpressionList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	return group(
-		[
-			'(',
-			indent(softline),
-			indent(join([',', line], path.map(print, 'nonFormattingChildren'))),
-			ifBreak(','), // trailing comma
-			softline,
-			')',
-		],
+		list({ path, print, options, open: '(', close: ')' }),
 		{ shouldBreak: shouldBreakFirstChild(path) },
 	);
 }
@@ -410,17 +403,9 @@ function printArgList(path: AstPath<Node>, options: ParserOptions, print: printF
 		return group(['(', children[0]!, ')']);
 	}
 
-	return group(
-		[
-			'(',
-			indent(softline),
-			indent(join([',', line], children)),
-			ifBreak(','), // trailing comma
-			softline,
-			')',
-		],
-		{ shouldBreak: shouldBreakFirstChild(path) },
-	);
+	return group(list({ path, print, options, open: '(', close: ')' }), {
+		shouldBreak: shouldBreakFirstChild(path),
+	});
 }
 
 /**
@@ -494,17 +479,9 @@ function printVectorExpression(path: AstPath<Node>, options: ParserOptions, prin
 	// Vector without type specified
 	// Eg: `vector[....]`
 	if (path.node.child(0)?.text == 'vector[') {
-		return group(
-			[
-				'vector[',
-				indent(softline),
-				indent(join([',', line], path.map(print, 'nonFormattingChildren'))),
-				ifBreak(','), // trailing comma
-				softline,
-				']',
-			],
-			{ shouldBreak: shouldBreakFirstChild(path) },
-		);
+		return group(['vector', list({ path, print, options, open: '[', close: ']' })], {
+			shouldBreak: shouldBreakFirstChild(path),
+		});
 	}
 
 	// Vector with type
@@ -515,13 +492,8 @@ function printVectorExpression(path: AstPath<Node>, options: ParserOptions, prin
 			// do not break the type in vector literal
 			// indent(softline),
 			path.call(print, 'nonFormattingChildren', 0),
-			// softline,
-			'>[',
-			indent(softline),
-			indent(join([',', line], path.map(print, 'nonFormattingChildren').slice(1))),
-			ifBreak(','), // trailing comma
-			softline,
-			']',
+			'>',
+			list({ path, print, options, open: '[', close: ']', skipChildren: 1 }),
 		],
 		{ shouldBreak: shouldBreakFirstChild(path) },
 	);
