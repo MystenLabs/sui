@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 48 --simulator --accounts C --custom-validator-account 
+//# init --protocol-version 51 --simulator --accounts C --custom-validator-account 
 
 // Run a few transactions and check that the system state storage fund is correctly reported
 // for historical epochs
