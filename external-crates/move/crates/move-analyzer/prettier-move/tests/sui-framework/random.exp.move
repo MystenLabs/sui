@@ -35,7 +35,6 @@ module sui::random {
     }
 
     #[allow(unused_function)]
-
     /// Create and share the Random object. This function is called exactly once, when
     /// the Random object is first created.
     /// Can only be called by genesis or change_epoch transactions.
@@ -59,7 +58,6 @@ module sui::random {
     }
 
     #[test_only]
-
     public fun create_for_testing(ctx: &mut TxContext) {
         create(ctx);
     }
@@ -86,7 +84,6 @@ module sui::random {
     }
 
     #[allow(unused_function)]
-
     /// Record new randomness. Called when executing the RandomnessStateUpdate system
     /// transaction.
     fun update_randomness_state(
@@ -126,7 +123,6 @@ module sui::random {
     }
 
     #[test_only]
-
     public fun update_randomness_state_for_testing(
         self: &mut Random,
         new_round: u64,
@@ -329,25 +325,21 @@ module sui::random {
     }
 
     #[test_only]
-
     public fun generator_seed(r: &RandomGenerator): &vector<u8> {
         &r.seed
     }
 
     #[test_only]
-
     public fun generator_counter(r: &RandomGenerator): u16 {
         r.counter
     }
 
     #[test_only]
-
     public fun generator_buffer(r: &RandomGenerator): &vector<u8> {
         &r.buffer
     }
 
     #[test_only]
-
     /// Random generator from a non-deterministic seed.
     /// To be used when non-deterministic randomness is needed in tests (e.g., fuzzing).
     public fun new_generator_for_testing(): RandomGenerator {
@@ -356,7 +348,6 @@ module sui::random {
     }
 
     #[test_only]
-
     /// Random generator from a given seed.
     public fun new_generator_from_seed_for_testing(
         seed: vector<u8>,
@@ -365,6 +356,5 @@ module sui::random {
     }
 
     #[test_only]
-
     native fun generate_rand_seed_for_testing(): vector<u8>;
 }

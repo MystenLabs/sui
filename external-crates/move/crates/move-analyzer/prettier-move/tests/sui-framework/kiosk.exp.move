@@ -228,7 +228,6 @@ module sui::kiosk {
     // === Kiosk packing and unpacking ===
 
     #[allow(lint(self_transfer, share_owned))]
-
     /// Creates a new Kiosk in a default configuration: sender receives the
     /// `KioskOwnerCap` and becomes the Owner, the `Kiosk` is shared.
     entry fun default(ctx: &mut TxContext) {
@@ -642,7 +641,6 @@ module sui::kiosk {
     // === Item borrowing ===
 
     #[syntax(index)]
-
     /// Immutably borrow an item from the `Kiosk`. Any item can be `borrow`ed
     /// at any time.
     public fun borrow<T: key + store>(
@@ -657,7 +655,6 @@ module sui::kiosk {
     }
 
     #[syntax(index)]
-
     /// Mutably borrow an item from the `Kiosk`.
     /// Item can be `borrow_mut`ed only if it's not `is_listed`.
     public fun borrow_mut<T: key + store>(

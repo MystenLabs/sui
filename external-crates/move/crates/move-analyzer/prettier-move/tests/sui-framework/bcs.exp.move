@@ -274,7 +274,6 @@ module sui::bcs {
     // === Tests ===
 
     #[test_only]
-
     public struct Info has drop {
         a: bool,
         b: u8,
@@ -286,7 +285,6 @@ module sui::bcs {
 
     #[test]
     #[expected_failure(abort_code = ELenOutOfRange)]
-
     fun test_uleb_len_fail() {
         let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
         let mut bytes = new(to_bytes(&value));
@@ -297,14 +295,12 @@ module sui::bcs {
 
     #[test]
     #[expected_failure(abort_code = ENotBool)]
-
     fun test_bool_fail() {
         let mut bytes = new(to_bytes(&10u8));
         let _fail = bytes.peel_bool();
     }
 
     #[test]
-
     fun test_option() {
         {
             let value = option::some(true);
@@ -344,7 +340,6 @@ module sui::bcs {
     }
 
     #[test]
-
     fun test_bcs() {
         {
             let value = @0xC0FFEE;

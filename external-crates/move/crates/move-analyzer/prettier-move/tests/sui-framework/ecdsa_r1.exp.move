@@ -3,22 +3,18 @@
 
 module sui::ecdsa_r1 {
     #[allow(unused_const)]
-
     /// Error if the public key cannot be recovered from the signature.
     const EFailToRecoverPubKey: u64 = 0;
 
     #[allow(unused_const)]
-
     /// Error if the signature is invalid.
     const EInvalidSignature: u64 = 1;
 
     #[allow(unused_const)]
-
     /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
 
     #[allow(unused_const)]
-
     const SHA256: u8 = 1;
 
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using

@@ -109,7 +109,6 @@ module sui::linked_table {
     }
 
     #[syntax(index)]
-
     /// Immutable borrows the value associated with the key in the table `table: &LinkedTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -121,7 +120,6 @@ module sui::linked_table {
     }
 
     #[syntax(index)]
-
     /// Mutably borrows the value associated with the key in the table `table: &mut LinkedTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.

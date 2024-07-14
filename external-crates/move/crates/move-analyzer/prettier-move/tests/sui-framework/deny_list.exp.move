@@ -155,7 +155,6 @@ module sui::deny_list {
     }
 
     #[allow(unused_function)]
-
     /// Creation of the deny list object is restricted to the system address
     /// via a system transaction.
     fun create(ctx: &mut TxContext) {
@@ -179,19 +178,16 @@ module sui::deny_list {
     }
 
     #[test_only]
-
     public fun reserved_addresses(): vector<address> {
         RESERVED
     }
 
     #[test_only]
-
     public fun create_for_test(ctx: &mut TxContext) {
         create(ctx);
     }
 
     #[test_only]
-
     /// Creates and returns a new DenyList object for testing purposes. It
     /// doesn't matter which object ID the list has in this kind of test.
     public fun new_for_testing(ctx: &mut TxContext): DenyList {

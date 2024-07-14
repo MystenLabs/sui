@@ -52,7 +52,6 @@ module sui::bag {
     }
 
     #[syntax(index)]
-
     /// Immutable borrows the value associated with the key in the bag `bag: &Bag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -63,7 +62,6 @@ module sui::bag {
     }
 
     #[syntax(index)]
-
     /// Mutably borrows the value associated with the key in the bag `bag: &mut Bag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.

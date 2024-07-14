@@ -58,13 +58,11 @@ module sui::borrow {
     }
 
     #[test_only]
-
     public struct Test has key, store {
         id: object::UID,
     }
 
     #[test]
-
     fun test_borrow() {
         let ctx = &mut sui::tx_context::dummy();
         let mut ref = new(Test { id: object::new(ctx) }, ctx);
@@ -78,7 +76,6 @@ module sui::borrow {
 
     #[test]
     #[expected_failure(abort_code = EWrongValue)]
-
     /// The `value` is swapped with another instance of the type `T`.
     fun test_object_swap() {
         let ctx = &mut sui::tx_context::dummy();
@@ -100,7 +97,6 @@ module sui::borrow {
 
     #[test]
     #[expected_failure(abort_code = EWrongBorrow)]
-
     /// The both `borrow` and `value` are swapped with another `Referent`.
     fun test_borrow_fail() {
         let ctx = &mut sui::tx_context::dummy();

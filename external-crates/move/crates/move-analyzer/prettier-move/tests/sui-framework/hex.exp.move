@@ -307,7 +307,6 @@ module sui::hex {
     }
 
     #[test]
-
     fun test_hex_encode_string_literal() {
         assert!(b"30" == encode(b"0"));
         assert!(b"61" == encode(b"a"));
@@ -315,7 +314,6 @@ module sui::hex {
     }
 
     #[test]
-
     fun test_hex_encode_hex_literal() {
         assert!(b"ff" == encode(x"ff"));
         assert!(b"fe" == encode(x"fe"));
@@ -323,7 +321,6 @@ module sui::hex {
     }
 
     #[test]
-
     fun test_hex_decode_string_literal() {
         assert!(x"ff" == decode(b"ff"));
         assert!(x"fe" == decode(b"fe"));
@@ -331,7 +328,6 @@ module sui::hex {
     }
 
     #[test]
-
     fun test_hex_decode_string_literal__lowercase_and_uppercase() {
         assert!(x"ff" == decode(b"Ff"));
         assert!(x"ff" == decode(b"fF"));
@@ -339,7 +335,6 @@ module sui::hex {
     }
 
     #[test]
-
     fun test_hex_decode_string_literal__long_hex() {
         assert!(
             x"036d2416252ae1db8aedad59e14b007bee6ab94a3e77a3549a81137871604456f3" ==
@@ -351,21 +346,18 @@ module sui::hex {
 
     #[test]
     #[expected_failure(abort_code = EInvalidHexLength)]
-
     fun test_hex_decode__invalid_length() {
         decode(b"0");
     }
 
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]
-
     fun test_hex_decode__hex_literal() {
         decode(x"ffff");
     }
 
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]
-
     fun test_hex_decode__invalid_string_literal() {
         decode(b"0g");
     }

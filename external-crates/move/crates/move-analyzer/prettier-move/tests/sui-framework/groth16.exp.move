@@ -3,17 +3,14 @@
 
 module sui::groth16 {
     #[allow(unused_const)]
-
     // Error for input is not a valid Arkwork representation of a verifying key.
     const EInvalidVerifyingKey: u64 = 0;
 
     #[allow(unused_const)]
-
     // Error if the given curve is not supported
     const EInvalidCurve: u64 = 1;
 
     #[allow(unused_const)]
-
     // Error if the number of public inputs given exceeds the max.
     const ETooManyPublicInputs: u64 = 2;
 

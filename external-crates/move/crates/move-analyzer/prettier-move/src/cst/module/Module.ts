@@ -81,6 +81,10 @@ function printModuleBody(
 			return print(path);
 		}
 
+		if (path.node.type === 'annotation') {
+			return print(path);
+		}
+
 		// add empty line between members of different types (e.g., function and struct)
 		// if it's not already there
 		if (next && !next?.isEmptyLine && next?.type != path.node.type) {

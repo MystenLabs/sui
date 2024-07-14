@@ -3,45 +3,37 @@
 
 module sui::ecdsa_k1 {
     #[allow(unused_const)]
-
     /// Error if the public key cannot be recovered from the signature.
     const EFailToRecoverPubKey: u64 = 0;
 
     #[allow(unused_const)]
-
     /// Error if the signature is invalid.
     const EInvalidSignature: u64 = 1;
 
     #[allow(unused_const)]
-
     /// Error if the public key is invalid.
     const EInvalidPubKey: u64 = 2;
 
     #[allow(unused_const)]
     #[test_only]
-
     /// Error if the private key is invalid.
     const EInvalidPrivKey: u64 = 3;
 
     #[allow(unused_const)]
     #[test_only]
-
     /// Error if the given hash function does not exist.
     const EInvalidHashFunction: u64 = 4;
 
     #[allow(unused_const)]
     #[test_only]
-
     /// Error if the seed is invalid.
     const EInvalidSeed: u64 = 5;
 
     #[allow(unused_const)]
-
     /// Hash function name that are valid for ecrecover and secp256k1_verify.
     const KECCAK256: u8 = 0;
 
     #[allow(unused_const)]
-
     const SHA256: u8 = 1;
 
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
@@ -83,7 +75,6 @@ module sui::ecdsa_k1 {
     ): bool;
 
     #[test_only]
-
     /// @param private_key: A 32-bytes private key that is used to sign the message.
     /// @param msg: The message to sign, this is raw message without hashing.
     /// @param hash: The hash function used to hash the message when signing.
@@ -101,26 +92,22 @@ module sui::ecdsa_k1 {
     ): vector<u8>;
 
     #[test_only]
-
     public struct KeyPair has drop {
         private_key: vector<u8>,
         public_key: vector<u8>,
     }
 
     #[test_only]
-
     public fun private_key(self: &KeyPair): &vector<u8> {
         &self.private_key
     }
 
     #[test_only]
-
     public fun public_key(self: &KeyPair): &vector<u8> {
         &self.public_key
     }
 
     #[test_only]
-
     /// @param seed: A 32-bytes seed that is used to generate the keypair.
     ///
     /// Returns a Secp256k1 keypair deterministically generated from the seed.

@@ -94,7 +94,6 @@ module sui::object {
     // === uid ===
 
     #[allow(unused_function)]
-
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
     fun sui_system_state(ctx: &TxContext): UID {
@@ -127,7 +126,6 @@ module sui::object {
     }
 
     #[allow(unused_function)]
-
     /// Create the `UID` for the singleton `Bridge` object.
     /// This should only be called once from `bridge`.
     fun bridge(): UID {
@@ -214,7 +212,6 @@ module sui::object {
     native fun record_new_uid(id: address);
 
     #[test_only]
-
     /// Return the most recent created object ID.
     public fun last_created(ctx: &TxContext): ID {
         ID { bytes: ctx.last_created_object_id() }

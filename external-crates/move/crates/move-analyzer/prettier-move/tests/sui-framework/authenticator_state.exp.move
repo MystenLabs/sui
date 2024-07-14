@@ -34,7 +34,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_field)]
-
     /// Must match the JWK struct in fastcrypto-zkp
     public struct JWK has store, drop, copy {
         kty: String,
@@ -44,7 +43,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_field)]
-
     /// Must match the JwkId struct in fastcrypto-zkp
     public struct JwkId has store, drop, copy {
         iss: String,
@@ -52,7 +50,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_field)]
-
     public struct ActiveJwk has store, drop, copy {
         jwk_id: JwkId,
         jwk: JWK,
@@ -60,7 +57,6 @@ module sui::authenticator_state {
     }
 
     #[test_only]
-
     public fun create_active_jwk(
         iss: String,
         kid: String,
@@ -143,7 +139,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_function)]
-
     /// Create and share the AuthenticatorState object. This function is call exactly once, when
     /// the authenticator state object is first created.
     /// Can only be called by genesis or change_epoch transactions.
@@ -202,7 +197,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_function)]
-
     /// Record a new set of active_jwks. Called when executing the AuthenticatorStateUpdate system
     /// transaction. The new input vector must be sorted and must not contain duplicates.
     /// If a new JWK is already present, but with a previous epoch, then the epoch is updated to
@@ -287,7 +281,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_function)]
-
     // Called directly by rust when constructing the ChangeEpoch transaction.
     fun expire_jwks(
         self: &mut AuthenticatorState,
@@ -357,7 +350,6 @@ module sui::authenticator_state {
     }
 
     #[allow(unused_function)]
-
     /// Get the current active_jwks. Called when the node starts up in order to load the current
     /// JWK state from the chain.
     fun get_active_jwks(
@@ -369,13 +361,11 @@ module sui::authenticator_state {
     }
 
     #[test_only]
-
     public fun create_for_testing(ctx: &TxContext) {
         create(ctx);
     }
 
     #[test_only]
-
     public fun update_authenticator_state_for_testing(
         self: &mut AuthenticatorState,
         new_active_jwks: vector<ActiveJwk>,
@@ -385,7 +375,6 @@ module sui::authenticator_state {
     }
 
     #[test_only]
-
     public fun expire_jwks_for_testing(
         self: &mut AuthenticatorState,
         min_epoch: u64,
@@ -395,7 +384,6 @@ module sui::authenticator_state {
     }
 
     #[test_only]
-
     public fun get_active_jwks_for_testing(
         self: &AuthenticatorState,
         ctx: &TxContext,

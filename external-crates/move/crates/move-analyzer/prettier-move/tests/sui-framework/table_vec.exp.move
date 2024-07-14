@@ -39,7 +39,6 @@ module sui::table_vec {
     }
 
     #[syntax(index)]
-
     /// Acquire an immutable reference to the `i`th element of the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow<Element: store>(t: &TableVec<Element>, i: u64): &Element {
@@ -57,7 +56,6 @@ module sui::table_vec {
     }
 
     #[syntax(index)]
-
     /// Return a mutable reference to the `i`th element in the TableVec `t`.
     /// Aborts if `i` is out of bounds.
     public fun borrow_mut<Element: store>(
@@ -117,7 +115,6 @@ module sui::table_vec {
     }
 
     #[test]
-
     fun test_swap() {
         let ctx = &mut sui::tx_context::dummy();
         let mut tv = singleton(0, ctx);
@@ -135,7 +132,6 @@ module sui::table_vec {
     }
 
     #[test_only]
-
     fun check_pop(tv: &mut TableVec<u64>, expected_value: u64) {
         let value = tv.pop_back();
         assert!(value == expected_value, value * 100 + expected_value);

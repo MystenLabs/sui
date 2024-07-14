@@ -97,7 +97,6 @@ module sui::balance {
     }
 
     #[allow(unused_function)]
-
     /// CAUTION: this function creates a `Balance` without increasing the supply.
     /// It should only be called by the epoch change system txn to create staking rewards,
     /// and nowhere else.
@@ -107,7 +106,6 @@ module sui::balance {
     }
 
     #[allow(unused_function)]
-
     /// CAUTION: this function destroys a `Balance` without decreasing the supply.
     /// It should only be called by the epoch change system txn to destroy storage rebates,
     /// and nowhere else.
@@ -123,14 +121,12 @@ module sui::balance {
     }
 
     #[test_only]
-
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
         Balance { value }
     }
 
     #[test_only]
-
     /// Destroy a `Balance` of any coin for testing purposes.
     public fun destroy_for_testing<T>(self: Balance<T>): u64 {
         let Balance { value } = self;
@@ -138,7 +134,6 @@ module sui::balance {
     }
 
     #[test_only]
-
     /// Create a `Supply` of any coin for testing purposes.
     public fun create_supply_for_testing<T>(): Supply<T> {
         Supply { value: 0 }
@@ -152,7 +147,6 @@ module sui::balance_tests {
     use sui::test_utils;
 
     #[test]
-
     fun test_balance() {
         let mut balance = balance::zero<SUI>();
         let another = balance::create_for_testing(1000);

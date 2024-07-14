@@ -63,7 +63,6 @@ module sui::vec_map {
     }
 
     #[syntax(index)]
-
     /// Get a mutable reference to the value bound to `key` in `self`.
     /// Aborts if `key` is not bound in `self`.
     public fun get_mut<K: copy, V>(self: &mut VecMap<K, V>, key: &K): &mut V {
@@ -73,7 +72,6 @@ module sui::vec_map {
     }
 
     #[syntax(index)]
-
     /// Get a reference to the value bound to `key` in `self`.
     /// Aborts if `key` is not bound in `self`.
     public fun get<K: copy, V>(self: &VecMap<K, V>, key: &K): &V {

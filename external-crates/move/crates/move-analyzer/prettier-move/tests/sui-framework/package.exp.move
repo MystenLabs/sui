@@ -146,7 +146,6 @@ module sui::package {
     }
 
     #[allow(lint(self_transfer))]
-
     /// Claim a Publisher object and send it to transaction sender.
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
@@ -307,7 +306,6 @@ module sui::package {
     }
 
     #[test_only]
-
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
         let tyname = type_name::get_with_original_ids<OTW>();
@@ -320,7 +318,6 @@ module sui::package {
     }
 
     #[test_only]
-
     /// Test-only function to simulate publishing a package at address
     /// `ID`, to create an `UpgradeCap`.
     public fun test_publish(package: ID, ctx: &mut TxContext): UpgradeCap {
@@ -333,7 +330,6 @@ module sui::package {
     }
 
     #[test_only]
-
     /// Test-only function that takes the role of the actual `Upgrade`
     /// command, converting the ticket for the pending upgrade to a
     /// receipt for a completed upgrade.

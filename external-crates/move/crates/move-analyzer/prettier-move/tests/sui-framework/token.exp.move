@@ -162,7 +162,6 @@ module sui::token {
     }
 
     #[allow(lint(share_owned))]
-
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
@@ -296,7 +295,6 @@ module sui::token {
     }
 
     #[allow(lint(self_transfer))]
-
     /// Transfer the `Token` to the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
         transfer::transfer(token, ctx.sender())
@@ -732,7 +730,6 @@ module sui::token {
     // === Testing ===
 
     #[test_only]
-
     public fun new_policy_for_testing<T>(
         ctx: &mut TxContext,
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
@@ -750,7 +747,6 @@ module sui::token {
     }
 
     #[test_only]
-
     public fun burn_policy_for_testing<T>(
         policy: TokenPolicy<T>,
         cap: TokenPolicyCap<T>,
@@ -763,14 +759,12 @@ module sui::token {
     }
 
     #[test_only]
-
     public fun mint_for_testing<T>(amount: u64, ctx: &mut TxContext): Token<T> {
         let balance = balance::create_for_testing(amount);
         Token { id: object::new(ctx), balance }
     }
 
     #[test_only]
-
     public fun burn_for_testing<T>(token: Token<T>) {
         let Token { id, balance } = token;
         balance.destroy_for_testing();

@@ -37,12 +37,10 @@ module sui::event {
     public native fun emit<T: copy + drop>(event: T);
 
     #[test_only]
-
     /// Get the total number of events emitted during execution so far
     public native fun num_events(): u32;
 
     #[test_only]
-
     /// Get all events of type `T` emitted during execution.
     /// Can only be used in testing,
     public native fun events_by_type<T: copy + drop>(): vector<T>;

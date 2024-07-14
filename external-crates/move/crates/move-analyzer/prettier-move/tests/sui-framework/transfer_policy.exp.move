@@ -136,7 +136,6 @@ module sui::transfer_policy {
     }
 
     #[allow(lint(self_transfer, share_owned))]
-
     /// Initialize the Transfer Policy in the default scenario: Create and share
     /// the `TransferPolicy`, transfer `TransferPolicyCap` to the transaction
     /// sender.
@@ -309,7 +308,6 @@ module sui::transfer_policy {
     // === Tests ===
 
     #[test_only]
-
     /// Create a new TransferPolicy for testing purposes.
     public fun new_for_testing<T>(
         ctx: &mut TxContext,

@@ -20,23 +20,19 @@ module sui::transfer {
     const ESharedNonNewObject: u64 = 0;
 
     #[allow(unused_const)]
-
     /// Serialization of the object failed.
     const EBCSSerializationFailure: u64 = 1;
 
     #[allow(unused_const)]
-
     /// The object being received is not of the expected type.
     const EReceivingObjectTypeMismatch: u64 = 2;
 
     #[allow(unused_const)]
-
     /// Represents both the case where the object does not exist and the case where the object is not
     /// able to be accessed through the parent that is passed-in.
     const EUnableToReceiveObject: u64 = 3;
 
     #[allow(unused_const)]
-
     /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
     const ESharedObjectOperationNotSupported: u64 = 4;
 
@@ -146,7 +142,6 @@ module sui::transfer {
     ): T;
 
     #[test_only]
-
     public(package) fun make_receiver<T: key>(
         id: ID,
         version: u64,
@@ -155,7 +150,6 @@ module sui::transfer {
     }
 
     #[test_only]
-
     public(package) fun receiving_id<T: key>(r: &Receiving<T>): ID {
         r.id
     }

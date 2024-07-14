@@ -138,7 +138,6 @@ module sui::priority_queue {
     }
 
     #[test]
-
     fun test_pq() {
         let mut h =
             new(
@@ -173,7 +172,6 @@ module sui::priority_queue {
     }
 
     #[test]
-
     fun test_swap_remove_edge_case() {
         // This test would fail if `remove` is used incorrectly instead of `swap_remove` in `pop_max`.
         // It's hard to characterize exactly under what condition this bug is triggered but roughly
@@ -195,7 +193,6 @@ module sui::priority_queue {
     }
 
     #[test_only]
-
     fun check_pop_max(
         h: &mut PriorityQueue<u64>,
         expected_priority: u64,

@@ -6,7 +6,6 @@ module sui::test_scenario {
     use sui::vec_map::VecMap;
 
     #[allow(unused_const)]
-
     /// the transaction failed when generating these effects. For example, a circular ownership
     /// of objects was created
     const ECouldNotGenerateEffects: u64 = 0;
@@ -30,17 +29,14 @@ module sui::test_scenario {
     const EObjectNotFound: u64 = 4;
 
     #[allow(unused_const)]
-
     /// Unable to allocate a receiving ticket for the object
     const EUnableToAllocateReceivingTicket: u64 = 5;
 
     #[allow(unused_const)]
-
     /// A receiving ticket for the object was already allocated in the transaction
     const EReceivingTicketAlreadyAllocated: u64 = 6;
 
     #[allow(unused_const)]
-
     /// Unable to deallocate the receiving ticket
     const EUnableToDeallocateReceivingTicket: u64 = 7;
 

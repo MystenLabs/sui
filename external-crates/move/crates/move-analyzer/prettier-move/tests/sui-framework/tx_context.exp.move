@@ -3,17 +3,14 @@
 
 module sui::tx_context {
     #[test_only]
-
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
 
     #[test_only]
-
     /// Expected an tx hash of length 32, but found a different length
     const EBadTxHashLength: u64 = 0;
 
     #[test_only]
-
     /// Attempt to get the most recent created object ID when none has been created.
     const ENoIDsCreated: u64 = 1;
 
@@ -67,7 +64,6 @@ module sui::tx_context {
     }
 
     #[allow(unused_function)]
-
     /// Return the number of id's created by the current transaction.
     /// Hidden for now, but may expose later
     fun ids_created(self: &TxContext): u64 {
@@ -80,7 +76,6 @@ module sui::tx_context {
     // ==== test-only functions ====
 
     #[test_only]
-
     /// Create a `TxContext` for testing
     public fun new(
         sender: address,
@@ -94,7 +89,6 @@ module sui::tx_context {
     }
 
     #[test_only]
-
     /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
     public fun new_from_hint(
         addr: address,
@@ -113,7 +107,6 @@ module sui::tx_context {
     }
 
     #[test_only]
-
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
         let tx_hash =
@@ -122,7 +115,6 @@ module sui::tx_context {
     }
 
     #[test_only]
-
     /// Utility for creating 256 unique input hashes.
     /// These hashes are guaranteed to be unique given a unique `hint: u64`
     fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
@@ -132,13 +124,11 @@ module sui::tx_context {
     }
 
     #[test_only]
-
     public fun get_ids_created(self: &TxContext): u64 {
         ids_created(self)
     }
 
     #[test_only]
-
     /// Return the most recent created object ID.
     public fun last_created_object_id(self: &TxContext): address {
         let ids_created = self.ids_created;
@@ -147,13 +137,11 @@ module sui::tx_context {
     }
 
     #[test_only]
-
     public fun increment_epoch_number(self: &mut TxContext) {
         self.epoch = self.epoch + 1
     }
 
     #[test_only]
-
     public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
         self.epoch_timestamp_ms = self.epoch_timestamp_ms + delta_ms
     }

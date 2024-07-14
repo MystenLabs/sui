@@ -428,7 +428,6 @@ module sui::coin {
     // === Test-only code ===
 
     #[test_only]
-
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin {
@@ -438,7 +437,6 @@ module sui::coin {
     }
 
     #[test_only]
-
     /// Burn coins of any type for testing purposes only
     public fun burn_for_testing<T>(coin: Coin<T>): u64 {
         let Coin { id, balance } = coin;
@@ -447,7 +445,6 @@ module sui::coin {
     }
 
     #[test_only]
-
     /// Create a `TreasuryCap` for any `Coin` for testing purposes.
     public fun create_treasury_cap_for_testing<T>(
         ctx: &mut TxContext,
@@ -467,7 +464,6 @@ module sui::coin {
 
     // deprecated as we have CoinMetadata now
     #[allow(unused_field)]
-
     public struct CurrencyCreated<phantom T> has copy, drop {
         decimals: u8,
     }
