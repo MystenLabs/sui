@@ -44,7 +44,6 @@ module sui::kiosk_extension {
     use sui::transfer_policy::TransferPolicy;
     use sui::kiosk::{Kiosk, KioskOwnerCap};
 
-
     /// Trying to add an extension while not being the owner of the Kiosk.
     const ENotOwner: u64 = 0;
     /// Extension is trying to access a permissioned action while not having
@@ -53,15 +52,12 @@ module sui::kiosk_extension {
     /// Extension is not installed in the Kiosk.
     const EExtensionNotInstalled: u64 = 3;
 
-
     /// Value that represents the `place` permission in the permissions bitmap.
     const PLACE: u128 = 1;
-
 
     /// Value that represents the `lock` and `place` permission in the
     /// permissions bitmap.
     const LOCK: u128 = 2;
-
 
     /// The Extension struct contains the data used by the extension and the
     /// configuration for this extension. Stored under the `ExtensionKey`
@@ -93,15 +89,12 @@ module sui::kiosk_extension {
         is_enabled: bool,
     }
 
-
     /// The `ExtensionKey` is a typed dynamic field key used to store the
     /// extension configuration and data. `Ext` is a phantom type that is used
     /// to identify the extension witness.
     public struct ExtensionKey<phantom Ext> has store, copy, drop {}
 
-
     // === Management ===
-
 
     /// Add an extension to the Kiosk. Can only be performed by the owner. The
     /// extension witness is required to allow extensions define their set of
@@ -121,7 +114,6 @@ module sui::kiosk_extension {
         )
     }
 
-
     /// Revoke permissions from the extension. While it does not remove the
     /// extension completely, it keeps it from performing any protected actions.
     /// The storage is still available to the extension (until it's removed).
@@ -131,7 +123,6 @@ module sui::kiosk_extension {
         extension_mut<Ext>(self).is_enabled = false;
     }
 
-
     /// Re-enable the extension allowing it to call protected actions (eg
     /// `place`, `lock`). By default, all added extensions are enabled. Kiosk
     /// owner can disable them via `disable` call.
@@ -140,7 +131,6 @@ module sui::kiosk_extension {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         extension_mut<Ext>(self).is_enabled = true;
     }
-
 
     /// Remove an extension from the Kiosk. Can only be performed by the owner,
     /// the extension storage must be empty for the transaction to succeed.
@@ -157,9 +147,7 @@ module sui::kiosk_extension {
         storage.destroy_empty();
     }
 
-
     // === Storage ===
-
 
     /// Get immutable access to the extension storage. Can only be performed by
     /// the extension as long as the extension is installed.
@@ -167,7 +155,6 @@ module sui::kiosk_extension {
         assert!(is_installed<Ext>(self), EExtensionNotInstalled);
         &extension<Ext>(self).storage
     }
-
 
     /// Get mutable access to the extension storage. Can only be performed by
     /// the extension as long as the extension is installed. Disabling the
@@ -186,9 +173,7 @@ module sui::kiosk_extension {
         &mut extension_mut<Ext>(self).storage
     }
 
-
     // === Protected Actions ===
-
 
     /// Protected action: place an item into the Kiosk. Can be performed by an
     /// authorized extension. The extension must have the `place` permission or
@@ -211,7 +196,6 @@ module sui::kiosk_extension {
         self.place_internal(item)
     }
 
-
     /// Protected action: lock an item in the Kiosk. Can be performed by an
     /// authorized extension. The extension must have the `lock` permission.
     public fun lock<Ext: drop, T: key + store>(
@@ -226,27 +210,22 @@ module sui::kiosk_extension {
         self.lock_internal(item)
     }
 
-
     // === Field Access ===
-
 
     /// Check whether an extension of type `Ext` is installed.
     public fun is_installed<Ext: drop>(self: &Kiosk): bool {
         df::exists_(self.uid(), ExtensionKey<Ext> {})
     }
 
-
     /// Check whether an extension of type `Ext` is enabled.
     public fun is_enabled<Ext: drop>(self: &Kiosk): bool {
         extension<Ext>(self).is_enabled
     }
 
-
     /// Check whether an extension of type `Ext` can `place` into Kiosk.
     public fun can_place<Ext: drop>(self: &Kiosk): bool {
         is_enabled<Ext>(self) && extension<Ext>(self).permissions & PLACE != 0
     }
-
 
     /// Check whether an extension of type `Ext` can `lock` items in Kiosk.
     /// Locking also enables `place`.
@@ -254,15 +233,12 @@ module sui::kiosk_extension {
         is_enabled<Ext>(self) && extension<Ext>(self).permissions & LOCK != 0
     }
 
-
     // === Internal ===
-
 
     /// Internal: get a read-only access to the Extension.
     fun extension<Ext: drop>(self: &Kiosk): &Extension {
         df::borrow(self.uid(), ExtensionKey<Ext> {})
     }
-
 
     /// Internal: get a mutable access to the Extension.
     fun extension_mut<Ext: drop>(self: &mut Kiosk): &mut Extension {

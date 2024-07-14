@@ -36,14 +36,12 @@ module sui::bcs {
     use sui::address;
     use std::bcs;
 
-
     /// For when bytes length is less than required for deserialization.
     const EOutOfRange: u64 = 0;
     /// For when the boolean value different than `0` or `1`.
     const ENotBool: u64 = 1;
     /// For when ULEB byte is out of range (or not found).
     const ELenOutOfRange: u64 = 2;
-
 
     /// A helper struct that saves resources on operations. For better
     /// vector performance, it stores reversed bytes of the BCS and
@@ -52,13 +50,11 @@ module sui::bcs {
         bytes: vector<u8>,
     }
 
-
     /// Get BCS serialized bytes for any value.
     /// Re-exports stdlib `bcs::to_bytes`.
     public fun to_bytes<T>(value: &T): vector<u8> {
         bcs::to_bytes(value)
     }
-
 
     /// Creates a new instance of BCS wrapper that holds inversed
     /// bytes for better performance.
@@ -67,7 +63,6 @@ module sui::bcs {
         BCS { bytes }
     }
 
-
     /// Unpack the `BCS` struct returning the leftover bytes.
     /// Useful for passing the data further after partial deserialization.
     public fun into_remainder_bytes(bcs: BCS): vector<u8> {
@@ -75,7 +70,6 @@ module sui::bcs {
         bytes.reverse();
         bytes
     }
-
 
     /// Read address from the bcs-serialized bytes.
     public fun peel_address(bcs: &mut BCS): address {
@@ -87,7 +81,6 @@ module sui::bcs {
         };
         address::from_bytes(addr_bytes)
     }
-
 
     /// Read a `bool` value from bcs-serialized bytes.
     public fun peel_bool(bcs: &mut BCS): bool {
@@ -101,13 +94,11 @@ module sui::bcs {
         }
     }
 
-
     /// Read `u8` value from bcs-serialized bytes.
     public fun peel_u8(bcs: &mut BCS): u8 {
         assert!(bcs.bytes.length() >= 1, EOutOfRange);
         bcs.bytes.pop_back()
     }
-
 
     /// Read `u64` value from bcs-serialized bytes.
     public fun peel_u64(bcs: &mut BCS): u64 {
@@ -123,7 +114,6 @@ module sui::bcs {
         value
     }
 
-
     /// Read `u128` value from bcs-serialized bytes.
     public fun peel_u128(bcs: &mut BCS): u128 {
         assert!(bcs.bytes.length() >= 16, EOutOfRange);
@@ -137,7 +127,6 @@ module sui::bcs {
 
         value
     }
-
 
     /// Read `u256` value from bcs-serialized bytes.
     public fun peel_u256(bcs: &mut BCS): u256 {
@@ -153,9 +142,7 @@ module sui::bcs {
         value
     }
 
-
     // === Vector<T> ===
-
 
     /// Read ULEB bytes expecting a vector length. Result should
     /// then be used to perform `peel_*` operation LEN times.
@@ -177,7 +164,6 @@ module sui::bcs {
         total
     }
 
-
     /// Peel a vector of `address` from serialized bytes.
     public fun peel_vec_address(bcs: &mut BCS): vector<address> {
         let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
@@ -187,7 +173,6 @@ module sui::bcs {
         };
         res
     }
-
 
     /// Peel a vector of `address` from serialized bytes.
     public fun peel_vec_bool(bcs: &mut BCS): vector<bool> {
@@ -199,7 +184,6 @@ module sui::bcs {
         res
     }
 
-
     /// Peel a vector of `u8` (eg string) from serialized bytes.
     public fun peel_vec_u8(bcs: &mut BCS): vector<u8> {
         let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
@@ -209,7 +193,6 @@ module sui::bcs {
         };
         res
     }
-
 
     /// Peel a `vector<vector<u8>>` (eg vec of string) from serialized bytes.
     public fun peel_vec_vec_u8(bcs: &mut BCS): vector<vector<u8>> {
@@ -221,7 +204,6 @@ module sui::bcs {
         res
     }
 
-
     /// Peel a vector of `u64` from serialized bytes.
     public fun peel_vec_u64(bcs: &mut BCS): vector<u64> {
         let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
@@ -231,7 +213,6 @@ module sui::bcs {
         };
         res
     }
-
 
     /// Peel a vector of `u128` from serialized bytes.
     public fun peel_vec_u128(bcs: &mut BCS): vector<u128> {
@@ -243,9 +224,7 @@ module sui::bcs {
         res
     }
 
-
     // === Option<T> ===
-
 
     /// Peel `Option<address>` from serialized bytes.
     public fun peel_option_address(bcs: &mut BCS): Option<address> {
@@ -256,7 +235,6 @@ module sui::bcs {
         }
     }
 
-
     /// Peel `Option<bool>` from serialized bytes.
     public fun peel_option_bool(bcs: &mut BCS): Option<bool> {
         if (bcs.peel_bool()) {
@@ -265,7 +243,6 @@ module sui::bcs {
             option::none()
         }
     }
-
 
     /// Peel `Option<u8>` from serialized bytes.
     public fun peel_option_u8(bcs: &mut BCS): Option<u8> {
@@ -276,7 +253,6 @@ module sui::bcs {
         }
     }
 
-
     /// Peel `Option<u64>` from serialized bytes.
     public fun peel_option_u64(bcs: &mut BCS): Option<u64> {
         if (bcs.peel_bool()) {
@@ -285,7 +261,6 @@ module sui::bcs {
             option::none()
         }
     }
-
 
     /// Peel `Option<u128>` from serialized bytes.
     public fun peel_option_u128(bcs: &mut BCS): Option<u128> {
@@ -296,9 +271,7 @@ module sui::bcs {
         }
     }
 
-
     // === Tests ===
-
 
     #[test_only]
 
@@ -311,7 +284,6 @@ module sui::bcs {
         s: address,
     }
 
-
     #[test]
     #[expected_failure(abort_code = ELenOutOfRange)]
 
@@ -323,7 +295,6 @@ module sui::bcs {
         abort 2
     }
 
-
     #[test]
     #[expected_failure(abort_code = ENotBool)]
 
@@ -331,7 +302,6 @@ module sui::bcs {
         let mut bytes = new(to_bytes(&10u8));
         let _fail = bytes.peel_bool();
     }
-
 
     #[test]
 
@@ -372,7 +342,6 @@ module sui::bcs {
             assert!(value == bytes.peel_option_bool());
         };
     }
-
 
     #[test]
 

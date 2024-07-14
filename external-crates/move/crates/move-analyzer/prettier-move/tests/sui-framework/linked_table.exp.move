@@ -6,12 +6,10 @@
 module sui::linked_table {
     use sui::dynamic_field as field;
 
-
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
     // Attempted to remove the front or back of an empty table
     const ETableIsEmpty: u64 = 1;
-
 
     public struct LinkedTable<
         K: copy + drop + store,
@@ -27,7 +25,6 @@ module sui::linked_table {
         tail: Option<K>,
     }
 
-
     public struct Node<K: copy + drop + store, V: store> has store {
         /// the previous key
         prev: Option<K>,
@@ -36,7 +33,6 @@ module sui::linked_table {
         /// the value being stored
         value: V,
     }
-
 
     /// Creates a new, empty table
     public fun new<K: copy + drop + store, V: store>(
@@ -50,7 +46,6 @@ module sui::linked_table {
         }
     }
 
-
     /// Returns the key for the first element in the table, or None if the table is empty
     public fun front<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
@@ -58,14 +53,12 @@ module sui::linked_table {
         &table.head
     }
 
-
     /// Returns the key for the last element in the table, or None if the table is empty
     public fun back<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
     ): &Option<K> {
         &table.tail
     }
-
 
     /// Inserts a key-value pair at the front of the table, i.e. the newly inserted pair will be
     /// the first element in the table
@@ -91,7 +84,6 @@ module sui::linked_table {
         table.size = table.size + 1;
     }
 
-
     /// Inserts a key-value pair at the back of the table, i.e. the newly inserted pair will be
     /// the last element in the table
     /// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry with
@@ -116,7 +108,6 @@ module sui::linked_table {
         table.size = table.size + 1;
     }
 
-
     #[syntax(index)]
 
     /// Immutable borrows the value associated with the key in the table `table: &LinkedTable<K, V>`.
@@ -128,7 +119,6 @@ module sui::linked_table {
     ): &V {
         &field::borrow<K, Node<K, V>>(&table.id, k).value
     }
-
 
     #[syntax(index)]
 
@@ -142,7 +132,6 @@ module sui::linked_table {
         &mut field::borrow_mut<K, Node<K, V>>(&mut table.id, k).value
     }
 
-
     /// Borrows the key for the previous entry of the specified key `k: K` in the table
     /// `table: &LinkedTable<K, V>`. Returns None if the entry does not have a predecessor.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
@@ -154,7 +143,6 @@ module sui::linked_table {
         &field::borrow<K, Node<K, V>>(&table.id, k).prev
     }
 
-
     /// Borrows the key for the next entry of the specified key `k: K` in the table
     /// `table: &LinkedTable<K, V>`. Returns None if the entry does not have a predecessor.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
@@ -165,7 +153,6 @@ module sui::linked_table {
     ): &Option<K> {
         &field::borrow<K, Node<K, V>>(&table.id, k).next
     }
-
 
     /// Removes the key-value pair in the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// This splices the element out of the ordering.
@@ -194,7 +181,6 @@ module sui::linked_table {
         value
     }
 
-
     /// Removes the front of the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// Aborts with `ETableIsEmpty` if the table is empty
     public fun pop_front<K: copy + drop + store, V: store>(
@@ -204,7 +190,6 @@ module sui::linked_table {
         let head = *table.head.borrow();
         (head, table.remove(head))
     }
-
 
     /// Removes the back of the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// Aborts with `ETableIsEmpty` if the table is empty
@@ -216,7 +201,6 @@ module sui::linked_table {
         (tail, table.remove(tail))
     }
 
-
     /// Returns true iff there is a value associated with the key `k: K` in table
     /// `table: &LinkedTable<K, V>`
     public fun contains<K: copy + drop + store, V: store>(
@@ -226,7 +210,6 @@ module sui::linked_table {
         field::exists_with_type<K, Node<K, V>>(&table.id, k)
     }
 
-
     /// Returns the size of the table, the number of key-value pairs
     public fun length<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
@@ -234,14 +217,12 @@ module sui::linked_table {
         table.size
     }
 
-
     /// Returns true iff the table is empty (if `length` returns `0`)
     public fun is_empty<K: copy + drop + store, V: store>(
         table: &LinkedTable<K, V>,
     ): bool {
         table.size == 0
     }
-
 
     /// Destroys an empty table
     /// Aborts with `ETableNotEmpty` if the table still contains values
@@ -252,7 +233,6 @@ module sui::linked_table {
         assert!(size == 0, ETableNotEmpty);
         id.delete()
     }
-
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability

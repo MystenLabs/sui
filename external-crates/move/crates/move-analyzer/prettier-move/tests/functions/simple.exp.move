@@ -7,7 +7,6 @@ module prettier::simple_function {
         100
     }
 
-
     fun breakable_parameters(
         first_breakable_parameter: u64,
         second_breakable_parameter: u64,
@@ -20,7 +19,6 @@ module prettier::simple_function {
         fourth_breakable_parameter +
         fifth_breakable_parameter
     }
-
 
     entry fun private_entry() {}
 

@@ -5,6 +5,5 @@
 module std::debug {
     public native fun print<T>(x: &T);
 
-
     public native fun print_stack_trace();
 }

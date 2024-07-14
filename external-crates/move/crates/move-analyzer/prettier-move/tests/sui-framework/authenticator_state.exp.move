@@ -12,15 +12,12 @@ module sui::authenticator_state {
     use sui::dynamic_field;
     use std::string::{String, utf8};
 
-
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
     const EJwksNotSorted: u64 = 2;
 
-
     const CurrentVersion: u64 = 1;
-
 
     /// Singleton shared object which stores the global authenticator state.
     /// The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
@@ -30,13 +27,11 @@ module sui::authenticator_state {
         version: u64,
     }
 
-
     public struct AuthenticatorStateInner has store {
         version: u64,
         /// List of currently active JWKs.
         active_jwks: vector<ActiveJwk>,
     }
-
 
     #[allow(unused_field)]
 
@@ -48,7 +43,6 @@ module sui::authenticator_state {
         alg: String,
     }
 
-
     #[allow(unused_field)]
 
     /// Must match the JwkId struct in fastcrypto-zkp
@@ -57,7 +51,6 @@ module sui::authenticator_state {
         kid: String,
     }
 
-
     #[allow(unused_field)]
 
     public struct ActiveJwk has store, drop, copy {
@@ -65,7 +58,6 @@ module sui::authenticator_state {
         jwk: JWK,
         epoch: u64,
     }
-
 
     #[test_only]
 
@@ -87,12 +79,10 @@ module sui::authenticator_state {
         }
     }
 
-
     fun active_jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
         jwk_equal(&a.jwk, &b.jwk) && jwk_id_equal(&a.jwk_id, &b.jwk_id)
     }
-
 
     fun jwk_equal(a: &JWK, b: &JWK): bool {
         (&a.kty == &b.kty) && (&a.e == &b.e) && (&a.n == &b.n) && (
@@ -100,11 +90,9 @@ module sui::authenticator_state {
         )
     }
 
-
     fun jwk_id_equal(a: &JwkId, b: &JwkId): bool {
         (&a.iss == &b.iss) && (&a.kid == &b.kid)
     }
-
 
     // Compare the underlying byte arrays lexicographically. Since the strings may be utf8 this
     // ordering is not necessarily the same as the string ordering, but we just need some
@@ -134,7 +122,6 @@ module sui::authenticator_state {
         }
     }
 
-
     fun jwk_lt(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
         if (&a.jwk_id.iss != &b.jwk_id.iss) {
@@ -154,7 +141,6 @@ module sui::authenticator_state {
         };
         string_bytes_lt(&a.jwk.alg, &b.jwk.alg)
     }
-
 
     #[allow(unused_function)]
 
@@ -177,7 +163,6 @@ module sui::authenticator_state {
         transfer::share_object(self);
     }
 
-
     fun load_inner_mut(
         self: &mut AuthenticatorState,
     ): &mut AuthenticatorStateInner {
@@ -193,7 +178,6 @@ module sui::authenticator_state {
         inner
     }
 
-
     fun load_inner(self: &AuthenticatorState): &AuthenticatorStateInner {
         let version = self.version;
 
@@ -207,7 +191,6 @@ module sui::authenticator_state {
         inner
     }
 
-
     fun check_sorted(new_active_jwks: &vector<ActiveJwk>) {
         let mut i = 0;
         while (i < new_active_jwks.length() - 1) {
@@ -217,7 +200,6 @@ module sui::authenticator_state {
             i = i + 1;
         };
     }
-
 
     #[allow(unused_function)]
 
@@ -283,7 +265,6 @@ module sui::authenticator_state {
         inner.active_jwks = res;
     }
 
-
     fun deduplicate(jwks: vector<ActiveJwk>): vector<ActiveJwk> {
         let mut res = vector[];
         let mut i = 0;
@@ -304,7 +285,6 @@ module sui::authenticator_state {
         };
         res
     }
-
 
     #[allow(unused_function)]
 
@@ -376,7 +356,6 @@ module sui::authenticator_state {
         inner.active_jwks = new_active_jwks;
     }
 
-
     #[allow(unused_function)]
 
     /// Get the current active_jwks. Called when the node starts up in order to load the current
@@ -389,13 +368,11 @@ module sui::authenticator_state {
         self.load_inner().active_jwks
     }
 
-
     #[test_only]
 
     public fun create_for_testing(ctx: &TxContext) {
         create(ctx);
     }
-
 
     #[test_only]
 
@@ -407,7 +384,6 @@ module sui::authenticator_state {
         self.update_authenticator_state(new_active_jwks, ctx);
     }
 
-
     #[test_only]
 
     public fun expire_jwks_for_testing(
@@ -417,7 +393,6 @@ module sui::authenticator_state {
     ) {
         self.expire_jwks(min_epoch, ctx);
     }
-
 
     #[test_only]
 

@@ -7,10 +7,8 @@ module std::type_name {
     use std::ascii::{Self, String};
     use std::address;
 
-
     /// ASCII Character code for the `:` (colon) symbol.
     const ASCII_COLON: u8 = 58;
-
 
     /// ASCII Character code for the `v` (lowercase v) symbol.
     const ASCII_V: u8 = 118;
@@ -25,10 +23,8 @@ module std::type_name {
     /// ASCII Character code for the `r` (lowercase r) symbol.
     const ASCII_R: u8 = 114;
 
-
     /// The type is not from a package/module. It is a primitive type.
     const ENonModuleType: u64 = 0;
-
 
     public struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
@@ -41,13 +37,11 @@ module std::type_name {
         name: String,
     }
 
-
     /// Return a value representation of the type `T`.  Package IDs
     /// that appear in fully qualified type names in the output from
     /// this function are defining IDs (the ID of the package in
     /// storage that first introduced the type).
     public native fun get<T>(): TypeName;
-
 
     /// Return a value representation of the type `T`.  Package IDs
     /// that appear in fully qualified type names in the output from
@@ -55,7 +49,6 @@ module std::type_name {
     /// the package, even if the type in question was introduced in a
     /// later upgrade).
     public native fun get_with_original_ids<T>(): TypeName;
-
 
     /// Returns true iff the TypeName represents a primitive type, i.e. one of
     /// u8, u16, u32, u64, u128, u256, bool, address, vector.
@@ -80,12 +73,10 @@ module std::type_name {
         )
     }
 
-
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {
         &self.name
     }
-
 
     /// Get Address string (Base16 encoded), first part of the TypeName.
     /// Aborts if given a primitive type.
@@ -106,7 +97,6 @@ module std::type_name {
 
         ascii::string(addr_bytes)
     }
-
 
     /// Get name of the module.
     /// Aborts if given a primitive type.
@@ -130,7 +120,6 @@ module std::type_name {
 
         ascii::string(module_name)
     }
-
 
     /// Convert `self` into its inner String
     public fun into_string(self: TypeName): String {

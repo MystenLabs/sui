@@ -20,14 +20,12 @@ module test::if_expression {
         };
     }
 
-
     public fun control_flow() {
         if (true) return call_something();
         if (true) {
             return call_something_else_call_something_else_call_something_else()
         };
     }
-
 
     public fun folding() {
         if (true) call_something()

@@ -12,7 +12,6 @@ module tests::formatting {
         transferred_to_object: VecMap<ID /* owner */, ID>,
     }
 
-
     public fun list() {
         let a = vector[
             // hahaha

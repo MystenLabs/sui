@@ -4,10 +4,8 @@
 module sui::versioned {
     use sui::dynamic_field;
 
-
     /// Failed to upgrade the inner object due to invalid capability or new version.
     const EInvalidUpgrade: u64 = 0;
-
 
     /// A wrapper type that supports versioning of the inner type.
     /// The inner type is a dynamic field of the Versioned object, and is keyed using version.
@@ -20,14 +18,12 @@ module sui::versioned {
         version: u64,
     }
 
-
     /// Represents a hot potato object generated when we take out the dynamic field.
     /// This is to make sure that we always put a new value back.
     public struct VersionChangeCap {
         versioned_id: ID,
         old_version: u64,
     }
-
 
     /// Create a new Versioned object that contains a initial value of type `T` with an initial version.
     public fun create<T: store>(
@@ -43,12 +39,10 @@ module sui::versioned {
         self
     }
 
-
     /// Get the current version of the inner type.
     public fun version(self: &Versioned): u64 {
         self.version
     }
-
 
     /// Load the inner value based on the current version. Caller specifies an expected type T.
     /// If the type mismatch, the load will fail.
@@ -56,12 +50,10 @@ module sui::versioned {
         dynamic_field::borrow(&self.id, self.version)
     }
 
-
     /// Similar to load_value, but return a mutable reference.
     public fun load_value_mut<T: store>(self: &mut Versioned): &mut T {
         dynamic_field::borrow_mut(&mut self.id, self.version)
     }
-
 
     /// Take the inner object out for upgrade. To ensure we always upgrade properly, a capability object is returned
     /// and must be used when we upgrade.
@@ -77,7 +69,6 @@ module sui::versioned {
         )
     }
 
-
     /// Upgrade the inner object with a new version and new value. Must use the capability returned
     /// by calling remove_value_for_upgrade.
     public fun upgrade<T: store>(
@@ -92,7 +83,6 @@ module sui::versioned {
         dynamic_field::add(&mut self.id, new_version, new_value);
         self.version = new_version;
     }
-
 
     /// Destroy this Versioned container, and return the inner object.
     public fun destroy<T: store>(self: Versioned): T {

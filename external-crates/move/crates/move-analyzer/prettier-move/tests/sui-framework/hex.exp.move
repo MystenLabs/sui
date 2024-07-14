@@ -6,7 +6,6 @@ module sui::hex {
     const EInvalidHexLength: u64 = 0;
     const ENotValidHexCharacter: u64 = 1;
 
-
     /// Vector of Base16 values from `00` to `FF`
     const HEX: vector<vector<u8>> = vector[
         b"00",
@@ -267,7 +266,6 @@ module sui::hex {
         b"ff",
     ];
 
-
     /// Encode `bytes` in lowercase hex
     public fun encode(bytes: vector<u8>): vector<u8> {
         let (mut i, mut r, l) = (0, vector[], bytes.length());
@@ -278,7 +276,6 @@ module sui::hex {
         };
         r
     }
-
 
     /// Decode hex into `bytes`
     /// Takes a hex string (no 0x prefix) (e.g. b"0f3a")
@@ -297,7 +294,6 @@ module sui::hex {
         r
     }
 
-
     fun decode_byte(hex: u8): u8 {
         if (48 <= hex && hex < 58) {
             hex - 48
@@ -310,7 +306,6 @@ module sui::hex {
         }
     }
 
-
     #[test]
 
     fun test_hex_encode_string_literal() {
@@ -318,7 +313,6 @@ module sui::hex {
         assert!(b"61" == encode(b"a"));
         assert!(b"666666" == encode(b"fff"));
     }
-
 
     #[test]
 
@@ -328,7 +322,6 @@ module sui::hex {
         assert!(b"00" == encode(x"00"));
     }
 
-
     #[test]
 
     fun test_hex_decode_string_literal() {
@@ -337,7 +330,6 @@ module sui::hex {
         assert!(x"00" == decode(b"00"));
     }
 
-
     #[test]
 
     fun test_hex_decode_string_literal__lowercase_and_uppercase() {
@@ -345,7 +337,6 @@ module sui::hex {
         assert!(x"ff" == decode(b"fF"));
         assert!(x"ff" == decode(b"FF"));
     }
-
 
     #[test]
 
@@ -358,7 +349,6 @@ module sui::hex {
         );
     }
 
-
     #[test]
     #[expected_failure(abort_code = EInvalidHexLength)]
 
@@ -366,14 +356,12 @@ module sui::hex {
         decode(b"0");
     }
 
-
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]
 
     fun test_hex_decode__hex_literal() {
         decode(x"ffff");
     }
-
 
     #[test]
     #[expected_failure(abort_code = ENotValidHexCharacter)]

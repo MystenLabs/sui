@@ -14,7 +14,6 @@ module sui::ecvrf {
 
     const EInvalidProofEncoding: u64 = 3;
 
-
     /// @param hash: The hash/output from a ECVRF to be verified.
     /// @param alpha_string: Input/seed to the ECVRF used to generate the output.
     /// @param public_key: The public key corresponding to the private key used to generate the output.

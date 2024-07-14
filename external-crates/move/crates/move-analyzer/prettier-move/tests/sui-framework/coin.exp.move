@@ -12,22 +12,17 @@ module sui::coin {
     use sui::deny_list::{Self, DenyList};
     use std::type_name;
 
-
     // Allows calling `.split_vec(amounts, ctx)` on `coin`
     public use fun sui::pay::split_vec as Coin.split_vec;
-
 
     // Allows calling `.join_vec(coins)` on `coin`
     public use fun sui::pay::join_vec as Coin.join_vec;
 
-
     // Allows calling `.split_and_transfer(amount, recipient, ctx)` on `coin`
     public use fun sui::pay::split_and_transfer as Coin.split_and_transfer;
 
-
     // Allows calling `.divide_and_keep(n, ctx)` on `coin`
     public use fun sui::pay::divide_and_keep as Coin.divide_and_keep;
-
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -36,13 +31,11 @@ module sui::coin {
     /// Trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
 
-
     /// A coin of type `T` worth `value`. Transferable and storable
     public struct Coin<phantom T> has key, store {
         id: UID,
         balance: Balance<T>,
     }
-
 
     /// Each Coin type T created through `create_currency` function will have a
     /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
@@ -63,7 +56,6 @@ module sui::coin {
         icon_url: Option<Url>,
     }
 
-
     /// Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
     /// This object is always immutable.
     public struct RegulatedCoinMetadata<phantom T> has key {
@@ -74,7 +66,6 @@ module sui::coin {
         deny_cap_object: ID,
     }
 
-
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
     public struct TreasuryCap<phantom T> has key, store {
@@ -82,22 +73,18 @@ module sui::coin {
         total_supply: Supply<T>,
     }
 
-
     /// Capability allowing the bearer to freeze addresses, preventing those addresses from
     /// interacting with the coin as an input to a transaction.
     public struct DenyCap<phantom T> has key, store {
         id: UID,
     }
 
-
     // === Supply <-> TreasuryCap morphing and accessors  ===
-
 
     /// Return the total number of `T`'s in circulation.
     public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
         balance::supply_value(&cap.total_supply)
     }
-
 
     /// Unwrap `TreasuryCap` getting the `Supply`.
     ///
@@ -109,39 +96,32 @@ module sui::coin {
         total_supply
     }
 
-
     /// Get immutable reference to the treasury's `Supply`.
     public fun supply_immut<T>(treasury: &TreasuryCap<T>): &Supply<T> {
         &treasury.total_supply
     }
-
 
     /// Get mutable reference to the treasury's `Supply`.
     public fun supply_mut<T>(treasury: &mut TreasuryCap<T>): &mut Supply<T> {
         &mut treasury.total_supply
     }
 
-
     // === Balance <-> Coin accessors and type morphing ===
-
 
     /// Public getter for the coin's value
     public fun value<T>(self: &Coin<T>): u64 {
         self.balance.value()
     }
 
-
     /// Get immutable reference to the balance of a coin.
     public fun balance<T>(coin: &Coin<T>): &Balance<T> {
         &coin.balance
     }
 
-
     /// Get a mutable reference to the balance of a coin.
     public fun balance_mut<T>(coin: &mut Coin<T>): &mut Balance<T> {
         &mut coin.balance
     }
-
 
     /// Wrap a balance into a Coin to make it transferable.
     public fun from_balance<T>(
@@ -151,14 +131,12 @@ module sui::coin {
         Coin { id: object::new(ctx), balance }
     }
 
-
     /// Destruct a Coin wrapper and keep the balance.
     public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
         id.delete();
         balance
     }
-
 
     /// Take a `Coin` worth of `value` from `Balance`.
     /// Aborts if `value > balance.value`
@@ -170,15 +148,12 @@ module sui::coin {
         Coin { id: object::new(ctx), balance: balance.split(value) }
     }
 
-
     /// Put a `Coin<T>` to the `Balance<T>`.
     public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
         balance.join(into_balance(coin));
     }
 
-
     // === Base Coin functionality ===
-
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
@@ -187,7 +162,6 @@ module sui::coin {
         id.delete();
         self.balance.join(balance);
     }
-
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
@@ -198,7 +172,6 @@ module sui::coin {
     ): Coin<T> {
         take(&mut self.balance, split_amount, ctx)
     }
-
 
     /// Split coin `self` into `n - 1` coins with equal balances. The remainder is left in
     /// `self`. Return newly created coins.
@@ -220,13 +193,11 @@ module sui::coin {
         vec
     }
 
-
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
     public fun zero<T>(ctx: &mut TxContext): Coin<T> {
         Coin { id: object::new(ctx), balance: balance::zero() }
     }
-
 
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
@@ -235,9 +206,7 @@ module sui::coin {
         balance.destroy_zero()
     }
 
-
     // === Registering new coin types and managing the coin supply ===
-
 
     /// Create a new currency type `T` as and return the `TreasuryCap` for
     /// `T` to the caller. Can only be called with a `one-time-witness`
@@ -270,7 +239,6 @@ module sui::coin {
         )
     }
 
-
     /// This creates a new currency, via `create_currency`, but with an extra capability that
     /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
     /// with the coin as input objects.
@@ -302,7 +270,6 @@ module sui::coin {
         (treasury_cap, deny_cap, metadata)
     }
 
-
     /// Create a coin worth `value` and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
@@ -316,7 +283,6 @@ module sui::coin {
         }
     }
 
-
     /// Mint some amount of T as a `Balance` and increase the total
     /// supply in `cap` accordingly.
     /// Aborts if `value` + `cap.total_supply` >= U64_MAX
@@ -327,7 +293,6 @@ module sui::coin {
         cap.total_supply.increase_supply(value)
     }
 
-
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
     public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
@@ -336,11 +301,9 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
-
     /// The index into the deny list vector for the `sui::coin::Coin` type.
     // TODO public(package) const
     const DENY_LIST_COIN_INDEX: u64 = 0;
-
 
     /// Adds the given address to the deny list, preventing it
     /// from interacting with the specified coin type as an input to a transaction.
@@ -361,7 +324,6 @@ module sui::coin {
         )
     }
 
-
     /// Removes an address from the deny list.
     /// Aborts with `ENotFrozen` if the address is not already in the list.
     public fun deny_list_remove<T>(
@@ -381,7 +343,6 @@ module sui::coin {
         )
     }
 
-
     /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
     public fun deny_list_contains<T>(freezer: &DenyList, addr: address): bool {
@@ -392,9 +353,7 @@ module sui::coin {
         freezer.contains(DENY_LIST_COIN_INDEX, `type`, addr)
     }
 
-
     // === Entrypoints ===
-
 
     /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
     public entry fun mint_and_transfer<T>(
@@ -406,9 +365,7 @@ module sui::coin {
         transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
-
     // === Update coin metadata ===
-
 
     /// Update name of the coin in `CoinMetadata`
     public entry fun update_name<T>(
@@ -419,7 +376,6 @@ module sui::coin {
         metadata.name = name;
     }
 
-
     /// Update the symbol of the coin in `CoinMetadata`
     public entry fun update_symbol<T>(
         _treasury: &TreasuryCap<T>,
@@ -428,7 +384,6 @@ module sui::coin {
     ) {
         metadata.symbol = symbol;
     }
-
 
     /// Update the description of the coin in `CoinMetadata`
     public entry fun update_description<T>(
@@ -439,7 +394,6 @@ module sui::coin {
         metadata.description = description;
     }
 
-
     /// Update the url of the coin in `CoinMetadata`
     public entry fun update_icon_url<T>(
         _treasury: &TreasuryCap<T>,
@@ -449,37 +403,29 @@ module sui::coin {
         metadata.icon_url = option::some(url::new_unsafe(url));
     }
 
-
     // === Get coin metadata fields for on-chain consumption ===
-
 
     public fun get_decimals<T>(metadata: &CoinMetadata<T>): u8 {
         metadata.decimals
     }
 
-
     public fun get_name<T>(metadata: &CoinMetadata<T>): string::String {
         metadata.name
     }
-
 
     public fun get_symbol<T>(metadata: &CoinMetadata<T>): ascii::String {
         metadata.symbol
     }
 
-
     public fun get_description<T>(metadata: &CoinMetadata<T>): string::String {
         metadata.description
     }
-
 
     public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
         metadata.icon_url
     }
 
-
     // === Test-only code ===
-
 
     #[test_only]
 
@@ -491,7 +437,6 @@ module sui::coin {
         }
     }
 
-
     #[test_only]
 
     /// Burn coins of any type for testing purposes only
@@ -500,7 +445,6 @@ module sui::coin {
         id.delete();
         balance.destroy_for_testing()
     }
-
 
     #[test_only]
 
@@ -514,15 +458,12 @@ module sui::coin {
         }
     }
 
-
     // === Deprecated code ===
-
 
     // oops, wanted treasury: &TreasuryCap<T>
     public fun supply<T>(treasury: &mut TreasuryCap<T>): &Supply<T> {
         &treasury.total_supply
     }
-
 
     // deprecated as we have CoinMetadata now
     #[allow(unused_field)]

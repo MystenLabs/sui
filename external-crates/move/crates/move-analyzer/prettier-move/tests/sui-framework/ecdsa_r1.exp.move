@@ -7,12 +7,10 @@ module sui::ecdsa_r1 {
     /// Error if the public key cannot be recovered from the signature.
     const EFailToRecoverPubKey: u64 = 0;
 
-
     #[allow(unused_const)]
 
     /// Error if the signature is invalid.
     const EInvalidSignature: u64 = 1;
-
 
     #[allow(unused_const)]
 
@@ -22,7 +20,6 @@ module sui::ecdsa_r1 {
     #[allow(unused_const)]
 
     const SHA256: u8 = 1;
-
 
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
     /// Secp256r1. Reference implementation on signature generation using RFC6979:
@@ -39,7 +36,6 @@ module sui::ecdsa_r1 {
         msg: &vector<u8>,
         hash: u8,
     ): vector<u8>;
-
 
     /// @param signature: A 64-bytes signature in form (r, s) that is signed using
     /// Secp256r1. This is an non-recoverable signature without recovery id.

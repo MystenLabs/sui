@@ -7,19 +7,16 @@ module std::bit_vector {
     /// An invalid length of bitvector was given
     const ELENGTH: u64 = 0x20001;
 
-
     #[allow(unused_const)]
 
     const WORD_SIZE: u64 = 1;
     /// The maximum allowed bitvector size
     const MAX_SIZE: u64 = 1024;
 
-
     public struct BitVector has copy, drop, store {
         length: u64,
         bit_field: vector<bool>,
     }
-
 
     public fun new(length: u64): BitVector {
         assert!(length > 0, ELENGTH);
@@ -34,7 +31,6 @@ module std::bit_vector {
         BitVector { length, bit_field }
     }
 
-
     /// Set the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun set(bitvector: &mut BitVector, bit_index: u64) {
         assert!(bit_index < bitvector.bit_field.length(), EINDEX);
@@ -42,14 +38,12 @@ module std::bit_vector {
         *x = true;
     }
 
-
     /// Unset the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun unset(bitvector: &mut BitVector, bit_index: u64) {
         assert!(bit_index < bitvector.bit_field.length(), EINDEX);
         let x = &mut bitvector.bit_field[bit_index];
         *x = false;
     }
-
 
     /// Shift the `bitvector` left by `amount`. If `amount` is greater than the
     /// bitvector's length the bitvector will be zeroed out.
@@ -80,7 +74,6 @@ module std::bit_vector {
         }
     }
 
-
     /// Return the value of the bit at `bit_index` in the `bitvector`. `true`
     /// represents "1" and `false` represents a 0
     public fun is_index_set(bitvector: &BitVector, bit_index: u64): bool {
@@ -88,12 +81,10 @@ module std::bit_vector {
         bitvector.bit_field[bit_index]
     }
 
-
     /// Return the length (number of usable bits) of this bitvector
     public fun length(bitvector: &BitVector): u64 {
         bitvector.bit_field.length()
     }
-
 
     /// Returns the length of the longest sequence of set bits starting at (and
     /// including) `start_index` in the `bitvector`. If there is no such
@@ -113,7 +104,6 @@ module std::bit_vector {
 
         index - start_index
     }
-
 
     #[test_only]
 

@@ -14,13 +14,11 @@ module sui::dynamic_object_field {
         remove_child_object,
     };
 
-
     // Internal object used for storing the field and the name associated with the value
     // The separate type is necessary to prevent key collision with direct usage of dynamic_field
     public struct Wrapper<Name> has copy, drop, store {
         name: Name,
     }
-
 
     /// Adds a dynamic object field to the object `object: &mut UID` at field specified by `name: Name`.
     /// Aborts with `EFieldAlreadyExists` if the object already has that field with that name.
@@ -37,7 +35,6 @@ module sui::dynamic_object_field {
         add_child_object(field.to_address(), value);
     }
 
-
     /// Immutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
     /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
     /// Aborts with `EFieldTypeMismatch` if the field exists, but the value object does not have the
@@ -50,7 +47,6 @@ module sui::dynamic_object_field {
         let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
         borrow_child_object<Value>(field, value_id)
     }
-
 
     /// Mutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
     /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
@@ -65,7 +61,6 @@ module sui::dynamic_object_field {
             field::field_info_mut<Wrapper<Name>>(object, key);
         borrow_child_object_mut<Value>(field, value_id)
     }
-
 
     /// Removes the `object`s dynamic object field with the name specified by `name: Name` and returns
     /// the bound object.
@@ -83,7 +78,6 @@ module sui::dynamic_object_field {
         value
     }
 
-
     /// Returns true if and only if the `object` has a dynamic object field with the name specified by
     /// `name: Name`.
     public fun exists_<Name: copy + drop + store>(
@@ -93,7 +87,6 @@ module sui::dynamic_object_field {
         let key = Wrapper { name };
         field::exists_with_type<Wrapper<Name>, ID>(object, key)
     }
-
 
     /// Returns true if and only if the `object` has a dynamic field with the name specified by
     /// `name: Name` with an assigned value of type `Value`.
@@ -108,7 +101,6 @@ module sui::dynamic_object_field {
         let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
         field::has_child_object_with_ty<Value>(field.to_address(), value_id)
     }
-
 
     /// Returns the ID of the object associated with the dynamic object field
     /// Returns none otherwise

@@ -9,7 +9,6 @@ module sui::deny_list {
     use sui::bag::{Self, Bag};
     use sui::vec_set::{Self, VecSet};
 
-
     /// Trying to create a deny list object when not called by the system address.
     const ENotSystemAddress: u64 = 0;
     /// The specified address to be removed is not already in the deny list.
@@ -17,10 +16,8 @@ module sui::deny_list {
     /// The specified address cannot be added to the deny list.
     const EInvalidAddress: u64 = 1;
 
-
     /// The index into the deny list vector for the `sui::coin::Coin` type.
     const COIN_INDEX: u64 = 0;
-
 
     /// These addresses are reserved and cannot be added to the deny list.
     /// The addresses listed are well known package and object addresses. So it would be
@@ -46,14 +43,12 @@ module sui::deny_list {
         @0xDEE9,
     ];
 
-
     /// A shared object that stores the addresses that are blocked for a given core type.
     public struct DenyList has key {
         id: UID,
         /// The individual deny lists.
         lists: Bag,
     }
-
 
     /// Stores the addresses that are denied for a given core type.
     public struct PerTypeList has key, store {
@@ -66,7 +61,6 @@ module sui::deny_list {
         /// "0...0123::my_coin::MY_COIN", this will be "0...0123::my_coin::MY_COIN" -> {A, B}.
         denied_addresses: Table<vector<u8>, VecSet<address>>,
     }
-
 
     /// Adds the given address to the deny list of the specified type, preventing it
     /// from interacting with instances of that type as an input to a transaction. For coins,
@@ -83,7 +77,6 @@ module sui::deny_list {
         let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
         bag_entry.per_type_list_add(`type`, addr)
     }
-
 
     fun per_type_list_add(
         list: &mut PerTypeList,
@@ -105,7 +98,6 @@ module sui::deny_list {
         *denied_count = *denied_count + 1;
     }
 
-
     /// Removes a previously denied address from the list.
     /// Aborts with `ENotDenied` if the address is not on the list.
     public(package) fun remove(
@@ -118,7 +110,6 @@ module sui::deny_list {
         assert!(!reserved.contains(&addr), EInvalidAddress);
         per_type_list_remove(&mut deny_list.lists[per_type_index], `type`, addr)
     }
-
 
     fun per_type_list_remove(
         list: &mut PerTypeList,
@@ -135,7 +126,6 @@ module sui::deny_list {
         }
     }
 
-
     /// Returns true iff the given address is denied for the given type.
     public(package) fun contains(
         deny_list: &DenyList,
@@ -147,7 +137,6 @@ module sui::deny_list {
         if (reserved.contains(&addr)) return false;
         per_type_list_contains(&deny_list.lists[per_type_index], `type`, addr)
     }
-
 
     fun per_type_list_contains(
         list: &PerTypeList,
@@ -165,7 +154,6 @@ module sui::deny_list {
         denied_addresses.contains(&addr)
     }
 
-
     #[allow(unused_function)]
 
     /// Creation of the deny list object is restricted to the system address
@@ -182,7 +170,6 @@ module sui::deny_list {
         transfer::share_object(deny_list_object);
     }
 
-
     fun per_type_list(ctx: &mut TxContext): PerTypeList {
         PerTypeList {
             id: object::new(ctx),
@@ -191,20 +178,17 @@ module sui::deny_list {
         }
     }
 
-
     #[test_only]
 
     public fun reserved_addresses(): vector<address> {
         RESERVED
     }
 
-
     #[test_only]
 
     public fun create_for_test(ctx: &mut TxContext) {
         create(ctx);
     }
-
 
     #[test_only]
 

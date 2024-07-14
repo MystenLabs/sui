@@ -7,7 +7,6 @@ module sui::clock {
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
 
-
     /// Singleton shared object that exposes time to Move calls.  This
     /// object is found at address 0x6, and can only be read (accessed
     /// via an immutable reference) by entry functions.
@@ -25,13 +24,11 @@ module sui::clock {
         timestamp_ms: u64,
     }
 
-
     /// The `clock`'s current timestamp as a running total of
     /// milliseconds since an arbitrary point in the past.
     public fun timestamp_ms(clock: &Clock): u64 {
         clock.timestamp_ms
     }
-
 
     #[allow(unused_function)]
 
@@ -49,7 +46,6 @@ module sui::clock {
         })
     }
 
-
     #[allow(unused_function)]
 
     fun consensus_commit_prologue(
@@ -63,7 +59,6 @@ module sui::clock {
         clock.timestamp_ms = timestamp_ms
     }
 
-
     #[test_only]
 
     /// Expose the functionality of `create()` (usually only done during
@@ -72,7 +67,6 @@ module sui::clock {
         Clock { id: object::new(ctx), timestamp_ms: 0 }
     }
 
-
     #[test_only]
 
     /// For transactional tests (if a Clock is used as a shared object).
@@ -80,13 +74,11 @@ module sui::clock {
         transfer::share_object(clock)
     }
 
-
     #[test_only]
 
     public fun increment_for_testing(clock: &mut Clock, tick: u64) {
         clock.timestamp_ms = clock.timestamp_ms + tick;
     }
-
 
     #[test_only]
 
@@ -94,7 +86,6 @@ module sui::clock {
         assert!(timestamp_ms >= clock.timestamp_ms);
         clock.timestamp_ms = timestamp_ms;
     }
-
 
     #[test_only]
 

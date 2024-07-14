@@ -77,6 +77,10 @@ function printModuleBody(
 	const printed = path.map((path, i) => {
 		const next = nodes[i + 1];
 
+		if (path.node.type === 'empty_line') {
+			return print(path);
+		}
+
 		// add empty line between members of different types (e.g., function and struct)
 		// if it's not already there
 		if (next && !next?.isEmptyLine && next?.type != path.node.type) {

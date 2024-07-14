@@ -9,7 +9,6 @@ module std::unit_test {
         num_signers: u64,
     ): vector<signer>;
 
-
     /// This function is used to poison modules compiled in `test` mode.
     /// This will cause a linking failure if an attempt is made to publish a
     /// test module in a VM that isn't in unit test mode.

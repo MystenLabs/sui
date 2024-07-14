@@ -7,11 +7,9 @@ module sui::sui {
     use sui::balance::Balance;
     use sui::coin;
 
-
     const EAlreadyMinted: u64 = 0;
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 1;
-
 
     #[allow(unused_const)]
 
@@ -19,20 +17,16 @@ module sui::sui {
     /// 10^-9 of a Sui token
     const MIST_PER_SUI: u64 = 1_000_000_000;
 
-
     #[allow(unused_const)]
 
     /// The total supply of Sui denominated in whole Sui tokens (10 Billion)
     const TOTAL_SUPPLY_SUI: u64 = 10_000_000_000;
 
-
     /// The total supply of Sui denominated in Mist (10 Billion * 10^9)
     const TOTAL_SUPPLY_MIST: u64 = 10_000_000_000_000_000_000;
 
-
     /// Name of the coin
     public struct SUI has drop {}
-
 
     #[allow(unused_function)]
 
@@ -59,7 +53,6 @@ module sui::sui {
         supply.destroy_supply();
         total_sui
     }
-
 
     public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
         transfer::public_transfer(c, recipient)

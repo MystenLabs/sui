@@ -5,26 +5,20 @@ module sui::vec_map {
     /// This key already exists in the map
     const EKeyAlreadyExists: u64 = 0;
 
-
     /// This key does not exist in the map
     const EKeyDoesNotExist: u64 = 1;
-
 
     /// Trying to destroy a map that is not empty
     const EMapNotEmpty: u64 = 2;
 
-
     /// Trying to access an element of the map at an invalid index
     const EIndexOutOfBounds: u64 = 3;
-
 
     /// Trying to pop from a map that is empty
     const EMapEmpty: u64 = 4;
 
-
     /// Trying to construct a map from keys and values of different lengths
     const EUnequalLengths: u64 = 5;
-
 
     /// A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
     /// are *not* sorted by key--entries are included in insertion order.
@@ -36,19 +30,16 @@ module sui::vec_map {
         contents: vector<Entry<K, V>>,
     }
 
-
     /// An entry in the map
     public struct Entry<K: copy, V> has copy, drop, store {
         key: K,
         value: V,
     }
 
-
     /// Create an empty `VecMap`
     public fun empty<K: copy, V>(): VecMap<K, V> {
         VecMap { contents: vector[] }
     }
-
 
     /// Insert the entry `key` |-> `value` into `self`.
     /// Aborts if `key` is already bound in `self`.
@@ -57,7 +48,6 @@ module sui::vec_map {
         self.contents.push_back(Entry { key, value })
     }
 
-
     /// Remove the entry `key` |-> `value` from self. Aborts if `key` is not bound in `self`.
     public fun remove<K: copy, V>(self: &mut VecMap<K, V>, key: &K): (K, V) {
         let idx = self.get_idx(key);
@@ -65,14 +55,12 @@ module sui::vec_map {
         (key, value)
     }
 
-
     /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
     public fun pop<K: copy, V>(self: &mut VecMap<K, V>): (K, V) {
         assert!(!self.contents.is_empty(), EMapEmpty);
         let Entry { key, value } = self.contents.pop_back();
         (key, value)
     }
-
 
     #[syntax(index)]
 
@@ -84,7 +72,6 @@ module sui::vec_map {
         &mut entry.value
     }
 
-
     #[syntax(index)]
 
     /// Get a reference to the value bound to `key` in `self`.
@@ -94,7 +81,6 @@ module sui::vec_map {
         let entry = &self.contents[idx];
         &entry.value
     }
-
 
     /// Safely try borrow a value bound to `key` in `self`.
     /// Return Some(V) if the value exists, None otherwise.
@@ -110,24 +96,20 @@ module sui::vec_map {
         }
     }
 
-
     /// Return true if `self` contains an entry for `key`, false otherwise
     public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
         get_idx_opt(self, key).is_some()
     }
-
 
     /// Return the number of entries in `self`
     public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
         self.contents.length()
     }
 
-
     /// Return true if `self` has 0 elements, false otherwise
     public fun is_empty<K: copy, V>(self: &VecMap<K, V>): bool {
         self.size() == 0
     }
-
 
     /// Destroy an empty map. Aborts if `self` is not empty
     public fun destroy_empty<K: copy, V>(self: VecMap<K, V>) {
@@ -135,7 +117,6 @@ module sui::vec_map {
         assert!(contents.is_empty(), EMapNotEmpty);
         contents.destroy_empty()
     }
-
 
     /// Unpack `self` into vectors of its keys and values.
     /// The output keys and values are stored in insertion order, *not* sorted by key.
@@ -159,7 +140,6 @@ module sui::vec_map {
         (keys, values)
     }
 
-
     /// Construct a new `VecMap` from two vectors, one for keys and one for values.
     /// The key value pairs are associated via their indices in the vectors, e.g. the key at index i
     /// in `keys` is associated with the value at index i in `values`.
@@ -179,7 +159,6 @@ module sui::vec_map {
         map
     }
 
-
     /// Returns a list of keys in the map.
     /// Do not assume any particular ordering.
     public fun keys<K: copy, V>(self: &VecMap<K, V>): vector<K> {
@@ -193,7 +172,6 @@ module sui::vec_map {
         };
         keys
     }
-
 
     /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
@@ -212,7 +190,6 @@ module sui::vec_map {
         option::none()
     }
 
-
     /// Find the index of `key` in `self`. Aborts if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     public fun get_idx<K: copy, V>(self: &VecMap<K, V>, key: &K): u64 {
@@ -220,7 +197,6 @@ module sui::vec_map {
         assert!(idx_opt.is_some(), EKeyDoesNotExist);
         idx_opt.destroy_some()
     }
-
 
     /// Return a reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
@@ -234,7 +210,6 @@ module sui::vec_map {
         (&entry.key, &entry.value)
     }
 
-
     /// Return a mutable reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     /// Aborts if `idx` is greater than or equal to `size(self)`
@@ -246,7 +221,6 @@ module sui::vec_map {
         let entry = &mut self.contents[idx];
         (&entry.key, &mut entry.value)
     }
-
 
     /// Remove the entry at index `idx` from self.
     /// Aborts if `idx` is greater than or equal to `size(self)`

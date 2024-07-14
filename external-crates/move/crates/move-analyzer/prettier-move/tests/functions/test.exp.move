@@ -2,21 +2,15 @@ module test::functions {
     /// Comment for a function.
     fun empty() {}
 
-
     public fun pub() {}
-
 
     public entry fun pub_entry() {}
 
-
     public entry fun entry_pub() {}
-
 
     fun simple(p: u64): u64 {}
 
-
     fun simple_generic<T1: key, T2: store + drop + key>() {}
-
 
     fun long_type_list(
         p1: SomeStructWithALongName,
@@ -24,7 +18,6 @@ module test::functions {
         p3: SomeStructWithALongName,
         p1: SomeStructWithALongName,
     ): u64 {}
-
 
     fun long_type_list_and_generics<
         TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1: key,
@@ -36,7 +29,6 @@ module test::functions {
         p3: SomeStructWithALongName,
         p1: SomeStructWithALongName,
     ): u64 {}
-
 
     fun long_type_list_generics_and_body<
         TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1: key,
@@ -57,15 +49,11 @@ module test::functions {
         some_long_function_name();
     }
 
-
     native fun simple_native(p: u64): u64;
-
 
     public native fun public_native(p: u64): u64;
 
-
     native fun simple_native_generic<T1: key, T2: store + drop + key>(): u64;
-
 
     // Comment for a function.
 }

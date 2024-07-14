@@ -36,12 +36,10 @@ module sui::event {
     /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
     public native fun emit<T: copy + drop>(event: T);
 
-
     #[test_only]
 
     /// Get the total number of events emitted during execution so far
     public native fun num_events(): u32;
-
 
     #[test_only]
 

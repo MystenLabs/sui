@@ -15,23 +15,19 @@ module sui::transfer {
         version: u64,
     }
 
-
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
-
 
     #[allow(unused_const)]
 
     /// Serialization of the object failed.
     const EBCSSerializationFailure: u64 = 1;
 
-
     #[allow(unused_const)]
 
     /// The object being received is not of the expected type.
     const EReceivingObjectTypeMismatch: u64 = 2;
-
 
     #[allow(unused_const)]
 
@@ -39,12 +35,10 @@ module sui::transfer {
     /// able to be accessed through the parent that is passed-in.
     const EUnableToReceiveObject: u64 = 3;
 
-
     #[allow(unused_const)]
 
     /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
     const ESharedObjectOperationNotSupported: u64 = 4;
-
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
@@ -57,7 +51,6 @@ module sui::transfer {
         transfer_impl(obj, recipient)
     }
 
-
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
     /// address represents an object ID, the `obj` sent will be inaccessible after the transfer
@@ -66,7 +59,6 @@ module sui::transfer {
     public fun public_transfer<T: key + store>(obj: T, recipient: address) {
         transfer_impl(obj, recipient)
     }
-
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or
     /// mutated.
@@ -77,14 +69,12 @@ module sui::transfer {
         freeze_object_impl(obj)
     }
 
-
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or
     /// mutated.
     /// The object must have `store` to be frozen outside of its module.
     public fun public_freeze_object<T: key + store>(obj: T) {
         freeze_object_impl(obj)
     }
-
 
     /// Turn the given object into a mutable shared object that everyone can access and mutate.
     /// This is irreversible, i.e. once an object is shared, it will stay shared forever.
@@ -97,7 +87,6 @@ module sui::transfer {
         share_object_impl(obj)
     }
 
-
     /// Turn the given object into a mutable shared object that everyone can access and mutate.
     /// This is irreversible, i.e. once an object is shared, it will stay shared forever.
     /// Aborts with `ESharedNonNewObject` of the object being shared was not created in this
@@ -106,7 +95,6 @@ module sui::transfer {
     public fun public_share_object<T: key + store>(obj: T) {
         share_object_impl(obj)
     }
-
 
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
     /// referencing an object of type `T` owned by `parent` use the `to_receive`
@@ -121,7 +109,6 @@ module sui::transfer {
         } = to_receive;
         receive_impl(parent.to_address(), id, version)
     }
-
 
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
     /// referencing an object of type `T` owned by `parent` use the `to_receive`
@@ -138,31 +125,25 @@ module sui::transfer {
         receive_impl(parent.to_address(), id, version)
     }
 
-
     /// Return the object ID that the given `Receiving` argument references.
     public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
         receiving.id
     }
 
-
     public(package) native fun freeze_object_impl<T: key>(obj: T);
 
-
     public(package) native fun share_object_impl<T: key>(obj: T);
-
 
     public(package) native fun transfer_impl<T: key>(
         obj: T,
         recipient: address,
     );
 
-
     native fun receive_impl<T: key>(
         parent: address,
         to_receive: ID,
         version: u64,
     ): T;
-
 
     #[test_only]
 
@@ -172,7 +153,6 @@ module sui::transfer {
     ): Receiving<T> {
         Receiving { id, version }
     }
-
 
     #[test_only]
 

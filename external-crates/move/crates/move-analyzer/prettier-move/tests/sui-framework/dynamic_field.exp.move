@@ -21,7 +21,6 @@ module sui::dynamic_field {
     /// The object added as a dynamic field was previously a shared object
     const ESharedObjectOperationNotSupported: u64 = 4;
 
-
     /// Internal object used for storing the field and value
     public struct Field<Name: copy + drop + store, Value: store> has key {
         /// Determined by the hash of the object ID, the field name value and it's type,
@@ -32,7 +31,6 @@ module sui::dynamic_field {
         /// The value bound to this field
         value: Value,
     }
-
 
     /// Adds a dynamic field to the object `object: &mut UID` at field specified by `name: Name`.
     /// Aborts with `EFieldAlreadyExists` if the object already has that field with that name.
@@ -49,7 +47,6 @@ module sui::dynamic_field {
         add_child_object(object_addr, field)
     }
 
-
     /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
     /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
     /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
@@ -64,7 +61,6 @@ module sui::dynamic_field {
         &field.value
     }
 
-
     /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
     /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
     /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
@@ -78,7 +74,6 @@ module sui::dynamic_field {
         let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
         &mut field.value
     }
-
 
     /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
     /// bound value.
@@ -97,7 +92,6 @@ module sui::dynamic_field {
         value
     }
 
-
     /// Returns true if and only if the `object` has a dynamic field with the name specified by
     /// `name: Name` but without specifying the `Value` type
     public fun exists_<Name: copy + drop + store>(
@@ -108,7 +102,6 @@ module sui::dynamic_field {
         let hash = hash_type_and_key(object_addr, name);
         has_child_object(object_addr, hash)
     }
-
 
     /// Removes the dynamic field if it exists. Returns the `some(Value)` if it exists or none otherwise.
     public fun remove_if_exists<Name: copy + drop + store, Value: store>(
@@ -122,7 +115,6 @@ module sui::dynamic_field {
         }
     }
 
-
     /// Returns true if and only if the `object` has a dynamic field with the name specified by
     /// `name: Name` with an assigned value of type `Value`.
     public fun exists_with_type<Name: copy + drop + store, Value: store>(
@@ -133,7 +125,6 @@ module sui::dynamic_field {
         let hash = hash_type_and_key(object_addr, name);
         has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
     }
-
 
     public(package) fun field_info<Name: copy + drop + store>(
         object: &UID,
@@ -146,7 +137,6 @@ module sui::dynamic_field {
         (id, value.to_address())
     }
 
-
     public(package) fun field_info_mut<Name: copy + drop + store>(
         object: &mut UID,
         name: Name,
@@ -158,19 +148,16 @@ module sui::dynamic_field {
         (id, value.to_address())
     }
 
-
     /// May abort with `EBCSSerializationFailure`.
     public(package) native fun hash_type_and_key<K: copy + drop + store>(
         parent: address,
         k: K,
     ): address;
 
-
     public(package) native fun add_child_object<Child: key>(
         parent: address,
         child: Child,
     );
-
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
     /// or throws `EFieldTypeMismatch` if the type does not match,
@@ -181,12 +168,10 @@ module sui::dynamic_field {
         id: address,
     ): &Child;
 
-
     public(package) native fun borrow_child_object_mut<Child: key>(
         object: &mut UID,
         id: address,
     ): &mut Child;
-
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
     /// or throws `EFieldTypeMismatch` if the type does not match,
@@ -196,12 +181,10 @@ module sui::dynamic_field {
         id: address,
     ): Child;
 
-
     public(package) native fun has_child_object(
         parent: address,
         id: address,
     ): bool;
-
 
     public(package) native fun has_child_object_with_ty<Child: key>(
         parent: address,

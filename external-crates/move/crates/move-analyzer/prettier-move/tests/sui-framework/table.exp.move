@@ -19,10 +19,8 @@
 module sui::table {
     use sui::dynamic_field as field;
 
-
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
-
 
     public struct Table<
         phantom K: copy + drop + store,
@@ -34,14 +32,12 @@ module sui::table {
         size: u64,
     }
 
-
     /// Creates a new, empty table
     public fun new<K: copy + drop + store, V: store>(
         ctx: &mut TxContext,
     ): Table<K, V> {
         Table { id: object::new(ctx), size: 0 }
     }
-
 
     /// Adds a key-value pair to the table `table: &mut Table<K, V>`
     /// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry with
@@ -55,7 +51,6 @@ module sui::table {
         table.size = table.size + 1;
     }
 
-
     #[syntax(index)]
 
     /// Immutable borrows the value associated with the key in the table `table: &Table<K, V>`.
@@ -67,7 +62,6 @@ module sui::table {
     ): &V {
         field::borrow(&table.id, k)
     }
-
 
     #[syntax(index)]
 
@@ -81,7 +75,6 @@ module sui::table {
         field::borrow_mut(&mut table.id, k)
     }
 
-
     /// Removes the key-value pair in the table `table: &mut Table<K, V>` and returns the value.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -94,7 +87,6 @@ module sui::table {
         v
     }
 
-
     /// Returns true iff there is a value associated with the key `k: K` in table `table: &Table<K, V>`
     public fun contains<K: copy + drop + store, V: store>(
         table: &Table<K, V>,
@@ -103,7 +95,6 @@ module sui::table {
         field::exists_with_type<K, V>(&table.id, k)
     }
 
-
     /// Returns the size of the table, the number of key-value pairs
     public fun length<K: copy + drop + store, V: store>(
         table: &Table<K, V>,
@@ -111,14 +102,12 @@ module sui::table {
         table.size
     }
 
-
     /// Returns true iff the table is empty (if `length` returns `0`)
     public fun is_empty<K: copy + drop + store, V: store>(
         table: &Table<K, V>,
     ): bool {
         table.size == 0
     }
-
 
     /// Destroys an empty table
     /// Aborts with `ETableNotEmpty` if the table still contains values
@@ -129,7 +118,6 @@ module sui::table {
         assert!(size == 0, ETableNotEmpty);
         id.delete()
     }
-
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability
