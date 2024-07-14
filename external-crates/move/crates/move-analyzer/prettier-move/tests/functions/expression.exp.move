@@ -1,5 +1,6 @@
 // options:
 // printWidth: 40
+
 module prettier::expression {
     fun assign_expression() {
         a = 1;
@@ -10,17 +11,21 @@ module prettier::expression {
         *df::borrow_mut<A, B>() =
             another_call();
         (a, b) = (1, 2);
+
         strategy.underlying_nominal_value_usdc =
             strategy.underlying_nominal_value_usdc -
             to_withdraw;
     }
+
     fun identified_expression() {
         'a: { call_something() };
     }
+
     fun name_expression() {
         name::expression;
         expression<T>;
     }
+
     fun call_expression() {
         call();
         call(1, 2, 3, 4, 5);
@@ -46,17 +51,20 @@ module prettier::expression {
             }),
         );
     }
+
     fun call_expression_type_arguments() {
         call<InnerTypeArguments>();
         call<
             InnerTypeArguments,
             InnerTypeArguments,
         >();
+
         module::another_call<Type>(
             module::another_call<A>(),
             module::another_call<B>(),
             module::another_call<C>(),
         );
+
         module::another_call<
             TypeArgument,
         >(
@@ -65,6 +73,7 @@ module prettier::expression {
             module::another_call<C>(),
         );
     }
+
     fun binary_expression() {
         lhs != rhs;
         lhs == rhs;
@@ -85,28 +94,34 @@ module prettier::expression {
         lhs | rhs;
         lhs ^ rhs;
     }
+
     fun binary_expression_folding() {
         // binary_expression
         say_something_really_long &&
         say_something_really_long ||
         say_something_really_long;
+
         say_something_really_long &&
         say_something_really_long ||
         say_something_really_long;
+
         say_something_really_long && // trailing comment
         say_something_really_long ||
         // leading comment
         say_something_really_long;
+
         say_something_really_long +
         say_something_really_long +
         say_something_really_long &&
         say_something_really_long +
         say_something_really_long +
         say_something_really_long;
+
         say_something_really_long >
         less_than_or_equal_to &&
         say_something_really_long <
         greater_than_or_equal_to;
+
         (
             say_something_really_long +
             say_something_really_long +
@@ -116,6 +131,7 @@ module prettier::expression {
             say_something_really_long +
             say_something_really_long,
         );
+
         (
             say_something +
             say_something +
@@ -124,20 +140,25 @@ module prettier::expression {
             say_something,
         );
     }
+
     fun break_expression() {
         break;
         break 'a;
+
         'very_long_label: {
             break 'very_long_label;
         }
     }
+
     fun continue_expression() {
         continue;
         continue 'a;
+
         'very_long_label: {
             continue 'very_long_label;
         }
     }
+
     fun pack_expression() {
         Positional();
         Positional(
@@ -200,6 +221,7 @@ module prettier::expression {
                 },
             },
         };
+
         // bind unpack
         let Slice {
             mut kek,
@@ -209,6 +231,7 @@ module prettier::expression {
             vals: mut lvals,
         } = left;
     }
+
     fun vector_expression() {
         vector[10, 20, 30, 40];
         vector[
@@ -231,7 +254,11 @@ module prettier::expression {
             MyStructT,
         ];
     }
-    fun unit_expression() { (); }
+
+    fun unit_expression() {
+        ();
+    }
+
     fun index_expression() {
         say[0];
         double_index[variable][another][
@@ -241,6 +268,7 @@ module prettier::expression {
             (first_arg, second_arg)
         ];
     }
+
     fun expression_list() {
         (expr1, expr2, expr3);
         (expr1, expr2, expr3);
@@ -282,9 +310,11 @@ module prettier::expression {
             expr9,
             expr10,
         );
+
         let request = pool.finish_swap(
             request,
         );
+
         (
             request,
             swap_impl < CoinIn,
@@ -298,6 +328,7 @@ module prettier::expression {
             ),
         )
     }
+
     fun annotate_expression() {
         (expr: Type);
         (
@@ -307,11 +338,13 @@ module prettier::expression {
             (call_expression(): Type);
         let a: Type = call_expression();
     }
+
     fun cast_expression() {
         100 as u64;
         1000 as u8;
         (say_something as u256);
     }
+
     fun dot_expression() {
         a().b().c();
         first()
@@ -320,6 +353,7 @@ module prettier::expression {
         start_a_chain()
             .then_call_something()
             .then_call_something_else();
+
         let a = first()
             .second()
             .ultra_long_third();
@@ -327,6 +361,7 @@ module prettier::expression {
             .second()
             .ultra_long_third();
     }
+
     fun block() {
         {};
         { say_something(); };
@@ -345,12 +380,15 @@ module prettier::expression {
                 .fourth(),
         );
         {
-            { say_something(); };
+            {
+                say_something();
+            };
             say_something_else();
             say_something_more();
             {};
         };
     }
+
     fun macro_module_access() {
         assert!<WithType, MultiEven>(
             module::call_something(),

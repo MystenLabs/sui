@@ -20,8 +20,8 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printBlockComment;
 		case Formatting.EmptyLine:
 			return printEmptyLine;
-		case Formatting.NextLine:
-			return printNextLine;
+		case Formatting.Newline:
+			return printNewline;
 		default:
 			return null;
 	}
@@ -35,7 +35,7 @@ export enum Formatting {
 	 * Special node to insert a newline before the next node.
 	 * We use it to make a call to hardline or not.
 	 */
-	NextLine = 'newline',
+	Newline = 'newline',
 }
 
 export function startsOnNewLine(path: AstPath<Node>): boolean {
@@ -43,7 +43,7 @@ export function startsOnNewLine(path: AstPath<Node>): boolean {
 }
 
 export function shouldNewLine(path: AstPath<Node>): boolean {
-	return path.next?.type == Formatting.NextLine;
+	return path.node.nextNamedSibling?.type == Formatting.Newline;
 }
 
 /**
@@ -57,7 +57,7 @@ export function isFormatting(node: Node): boolean {
 		Formatting.LineComment,
 		Formatting.BlockComment,
 		Formatting.EmptyLine,
-		Formatting.NextLine,
+		Formatting.Newline,
 	].includes(node.type as Formatting);
 }
 
@@ -69,8 +69,8 @@ export function isEmptyLine(node: Node | null): boolean {
 	return Formatting.EmptyLine == node?.type;
 }
 
-export function isNextLine(node: Node | null): boolean {
-	return Formatting.NextLine == node?.type;
+export function isNewline(node: Node | null): boolean {
+	return Formatting.Newline == node?.type;
 }
 
 /**
@@ -78,8 +78,7 @@ export function isNextLine(node: Node | null): boolean {
  * Comments are handled via the `addLeadingComments` function.
  */
 export function printLineComment(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	// throw new Error('Handled by `addLeadingComments`');
-	return '';
+	return path.node.text;
 }
 
 /**
@@ -91,9 +90,9 @@ export function printBlockComment(
 	print: printFn,
 ): Doc {
 	return [
-		startsOnNewLine(path) ? hardline : '',
+		// startsOnNewLine(path) ? hardline : '',
 		path.node.text,
-		shouldNewLine(path) ? hardline : '',
+		// shouldNewLine(path) ? hardline : '',
 	];
 }
 
@@ -101,6 +100,6 @@ export function printEmptyLine(path: AstPath<Node>, options: ParserOptions, prin
 	return ''; // should not be printed directly, used in `join(hardline)` to act as an extra newline
 }
 
-export function printNextLine(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+export function printNewline(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	return ''; // should not be printed, ever
 }

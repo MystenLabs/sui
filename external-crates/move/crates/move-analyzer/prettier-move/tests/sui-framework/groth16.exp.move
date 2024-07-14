@@ -1,22 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 module sui::groth16 {
     #[allow(unused_const)]
     // Error for input is not a valid Arkwork representation of a verifying key.
     const EInvalidVerifyingKey: u64 = 0;
+
     #[allow(unused_const)]
     // Error if the given curve is not supported
     const EInvalidCurve: u64 = 1;
+
     #[allow(unused_const)]
     // Error if the number of public inputs given exceeds the max.
     const ETooManyPublicInputs: u64 = 2;
+
     /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
     /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
-    public struct Curve has store, copy, drop { id: u8 }
+    public struct Curve has store, copy, drop {
+        id: u8,
+    }
+
     /// Return the `Curve` value indicating that the BLS12-381 construction should be used in a given function.
     public fun bls12381(): Curve { Curve { id: 0 } }
+
     /// Return the `Curve` value indicating that the BN254 construction should be used in a given function.
     public fun bn254(): Curve { Curve { id: 1 } }
+
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
     public struct PreparedVerifyingKey has store, copy, drop {
         vk_gamma_abc_g1_bytes: vector<u8>,
@@ -24,6 +33,7 @@ module sui::groth16 {
         gamma_g2_neg_pc_bytes: vector<u8>,
         delta_g2_neg_pc_bytes: vector<u8>,
     }
+
     /// Creates a `PreparedVerifyingKey` from bytes.
     public fun pvk_from_bytes(
         vk_gamma_abc_g1_bytes: vector<u8>,
@@ -38,6 +48,7 @@ module sui::groth16 {
             delta_g2_neg_pc_bytes,
         }
     }
+
     /// Returns bytes of the four components of the `PreparedVerifyingKey`.
     public fun pvk_to_bytes(pvk: PreparedVerifyingKey): vector<vector<u8>> {
         vector[
@@ -47,18 +58,29 @@ module sui::groth16 {
             pvk.delta_g2_neg_pc_bytes,
         ]
     }
+
     /// A `PublicProofInputs` wrapper around its serialized bytes.
-    public struct PublicProofInputs has store, copy, drop { bytes: vector<u8> }
+    public struct PublicProofInputs has store, copy, drop {
+        bytes: vector<u8>,
+    }
+
     /// Creates a `PublicProofInputs` wrapper from bytes.
     public fun public_proof_inputs_from_bytes(
         bytes: vector<u8>,
-    ): PublicProofInputs { PublicProofInputs { bytes } }
+    ): PublicProofInputs {
+        PublicProofInputs { bytes }
+    }
+
     /// A `ProofPoints` wrapper around the serialized form of three proof points.
-    public struct ProofPoints has store, copy, drop { bytes: vector<u8> }
+    public struct ProofPoints has store, copy, drop {
+        bytes: vector<u8>,
+    }
+
     /// Creates a Groth16 `ProofPoints` from bytes.
     public fun proof_points_from_bytes(bytes: vector<u8>): ProofPoints {
         ProofPoints { bytes }
     }
+
     /// @param curve: What elliptic curve construction to use. See `bls12381` and `bn254`.
     /// @param verifying_key: An Arkworks canonical compressed serialization of a verifying key.
     ///
@@ -71,11 +93,13 @@ module sui::groth16 {
     ): PreparedVerifyingKey {
         prepare_verifying_key_internal(curve.id, verifying_key)
     }
+
     /// Native functions that flattens the inputs into an array and passes to the Rust native function. May abort with `EInvalidVerifyingKey` or `EInvalidCurve`.
     native fun prepare_verifying_key_internal(
         curve: u8,
         verifying_key: &vector<u8>,
     ): PreparedVerifyingKey;
+
     /// @param curve: What elliptic curve construction to use. See the `bls12381` and `bn254` functions.
     /// @param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
     /// @param public_proof_inputs: Represent inputs that are public.
@@ -98,6 +122,7 @@ module sui::groth16 {
             &proof_points.bytes,
         )
     }
+
     /// Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function. May abort with `EInvalidCurve` or `ETooManyPublicInputs`.
     native fun verify_groth16_proof_internal(
         curve: u8,

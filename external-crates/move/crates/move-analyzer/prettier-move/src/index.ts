@@ -15,10 +15,8 @@
 
 import * as path from 'path';
 import Parser = require('web-tree-sitter');
-import { SyntaxNode } from 'web-tree-sitter';
 import { print } from './printer';
 import { Tree } from './tree';
-import { FormattedNode, preprocess } from './preprocess';
 import {
 	Parser as PrettierParser,
 	Printer,
@@ -63,7 +61,7 @@ export const parsers: { [key: string]: PrettierParser } = {
 export const printers: { [key: string]: Printer } = {
 	'move-format': {
 		print,
-		preprocess,
+		// preprocess,
 	},
 };
 

@@ -1,5 +1,6 @@
 // options:
 // printWidth: 80
+
 /*
  * @title Timelock
  *
@@ -23,7 +24,9 @@ module suitears::timelock {
             ) as u64,
         )
     }
+
     // === Imports ===
+
     public fun lock<T: store>(
         data: T,
         c: &Clock,
@@ -33,6 +36,7 @@ module suitears::timelock {
         // It makes no sense to lock in the past
         assert!(unlock_time > c.timestamp_ms(), EInvalidTime);
     }
+
     public fun propose<DaoWitness: drop>(
         dao: &mut Dao<DaoWitness>,
         c: &Clock,
@@ -47,7 +51,9 @@ module suitears::timelock {
         assert!(action_delay >= dao.min_action_delay, EActionDelayTooShort);
         assert!(quorum_votes >= dao.min_quorum_votes, EMinQuorumVotesTooSmall);
         assert!(hash.length() != 0, EEmptyHash);
+
         let start_time = c.timestamp_ms() + dao.voting_delay;
+
         let proposal = Proposal {
             id: object::new(ctx),
             proposer: ctx.sender(),
@@ -64,14 +70,19 @@ module suitears::timelock {
             capability_id,
             coin_type: dao.coin_type,
         };
+
         emit(NewProposal<DaoWitness> {
             proposal_id: object::id(&proposal),
             proposer: proposal.proposer,
         });
+
         proposal
     }
+
     public fun inline_fun(): u128 { 1000 }
+
     // === Public View Function ===
+
     /*
      * @notice Returns the unlock time in milliseconds.
      *
@@ -81,7 +92,9 @@ module suitears::timelock {
     public fun unlock_time<T: store>(self: &Timelock<T>): u64 {
         self.unlock_time
     }
+
     // === Public Mutative Function ===
+
     /*
      * @notice Locks the `data` for `unlock_time` milliseconds.
      *
@@ -101,8 +114,10 @@ module suitears::timelock {
     ): Timelock<T> {
         // It makes no sense to lock in the past
         assert!(unlock_time > c.timestamp_ms(), EInvalidTime);
+
         Timelock { id: object::new(ctx), data, unlock_time }
     }
+
     /*
      * @notice Unlocks a {Timelock<T>} and returns the locked resource `T`.
      *
@@ -115,6 +130,7 @@ module suitears::timelock {
      */
     public fun unlock<T: store>(self: Timelock<T>, c: &Clock): T {
         let Timelock { id, data, unlock_time } = self;
+
         assert!(c.timestamp_ms() >= unlock_time, ETooEarly);
         id.delete();
         data

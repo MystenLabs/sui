@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 module sui::ecvrf {
     #[allow(unused_const)]
     const EInvalidHashLength: u64 = 1;
@@ -7,6 +8,7 @@ module sui::ecvrf {
     const EInvalidPublicKeyEncoding: u64 = 2;
     #[allow(unused_const)]
     const EInvalidProofEncoding: u64 = 3;
+
     /// @param hash: The hash/output from a ECVRF to be verified.
     /// @param alpha_string: Input/seed to the ECVRF used to generate the output.
     /// @param public_key: The public key corresponding to the private key used to generate the output.

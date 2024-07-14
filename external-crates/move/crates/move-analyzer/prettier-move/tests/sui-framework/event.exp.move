@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 /// Events module. Defines the `sui::event::emit` function which
 /// creates and sends a custom MoveEvent as a part of the effects
 /// certificate of the transaction.
@@ -34,9 +35,11 @@ module sui::event {
     /// The type `T` is the main way to index the event, and can contain
     /// phantom parameters, eg `emit(MyEvent<phantom T>)`.
     public native fun emit<T: copy + drop>(event: T);
+
     #[test_only]
     /// Get the total number of events emitted during execution so far
     public native fun num_events(): u32;
+
     #[test_only]
     /// Get all events of type `T` emitted during execution.
     /// Can only be used in testing,
