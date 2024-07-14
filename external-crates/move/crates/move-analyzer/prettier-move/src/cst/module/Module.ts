@@ -76,7 +76,6 @@ const separatedMembers = [
 	UseDeclaration.UseDeclaration,
 	UseDeclaration.FriendDeclaration,
 	EnumDefinition.EnumDefinition,
-	,
 ] as string[];
 
 /**
