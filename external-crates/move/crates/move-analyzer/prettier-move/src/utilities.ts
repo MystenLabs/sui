@@ -5,7 +5,8 @@ import { Node } from '.';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
 import { printFn } from './printer';
 
-const { hardline, indent, join, softline, group, ifBreak } = doc.builders;
+const { hardline, indent, join, softline, dedent, line, group, breakParent, ifBreak } =
+	doc.builders;
 
 /**
  * Returns `true` if the first non-formatting child of the path starts on a new line.
@@ -55,12 +56,18 @@ export function printLeadingComment(path: AstPath<Node>): Doc[] {
  * @param path
  * @returns
  */
-export function printTrailingComment(path: AstPath<Node>): Doc {
+export function printTrailingComment(path: AstPath<Node>, shouldBreak: boolean = false): Doc {
 	// we do not allow comments on empty lines
 	if (path.node.isEmptyLine) return '';
+	if (!path.node.enableTrailingComment) return '';
 	const comment = path.node.trailingComment;
 	if (!comment) return '';
-	return [' ', comment];
+
+	if (comment.type == 'line_comment') {
+		return [' ', comment.text, shouldBreak ? breakParent : ''];
+	}
+
+	return [' ', comment.text];
 }
 
 /**
@@ -88,12 +95,6 @@ export type BlockOptions = {
  */
 export function block({ path, print, options, shouldBreak, skipChildren }: BlockOptions) {
 	const length = path.node.nonFormattingChildren.length;
-	const firstNonEmpty = path.node.namedAndEmptyLineChildren.findIndex((e) => !e.isEmptyLine);
-	const lastNonEmpty = path.node.namedAndEmptyLineChildren.reverse().findIndex((e) => !e.isEmptyLine);
-	const children = path
-		.map(print, 'namedAndEmptyLineChildren')
-		.slice(firstNonEmpty, lastNonEmpty === 0 ? undefined : -lastNonEmpty)
-		.slice(skipChildren);
 
 	if (length == 0) {
 		return '{}';
@@ -104,11 +105,80 @@ export function block({ path, print, options, shouldBreak, skipChildren }: Block
 			'{',
 			options.bracketSpacing ? ifBreak('', ' ') : '',
 			indent(softline),
-			indent(join(softline, children)),
+			indent(
+				join(softline, path.map(print, 'namedAndEmptyLineChildren').slice(skipChildren)),
+			),
 			softline,
 			options.bracketSpacing ? ifBreak('', ' ') : '',
 			'}',
 		],
 		{ shouldBreak },
 	);
+}
+
+export type ListOptions = {
+	path: AstPath<Node>;
+	print: printFn;
+	options: ParserOptions;
+	/** Opening bracket. */
+	open: string;
+	/** Closing bracket. */
+	close: string;
+	/**
+	 * The number of children to skip when printing the list.
+	 */
+	skipChildren?: number;
+	/**
+	 * Whether to add a whitespace after the open bracket and before the close bracket.
+	 * ```
+	 * { a, b, c } // addWhitespace = true
+	 * {a, b, c}   // addWhitespace = false
+	 * ```
+	 */
+	addWhitespace?: boolean;
+};
+
+/**
+ * Prints a list of non-formatting children. Handles commas and trailing comments.
+ *
+ * @param param0
+ * @returns
+ */
+export function list({
+	path,
+	print,
+	options,
+	open,
+	close,
+	addWhitespace = false,
+	skipChildren = 0,
+}: ListOptions) {
+	const length = path.node.nonFormattingChildren.length;
+
+	if (length == skipChildren) {
+		return `${open}${close}`;
+	}
+
+	return [
+		open,
+		indent(addWhitespace ? line : softline),
+		indent(
+			path
+				.map((path, i) => {
+					const comment = printTrailingComment(path, true);
+					path.node.disableTrailingComment();
+
+					return i < length - 1
+						? [print(path), ',', comment, line]
+						: [
+								print(path),
+								ifBreak(','),
+								comment,
+								dedent(addWhitespace ? line : softline),
+							];
+				}, 'nonFormattingChildren')
+				.slice(skipChildren),
+		),
+		close,
+	];
 }

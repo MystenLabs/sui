@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { shouldBreakFirstChild } from '../../utilities';
+import { list, shouldBreakFirstChild } from '../../utilities';
 const { group, ifBreak, join, indent, line, softline } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
@@ -171,17 +171,9 @@ export function printNamedFields(
 
 	return [
 		' ',
-		group(
-			[
-				'{',
-				indent(line),
-				indent(join([',', line], children)),
-				ifBreak(','), // trailing comma
-				line,
-				'}',
-			],
-			{ shouldBreak: shouldBreakFirstChild(path) },
-		),
+		group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
+			shouldBreak: shouldBreakFirstChild(path),
+		}),
 	];
 }
 
@@ -200,17 +192,9 @@ export function printPositionalFields(
 		return '()';
 	}
 
-	return group(
-		[
-			'(',
-			indent(softline),
-			indent(join([',', line], children)),
-			ifBreak(','), // trailing comma
-			softline,
-			')',
-		],
-		{ shouldBreak: shouldBreakFirstChild(path) },
-	);
+	return group(list({ path, print, options, open: '(', close: ')' }), {
+		shouldBreak: shouldBreakFirstChild(path),
+	});
 }
 
 /**

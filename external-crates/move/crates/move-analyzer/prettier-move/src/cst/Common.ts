@@ -4,7 +4,7 @@
 import { Node } from '..';
 import { printFn, treeFn } from '../printer';
 import { AstPath, ParserOptions, doc, Doc } from 'prettier';
-import { shouldBreakFirstChild } from '../utilities';
+import { list, shouldBreakFirstChild } from '../utilities';
 import { builders } from 'prettier/doc';
 const { group, ifBreak, softline, indent, join, line } = doc.builders;
 
@@ -283,23 +283,9 @@ function printBindList(path: AstPath<Node>, options: ParserOptions, print: print
  * Print `bind_named_fields` node.
  */
 function printBindNamedFields(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-
-	if (children.length === 0) {
-		return ' {}';
-	}
-
-	return group(
-		[
-			' {',
-			indent(line),
-			indent(join([',', line], children)),
-			ifBreak(','), // trailing comma
-			line,
-			'}',
-		],
-		{ shouldBreak: shouldBreakFirstChild(path) },
-	);
+	return [' ', group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
+		shouldBreak: shouldBreakFirstChild(path),
+	})];
 }
 
 /**
@@ -310,23 +296,9 @@ function printBindPositionalFields(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-
-	if (children.length === 0) {
-		return '()';
-	}
-
-	return group(
-		[
-			'(',
-			indent(softline),
-			indent(join([',', line], children)),
-			ifBreak(','), // trailing comma
-			softline,
-			')',
-		],
-		{ shouldBreak: shouldBreakFirstChild(path) },
-	);
+	return group(list({ path, print, options, open: '(', close: ')' }), {
+		shouldBreak: shouldBreakFirstChild(path),
+	});
 }
 
 /**
@@ -376,20 +348,7 @@ function printFieldInitializeList(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-
-	if (children.length === 0) {
-		return ' {}';
-	}
-
-	return group([
-		` {`,
-		indent(line),
-		indent(join([',', line], children)),
-		ifBreak(','), // trailing comma
-		line,
-		`}`,
-	]);
+	return [' ', group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }))];
 }
 
 /**
@@ -412,20 +371,7 @@ function printExpressionField(path: AstPath<Node>, options: ParserOptions, print
  * Print `lambda_bindings` node
  */
 function printLambdaBindings(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-
-	if (children.length === 0) {
-		return '||';
-	}
-
-	return group([
-		'|',
-		indent(softline),
-		indent(join([',', line], children)),
-		ifBreak(','), // trailing comma
-		softline,
-		'|',
-	]);
+	return group(list({ path, print, options, open: '|', close: '|' }));
 }
 
 /**
@@ -456,17 +402,5 @@ function printFunctionTypeParameters(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-	if (children.length === 0) {
-		return '||';
-	}
-
-	return group([
-		'|',
-		indent(softline),
-		indent(join([',', line], children)),
-		ifBreak(','), // trailing comma
-		softline,
-		'|',
-	]);
+	return group(list({ path, print, options, open: '|', close: '|' }));
 }
