@@ -289,7 +289,8 @@ module sui::bcs {
         let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
         let mut bytes = new(to_bytes(&value));
         let _fail = bytes.peel_vec_length();
-        abort 2 // TODO: make this test fail
+        // TODO: make this test fail
+        abort 2
     }
 
     #[test]
@@ -347,48 +348,56 @@ module sui::bcs {
         };
 
         {
+            // boolean: true
             let value = true;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_bool());
         };
 
         {
+            // boolean: false
             let value = false;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_bool());
         };
 
         {
+            // u8
             let value = 100u8;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_u8());
         };
 
         {
+            // u64 (4 bytes)
             let value = 1000100u64;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_u64());
         };
 
         {
+            // u64 (8 bytes)
             let value = 100000000000000u64;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_u64());
         };
 
         {
+            // u128 (16 bytes)
             let value = 100000000000000000000000000u128;
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_u128());
         };
 
         {
+            // vector length
             let value = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
             let mut bytes = new(to_bytes(&value));
             assert!(value.length() == bytes.peel_vec_length());
         };
 
         {
+            // vector length (more data)
             let value = vector[
                 0,
                 0,
@@ -757,6 +766,7 @@ module sui::bcs {
         };
 
         {
+            // full deserialization test (ordering)
             let info = Info {
                 a: true,
                 b: 100,
@@ -786,6 +796,7 @@ module sui::bcs {
         };
 
         {
+            // read vector of bytes directly
             let value = vector[
                 vector[1, 2, 3, 4, 5],
                 vector[1, 2, 3, 4, 5],
@@ -796,30 +807,35 @@ module sui::bcs {
         };
 
         {
+            // read vector of bytes directly
             let value = vector[1, 2, 3, 4, 5];
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_vec_u8());
         };
 
         {
+            // read vector of bytes directly
             let value = vector[1, 2, 3, 4, 5];
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_vec_u64());
         };
 
         {
+            // read vector of bytes directly
             let value = vector[1, 2, 3, 4, 5];
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_vec_u128());
         };
 
         {
+            // read vector of bytes directly
             let value = vector[true, false, true, false];
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_vec_bool());
         };
 
         {
+            // read vector of address directly
             let value = vector[@0x0, @0x1, @0x2, @0x3];
             let mut bytes = new(to_bytes(&value));
             assert!(value == bytes.peel_vec_address());

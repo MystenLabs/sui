@@ -6,13 +6,14 @@ module test::constants {
     /// This is a constant.
     /// this comment should be attached to the node.
     /// what if there are 3 lines?
-    const B: u8 =
+    const B /* type */: u8 =
         // line comment in between
         42;
 
     /// this is a line
     const A: u8 = 42;
-    const T: u8 = 100; // trailing comment
+    // trailing comment
+    const T: u8 = 100;
 
     /// This is another comment;
     /// it should be attached to the node too.
@@ -22,7 +23,8 @@ module test::constants {
         b"hello, cruel world. you have been there a long time.";
 
     const C: u64 = {
-        100 + 200 // trailing comment in a block
+        // trailing comment in a block
+        100 + 200
     };
 
     const X: u8 = 5 + 100 / 2 * 3;

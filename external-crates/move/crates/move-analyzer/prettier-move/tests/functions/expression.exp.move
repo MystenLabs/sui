@@ -105,7 +105,8 @@ module prettier::expression {
         say_something_really_long ||
         say_something_really_long;
 
-        say_something_really_long && // trailing comment
+        say_something_really_long &&
+        // trailing comment
         say_something_really_long ||
         // leading comment
         say_something_really_long;

@@ -245,7 +245,9 @@ module sui::package {
 
     /// Expose the constants representing various upgrade policies
     public fun compatible_policy(): u8 { COMPATIBLE }
+
     public fun additive_policy(): u8 { ADDITIVE }
+
     public fun dep_only_policy(): u8 { DEP_ONLY }
 
     /// Restrict upgrades through this upgrade `cap` to just add code, or

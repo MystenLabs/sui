@@ -54,4 +54,6 @@ module test::functions {
     public native fun public_native(p: u64): u64;
 
     native fun simple_native_generic<T1: key, T2: store + drop + key>(): u64;
+
+    // Comment for a function.
 }

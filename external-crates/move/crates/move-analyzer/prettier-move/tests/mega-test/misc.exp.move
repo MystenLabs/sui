@@ -54,7 +54,6 @@ module suitears::timelock {
 
         let start_time = c.timestamp_ms() + dao.voting_delay;
 
-
         let proposal = Proposal {
             id: object::new(ctx),
             proposer: ctx.sender(),

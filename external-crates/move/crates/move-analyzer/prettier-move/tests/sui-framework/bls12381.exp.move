@@ -236,6 +236,9 @@ module sui::bls12381 {
         group_ops::multi_scalar_multiplication(G2_TYPE, scalars, elements)
     }
 
+    /////////////////////////////////
+    ////// Gt group operations //////
+
     public fun gt_identity(): Element<GT> {
         let identity = GT_IDENTITY_BYTES;
         group_ops::from_bytes(GT_TYPE, &identity, true)
