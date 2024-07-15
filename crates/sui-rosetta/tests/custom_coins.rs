@@ -3,11 +3,11 @@ mod rosetta_client;
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
 
-use sui_rosetta::SUI;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SuiEnv,
 };
+use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
 
@@ -61,11 +61,17 @@ async fn test_custom_coin_balance() {
         currencies: vec![sui_currency, test_coin_currency],
     };
 
-    println!("request: {}", serde_json::to_string_pretty(&request).unwrap());
+    println!(
+        "request: {}",
+        serde_json::to_string_pretty(&request).unwrap()
+    );
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
         .await;
-    println!("response: {}", serde_json::to_string_pretty(&response).unwrap());
+    println!(
+        "response: {}",
+        serde_json::to_string_pretty(&response).unwrap()
+    );
     assert_eq!(response.balances.len(), 2);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
     assert_eq!(response.balances[0].currency.coin_type, "0x2::sui::SUI");
