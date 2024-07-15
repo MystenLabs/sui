@@ -29,10 +29,25 @@ export class DeepBookClient {
 	flashLoans: FlashLoanContract;
 	governance: GovernanceContract;
 
-	constructor({ client, address, env }: { client: SuiClient; address: string; env: Environment }) {
+	constructor({
+		client,
+		address,
+		env,
+		coins,
+		pools,
+	}: {
+		client: SuiClient;
+		address: string;
+		env: Environment;
+		coins?: { [key: string]: any };
+		pools?: { [key: string]: any };
+	}) {
 		this.#client = client;
 		this.#address = normalizeSuiAddress(address);
-		this.#config = new DeepBookConfig({ client, address: this.#address, env });
+
+		// Update to pass custom coins and pools
+		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
+
 		this.#balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);
 		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
