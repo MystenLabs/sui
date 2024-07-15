@@ -10,7 +10,6 @@ export interface BalanceManager {
 }
 
 export interface Coin {
-	key: string;
 	address: string;
 	type: string;
 	scalar: number;
@@ -18,8 +17,8 @@ export interface Coin {
 
 export interface Pool {
 	address: string;
-	baseCoin: Coin;
-	quoteCoin: Coin;
+	baseCoin: string;
+	quoteCoin: string;
 }
 
 // Trading constants

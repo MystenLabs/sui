@@ -38,8 +38,8 @@ export class DeepBookContract {
 
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const inputPrice = (price * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar;
 		const inputQuantity = quantity * baseCoin.scalar;
 
@@ -78,8 +78,8 @@ export class DeepBookContract {
 
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 		tx.moveCall({
@@ -102,8 +102,8 @@ export class DeepBookContract {
 	modifyOrder =
 		(pool: Pool, balanceManager: BalanceManager, orderId: number, newQuantity: number) =>
 		(tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 			tx.moveCall({
@@ -123,8 +123,8 @@ export class DeepBookContract {
 	cancelOrder =
 		(pool: Pool, balanceManager: BalanceManager, orderId: number) => (tx: Transaction) => {
 			tx.setGasBudgetIfNotSet(GAS_BUDGET);
-			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 			tx.moveCall({
@@ -142,8 +142,8 @@ export class DeepBookContract {
 
 	cancelAllOrders = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 		tx.moveCall({
@@ -159,8 +159,8 @@ export class DeepBookContract {
 	};
 
 	withdrawSettledAmounts = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 		tx.moveCall({
@@ -171,10 +171,10 @@ export class DeepBookContract {
 	};
 
 	addDeepPricePoint = (targetPool: Pool, referencePool: Pool) => (tx: Transaction) => {
-		const targetBaseCoin = this.#config.getCoin(targetPool.baseCoin.key);
-		const targetQuoteCoin = this.#config.getCoin(targetPool.quoteCoin.key);
-		const referenceBaseCoin = this.#config.getCoin(referencePool.baseCoin.key);
-		const referenceQuoteCoin = this.#config.getCoin(referencePool.quoteCoin.key);
+		const targetBaseCoin = this.#config.getCoin(targetPool.baseCoin);
+		const targetQuoteCoin = this.#config.getCoin(targetPool.quoteCoin);
+		const referenceBaseCoin = this.#config.getCoin(referencePool.baseCoin);
+		const referenceQuoteCoin = this.#config.getCoin(referencePool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::add_deep_price_point`,
 			arguments: [
@@ -192,8 +192,8 @@ export class DeepBookContract {
 	};
 
 	claimRebates = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
 		tx.moveCall({
@@ -204,8 +204,8 @@ export class DeepBookContract {
 	};
 
 	burnDeep = (pool: Pool) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::burn_deep`,
 			arguments: [tx.object(pool.address), tx.object(this.#config.DEEP_TREASURY_ID)],
@@ -214,8 +214,8 @@ export class DeepBookContract {
 	};
 
 	midPrice = (pool: Pool) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::mid_price`,
@@ -225,8 +225,8 @@ export class DeepBookContract {
 	};
 
 	whitelisted = (pool: Pool) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::whitelisted`,
 			arguments: [tx.object(pool.address)],
@@ -235,8 +235,8 @@ export class DeepBookContract {
 	};
 
 	getQuoteQuantityOut = (pool: Pool, baseQuantity: number) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_quote_quantity_out`,
@@ -250,8 +250,8 @@ export class DeepBookContract {
 	};
 
 	getBaseQuantityOut = (pool: Pool, quoteQuantity: number) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const quoteScalar = quoteCoin.scalar;
 
 		tx.moveCall({
@@ -267,8 +267,8 @@ export class DeepBookContract {
 
 	getQuantityOut =
 		(pool: Pool, baseQuantity: number, quoteQuantity: number) => (tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 			const quoteScalar = quoteCoin.scalar;
 
 			tx.moveCall({
@@ -284,8 +284,8 @@ export class DeepBookContract {
 		};
 
 	accountOpenOrders = (pool: Pool, managerId: string) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::account_open_orders`,
@@ -296,8 +296,8 @@ export class DeepBookContract {
 
 	getLevel2Range =
 		(pool: Pool, priceLow: number, priceHigh: number, isBid: boolean) => (tx: Transaction) => {
-			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_range`,
@@ -312,8 +312,8 @@ export class DeepBookContract {
 		};
 
 	getLevel2TicksFromMid = (pool: Pool, tickFromMid: number) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_tick_from_mid`,
@@ -323,8 +323,8 @@ export class DeepBookContract {
 	};
 
 	vaultBalances = (pool: Pool) => (tx: Transaction) => {
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vault_balances`,
@@ -348,12 +348,12 @@ export class DeepBookContract {
 
 		let pool = this.#config.getPool(poolKey);
 		let deepCoinType = this.#config.getCoin('DEEP').type;
-		const baseScalar = pool.baseCoin.scalar;
-		const quoteScalar = pool.quoteCoin.scalar;
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-		const baseCoin =
+		const baseCoinInput =
 			params.baseCoin ??
-			coinWithBalance({ type: pool.baseCoin.type, balance: baseAmount * baseScalar });
+			coinWithBalance({ type: baseCoin.type, balance: baseAmount * baseCoin.scalar });
 
 		const deepCoin =
 			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
@@ -362,12 +362,12 @@ export class DeepBookContract {
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
 			arguments: [
 				tx.object(pool.address),
-				baseCoin,
+				baseCoinInput,
 				deepCoin,
-				tx.pure.u64(quoteScalar * minQuote),
+				tx.pure.u64(quoteCoin.scalar * minQuote),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
-			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 
 		return [baseCoinResult, quoteCoinResult, deepCoinResult] as const;
@@ -380,12 +380,12 @@ export class DeepBookContract {
 
 		let pool = this.#config.getPool(poolKey);
 		let deepCoinType = this.#config.getCoin('DEEP').type;
-		const baseScalar = pool.baseCoin.scalar;
-		const quoteScalar = pool.quoteCoin.scalar;
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-		const quoteCoin =
+		const quoteCoinInput =
 			params.quoteCoin ??
-			coinWithBalance({ type: pool.quoteCoin.type, balance: quoteAmount * quoteScalar });
+			coinWithBalance({ type: quoteCoin.type, balance: quoteAmount * quoteCoin.scalar });
 
 		const deepCoin =
 			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
@@ -394,12 +394,12 @@ export class DeepBookContract {
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
 			arguments: [
 				tx.object(pool.address),
-				quoteCoin,
+				quoteCoinInput,
 				deepCoin,
-				tx.pure.u64(baseScalar * minBase),
+				tx.pure.u64(baseCoin.scalar * minBase),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
-			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 
 		return [baseCoinResult, quoteCoinResult, deepCoinResult] as const;

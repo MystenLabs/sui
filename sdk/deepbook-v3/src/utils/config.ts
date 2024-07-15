@@ -33,7 +33,6 @@ export class DeepBookConfig {
 	balanceManager: BalanceManagerContract;
 
 	constructor({
-		client,
 		env,
 		adminCap,
 		address,
