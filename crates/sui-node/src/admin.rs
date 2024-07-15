@@ -419,10 +419,16 @@ async fn randomness_inject_full_sig(
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()),
     };
 
-    state
-        .node
-        .randomness_handle()
-        .admin_inject_full_signature(RandomnessRound(round), sig);
+    let (tx_result, rx_result) = oneshot::channel();
+    state.node.randomness_handle().admin_inject_full_signature(
+        RandomnessRound(round),
+        sig,
+        tx_result,
+    );
 
-    (StatusCode::OK, "partial signatures injected\n".to_string())
+    match rx_result.await {
+        Ok(Ok(())) => (StatusCode::OK, "full signature injected\n".to_string()),
+        Ok(Err(e)) => (StatusCode::BAD_REQUEST, e.to_string()),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
 }

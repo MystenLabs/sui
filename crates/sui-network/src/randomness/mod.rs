@@ -139,9 +139,18 @@ impl Handle {
 
     /// Admin interface handler: injects full signature for the given round at the
     /// current epoch, skipping validity checks.
-    pub fn admin_inject_full_signature(&self, round: RandomnessRound, sig: RandomnessSignature) {
+    pub fn admin_inject_full_signature(
+        &self,
+        round: RandomnessRound,
+        sig: RandomnessSignature,
+        result_channel: oneshot::Sender<Result<()>>,
+    ) {
         self.sender
-            .try_send(RandomnessMessage::AdminInjectFullSignature(round, sig))
+            .try_send(RandomnessMessage::AdminInjectFullSignature(
+                round,
+                sig,
+                result_channel,
+            ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
@@ -189,7 +198,11 @@ enum RandomnessMessage {
         Vec<RandomnessPartialSignature>,
         oneshot::Sender<Result<()>>,
     ),
-    AdminInjectFullSignature(RandomnessRound, RandomnessSignature),
+    AdminInjectFullSignature(
+        RandomnessRound,
+        RandomnessSignature,
+        oneshot::Sender<Result<()>>,
+    ),
 }
 
 struct RandomnessEventLoop {
@@ -287,8 +300,8 @@ impl RandomnessEventLoop {
                     sigs,
                 ));
             }
-            RandomnessMessage::AdminInjectFullSignature(round, sig) => {
-                self.admin_inject_full_signature(round, sig)
+            RandomnessMessage::AdminInjectFullSignature(round, sig, result_channel) => {
+                let _ = result_channel.send(self.admin_inject_full_signature(round, sig));
             }
         }
     }
@@ -977,15 +990,27 @@ impl RandomnessEventLoop {
         Ok(())
     }
 
-    fn admin_inject_full_signature(&mut self, round: RandomnessRound, sig: RandomnessSignature) {
-        self.completed_sigs.insert(round);
-        self.remove_partial_sigs_in_range((
-            Bound::Included((round, PeerId([0; 32]))),
-            Bound::Excluded((round + 1, PeerId([0; 32]))),
-        ));
-        let bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
-        self.randomness_tx
-            .try_send((self.epoch, round, bytes))
-            .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
+    fn admin_inject_full_signature(
+        &mut self,
+        round: RandomnessRound,
+        sig: RandomnessSignature,
+    ) -> Result<()> {
+        let vss_pk = {
+            let Some(dkg_output) = &self.dkg_output else {
+                return Err(anyhow::anyhow!(
+                    "called admin_inject_full_signature before DKG completed"
+                ));
+            };
+            &dkg_output.vss_pk
+        };
+
+        if let Err(e) =
+            ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+        {
+            return Err(anyhow::anyhow!("invalid full signature"));
+        }
+
+        self.process_valid_full_signature(self.epoch, round, sig);
+        Ok(())
     }
 }
