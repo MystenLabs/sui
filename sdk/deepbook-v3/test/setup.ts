@@ -2,28 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import {
-	DevInspectResults,
-	SuiObjectChangePublished,
-	SuiTransactionBlockResponse,
-	getFullnodeUrl,
-	SuiClient
-} from '../../typescript/src/client/index.js';
-import {
-	FaucetRateLimitError,
-	getFaucetHost,
-	requestSuiFromFaucetV0
-} from '../../typescript/src/faucet';
-import { Ed25519Keypair } from '../../typescript/src/keypairs/ed25519';
-import { Transaction } from '../../typescript/src/transactions';
+import path from 'path';
+import type { SuiObjectChangePublished } from '@mysten/sui/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
-import path from "path";
-
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
-const SUI_BIN = process.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
+const SUI_BIN = process.env.VITE_SUI_BIN ?? path.resolve(process.cwd(), '../../target/debug/sui');
 
 export const DEFAULT_TICK_SIZE = 1n;
 export const DEFAULT_LOT_SIZE = 1n;
@@ -76,10 +66,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	}
 
 	const { modules, dependencies } = JSON.parse(
-		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-			{ encoding: 'utf-8' },
-		),
+		execSync(`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
+			encoding: 'utf-8',
+		}),
 	);
 	const tx = new Transaction();
 	const cap = tx.publish({
@@ -112,10 +101,3 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 
 	return { packageId, publishTxn };
 }
-
-export const main = async () => {
-	const tokenSourcesPath = path.join(__dirname, "../../deepbookv3/packages/token");
-	await publishPackage(tokenSourcesPath, await setupSuiClient());
-}
-
-main();
