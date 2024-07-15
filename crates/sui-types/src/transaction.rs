@@ -3043,22 +3043,34 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
-    pub fn get_congested_objects(&self) -> Option<Vec<ObjectID>> {
-        let mut contains_cancelled_read = false;
-        let mut congested_objects = Vec::new();
+    // Returns IDs of objects responsible for a tranaction being cancelled, and the corresponding
+    // reason for cancellation.
+    pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
+        let mut contains_cancelled = false;
+        let mut cancel_reason = None;
+        let mut cancelled_objects = Vec::new();
         for obj in &self.objects {
             if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
-                contains_cancelled_read = true;
-                if version == SequenceNumber::CONGESTED {
-                    congested_objects.push(obj.id());
+                contains_cancelled = true;
+                if version == SequenceNumber::CONGESTED
+                    || version == SequenceNumber::RANDOMNESS_UNAVAILABLE
+                {
+                    // Verify we don't have multiple cancellation reasons.
+                    assert!(cancel_reason.is_none() || cancel_reason == Some(version));
+                    cancel_reason = Some(version);
+                    cancelled_objects.push(obj.id());
                 }
             }
         }
 
-        if !congested_objects.is_empty() {
-            Some(congested_objects)
+        if !cancelled_objects.is_empty() {
+            Some((
+                cancelled_objects,
+                cancel_reason
+                    .expect("there should be a cancel reason if there are cancelled objects"),
+            ))
         } else {
-            assert!(!contains_cancelled_read);
+            assert!(!contains_cancelled);
             None
         }
     }

@@ -136,6 +136,7 @@ type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
 
 pub enum CancelConsensusCertificateReason {
     CongestionOnObjects(Vec<ObjectID>),
+    DkgFailed,
 }
 
 pub enum ConsensusCertificateResult {
@@ -2783,15 +2784,18 @@ impl AuthorityPerEpochStore {
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
 
             // Generate pending checkpoint for user tx with randomness.
-            // Note if randomness is not generated for this commit, we will skip the
-            // checkpoint with the associated height. Therefore checkpoint heights may
-            // not be contiguous.
+            // - If randomness is not generated for this commit, we will skip the
+            //   checkpoint with the associated height. Therefore checkpoint heights may
+            //   not be contiguous.
+            // - Exception: if DKG fails, we always need to write out a PendingCheckpoint
+            //   for randomness tx that are canceled.
             if let Some(randomness_round) = randomness_round {
                 randomness_roots.insert(TransactionKey::RandomnessRound(
                     self.epoch(),
                     randomness_round,
                 ));
-
+            }
+            if randomness_round.is_some() || (dkg_failed && !randomness_roots.is_empty()) {
                 let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {
@@ -2864,16 +2868,17 @@ impl AuthorityPerEpochStore {
 
         let mut shared_input_next_version = HashMap::new();
         for txn in transactions.iter() {
-            if let Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) =
-                cancelled_txns.get(txn.digest())
-            {
-                let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
-                    txn,
-                    &mut shared_input_next_version,
-                    cancelled_txns,
-                );
-
-                version_assignment.push((*txn.digest(), assigned_versions));
+            match cancelled_txns.get(txn.digest()) {
+                Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
+                | Some(CancelConsensusCertificateReason::DkgFailed) => {
+                    let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                        txn,
+                        &mut shared_input_next_version,
+                        cancelled_txns,
+                    );
+                    version_assignment.push((*txn.digest(), assigned_versions));
+                }
+                None => {}
             }
         }
 
@@ -3445,12 +3450,14 @@ impl AuthorityPerEpochStore {
                     && self.randomness_state_enabled()
                     && certificate.transaction_data().uses_randomness()
                 {
-                    // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
-                        "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
+                        "Canceling randomness-using certificate for transaction {:?} because DKG failed",
                         certificate.digest(),
                     );
-                    return Ok(ConsensusCertificateResult::Ignored);
+                    return Ok(ConsensusCertificateResult::Cancelled((
+                        certificate,
+                        CancelConsensusCertificateReason::DkgFailed,
+                    )));
                 }
 
                 // This certificate will be scheduled. Update object execution cost.
