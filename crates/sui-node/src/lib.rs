@@ -1806,6 +1806,10 @@ impl SuiNode {
     pub fn get_config(&self) -> &NodeConfig {
         &self.config
     }
+
+    pub fn randomness_handle(&self) -> randomness::Handle {
+        self.randomness_handle.clone()
+    }
 }
 
 #[cfg(not(msim))]

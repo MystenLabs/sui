@@ -6,7 +6,10 @@ use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::{
-    dkg, nodes::PartyId, tbls::ThresholdBls, types::ShareIndex, types::ThresholdBls12381MinSig,
+    dkg,
+    nodes::PartyId,
+    tbls::ThresholdBls,
+    types::{ShareIndex, ThresholdBls12381MinSig},
 };
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
@@ -24,7 +27,9 @@ use sui_types::{
     committee::EpochId,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
 };
-use tokio::sync::{mpsc, OnceCell};
+use tokio::sync::{
+    OnceCell, {mpsc, oneshot},
+};
 use tracing::{debug, error, info, instrument, warn};
 
 mod auth;
@@ -101,6 +106,54 @@ impl Handle {
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
+    /// Admin interface handler: generates partial signatures for the given round at the
+    /// current epoch.
+    pub fn admin_get_partial_signatures(
+        &self,
+        round: RandomnessRound,
+        tx: oneshot::Sender<Vec<u8>>,
+    ) {
+        self.sender
+            .try_send(RandomnessMessage::AdminGetPartialSignatures(round, tx))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
+    }
+
+    /// Admin interface handler: injects partial signatures for the given round at the
+    /// current epoch, skipping validity checks.
+    pub fn admin_inject_partial_signatures(
+        &self,
+        authority_name: AuthorityName,
+        round: RandomnessRound,
+        sigs: Vec<RandomnessPartialSignature>,
+        result_channel: oneshot::Sender<Result<()>>,
+    ) {
+        self.sender
+            .try_send(RandomnessMessage::AdminInjectPartialSignatures(
+                authority_name,
+                round,
+                sigs,
+                result_channel,
+            ))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
+    }
+
+    /// Admin interface handler: injects full signature for the given round at the
+    /// current epoch, skipping validity checks.
+    pub fn admin_inject_full_signature(
+        &self,
+        round: RandomnessRound,
+        sig: RandomnessSignature,
+        result_channel: oneshot::Sender<Result<()>>,
+    ) {
+        self.sender
+            .try_send(RandomnessMessage::AdminInjectFullSignature(
+                round,
+                sig,
+                result_channel,
+            ))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
+    }
+
     // For testing.
     pub fn new_stub() -> Self {
         let (sender, mut receiver) = mpsc::channel(1);
@@ -120,7 +173,7 @@ impl Handle {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum RandomnessMessage {
     UpdateEpoch(
         EpochId,
@@ -137,6 +190,18 @@ enum RandomnessMessage {
         RandomnessRound,
         Vec<Vec<u8>>,
         Option<RandomnessSignature>,
+    ),
+    AdminGetPartialSignatures(RandomnessRound, oneshot::Sender<Vec<u8>>),
+    AdminInjectPartialSignatures(
+        AuthorityName,
+        RandomnessRound,
+        Vec<RandomnessPartialSignature>,
+        oneshot::Sender<Result<()>>,
+    ),
+    AdminInjectFullSignature(
+        RandomnessRound,
+        RandomnessSignature,
+        oneshot::Sender<Result<()>>,
     ),
 }
 
@@ -219,6 +284,24 @@ impl RandomnessEventLoop {
                 } else {
                     self.receive_partial_signatures(peer_id, epoch, round, partial_sigs)
                 }
+            }
+            RandomnessMessage::AdminGetPartialSignatures(round, tx) => {
+                self.admin_get_partial_signatures(round, tx)
+            }
+            RandomnessMessage::AdminInjectPartialSignatures(
+                authority_name,
+                round,
+                sigs,
+                result_channel,
+            ) => {
+                let _ = result_channel.send(self.admin_inject_partial_signatures(
+                    authority_name,
+                    round,
+                    sigs,
+                ));
+            }
+            RandomnessMessage::AdminInjectFullSignature(round, sig, result_channel) => {
+                let _ = result_channel.send(self.admin_inject_full_signature(round, sig));
             }
         }
     }
@@ -874,5 +957,57 @@ impl RandomnessEventLoop {
             );
         }
         self.metrics.set_num_rounds_pending(num_rounds_pending);
+    }
+
+    fn admin_get_partial_signatures(&self, round: RandomnessRound, tx: oneshot::Sender<Vec<u8>>) {
+        let shares = if let Some(shares) = self.dkg_output.as_ref().and_then(|d| d.shares.as_ref())
+        {
+            shares
+        } else {
+            let _ = tx.send(Vec::new()); // no error handling needed if receiver is already dropped
+            return;
+        };
+
+        let partial_sigs =
+            ThresholdBls12381MinSig::partial_sign_batch(shares.iter(), &round.signature_message());
+        // no error handling needed if receiver is already dropped
+        let _ = tx.send(bcs::to_bytes(&partial_sigs).expect("serialization should not fail"));
+    }
+
+    fn admin_inject_partial_signatures(
+        &mut self,
+        authority_name: AuthorityName,
+        round: RandomnessRound,
+        sigs: Vec<RandomnessPartialSignature>,
+    ) -> Result<()> {
+        let peer_id = self
+            .authority_info
+            .get(&authority_name)
+            .map(|(peer_id, _)| *peer_id)
+            .ok_or(anyhow::anyhow!("unknown AuthorityName {authority_name:?}"))?;
+        self.received_partial_sigs.insert((round, peer_id), sigs);
+        self.maybe_aggregate_partial_signatures(self.epoch, round);
+        Ok(())
+    }
+
+    fn admin_inject_full_signature(
+        &mut self,
+        round: RandomnessRound,
+        sig: RandomnessSignature,
+    ) -> Result<()> {
+        let vss_pk = {
+            let Some(dkg_output) = &self.dkg_output else {
+                return Err(anyhow::anyhow!(
+                    "called admin_inject_full_signature before DKG completed"
+                ));
+            };
+            &dkg_output.vss_pk
+        };
+
+        ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+            .map_err(|e| anyhow::anyhow!("invalid full signature: {e:?}"))?;
+
+        self.process_valid_full_signature(self.epoch, round, sig);
+        Ok(())
     }
 }
