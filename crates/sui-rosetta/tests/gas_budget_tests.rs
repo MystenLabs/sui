@@ -67,9 +67,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
             "operation_identifier":{"index":0},
             "type":"PaySui",
             "account": { "address" : recipient.to_string() },
-            "amount" : {
-                "value": "1000000000",
-            },
+            "amount" : { "value": "1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
         },{
             "operation_identifier":{"index":1},
             "type":"PaySui",
