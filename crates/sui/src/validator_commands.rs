@@ -1167,8 +1167,8 @@ async fn update_metadata(
         }
         MetadataUpdate::NetworkAddress { network_address } => {
             // Check the network address to be in TCP.
-            if !network_address.is_tcp_addr().map_err(|e| anyhow!("{e}"))? {
-                bail!("Network address must be a TCP address.");
+            if !network_address.is_loosely_valid_tcp_addr() {
+                bail!("Network address must be a TCP address");
             }
             let _status = check_status(context, HashSet::from([Pending, Active])).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&network_address).unwrap())];
