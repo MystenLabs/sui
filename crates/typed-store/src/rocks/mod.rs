@@ -2429,8 +2429,7 @@ pub fn default_db_options() -> DBOptions {
     // the next write) may not work well. So sticking to per-db write buffer size limit for now.
     //
     // The environment variables are only meant to be emergency overrides. They may go away in future.
-    // If you need to modify an option, either update the default value, or override the option in
-    // Sui / Narwhal.
+    // It is preferable to update the default value, or override the option in code.
     opt.set_db_write_buffer_size(
         read_size_from_env(ENV_VAR_DB_WRITE_BUFFER_SIZE).unwrap_or(DEFAULT_DB_WRITE_BUFFER_SIZE)
             * 1024
