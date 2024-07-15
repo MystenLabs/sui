@@ -97,8 +97,8 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind,
+    check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, ConsensusTransaction,
+    ConsensusTransactionKey, ConsensusTransactionKind,
 };
 use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
 use sui_types::storage::GetSharedLocks;
@@ -488,6 +488,7 @@ pub struct AuthorityEpochTables {
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
+    authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
@@ -2127,9 +2128,10 @@ impl AuthorityPerEpochStore {
     pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
         let authority = &capabilities.authority;
+        let tables = self.tables()?;
 
         // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = self.tables()?.authority_capabilities.get(authority)? {
+        if let Some(cap) = tables.authority_capabilities.get(authority)? {
             if cap.generation >= capabilities.generation {
                 debug!(
                     "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
@@ -2138,16 +2140,50 @@ impl AuthorityPerEpochStore {
                 return Ok(());
             }
         }
-        self.tables()?
+        tables
             .authority_capabilities
             .insert(authority, capabilities)?;
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+    /// Record most recently advertised capabilities of all authorities
+    pub fn record_capabilities_v2(&self, capabilities: &AuthorityCapabilitiesV2) -> SuiResult {
+        info!("received capabilities v2 {:?}", capabilities);
+        let authority = &capabilities.authority;
+        let tables = self.tables()?;
+
+        // Read-compare-write pattern assumes we are only called from the consensus handler task.
+        if let Some(cap) = tables.authority_capabilities_v2.get(authority)? {
+            if cap.generation >= capabilities.generation {
+                debug!(
+                    "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
+                    capabilities, cap
+                );
+                return Ok(());
+            }
+        }
+        tables
+            .authority_capabilities_v2
+            .insert(authority, capabilities)?;
+        Ok(())
+    }
+
+    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+        assert!(!self.protocol_config.authority_capabilities_v2());
         let result: Result<Vec<AuthorityCapabilitiesV1>, TypedStoreError> = self
             .tables()?
             .authority_capabilities
+            .values()
+            .map_into()
+            .collect();
+        Ok(result?)
+    }
+
+    pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {
+        assert!(self.protocol_config.authority_capabilities_v2());
+        let result: Result<Vec<AuthorityCapabilitiesV2>, TypedStoreError> = self
+            .tables()?
+            .authority_capabilities_v2
             .values()
             .map_into()
             .collect();
@@ -2451,13 +2487,25 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+                kind:
+                    ConsensusTransactionKind::CapabilityNotification(AuthorityCapabilitiesV1 {
+                        authority,
+                        ..
+                    }),
+                ..
+            })
+            | SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::CapabilityNotificationV2(AuthorityCapabilitiesV2 {
+                        authority,
+                        ..
+                    }),
                 ..
             }) => {
-                if transaction.sender_authority() != capabilities.authority {
+                if transaction.sender_authority() != *authority {
                     warn!(
                         "CapabilityNotification authority {} does not match its author from consensus {}",
-                        capabilities.authority, transaction.certificate_author_index
+                        authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -3509,6 +3557,28 @@ impl AuthorityPerEpochStore {
                 } else {
                     debug!(
                         "Ignoring CapabilityNotification from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
+                Ok(ConsensusCertificateResult::ConsensusMessage)
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
+                ..
+            }) => {
+                let authority = capabilities.authority;
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!(
+                        "Received CapabilityNotificationV2 from {:?}",
+                        authority.concise()
+                    );
+                    self.record_capabilities_v2(capabilities)?;
+                } else {
+                    debug!(
+                        "Ignoring CapabilityNotificationV2 from {:?} because of end of epoch",
                         authority.concise()
                     );
                 }

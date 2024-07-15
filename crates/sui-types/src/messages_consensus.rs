@@ -7,7 +7,9 @@ use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
-use crate::supported_protocol_versions::SupportedProtocolVersions;
+use crate::supported_protocol_versions::{
+    Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
+};
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
@@ -190,12 +192,75 @@ impl AuthorityCapabilitiesV1 {
     }
 }
 
+/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// negotiate the creation of the ChangeEpoch transaction.
+#[derive(Serialize, Deserialize, Clone, Hash)]
+pub struct AuthorityCapabilitiesV2 {
+    /// Originating authority - must match narwhal transaction source.
+    pub authority: AuthorityName,
+    /// Generation number set by sending authority. Used to determine which of multiple
+    /// AuthorityCapabilities messages from the same authority is the most recent.
+    ///
+    /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
+    /// should not be interpreted as a timestamp.)
+    pub generation: u64,
+
+    /// ProtocolVersions that the authority supports.
+    pub supported_protocol_versions: SupportedProtocolVersionsWithHashes,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
+}
+
+impl Debug for AuthorityCapabilitiesV2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorityCapabilities")
+            .field("authority", &self.authority.concise())
+            .field("generation", &self.generation)
+            .field(
+                "supported_protocol_versions",
+                &self.supported_protocol_versions,
+            )
+            .field("available_system_packages", &self.available_system_packages)
+            .finish()
+    }
+}
+
+impl AuthorityCapabilitiesV2 {
+    pub fn new(
+        authority: AuthorityName,
+        chain: Chain,
+        supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
+    ) -> Self {
+        let generation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Sui did not exist prior to 1970")
+            .as_millis()
+            .try_into()
+            .expect("This build of sui is not supported in the year 500,000,000");
+        Self {
+            authority,
+            generation,
+            supported_protocol_versions:
+                SupportedProtocolVersionsWithHashes::from_supported_versions(
+                    supported_protocol_versions,
+                    chain,
+                ),
+            available_system_packages,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
+
     CapabilityNotification(AuthorityCapabilitiesV1),
+
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
@@ -206,6 +271,8 @@ pub enum ConsensusTransactionKind {
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+
+    CapabilityNotificationV2(AuthorityCapabilitiesV2),
 }
 
 impl ConsensusTransactionKind {
@@ -375,6 +442,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_capability_notification_v2(capabilities: AuthorityCapabilitiesV2) -> Self {
+        let mut hasher = DefaultHasher::new();
+        capabilities.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
+        }
+    }
+
     pub fn new_mysticeti_certificate(
         round: u64,
         offset: u64,
@@ -464,6 +541,9 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::EndOfPublish(*authority)
             }
             ConsensusTransactionKind::CapabilityNotification(cap) => {
+                ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
+            }
+            ConsensusTransactionKind::CapabilityNotificationV2(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
             ConsensusTransactionKind::NewJWKFetched(authority, id, key) => {

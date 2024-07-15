@@ -497,6 +497,10 @@ struct FeatureFlags {
     // Enable passkey auth (SIP-9)
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
+
+    // Use AuthorityCapabilitiesV2
+    #[serde(skip_serializing_if = "is_false")]
+    authority_capabilities_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1470,6 +1474,10 @@ impl ProtocolConfig {
 
     pub fn passkey_auth(&self) -> bool {
         self.feature_flags.passkey_auth
+    }
+
+    pub fn authority_capabilities_v2(&self) -> bool {
+        self.feature_flags.authority_capabilities_v2
     }
 }
 
