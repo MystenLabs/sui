@@ -472,15 +472,8 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         &self,
         conn: &mut Conn<'_>,
         checkpoint_viewed_at: u64,
-        tx_bounds: TxBounds,
         query: RawQuery,
-    ) -> QueryResult<(
-        bool,
-        bool,
-        Option<u64>,
-        Option<u64>,
-        impl Iterator<Item = T>,
-    )>
+    ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
         T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
     {
@@ -504,12 +497,12 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results.first().map(|f| f.cursor(checkpoint_viewed_at)),
             results.last().map(|l| l.cursor(checkpoint_viewed_at)),
             results,
-            tx_bounds,
         ))
     }
 
     /// Given the results of a database query, determine whether the result set has a previous and
-    /// next page and is consistent with the provided cursors.
+    /// next page and is consistent with the provided cursors. yadda yadda because of `scan_limit`
+    /// some requirements are relaxed. Caller will determine what cursors and flags to overwrite etc. etc
     ///
     /// Returns two booleans indicating whether there is a previous or next page in the range,
     /// followed by an iterator of values in the page, fetched from the database. The values
@@ -521,33 +514,17 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         f_cursor: Option<C>, // from the current page
         l_cursor: Option<C>,
         results: Vec<T>,
-        tx_bounds: TxBounds,
-    ) -> (
-        bool,
-        bool,
-        Option<u64>,
-        Option<u64>,
-        impl Iterator<Item = T>,
-    )
+    ) -> (bool, bool, impl Iterator<Item = T>)
     where
         T: Send + 'static,
     {
-        let (has_prev_page, before) = tx_bounds.scan_prev_page_and_lo();
-        let (has_next_page, after) = tx_bounds.scan_next_page_and_hi();
-
         // Detect whether the results imply the existence of a previous or next page.
         let (prev, next, prefix, suffix) =
             match (self.after(), f_cursor, l_cursor, self.before(), self.end) {
                 // Results came back empty; as long as we're still scanning within the range, there
                 // will be a previous and/ or next page.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
-                    return (
-                        has_prev_page,
-                        has_next_page,
-                        before,
-                        after,
-                        vec![].into_iter(),
-                    );
+                    return (false, false, vec![].into_iter());
                 }
 
                 // From here onwards, we know that the results are non-empty and if a cursor was
@@ -565,7 +542,11 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                     // limit.
                     let mut suffix = before.is_some_and(|b| *b == l) as usize;
                     suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                    // let has_next_page = suffix > 0; // todo: with scan limit we should just defer to whether within range
+                    let has_next_page = suffix > 0; // at this point in time, Page.paginate_results would only know whether there is a next page from this information. The caller would provide more info on their side
+                    println!(
+                        "in paginate_results, do we have next page: {}",
+                        has_next_page
+                    );
 
                     (has_previous_page, has_next_page, prefix, suffix)
                 }
@@ -579,9 +560,9 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
 
                     let mut prefix = after.is_some_and(|a| *a == f) as usize;
                     prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                    // let has_previous_page = prefix > 0; // todo: with scan limit we should just defer to whether within range
+                    let has_previous_page = prefix > 0;
 
-                    (has_prev_page, has_next_page, prefix, suffix)
+                    (has_previous_page, has_next_page, prefix, suffix)
                 }
             };
 
@@ -591,13 +572,12 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         if results.len() == prefix + suffix {
             println!("paginate_results:f");
 
-            return (
-                has_prev_page,
-                has_next_page,
-                before,
-                after,
-                vec![].into_iter(),
-            );
+            // hmm this seems quite annoying ... if after trimming we're going to return no elements
+            // ... like basically, only contains one element, the `after` cursor, which we would
+            // then remove then for this page, the new `after` cursor should be `after + scanLimit`,
+            // and the `before` becomes the current `after`. however, since we've pruned it all
+            // away, would we still have the correct info?
+            return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
@@ -611,7 +591,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results.nth_back(suffix - 1);
         }
 
-        (prev, next, None, None, results)
+        (prev, next, results)
     }
 
     pub(crate) fn apply<T>(&self, mut query: RawQuery) -> RawQuery

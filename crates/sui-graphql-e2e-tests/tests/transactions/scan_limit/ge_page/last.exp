@@ -267,7 +267,7 @@ Response: {
     "transactionBlocks": {
       "pageInfo": {
         "hasNextPage": true,
-        "hasPreviousPage": false,
+        "hasPreviousPage": true,
         "endCursor": "eyJjIjo3LCJ0IjozfQ",
         "startCursor": "eyJjIjo3LCJ0IjozfQ"
       },

@@ -189,18 +189,16 @@ impl TxBounds {
         self.scan_hi() < self.hi
     }
 
-    pub(crate) fn scan_prev_page_and_lo(&self) -> (bool, Option<u64>) {
+    pub(crate) fn scan_prev_page_and_lo(&self) -> (bool, u64) {
         let has_prev = self.scan_has_prev_page();
-        let lo = if has_prev { Some(self.scan_lo()) } else { None };
 
-        (has_prev, lo)
+        (has_prev, self.scan_lo())
     }
 
-    pub(crate) fn scan_next_page_and_hi(&self) -> (bool, Option<u64>) {
+    pub(crate) fn scan_next_page_and_hi(&self) -> (bool, u64) {
         let has_next = self.scan_has_next_page();
-        let hi = if has_next { Some(self.scan_hi()) } else { None };
 
-        (has_next, hi)
+        (has_next, self.scan_hi())
     }
 }
 

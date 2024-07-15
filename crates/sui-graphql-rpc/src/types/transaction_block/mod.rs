@@ -312,11 +312,11 @@ impl TransactionBlock {
 
         use transactions::dsl as tx;
 
-        let (prev, next, before, after, transactions, tx_bounds): (
+        let is_from_front = page.is_from_front();
+
+        let (prev, next, transactions, tx_bounds): (
             bool,
             bool,
-            Option<u64>,
-            Option<u64>,
             Vec<StoredTransaction>,
             Option<TxBounds>,
         ) = db
@@ -331,14 +331,7 @@ impl TransactionBlock {
                     &page,
                 )?
                 else {
-                    return Ok::<_, diesel::result::Error>((
-                        false,
-                        false,
-                        None,
-                        None,
-                        Vec::new(),
-                        None,
-                    ));
+                    return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
                 };
 
                 // If no filters are selected, or if the filter is composed of only checkpoint
@@ -346,7 +339,7 @@ impl TransactionBlock {
                 // fetch the set of `tx_sequence_number` from a join over relevant lookup tables,
                 // and then issue a query against the `transactions` table to fetch the remaining
                 // contents.
-                let (prev, next, before, after, transactions) = if !filter.has_filters() {
+                let (prev, next, transactions) = if !filter.has_filters() {
                     let (prev, next, iter) = page.paginate_query::<StoredTransaction, _, _, _>(
                         conn,
                         checkpoint_viewed_at,
@@ -358,14 +351,13 @@ impl TransactionBlock {
                         },
                     )?;
 
-                    (prev, next, None, None, iter.collect())
+                    (prev, next, iter.collect())
                 } else {
                     let subquery = subqueries(&filter, tx_bounds).unwrap();
-                    let (prev, next, before, after, results) = page
+                    let (prev, next, results) = page
                         .paginate_raw_query_with_scan_limit::<TxLookup>(
                             conn,
                             checkpoint_viewed_at,
-                            tx_bounds,
                             subquery,
                         )?;
 
@@ -379,25 +371,18 @@ impl TransactionBlock {
                             .filter(tx::tx_sequence_number.eq_any(tx_sequence_numbers.clone()))
                     })?;
 
-                    (prev, next, before, after, transactions)
+                    (prev, next, transactions)
                 };
 
-                Ok::<_, diesel::result::Error>((
-                    prev,
-                    next,
-                    before,
-                    after,
-                    transactions,
-                    Some(tx_bounds),
-                ))
+                Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
             })
             .await?;
 
         let mut conn = ScanConnection::new(prev, next);
 
-        if tx_bounds.is_none() {
+        let Some(tx_bounds) = tx_bounds else {
             return Ok(conn);
-        }
+        };
 
         for stored in transactions {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
@@ -409,28 +394,54 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
-        // If there is a derived before and/ or after, it means the page is empty. This occurs when
-        // `scan_limit` is specified. Even though there are no matches on the page of candidates, we
-        // can continue to paginate forwards or backwards with the derived cursor.
-        if let Some(before) = before {
-            conn.has_previous_page = true;
-            conn.start_cursor = Some(
-                Cursor::new(tx_cursor::TransactionBlockCursor {
-                    checkpoint_viewed_at,
-                    tx_sequence_number: before,
-                })
-                .encode_cursor(),
-            );
-        }
-        if let Some(after) = after {
-            conn.has_next_page = true;
-            conn.end_cursor = Some(
-                Cursor::new(tx_cursor::TransactionBlockCursor {
-                    checkpoint_viewed_at,
-                    tx_sequence_number: after,
-                })
-                .encode_cursor(),
-            );
+        // `paginate_query` handles (describe scenario) for us but
+        // when empty
+        // or when paginating through, say `is_from_front`, cannot absolutely determine whethere there is or isn't a next page
+        // because `paginate_query` only aware of whether we returned a result set for this particular query
+        // so use tx bounds
+        let (scan_prev_page, scan_lo) = tx_bounds.scan_prev_page_and_lo();
+        let (scan_next_page, scan_hi) = tx_bounds.scan_next_page_and_hi();
+
+        // if the set of transactions is empty, then leverage `scan` results - i think this can be rolled into the latter two conditions
+
+        // if scan_limit && is_from_front and has_next_page is false, also defer to tx_bounds
+        if scan_limit.is_some() {
+            // Ah so the issue is that is_from_front + paginate_results:d means
+            // since we only set has_next_page to true if suffix > 0
+            // then for some query that leverages an after cursor, and we yield only one result
+            // has_next_page will always be false unless we specify an ending cursor
+            // now if scan limit is in play, we know that there will always be a next page as long as ... it is within the range
+            // so basically if you query after = 13, and you get a single result 13, Page wil think that ther eisn't a next page
+            // however we know that unless scanLimited exceeds range, there is a next page
+            // now the question is ... what is the correct ending cursor to use in this scenario?
+            // i believe it should be the last cursor of the list of elements, because it's possible that there are more between the current page and the next within the scan limit
+            // in other words, there might be more between after + some and after + scanlimit
+            // just like how there are more between after+scanLimit and the absolute range end
+            if !conn.has_next_page && scan_next_page {
+                conn.has_next_page = true;
+                if conn.edges.is_empty() {
+                    conn.end_cursor = Some(
+                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                            checkpoint_viewed_at,
+                            tx_sequence_number: scan_hi,
+                        })
+                        .encode_cursor(),
+                    );
+                }
+            }
+
+            if !conn.has_previous_page && scan_prev_page {
+                conn.has_previous_page = true;
+                if conn.edges.is_empty() {
+                    conn.start_cursor = Some(
+                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                            checkpoint_viewed_at,
+                            tx_sequence_number: scan_lo,
+                        })
+                        .encode_cursor(),
+                    );
+                }
+            }
         }
 
         Ok(conn)
