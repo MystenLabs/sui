@@ -4,6 +4,7 @@ import { normalizeSuiAddress } from '@mysten/sui/src/utils/sui-types.js';
 
 import { BalanceManagerContract } from '../transactions/balanceManager.js';
 import type { Environment } from '../types/index.js';
+import type { CoinMap, PoolMap } from './constants.js';
 import {
 	mainnetCoins,
 	mainnetPackageIds,
@@ -20,8 +21,8 @@ export const GAS_BUDGET = 0.5 * 500000000; // Adjust based on benchmarking
 export const DEEP_SCALAR = 1000000;
 
 export class DeepBookConfig {
-	#coins: { [key: string]: any };
-	#pools: { [key: string]: any };
+	#coins: CoinMap;
+	#pools: PoolMap;
 	address: string;
 
 	DEEPBOOK_PACKAGE_ID: string;
@@ -41,8 +42,8 @@ export class DeepBookConfig {
 		env: Environment;
 		address: string;
 		adminCap?: string;
-		coins?: { [key: string]: any };
-		pools?: { [key: string]: any };
+		coins?: CoinMap;
+		pools?: PoolMap;
 	}) {
 		this.address = normalizeSuiAddress(address);
 		this.adminCap = adminCap;

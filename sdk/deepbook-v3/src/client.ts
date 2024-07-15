@@ -12,6 +12,7 @@ import { FlashLoanContract } from './transactions/flashLoans.js';
 import { GovernanceContract } from './transactions/governance.js';
 import type { BalanceManager, Environment } from './types/index.js';
 import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
+import type { CoinMap, PoolMap } from './utils/constants.js';
 
 /// DeepBook Client. If a private key is provided, then all transactions
 /// will be signed with that key. Otherwise, the default key will be used.
@@ -39,8 +40,8 @@ export class DeepBookClient {
 		client: SuiClient;
 		address: string;
 		env: Environment;
-		coins?: { [key: string]: any };
-		pools?: { [key: string]: any };
+		coins?: CoinMap;
+		pools?: PoolMap;
 	}) {
 		this.#client = client;
 		this.#address = normalizeSuiAddress(address);
