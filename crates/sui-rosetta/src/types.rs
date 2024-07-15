@@ -95,6 +95,10 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
+fn default_currency_coin_type() -> String {
+    SUI.clone().coin_type
+}
+
 fn default_currency() -> Currency {
     SUI.clone()
 }
@@ -114,6 +118,7 @@ where
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct Currency {
+    #[serde(default = "default_currency_coin_type")]
     pub coin_type: String,
     pub symbol: String,
     pub decimals: u64,
@@ -171,10 +176,10 @@ pub struct SubBalance {
 }
 
 impl Amount {
-    pub fn new(value: i128) -> Self {
+    pub fn new(value: i128, currency: Option<Currency>) -> Self {
         Self {
             value,
-            currency: SUI.clone(),
+            currency: currency.unwrap_or(default_currency()),
             metadata: None,
         }
     }
@@ -183,7 +188,7 @@ impl Amount {
 
         Self {
             value,
-            currency: SUI.clone(),
+            currency: default_currency(),
             metadata: Some(AmountMetadata { sub_balances }),
         }
     }

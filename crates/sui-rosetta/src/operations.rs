@@ -380,7 +380,7 @@ impl Operations {
                 ),
                 SuiCommand::MoveCall(m) if Self::is_stake_call(m) => {
                     stake_call(inputs, &known_results, m)?.map(|(amount, validator)| {
-                        let amount = amount.map(|amount| Amount::new(-(amount as i128)));
+                        let amount = amount.map(|amount| Amount::new(-(amount as i128), None));
                         operations.push(Operation {
                             operation_identifier: Default::default(),
                             type_: OperationType::Stake,
@@ -672,7 +672,7 @@ impl Operation {
             type_: OperationType::Genesis,
             status: Some(OperationStatus::Success),
             account: Some(sender.into()),
-            amount: Some(Amount::new(coin.value().into())),
+            amount: Some(Amount::new(coin.value().into(), None)),
             coin_change: Some(CoinChange {
                 coin_identifier: CoinIdentifier {
                     identifier: CoinID {
@@ -692,7 +692,7 @@ impl Operation {
             type_: OperationType::PaySui,
             status,
             account: Some(address.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -704,7 +704,7 @@ impl Operation {
             type_: OperationType::SuiBalanceChange,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -715,7 +715,7 @@ impl Operation {
             type_: OperationType::Gas,
             status: Some(OperationStatus::Success),
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -726,7 +726,7 @@ impl Operation {
             type_: OperationType::StakeReward,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -737,7 +737,7 @@ impl Operation {
             type_: OperationType::StakePrinciple,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
