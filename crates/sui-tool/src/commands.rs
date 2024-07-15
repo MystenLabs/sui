@@ -883,7 +883,7 @@ impl ToolCommand {
                         _ => panic!("If setting `CUSTOM_ARCHIVE_BUCKET=true` must set FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE to one of 'gcs', 'azure', or 's3' "),
                     }
                 } else {
-                    // if not explictly overriden, just default to the permissionless archive store
+                    // if not explicitly overridden, just default to the permissionless archive store
                     ObjectStoreConfig {
                         object_store: Some(ObjectStoreType::S3),
                         bucket: archive_bucket.filter(|s| !s.is_empty()),
@@ -1134,9 +1134,8 @@ impl ToolCommand {
                 )
                 .unwrap();
                 let transaction = Transaction::new(sender_signed_data);
-                let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
-                    .build()
-                    .unwrap();
+                let (agg, _) =
+                    AuthorityAggregatorBuilder::from_genesis(&genesis).build_network_clients();
                 let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
             }

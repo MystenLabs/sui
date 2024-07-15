@@ -176,12 +176,11 @@ where
 mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::authority::AuthorityState;
-    use crate::authority_aggregator::AuthorityAggregator;
+    use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use async_trait::async_trait;
-    use prometheus::default_registry;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
     use std::iter;
     use std::net::SocketAddr;
     use std::num::NonZeroUsize;
@@ -504,13 +503,8 @@ mod tests {
                 )
             })
             .collect();
-        let auth_agg = AuthorityAggregator::new(
-            network_config.committee_with_network().committee().clone(),
-            authority_states[0].clone_committee_store(),
-            clients.clone(),
-            default_registry(),
-            Arc::new(HashMap::new()),
-        );
+        let auth_agg = AuthorityAggregatorBuilder::from_network_config(&network_config)
+            .build_custom_clients(clients.clone());
         (authority_states, Arc::new(auth_agg), clients)
     }
 
