@@ -13,15 +13,8 @@ use tracing::info;
 
 use crate::errors::Error;
 use crate::types::{
-    AccountBalanceRequest,
-    AccountBalanceResponse,
-    AccountCoinsRequest,
-    AccountCoinsResponse,
-    Amount,
-    Coin,
-    Currency,
-    SubAccountType,
-    SubBalance,
+    AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
+    Amount, Coin, Currency, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
@@ -49,13 +42,19 @@ pub async fn balance(
         }
         let balances_second = get_balances(&ctx, &request, address, currencies).await?;
         if balances_first.eq(&balances_second) {
-            info!("same balance for account {} at checkpoint {}", address, checkpoint2);
+            info!(
+                "same balance for account {} at checkpoint {}",
+                address, checkpoint2
+            );
             return Ok(AccountBalanceResponse {
                 block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
                 balances: balances_first,
             });
         } else {
-            info!("different balance for account {} at checkpoint {}", address, checkpoint2);
+            info!(
+                "different balance for account {} at checkpoint {}",
+                address, checkpoint2
+            );
             retry_attempts -= 1;
         }
     }
@@ -63,8 +62,7 @@ pub async fn balance(
 }
 
 async fn get_checkpoint(ctx: &OnlineServerContext) -> CheckpointSequenceNumber {
-    ctx
-        .client
+    ctx.client
         .read_api()
         .get_latest_checkpoint_sequence_number()
         .await
@@ -75,7 +73,7 @@ async fn get_balances(
     ctx: &OnlineServerContext,
     request: &AccountBalanceRequest,
     address: SuiAddress,
-    currencies: &Vec<Currency>
+    currencies: &Vec<Currency>,
 ) -> Result<Vec<Amount>, Error> {
     if let Some(sub_account) = &request.account_identifier.sub_account {
         let account_type = sub_account.account_type.clone();
@@ -83,26 +81,33 @@ async fn get_balances(
     } else if !currencies.is_empty() {
         let balance_futures = currencies.iter().map(|currency| {
             let coin_type = currency.coin_type.clone();
-            async move { (currency.clone(), get_account_balances(&ctx, address, &coin_type).await) }
+            async move {
+                (
+                    currency.clone(),
+                    get_account_balances(&ctx, address, &coin_type).await,
+                )
+            }
         });
         let balances: Vec<(Currency, Result<i128, Error>)> = join_all(balance_futures).await;
         let mut amounts = Vec::new();
         for (currency, balance_result) in balances {
             match balance_result {
                 Ok(value) => amounts.push(Amount::new(value, Some(currency))),
-                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.coin_type)))
+                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.coin_type))),
             }
         }
         Ok(amounts)
     } else {
-        Err(Error::InvalidInput("Coin type is required for this request".to_string()))
+        Err(Error::InvalidInput(
+            "Coin type is required for this request".to_string(),
+        ))
     }
 }
 
 async fn get_account_balances(
     ctx: &OnlineServerContext,
     address: SuiAddress,
-    coin_type: &String
+    coin_type: &String,
 ) -> Result<i128, Error> {
     Ok(ctx
         .client
