@@ -2733,13 +2733,12 @@ impl<'a> ParsingSymbolicator<'a> {
             MP::Name(_, chain) => {
                 self.chain_symbols(chain);
                 assert!(self.current_mod_ident_str.is_some());
-                let Some(mod_defs) = self
+                if let Some(mod_defs) = self
                     .mod_outer_defs
                     .get_mut(&self.current_mod_ident_str.clone().unwrap())
-                else {
-                    return;
+                {
+                    mod_defs.untyped_defs.insert(chain.loc);
                 };
-                mod_defs.untyped_defs.insert(chain.loc);
             }
             MP::Or(m1, m2) => {
                 self.match_pattern_symbols(m2);
@@ -2959,13 +2958,12 @@ impl<'a> ParsingSymbolicator<'a> {
             B::Var(_, var) => {
                 if !explicitly_typed {
                     assert!(self.current_mod_ident_str.is_some());
-                    let Some(mod_defs) = self
+                    if let Some(mod_defs) = self
                         .mod_outer_defs
                         .get_mut(&self.current_mod_ident_str.clone().unwrap())
-                    else {
-                        return;
+                    {
+                        mod_defs.untyped_defs.insert(var.loc());
                     };
-                    mod_defs.untyped_defs.insert(var.loc());
                 }
             }
         }
