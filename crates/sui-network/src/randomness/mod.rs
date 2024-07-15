@@ -1007,7 +1007,7 @@ impl RandomnessEventLoop {
         if let Err(e) =
             ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
         {
-            return Err(anyhow::anyhow!("invalid full signature"));
+            return Err(e);
         }
 
         self.process_valid_full_signature(self.epoch, round, sig);
