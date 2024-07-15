@@ -4,7 +4,7 @@
 import { execSync } from 'child_process';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
-import path, { resolve } from 'path';
+import path from 'path';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
@@ -16,7 +16,7 @@ import type { Keypair } from '../../../src/cryptography/index.js';
 import {
 	FaucetRateLimitError,
 	getFaucetHost,
-	requestSuiFromFaucetV0,
+	requestSuiFromFaucetV1,
 } from '../../../src/faucet/index.js';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
 import { Transaction, UpgradePolicy } from '../../../src/transactions/index.js';
@@ -25,7 +25,8 @@ import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
 
-const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
+const SUI_BIN =
+	import.meta.env.VITE_SUI_BIN ?? path.resolve(__dirname, '../../../../../target/debug/sui');
 
 export const DEFAULT_RECIPIENT =
 	'0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
@@ -97,7 +98,7 @@ export class TestToolbox {
 	}
 
 	async mintNft(name: string = 'Test NFT') {
-		const packageId = await this.getPackage(resolve(__dirname, '../data/demo-bear'));
+		const packageId = await this.getPackage(path.resolve(__dirname, '../data/demo-bear'));
 		return (tx: Transaction) => {
 			return tx.moveCall({
 				target: `${packageId}::demo_bear::new`,
@@ -132,7 +133,7 @@ export async function setupWithFundedAddress(
 	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
 ) {
 	const client = getClient(rpcURL);
-	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
+	await retry(() => requestSuiFromFaucetV1({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds
 		timeout: 1000 * 60,
