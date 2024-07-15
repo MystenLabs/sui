@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import type { TransactionObjectArgument } from '@mysten/sui/src/transactions';
+
+// SPDX-License-Identifier: Apache-2.0
 export interface BalanceManager {
 	address: string;
 	tradeCap: string | undefined;
 }
 
 export interface Coin {
-	key: CoinKey;
+	key: string;
 	address: string;
 	type: string;
 	scalar: number;
@@ -14,12 +18,9 @@ export interface Coin {
 
 export interface Pool {
 	address: string;
-	baseCoin: CoinKey;
-	quoteCoin: CoinKey;
+	baseCoin: Coin;
+	quoteCoin: Coin;
 }
-
-export type CoinKey = 'DEEP' | 'SUI' | 'DBUSDC' | 'DBWETH' | 'USDC' | 'WETH';
-export type PoolKey = 'DEEP_SUI' | 'SUI_DBUSDC' | 'DEEP_DBWETH' | 'DBWETH_DBUSDC';
 
 // Trading constants
 export enum OrderType {
@@ -37,21 +38,21 @@ export enum SelfMatchingOptions {
 }
 
 export interface PlaceLimitOrderParams {
-	poolKey: PoolKey;
-	managerKey: string;
+	poolKey: string;
+	balanceManager: BalanceManager;
 	clientOrderId: number;
 	price: number;
 	quantity: number;
 	isBid: boolean;
-	expiration?: number;
+	expiration?: number | bigint;
 	orderType?: OrderType;
 	selfMatchingOption?: SelfMatchingOptions;
 	payWithDeep?: boolean;
 }
 
 export interface PlaceMarketOrderParams {
-	poolKey: PoolKey;
-	managerKey: string;
+	poolKey: string;
+	balanceManager: BalanceManager;
 	clientOrderId: number;
 	quantity: number;
 	isBid: boolean;
@@ -60,28 +61,33 @@ export interface PlaceMarketOrderParams {
 }
 
 export interface ProposalParams {
-	poolKey: PoolKey;
-	managerKey: string;
+	poolKey: string;
+	balanceManager: BalanceManager;
 	takerFee: number;
 	makerFee: number;
 	stakeRequired: number;
 }
 
 export interface SwapParams {
-	poolKey: PoolKey;
-	coinKey: CoinKey;
+	poolKey: string;
 	amount: number;
 	deepAmount: number;
+	minOut: number;
+	deepCoin?: TransactionObjectArgument;
+	baseCoin?: TransactionObjectArgument;
+	quoteCoin?: TransactionObjectArgument;
 }
 
 export interface CreatePoolAdminParams {
-	baseCoinKey: CoinKey;
-	quoteCoinKey: CoinKey;
+	baseCoinKey: string;
+	quoteCoinKey: string;
 	tickSize: number;
 	lotSize: number;
 	minSize: number;
 	whitelisted: boolean;
 	stablePool: boolean;
+	deepCoin?: TransactionObjectArgument;
+	baseCoin?: TransactionObjectArgument;
 }
 
 export interface Config {
