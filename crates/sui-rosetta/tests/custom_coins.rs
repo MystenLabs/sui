@@ -3,6 +3,7 @@ mod rosetta_client;
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
 
+use sui_rosetta::SUI;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SuiEnv,
@@ -15,6 +16,7 @@ use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
 #[tokio::test]
 async fn test_custom_coin_balance() {
     // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
+    const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     const COIN1_BALANCE: u64 = 100_000_000;
     const COIN2_BALANCE: u64 = 200_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
@@ -40,6 +42,14 @@ async fn test_custom_coin_balance() {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
     };
+
+    let sui_currency = SUI.clone();
+    let test_coin_currency = Currency {
+        coin_type: coin_type.clone(),
+        symbol: "TEST_COIN".to_string(),
+        decimals: 6,
+    };
+
     // Verify initial balance and stake
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),
@@ -48,11 +58,7 @@ async fn test_custom_coin_balance() {
             sub_account: None,
         },
         block_identifier: Default::default(),
-        currencies: vec![Currency {
-            coin_type,
-            symbol: "TEST_COIN".to_string(),
-            decimals: 6,
-        }],
+        currencies: vec![sui_currency, test_coin_currency],
     };
 
     println!("request: {}", serde_json::to_string_pretty(&request).unwrap());
@@ -60,5 +66,9 @@ async fn test_custom_coin_balance() {
         .call(RosettaEndpoint::Balance, &request)
         .await;
     println!("response: {}", serde_json::to_string_pretty(&response).unwrap());
-    assert_eq!(response.balances[0].value, COIN1_BALANCE as i128);
+    assert_eq!(response.balances.len(), 2);
+    assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
+    assert_eq!(response.balances[0].currency.coin_type, "0x2::sui::SUI");
+    assert_eq!(response.balances[1].value, COIN1_BALANCE as i128);
+    assert_eq!(response.balances[1].currency.coin_type, coin_type);
 }

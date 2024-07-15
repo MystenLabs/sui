@@ -4,7 +4,7 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
-use futures::StreamExt;
+use futures::{future::join_all, StreamExt};
 
 use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
@@ -13,8 +13,15 @@ use tracing::info;
 
 use crate::errors::Error;
 use crate::types::{
-    AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, SubAccountType, SubBalance,
+    AccountBalanceRequest,
+    AccountBalanceResponse,
+    AccountCoinsRequest,
+    AccountCoinsResponse,
+    Amount,
+    Coin,
+    Currency,
+    SubAccountType,
+    SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
@@ -30,17 +37,17 @@ pub async fn balance(
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let address = request.account_identifier.address;
-    let coin_type = request.currencies.get(0).map(|currency| &currency.coin_type);
+    let currencies = &request.currencies;
     let mut retry_attempts = 5;
     while retry_attempts > 0 {
-        let balances_first = get_balances(&ctx, &request, address, coin_type).await?;
+        let balances_first = get_balances(&ctx, &request, address, currencies).await?;
         let checkpoint1 = get_checkpoint(&ctx).await;
         let mut checkpoint2 = get_checkpoint(&ctx).await;
         while checkpoint2 <= checkpoint1 {
             checkpoint2 = get_checkpoint(&ctx).await;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        let balances_second = get_balances(&ctx, &request, address, coin_type).await?;
+        let balances_second = get_balances(&ctx, &request, address, currencies).await?;
         if balances_first.eq(&balances_second) {
             info!("same balance for account {} at checkpoint {}", address, checkpoint2);
             return Ok(AccountBalanceResponse {
@@ -68,14 +75,25 @@ async fn get_balances(
     ctx: &OnlineServerContext,
     request: &AccountBalanceRequest,
     address: SuiAddress,
-    coin_type: Option<&String>
+    currencies: &Vec<Currency>
 ) -> Result<Vec<Amount>, Error> {
     if let Some(sub_account) = &request.account_identifier.sub_account {
         let account_type = sub_account.account_type.clone();
         get_sub_account_balances(account_type, &ctx.client, address).await
-    } else if let Some(coin_type) = coin_type {
-        let balance = get_account_balances(&ctx, address, coin_type).await?;
-        Ok(vec![Amount::new(balance)])
+    } else if !currencies.is_empty() {
+        let balance_futures = currencies.iter().map(|currency| {
+            let coin_type = currency.coin_type.clone();
+            async move { (currency.clone(), get_account_balances(&ctx, address, &coin_type).await) }
+        });
+        let balances: Vec<(Currency, Result<i128, Error>)> = join_all(balance_futures).await;
+        let mut amounts = Vec::new();
+        for (currency, balance_result) in balances {
+            match balance_result {
+                Ok(value) => amounts.push(Amount::new(value, Some(currency))),
+                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.coin_type)))
+            }
+        }
+        Ok(amounts)
     } else {
         Err(Error::InvalidInput("Coin type is required for this request".to_string()))
     }
@@ -150,7 +168,7 @@ async fn get_sub_account_balances(
 
     // Make sure there are always one amount returned
     Ok(if amounts.is_empty() {
-        vec![Amount::new(0)]
+        vec![Amount::new(0, None)]
     } else {
         vec![Amount::new_from_sub_balances(amounts)]
     })

@@ -370,7 +370,7 @@ pub async fn metadata(
             gas_price,
             budget,
         },
-        suggested_fee: vec![Amount::new(budget as i128)],
+        suggested_fee: vec![Amount::new(budget as i128, None)],
     })
 }
 
