@@ -4,6 +4,7 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::execution_cache::TransactionCacheRead;
+use arc_swap::ArcSwap;
 use mysten_metrics::TX_LATENCY_SEC_BUCKETS;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -87,15 +88,14 @@ impl ValidatorTxFinalizerMetrics {
 /// after the transaction has been signed, and then attempting to finalize
 /// the transaction if it has not yet been done by a fullnode.
 pub struct ValidatorTxFinalizer<C: Clone> {
-    agg: Arc<AuthorityAggregator<C>>,
+    agg: Arc<ArcSwap<AuthorityAggregator<C>>>,
     tx_finalization_delay: Duration,
     finalization_timeout: Duration,
     metrics: Arc<ValidatorTxFinalizerMetrics>,
 }
 
 impl<C: Clone> ValidatorTxFinalizer<C> {
-    #[allow(dead_code)]
-    pub(crate) fn new(agg: Arc<AuthorityAggregator<C>>, registry: &Registry) -> Self {
+    pub fn new(agg: Arc<ArcSwap<AuthorityAggregator<C>>>, registry: &Registry) -> Self {
         Self {
             agg,
             tx_finalization_delay: TX_FINALIZATION_DELAY,
@@ -106,7 +106,7 @@ impl<C: Clone> ValidatorTxFinalizer<C> {
 
     #[cfg(test)]
     pub(crate) fn new_for_testing(
-        agg: Arc<AuthorityAggregator<C>>,
+        agg: Arc<ArcSwap<AuthorityAggregator<C>>>,
         tx_finalization_delay: Duration,
         finalization_timeout: Duration,
     ) -> Self {
@@ -118,6 +118,11 @@ impl<C: Clone> ValidatorTxFinalizer<C> {
                 prometheus::default_registry(),
             )),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn auth_agg(&self) -> &Arc<ArcSwap<AuthorityAggregator<C>>> {
+        &self.agg
     }
 }
 
@@ -164,6 +169,7 @@ where
         tokio::time::timeout(
             self.finalization_timeout,
             self.agg
+                .load()
                 .execute_transaction_block(tx.into_unsigned().inner(), None),
         )
         .await??;
@@ -179,6 +185,7 @@ mod tests {
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
+    use arc_swap::ArcSwap;
     use async_trait::async_trait;
     use std::collections::BTreeMap;
     use std::iter;
@@ -341,7 +348,7 @@ mod tests {
             finalizer1.track_signed_tx(cache_read, signed_tx).await;
         });
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, true);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, true);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             1
@@ -378,7 +385,7 @@ mod tests {
         });
         states[0].reconfigure_for_testing().await;
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, false);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, false);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             0
@@ -388,6 +395,28 @@ mod tests {
                 .num_successful_finalizations_for_testing
                 .load(Relaxed),
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validator_tx_finalizer_auth_agg_reconfig() {
+        let (sender, _) = get_account_key_pair();
+        let gas_object = Object::with_owner_for_testing(sender);
+        let (_states, auth_agg, _clients) = create_validators(gas_object).await;
+        let finalizer1 = ValidatorTxFinalizer::new_for_testing(
+            auth_agg.clone(),
+            std::time::Duration::from_secs(10),
+            std::time::Duration::from_secs(60),
+        );
+        let mut new_auth_agg = (**auth_agg.load()).clone();
+        let mut new_committee = (*new_auth_agg.committee).clone();
+        new_committee.epoch = 100;
+        new_auth_agg.committee = Arc::new(new_committee);
+        auth_agg.store(Arc::new(new_auth_agg));
+        assert_eq!(
+            finalizer1.auth_agg().load().committee.epoch,
+            100,
+            "AuthorityAggregator not updated"
         );
     }
 
@@ -415,11 +444,12 @@ mod tests {
                 .await;
         });
         auth_agg
+            .load()
             .execute_transaction_block(&signed_tx.into_inner().into_unsigned(), None)
             .await
             .unwrap();
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, true);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, true);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             0
@@ -459,7 +489,7 @@ mod tests {
                 .await;
         });
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, false);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, false);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             1
@@ -476,7 +506,7 @@ mod tests {
         gas_object: Object,
     ) -> (
         Vec<Arc<AuthorityState>>,
-        Arc<AuthorityAggregator<MockAuthorityClient>>,
+        Arc<ArcSwap<AuthorityAggregator<MockAuthorityClient>>>,
         BTreeMap<AuthorityName, MockAuthorityClient>,
     ) {
         let network_config = ConfigBuilder::new_with_temp_dir()
@@ -505,7 +535,11 @@ mod tests {
             .collect();
         let auth_agg = AuthorityAggregatorBuilder::from_network_config(&network_config)
             .build_custom_clients(clients.clone());
-        (authority_states, Arc::new(auth_agg), clients)
+        (
+            authority_states,
+            Arc::new(ArcSwap::new(Arc::new(auth_agg))),
+            clients,
+        )
     }
 
     async fn create_tx(
