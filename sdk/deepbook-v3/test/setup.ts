@@ -18,6 +18,7 @@ import { Ed25519Keypair } from '../../typescript/src/keypairs/ed25519';
 import { Transaction } from '../../typescript/src/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
+import path from "path";
 
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
@@ -112,32 +113,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	return { packageId, publishTxn };
 }
 
-export async function setupPool(toolbox: TestToolbox) {
+export const main = async () => {
+	const tokenSourcesPath = path.join(__dirname, "../../deepbookv3/packages/token");
+	await publishPackage(tokenSourcesPath, await setupSuiClient());
 }
 
-export async function executeTransaction(
-	toolbox: TestToolbox,
-	tx: Transaction,
-): Promise<SuiTransactionBlockResponse> {
-	const resp = await toolbox.client.signAndExecuteTransaction({
-		signer: toolbox.keypair,
-		transaction: tx,
-		options: {
-			showEffects: true,
-			showEvents: true,
-			showObjectChanges: true,
-		},
-	});
-	expect(resp.effects?.status.status).toEqual('success');
-	return resp;
-}
-
-export async function devInspectTransaction(
-	toolbox: TestToolbox,
-	tx: Transaction,
-): Promise<DevInspectResults> {
-	return await toolbox.client.devInspectTransactionBlock({
-		transactionBlock: tx,
-		sender: toolbox.address(),
-	});
-}
+main();
