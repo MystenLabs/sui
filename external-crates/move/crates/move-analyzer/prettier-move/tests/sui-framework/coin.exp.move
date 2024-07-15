@@ -302,8 +302,7 @@ module sui::coin {
     }
 
     /// The index into the deny list vector for the `sui::coin::Coin` type.
-    // TODO public(package) const
-    const DENY_LIST_COIN_INDEX: u64 = 0;
+    const DENY_LIST_COIN_INDEX: u64 = 0; // TODO public(package) const
 
     /// Adds the given address to the deny list, preventing it
     /// from interacting with the specified coin type as an input to a transaction.
