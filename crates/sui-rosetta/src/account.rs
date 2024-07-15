@@ -84,7 +84,7 @@ async fn get_balances(
             async move {
                 (
                     currency.clone(),
-                    get_account_balances(&ctx, address, &coin_type).await,
+                    get_account_balances(ctx, address, &coin_type).await,
                 )
             }
         });

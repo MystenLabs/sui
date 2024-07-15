@@ -148,7 +148,7 @@ pub async fn init_package(
         )
         .await?;
 
-    let gas_data = select_gas(&client, sender, None, None, vec![], None).await?;
+    let gas_data = select_gas(client, sender, None, None, vec![], None).await?;
     let tx_data = client
         .transaction_builder()
         .tx_data(
@@ -214,7 +214,7 @@ pub async fn mint(
     balances_to: Vec<(u64, SuiAddress)>,
 ) -> Result<SuiTransactionBlockResponse> {
     let treasury_cap_owner = init_ret.owner;
-    let gas_data = select_gas(&client, treasury_cap_owner, None, None, vec![], None).await?;
+    let gas_data = select_gas(client, treasury_cap_owner, None, None, vec![], None).await?;
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 
