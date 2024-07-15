@@ -55,10 +55,10 @@ pub enum EpochFlag {
     // This flag was "burned" because it was deployed with a broken version of the code. The
     // new flags below are required to enable state accumulator v2
     _StateAccumulatorV2EnabledDeprecated,
-
-    ExecutedInEpochTable,
     StateAccumulatorV2EnabledTestnet,
     StateAccumulatorV2EnabledMainnet,
+
+    ExecutedInEpochTable,
 }
 
 impl EpochFlag {
