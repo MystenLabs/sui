@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionArgument } from '@mysten/sui/src/transactions';
+import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 
 // SPDX-License-Identifier: Apache-2.0
 export interface BalanceManager {
@@ -72,9 +72,9 @@ export interface SwapParams {
 	amount: number;
 	deepAmount: number;
 	minOut: number;
-	deepCoin?: TransactionArgument;
-	baseCoin?: TransactionArgument;
-	quoteCoin?: TransactionArgument;
+	deepCoin?: TransactionObjectArgument;
+	baseCoin?: TransactionObjectArgument;
+	quoteCoin?: TransactionObjectArgument;
 }
 
 export interface CreatePoolAdminParams {
@@ -85,8 +85,8 @@ export interface CreatePoolAdminParams {
 	minSize: number;
 	whitelisted: boolean;
 	stablePool: boolean;
-	deepCoin?: TransactionArgument;
-	baseCoin?: TransactionArgument;
+	deepCoin?: TransactionObjectArgument;
+	baseCoin?: TransactionObjectArgument;
 }
 
 export interface Config {
