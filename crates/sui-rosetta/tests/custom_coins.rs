@@ -29,6 +29,7 @@ async fn test_custom_coin_balance() {
     let address1 = test_cluster.get_address_1();
     let address2 = test_cluster.get_address_2();
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
+    let coin_type = init_ret.coin_tag.to_canonical_string(true);
 
     let _mint_res = mint(&client, keystore, init_ret, balances_to)
         .await
@@ -48,6 +49,7 @@ async fn test_custom_coin_balance() {
         },
         block_identifier: Default::default(),
         currencies: vec![Currency {
+            coin_type,
             symbol: "TEST_COIN".to_string(),
             decimals: 6,
         }],

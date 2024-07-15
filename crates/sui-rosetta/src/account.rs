@@ -14,10 +14,11 @@ use tracing::info;
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, SubAccount, SubAccountType, SubBalance,
+    Amount, Coin, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
@@ -29,106 +30,68 @@ pub async fn balance(
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let address = request.account_identifier.address;
+    let coin_type = request.currencies.get(0).map(|currency| &currency.coin_type);
     let mut retry_attempts = 5;
-    if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
-        while retry_attempts > 0 {
-            let balances_first =
-                get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
-            let checkpoint1 = ctx
-                .client
-                .read_api()
-                .get_latest_checkpoint_sequence_number()
-                .await?;
-            // Get another checkpoint which is greater than current
-            let mut checkpoint2 = ctx
-                .client
-                .read_api()
-                .get_latest_checkpoint_sequence_number()
-                .await?;
-
-            while checkpoint2 <= checkpoint1 {
-                checkpoint2 = ctx
-                    .client
-                    .read_api()
-                    .get_latest_checkpoint_sequence_number()
-                    .await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-            let balances_second =
-                get_sub_account_balances(account_type.clone(), &ctx.client, address).await?;
-            if balances_first.eq(&balances_second) {
-                return Ok(AccountBalanceResponse {
-                    block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                    balances: balances_first,
-                });
-            } else {
-                // retry logic needs to be aaded
-                retry_attempts -= 1;
-            }
+    while retry_attempts > 0 {
+        let balances_first = get_balances(&ctx, &request, address, coin_type).await?;
+        let checkpoint1 = get_checkpoint(&ctx).await;
+        let mut checkpoint2 = get_checkpoint(&ctx).await;
+        while checkpoint2 <= checkpoint1 {
+            checkpoint2 = get_checkpoint(&ctx).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        Err(Error::RetryExhausted(String::from("retry")))
-    } else {
-        // Get current live balance
-        while retry_attempts > 0 {
-            let balances_first = ctx
-                .client
-                .coin_read_api()
-                .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
-                .await?
-                .total_balance as i128;
-
-            // Get current latest checkpoint
-            let checkpoint1 = ctx
-                .client
-                .read_api()
-                .get_latest_checkpoint_sequence_number()
-                .await?;
-
-            // Get another checkpoint which is greater than current
-            let mut checkpoint2 = ctx
-                .client
-                .read_api()
-                .get_latest_checkpoint_sequence_number()
-                .await?;
-
-            while checkpoint2 <= checkpoint1 {
-                checkpoint2 = ctx
-                    .client
-                    .read_api()
-                    .get_latest_checkpoint_sequence_number()
-                    .await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-
-            // Get live balance again
-            let balances_second = ctx
-                .client
-                .coin_read_api()
-                .get_balance(address, Some(SUI_COIN_TYPE.to_string()))
-                .await?
-                .total_balance as i128;
-
-            // if those two live balances are equal then that is the current balance for checkpoint2
-            if balances_first.eq(&balances_second) {
-                info!(
-                    "same balance for account {} at checkpoint {}",
-                    address, checkpoint2
-                );
-                return Ok(AccountBalanceResponse {
-                    block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
-                    balances: vec![Amount::new(balances_first)],
-                });
-            } else {
-                // balances are different so we need to try again.
-                info!(
-                    "different balance for account {} at checkpoint {}",
-                    address, checkpoint2
-                );
-                retry_attempts -= 1;
-            }
+        let balances_second = get_balances(&ctx, &request, address, coin_type).await?;
+        if balances_first.eq(&balances_second) {
+            info!("same balance for account {} at checkpoint {}", address, checkpoint2);
+            return Ok(AccountBalanceResponse {
+                block_identifier: ctx.blocks().create_block_identifier(checkpoint2).await?,
+                balances: balances_first,
+            });
+        } else {
+            info!("different balance for account {} at checkpoint {}", address, checkpoint2);
+            retry_attempts -= 1;
         }
-        Err(Error::RetryExhausted(String::from("retry")))
     }
+    Err(Error::RetryExhausted(String::from("retry")))
+}
+
+async fn get_checkpoint(ctx: &OnlineServerContext) -> CheckpointSequenceNumber {
+    ctx
+        .client
+        .read_api()
+        .get_latest_checkpoint_sequence_number()
+        .await
+        .unwrap()
+}
+
+async fn get_balances(
+    ctx: &OnlineServerContext,
+    request: &AccountBalanceRequest,
+    address: SuiAddress,
+    coin_type: Option<&String>
+) -> Result<Vec<Amount>, Error> {
+    if let Some(sub_account) = &request.account_identifier.sub_account {
+        let account_type = sub_account.account_type.clone();
+        get_sub_account_balances(account_type, &ctx.client, address).await
+    } else if let Some(coin_type) = coin_type {
+        let balance = get_account_balances(&ctx, address, coin_type).await?;
+        Ok(vec![Amount::new(balance)])
+    } else {
+        Err(Error::InvalidInput("Coin type is required for this request".to_string()))
+    }
+}
+
+async fn get_account_balances(
+    ctx: &OnlineServerContext,
+    address: SuiAddress,
+    coin_type: &String
+) -> Result<i128, Error> {
+    Ok(ctx
+        .client
+        .coin_read_api()
+        .get_balance(address, Some(coin_type.to_string()))
+        .await?
+        .total_balance as i128)
 }
 
 async fn get_sub_account_balances(

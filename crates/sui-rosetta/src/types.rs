@@ -95,8 +95,26 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
+fn default_currency() -> Currency {
+    SUI.clone()
+}
+
+fn deserialize_or_default_currencies<'de, D>(deserializer: D) -> Result<Vec<Currency>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<Vec<Currency>> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(vec) if vec.is_empty() => Ok(vec![default_currency()]),
+        Some(vec) if vec[0].coin_type.is_empty() => Ok(vec![default_currency()]),
+        Some(vec) => Ok(vec),
+        None => Ok(vec![default_currency()]),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct Currency {
+    pub coin_type: String,
     pub symbol: String,
     pub decimals: u64,
 }
@@ -106,7 +124,7 @@ pub struct AccountBalanceRequest {
     pub account_identifier: AccountIdentifier,
     #[serde(default)]
     pub block_identifier: PartialBlockIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, deserialize_with = "deserialize_or_default_currencies")]
     pub currencies: Vec<Currency>,
 }
 #[derive(Serialize, Deserialize, Debug)]
@@ -133,6 +151,7 @@ pub type BlockHash = CheckpointDigest;
 pub struct Amount {
     #[serde(with = "str_format")]
     pub value: i128,
+    #[serde(default = "default_currency")]
     pub currency: Currency,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<AmountMetadata>,
