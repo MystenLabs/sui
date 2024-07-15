@@ -234,6 +234,7 @@ impl Validator {
         Ok(Some(Owner {
             address: self.validator_summary.exchange_rates_id.into(),
             checkpoint_viewed_at: self.checkpoint_viewed_at,
+            root_version: None,
         }))
     }
 
