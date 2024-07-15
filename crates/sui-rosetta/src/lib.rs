@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::string::ToString;
 use std::sync::Arc;
 
 use axum::routing::post;
@@ -9,7 +10,7 @@ use axum::{Extension, Router};
 use once_cell::sync::Lazy;
 use tracing::info;
 
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 
 use crate::errors::Error;
 use crate::state::{CheckpointBlockProvider, OnlineServerContext};
@@ -26,6 +27,7 @@ mod state;
 pub mod types;
 
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
+    coin_type: SUI_COIN_TYPE.to_string(),
     symbol: "SUI".to_string(),
     decimals: 9,
 });
