@@ -44,10 +44,7 @@ export class DeepBookClient {
 	}) {
 		this.#client = client;
 		this.#address = normalizeSuiAddress(address);
-
-		// Update to pass custom coins and pools
 		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
-
 		this.#balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);
 		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
