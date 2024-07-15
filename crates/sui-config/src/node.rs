@@ -234,6 +234,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
     ]);
     let providers = BTreeSet::from([
         "Google".to_string(),
