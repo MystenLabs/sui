@@ -449,6 +449,11 @@ mod tests {
             .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
             .build()
             .await;
+        let randomness_obj_version = authority
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .randomness_obj_initial_shared_version()
+            .unwrap();
 
         // Generate 5 transactions for testing.
         //   tx1: shared_object_1, shared_object_2, owned_object_version = 3
@@ -489,7 +494,11 @@ mod tests {
             ),
             generate_shared_objs_tx_with_gas_version(
                 &[
-                    (id1, init_shared_version_1, true),
+                    (
+                        SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        randomness_obj_version,
+                        false,
+                    ),
                     (id2, init_shared_version_2, true),
                 ],
                 11,
@@ -534,8 +543,9 @@ mod tests {
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
-                (id1, SequenceNumber::from_u64(5)), // Determined by tx3
-                (id2, SequenceNumber::from_u64(4))  // Determined by tx1
+                (id1, SequenceNumber::from_u64(5)), // determined by tx3
+                (id2, SequenceNumber::from_u64(4)), // determined by tx1
+                (SUI_RANDOMNESS_STATE_OBJECT_ID, SequenceNumber::from_u64(1)), // not mutable
             ])
         );
 
@@ -565,7 +575,10 @@ mod tests {
                 (
                     certs[4].key(),
                     vec![
-                        (id1, SequenceNumber::CANCELLED_READ),
+                        (
+                            SUI_RANDOMNESS_STATE_OBJECT_ID,
+                            SequenceNumber::RANDOMNESS_UNAVAILABLE
+                        ),
                         (id2, SequenceNumber::CANCELLED_READ)
                     ]
                 ),
