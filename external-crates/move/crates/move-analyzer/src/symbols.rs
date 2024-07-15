@@ -375,6 +375,7 @@ pub struct ModuleDefs {
     /// Function definitions
     pub functions: BTreeMap<Symbol, MemberDef>,
     /// Definitions where the type is not explicitly specified
+    /// and should be inserted as an inlay hint
     pub untyped_defs: BTreeSet<Loc>,
     /// Information about calls in this module
     pub call_infos: BTreeMap<Loc, CallInfo>,
@@ -2729,7 +2730,16 @@ impl<'a> ParsingSymbolicator<'a> {
                     }
                 })
             }
-            MP::Name(_, chain) => self.chain_symbols(chain),
+            MP::Name(_, chain) => {
+                self.chain_symbols(chain);
+                assert!(self.current_mod_ident_str.is_some());
+                if let Some(mod_defs) = self
+                    .mod_outer_defs
+                    .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                {
+                    mod_defs.untyped_defs.insert(chain.loc);
+                };
+            }
             MP::Or(m1, m2) => {
                 self.match_pattern_symbols(m2);
                 self.match_pattern_symbols(m1);
@@ -2948,13 +2958,12 @@ impl<'a> ParsingSymbolicator<'a> {
             B::Var(_, var) => {
                 if !explicitly_typed {
                     assert!(self.current_mod_ident_str.is_some());
-                    let Some(mod_defs) = self
+                    if let Some(mod_defs) = self
                         .mod_outer_defs
                         .get_mut(&self.current_mod_ident_str.clone().unwrap())
-                    else {
-                        return;
+                    {
+                        mod_defs.untyped_defs.insert(var.loc());
                     };
-                    mod_defs.untyped_defs.insert(var.loc());
                 }
             }
         }

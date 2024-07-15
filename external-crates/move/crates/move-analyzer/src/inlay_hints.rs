@@ -69,7 +69,7 @@ fn inlay_type_hints_internal(symbols: &Symbols, mod_defs: &ModuleDefs, hints: &m
                 command: None,
             };
             let type_label = InlayHintLabelPart {
-                value: type_to_ide_string(t, /* verbose */ true),
+                value: type_to_ide_string(t, /* verbose */ false),
                 tooltip: None,
                 location: None,
                 command: None,
