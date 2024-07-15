@@ -16,7 +16,7 @@ use sui_config::node::{
     Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
+use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
@@ -140,7 +140,6 @@ impl ValidatorConfigBuilder {
             max_pending_transactions: None,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            protocol: ConsensusProtocol::Narwhal,
             narwhal_config: narwhal_config::Parameters {
                 network_admin_server: NetworkAdminServerParameters {
                     primary_network_admin_server_port: local_ip_utils::get_available_port(
