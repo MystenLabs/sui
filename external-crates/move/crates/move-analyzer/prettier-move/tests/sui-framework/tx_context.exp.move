@@ -109,8 +109,7 @@ module sui::tx_context {
     #[test_only]
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
-        let tx_hash =
-            x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
+        let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
         new(@0x0, tx_hash, 0, 0, 0)
     }
 

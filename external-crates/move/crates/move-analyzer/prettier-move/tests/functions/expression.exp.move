@@ -334,8 +334,9 @@ module prettier::expression {
         (
             really_long_expression: ReallyLongType
         ).say_something();
-        let a =
-            (call_expression(): Type);
+        let a = (
+            call_expression(): Type
+        );
         let a: Type = call_expression();
     }
 

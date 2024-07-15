@@ -11,8 +11,9 @@ export class Tree {
 	public text: string;
 	public isNamed: boolean;
 	public children: Tree[];
-	public leadingComment: string[];
+	public leadingComment: Comment[];
 	public trailingComment: Comment | null;
+	public enableLeadingComment: boolean = true;
 	public enableTrailingComment: boolean = true;
 
 	/**
@@ -92,6 +93,13 @@ export class Tree {
 	 */
 	disableTrailingComment() {
 		this.enableTrailingComment = false;
+	}
+
+	/**
+	 * Special case for lists, where we want to print the leading character (eg `dot_expression`).
+	 */
+	disableLeadingComment() {
+		this.enableLeadingComment = false;
 	}
 
 	get namedChildCount(): number {
@@ -280,13 +288,16 @@ export class Tree {
 		while (prev?.isComment || (prev?.isNewline && !prev?.isUsedComment)) {
 			if (prev.isUsedComment) break;
 			if (prev.isComment) {
-				comments.unshift(prev.text);
+				comments.unshift({
+					type: prev.type as 'line_comment' | 'block_comment',
+					text: prev.text
+				});
 				prev.isUsedComment = true;
 			}
 
 			prev = prev.previousNamedSibling; // move to the next comment
 		}
-    
+
 		this.leadingComment = comments;
 
 		return this;

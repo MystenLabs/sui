@@ -148,7 +148,7 @@ export function printUseModuleMembers(
 ): Doc {
 	const children = path.map(print, 'nonFormattingChildren');
 
-	return [
+	return group([
 		children[0]!,
 		'::{',
 		indent(softline),
@@ -156,11 +156,11 @@ export function printUseModuleMembers(
 		ifBreak(','), // trailing comma
 		softline,
 		'}',
-	];
+	]);
 }
 
 export function printUseFun(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
+	return [
 		'fun',
 		' ',
 		path.call(print, 'nonFormattingChildren', 0), // module_access
@@ -170,7 +170,7 @@ export function printUseFun(path: AstPath<Node>, options: ParserOptions, print: 
 		path.call(print, 'nonFormattingChildren', 1), // module_access
 		'.',
 		path.call(print, 'nonFormattingChildren', 2), // function_identifier
-	]);
+	];
 }
 
 export function printModuleIdentity(

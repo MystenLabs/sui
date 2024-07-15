@@ -57,36 +57,33 @@ module prettier::let_statement {
             very_very_very_long_value,
         );
 
-        let a =
-            very_very_very_long_value_very_long_value_very_long_value;
+        let a = very_very_very_long_value_very_long_value_very_long_value;
 
-        let c: TypeName<Which<Is<Very<Big>>>> =
-            very_very_very_long_value_very_long_value_very_long_value;
+        let c: TypeName<
+            Which<Is<Very<Big>>>,
+        > = very_very_very_long_value_very_long_value_very_long_value;
 
         let to_remain_locked = (
             self.final_unlock_ts_sec -
             math::min(self.final_unlock_ts_sec, now),
         );
 
-        let to_remain_locked =
-            (
-                self.final_unlock_ts_sec -
-                math::min(self.final_unlock_ts_sec, now),
-            ) * self.unlock_per_second;
+        let to_remain_locked = (
+            self.final_unlock_ts_sec -
+            math::min(self.final_unlock_ts_sec, now),
+        ) * self.unlock_per_second;
 
-        let locked_amount_round =
-            balance::value(
-                &self.locked_balance,
-            ) / self.unlock_per_second * self.unlock_per_second;
+        let locked_amount_round = balance::value(
+            &self.locked_balance,
+        ) / self.unlock_per_second * self.unlock_per_second;
     }
 
     fun misc() {
-        let a =
-            very_very_long_if_condition >
-            very_very_long_if_condition &&
-            very_very_long_if_condition >
-            very_very_long_if_condition &&
-            very_very_long_if_condition >
-            very_very_long_if_condition;
+        let a = very_very_long_if_condition >
+        very_very_long_if_condition &&
+        very_very_long_if_condition >
+        very_very_long_if_condition &&
+        very_very_long_if_condition >
+        very_very_long_if_condition;
     }
 }

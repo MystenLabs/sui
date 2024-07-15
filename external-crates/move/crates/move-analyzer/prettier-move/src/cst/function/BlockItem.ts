@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-const { group, line, indent } = doc.builders;
+const { group, line, indent, ifBreak } = doc.builders;
 
 export enum BlockItem {
 	/**
@@ -51,18 +51,14 @@ function printLetStatement(path: AstPath<Node>, options: ParserOptions, print: p
 		return group(['let', ' ', path.call(print, 'nonFormattingChildren', 0)]);
 	}
 
-	const children = path.node.nonFormattingChildren;
 	const printed = path.map(print, 'nonFormattingChildren');
-	const expression = children.length === 3 ? children[2] : children[1];
 
 	if (printed.length === 2) {
 		return [
 			'let ',
 			printed[0]!,
-			' =',
-			expression?.isBreakableExpression || expression?.isControlFlow
-			? [' ', printed[1]!]
-			: group([indent(line), indent(printed[1]!)]),
+			' = ',
+			printed[1]!,
 		];
 	}
 
@@ -71,11 +67,7 @@ function printLetStatement(path: AstPath<Node>, options: ParserOptions, print: p
 		printed[0]!,
 		': ',
 		printed[1]!,
-		' =',
-		group(
-			expression!.isBreakableExpression || expression!.isControlFlow
-				? [' ', printed[2]!]
-				: [indent(line), indent(printed[2]!)],
-		),
+		' = ',
+		printed[2]!,
 	];
 }

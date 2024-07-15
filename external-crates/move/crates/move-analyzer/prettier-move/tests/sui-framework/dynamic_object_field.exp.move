@@ -57,8 +57,10 @@ module sui::dynamic_object_field {
         name: Name,
     ): &mut Value {
         let key = Wrapper { name };
-        let (field, value_id) =
-            field::field_info_mut<Wrapper<Name>>(object, key);
+        let (field, value_id) = field::field_info_mut<Wrapper<Name>>(
+            object,
+            key,
+        );
         borrow_child_object_mut<Value>(field, value_id)
     }
 
@@ -112,8 +114,10 @@ module sui::dynamic_object_field {
         if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) {
             return option::none()
         };
-        let (_field, value_addr) =
-            field::field_info<Wrapper<Name>>(object, key);
+        let (_field, value_addr) = field::field_info<Wrapper<Name>>(
+            object,
+            key,
+        );
         option::some(value_addr.to_id())
     }
 }

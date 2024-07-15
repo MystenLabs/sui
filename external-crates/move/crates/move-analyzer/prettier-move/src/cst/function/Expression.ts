@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { block, list, shouldBreakFirstChild } from '../../utilities';
+import { block, list, printLeadingComment, shouldBreakFirstChild } from '../../utilities';
 const { group, join, line, softline, ifBreak, indent } = doc.builders;
 
 // + sign marks nodes that have tests
@@ -373,9 +373,9 @@ function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: 
 
 	if (isChain) {
 		const parts = [
-			children[0]!, // lhs
+			path.call(print, 'nonFormattingChildren', 0), // lhs
 			indent(softline),
-			indent(['.', children[1]!]), // rhs
+			indent(path.call(printWithLeadingComment, 'nonFormattingChildren', 1)), // rhs
 		];
 
 		// start a group if the parent is not a `dot_expression`, this way we either break the
@@ -385,22 +385,28 @@ function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: 
 			: parts;
 	}
 
-	return [children[0]!, '.', children[1]!];
+	return [
+		path.call(print, 'nonFormattingChildren', 0),
+		path.call(printWithLeadingComment, 'nonFormattingChildren', 1),
+	];
+
+	/** Prints leading comment before the dot. And disables it. */
+	function printWithLeadingComment(path: AstPath<Node>) {
+		const comment = printLeadingComment(path);
+		path.node.disableLeadingComment();
+		return [comment, '.', print(path)];
+	}
 }
 
 /**
  * Print `arg_list` node.
  */
 function printArgList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	if (path.node.namedChildCount === 0) {
-		return '()';
-	}
-
 	const nodes = path.node.nonFormattingChildren;
 	const children = path.map(print, 'nonFormattingChildren');
 
 	if (nodes.length === 1 && nodes[0]!.isBreakableExpression) {
-		return group(['(', children[0]!, ')']);
+		return ['(', children[0]!, ')'];
 	}
 
 	return group(list({ path, print, options, open: '(', close: ')' }), {

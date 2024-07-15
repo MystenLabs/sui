@@ -5,6 +5,20 @@ module test::if_expression {
     public fun basic() {
         if (true) call_something();
         if (false) call_something_else_call_something_else_call_something_else();
+
+
+        if (cond) do_this()
+        else {
+            do_that();
+            do_this();
+        };
+
+        if (cond) {
+            do_this();
+            do_that();
+        } else do_this();
+
+        
         if (false) {
             call_something_else();
         } else {
