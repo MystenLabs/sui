@@ -5,7 +5,7 @@
 use crate::{
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
-    loader::{Function, Loader},
+    loader::{ast::Function, Loader},
     native_extensions::NativeContextExtensions,
     native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
