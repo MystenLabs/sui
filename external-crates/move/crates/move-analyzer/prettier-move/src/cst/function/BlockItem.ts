@@ -60,11 +60,9 @@ function printLetStatement(path: AstPath<Node>, options: ParserOptions, print: p
 			'let ',
 			printed[0]!,
 			' =',
-			group(
-				expression?.isBreakableExpression || expression?.isControlFlow
-				? [' ', printed[1]!]
-				: [indent(line), indent(printed[1]!)],
-			),
+			expression?.isBreakableExpression || expression?.isControlFlow
+			? [' ', printed[1]!]
+			: group([indent(line), indent(printed[1]!)]),
 		];
 	}
 
