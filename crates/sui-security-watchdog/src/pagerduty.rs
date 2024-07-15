@@ -46,6 +46,7 @@ pub struct Incident {
     pub title: String,
     pub service: Service,
     pub body: Body,
+    pub urgency: Option<String>,
 }
 
 impl Default for Incident {
@@ -56,6 +57,7 @@ impl Default for Incident {
             title: "".to_string(),
             service: Service::default(),
             body: Body::default(),
+            urgency: None,
         }
     }
 }
