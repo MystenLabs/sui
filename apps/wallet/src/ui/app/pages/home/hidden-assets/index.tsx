@@ -96,10 +96,10 @@ function HiddenNftsPage() {
 											isKioskOwnerToken(kioskClient.network, nft.data)
 												? `/kiosk?${new URLSearchParams({
 														kioskId: getKioskIdFromOwnerCap(nft.data!),
-												  })}`
+													})}`
 												: `/nft-details?${new URLSearchParams({
 														objectId,
-												  }).toString()}`
+													}).toString()}`
 										}
 										onClick={() => {
 											ampli.clickedCollectibleCard({

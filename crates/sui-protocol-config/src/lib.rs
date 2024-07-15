@@ -129,7 +129,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Enable transactions to be signed with zkLogin inside multisig signature.
 //             Add native bridge.
 //             Enable native bridge in devnet
-//             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus on testnet.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
 // Version 47: Deepbook changes (framework update)
@@ -147,12 +147,21 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Prepose consensus commit prologue in checkpoints.
 //             Set number of leaders per round for Mysticeti commits.
 // Version 51: Switch to DKG V1.
+//             Enable deny list v2 on devnet.
 // Version 52: Emit `CommitteeMemberUrlUpdateEvent` when updating bridge node url.
 //             std::config native functions.
 //             Modified sui-system package to enable withdrawal of stake before it becomes active.
 //             Enable soft bundle in devnet and testnet.
 //             Core macro visibility in sui core framework.
+//             Enable checkpoint batching in mainnet.
 //             Enable Mysticeti on mainnet.
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus on mainnet.
+//             Turn on count based shared object congestion control in devnet.
+//             Enable consensus commit prologue V3 in testnet.
+//             Enable enums on testnet.
+//             Add support for passkey in devnet.
+//             Enable deny list v2 on testnet and mainnet.
+// Version 54: Add feature flag to decide whether to attempt to finalize bridge committee
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -205,40 +214,6 @@ impl std::ops::Add<u64> for ProtocolVersion {
     type Output = Self;
     fn add(self, rhs: u64) -> Self::Output {
         Self::new(self.0 + rhs)
-    }
-}
-
-/// Models the set of protocol versions supported by a validator.
-/// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
-/// to be able to inject arbitrary versions into SuiNode.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct SupportedProtocolVersions {
-    pub min: ProtocolVersion,
-    pub max: ProtocolVersion,
-}
-
-impl SupportedProtocolVersions {
-    pub const SYSTEM_DEFAULT: Self = Self {
-        min: ProtocolVersion::MIN,
-        max: ProtocolVersion::MAX,
-    };
-
-    /// Use by VersionedProtocolMessage implementors to describe in which range of versions a
-    /// message variant is supported.
-    pub fn new_for_message(min: u64, max: u64) -> Self {
-        let min = ProtocolVersion::new(min);
-        let max = ProtocolVersion::new(max);
-        Self { min, max }
-    }
-
-    pub fn new_for_testing(min: u64, max: u64) -> Self {
-        let min = min.into();
-        let max = max.into();
-        Self { min, max }
-    }
-
-    pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
-        v.0 >= self.min.0 && v.0 <= self.max.0
     }
 }
 
@@ -517,6 +492,10 @@ struct FeatureFlags {
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list_v2: bool,
+
+    // Enable passkey auth (SIP-9)
+    #[serde(skip_serializing_if = "is_false")]
+    passkey_auth: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1178,6 +1157,11 @@ pub struct ProtocolConfig {
 
     /// The max number of transactions that can be included in a single Soft Bundle.
     max_soft_bundle_size: Option<u64>,
+
+    /// Whether to try to form bridge committee
+    // Note: this is not a feature flag because we want to distinguish between
+    // `None` and `Some(false)`, as committee was already finalized on Testnet.
+    bridge_should_try_to_finalize_committee: Option<bool>,
 }
 
 // feature flags
@@ -1365,6 +1349,14 @@ impl ProtocolConfig {
         ret
     }
 
+    pub fn should_try_to_finalize_bridge_committee(&self) -> bool {
+        if !self.enable_bridge() {
+            return false;
+        }
+        // In the older protocol version, always try to finalize the committee.
+        self.bridge_should_try_to_finalize_committee.unwrap_or(true)
+    }
+
     pub fn enable_effects_v2(&self) -> bool {
         self.feature_flags.enable_effects_v2
     }
@@ -1473,6 +1465,10 @@ impl ProtocolConfig {
 
     pub fn soft_bundle(&self) -> bool {
         self.feature_flags.soft_bundle
+    }
+
+    pub fn passkey_auth(&self) -> bool {
+        self.feature_flags.passkey_auth
     }
 }
 
@@ -1939,6 +1935,8 @@ impl ProtocolConfig {
             checkpoint_summary_version_specific_data: None,
 
             max_soft_bundle_size: None,
+
+            bridge_should_try_to_finalize_committee: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2465,7 +2463,36 @@ impl ProtocolConfig {
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
 
+                    // Enable Mysticeti on mainnet.
                     cfg.feature_flags.consensus_choice = ConsensusChoice::Mysticeti;
+
+                    // Enable leader scoring & schedule change on mainnet for mysticeti.
+                    cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
+
+                    // Enable checkpoint batching on mainnet.
+                    cfg.checkpoint_summary_version_specific_data = Some(1);
+                    cfg.min_checkpoint_interval_ms = Some(200);
+
+                    // Enable consensus commit prologue V3 in testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .record_consensus_determined_version_assignments_in_prologue = true;
+                        cfg.feature_flags
+                            .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+                    }
+                    // Turn on enums in testnet and devnet
+                    if chain != Chain::Mainnet {
+                        cfg.move_binary_format_version = Some(7);
+                    }
+
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
+                    }
+                    cfg.feature_flags.enable_coin_deny_list_v2 = true;
+                }
+                54 => {
+                    // Do not allow bridge committee to finalize on mainnet.
+                    cfg.bridge_should_try_to_finalize_committee = Some(chain != Chain::Mainnet);
                 }
                 // Use this template when making changes:
                 //
@@ -2626,6 +2653,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_soft_bundle_for_testing(&mut self, val: bool) {
         self.feature_flags.soft_bundle = val;
+    }
+
+    pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
+        self.feature_flags.passkey_auth = val
     }
 }
 

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::io::Read;
+use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -31,7 +32,7 @@ use sui::{
         estimate_gas_budget, Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands,
         SwitchResponse,
     },
-    sui_commands::SuiCommand,
+    sui_commands::{parse_host_port, SuiCommand},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
@@ -323,6 +324,31 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         .execute(context)
         .await?;
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_ptb_publish() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("ptb_complex_args_test_functions");
+
+    let publish_ptb_string = format!(
+        r#"
+         --move-call sui::tx_context::sender
+         --assign sender
+         --publish {}
+         --assign upgrade_cap
+         --transfer-objects "[upgrade_cap]" sender
+        "#,
+        package_path.display()
+    );
+    let args = shlex::split(&publish_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
     Ok(())
 }
 
@@ -1491,7 +1517,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a published-at field).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
+                error: "Package dependency \"Unpublished\" does not specify a published address (the Move.toml manifest for \"Unpublished\" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).\nIf this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain).",
             },
         )
     "#]];
@@ -1586,7 +1612,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for published-at field.",
+                error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for 'published-at' field in Move.toml or 'published-id' in Move.lock file.",
             },
         )
     "#]];
@@ -1838,10 +1864,10 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
-    let build_config_publish = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
-        build_config: build_config_publish.clone(),
+        build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
@@ -1863,6 +1889,12 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
         .unwrap();
 
+    // We will upgrade the package in a `tmp_dir` using the `Move.lock` resulting from publish,
+    // so as not to clobber anything.
+    // The `Move.lock` needs to point to the root directory of the package-to-be-upgraded.
+    // The core implementation does not use support an arbitrary `lock_file` path specified in
+    // `BuildConfig` when the `Move.lock` file is an input for upgrades, so we change the `BuildConfig`
+    // `lock_file` to point to the root directory of package-to-be-upgraded.
     let tmp_dir = tempfile::tempdir().unwrap();
     fs_extra::dir::copy(
         &package_path,
@@ -1873,23 +1905,22 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
     upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
     upgrade_pkg_path.pop();
-
-    // Create a new build config for the upgrade. Initialize its lock file
-    // to the package we published.
-    let build_config_upgrade = BuildConfig::new_for_testing().config;
+    // Place the `Move.lock` after publishing in the tmp dir for upgrading.
+    let published_lock_file_path = build_config.lock_file.clone().unwrap();
     let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
     upgrade_lock_file_path.push("Move.lock");
-    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
     std::fs::copy(
-        publish_lock_file_path.clone(),
+        published_lock_file_path.clone(),
         upgrade_lock_file_path.clone(),
     )?;
+    // Point the `BuildConfig` lock_file to the package root.
+    build_config.lock_file = Some(upgrade_pkg_path.join("Move.lock"));
 
     // Now run the upgrade
     let upgrade_response = SuiClientCommands::Upgrade {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
-        build_config: build_config_upgrade.clone(),
+        build_config: build_config.clone(),
         opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
@@ -1915,9 +1946,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         };
 
     // Get lock file that recorded Package ID and version
-    let lock_file = build_config_upgrade
-        .lock_file
-        .expect("Lock file for testing");
+    let lock_file = build_config.lock_file.expect("Lock file for testing");
     let mut lock_file = std::fs::File::open(lock_file).unwrap();
     let envs = ManagedPackage::read(&mut lock_file).unwrap();
     let localnet = envs.get("localnet").unwrap();
@@ -3903,4 +3932,37 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
 
     insta::assert_snapshot!(error_string);
     Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_host_port() {
+    let input = "127.0.0.0";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let input = "127.0.0.5:9124";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "127.0.0.5:9124".parse::<SocketAddr>().unwrap());
+
+    let input = "9090";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9090".parse::<SocketAddr>().unwrap());
+
+    let input = "";
+    let result = parse_host_port(input.to_string(), 9123).unwrap();
+    assert_eq!(result, "0.0.0.0:9123".parse::<SocketAddr>().unwrap());
+
+    let result = parse_host_port("localhost".to_string(), 9899).unwrap();
+    assert_eq!(result, "127.0.0.1:9899".parse::<SocketAddr>().unwrap());
+
+    let input = "asg";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0:900";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.0.0";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
+    let input = "127.9.0.1:asb";
+    assert!(parse_host_port(input.to_string(), 9123).is_err());
 }

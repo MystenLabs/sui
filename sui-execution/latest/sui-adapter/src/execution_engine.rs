@@ -673,6 +673,7 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
                             assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                     }

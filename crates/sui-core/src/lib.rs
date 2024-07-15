@@ -42,6 +42,7 @@ mod transaction_input_loader;
 mod transaction_manager;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
+pub mod validator_tx_finalizer;
 pub mod verify_indexes;
 
 #[cfg(test)]
@@ -65,6 +66,7 @@ mod pay_sui_tests;
 #[cfg(test)]
 #[path = "unit_tests/shared_object_deletion_tests.rs"]
 mod shared_object_deletion_tests;
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_authority_clients;
 #[cfg(test)]
 #[path = "unit_tests/transfer_to_object_tests.rs"]

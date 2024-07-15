@@ -3,7 +3,7 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
-import type { Input } from 'valibot';
+import type { InferInput } from 'valibot';
 import { is, parse } from 'valibot';
 
 import type { SuiClient } from '../client/index.js';
@@ -27,8 +27,8 @@ import { TransactionDataBuilder } from './TransactionData.js';
 import { getIdFromCallArg } from './utils.js';
 
 export type TransactionObjectArgument =
-	| Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>
-	| ((tx: Transaction) => Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>);
+	| Exclude<InferInput<typeof Argument>, { Input: unknown; type?: 'pure' }>
+	| ((tx: Transaction) => Exclude<InferInput<typeof Argument>, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
@@ -170,7 +170,7 @@ export class Transaction {
 			this.#data.sender = sender;
 		}
 	}
-	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
+	setExpiration(expiration?: InferInput<typeof TransactionExpiration> | null) {
 		this.#data.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
 	}
 	setGasPrice(price: number | bigint) {
@@ -224,8 +224,8 @@ export class Transaction {
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
-						? Inputs.Pure(value)
-						: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
+							? Inputs.Pure(value)
+							: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
 				);
 			}),
 		});
@@ -272,9 +272,9 @@ export class Transaction {
 						? {
 								$kind: 'UnresolvedObject',
 								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
-						  }
+							}
 						: value,
-			  );
+				);
 	}
 
 	/**

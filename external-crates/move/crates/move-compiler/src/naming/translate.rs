@@ -2119,7 +2119,7 @@ fn struct_def(
         warning_filter,
         index,
         attributes,
-        loc: _loc,
+        loc,
         abilities,
         type_parameters,
         fields,
@@ -2131,6 +2131,7 @@ fn struct_def(
     N::StructDefinition {
         warning_filter,
         index,
+        loc,
         attributes,
         abilities,
         type_parameters,
@@ -2176,7 +2177,7 @@ fn enum_def(
         warning_filter,
         index,
         attributes,
-        loc: _loc,
+        loc,
         abilities,
         type_parameters,
         variants,
@@ -2188,6 +2189,7 @@ fn enum_def(
     N::EnumDefinition {
         warning_filter,
         index,
+        loc,
         attributes,
         abilities,
         type_parameters,
@@ -3831,11 +3833,18 @@ fn lvalue_list(
     case: LValueCase,
     sp!(loc, b_): E::LValueList,
 ) -> Option<N::LValueList> {
+    use N::LValue_ as NL;
     Some(sp(
         loc,
         b_.into_iter()
-            .map(|inner| lvalue(context, seen_locals, case, inner))
-            .collect::<Option<_>>()?,
+            .map(|inner| {
+                let inner_loc = inner.loc;
+                lvalue(context, seen_locals, case, inner).unwrap_or_else(|| {
+                    assert!(context.env.has_errors());
+                    sp(inner_loc, NL::Error)
+                })
+            })
+            .collect::<Vec<_>>(),
     ))
 }
 
@@ -4162,6 +4171,7 @@ fn remove_unused_bindings_lvalue(
 ) {
     match lvalue_ {
         N::LValue_::Ignore => (),
+        N::LValue_::Error => (),
         N::LValue_::Var {
             var,
             unused_binding,

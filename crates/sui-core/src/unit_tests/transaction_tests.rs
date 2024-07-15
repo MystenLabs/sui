@@ -5,7 +5,6 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use move_core_types::ident_str;
-use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -437,13 +436,7 @@ async fn do_transaction_test_impl(
         rgp,
     );
 
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1035,13 +1028,7 @@ async fn setup_zklogin_network(
     )
     .await;
 
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
     let metrics = server.metrics.clone();
 
     let server_handle = server.spawn_for_test().await.unwrap();
@@ -1335,13 +1322,7 @@ async fn execute_transaction_assert_err(
     txn: Transaction,
     object_ids: Vec<ObjectID>,
 ) {
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1393,13 +1374,7 @@ async fn test_oversized_txn() {
     // Making sure the txn is larger than the max txn size.
     assert!(tx_size > max_txn_size);
 
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1450,13 +1425,7 @@ async fn test_very_large_certificate() {
         rgp,
     );
 
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1538,13 +1507,7 @@ async fn test_handle_certificate_errors() {
         rgp,
     );
 
-    let consensus_address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address.clone(),
-    );
+    let server = AuthorityServer::new_for_test(authority_state.clone());
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1715,11 +1678,7 @@ async fn test_handle_soft_bundle_certificates() {
     // Create a server with mocked consensus.
     // This ensures transactions submitted to consensus will get processed.
     let adapter = make_consensus_adapter_for_test(authority.clone(), true);
-    let server = AuthorityServer::new_for_test_with_consensus_adapter(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority.clone(),
-        adapter,
-    );
+    let server = AuthorityServer::new_for_test_with_consensus_adapter(authority.clone(), adapter);
     let _metrics = server.metrics.clone();
     let server_handle = server.spawn_for_test().await.unwrap();
     let client = NetworkAuthorityClient::connect(server_handle.address())
@@ -1873,12 +1832,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
     let initial_shared_version = shared_object.version();
 
     // Create a single validator cluster.
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority,
-        consensus_address,
-    );
+    let server = AuthorityServer::new_for_test(authority);
     let authority = server.state.clone();
     let _metrics = server.metrics.clone();
     let server_handle = server.spawn_for_test().await.unwrap();

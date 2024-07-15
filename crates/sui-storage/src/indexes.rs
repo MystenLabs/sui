@@ -348,19 +348,16 @@ impl IndexStore {
         let (input_coins, written_coins) = tx_coins.unwrap();
         // 1. Delete old owner if the object is deleted or transferred to a new owner,
         // by looking at `object_index_changes.deleted_owners`.
-        // Objects in `deleted_owners` must be owned by `Owner::Address` before the tx,
-        // hence must appear in the tx inputs.
-        // They also mut be coin type (see `AuthorityState::commit_certificate`).
+        // Objects in `deleted_owners` must be coin type (see `AuthorityState::commit_certificate`).
         let coin_delete_keys = object_index_changes
             .deleted_owners
             .iter()
             .filter_map(|(owner, obj_id)| {
-                // If it's not in `input_coins`, then it's not a coin type. Skip.
-                let object = input_coins.get(obj_id)?;
+                let object = input_coins.get(obj_id).or(written_coins.get(obj_id))?;
                 let coin_type_tag = object.coin_type_maybe().unwrap_or_else(|| {
                     panic!(
-                        "object_id: {:?} in input_coins is not a coin type, input_coins: {:?}, tx_digest: {:?}",
-                        obj_id, input_coins, digest
+                        "object_id: {:?} is not a coin type, input_coins: {:?}, written_coins: {:?}, tx_digest: {:?}",
+                        obj_id, input_coins, written_coins, digest
                     )
                 });
                 let map = balance_changes.entry(*owner).or_default();

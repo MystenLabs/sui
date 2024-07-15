@@ -97,7 +97,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
+    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
 use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
@@ -486,7 +486,7 @@ pub struct AuthorityEpochTables {
     pub running_root_accumulators: DBMap<CheckpointSequenceNumber, Accumulator>,
 
     /// Record of the capabilities advertised by each authority.
-    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
+    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
 
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
@@ -1205,6 +1205,15 @@ impl AuthorityPerEpochStore {
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             self.executed_digests_notify_read.notify(tx_key, tx_digest);
         }
+        Ok(())
+    }
+
+    pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
+        let tables = self.tables()?;
+        let mut batch = tables.effects_signatures.batch();
+        batch.delete_batch(&tables.executed_in_epoch, [*tx_digest])?;
+        batch.delete_batch(&tables.effects_signatures, [*tx_digest])?;
+        batch.write()?;
         Ok(())
     }
 
@@ -2114,7 +2123,7 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record most recently advertised capabilities of all authorities
-    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilities) -> SuiResult {
+    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
         let authority = &capabilities.authority;
 
@@ -2134,8 +2143,8 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilities>> {
-        let result: Result<Vec<AuthorityCapabilities>, TypedStoreError> = self
+    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+        let result: Result<Vec<AuthorityCapabilitiesV1>, TypedStoreError> = self
             .tables()?
             .authority_capabilities
             .values()
@@ -3913,6 +3922,37 @@ impl AuthorityPerEpochStore {
 
     pub fn clear_signature_cache(&self) {
         self.signature_verifier.clear_signature_cache();
+    }
+
+    pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) {
+        if !self.executed_in_epoch_table_enabled() {
+            error!("Cannot check executed transactions in checkpoint because executed_in_epoch table is not enabled");
+            return;
+        }
+        let tables = self.tables().unwrap();
+
+        info!("Verifying that all executed transactions are in a checkpoint");
+
+        let mut executed_iter = tables.executed_in_epoch.unbounded_iter();
+        let mut checkpointed_iter = tables.executed_transactions_to_checkpoint.unbounded_iter();
+
+        // verify that the two iterators (which are both sorted) are identical
+        loop {
+            let executed = executed_iter.next();
+            let checkpointed = checkpointed_iter.next();
+            match (executed, checkpointed) {
+                (Some((left, ())), Some((right, _))) => {
+                    if left != right {
+                        panic!("Executed transactions and checkpointed transactions do not match: {:?} {:?}", left, right);
+                    }
+                }
+                (None, None) => break,
+                (left, right) => panic!(
+                    "Executed transactions and checkpointed transactions do not match: {:?} {:?}",
+                    left, right
+                ),
+            }
+        }
     }
 }
 

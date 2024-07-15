@@ -20,6 +20,7 @@ use sui_types::{
 use crate::consistency::ConsistentIndexCursor;
 use crate::types::cursor::{JsonCursor, Page};
 use crate::types::sui_address::SuiAddress;
+use crate::types::uint53::UInt53;
 use crate::{
     error::Error,
     types::{
@@ -149,8 +150,8 @@ impl ChangeEpochTransaction {
     }
 
     /// The protocol version in effect in the new epoch.
-    async fn protocol_version(&self) -> u64 {
-        self.native.protocol_version.as_u64()
+    async fn protocol_version(&self) -> UInt53 {
+        self.native.protocol_version.as_u64().into()
     }
 
     /// The total amount of gas charged for storage during the previous epoch (in MIST).
@@ -243,8 +244,11 @@ impl AuthenticatorStateExpireTransaction {
     }
 
     /// The initial version that the AuthenticatorStateUpdate was shared at.
-    async fn authenticator_obj_initial_shared_version(&self) -> u64 {
-        self.native.authenticator_obj_initial_shared_version.value()
+    async fn authenticator_obj_initial_shared_version(&self) -> UInt53 {
+        self.native
+            .authenticator_obj_initial_shared_version
+            .value()
+            .into()
     }
 }
 
@@ -257,8 +261,8 @@ impl BridgeStateCreateTransaction {
 
 #[Object]
 impl BridgeCommitteeInitTransaction {
-    async fn bridge_obj_initial_shared_version(&self) -> u64 {
-        self.native.value()
+    async fn bridge_obj_initial_shared_version(&self) -> UInt53 {
+        self.native.value().into()
     }
 }
 

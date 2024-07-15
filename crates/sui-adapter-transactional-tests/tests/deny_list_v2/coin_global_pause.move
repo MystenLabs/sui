@@ -62,9 +62,9 @@ module test::regulated_coin {
     entry fun assert_global_pause_status(
         deny_list: &DenyList,
         expected: bool,
-        ctx: &TxContext,
     ) {
-        let status = coin::deny_list_v2_most_recent_is_global_pause_enabled<REGULATED_COIN>(deny_list, ctx);
+        let status =
+            coin::deny_list_v2_is_global_pause_enabled_next_epoch<REGULATED_COIN>(deny_list);
         assert!(status == expected, 0);
     }
 }

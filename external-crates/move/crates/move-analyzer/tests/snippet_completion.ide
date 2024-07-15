@@ -1,0 +1,29 @@
+// Tests completions of various code snippets
+{
+  "Completion": {
+    "project": "tests/completion",
+    "file_tests": {
+      // tests completion of the object snippet
+      "object.move": [
+        {
+          "use_line": 3,
+          "use_col": 38
+        }
+      ],
+      // tests completion of the init snippet
+      "init.move": [
+        {
+          "use_line": 3,
+          "use_col": 9
+        }
+      ],
+      // tests completion of the init snippet with one-time witness defined
+      "init_otw.move": [
+        {
+          "use_line": 5,
+          "use_col": 9
+        }
+      ]
+    }
+  }
+}

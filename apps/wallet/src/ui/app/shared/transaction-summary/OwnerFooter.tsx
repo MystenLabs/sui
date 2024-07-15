@@ -18,10 +18,10 @@ export function OwnerFooter({ owner, ownerType }: { owner?: string; ownerType?: 
 		ownerType === 'Shared'
 			? 'Shared'
 			: isValidSuiAddress(owner)
-			? isOwner
-				? 'You'
-				: formatAddress(owner)
-			: owner;
+				? isOwner
+					? 'You'
+					: formatAddress(owner)
+				: owner;
 
 	return (
 		<SummaryCardFooter>

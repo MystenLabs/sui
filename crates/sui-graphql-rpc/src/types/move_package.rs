@@ -17,6 +17,7 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
+use super::uint53::UInt53;
 use crate::consistency::ConsistentNamedCursor;
 use crate::error::Error;
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -44,7 +45,7 @@ struct Linkage {
     upgraded_id: SuiAddress,
 
     /// The version of the dependency that this package depends on.
-    version: u64,
+    version: UInt53,
 }
 
 /// Information about which previous versions of a package introduced its types.
@@ -187,7 +188,7 @@ impl MovePackage {
             .await
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_).version().await
     }
 
@@ -347,7 +348,7 @@ impl MovePackage {
             .map(|(&runtime_id, upgrade_info)| Linkage {
                 original_id: runtime_id.into(),
                 upgraded_id: upgrade_info.upgraded_id.into(),
-                version: upgrade_info.upgraded_version.value(),
+                version: upgrade_info.upgraded_version.value().into(),
             })
             .collect();
 

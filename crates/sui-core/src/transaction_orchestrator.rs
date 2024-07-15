@@ -38,14 +38,14 @@ use sui_types::quorum_driver_types::{
     ExecuteTransactionResponse, ExecuteTransactionResponseV3, FinalizedEffects,
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction::VerifiedTransaction;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
-
-use sui_types::transaction::VerifiedTransaction;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -64,19 +64,20 @@ pub struct TransactiondOrchestrator<A: Clone> {
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
     pub fn new_with_network_clients(
+        epoch_start_state: &EpochStartSystemState,
         validator_state: Arc<AuthorityState>,
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let validators = AuthorityAggregator::new_from_local_system_state(
-            validator_state.get_object_cache_reader(),
+        let validators = AuthorityAggregator::new_from_epoch_start_state(
+            epoch_start_state,
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
-            auth_agg_metrics.clone(),
-        )?;
+            Arc::new(auth_agg_metrics.clone()),
+        );
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
@@ -85,13 +86,13 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             safe_client_metrics_base,
             auth_agg_metrics,
         );
-        Ok(TransactiondOrchestrator::new(
+        TransactiondOrchestrator::new(
             Arc::new(validators),
             validator_state,
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
     }
 }
 

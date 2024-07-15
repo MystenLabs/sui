@@ -25,7 +25,7 @@ export function mapGraphQLObjectToRpcObject(
 					hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
 					version: object.version as unknown as string,
 					type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
-			  }
+				}
 			: undefined,
 		content: {
 			dataType: 'moveObject' as const,
@@ -63,7 +63,7 @@ export function mapGraphQLMoveObjectToRpcObject(
 					hasPublicTransfer: object?.hasPublicTransfer!,
 					version: object.version as unknown as string,
 					type: toShortTypeString(object?.contents?.type.repr!),
-			  }
+				}
 			: undefined,
 		content: {
 			dataType: 'moveObject' as const,

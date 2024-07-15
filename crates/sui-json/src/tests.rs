@@ -9,6 +9,7 @@ use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTy
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
+use serde::Serialize;
 use serde_json::{json, Value};
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
@@ -417,8 +418,7 @@ fn test_basic_args_linter_pure_args_good() {
 
 #[test]
 fn test_basic_args_linter_top_level() {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics");
     let compiled_modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
@@ -429,236 +429,81 @@ fn test_basic_args_linter_top_level() {
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
-    let example_package = example_package.data.try_as_package().unwrap();
+    let package = example_package.data.try_as_package().unwrap();
 
-    let module = Identifier::new("geniteam").unwrap();
-    let function = Identifier::new("create_monster").unwrap();
+    let module = Identifier::new("resolve_args").unwrap();
+    let function = Identifier::new("foo").unwrap();
 
-    /*
-    Function signature:
-            public fun create_monster(
-                _player: &mut Player,
-                farm: &mut Farm,
-                pet_monsters: &mut Collection,
-                monster_name: vector<u8>,
-                monster_img_index: u64,
-                breed: u8,
-                monster_affinity: u8,
-                monster_description: vector<u8>,
-                display: vector<u8>,
-                ctx: &mut TxContext
-            )
-    */
+    // Function signature:
+    // foo(
+    //     _foo: &mut Foo,
+    //     _bar: vector<Foo>,
+    //     _name: vector<u8>,
+    //     _index: u64,
+    //     _flag: u8,
+    //     _recipient: address,
+    //     _ctx: &mut TxContext,
+    // )
 
-    let monster_name_raw = "MonsterName";
-    let monster_img_id_raw = "12345678";
-    let breed_raw = 89;
-    let monster_affinity_raw = 200;
-    let monster_description_raw = "MonsterDescription";
-    let display_raw = "DisplayUrl";
+    let foo_id = ObjectID::random();
+    let bar_id = ObjectID::random();
+    let baz_id = ObjectID::random();
+    let recipient_addr = SuiAddress::random_for_testing_only();
 
-    let player_id = json!(format!("0x{}", ObjectID::random()));
-    // This is okay since not starting with 0x
-    let monster_name = json!(monster_name_raw);
-    // Well within U64 bounds
-    let monster_img_id = json!(monster_img_id_raw);
-    // Well within U8 bounds
-    let breed = json!(breed_raw);
-    // Well within U8 bounds
-    let monster_affinity = json!(monster_affinity_raw);
-    // This is okay since not starting with 0x
-    let monster_description = json!(monster_description_raw);
-    // This is okay since not starting with 0x
-    let display = json!(display_raw);
+    let foo = json!(foo_id.to_canonical_string(/* with_prefix */ true));
+    let bar = json!([
+        bar_id.to_canonical_string(/* with_prefix */ true),
+        baz_id.to_canonical_string(/* with_prefix */ true),
+    ]);
 
-    // They have to be ordered
-    let args = vec![
-        player_id,
-        monster_name.clone(),
-        monster_img_id.clone(),
-        breed,
-        monster_affinity.clone(),
-        monster_description.clone(),
-        display.clone(),
+    let name = json!("Name");
+    let index = json!("12345678");
+    let flag = json!(89);
+    let recipient = json!(recipient_addr.to_string());
+
+    let args: Vec<_> = [
+        foo.clone(),
+        bar.clone(),
+        name.clone(),
+        index.clone(),
+        flag,
+        recipient.clone(),
     ]
-    .iter()
+    .into_iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
 
-    let json_args =
-        resolve_move_function_args(example_package, module.clone(), function.clone(), &[], args)
-            .unwrap();
+    let json_args: Vec<_> =
+        resolve_move_function_args(package, module.clone(), function.clone(), &[], args)
+            .unwrap()
+            .into_iter()
+            .map(|(arg, _)| arg)
+            .collect();
 
-    assert!(!json_args.is_empty());
-
-    assert_eq!(
-        json_args[1].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
-    );
-    assert_eq!(
-        json_args[2].0,
-        ResolvedCallArg::Pure(
-            bcs::to_bytes(&(monster_img_id_raw.parse::<u64>().unwrap())).unwrap()
-        ),
-    );
-    assert_eq!(
-        json_args[3].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
-    );
-    assert_eq!(
-        json_args[4].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
-    );
-    assert_eq!(
-        json_args[5].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
-    );
-
-    // Breed is u8 so too large
-    let args = vec![
-        monster_name,
-        monster_img_id,
-        json!(10000u64),
-        monster_affinity,
-        monster_description,
-        display,
-    ]
-    .iter()
-    .map(|q| SuiJsonValue::new(q.clone()).unwrap())
-    .collect();
-    assert!(resolve_move_function_args(example_package, module, function, &[], args,).is_err());
-
-    // Test with vecu8 as address
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
-    let compiled_modules = BuildConfig::new_for_testing()
-        .build(&path)
-        .unwrap()
-        .into_modules();
-    let example_package = Object::new_package_for_testing(
-        &compiled_modules,
-        TransactionDigest::genesis_marker(),
-        BuiltInFramework::genesis_move_packages(),
-    )
-    .unwrap();
-    let framework_pkg = example_package.data.try_as_package().unwrap();
-
-    let module = Identifier::new("object_basics").unwrap();
-    let function = Identifier::new("create").unwrap();
-
-    /*
-    Function signature:
-            public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext)
-    */
-    let value_raw = "29897";
-    let address = SuiAddress::random_for_testing_only();
-
-    let value = json!(value_raw);
-    // Encode as hex string
-    let addr = json!(format!("{address}"));
-
-    // They have to be ordered
-    let args = [value, addr]
-        .iter()
-        .map(|q| SuiJsonValue::new(q.clone()).unwrap())
-        .collect();
-
-    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
-
-    assert_eq!(
-        args[0].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&(value_raw.parse::<u64>().unwrap())).unwrap())
-    );
-
-    // Need to verify this specially
-    // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
-    assert_eq!(
-        args[1].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap()),
-    );
-
-    // Test with object args
-
-    let module = Identifier::new("object_basics").unwrap();
-    let function = Identifier::new("transfer").unwrap();
-
-    /*
-    Function signature:
-            public fun transfer(o: Object, recipient: vector<u8>, _ctx: &mut TxContext)
-    */
-    let object_id_raw = ObjectID::random();
-    let address = SuiAddress::random_for_testing_only();
-
-    let object_id = json!(format!("{object_id_raw}"));
-    // Encode as hex string
-    let addr = json!(format!("{address}"));
-
-    // They have to be ordered
-    let args = [object_id, addr]
-        .iter()
-        .map(|q| SuiJsonValue::new(q.clone()).unwrap())
-        .collect();
-
-    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
-
-    assert_eq!(
-        args[0].0,
-        ResolvedCallArg::Object(
-            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw)).unwrap()
-        )
-    );
-
-    // Need to verify this specially
-    // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
-    assert_eq!(
-        args[1].0,
-        ResolvedCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
-    );
-
-    // Test with object vector  args
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../sui-core/src/unit_tests/data/entry_point_vector");
-    let compiled_modules = BuildConfig::new_for_testing()
-        .build(&path)
-        .unwrap()
-        .into_modules();
-    let example_package = Object::new_package_for_testing(
-        &compiled_modules,
-        TransactionDigest::genesis_marker(),
-        BuiltInFramework::genesis_move_packages(),
-    )
-    .unwrap();
-    let example_package = example_package.data.try_as_package().unwrap();
-
-    let module = Identifier::new("entry_point_vector").unwrap();
-    let function = Identifier::new("two_obj_vec_destroy").unwrap();
-
-    /*
-    Function signature:
-            public entry fun two_obj_vec_destroy(v: vector<Obj>, _: &mut TxContext)
-     */
-    let object_id_raw1 = ObjectID::random();
-    let object_id_raw2 = ObjectID::random();
-    let object_id1 = json!(format!("0x{}", object_id_raw1));
-    let object_id2 = json!(format!("0x{}", object_id_raw2));
-
-    let args = vec![SuiJsonValue::new(Value::Array(vec![object_id1, object_id2])).unwrap()];
-
-    let args = resolve_move_function_args(example_package, module, function, &[], args).unwrap();
-
-    assert!(matches!(args[0].0, ResolvedCallArg::ObjVec { .. }));
-
-    if let ResolvedCallArg::ObjVec(vec) = &args[0].0 {
-        assert_eq!(vec.len(), 2);
-        assert_eq!(
-            vec[0],
-            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw1)).unwrap()
-        );
-        assert_eq!(
-            vec[1],
-            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw2)).unwrap()
-        );
+    use ResolvedCallArg as RCA;
+    fn pure<T: Serialize>(t: &T) -> RCA {
+        RCA::Pure(bcs::to_bytes(t).unwrap())
     }
+
+    assert_eq!(
+        json_args,
+        vec![
+            RCA::Object(foo_id),
+            RCA::ObjVec(vec![bar_id, baz_id]),
+            pure(&"Name"),
+            pure(&12345678u64),
+            pure(&89u8),
+            pure(&recipient_addr),
+        ],
+    );
+
+    // Flag is u8 so too large
+    let args: Vec<_> = [foo, bar, name, index, json!(10000u64), recipient]
+        .into_iter()
+        .map(|q| SuiJsonValue::new(q.clone()).unwrap())
+        .collect();
+
+    assert!(resolve_move_function_args(package, module, function, &[], args,).is_err());
 }
 
 #[test]

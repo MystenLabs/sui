@@ -40,7 +40,7 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObject;
+    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -830,7 +830,12 @@ mod checked {
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
-                state_view.check_coin_deny_list(&written_objects)?;
+                let DenyListResult {
+                    result,
+                    num_non_gas_coin_owners,
+                } = state_view.check_coin_deny_list(&written_objects);
+                gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+                result?;
             }
 
             let user_events = user_events

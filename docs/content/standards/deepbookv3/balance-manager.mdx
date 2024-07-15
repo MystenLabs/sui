@@ -1,0 +1,115 @@
+---
+title: BalanceManager
+description: Learn about the balance manager and how it works
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+The `BalanceManager` shared object holds all balances for different assets. To perform trades, pass a combination of `BalanceManager` and `TradeProof` into a [pool](./design.mdx#pool). `TradeProof`s are generated in one of two ways, either by the `BalanceManager` owner directly, or by any `TradeCap` owner. The owner can generate a `TradeProof` without the risk of equivocation. The `TradeCap` owner, because it's an owned object, risks equivocation when generating a `TradeProof`. Generally, a high frequency trading engine trades as the default owner.
+
+With exception to swaps, all interactions with DeepBook require a `BalanceManager` as one of its inputs. When orders are matched, funds are transferred to or from the `BalanceManager`. You can use a single `BalanceManager` between all pools.
+
+## API
+
+Following are the different public functions that the `BalanceManager` exposes.
+
+### Create a `BalanceManager`
+
+The `new()` function creates a `BalanceManager` hot potato (a struct with no abilities). Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
+
+```move
+/// Create a new Balance Manager.
+public fun new(ctx: &mut TxContext): BalanceManager;
+
+/// Share the balance manager.
+public fun share(balance_manager: BalanceManager);
+```
+
+### Mint a `TradeCap`
+
+The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum number of `TradeCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing `TradeCap` must be revoked before minting new ones.
+
+```move
+/// Mint a `TradeCap`, only owner can mint a `TradeCap`.
+public fun mint_trade_cap(
+	balance_manager: &mut BalanceManager,
+	ctx: &mut TxContext
+): TradeCap
+
+/// Revoke a `TradeCap`. Only the owner can revoke a `TradeCap`.
+public fun revoke_trade_cap(
+	balance_manager: &mut BalanceManager,
+	trade_cap_id: &ID,
+	ctx: &TxContext
+)
+```
+
+### Generate a `TradeProof`
+
+To call any function that requires a balance check or transfer, the user must provide their `BalanceManager` as well as a `TradeProof`. There are two ways to generate a trade proof, one used by the owner and another used by a `TradeCap` owner.
+
+```move
+/// Generate a `TradeProof` by the owner. The owner does not require a capability
+/// and can generate TradeProofs without the risk of equivocation.
+public fun generate_proof_as_owner(
+	balance_manager: &mut BalanceManager,
+	ctx: &TxContext
+): TradeProof
+
+/// Generate a `TradeProof` with a `TradeCap`.
+/// Risk of equivocation since `TradeCap` is an owned object.
+public fun generate_proof_as_trader(
+	balance_manager: &mut BalanceManager,
+	trade_cap: &TradeCap,
+	ctx: &TxContext
+): TradeProof
+```
+
+### Deposit funds
+
+Only the owner can deposit funds into the `BalanceManager`.
+
+```move
+/// Deposit funds to a balance_manager. Only owner can call this directly.
+public fun deposit<T>(
+  balance_manager: &mut BalanceManager,
+  coin: Coin<T>,
+  ctx: &mut TxContext,
+)
+```
+
+### Withdraw funds
+
+Only the owner can withdraw funds from the `BalanceManager`.
+
+```move
+/// Withdraw funds from a balance_manager. Only owner can call this directly.
+/// If withdraw_all is true, amount is ignored and full balance withdrawn.
+/// If withdraw_all is false, withdraw_amount is withdrawn.
+public fun withdraw<T>(
+  balance_manager: &mut BalanceManager,
+  withdraw_amount: u64,
+  ctx: &mut TxContext,
+): Coin<T>
+
+public fun withdraw_all<T>(
+  balance_manager: &mut BalanceManager,
+  ctx: &mut TxContext,
+): Coin<T>
+```
+
+### Read endpoints
+
+```move
+/// Validate that this `TradeProof` can access the balance manager's funds.
+public fun validate_proof(balance_manager: &BalanceManager, proof: &TradeProof)
+
+/// Returns the balance of a Coin in an balance_manager.
+public fun balance<T>(balance_manager: &BalanceManager): u64
+
+/// Returns the owner of the balance_manager.
+public fun owner(balance_manager: &BalanceManager): address
+
+/// Returns the owner of the balance_manager.
+public fun id(balance_manager: &BalanceManager): ID
+```

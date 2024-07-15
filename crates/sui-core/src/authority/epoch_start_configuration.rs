@@ -86,8 +86,7 @@ impl EpochFlag {
 
         if enable_state_accumulator_v2 {
             new_flags.push(EpochFlag::StateAccumulatorV2EnabledTestnet);
-            // TODO: enable on mainnet
-            // new_flags.push(EpochFlag::StateAccumulatorV2EnabledMainnet);
+            new_flags.push(EpochFlag::StateAccumulatorV2EnabledMainnet);
         }
 
         new_flags

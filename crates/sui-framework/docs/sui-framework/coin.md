@@ -33,15 +33,18 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
 -  [Function `create_regulated_currency_v2`](#0x2_coin_create_regulated_currency_v2)
+-  [Function `migrate_regulated_currency_to_v2`](#0x2_coin_migrate_regulated_currency_to_v2)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `deny_list_v2_add`](#0x2_coin_deny_list_v2_add)
 -  [Function `deny_list_v2_remove`](#0x2_coin_deny_list_v2_remove)
--  [Function `deny_list_v2_most_recent_contains`](#0x2_coin_deny_list_v2_most_recent_contains)
+-  [Function `deny_list_v2_contains_current_epoch`](#0x2_coin_deny_list_v2_contains_current_epoch)
+-  [Function `deny_list_v2_contains_next_epoch`](#0x2_coin_deny_list_v2_contains_next_epoch)
 -  [Function `deny_list_v2_enable_global_pause`](#0x2_coin_deny_list_v2_enable_global_pause)
 -  [Function `deny_list_v2_disable_global_pause`](#0x2_coin_deny_list_v2_disable_global_pause)
--  [Function `deny_list_v2_most_recent_is_global_pause_enabled`](#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled)
+-  [Function `deny_list_v2_is_global_pause_enabled_current_epoch`](#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch)
+-  [Function `deny_list_v2_is_global_pause_enabled_next_epoch`](#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
@@ -250,6 +253,11 @@ coins of type <code>T</code>. Transferable
 
 ## Resource `DenyCapV2`
 
+Capability allowing the bearer to deny addresses from using the currency's coins--
+immediately preventing those addresses from interacting with the coin as an input to a
+transaction and at the start of the next preventing them from receiving the coin.
+If <code>allow_global_pause</code> is true, the bearer can enable a global pause that behaves as if
+all addresses were added to the deny list.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; <b>has</b> store, key
@@ -879,6 +887,14 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
 
 ## Function `create_regulated_currency_v2`
 
+This creates a new currency, via <code>create_currency</code>, but with an extra capability that
+allows for specific addresses to have their coins frozen. When an address is added to the
+deny list, it is immediately unable to interact with the currency's coin as input objects.
+Additionally at the start of the next epoch, they will be unable to receive the currency's
+coin.
+The <code>allow_global_pause</code> flag enables an additional API that will cause all addresses to be
+be denied. Note however, that this doesn't affect per-address entries of the deny list and
+will not change the result of the "contains" APIs.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
@@ -898,7 +914,7 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
     description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     icon_url: Option&lt;Url&gt;,
     allow_global_pause: bool,
-    ctx: &<b>mut</b> TxContext
+    ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
         witness,
@@ -919,6 +935,45 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
         deny_cap_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
     (treasury_cap, deny_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_migrate_regulated_currency_to_v2"></a>
+
+## Function `migrate_regulated_currency_to_v2`
+
+Given the <code><a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a></code> for a regulated currency, migrate it to the new <code><a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a></code> type.
+All entries in the deny list will be migrated to the new format.
+See <code>create_regulated_currency_v2</code> for details on the new v2 of the deny list.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_migrate_regulated_currency_to_v2">migrate_regulated_currency_to_v2</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, cap: <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_migrate_regulated_currency_to_v2">migrate_regulated_currency_to_v2</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    cap: <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+    allow_global_pause: bool,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
+    <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a> { id } = cap;
+    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.migrate_v1_to_v2(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx);
+    <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        allow_global_pause,
+    }
 }
 </code></pre>
 
@@ -1018,6 +1073,9 @@ accordingly.
 
 ## Function `deny_list_v2_add`
 
+Adds the given address to the deny list, preventing it from interacting with the specified
+coin type as an input to a transaction. Additionally at the start of the next epoch, the
+address will be unable to receive objects of this coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -1048,6 +1106,9 @@ accordingly.
 
 ## Function `deny_list_v2_remove`
 
+Removes an address from the deny list. Similar to <code>deny_list_v2_add</code>, the effect for input
+objects will be immediate, but the effect for receiving objects will be delayed until the
+next epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -1074,13 +1135,15 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_v2_most_recent_contains"></a>
+<a name="0x2_coin_deny_list_v2_contains_current_epoch"></a>
 
-## Function `deny_list_v2_most_recent_contains`
+## Function `deny_list_v2_contains_current_epoch`
+
+Check if the deny list contains the given address for the current epoch. Denied addresses
+in the current epoch will be unable to receive objects of this coin type.
 
 
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_contains">deny_list_v2_most_recent_contains</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1089,13 +1152,44 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_contains">deny_list_v2_most_recent_contains</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_current_epoch">deny_list_v2_contains_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     addr: <b>address</b>,
     ctx: &TxContext,
 ): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_most_recent_contains(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_contains_current_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_contains_next_epoch"></a>
+
+## Function `deny_list_v2_contains_next_epoch`
+
+Check if the deny list contains the given address for the next epoch. Denied addresses in
+the next epoch will immediately be unable to use objects of this coin type as inputs. At the
+start of the next epoch, the address will be unable to receive objects of this coin type.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
+    addr: <b>address</b>,
+): bool {
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_contains_next_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr)
 }
 </code></pre>
 
@@ -1107,6 +1201,9 @@ accordingly.
 
 ## Function `deny_list_v2_enable_global_pause`
 
+Enable the global pause for the given coin type. This will immediately prevent all addresses
+from using objects of this coin type as inputs. At the start of the next epoch, all
+addresses will be unable to receive objects of this coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_global_pause">deny_list_v2_enable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -1137,6 +1234,9 @@ accordingly.
 
 ## Function `deny_list_v2_disable_global_pause`
 
+Disable the global pause for the given coin type. This will immediately allow all addresses
+to resume using objects of this coin type as inputs. However, receiving objects of this coin
+type will still be paused until the start of the next epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_global_pause">deny_list_v2_disable_global_pause</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -1163,13 +1263,14 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled"></a>
+<a name="0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch"></a>
 
-## Function `deny_list_v2_most_recent_is_global_pause_enabled`
+## Function `deny_list_v2_is_global_pause_enabled_current_epoch`
+
+Check if the global pause is enabled for the given coin type in the current epoch.
 
 
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled">deny_list_v2_most_recent_is_global_pause_enabled</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1178,12 +1279,40 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_most_recent_is_global_pause_enabled">deny_list_v2_most_recent_is_global_pause_enabled</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(
     <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
     ctx: &TxContext,
 ): bool {
     <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_most_recent_is_global_pause_enabled(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_is_global_pause_enabled_current_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch"></a>
+
+## Function `deny_list_v2_is_global_pause_enabled_next_epoch`
+
+Check if the global pause is enabled for the given coin type in the next epoch.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &DenyList,
+): bool {
+    <b>let</b> ty = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.v2_is_global_pause_enabled_next_epoch(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
 }
 </code></pre>
 

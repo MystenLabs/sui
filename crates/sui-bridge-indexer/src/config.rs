@@ -19,6 +19,8 @@ pub struct IndexerConfig {
     pub metric_url: String,
     pub metric_port: u16,
     pub sui_rpc_url: Option<String>,
+    pub back_fill_lot_size: u64,
+    pub resume_from_checkpoint: Option<u64>,
 }
 
 impl sui_config::Config for IndexerConfig {}

@@ -47,7 +47,7 @@ pub struct FilePosition {
 
 /// A position holds the byte offset along with the line and column location in a file.
 /// Both are zero-indexed.
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Copy)]
 pub struct Position {
     // zero-indexed line offset
     line_offset: usize,
@@ -59,7 +59,7 @@ pub struct Position {
 
 /// A file, and the usize start and usize end that corresponds to a `Loc`
 pub struct FileByteSpan {
-    pub file_id: FileId,
+    pub file_hash: FileHash,
     pub byte_span: ByteSpan,
 }
 
@@ -140,6 +140,16 @@ impl MappedFiles {
             .map(|file| (*file.name(), file.source().clone()))
     }
 
+    /// Find a file hash for a path buffer. Note this is inefficient.
+    pub fn file_hash(&self, path: &PathBuf) -> Option<FileHash> {
+        for (file_hash, file_path) in &self.file_name_mapping {
+            if file_path == path {
+                return Some(*file_hash);
+            }
+        }
+        None
+    }
+
     /// Returns the FileHashes for iteration
     pub fn keys(&self) -> hash_map::Keys<'_, FileHash, FileId> {
         self.file_mapping.keys()
@@ -215,13 +225,14 @@ impl MappedFiles {
     }
 
     pub fn position_opt(&self, loc: &Loc) -> Option<FilePositionSpan> {
+        let file_hash = loc.file_hash();
         let start_loc = loc.start() as usize;
         let end_loc = loc.end() as usize;
         let file_id = *self.file_mapping().get(&loc.file_hash())?;
         let start_file_loc = self.files().location(file_id, start_loc).ok()?;
         let end_file_loc = self.files().location(file_id, end_loc).ok()?;
         let posn = FilePositionSpan {
-            file_hash: loc.file_hash(),
+            file_hash,
             start: Position {
                 line_offset: start_file_loc.line_number - 1,
                 column_offset: start_file_loc.column_number - 1,
@@ -237,12 +248,12 @@ impl MappedFiles {
     }
 
     pub fn byte_span_opt(&self, loc: &Loc) -> Option<FileByteSpan> {
+        let file_hash = loc.file_hash();
         let start = loc.start() as usize;
         let end = loc.end() as usize;
-        let file_id = *self.file_mapping().get(&loc.file_hash())?;
         let posn = FileByteSpan {
             byte_span: ByteSpan { start, end },
-            file_id,
+            file_hash,
         };
         Some(posn)
     }
@@ -382,6 +393,18 @@ impl FilePosition {
     }
 }
 
+impl FilePositionSpan {
+    /// Return the start position from the span
+    pub fn file_start_position(self) -> FilePosition {
+        FilePosition::new(self.file_hash, self.start)
+    }
+
+    /// Return the end position from the span
+    pub fn file_end_position(self) -> FilePosition {
+        FilePosition::new(self.file_hash, self.start)
+    }
+}
+
 impl Position {
     pub fn empty() -> Self {
         Position {
@@ -396,7 +419,7 @@ impl Position {
         self.line_offset + 1
     }
 
-    /// User-facing (1-indexed) coulmn
+    /// User-facing (1-indexed) column
     pub fn user_column(&self) -> usize {
         self.column_offset + 1
     }
