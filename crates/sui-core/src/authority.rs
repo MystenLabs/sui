@@ -264,6 +264,8 @@ pub struct AuthorityMetrics {
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
 
+    pub(crate) transaction_overload_sources: IntCounterVec,
+
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
     post_processing_total_tx_indexed: IntCounter,
@@ -567,6 +569,12 @@ impl AuthorityMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
+            .unwrap(),
+            transaction_overload_sources: register_int_counter_vec_with_registry!(
+                "transaction_overload_sources",
+                "Number of times each source indicates transaction overload.",
+                &["source"],
+                registry)
             .unwrap(),
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
@@ -970,11 +978,18 @@ impl AuthorityState {
         do_authority_overload_check: bool,
     ) -> SuiResult {
         if do_authority_overload_check {
-            self.check_authority_overload(tx_data)?;
+            self.check_authority_overload(tx_data).tap_err(|_| {
+                self.update_overload_metrics("execution_queue");
+            })?;
         }
         self.transaction_manager
-            .check_execution_overload(self.overload_config(), tx_data)?;
-        consensus_adapter.check_consensus_overload()?;
+            .check_execution_overload(self.overload_config(), tx_data)
+            .tap_err(|_| {
+                self.update_overload_metrics("execution_pending");
+            })?;
+        consensus_adapter.check_consensus_overload().tap_err(|_| {
+            self.update_overload_metrics("consensus");
+        })?;
         Ok(())
     }
 
@@ -988,6 +1003,13 @@ impl AuthorityState {
             .load_shedding_percentage
             .load(Ordering::Relaxed);
         overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
+    }
+
+    fn update_overload_metrics(&self, source: &str) {
+        self.metrics
+            .transaction_overload_sources
+            .with_label_values(&[source])
+            .inc();
     }
 
     /// Executes a transaction that's known to have correct effects.
