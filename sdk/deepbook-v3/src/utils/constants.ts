@@ -42,7 +42,7 @@ export const testnetCoins: CoinMap = {
 	DBUSDT: {
 		address: `0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7`,
 		type: `0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDT::DBUSDT`,
-		scalar: 100000000,
+		scalar: 1000000,
 	},
 };
 
