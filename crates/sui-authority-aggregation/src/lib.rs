@@ -50,7 +50,7 @@ pub async fn quorum_map_then_reduce_with_timeout_and_prefs<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Copy + 'a,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>>,
@@ -66,7 +66,7 @@ where
             let concise_name = name.concise_owned();
             monitored_future!(async move {
                 (
-                    name,
+                    name.clone(),
                     execute(name, client)
                         .instrument(
                             tracing::trace_span!("quorum_map_auth", authority =? concise_name),
@@ -153,7 +153,7 @@ pub async fn quorum_map_then_reduce_with_timeout<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Copy + 'a,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>> + 'a,

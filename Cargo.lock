@@ -12256,7 +12256,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.8.1",
  "shared-crypto",
- "sui-common",
+ "sui-authority-aggregation",
  "sui-config",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
@@ -12370,17 +12370,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
-]
-
-[[package]]
-name = "sui-common"
-version = "0.1.0"
-dependencies = [
- "futures",
- "mysten-metrics",
- "sui-types",
- "tokio",
- "tracing",
 ]
 
 [[package]]
