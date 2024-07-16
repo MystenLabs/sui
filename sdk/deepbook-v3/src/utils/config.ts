@@ -64,7 +64,7 @@ export class DeepBookConfig {
 		this.DEEPBOOK_PACKAGE_ID = packageId;
 	}
 
-	setRegistry(registryId: string) {
+	setRegistryId(registryId: string) {
 		this.REGISTRY_ID = registryId;
 	}
 
