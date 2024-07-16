@@ -4,6 +4,7 @@
 #[test_only]
 module sui::test_scenario {
     use sui::vec_map::VecMap;
+    use sui::random::{Self, RandomGenerator};
 
     #[allow(unused_const)]
     /// the transaction failed when generating these effects. For example, a circular ownership
@@ -40,6 +41,8 @@ module sui::test_scenario {
     /// Unable to deallocate the receiving ticket
     const EUnableToDeallocateReceivingTicket: u64 = 7;
 
+    const TX_HASH_LENGTH: u16 = 32;
+
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
     /// These objects can be accessed via functions like `take_from_sender`, which gives the
@@ -72,6 +75,7 @@ module sui::test_scenario {
     public struct Scenario {
         txn_number: u64,
         ctx: TxContext,
+        generator: RandomGenerator,
     }
 
     /// The effects of a transaction
@@ -96,9 +100,12 @@ module sui::test_scenario {
 
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: address): Scenario {
+        let mut generator = random::new_generator_for_testing();
+        let test_random_tx_hash = generator.generate_bytes(TX_HASH_LENGTH);
         Scenario {
             txn_number: 0,
-            ctx: tx_context::new_from_hint(sender, 0, 0, 0, 0),
+            ctx: tx_context::new(sender, test_random_tx_hash, 0, 0, 0),
+            generator,
         }
     }
 
@@ -116,9 +123,10 @@ module sui::test_scenario {
         scenario.txn_number = scenario.txn_number + 1;
         let epoch = scenario.ctx.epoch();
         let epoch_timestamp_ms = scenario.ctx.epoch_timestamp_ms();
-        scenario.ctx = tx_context::new_from_hint(
+        let test_random_tx_hash = scenario.generator.generate_bytes(TX_HASH_LENGTH);
+        scenario.ctx = tx_context::new(
             sender,
-            scenario.txn_number,
+            test_random_tx_hash,
             epoch,
             epoch_timestamp_ms,
             0,
@@ -151,7 +159,7 @@ module sui::test_scenario {
     /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
     /// Will abort if TransactionEffects cannot be generated
     public fun end(scenario: Scenario): TransactionEffects {
-        let Scenario { txn_number: _, ctx: _ } = scenario;
+        let Scenario { .. } = scenario;
         end_transaction()
     }
 

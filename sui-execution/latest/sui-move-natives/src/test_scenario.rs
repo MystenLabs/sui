@@ -130,7 +130,7 @@ pub fn end_transaction(
                 unreceived.insert(id);
                 // This must be untouched since the allocated ticket is still live, so ok to re-insert.
                 object_runtime_ref
-        .test_inventories
+                    .test_inventories
                     .objects
                     .insert(id, value);
             }
@@ -621,6 +621,7 @@ pub fn allocate_receiving_ticket_for_object(
     let ty = get_specified_ty(ty_args);
     let id = pop_id(&mut args)?;
 
+    let abilities = context.type_to_abilities(&ty)?;
     let Some((tag, layout, _)) = get_tag_and_layouts(context, &ty)? else {
         return Ok(NativeResult::err(
             context.gas_used(),
@@ -644,10 +645,11 @@ pub fn allocate_receiving_ticket_for_object(
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
         ));
     };
+    let has_public_transfer = abilities.has_store();
     let move_object = unsafe {
         MoveObject::new_from_execution_with_limit(
             tag.into(),
-            false,
+            has_public_transfer,
             object_version,
             bytes,
             250 * 1024,
