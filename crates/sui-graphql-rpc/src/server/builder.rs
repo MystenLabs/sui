@@ -44,7 +44,7 @@ use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{get, post, MethodRouter, Route};
 use axum::Extension;
-use axum::{headers::Header, Router};
+use axum::Router;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
@@ -57,7 +57,7 @@ use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
-use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -309,11 +309,7 @@ impl ServerBuilder {
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([
-                hyper::header::CONTENT_TYPE,
-                VERSION_HEADER.clone(),
-                LIMITS_HEADER.clone(),
-            ]);
+            .allow_headers([hyper::header::CONTENT_TYPE, LIMITS_HEADER.clone()]);
         Ok(cors)
     }
 

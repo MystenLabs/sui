@@ -12,9 +12,7 @@ use async_graphql::parser::types::{
 };
 use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
-use axum::headers;
 use axum::http::HeaderName;
-use axum::http::HeaderValue;
 use once_cell::sync::Lazy;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::net::SocketAddr;
@@ -48,20 +46,9 @@ struct QueryLimitsCheckerExt {
 
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 
-impl headers::Header for ShowUsage {
-    fn name() -> &'static HeaderName {
+impl ShowUsage {
+    pub(crate) fn name() -> &'static HeaderName {
         &LIMITS_HEADER
-    }
-
-    fn decode<'i, I>(_: &mut I) -> Result<Self, headers::Error>
-    where
-        I: Iterator<Item = &'i HeaderValue>,
-    {
-        Ok(ShowUsage)
-    }
-
-    fn encode<E: Extend<HeaderValue>>(&self, _: &mut E) {
-        unimplemented!()
     }
 }
 
