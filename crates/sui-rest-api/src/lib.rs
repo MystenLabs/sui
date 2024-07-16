@@ -198,6 +198,38 @@ fn info() -> openapiv3::v3_1::Info {
     }
 }
 
+mod _schemars {
+    use schemars::schema::InstanceType;
+    use schemars::schema::Metadata;
+    use schemars::schema::SchemaObject;
+    use schemars::JsonSchema;
+
+    pub(crate) struct U64;
+
+    impl JsonSchema for U64 {
+        fn schema_name() -> String {
+            "u64".to_owned()
+        }
+
+        fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            SchemaObject {
+                metadata: Some(Box::new(Metadata {
+                    description: Some("Radix-10 encoded 64-bit unsigned integer".to_owned()),
+                    ..Default::default()
+                })),
+                instance_type: Some(InstanceType::String.into()),
+                format: Some("u64".to_owned()),
+                ..Default::default()
+            }
+            .into()
+        }
+
+        fn is_referenceable() -> bool {
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
