@@ -96,7 +96,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":2}
+//# run-graphql --cursors {"c":4,"t":2,"i":false}
 # The query fetches the second transaction from the list of ten
 {
   transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
@@ -117,7 +117,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":6}
+//# run-graphql --cursors {"c":4,"t":6,"i":false}
 # The query fetches the sixth transaction from the set, also the first transaction from checkpoint 3
 {
   transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
@@ -138,7 +138,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":10}
+//# run-graphql --cursors {"c":4,"t":10,"i":false}
 # Fetches the last transaction, hasPrevPage is true, hasNextPage is false
 {
   transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
@@ -159,7 +159,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":11}
+//# run-graphql --cursors {"c":4,"t":11,"i":false}
 # Should yield no results, no cursors, and both pages are false
 {
   transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
@@ -180,7 +180,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":12}
+//# run-graphql --cursors {"c":4,"t":12,"i":false}
 # Should yield no results, no cursors, and both pages are false
 {
   transactionBlocks(first: 1 scanLimit: 1 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {

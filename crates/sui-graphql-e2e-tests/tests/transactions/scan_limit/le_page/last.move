@@ -100,7 +100,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":10}
+//# run-graphql --cursors {"c":4,"t":10,"i":false}
 {
   transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
@@ -120,7 +120,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":8}
+//# run-graphql --cursors {"c":4,"t":8,"i":false}
 {
   transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
@@ -140,7 +140,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":6}
+//# run-graphql --cursors {"c":4,"t":6,"i":false}
 {
   transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
@@ -160,28 +160,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":4}
-{
-  transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
-    pageInfo {
-      hasNextPage
-      hasPreviousPage
-      endCursor
-      startCursor
-    }
-    nodes {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
-}
-
-
-//# run-graphql --cursors {"c":4,"t":2}
+//# run-graphql --cursors {"c":4,"t":4,"i":false}
 {
   transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {
@@ -202,7 +181,28 @@ module Test::M1 {
 }
 
 
-//# run-graphql --cursors {"c":4,"t":0}
+//# run-graphql --cursors {"c":4,"t":2,"i":false}
+{
+  transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      endCursor
+      startCursor
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+
+//# run-graphql --cursors {"c":4,"t":0,"i":false}
 {
   transactionBlocks(last: 3 before: "@{cursor_0}" scanLimit: 2 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
     pageInfo {

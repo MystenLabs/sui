@@ -100,7 +100,7 @@ module Test::M1 {
 }
 
 
-//# run-graphql --cursors {"c":7,"t":13}
+//# run-graphql
 {
   transactionBlocks(first: 1 scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -120,7 +120,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":7,"t":2}
+//# run-graphql --cursors {"c":7,"t":2,"i":false}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -141,7 +141,7 @@ module Test::M1 {
 }
 
 
-//# run-graphql --cursors {"c":7,"t":3}
+//# run-graphql --cursors {"c":7,"t":3,"i":false}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -161,7 +161,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":7,"t":8}
+//# run-graphql --cursors {"c":7,"t":8,"i":true}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -181,7 +181,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":7,"t":13}
+//# run-graphql --cursors {"c":7,"t":13,"i":true}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -201,7 +201,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":7,"t":17}
+//# run-graphql --cursors {"c":7,"t":17,"i":false}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
@@ -221,7 +221,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":7,"t":21}
+//# run-graphql --cursors {"c":7,"t":21,"i":false}
 {
   transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {

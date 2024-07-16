@@ -78,7 +78,7 @@ Response: {
           "transactionBlocks": {
             "edges": [
               {
-                "cursor": "eyJjIjozLCJ0IjoyfQ",
+                "cursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "Ap9FiJGfZ2hbKbbYiWvKCqUriZh51TuaLqavgM9eafD7",
                   "sender": {
@@ -93,7 +93,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0IjozfQ",
+                "cursor": "eyJjIjozLCJ0IjozLCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "8FGXx3CxjRxi7xV2d6R2FsiyrsyiBfiHLPyGtVtZodES",
                   "sender": {
@@ -108,7 +108,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0Ijo0fQ",
+                "cursor": "eyJjIjozLCJ0Ijo0LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "HsVHTLTZk5EPHudApRULZfARE7CpCjMsuAPd1UeC6QiP",
                   "sender": {
@@ -123,7 +123,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0Ijo1fQ",
+                "cursor": "eyJjIjozLCJ0Ijo1LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "qMEs41Xi9K7Nae7AxdnJT9d82EYYDvyk9KDixC8ktt3",
                   "sender": {
@@ -145,7 +145,7 @@ Response: {
           "transactionBlocks": {
             "edges": [
               {
-                "cursor": "eyJjIjozLCJ0Ijo2fQ",
+                "cursor": "eyJjIjozLCJ0Ijo2LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "9k4rfA8ZMvyvsU6ar3DVBHH928Tw2aKorQCGJKNCUnYb",
                   "sender": {
@@ -160,7 +160,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0Ijo3fQ",
+                "cursor": "eyJjIjozLCJ0Ijo3LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "GLiUrKx2gJVwbRaMtGwVX26PPyhtUbknb3Q9pa3c9XbQ",
                   "sender": {
@@ -175,7 +175,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0Ijo4fQ",
+                "cursor": "eyJjIjozLCJ0Ijo4LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "9w6r3o2uCzXjbktKREZJSkAFcAH3uKjNFPCTS1qasXKD",
                   "sender": {
@@ -197,7 +197,7 @@ Response: {
           "transactionBlocks": {
             "edges": [
               {
-                "cursor": "eyJjIjozLCJ0Ijo5fQ",
+                "cursor": "eyJjIjozLCJ0Ijo5LCJpIjpmYWxzZX0",
                 "node": {
                   "digest": "12ZTS2Sz3L1HkXMbDsUnfBZHX7XqgtB4KYwNcXfJ2WfS",
                   "sender": {
@@ -212,7 +212,7 @@ Response: {
                 }
               },
               {
-                "cursor": "eyJjIjozLCJ0IjoxMH0",
+                "cursor": "eyJjIjozLCJ0IjoxMCwiaSI6ZmFsc2V9",
                 "node": {
                   "digest": "5cHBxf8yer7uxaGUR1H3X3zHFvqTHgW3fp298CRFdxL",
                   "sender": {
