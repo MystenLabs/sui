@@ -55,14 +55,18 @@ export class DeepBookAdminContract {
 	};
 
 	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unregister_pool_admin`,
 			arguments: [tx.object(this.#config.REGISTRY_ID), tx.object(this.#adminCap())],
-			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
 
 	updateAllowedVersions = (pool: Pool) => (tx: Transaction) => {
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::update_allowed_versions`,
 			arguments: [
@@ -70,7 +74,7 @@ export class DeepBookAdminContract {
 				tx.object(this.#config.REGISTRY_ID),
 				tx.object(this.#adminCap()),
 			],
-			typeArguments: [pool.baseCoin.type, pool.quoteCoin.type],
+			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
 
