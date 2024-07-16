@@ -29,6 +29,8 @@ use crate::{
     CommitIndex, Round,
 };
 
+pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
+
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
@@ -182,7 +184,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
         // The threshold to ignore block should be larger than commit_sync_batch_size,
         // to avoid excessive block rejections and synchronizations.
-        const COMMIT_LAG_MULTIPLIER: u32 = 5;
         if last_commit_index
             + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
             < quorum_commit_index
@@ -693,10 +694,12 @@ mod tests {
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
+            commit_vote_monitor,
             block_verifier.clone(),
             dag_state.clone(),
         );
@@ -749,10 +752,12 @@ mod tests {
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
+            commit_vote_monitor,
             block_verifier.clone(),
             dag_state.clone(),
         );

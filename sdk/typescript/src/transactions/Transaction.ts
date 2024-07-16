@@ -86,7 +86,7 @@ function createTransactionResult(index: number) {
 	}) as TransactionResult;
 }
 
-const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
+const TRANSACTION_BRAND = Symbol.for('@mysten/transaction') as never;
 
 interface SignOptions extends BuildTransactionOptions {
 	signer: Signer;
