@@ -43,7 +43,64 @@
       "get": {}
     },
     "/accounts/{account}/objects": {
-      "get": {}
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "ListAccountObjects",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Address"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "$ref": "#/components/schemas/ObjectId"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountOwnedObjectInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "/objects/{object_id}": {
       "get": {
@@ -357,6 +414,31 @@
   },
   "components": {
     "schemas": {
+      "AccountOwnedObjectInfo": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "owner",
+          "type",
+          "version"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "type": {
+            "$ref": "#/components/schemas/StructTag"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
       "ActiveJwk": {
         "type": "object",
         "required": [
@@ -4449,6 +4531,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Account"
+    },
     {
       "name": "General"
     },
