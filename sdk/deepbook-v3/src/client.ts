@@ -40,6 +40,10 @@ export class DeepBookClient {
 		this.governance = new GovernanceContract(this.#config);
 	}
 
+	setConfig(config: DeepBookConfig) {
+		this.#config = config;
+	}
+
 	addBalanceManager(managerKey: string, managerId: string, tradeCapId?: string) {
 		this.#balanceManagers[managerKey] = {
 			address: managerId,

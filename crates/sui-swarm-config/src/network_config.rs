@@ -28,9 +28,9 @@ impl NetworkConfig {
     pub fn net_addresses(&self) -> Vec<Multiaddr> {
         self.genesis
             .committee_with_network()
-            .network_metadata
-            .into_values()
-            .map(|n| n.network_address)
+            .validators()
+            .values()
+            .map(|(_, n)| n.network_address.clone())
             .collect()
     }
 

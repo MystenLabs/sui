@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_sdk::rpc_types::{
-    get_new_package_obj_from_response, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    get_new_package_obj_from_response, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse,
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
@@ -23,6 +24,7 @@ use sui_types::transaction::{
     DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
 
 pub struct TestTransactionBuilder {
@@ -147,8 +149,8 @@ impl TestTransactionBuilder {
     pub fn call_nft_create(self, package_id: ObjectID) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
-            "mint",
+            "testnet_nft",
+            "mint_to_sender",
             vec![
                 CallArg::Pure(bcs::to_bytes("example_nft_name").unwrap()),
                 CallArg::Pure(bcs::to_bytes("example_nft_description").unwrap()),
@@ -162,7 +164,7 @@ impl TestTransactionBuilder {
     pub fn call_nft_delete(self, package_id: ObjectID, nft_to_delete: ObjectRef) -> Self {
         self.move_call(
             package_id,
-            "devnet_nft",
+            "testnet_nft",
             "burn",
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
         )
@@ -262,7 +264,7 @@ impl TestTransactionBuilder {
             path
         } else {
             let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            path.extend(["..", "..", "sui_programmability", "examples", subpath]);
+            path.extend(["..", "..", "examples", "move", subpath]);
             path
         };
         self.publish(path)
@@ -606,6 +608,49 @@ pub async fn increment_counter(
     context.execute_transaction_must_succeed(txn).await
 }
 
+/// Executes a transaction that generates a new random u128 using Random and emits it as an event.
+pub async fn emit_new_random_u128(
+    context: &WalletContext,
+    package_id: ObjectID,
+) -> SuiTransactionBlockResponse {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let rgp = context.get_reference_gas_price().await.unwrap();
+
+    let client = context.get_client().await.unwrap();
+    let random_obj = client
+        .read_api()
+        .get_object_with_options(
+            SUI_RANDOMNESS_STATE_OBJECT_ID,
+            SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap();
+    let random_obj_owner = random_obj
+        .owner
+        .expect("Expect Randomness object to have an owner");
+
+    let Owner::Shared {
+        initial_shared_version,
+    } = random_obj_owner
+    else {
+        panic!("Expect Randomness to be shared object")
+    };
+    let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+        initial_shared_version,
+        mutable: false,
+    });
+
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, rgp)
+            .move_call(package_id, "random", "new", vec![random_call_arg])
+            .build(),
+    );
+    context.execute_transaction_must_succeed(txn).await
+}
+
 /// Executes a transaction to publish the `nfts` package and returns the package id, id of the gas
 /// object used, and the digest of the transaction.
 pub async fn publish_nfts_package(
@@ -616,7 +661,7 @@ pub async fn publish_nfts_package(
     let gas_price = context.get_reference_gas_price().await.unwrap();
     let txn = context.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_examples("nfts")
+            .publish_examples("nft")
             .build(),
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
@@ -627,7 +672,7 @@ pub async fn publish_nfts_package(
 /// Pre-requisite: `publish_nfts_package` must be called before this function.  Executes a
 /// transaction to create an NFT and returns the sender address, the object id of the NFT, and the
 /// digest of the transaction.
-pub async fn create_devnet_nft(
+pub async fn create_nft(
     context: &WalletContext,
     package_id: ObjectID,
 ) -> (SuiAddress, ObjectID, TransactionDigest) {
@@ -655,7 +700,7 @@ pub async fn create_devnet_nft(
 }
 
 /// Executes a transaction to delete the given NFT.
-pub async fn delete_devnet_nft(
+pub async fn delete_nft(
     context: &WalletContext,
     sender: SuiAddress,
     package_id: ObjectID,

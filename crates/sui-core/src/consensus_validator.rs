@@ -241,7 +241,7 @@ mod tests {
                 .build();
 
         let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config)
+            .with_network_config(&network_config, 0)
             .build()
             .await;
         let name1 = state.name;

@@ -55,17 +55,25 @@ module sui::deny_list {
 
     // === V2 ===
 
+    /// The capability used to write to the deny list config. Ensures that the Configs for the
+    /// DenyList are modified only by this module.
     public struct ConfigWriteCap() has drop;
 
+    /// The dynamic object field key used to store the `Config` for a given type, essentially a
+    /// `(per_type_index, per_type_key)` pair.
     public struct ConfigKey has copy, drop, store {
         per_type_index: u64,
         per_type_key: vector<u8>,
     }
 
+    /// The setting key used to store the deny list for a given address in the `Config`.
     public struct AddressKey(address) has copy, drop, store;
 
+    /// The setting key used to store the global pause setting in the `Config`.
     public struct GlobalPauseKey() has copy, drop, store;
 
+    /// The event emitted when a new `Config` is created for a given type. This can be useful for
+    /// tracking the `ID` of a type's `Config` object.
     public struct PerTypeConfigCreated has copy, drop, store {
         key: ConfigKey,
         config_id: ID,

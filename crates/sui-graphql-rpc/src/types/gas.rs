@@ -171,7 +171,7 @@ impl GasInput {
                 .iter()
                 .map(|o| ObjectKey {
                     object_id: o.0.into(),
-                    version: o.1.value(),
+                    version: o.1.value().into(),
                 })
                 .collect(),
             checkpoint_viewed_at,

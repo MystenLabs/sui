@@ -30,10 +30,7 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::sim_test;
-use sui_protocol_config::{
-    Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion,
-    SupportedProtocolVersions,
-};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
@@ -47,6 +44,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
@@ -3215,7 +3213,10 @@ async fn test_genesis_sui_system_state_object() {
         .get_sui_system_state_object_for_testing()
         .unwrap();
     assert_eq!(
-        &sui_system_state.get_current_epoch_committee().committee,
+        &sui_system_state
+            .get_current_epoch_committee()
+            .committee()
+            .clone(),
         authority_state
             .epoch_store_for_testing()
             .committee()
@@ -4956,7 +4957,7 @@ fn test_choose_next_system_packages() {
 
     macro_rules! make_capabilities {
         ($v: expr, $name: expr, $packages: expr) => {
-            AuthorityCapabilities::new(
+            AuthorityCapabilitiesV1::new(
                 $name,
                 SupportedProtocolVersions::new_for_testing(1, $v),
                 $packages,
@@ -6118,9 +6119,10 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         ]
     );
 
-    // Test get_congested_objects.
-    let congested_objects = input_objects.get_congested_objects().unwrap();
-    assert_eq!(congested_objects, vec![shared_objects[0].id()]);
+    // Test get_cancelled_objects.
+    let (cancelled_objects, cancellation_reason) = input_objects.get_cancelled_objects().unwrap();
+    assert_eq!(cancelled_objects, vec![shared_objects[0].id()]);
+    assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 
     // Consensus commit prologue contains cancelled txn shared object version assignment.
     if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =

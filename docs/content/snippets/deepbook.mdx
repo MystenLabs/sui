@@ -1,0 +1,25 @@
+import { useLocation } from "@docusaurus/router";
+import useGlobalData from '@docusaurus/useGlobalData';
+import Link from '@docusaurus/Link';
+
+export function DBV() {
+  const location = useLocation();
+  const isV3 = location.pathname.includes("v3");
+
+  function DBLink() {
+    return <Link href={isV3 ? "/standards/deepbookv2" : "/standards/deepbookv3"}>DeepBook{isV3 ? "V2" : "V3"} docs</Link>
+  }
+
+  return (
+    <>
+      This documentation is for <b>version {isV3 ? "3" : "2"}</b> of DeepBook. DeepBook{isV3 ? "V3" : "V2"} is currently available in {isV3 ? "Devnet and Testnet" : "Mainnet"}. For documentation on version {isV3 ? "2" : "3"} of DeepBook, see <DBLink />.  
+    </>
+  )
+
+}
+
+:::info
+
+ <DBV />
+
+:::

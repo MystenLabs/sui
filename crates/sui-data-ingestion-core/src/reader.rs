@@ -241,7 +241,7 @@ impl CheckpointReader {
             checkpoints.len(),
         );
         for checkpoint in checkpoints {
-            if self.remote_store_url.is_none()
+            if read_source == "local"
                 && checkpoint.checkpoint_summary.sequence_number > self.current_checkpoint_number
             {
                 break;

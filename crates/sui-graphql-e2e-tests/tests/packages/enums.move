@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator --protocol-version 48
+//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator --protocol-version 51
 
 //# publish --upgradeable --sender A
 

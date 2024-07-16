@@ -1,0 +1,12 @@
+[package]
+name = "token"
+edition = "2024.beta"
+published-at = "0xf5e991aa17b0d3eaf43a069640a50d26855cc789e8c99616978eba7d79fe7512"
+
+[dependencies.Sui]
+git = "https://github.com/MystenLabs/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "framework/mainnet"
+
+[addresses]
+token = "0xf5e991aa17b0d3eaf43a069640a50d26855cc789e8c99616978eba7d79fe7512"

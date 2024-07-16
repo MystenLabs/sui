@@ -1,16 +1,9 @@
 // Checks if symbolication enums work correctly.
-    // test matching of variants
-    // test matching of structs
-    // test matching of ints
-    // test displaying of enum with many variants
-    // test matching of mutable value (guards should be immutable refs)
-    // test matching of nested patterns
-    // tests if a nested pattern var is displayed correctly (it's inside outer guard
-    // but should only be displayed as immutable reference when inside inner guard)
 {
   "UseDef": {
     "project": "tests/enums",
     "file_tests": {
+      // test matching of variants
       "variant_match.move": [
         {
           "use_line": 7,
@@ -141,6 +134,7 @@
           "use_ndx": 3
         }
       ],
+      // test matching of structs
       "struct_match.move": [
         {
           "use_line": 13,
@@ -175,6 +169,7 @@
           "use_ndx": 4
         }
       ],
+      // test matching of ints
       "int_match.move": [
         {
           "use_line": 5,
@@ -197,12 +192,14 @@
           "use_ndx": 1
         }
       ],
+      // test displaying of enum with many variants
       "long_enum.move": [
         {
           "use_line": 3,
           "use_ndx": 0
         }
       ],
+      // test matching of mutable value (guards should be immutable refs)
       "mut_match.move": [
         {
           "use_line": 4,
@@ -221,6 +218,7 @@
           "use_ndx": 2
         }
       ],
+      // test matching of nested patterns
       "nested_match.move": [
         {
           "use_line": 15,
@@ -267,6 +265,8 @@
           "use_ndx": 6
         }
       ],
+      // tests if a nested pattern var is displayed correctly (it's inside outer guard
+      // but should only be displayed as immutable reference when inside inner guard)
       "nested_guard.move": [
         {
           "use_line": 4,

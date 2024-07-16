@@ -3,7 +3,7 @@
 
 use super::{
     big_int::BigInt, gas::GasCostSummary, safe_mode::SafeMode, stake_subsidy::StakeSubsidy,
-    storage_fund::StorageFund, system_parameters::SystemParameters,
+    storage_fund::StorageFund, system_parameters::SystemParameters, uint53::UInt53,
 };
 use async_graphql::*;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSystemStateSummary;
@@ -47,15 +47,15 @@ impl SystemStateSummary {
     /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
     /// version changes whenever the fields contained in the system state object (held in a dynamic
     /// field attached to `0x5`) change.
-    async fn system_state_version(&self) -> Option<u64> {
-        Some(self.native.system_state_version)
+    async fn system_state_version(&self) -> Option<UInt53> {
+        Some(self.native.system_state_version.into())
     }
 
     /// Details of the system that are decided during genesis.
     async fn system_parameters(&self) -> Option<SystemParameters> {
         Some(SystemParameters {
             duration_ms: Some(BigInt::from(self.native.epoch_duration_ms)),
-            stake_subsidy_start_epoch: Some(self.native.stake_subsidy_start_epoch),
+            stake_subsidy_start_epoch: Some(self.native.stake_subsidy_start_epoch.into()),
             // TODO min validator count can be extracted, but it requires some JSON RPC changes,
             // so we decided to wait on it for now.
             min_validator_count: None,

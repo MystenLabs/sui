@@ -37,6 +37,7 @@ use super::{
     gas::GasEffects,
     object_change::ObjectChange,
     transaction_block::{TransactionBlock, TransactionBlockInner},
+    uint53::UInt53,
     unchanged_shared_object::UnchangedSharedObject,
 };
 
@@ -110,8 +111,8 @@ impl TransactionBlockEffects {
 
     /// The latest version of all objects (apart from packages) that have been created or modified
     /// by this transaction, immediately following this transaction.
-    async fn lamport_version(&self) -> u64 {
-        self.native().lamport_version().value()
+    async fn lamport_version(&self) -> UInt53 {
+        self.native().lamport_version().value().into()
     }
 
     /// The reason for a transaction failure, if it did fail.

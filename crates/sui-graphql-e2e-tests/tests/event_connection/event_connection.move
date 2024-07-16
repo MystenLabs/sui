@@ -9,7 +9,7 @@
 // Verifies correct event when filtered for Test::M1::EventB
 // Verifies error when filtered on sender, package, module and event type with generics and <
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {
