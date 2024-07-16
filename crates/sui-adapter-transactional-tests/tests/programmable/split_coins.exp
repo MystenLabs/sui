@@ -3,22 +3,22 @@ processed 20 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-24:
+task 1 'publish'. lines 9-22:
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 5403600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5677200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 26-30:
+task 2 'programmable'. lines 24-28:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 31-31:
+task 3 'run'. lines 29-29:
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 4 'view-object'. lines 33-35:
+task 4 'view-object'. lines 31-33:
 Owner: Account Address ( A )
 Version: 3
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -32,12 +32,12 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5 'programmable'. lines 36-38:
+task 5 'programmable'. lines 34-36:
 created: object(5,0)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 6 'view-object'. lines 40-40:
+task 6 'view-object'. lines 38-38:
 Owner: Account Address ( A )
 Version: 4
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -51,7 +51,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 7 'view-object'. lines 42-45:
+task 7 'view-object'. lines 40-43:
 Owner: Account Address ( B )
 Version: 4
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -65,12 +65,12 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 8 'programmable'. lines 46-48:
+task 8 'programmable'. lines 44-46:
 created: object(8,0), object(8,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 9 'view-object'. lines 50-50:
+task 9 'view-object'. lines 48-48:
 Owner: Account Address ( A )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -84,7 +84,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 10 'view-object'. lines 52-52:
+task 10 'view-object'. lines 50-50:
 Owner: Account Address ( B )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -98,7 +98,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 11 'view-object'. lines 54-56:
+task 11 'view-object'. lines 52-54:
 Owner: Account Address ( B )
 Version: 5
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -112,12 +112,12 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 12 'programmable'. lines 57-60:
+task 12 'programmable'. lines 55-58:
 created: object(12,0), object(12,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 13 'view-object'. lines 62-62:
+task 13 'view-object'. lines 60-60:
 Owner: Account Address ( A )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -131,7 +131,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 14 'view-object'. lines 64-64:
+task 14 'view-object'. lines 62-62:
 Owner: Account Address ( B )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -145,7 +145,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 15 'view-object'. lines 66-69:
+task 15 'view-object'. lines 64-67:
 Owner: Account Address ( B )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -159,12 +159,12 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 16 'programmable'. lines 70-74:
+task 16 'programmable'. lines 68-72:
 created: object(16,0), object(16,1)
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 17 'view-object'. lines 76-76:
+task 17 'view-object'. lines 74-74:
 Owner: Account Address ( A )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -178,7 +178,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 18 'view-object'. lines 78-78:
+task 18 'view-object'. lines 76-76:
 Owner: Account Address ( B )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -192,7 +192,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 19 'view-object'. lines 80-80:
+task 19 'view-object'. lines 78-78:
 Owner: Account Address ( B )
 Version: 7
 Contents: sui::coin::Coin<sui::sui::SUI> {

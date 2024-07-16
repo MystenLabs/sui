@@ -87,7 +87,12 @@ async fn fetch_incidents(
     Ok(all_incidents)
 }
 
-pub async fn print_recent_incidents(long: bool, limit: usize, days: usize) -> Result<()> {
+pub async fn print_recent_incidents(
+    long: bool,
+    limit: usize,
+    days: usize,
+    with_priority: bool,
+) -> Result<()> {
     let current_time = Local::now();
     let start_time = current_time - Duration::days(days as i64);
     let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
@@ -151,6 +156,10 @@ pub async fn print_recent_incidents(long: bool, limit: usize, days: usize) -> Re
                 Some("P4") => "P4".white(),
                 _ => "  ".white(),
             };
+            if with_priority && priority == "  ".white() {
+                // skip incidents without priority
+                continue;
+            }
             println!(
                 "{}: ({}) {} {} ({})",
                 incident["incident_number"]

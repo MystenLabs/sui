@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::{date_time::DateTime, epoch::Epoch};
+use crate::types::{date_time::DateTime, epoch::Epoch, uint53::UInt53};
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_types::{
@@ -49,8 +49,8 @@ impl ConsensusCommitPrologueTransaction {
     }
 
     /// Consensus round of the commit.
-    async fn round(&self) -> u64 {
-        self.round
+    async fn round(&self) -> UInt53 {
+        self.round.into()
     }
 
     /// Unix timestamp from consensus.

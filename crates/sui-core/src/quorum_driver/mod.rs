@@ -630,7 +630,7 @@ where
         let (subscriber_tx, subscriber_rx) =
             tokio::sync::broadcast::channel::<_>(EFFECTS_QUEUE_SIZE);
         let quorum_driver = Arc::new(QuorumDriver::new(
-            ArcSwap::from(validators),
+            ArcSwap::new(validators),
             task_tx,
             subscriber_tx,
             notifier,

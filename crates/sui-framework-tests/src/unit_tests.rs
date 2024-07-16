@@ -52,32 +52,6 @@ fn run_bridge_tests() {
     check_move_unit_tests(&buf);
 }
 
-#[test]
-#[cfg_attr(msim, ignore)]
-fn run_sui_programmability_examples_move_unit_tests() {
-    let examples_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join("sui_programmability")
-        .join("examples");
-
-    for example in [
-        "basics",
-        "capy",
-        "crypto",
-        "defi",
-        "fungible_tokens",
-        "games",
-        "move_tutorial",
-        "nfts",
-        "objects_tutorial",
-    ] {
-        let path = examples_dir.join(example);
-        check_package_builds(&path);
-        check_move_unit_tests(&path);
-    }
-}
-
 fn check_packages_recursively(path: &Path) -> io::Result<()> {
     for entry in fs::read_dir(path).unwrap() {
         let entry = entry?;
@@ -96,7 +70,7 @@ fn check_packages_recursively(path: &Path) -> io::Result<()> {
 fn run_examples_move_unit_tests() -> io::Result<()> {
     let examples = {
         let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "examples", "move"]);
+        buf.extend(["..", "..", "examples"]);
         buf
     };
 

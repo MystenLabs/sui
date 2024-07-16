@@ -2,45 +2,65 @@
 title: Coin Flip
 ---
 
-This guide demonstrates writing a module (smart contract) in Move, deploying it on Devnet, and adding a TypeScript frontend to communicate with the module.
+This example walks you through building a coin flip dApp, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. This coin flip dApp utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
 
-Satoshi Coin Flip is a dApp that utilizes verifiable random functions (VRFs) to create a fair coin game on the Sui blockchain. The user (human) plays against the house (module) and places a bet on either heads or tails. The user then either receives double their bet, or gets nothing, depending on the outcome of the game.
+The guide is split into two parts:
 
-This guide assumes you have [installed Sui](../getting-started/sui-install.mdx) and understand Sui fundamentals.
+1. [Smart Contracts](#smart-contracts): The Move code that sets up the coin flip logic.
+1. [Frontend](#frontend): A UI that enables the players to place bets and take profits, and the admin to manage the house. 
 
-## Backend
+:::tip Additional resources
 
-As with all Sui dApps, a Move package on chain powers the logic of Satoshi Coin Flip. The following instruction walks you through creating and publishing the module.
+Source code locations for the smart contracts and frontend: 
+- [Move package repository](https://github.com/MystenLabs/satoshi-coin-flip)
+- [Frontend repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example)
+
+:::
+
+## What the guide teaches
+
+- **Shared objects:** The guide teaches you how to use [shared objects](concepts/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
+- **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
+- **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
+- **Address-owned objects:** The guide teaches you how to use [address-owned objects](concepts/object-ownership/address-owned.mdx) when necessary.
+- **Events:** The guide teaches you how to emit [events](concepts/events.mdx) in your contracts, which can be used to track off chain.
+- **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics/storage-fund.mdx#incentives).
+- **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
+
+
+## What you need
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](../getting-started/sui-install.mdx).
+
+## Smart contracts {#smart-contracts}
+
+In this part of the guide, you write the Move contracts that manage the house and set up the coin-flip logic. The first step is to [set up a Move package](../first-app/write-package.mdx) for storing your Move modules.
+
+:::info
+
+To follow along with this guide, set your new Move package to `satoshi_flip`.
+
+:::
 
 ### House module
 
 This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game’s data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
 
-:::info
-
-The full source code for the Move modules, including comments and on overview of its cryptography, is available at the [Satoshi Coin Flip repository](https://github.com/MystenLabs/satoshi-coin-flip).
-
-:::
-
-Before you get started, you must initialize a Move package. Open a terminal or console in the directory you want to store the example and run the following command to create an empty package with the name `satoshi_flip`:
-
-```shell
-sui move new satoshi_flip
-```
-
-With that done, it's time to jump into some code. Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
+Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
 
 ```move title='house_data.move'
 module satoshi_flip::house_data {
 
-    use sui::balance::{Self, Balance};
-    use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
-    use sui::package::{Self};
+  use sui::balance::{Self, Balance};
+  use sui::sui::SUI;
+  use sui::coin::{Self, Coin};
+  use sui::package::{Self};
 
-    // Error codes
-    const ECallerNotHouse: u64 = 0;
-    const EInsufficientBalance: u64 = 1;
+  // Error codes
+  const ECallerNotHouse: u64 = 0;
+  const EInsufficientBalance: u64 = 1;
 
 ```
 
@@ -53,38 +73,38 @@ There are few details to take note of in this code:
 Next, add some more code to this module:
 
 ```move title='house_data.move'
-    /// Configuration and Treasury object, managed by the house.
-    public struct HouseData has key {
-        id: UID,
-        balance: Balance<SUI>,
-        house: address,
-        public_key: vector<u8>,
-        max_stake: u64,
-        min_stake: u64,
-        fees: Balance<SUI>,
-        base_fee_in_bp: u16
-    }
+  /// Configuration and Treasury object, managed by the house.
+  public struct HouseData has key {
+    id: UID,
+    balance: Balance<SUI>,
+    house: address,
+    public_key: vector<u8>,
+    max_stake: u64,
+    min_stake: u64,
+    fees: Balance<SUI>,
+    base_fee_in_bp: u16
+  }
 
-    /// A one-time use capability to initialize the house data; created and sent
-    /// to sender in the initializer.
-    public struct HouseCap has key {
-        id: UID
-    }
+  /// A one-time use capability to initialize the house data; created and sent
+  /// to sender in the initializer.
+  public struct HouseCap has key {
+    id: UID
+  }
 
-    /// Used as a one time witness to generate the publisher.
-    public struct HOUSE_DATA has drop {}
+  /// Used as a one time witness to generate the publisher.
+  public struct HOUSE_DATA has drop {}
 
-    fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
-        // Creating and sending the Publisher object to the sender.
-        package::claim_and_keep(otw, ctx);
+  fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
+    // Creating and sending the Publisher object to the sender.
+    package::claim_and_keep(otw, ctx);
 
-        // Creating and sending the HouseCap object to the sender.
-        let house_cap = HouseCap {
-            id: object::new(ctx)
-        };
+    // Creating and sending the HouseCap object to the sender.
+    let house_cap = HouseCap {
+      id: object::new(ctx)
+    };
 
-        transfer::transfer(house_cap, ctx.sender());
-    }
+    transfer::transfer(house_cap, ctx.sender());
+  }
 ```
 
 - The first struct, `HouseData`, stores the most essential information pertaining to the game.
@@ -95,65 +115,65 @@ Next, add some more code to this module:
 So far, you've set up the data structures within the module. Now, create a function that initializes the house data and shares the `HouseData` object:
 
 ```move title='house_data.move'
-    public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, ctx: &mut TxContext) {
-        assert!(coin.value() > 0, EInsufficientBalance);
+  public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, ctx: &mut TxContext) {
+    assert!(coin.value() > 0, EInsufficientBalance);
 
-        let house_data = HouseData {
-            id: object::new(ctx),
-            balance: coin.into_balance(),
-            house: ctx.sender(),
-            public_key,
-            max_stake: 50_000_000_000, // 50 SUI, 1 SUI = 10^9.
-            min_stake: 1_000_000_000, // 1 SUI.
-            fees: balance::zero(),
-            base_fee_in_bp: 100 // 1% in basis points.
-        };
+    let house_data = HouseData {
+      id: object::new(ctx),
+      balance: coin.into_balance(),
+      house: ctx.sender(),
+      public_key,
+      max_stake: 50_000_000_000, // 50 SUI, 1 SUI = 10^9.
+      min_stake: 1_000_000_000, // 1 SUI.
+      fees: balance::zero(),
+      base_fee_in_bp: 100 // 1% in basis points.
+    };
 
-        let HouseCap { id } = house_cap;
-        object::delete(id);
+    let HouseCap { id } = house_cap;
+    object::delete(id);
 
-        transfer::share_object(house_data);
-    }
+    transfer::share_object(house_data);
+  }
 ```
 
 With the house data initialized, you also need to add some functions that enable some important administrative tasks for the house to perform:
 
 ```move title='house_data.move'
-    public fun top_up(house_data: &mut HouseData, coin: Coin<SUI>, _: &mut TxContext) {
-        coin::put(&mut house_data.balance, coin)
-    }
+  public fun top_up(house_data: &mut HouseData, coin: Coin<SUI>, _: &mut TxContext) {
+    coin::put(&mut house_data.balance, coin)
+  }
 
-    public fun withdraw(house_data: &mut HouseData, ctx: &mut TxContext) {
-        // Only the house address can withdraw funds.
-        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+  public fun withdraw(house_data: &mut HouseData, ctx: &mut TxContext) {
+    // Only the house address can withdraw funds.
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-        let total_balance = balance(house_data);
-        let coin = coin::take(&mut house_data.balance, total_balance, ctx);
-        transfer::public_transfer(coin, house_data.house());
-    }
+    let total_balance = balance(house_data);
+    let coin = coin::take(&mut house_data.balance, total_balance, ctx);
+    transfer::public_transfer(coin, house_data.house());
+  }
 
-    public fun claim_fees(house_data: &mut HouseData, ctx: &mut TxContext) {
-        // Only the house address can withdraw fee funds.
-        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+  public fun claim_fees(house_data: &mut HouseData, ctx: &mut TxContext) {
+    // Only the house address can withdraw fee funds.
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-        let total_fees = fees(house_data);
-        let coin = coin::take(&mut house_data.fees, total_fees, ctx);
-        transfer::public_transfer(coin, house_data.house());
-    }
+    let total_fees = fees(house_data);
+    let coin = coin::take(&mut house_data.fees, total_fees, ctx);
+    transfer::public_transfer(coin, house_data.house());
+  }
 
-    public fun update_max_stake(house_data: &mut HouseData, max_stake: u64, ctx: &mut TxContext) {
-        // Only the house address can update the base fee.
-        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+  public fun update_max_stake(house_data: &mut HouseData, max_stake: u64, ctx: &mut TxContext) {
+    // Only the house address can update the base fee.
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-        house_data.max_stake = max_stake;
-    }
+    house_data.max_stake = max_stake;
+  }
 
-    public fun update_min_stake(house_data: &mut HouseData, min_stake: u64, ctx: &mut TxContext) {
-        // Only the house address can update the min stake.
-        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+  public fun update_min_stake(house_data: &mut HouseData, min_stake: u64, ctx: &mut TxContext) {
+    // Only the house address can update the min stake.
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-        house_data.min_stake = min_stake;
-    }
+    house_data.min_stake = min_stake;
+  }
 ```
 
 All of these functions contain an `assert!` call that ensures only the house can call them:
@@ -166,68 +186,68 @@ All of these functions contain an `assert!` call that ensures only the house can
 You have established the data structure of this module, but without the appropriate functions this data is not accessible. Now add helper functions that return mutable references, read-only references, and test-only functions:
 
 ```move title='house_data.move'
-    // --------------- Mutable References ---------------
+  // --------------- Mutable References ---------------
 
-    public(package) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
-        &mut house_data.balance
-    }
+  public(package) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    &mut house_data.balance
+  }
 
-    public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
-        &mut house_data.fees
-    }
+  public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    &mut house_data.fees
+  }
 
-    public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
-        &mut house_data.id
-    }
+  public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
+    &mut house_data.id
+  }
 
-    // --------------- Read-only References ---------------
+  // --------------- Read-only References ---------------
 
-    /// Returns a reference to the house id.
-    public(package) fun borrow(house_data: &HouseData): &UID {
-        &house_data.id
-    }
+  /// Returns a reference to the house id.
+  public(package) fun borrow(house_data: &HouseData): &UID {
+    &house_data.id
+  }
 
-    /// Returns the balance of the house.
-    public fun balance(house_data: &HouseData): u64 {
-        house_data.balance.value()
-    }
+  /// Returns the balance of the house.
+  public fun balance(house_data: &HouseData): u64 {
+    house_data.balance.value()
+  }
 
-    /// Returns the address of the house.
-    public fun house(house_data: &HouseData): address {
-        house_data.house
-    }
+  /// Returns the address of the house.
+  public fun house(house_data: &HouseData): address {
+    house_data.house
+  }
 
-    /// Returns the public key of the house.
-    public fun public_key(house_data: &HouseData): vector<u8> {
-        house_data.public_key
-    }
+  /// Returns the public key of the house.
+  public fun public_key(house_data: &HouseData): vector<u8> {
+    house_data.public_key
+  }
 
-    /// Returns the max stake of the house.
-    public fun max_stake(house_data: &HouseData): u64 {
-        house_data.max_stake
-    }
+  /// Returns the max stake of the house.
+  public fun max_stake(house_data: &HouseData): u64 {
+    house_data.max_stake
+  }
 
-    /// Returns the min stake of the house.
-    public fun min_stake(house_data: &HouseData): u64 {
-        house_data.min_stake
-    }
+  /// Returns the min stake of the house.
+  public fun min_stake(house_data: &HouseData): u64 {
+    house_data.min_stake
+  }
 
-    /// Returns the fees of the house.
-    public fun fees(house_data: &HouseData): u64 {
-        house_data.fees.value()
-    }
+  /// Returns the fees of the house.
+  public fun fees(house_data: &HouseData): u64 {
+    house_data.fees.value()
+  }
 
-    /// Returns the base fee.
-    public fun base_fee_in_bp(house_data: &HouseData): u16 {
-        house_data.base_fee_in_bp
-    }
+  /// Returns the base fee.
+  public fun base_fee_in_bp(house_data: &HouseData): u16 {
+    house_data.base_fee_in_bp
+  }
 
-    // --------------- Test-only Functions ---------------
+  // --------------- Test-only Functions ---------------
 
-    #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(HOUSE_DATA {}, ctx);
-    }
+  #[test_only]
+  public fun init_for_testing(ctx: &mut TxContext) {
+    init(HOUSE_DATA {}, ctx);
+  }
 }
 ```
 
@@ -240,28 +260,28 @@ In the same `sources` directory, now create a file named `counter_nft.move`. A `
 ```move title='counter_nft.move'
 module satoshi_flip::counter_nft {
 
-    use sui::bcs::{Self};
+  use sui::bcs::{Self};
 
-    public struct Counter has key {
-        id: UID,
-        count: u64,
-    }
+  public struct Counter has key {
+    id: UID,
+    count: u64,
+  }
 
-    entry fun burn(self: Counter) {
-        let Counter { id, count: _ } = self;
-        object::delete(id);
-    }
+  entry fun burn(self: Counter) {
+    let Counter { id, count: _ } = self;
+    object::delete(id);
+  }
 
-    public fun mint(ctx: &mut TxContext): Counter {
-        Counter {
-            id: object::new(ctx),
-            count: 0
-        }
+  public fun mint(ctx: &mut TxContext): Counter {
+    Counter {
+      id: object::new(ctx),
+      count: 0
     }
+  }
 
-    public fun transfer_to_sender(counter: Counter, ctx: &mut TxContext) {
-        transfer::transfer(counter, tx_context::sender(ctx));
-    }
+  public fun transfer_to_sender(counter: Counter, ctx: &mut TxContext) {
+    transfer::transfer(counter, tx_context::sender(ctx));
+  }
 ```
 
 This might look familiar from the house module. You set the module name, import functions from the standard library, and initialize the `Counter` object. The `Counter` object has the `key` ability, but does not have `store` - this prevents the object from being transferable.
@@ -271,26 +291,26 @@ In addition, you create `mint` and `transfer_to_sender` functions used when the 
 You have a `Counter` object, as well as functions that initialize and burn the object, but you need a way to increment the counter. Add the following code to the module:
 
 ```move title='counter_nft.move'
-    public fun get_vrf_input_and_increment(self: &mut Counter): vector<u8> {
-        let mut vrf_input = object::id_bytes(self);
-        let count_to_bytes = bcs::to_bytes(&count(self));
-        vrf_input.append(count_to_bytes);
-        self.increment();
-        vrf_input
-    }
+  public fun get_vrf_input_and_increment(self: &mut Counter): vector<u8> {
+    let mut vrf_input = object::id_bytes(self);
+    let count_to_bytes = bcs::to_bytes(&count(self));
+    vrf_input.append(count_to_bytes);
+    self.increment();
+    vrf_input
+  }
 
-    public fun count(self: &Counter): u64 {
-        self.count
-    }
+  public fun count(self: &Counter): u64 {
+    self.count
+  }
 
-    fun increment(self: &mut Counter) {
-        self.count = self.count + 1;
-    }
+  fun increment(self: &mut Counter) {
+    self.count = self.count + 1;
+  }
 
-    #[test_only]
-    public fun burn_for_testing(self: Counter) {
-        self.burn();
-    }
+  #[test_only]
+  public fun burn_for_testing(self: Counter) {
+    self.burn();
+  }
 }
 ```
 
@@ -306,48 +326,48 @@ Create the game module. In the `sources` directory, create a new file called `si
 
 ```move title='single_player_satoshi.move'
 module satoshi_flip::single_player_satoshi {
-    use std::string::String;
+  use std::string::String;
 
-    use sui::coin::{Self, Coin};
-    use sui::balance::Balance;
-    use sui::sui::SUI;
-    use sui::bls12381::bls12381_min_pk_verify;
-    use sui::event::emit;
-    use sui::hash::{blake2b256};
-    use sui::dynamic_object_field::{Self as dof};
+  use sui::coin::{Self, Coin};
+  use sui::balance::Balance;
+  use sui::sui::SUI;
+  use sui::bls12381::bls12381_min_pk_verify;
+  use sui::event::emit;
+  use sui::hash::{blake2b256};
+  use sui::dynamic_object_field::{Self as dof};
 
-    use satoshi_flip::counter_nft::Counter;
-    use satoshi_flip::house_data::HouseData;
+  use satoshi_flip::counter_nft::Counter;
+  use satoshi_flip::house_data::HouseData;
 
-    const EPOCHS_CANCEL_AFTER: u64 = 7;
-    const GAME_RETURN: u8 = 2;
-    const PLAYER_WON_STATE: u8 = 1;
-    const HOUSE_WON_STATE: u8 = 2;
-    const CHALLENGED_STATE: u8 = 3;
-    const HEADS: vector<u8> = b"H";
-    const TAILS: vector<u8> = b"T";
+  const EPOCHS_CANCEL_AFTER: u64 = 7;
+  const GAME_RETURN: u8 = 2;
+  const PLAYER_WON_STATE: u8 = 1;
+  const HOUSE_WON_STATE: u8 = 2;
+  const CHALLENGED_STATE: u8 = 3;
+  const HEADS: vector<u8> = b"H";
+  const TAILS: vector<u8> = b"T";
 
-    const EStakeTooLow: u64 = 0;
-    const EStakeTooHigh: u64 = 1;
-    const EInvalidBlsSig: u64 = 2;
-    const ECanNotChallengeYet: u64 = 3;
-    const EInvalidGuess: u64 = 4;
-    const EInsufficientHouseBalance: u64 = 5;
-    const EGameDoesNotExist: u64 = 6;
+  const EStakeTooLow: u64 = 0;
+  const EStakeTooHigh: u64 = 1;
+  const EInvalidBlsSig: u64 = 2;
+  const ECanNotChallengeYet: u64 = 3;
+  const EInvalidGuess: u64 = 4;
+  const EInsufficientHouseBalance: u64 = 5;
+  const EGameDoesNotExist: u64 = 6;
 
-    public struct NewGame has copy, drop {
-        game_id: ID,
-        player: address,
-        vrf_input: vector<u8>,
-        guess: String,
-        user_stake: u64,
-        fee_bp: u16
-    }
+  public struct NewGame has copy, drop {
+    game_id: ID,
+    player: address,
+    vrf_input: vector<u8>,
+    guess: String,
+    user_stake: u64,
+    fee_bp: u16
+  }
 
-    public struct Outcome has copy, drop {
-        game_id: ID,
-        status: u8
-    }
+  public struct Outcome has copy, drop {
+    game_id: ID,
+    status: u8
+  }
 ```
 
 This code follows the same pattern as the others. First, you include the respective imports, although this time the imports are not only from the standard library but also include modules created previously in this example. You also create several constants (in upper case), as well as constants used for errors (Pascal case prefixed with `E`).
@@ -357,15 +377,15 @@ Lastly in this section, you also create structs for two [events](concepts/events
 Add a struct to the module:
 
 ```move title='single_player_satoshi.move'
-    public struct Game has key, store {
-        id: UID,
-        guess_placed_epoch: u64,
-        total_stake: Balance<SUI>,
-        guess: String,
-        player: address,
-        vrf_input: vector<u8>,
-        fee_bp: u16
-    }
+  public struct Game has key, store {
+    id: UID,
+    guess_placed_epoch: u64,
+    total_stake: Balance<SUI>,
+    guess: String,
+    player: address,
+    vrf_input: vector<u8>,
+    fee_bp: u16
+  }
 ```
 
 The `Game` struct represents a single game and all its information, including the epoch the player placed the bet (`guess_placed_epoch`), bet (`total_stake`), `guess`, address of the `player`, `vrf_input`, and the fee the house collects (`fee_bp`).
@@ -373,55 +393,55 @@ The `Game` struct represents a single game and all its information, including th
 Now take a look at the main function in this game, `finish_game`:
 
 ```move title='single_player_satoshi.move'
-    public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, ctx: &mut TxContext) {
-        // Ensure that the game exists.
-        assert!(game_exists(house_data, game_id), EGameDoesNotExist);
+  public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, ctx: &mut TxContext) {
+    // Ensure that the game exists.
+    assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
-        let Game {
-            id,
-            guess_placed_epoch: _,
-            mut total_stake,
-            guess,
-            player,
-            vrf_input,
-            fee_bp
-        } = dof::remove<ID, Game>(house_data.borrow_mut(), game_id);
+    let Game {
+      id,
+      guess_placed_epoch: _,
+      mut total_stake,
+      guess,
+      player,
+      vrf_input,
+      fee_bp
+    } = dof::remove<ID, Game>(house_data.borrow_mut(), game_id);
 
-        object::delete(id);
+    object::delete(id);
 
-        // Step 1: Check the BLS signature, if its invalid abort.
-        let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &house_data.public_key(), &vrf_input);
-        assert!(is_sig_valid, EInvalidBlsSig);
+    // Step 1: Check the BLS signature, if its invalid abort.
+    let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &house_data.public_key(), &vrf_input);
+    assert!(is_sig_valid, EInvalidBlsSig);
 
-        // Hash the beacon before taking the 1st byte.
-        let hashed_beacon = blake2b256(&bls_sig);
-        // Step 2: Determine winner.
-        let first_byte = hashed_beacon[0];
-        let player_won = map_guess(guess) == (first_byte % 2);
+    // Hash the beacon before taking the 1st byte.
+    let hashed_beacon = blake2b256(&bls_sig);
+    // Step 2: Determine winner.
+    let first_byte = hashed_beacon[0];
+    let player_won = map_guess(guess) == (first_byte % 2);
 
-        // Step 3: Distribute funds based on result.
-        let status = if (player_won) {
-            // Step 3.a: If player wins transfer the game balance as a coin to the player.
-            // Calculate the fee and transfer it to the house.
-            let stake_amount = total_stake.value();
-            let fee_amount = fee_amount(stake_amount, fee_bp);
-            let fees = total_stake.split(fee_amount);
-            house_data.borrow_fees_mut().join(fees);
+    // Step 3: Distribute funds based on result.
+    let status = if (player_won) {
+      // Step 3.a: If player wins transfer the game balance as a coin to the player.
+      // Calculate the fee and transfer it to the house.
+      let stake_amount = total_stake.value();
+      let fee_amount = fee_amount(stake_amount, fee_bp);
+      let fees = total_stake.split(fee_amount);
+      house_data.borrow_fees_mut().join(fees);
 
-            // Calculate the rewards and take it from the game stake.
-            transfer::public_transfer(total_stake.into_coin(ctx), player);
-            PLAYER_WON_STATE
-        } else {
-            // Step 3.b: If house wins, then add the game stake to the house_data.house_balance (no fees are taken).
-            house_data.borrow_balance_mut().join(total_stake);
-            HOUSE_WON_STATE
-        };
+      // Calculate the rewards and take it from the game stake.
+      transfer::public_transfer(total_stake.into_coin(ctx), player);
+      PLAYER_WON_STATE
+    } else {
+      // Step 3.b: If house wins, then add the game stake to the house_data.house_balance (no fees are taken).
+      house_data.borrow_balance_mut().join(total_stake);
+      HOUSE_WON_STATE
+    };
 
-        emit(Outcome {
-            game_id,
-            status
-        });
-    }
+    emit(Outcome {
+      game_id,
+      status
+    });
+  }
 ```
 
 - First, the function makes sure the `Game` object exists, then deletes it, as after the game concludes the metadata is no longer needed. Freeing up unnecessary storage is not only recommended, but [incentivized through rebates on storage fees](concepts/tokenomics/storage-fund.mdx#incentives).
@@ -433,34 +453,34 @@ Now take a look at the main function in this game, `finish_game`:
 Now add a function that handles game disputes:
 
 ```move title='single_player_satoshi.move'
-    public fun dispute_and_win(house_data: &mut HouseData, game_id: ID, ctx: &mut TxContext) {
-        // Ensure that the game exists.
-        assert!(game_exists(house_data, game_id), EGameDoesNotExist);
+  public fun dispute_and_win(house_data: &mut HouseData, game_id: ID, ctx: &mut TxContext) {
+    // Ensure that the game exists.
+    assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
-        let Game {
-            id,
-            guess_placed_epoch,
-            total_stake,
-            guess: _,
-            player,
-            vrf_input: _,
-            fee_bp: _
-        } = dof::remove(house_data.borrow_mut(), game_id);
+    let Game {
+      id,
+      guess_placed_epoch,
+      total_stake,
+      guess: _,
+      player,
+      vrf_input: _,
+      fee_bp: _
+    } = dof::remove(house_data.borrow_mut(), game_id);
 
-        object::delete(id);
+    object::delete(id);
 
-        let caller_epoch = ctx.epoch();
-        let cancel_epoch = guess_placed_epoch + EPOCHS_CANCEL_AFTER;
-        // Ensure that minimum epochs have passed before user can cancel.
-        assert!(cancel_epoch <= caller_epoch, ECanNotChallengeYet);
+    let caller_epoch = ctx.epoch();
+    let cancel_epoch = guess_placed_epoch + EPOCHS_CANCEL_AFTER;
+    // Ensure that minimum epochs have passed before user can cancel.
+    assert!(cancel_epoch <= caller_epoch, ECanNotChallengeYet);
 
-        transfer::public_transfer(total_stake.into_coin(ctx), player);
+    transfer::public_transfer(total_stake.into_coin(ctx), player);
 
-        emit(Outcome {
-            game_id,
-            status: CHALLENGED_STATE
-        });
-    }
+    emit(Outcome {
+      game_id,
+      status: CHALLENGED_STATE
+    });
+  }
 ```
 
 This function, `dispute_and_win`, ensures that no bet can live in “purgatory”. After a certain amount of time passes, the player can call this function and get all of their funds back.
@@ -468,110 +488,112 @@ This function, `dispute_and_win`, ensures that no bet can live in “purgatory�
 The rest of the functions are accessors and helper functions used to retrieve values, check if values exist, initialize the game, and so on:
 
 ```move title='single_player_satoshi.move'
-    // --------------- Read-only References ---------------
+  // --------------- Read-only References ---------------
 
-    public fun guess_placed_epoch(game: &Game): u64 {
-        game.guess_placed_epoch
+  public fun guess_placed_epoch(game: &Game): u64 {
+    game.guess_placed_epoch
+  }
+
+  public fun stake(game: &Game): u64 {
+    game.total_stake.value()
+  }
+
+  public fun guess(game: &Game): u8 {
+    map_guess(game.guess)
+  }
+
+  public fun player(game: &Game): address {
+    game.player
+  }
+
+  public fun vrf_input(game: &Game): vector<u8> {
+    game.vrf_input
+  }
+
+  public fun fee_in_bp(game: &Game): u16 {
+    game.fee_bp
+  }
+
+  // --------------- Helper functions ---------------
+
+  /// Public helper function to calculate the amount of fees to be paid.
+  public fun fee_amount(game_stake: u64, fee_in_bp: u16): u64 {
+    ((((game_stake / (GAME_RETURN as u64)) as u128) * (fee_in_bp as u128) / 10_000) as u64)
+  }
+
+  /// Helper function to check if a game exists.
+  public fun game_exists(house_data: &HouseData, game_id: ID): bool {
+    dof::exists_(house_data.borrow(), game_id)
+  }
+
+  /// Helper function to check that a game exists and return a reference to the game Object.
+  /// Can be used in combination with any accessor to retrieve the desired game field.
+  public fun borrow_game(game_id: ID, house_data: &HouseData): &Game {
+    assert!(game_exists(house_data, game_id), EGameDoesNotExist);
+    dof::borrow(house_data.borrow(), game_id)
+  }
+
+  /// Internal helper function used to create a new game.
+  fun internal_start_game(guess: String, counter: &mut Counter, coin: Coin<SUI>, house_data: &mut HouseData, fee_bp: u16, ctx: &mut TxContext): (ID, Game) {
+    // Ensure guess is valid.
+    map_guess(guess);
+    let user_stake = coin.value();
+    // Ensure that the stake is not higher than the max stake.
+    assert!(user_stake <= house_data.max_stake(), EStakeTooHigh);
+    // Ensure that the stake is not lower than the min stake.
+    assert!(user_stake >= house_data.min_stake(), EStakeTooLow);
+    // Ensure that the house has enough balance to play for this game.
+    assert!(house_data.balance() >= user_stake, EInsufficientHouseBalance);
+
+    // Get the house's stake.
+    let mut total_stake = house_data.borrow_balance_mut().split(user_stake);
+    coin::put(&mut total_stake, coin);
+
+    let vrf_input = counter.get_vrf_input_and_increment();
+
+    let id = object::new(ctx);
+    let game_id = object::uid_to_inner(&id);
+
+    let new_game = Game {
+      id,
+      guess_placed_epoch: ctx.epoch(),
+      total_stake,
+      guess,
+      player: ctx.sender(),
+      vrf_input,
+      fee_bp
+    };
+
+    emit(NewGame {
+      game_id,
+      player: ctx.sender(),
+      vrf_input,
+      guess,
+      user_stake,
+      fee_bp
+    });
+
+    (game_id, new_game)
+  }
+
+  /// Helper function to map (H)EADS and (T)AILS to 0 and 1 respectively.
+  /// H = 0
+  /// T = 1
+  fun map_guess(guess: String): u8 {
+    let heads = HEADS;
+    let tails = TAILS;
+    assert!(guess.bytes() == heads || guess.bytes() == tails, EInvalidGuess);
+
+    if (guess.bytes() == heads) {
+      0
+    } else {
+      1
     }
-
-    public fun stake(game: &Game): u64 {
-        game.total_stake.value()
-    }
-
-    public fun guess(game: &Game): u8 {
-        map_guess(game.guess)
-    }
-
-    public fun player(game: &Game): address {
-        game.player
-    }
-
-    public fun vrf_input(game: &Game): vector<u8> {
-        game.vrf_input
-    }
-
-    public fun fee_in_bp(game: &Game): u16 {
-        game.fee_bp
-    }
-
-    // --------------- Helper functions ---------------
-
-    /// Public helper function to calculate the amount of fees to be paid.
-    public fun fee_amount(game_stake: u64, fee_in_bp: u16): u64 {
-        ((((game_stake / (GAME_RETURN as u64)) as u128) * (fee_in_bp as u128) / 10_000) as u64)
-    }
-
-    /// Helper function to check if a game exists.
-    public fun game_exists(house_data: &HouseData, game_id: ID): bool {
-        dof::exists_(house_data.borrow(), game_id)
-    }
-
-    /// Helper function to check that a game exists and return a reference to the game Object.
-    /// Can be used in combination with any accessor to retrieve the desired game field.
-    public fun borrow_game(game_id: ID, house_data: &HouseData): &Game {
-        assert!(game_exists(house_data, game_id), EGameDoesNotExist);
-        dof::borrow(house_data.borrow(), game_id)
-    }
-
-    /// Internal helper function used to create a new game.
-    fun internal_start_game(guess: String, counter: &mut Counter, coin: Coin<SUI>, house_data: &mut HouseData, fee_bp: u16, ctx: &mut TxContext): (ID, Game) {
-        // Ensure guess is valid.
-        map_guess(guess);
-        let user_stake = coin.value();
-        // Ensure that the stake is not higher than the max stake.
-        assert!(user_stake <= house_data.max_stake(), EStakeTooHigh);
-        // Ensure that the stake is not lower than the min stake.
-        assert!(user_stake >= house_data.min_stake(), EStakeTooLow);
-        // Ensure that the house has enough balance to play for this game.
-        assert!(house_data.balance() >= user_stake, EInsufficientHouseBalance);
-
-        // Get the house's stake.
-        let mut total_stake = house_data.borrow_balance_mut().split(user_stake);
-        coin::put(&mut total_stake, coin);
-
-        let vrf_input = counter.get_vrf_input_and_increment();
-
-        let id = object::new(ctx);
-        let game_id = object::uid_to_inner(&id);
-
-        let new_game = Game {
-            id,
-            guess_placed_epoch: ctx.epoch(),
-            total_stake,
-            guess,
-            player: ctx.sender(),
-            vrf_input,
-            fee_bp
-        };
-
-        emit(NewGame {
-            game_id,
-            player: ctx.sender(),
-            vrf_input,
-            guess,
-            user_stake,
-            fee_bp
-        });
-
-        (game_id, new_game)
-    }
-
-    /// Helper function to map (H)EADS and (T)AILS to 0 and 1 respectively.
-    /// H = 0
-    /// T = 1
-    fun map_guess(guess: String): u8 {
-        let heads = HEADS;
-        let tails = TAILS;
-        assert!(guess.bytes() == heads || guess.bytes() == tails, EInvalidGuess);
-
-        if (guess.bytes() == heads) {
-            0
-        } else {
-            1
-        }
-    }
+  }
 }
 ```
+
+## Finished package
 
 This represents a basic example of a coin flip backend in Move. The game module, `single_player_satoshi`, is prone to MEV attacks, but the user experience for the player is streamlined. Another example game module, `mev_attack_resistant_single_player_satoshi`, exists that is MEV-resistant, but has a slightly downgraded user experience (two player-transactions per game).
 
@@ -579,61 +601,148 @@ You can read more about both versions of the game, and view the full source code
 
 Now that you have written our contracts, it's time to deploy them.
 
-## Deployment
+### Deployment {#deployment}
 
 {@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
+Next, configure the Sui CLI to use `testnet` as the active environment, as well. If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
+
+```bash
+sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+```
+
+Run the following command to activate the `testnet` environment:
+
+```bash
+sui client switch --env testnet
+```
+
 {@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
 
-The package should successfully deploy. Now, it's time to create a frontend that can interact with it.
+The output of this command contains a `packageID` value that you need to save to use the package.
 
-## Frontend
+Partial snippet of CLI deployment output.
+
+```bash
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                           │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                         │
+│  ┌──                                                                                                     │
+│  │ ObjectID: 0x17e9468127384cfff5523940586f5617a75fac8fd93f143601983523ae9c9f31                          │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                            │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )         │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                                  │
+│  │ Version: 75261540                                                                                     │
+│  │ Digest: 9ahkhuGYTNYi5GucCqmUHyBuWoV2R3rRqBu553KBPVv8                                                  │
+│  └──                                                                                                     │
+│  ┌──                                                                                                     │
+│  │ ObjectID: 0xa01d8d5ba121e7771547e749a787b4dd9ff8cc32e341c898bab5d12c46412a23                          │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                            │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )         │
+│  │ ObjectType: 0x2::package::Publisher                                                                   │
+│  │ Version: 75261540                                                                                     │
+│  │ Digest: Ba9VU2dUqg3NHkwQ4t5AKDLJQuiFZnnxvty2xREQKWm9                                                  │
+│  └──                                                                                                     │
+│  ┌──                                                                                                     │
+│  │ ObjectID: 0xfa1f6edad697afca055749fedbdee420b6cdba3edc2f7fd4927ed42f98a7e63a                          │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                            │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )         │
+│  │ ObjectType: 0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8::house_data::HouseCap  │
+│  │ Version: 75261540                                                                                     │
+│  │ Digest: 5326hf6zWgdiNgr63wvwKkhUNtnTFkp82e9vfS5QHy3n                                                  │
+│  └──                                                                                                     │
+│ Mutated Objects:                                                                                         │
+│  ┌──                                                                                                     │
+│  │ ObjectID: 0x0e4eb516f8899e116a26f927c8aaddae8466c8cdc3822f05c15159e3a8ff8006                          │
+│  │ Sender: 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654                            │
+│  │ Owner: Account Address ( 0x8e8cae7791a93778800b88b6a274de5c32a86484593568d38619c7ea71999654 )         │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                            │
+│  │ Version: 75261540                                                                                     │
+│  │ Digest: Ezmi94kWCfjRzgGTwnXehv9ipPvYQ7T6Z4wefPLRQPPY                                                  │
+│  └──                                                                                                     │
+│ Published Objects:                                                                                       │
+│  ┌──                                                                                                     │
+│  │ PackageID: 0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8                         │
+│  │ Version: 1                                                                                            │
+│  │ Digest: 5XbJkgx8RSccxaHoP3xinY2fMMhwKJ7qoWfp349cmZBg                                                  │
+│  │ Modules: counter_nft, house_data, single_player_satoshi                                               │
+│  └──                                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+Save the `PackageID` and the `ObjectID` of the `HouseCap` object you receive in your own response to [connect to your frontend](#connecting-your-package).
+
+In this case, the `PackageID` is `0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8` and the `HouseCap` ID is `0xfa1f6edad697afca055749fedbdee420b6cdba3edc2f7fd4927ed42f98a7e63a`.
+
+### Next steps
+
+Well done. You have written and deployed the Move package! 🚀
+
+To turn this into a complete dApp, you need to [create a frontend](#frontend).
+
+## Frontend {#frontend}
+
+In this final part of the dApp example, you build a frontend (UI) that allows end users to place bets and take profits, and lets the admin manage the house.
 
 :::info
 
-The full source code for the frontend is available at the [Satoshi Coin Flip Frontend Example repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example).
+To skip building the frontend and test out your newly deployed package, use the provided [Satoshi Coin Flip Frontend Example repository](https://github.com/sui-foundation/satoshi-coin-flip-frontend-example) and follow the instructions in the example's `README.md` file
 
 :::
 
-To expose the backend you have created to your users, you need a frontend (UI). In this section, you create a React frontend project using the [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) and the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) that interacts with the deployed smart contracts.
+### Prerequisites
 
-### Initialize the project
+Before getting started, make sure you have:
 
-:::info
+- [Deployed the complete `satoshi_flip` Move package](#smart-contracts) and understand its design.
+- Installed [`pnpm`](https://pnpm.io/installation) or [`yarn`](https://classic.yarnpkg.com/lang/en/docs/install/#mac-stable) to use as the package manager.
 
-The following instructions are using `pnpm` as the package manager. Follow the [`pnpm` install instructions](https://pnpm.io/installation), if needed.
+:::tip Additional resources
+
+- Tooling: [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui using TypeScript.
+- Tooling: [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
+- Tooling: [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp), used within this project to quickly scaffold a React-based Sui dApp.
 
 :::
 
-First, initialize your frontend project. To do this rapidly, use the [`create-dapp` tool](https://sdk.mystenlabs.com/dapp-kit/create-dapp) to bootstrap the project using [dApp Kit](https://sdk.mystenlabs.com/dapp-kit). Run the following command in your terminal or console:
+### Overview
 
-```
-pnpm create @mysten/dapp
-```
-
-This CLI command prompts you through a couple of steps:
-
-1. It asks you the starter template that you want to use. Currently, there are two variants:
-
-   1. `react-client-dapp`: This starter template contains the minimum dApp Kit template code that you can start with. This variant is meant for developers already familiar with the dApp Kit and who don't want unnecessary template code.
-   1. `react-e2e-counter`: This starter template contains a simple counter Sui Move smart contract with the frontend template code interacting with it. This variant is meant for developers trying to learn how to use dApp Kit.
-
-1. It prompts you to name your project folder.
-
-Done. Your project has all necessary code to get you started. Lastly, `cd` into your project folder and run `pnpm install` to install all dependencies.
-
-### User interface layout design
-
-The user interface (UI) of this frontend example demonstrates how to use the dApp Kit instead of serving as a production-grade product, so the Player and the House features are in the same UI to simplify the process. In a production solution, your frontend would only contain functionality dedicated to the Player, with a backend service carrying out the interactions with House functions in the smart contracts.
+The UI of this example demonstrates how to use the dApp Kit instead of serving as a production-grade product, so the Player and the House features are in the same UI to simplify the process. In a production solution, your frontend would only contain functionality dedicated to the Player, with a backend service carrying out the interactions with House functions in the smart contracts.
 
 The UI has two columns:
 
 - First column is dedicated to the Player, and all Player-related features live there
 - Second column is dedicated to the House, and all House-related features live there
 
+### Scaffold a new app
+
+The first step is to set up the client app. Run the following command to scaffold a new app.
+
+```bash
+pnpm create @mysten/dapp --template react-client-dapp
+```
+
+or
+
+```bash
+yarn create @mysten/dapp --template react-client-dapp
+```
+
 ### Project folder structure
 
 Structure the project folder according to the UI layout, meaning that all Player-related React components reside in the `containers/Player` folder, while all House-related React components reside in the `containers/House` folder.
+
+### Connecting your deployed package {#connecting-your-package}
+
+Add the `packageId` value you saved from [deploying your package](#deployment) to a new `src/constants.ts` file in your project:
+
+```ts
+export const PACKAGE_ID =
+  "0x4120b39e5d94845aa539d4b830743a7433fd8511bdcf3841f98080080f327ca8";
+export const HOUSECAP_ID =
+  "0xfa1f6edad697afca055749fedbdee420b6cdba3edc2f7fd4927ed42f98a7e63a";
+```
 
 ### Exploring the code
 
@@ -657,56 +766,56 @@ import { HouseSesh } from './containers/House/HouseSesh';
 import { PlayerSesh } from './containers/Player/PlayerSesh';
 
 function App() {
-	const account = useCurrentAccount();
-	return (
-		<>
-			<Flex
-				position="sticky"
-				px="4"
-				py="2"
-				justify="between"
-				style={{
-					borderBottom: '1px solid var(--gray-a2)',
-				}}
-			>
-				<Box>
-					<Heading>Satoshi Coin Flip Single Player</Heading>
-				</Box>
+  const account = useCurrentAccount();
+  return (
+    <>
+      <Flex
+        position="sticky"
+        px="4"
+        py="2"
+        justify="between"
+        style={{
+          borderBottom: '1px solid var(--gray-a2)',
+        }}
+      >
+        <Box>
+          <Heading>Satoshi Coin Flip Single Player</Heading>
+        </Box>
 
-				<Box>
-					<ConnectButton />
-				</Box>
-			</Flex>
-			<Container>
-				<Heading size="4" m={'2'}>
-					Package ID: {PACKAGE_ID}
-				</Heading>
-				<Heading size="4" m={'2'}>
-					HouseCap ID: {HOUSECAP_ID}
-				</Heading>
+        <Box>
+          <ConnectButton />
+        </Box>
+      </Flex>
+      <Container>
+        <Heading size="4" m={'2'}>
+          Package ID: {PACKAGE_ID}
+        </Heading>
+        <Heading size="4" m={'2'}>
+          HouseCap ID: {HOUSECAP_ID}
+        </Heading>
 
-				<Callout.Root mb="2">
-					<Callout.Icon>
-						<InfoCircledIcon />
-					</Callout.Icon>
-					<Callout.Text>
-						You need to connect to wallet that publish the smart contract package
-					</Callout.Text>
-				</Callout.Root>
+        <Callout.Root mb="2">
+          <Callout.Icon>
+            <InfoCircledIcon />
+          </Callout.Icon>
+          <Callout.Text>
+            You need to connect to wallet that publish the smart contract package
+          </Callout.Text>
+        </Callout.Root>
 
-				{!account ? (
-					<Heading size="4" align="center">
-						Please connect wallet to continue
-					</Heading>
-				) : (
-					<Grid columns="2" gap={'3'} width={'auto'}>
-						<PlayerSesh />
-						<HouseSesh />
-					</Grid>
-				)}
-			</Container>
-		</>
-	);
+        {!account ? (
+          <Heading size="4" align="center">
+            Please connect wallet to continue
+          </Heading>
+        ) : (
+          <Grid columns="2" gap={'3'} width={'auto'}>
+            <PlayerSesh />
+            <HouseSesh />
+          </Grid>
+        )}
+      </Container>
+    </>
+  );
 }
 
 export default App;
@@ -715,8 +824,6 @@ export default App;
 Like other dApps, you need a "connect wallet" button to enable connecting users' wallets. dApp Kit contains a pre-made `ConnectButton` React component that you can reuse to help users onboard.
 
 `useCurrentAccount()` is a React hook the dApp Kit also provides to query the current connected wallet; returning `null` if there isn't a wallet connection. Leverage this behavior to prevent a user from proceeding further if they haven’t connected their wallet yet.
-
-There are two constants that you need to put into `constants.ts` to make the app work – `PACKAGE_ID` and `HOUSECAP_ID`. You can get these from the terminal or console after running the Sui CLI command to publish the package.
 
 After ensuring that the user has connected their wallet, you can display the two columns described in the previous section: `PlayerSesh` and `HouseSesh` components.
 
@@ -819,44 +926,44 @@ import { PACKAGE_ID } from '../../constants';
 // This hook is to demonstrate how to use `@mysten/dapp-kit` React hook to query data
 // besides using SuiClient directly
 export function useFetchCounterNft() {
-	const account = useCurrentAccount();
+  const account = useCurrentAccount();
 
-	if (!account) {
-		return { data: [] };
-	}
+  if (!account) {
+    return { data: [] };
+  }
 
-	// Fetch CounterNFT owned by current connected wallet
-	// Only fetch the 1st one
-	const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
-		'getOwnedObjects',
-		{
-			owner: account.address,
-			limit: 1,
-			filter: {
-				MatchAll: [
-					{
-						StructType: `${PACKAGE_ID}::counter_nft::Counter`,
-					},
-					{
-						AddressOwner: account.address,
-					},
-				],
-			},
-			options: {
-				showOwner: true,
-				showType: true,
-			},
-		},
-		{ queryKey: ['CounterNFT'] },
-	);
+  // Fetch CounterNFT owned by current connected wallet
+  // Only fetch the 1st one
+  const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
+    'getOwnedObjects',
+    {
+      owner: account.address,
+      limit: 1,
+      filter: {
+        MatchAll: [
+          {
+            StructType: `${PACKAGE_ID}::counter_nft::Counter`,
+          },
+          {
+            AddressOwner: account.address,
+          },
+        ],
+      },
+      options: {
+        showOwner: true,
+        showType: true,
+      },
+    },
+    { queryKey: ['CounterNFT'] },
+  );
 
-	return {
-		data: data && data.data.length > 0 ? data?.data : [],
-		isLoading,
-		isError,
-		error,
-		refetch,
-	};
+  return {
+    data: data && data.data.length > 0 ? data?.data : [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  };
 }
 ```
 
@@ -870,39 +977,39 @@ That’s it, now put the hook into the UI component `PlayerListCounterNft.tsx` a
 
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 export function PlayerListCounterNft() {
-	const { data, isLoading, error, refetch } = useFetchCounterNft();
-	const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
+  const { data, isLoading, error, refetch } = useFetchCounterNft();
+  const { mutate: execCreateCounterNFT } = useSignAndExecuteTransaction();
 
-	return (
-		<Container mb={'4'}>
-			<Heading size="3" mb="2">
-				Counter NFTs
-			</Heading>
+  return (
+    <Container mb={'4'}>
+      <Heading size="3" mb="2">
+        Counter NFTs
+      </Heading>
 
-			{error && <Text>Error: {error.message}</Text>}
+      {error && <Text>Error: {error.message}</Text>}
 
-			<Box mb="3">
-				{data.length > 0 ? (
-					data.map((it) => {
-						return (
-							<Box key={it.data?.objectId}>
-								<Text as="div" weight="bold">
-									Object ID:
-								</Text>
-								<Text as="div">{it.data?.objectId}</Text>
-								<Text as="div" weight="bold">
-									Object Type:
-								</Text>
-								<Text as="div">{it.data?.type}</Text>
-							</Box>
-						);
-					})
-				) : (
-					<Text>No CounterNFT Owned</Text>
-				)}
-			</Box>
-		</Container>
-	);
+      <Box mb="3">
+        {data.length > 0 ? (
+          data.map((it) => {
+            return (
+              <Box key={it.data?.objectId}>
+                <Text as="div" weight="bold">
+                  Object ID:
+                </Text>
+                <Text as="div">{it.data?.objectId}</Text>
+                <Text as="div" weight="bold">
+                  Object Type:
+                </Text>
+                <Text as="div">{it.data?.type}</Text>
+              </Box>
+            );
+          })
+        ) : (
+          <Text>No CounterNFT Owned</Text>
+        )}
+      </Box>
+    </Container>
+  );
 }
 ```
 
@@ -913,26 +1020,26 @@ As you might recall with `Transaction`, outputs from the transaction can be inpu
 ```typescript title='containers/Player/PlayerListCounterNft.tsx'
 const txb = new Transaction();
 const [counterNft] = txb.moveCall({
-	target: `${PACKAGE_ID}::counter_nft::mint`,
+  target: `${PACKAGE_ID}::counter_nft::mint`,
 });
 txb.moveCall({
-	target: `${PACKAGE_ID}::counter_nft::transfer_to_sender`,
-	arguments: [counterNft],
+  target: `${PACKAGE_ID}::counter_nft::transfer_to_sender`,
+  arguments: [counterNft],
 });
 
 execCreateCounterNFT(
-	{
-		transaction: txb,
-	},
-	{
-		onError: (err) => {
-			toast.error(err.message);
-		},
-		onSuccess: (result) => {
-			toast.success(`Digest: ${result.digest}`);
-			refetch?.();
-		},
-	},
+  {
+    transaction: txb,
+  },
+  {
+    onError: (err) => {
+      toast.error(err.message);
+    },
+    onSuccess: (result) => {
+      toast.success(`Digest: ${result.digest}`);
+      refetch?.();
+    },
+  },
 );
 ```
 
@@ -947,27 +1054,27 @@ const [stakeCoin] = txb.splitCoins(txb.gas, [MIST_PER_SUI * BigInt(stake)]);
 
 // Create the game with CounterNFT
 txb.moveCall({
-	target: `${PACKAGE_ID}::single_player_satoshi::start_game`,
-	arguments: [
-		txb.pure.string(guess),
-		txb.object(counterNFTData[0].data?.objectId!),
-		stakeCoin,
-		txb.object(houseDataId),
-	],
+  target: `${PACKAGE_ID}::single_player_satoshi::start_game`,
+  arguments: [
+    txb.pure.string(guess),
+    txb.object(counterNFTData[0].data?.objectId!),
+    stakeCoin,
+    txb.object(houseDataId),
+  ],
 });
 
 execCreateGame(
-	{
-		transaction: txb,
-	},
-	{
-		onError: (err) => {
-			toast.error(err.message);
-		},
-		onSuccess: (result: SuiTransactionBlockResponse) => {
-			toast.success(`Digest: ${result.digest}`);
-		},
-	},
+  {
+    transaction: txb,
+  },
+  {
+    onError: (err) => {
+      toast.error(err.message);
+    },
+    onSuccess: (result: SuiTransactionBlockResponse) => {
+      toast.success(`Digest: ${result.digest}`);
+    },
+  },
 );
 ```
 
@@ -981,70 +1088,70 @@ All of this logic is in `HouseFinishGame.tsx`:
 ```typescript title='containers/House/HouseFinishGame.tsx'
 // This component will help the House to automatically finish the game whenever new game is started
 export function HouseFinishGame() {
-	const suiClient = useSuiClient();
-	const { mutate: execFinishGame } = useSignAndExecuteTransactionBlock();
+  const suiClient = useSuiClient();
+  const { mutate: execFinishGame } = useSignAndExecuteTransactionBlock();
 
-	const [housePrivHex] = useContext(HouseKeypairContext);
-	const [houseDataId] = useContext(HouseDataContext);
+  const [housePrivHex] = useContext(HouseKeypairContext);
+  const [houseDataId] = useContext(HouseDataContext);
 
-	useEffect(() => {
-		// Subscribe to NewGame event
-		const unsub = suiClient.subscribeEvent({
-			filter: {
-				MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
-			},
-			onMessage(event) {
-				console.log(event);
-				const { game_id, vrf_input } = event.parsedJson as {
-					game_id: string;
-					vrf_input: number[];
-				};
+  useEffect(() => {
+    // Subscribe to NewGame event
+    const unsub = suiClient.subscribeEvent({
+      filter: {
+        MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+      },
+      onMessage(event) {
+        console.log(event);
+        const { game_id, vrf_input } = event.parsedJson as {
+          game_id: string;
+          vrf_input: number[];
+        };
 
-				toast.info(`NewGame started ID: ${game_id}`);
+        toast.info(`NewGame started ID: ${game_id}`);
 
-				console.log(housePrivHex);
+        console.log(housePrivHex);
 
-				try {
-					const houseSignedInput = bls.sign(
-						new Uint8Array(vrf_input),
-						curveUtils.hexToBytes(housePrivHex),
-					);
+        try {
+          const houseSignedInput = bls.sign(
+            new Uint8Array(vrf_input),
+            curveUtils.hexToBytes(housePrivHex),
+          );
 
-					// Finish the game immediately after new game started
-					const txb = new Transaction();
-					txb.moveCall({
-						target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
-						arguments: [
-							txb.pure.id(game_id),
-							txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
-							txb.object(houseDataId),
-						],
-					});
-					execFinishGame(
-						{
-							transaction: txb,
-						},
-						{
-							onError: (err) => {
-								toast.error(err.message);
-							},
-							onSuccess: (result: SuiTransactionBlockResponse) => {
-								toast.success(`Digest: ${result.digest}`);
-							},
-						},
-					);
-				} catch (err) {
-					console.error(err);
-				}
-			},
-		});
+          // Finish the game immediately after new game started
+          const txb = new Transaction();
+          txb.moveCall({
+            target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
+            arguments: [
+              txb.pure.id(game_id),
+              txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
+              txb.object(houseDataId),
+            ],
+          });
+          execFinishGame(
+            {
+              transaction: txb,
+            },
+            {
+              onError: (err) => {
+                toast.error(err.message);
+              },
+              onSuccess: (result: SuiTransactionBlockResponse) => {
+                toast.success(`Digest: ${result.digest}`);
+              },
+            },
+          );
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
 
-		return () => {
-			(async () => (await unsub)())();
-		};
-	}, [housePrivHex, houseDataId, suiClient]);
+    return () => {
+      (async () => (await unsub)())();
+    };
+  }, [housePrivHex, houseDataId, suiClient]);
 
-	return null;
+  return null;
 }
 ```
 

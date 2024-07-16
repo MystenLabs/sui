@@ -176,7 +176,7 @@ type AuthenticatorStateExpireTransaction {
 	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
-	authenticatorObjInitialSharedVersion: Int!
+	authenticatorObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -190,7 +190,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Consensus round of the authenticator state update.
 	"""
-	round: Int!
+	round: UInt53!
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
@@ -198,7 +198,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	The initial version of the authenticator object that it was shared at.
 	"""
-	authenticatorObjInitialSharedVersion: Int!
+	authenticatorObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -220,7 +220,7 @@ type Balance {
 	"""
 	How many coins of this type constitute the balance
 	"""
-	coinObjectCount: Int
+	coinObjectCount: UInt53
 	"""
 	Total balance across all coin objects of the coin type
 	"""
@@ -315,7 +315,7 @@ scalar BigInt
 
 
 type BridgeCommitteeInitTransaction {
-	bridgeObjInitialSharedVersion: Int!
+	bridgeObjInitialSharedVersion: UInt53!
 }
 
 type BridgeStateCreateTransaction {
@@ -337,7 +337,7 @@ type ChangeEpochTransaction {
 	"""
 	The protocol version in effect in the new epoch.
 	"""
-	protocolVersion: Int!
+	protocolVersion: UInt53!
 	"""
 	The total amount of gas charged for storage during the previous epoch (in MIST).
 	"""
@@ -382,7 +382,7 @@ type Checkpoint {
 	This checkpoint's position in the total order of finalized checkpoints, agreed upon by
 	consensus.
 	"""
-	sequenceNumber: Int!
+	sequenceNumber: UInt53!
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus.
 	Transactions that access time in this checkpoint will observe this timestamp.
@@ -400,7 +400,7 @@ type Checkpoint {
 	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
-	networkTotalTransactions: Int
+	networkTotalTransactions: UInt53
 	"""
 	The computation cost, storage cost, storage rebate, and non-refundable storage fee
 	accumulated during this epoch, up to and including this checkpoint. These values increase
@@ -451,7 +451,7 @@ Filter either by the digest, or the sequence number, or neither, to get the late
 """
 input CheckpointId {
 	digest: String
-	sequenceNumber: Int
+	sequenceNumber: UInt53
 }
 
 """
@@ -491,7 +491,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -650,7 +650,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -765,7 +765,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Consensus round of the commit.
 	"""
-	round: Int!
+	round: UInt53!
 	"""
 	Unix timestamp from consensus.
 	"""
@@ -1000,7 +1000,7 @@ type Epoch {
 	"""
 	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
-	epochId: Int!
+	epochId: UInt53!
 	"""
 	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
 	"""
@@ -1020,11 +1020,11 @@ type Epoch {
 	"""
 	The total number of checkpoints in this epoch.
 	"""
-	totalCheckpoints: BigInt
+	totalCheckpoints: UInt53
 	"""
 	The total number of transaction blocks in this epoch.
 	"""
-	totalTransactions: Int
+	totalTransactions: UInt53
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
@@ -1077,7 +1077,7 @@ type Epoch {
 	version changes whenever the fields contained in the system state object (held in a dynamic
 	field attached to `0x5`) change.
 	"""
-	systemStateVersion: Int
+	systemStateVersion: UInt53
 	"""
 	Details of the system that are decided during genesis.
 	"""
@@ -1408,7 +1408,7 @@ Interface implemented by on-chain values that are addressable by an ID (also ref
 address). This includes Move objects and packages.
 """
 interface IObject {
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are: NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or system package upgrade transaction. LIVE, the version returned is the most recent for the object, and it is not deleted or wrapped at that version. HISTORICAL, the object was referenced at a specific version or checkpoint, so is fetched from historical tables and may not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or wrapped and only partial information can be loaded.
 	"""
@@ -1519,7 +1519,7 @@ type Linkage {
 	"""
 	The version of the dependency that this package depends on.
 	"""
-	version: Int!
+	version: UInt53!
 }
 
 """
@@ -1946,7 +1946,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -2129,7 +2129,7 @@ type MovePackage implements IObject & IOwner {
 	cannot be owned by an address.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -2465,7 +2465,7 @@ type Object implements IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -2664,7 +2664,7 @@ input ObjectFilter {
 
 input ObjectKey {
 	objectId: SuiAddress!
-	version: Int!
+	version: UInt53!
 }
 
 enum ObjectKind {
@@ -2697,7 +2697,7 @@ input ObjectRef {
 	"""
 	Version or sequence number of the object.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	Digest of the object.
 	"""
@@ -2755,7 +2755,7 @@ type OwnedOrImmutable {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -2939,7 +2939,7 @@ type ProtocolConfigs {
 	The protocol is not required to change on every epoch boundary, so the protocol version
 	tracks which change to the protocol these configs are from.
 	"""
-	protocolVersion: Int!
+	protocolVersion: UInt53!
 	"""
 	List all available feature flags and their values.  Feature flags are a form of boolean
 	configuration that are usually used to gate features while they are in development.  Once a
@@ -3020,12 +3020,29 @@ type Query {
 	non-entry functions, and some other checks.  Defaults to false.
 	"""
 	dryRunTransactionBlock(txBytes: String!, txMeta: TransactionMetadata, skipChecks: Boolean): DryRunResult!
-	owner(address: SuiAddress!): Owner
+	"""
+	Look up an Owner by its SuiAddress.
+	
+	`rootVersion` represents the version of the root object in some nested chain of dynamic
+	fields. It allows consistent historical queries for the case of wrapped objects, which don't
+	have a version. For example, if querying the dynamic field of a table wrapped in a parent
+	object, passing the parent object's version here will ensure we get the dynamic field's
+	state at the moment that parent's version was created.
+	
+	Also, if this Owner is an object itself, `rootVersion` will be used to bound its version
+	from above when querying `Owner.asObject`. This can be used, for example, to get the
+	contents of a dynamic object field when its parent was at `rootVersion`.
+	
+	If `rootVersion` is omitted, dynamic fields will be from a consistent snapshot of the Sui
+	state at the latest checkpoint known to the GraphQL RPC. Similarly, `Owner.asObject` will
+	return the object's version at the latest checkpoint.
+	"""
+	owner(address: SuiAddress!, rootVersion: Int): Owner
 	"""
 	The object corresponding to the given address at the (optionally) given version.
 	When no version is given, the latest version is returned.
 	"""
-	object(address: SuiAddress!, version: Int): Object
+	object(address: SuiAddress!, version: UInt53): Object
 	"""
 	Look-up an Account by its SuiAddress.
 	"""
@@ -3038,7 +3055,7 @@ type Query {
 	"""
 	Fetch epoch information by ID (defaults to the latest epoch).
 	"""
-	epoch(id: Int): Epoch
+	epoch(id: UInt53): Epoch
 	"""
 	Fetch checkpoint information by sequence number or digest (defaults to the latest available
 	checkpoint).
@@ -3075,7 +3092,7 @@ type Query {
 	Fetch the protocol config by protocol version (defaults to the latest protocol
 	version known to the GraphQL service).
 	"""
-	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	protocolConfig(protocolVersion: UInt53): ProtocolConfigs!
 	"""
 	Resolves a SuiNS `domain` name to an address, if it has been bound.
 	"""
@@ -3118,7 +3135,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	Randomness round of the update.
 	"""
-	randomnessRound: Int!
+	randomnessRound: UInt53!
 	"""
 	Updated random bytes, encoded as Base64.
 	"""
@@ -3126,7 +3143,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	The initial version the randomness object was shared at.
 	"""
-	randomnessObjInitialSharedVersion: Int!
+	randomnessObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -3140,7 +3157,7 @@ type Receiving {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -3224,7 +3241,7 @@ type ServiceConfig {
 	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
 	measured in the same units that the database uses in EXPLAIN queries.
 	"""
-	maxDbQueryCost: BigInt!
+	maxDbQueryCost: Int!
 	"""
 	Default number of elements allowed on a single page of a connection.
 	"""
@@ -3273,7 +3290,7 @@ A shared object is an object that is shared using the 0x2::transfer::share_objec
 Unlike owned objects, once an object is shared, it stays mutable and is accessible by anyone.
 """
 type Shared {
-	initialSharedVersion: Int!
+	initialSharedVersion: UInt53!
 }
 
 """
@@ -3284,7 +3301,7 @@ type SharedInput {
 	"""
 	The version that this this object was shared at.
 	"""
-	initialSharedVersion: Int!
+	initialSharedVersion: UInt53!
 	"""
 	Controls whether the transaction block can reference the shared object as a mutable
 	reference or by value. This has implications for scheduling: Transactions that just read
@@ -3306,7 +3323,7 @@ type SharedObjectCancelled {
 	"""
 	The assigned shared object version. It is a special version indicating transaction cancellation reason.
 	"""
-	version: Int!
+	version: UInt53!
 }
 
 """
@@ -3322,7 +3339,7 @@ type SharedObjectDelete {
 	The version of the shared object that was assigned to this transaction during by consensus,
 	during sequencing.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	Whether this transaction intended to use this shared object mutably or not. See
 	`SharedInput.mutable` for further details.
@@ -3341,7 +3358,7 @@ type SharedObjectRead {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -3453,7 +3470,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -3655,7 +3672,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -3781,7 +3798,7 @@ type SystemParameters {
 	"""
 	The epoch at which stake subsidies start being paid out.
 	"""
-	stakeSubsidyStartEpoch: Int
+	stakeSubsidyStartEpoch: UInt53
 	"""
 	The minimum number of active validators that the system supports.
 	"""
@@ -3906,7 +3923,7 @@ type TransactionBlockEffects {
 	The latest version of all objects (apart from packages) that have been created or modified
 	by this transaction, immediately following this transaction.
 	"""
-	lamportVersion: Int!
+	lamportVersion: UInt53!
 	"""
 	The reason for a transaction failure, if it did fail.
 	If the error is a Move abort, the error message will be resolved to a human-readable form if
@@ -3962,9 +3979,9 @@ input TransactionBlockFilter {
 	An input filter selecting for either system or programmable transactions.
 	"""
 	kind: TransactionBlockKindInput
-	afterCheckpoint: Int
-	atCheckpoint: Int
-	beforeCheckpoint: Int
+	afterCheckpoint: UInt53
+	atCheckpoint: UInt53
+	beforeCheckpoint: UInt53
 	signAddress: SuiAddress
 	recvAddress: SuiAddress
 	inputObject: SuiAddress
@@ -4032,9 +4049,9 @@ to the sender.
 """
 input TransactionMetadata {
 	sender: SuiAddress
-	gasPrice: Int
+	gasPrice: UInt53
 	gasObjects: [ObjectRef!]
-	gasBudget: Int
+	gasBudget: UInt53
 	gasSponsor: SuiAddress
 }
 
@@ -4070,6 +4087,12 @@ type TypeOrigin {
 	"""
 	definingId: SuiAddress!
 }
+
+"""
+An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`,
+but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
+"""
+scalar UInt53
 
 """
 Details pertaining to shared objects that are referenced by but not changed by a transaction.
@@ -4188,11 +4211,11 @@ type Validator {
 	"""
 	Number of exchange rates in the table.
 	"""
-	exchangeRatesSize: Int
+	exchangeRatesSize: UInt53
 	"""
 	The epoch at which this pool became active.
 	"""
-	stakingPoolActivationEpoch: Int
+	stakingPoolActivationEpoch: UInt53
 	"""
 	The total number of SUI tokens in this pool.
 	"""
@@ -4246,7 +4269,7 @@ type Validator {
 	The number of epochs for which this validator has been below the
 	low stake threshold.
 	"""
-	atRisk: Int
+	atRisk: UInt53
 	"""
 	The addresses of other validators this validator has reported.
 	"""
@@ -4387,3 +4410,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+

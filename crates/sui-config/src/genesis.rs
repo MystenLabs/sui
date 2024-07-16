@@ -140,9 +140,9 @@ impl Genesis {
         self.sui_system_object().reference_gas_price()
     }
 
-    // TODO: No need to return SuiResult.
+    // TODO: No need to return SuiResult. Also consider return &.
     pub fn committee(&self) -> SuiResult<Committee> {
-        Ok(self.committee_with_network().committee)
+        Ok(self.committee_with_network().committee().clone())
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {

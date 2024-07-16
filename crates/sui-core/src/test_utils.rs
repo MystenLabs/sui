@@ -6,9 +6,8 @@ use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,8 +46,7 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
+use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder, TimeoutConfig};
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 
@@ -191,7 +189,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/basics")
+    compile_example_package("../../examples/move/basics")
 }
 
 pub fn compile_managed_coin_package() -> CompiledPackage {
@@ -312,8 +310,6 @@ pub async fn init_local_authorities_with_genesis(
     authorities: Vec<Arc<AuthorityState>>,
 ) -> AuthorityAggregator<LocalAuthorityClient> {
     telemetry_subscribers::init_for_testing();
-    let committee = genesis.committee().unwrap();
-
     let mut clients = BTreeMap::new();
     for state in authorities {
         let name = state.name;
@@ -325,15 +321,9 @@ pub async fn init_local_authorities_with_genesis(
         post_quorum_timeout: Duration::from_secs(5),
         serial_authority_request_interval: Duration::from_secs(1),
     };
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    AuthorityAggregator::new_with_timeouts(
-        committee,
-        committee_store,
-        clients,
-        &Registry::new(),
-        Arc::new(HashMap::new()),
-        timeouts,
-    )
+    AuthorityAggregatorBuilder::from_genesis(genesis)
+        .with_timeouts_config(timeouts)
+        .build_custom_clients(clients)
 }
 
 pub fn make_transfer_sui_transaction(

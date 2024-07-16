@@ -420,7 +420,7 @@ impl ServerBuilder {
             // Bound each statement in a request with the overall request timeout, to bound DB
             // utilisation (in the worst case we will use 2x the request timeout time in DB wall
             // time).
-            config.service.limits.request_timeout_ms,
+            config.service.limits.request_timeout_ms.into(),
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
@@ -688,7 +688,7 @@ pub mod tests {
         let reader = PgManager::reader_with_config(
             connection_config.db_url.clone(),
             connection_config.db_pool_size,
-            service_config.limits.request_timeout_ms,
+            service_config.limits.request_timeout_ms.into(),
         )
         .expect("Failed to create pg connection pool");
 
@@ -771,8 +771,8 @@ pub mod tests {
             sui_client: &SuiClient,
         ) -> Response {
             let mut cfg = ServiceConfig::default();
-            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
-            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u32;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(None, Some(cfg))
                 .context_data(Some(sui_client.clone()))

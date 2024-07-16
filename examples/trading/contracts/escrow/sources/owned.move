@@ -33,7 +33,7 @@
 ///      `Locked` object that the respective objects resided in immediately
 ///      before being sent to the custodian.
 module escrow::owned {
-    use escrow::lock::{Self, Locked, Key};
+    use escrow::lock::{Locked, Key};
 
     /// An object held in escrow
     public struct Escrow<T: key + store> has key {
@@ -164,6 +164,8 @@ module escrow::owned {
     #[test_only] use sui::coin::{Self, Coin};
     #[test_only] use sui::sui::SUI;
     #[test_only] use sui::test_scenario::{Self as ts, Scenario};
+
+    #[test_only] use escrow::lock;
 
     #[test_only] const ALICE: address = @0xA;
     #[test_only] const BOB: address = @0xB;

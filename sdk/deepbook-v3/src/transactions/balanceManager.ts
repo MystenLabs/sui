@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
 import type { BalanceManager, Coin } from '../types/index.js';
@@ -17,7 +18,7 @@ export class BalanceManagerContract {
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::new`,
 		});
 
-		return tx.moveCall({
+		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::share`,
 			arguments: [manager],
 		});
@@ -25,17 +26,13 @@ export class BalanceManagerContract {
 
 	depositIntoManager =
 		(managerId: string, amountToDeposit: number, coin: Coin) => (tx: Transaction) => {
-			let deposit;
+			tx.setSenderIfNotSet(this.#config.address);
+			const deposit = coinWithBalance({
+				type: coin.type,
+				balance: amountToDeposit * coin.scalar,
+			});
 
-			if (coin.key === 'SUI') {
-				[deposit] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToDeposit * coin.scalar)]);
-			} else {
-				[deposit] = tx.splitCoins(tx.object(this.#config.getCoinId(coin.key)), [
-					tx.pure.u64(amountToDeposit * coin.scalar),
-				]);
-			}
-
-			return tx.moveCall({
+			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::deposit`,
 				arguments: [tx.object(managerId), deposit],
 				typeArguments: [coin.type],
@@ -56,44 +53,44 @@ export class BalanceManagerContract {
 
 	withdrawAllFromManager =
 		(managerId: string, coin: Coin, recipient: string) => (tx: Transaction) => {
-			const coinObject = tx.moveCall({
+			const withdrawalCoin = tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::withdraw_all`,
 				arguments: [tx.object(managerId)],
 				typeArguments: [coin.type],
 			});
 
-			tx.transferObjects([coinObject], recipient);
+			tx.transferObjects([withdrawalCoin], recipient);
 		};
 
-	checkManagerBalance = (managerId: string, coin: Coin) => (tx: Transaction) =>
+	checkManagerBalance = (managerId: string, coin: Coin) => (tx: Transaction) => {
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::balance`,
 			arguments: [tx.object(managerId)],
 			typeArguments: [coin.type],
 		});
+	};
 
-	generateProofAsOwner = (managerId: string) => (tx: Transaction) =>
-		tx.moveCall({
+	generateProof = (balanceManager: BalanceManager) => (tx: Transaction) => {
+		return tx.add(
+			balanceManager.tradeCap
+				? this.generateProofAsTrader(balanceManager.address, balanceManager.tradeCap)
+				: this.generateProofAsOwner(balanceManager.address),
+		);
+	};
+
+	generateProofAsOwner = (managerId: string) => (tx: Transaction) => {
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::generate_proof_as_owner`,
 			arguments: [tx.object(managerId)],
 		});
+	};
 
-	generateProof = (balanceManager: BalanceManager) =>
-		balanceManager.tradeCap
-			? this.generateProofAsTrader(balanceManager.address, balanceManager.tradeCap)
-			: this.generateProofAsOwner(balanceManager.address);
-
-	generateProofAsTrader = (managerId: string, tradeCapId: string) => (tx: Transaction) =>
-		tx.moveCall({
+	generateProofAsTrader = (managerId: string, tradeCapId: string) => (tx: Transaction) => {
+		return tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::generate_proof_as_trader`,
 			arguments: [tx.object(managerId), tx.object(tradeCapId)],
 		});
-
-	validateProof = (managerId: string, tradeProofId: string) => (tx: Transaction) =>
-		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::validate_proof`,
-			arguments: [tx.object(managerId), tx.object(tradeProofId)],
-		});
+	};
 
 	owner = (managerId: string) => (tx: Transaction) =>
 		tx.moveCall({

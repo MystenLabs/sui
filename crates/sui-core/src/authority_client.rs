@@ -260,16 +260,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
 pub fn make_network_authority_clients_with_network_config(
     committee: &CommitteeWithNetworkMetadata,
     network_config: &Config,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
+) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
-    for (name, _stakes) in &committee.committee.voting_rights {
-        let address = &committee
-            .network_metadata
-            .get(name)
-            .ok_or_else(|| {
-                SuiError::from("Missing network metadata in CommitteeWithNetworkMetadata")
-            })?
-            .network_address;
+    for (name, (_state, network_metadata)) in committee.validators() {
+        let address = network_metadata.network_address.clone();
         let address = address.rewrite_udp_to_tcp();
         let maybe_channel = network_config.connect_lazy(&address).map_err(|e| {
             tracing::error!(
@@ -282,14 +276,14 @@ pub fn make_network_authority_clients_with_network_config(
         let client = NetworkAuthorityClient::new_lazy(maybe_channel);
         authority_clients.insert(*name, client);
     }
-    Ok(authority_clients)
+    authority_clients
 }
 
 pub fn make_authority_clients_with_timeout_config(
     committee: &CommitteeWithNetworkMetadata,
     connect_timeout: Duration,
     request_timeout: Duration,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
+) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut network_config = mysten_network::config::Config::new();
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);

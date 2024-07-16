@@ -69,25 +69,18 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {
                         debug!(epoch_id, "Got SuiSystemState in newer epoch");
-                        let new_committee = sui_system_state
-                            .get_sui_committee_for_benchmarking()
-                            .committee;
-                        let _ = self.committee_store.insert_new_committee(&new_committee);
-                        match AuthorityAggregator::new_from_committee(
+                        let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
+                        let _ = self
+                            .committee_store
+                            .insert_new_committee(new_committee.committee());
+                        let auth_agg = AuthorityAggregator::new_from_committee(
                             sui_system_state.get_sui_committee_for_benchmarking(),
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),
                             Arc::new(HashMap::new()),
-                        ) {
-                            Ok(auth_agg) => {
-                                quorum_driver.update_validators(Arc::new(auth_agg)).await
-                            }
-                            Err(err) => error!(
-                                "Can't create AuthorityAggregator from SuiSystemState: {:?}",
-                                err
-                            ),
-                        }
+                        );
+                        quorum_driver.update_validators(Arc::new(auth_agg)).await
                     } else {
                         trace!(
                             epoch_id,

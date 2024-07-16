@@ -77,6 +77,11 @@ module sui::coin {
         total_supply: Supply<T>
     }
 
+    /// Capability allowing the bearer to deny addresses from using the currency's coins--
+    /// immediately preventing those addresses from interacting with the coin as an input to a
+    /// transaction and at the start of the next preventing them from receiving the coin.
+    /// If `allow_global_pause` is true, the bearer can enable a global pause that behaves as if
+    /// all addresses were added to the deny list.
     public struct DenyCapV2<phantom T> has key, store {
         id: UID,
         allow_global_pause: bool,
@@ -236,6 +241,14 @@ module sui::coin {
         )
     }
 
+    /// This creates a new currency, via `create_currency`, but with an extra capability that
+    /// allows for specific addresses to have their coins frozen. When an address is added to the
+    /// deny list, it is immediately unable to interact with the currency's coin as input objects.
+    /// Additionally at the start of the next epoch, they will be unable to receive the currency's
+    /// coin.
+    /// The `allow_global_pause` flag enables an additional API that will cause all addresses to be
+    /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
+    /// will not change the result of the "contains" APIs.
     public fun create_regulated_currency_v2<T: drop>(
         witness: T,
         decimals: u8,
@@ -267,6 +280,9 @@ module sui::coin {
         (treasury_cap, deny_cap, metadata)
     }
 
+    /// Given the `DenyCap` for a regulated currency, migrate it to the new `DenyCapV2` type.
+    /// All entries in the deny list will be migrated to the new format.
+    /// See `create_regulated_currency_v2` for details on the new v2 of the deny list.
     public fun migrate_regulated_currency_to_v2<T>(
         deny_list: &mut DenyList,
         cap: DenyCap<T>,
@@ -311,6 +327,9 @@ module sui::coin {
         cap.total_supply.decrease_supply(balance)
     }
 
+    /// Adds the given address to the deny list, preventing it from interacting with the specified
+    /// coin type as an input to a transaction. Additionally at the start of the next epoch, the
+    /// address will be unable to receive objects of this coin type.
     public fun deny_list_v2_add<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
@@ -321,6 +340,9 @@ module sui::coin {
         deny_list.v2_add(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
+    /// Removes an address from the deny list. Similar to `deny_list_v2_add`, the effect for input
+    /// objects will be immediate, but the effect for receiving objects will be delayed until the
+    /// next epoch.
     public fun deny_list_v2_remove<T>(
         deny_list: &mut DenyList,
         _deny_cap: &mut DenyCapV2<T>,
@@ -331,6 +353,8 @@ module sui::coin {
         deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
+    /// Check if the deny list contains the given address for the current epoch. Denied addresses
+    /// in the current epoch will be unable to receive objects of this coin type.
     public fun deny_list_v2_contains_current_epoch<T>(
         deny_list: &DenyList,
         addr: address,
@@ -340,6 +364,9 @@ module sui::coin {
         deny_list.v2_contains_current_epoch(DENY_LIST_COIN_INDEX, ty, addr, ctx)
     }
 
+    /// Check if the deny list contains the given address for the next epoch. Denied addresses in
+    /// the next epoch will immediately be unable to use objects of this coin type as inputs. At the
+    /// start of the next epoch, the address will be unable to receive objects of this coin type.
     public fun deny_list_v2_contains_next_epoch<T>(
         deny_list: &DenyList,
         addr: address,
@@ -348,6 +375,9 @@ module sui::coin {
         deny_list.v2_contains_next_epoch(DENY_LIST_COIN_INDEX, ty, addr)
     }
 
+    /// Enable the global pause for the given coin type. This will immediately prevent all addresses
+    /// from using objects of this coin type as inputs. At the start of the next epoch, all
+    /// addresses will be unable to receive objects of this coin type.
     #[allow(unused_mut_parameter)]
     public fun deny_list_v2_enable_global_pause<T>(
         deny_list: &mut DenyList,
@@ -359,6 +389,9 @@ module sui::coin {
         deny_list.v2_enable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
+    /// Disable the global pause for the given coin type. This will immediately allow all addresses
+    /// to resume using objects of this coin type as inputs. However, receiving objects of this coin
+    /// type will still be paused until the start of the next epoch.
     #[allow(unused_mut_parameter)]
     public fun deny_list_v2_disable_global_pause<T>(
         deny_list: &mut DenyList,
@@ -370,6 +403,7 @@ module sui::coin {
         deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
+    /// Check if the global pause is enabled for the given coin type in the current epoch.
     public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
         deny_list: &DenyList,
         ctx: &TxContext,
@@ -378,6 +412,7 @@ module sui::coin {
         deny_list.v2_is_global_pause_enabled_current_epoch(DENY_LIST_COIN_INDEX, ty, ctx)
     }
 
+    /// Check if the global pause is enabled for the given coin type in the next epoch.
     public fun deny_list_v2_is_global_pause_enabled_next_epoch<T>(
         deny_list: &DenyList,
     ): bool {
