@@ -267,8 +267,6 @@ impl Page<JsonCursor<ConsistentIndexCursor>> {
     }
 }
 
-// todo introduce additional trait that allows us to check whether the cursor was a scanLimit cursor
-// or from one of the ends
 impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// Treat the cursors of this page as upper- and lowerbound filters for a database `query`.
     /// Returns two booleans indicating whether there is a previous or next page in the range,

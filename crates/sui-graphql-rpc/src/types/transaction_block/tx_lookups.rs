@@ -17,17 +17,19 @@ use diesel::{
     backend::Backend,
     deserialize::{self, FromSql, QueryableByName},
     row::NamedRow,
+    sql_types::Nullable,
 };
 use std::fmt::Write;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use super::{Cursor, TransactionBlockFilter};
 
-/// The `tx_sequence_number` range of the transactions to be queried.
+/// The `tx_sequence_number` range of the transactions to be queried. Even though the values that
+/// constitute `lo` and `hi` are non-null, the checkpoints themselves may be.
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct StoredTxBounds {
-    pub lo: i64,
-    pub hi: i64,
+    pub lo: Option<i64>,
+    pub hi: Option<i64>,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -89,8 +91,11 @@ impl TxBounds {
         let from_db: StoredTxBounds =
             conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
 
-        let lo = from_db.lo as u64;
-        let hi = from_db.hi as u64;
+        // Both `lo` and `hi` must be non-null, or else the result is invalid.
+        let (lo, hi) = match (from_db.lo, from_db.hi) {
+            (Some(lo), Some(hi)) => (lo as u64, hi as u64),
+            _ => return Ok(None),
+        };
 
         if page.after().is_some_and(|x| x.tx_sequence_number >= hi)
             || page.before().is_some_and(|x| x.tx_sequence_number <= lo)
@@ -260,8 +265,8 @@ where
     i64: FromSql<diesel::sql_types::BigInt, DB>,
 {
     fn build<'a>(row: &impl NamedRow<'a, DB>) -> deserialize::Result<Self> {
-        let lo = NamedRow::get::<diesel::sql_types::BigInt, _>(row, "lo")?;
-        let hi = NamedRow::get::<diesel::sql_types::BigInt, _>(row, "hi")?;
+        let lo = NamedRow::get::<Nullable<diesel::sql_types::BigInt>, _>(row, "lo")?;
+        let hi = NamedRow::get::<Nullable<diesel::sql_types::BigInt>, _>(row, "hi")?;
 
         Ok(Self { lo, hi })
     }

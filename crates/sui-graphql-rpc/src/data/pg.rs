@@ -71,7 +71,6 @@ impl QueryExecutor for PgExecutor {
         result.map_err(|e| Error::Internal(e.to_string()))
     }
 
-    /// TODO annotate with docs
     async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
     where
         T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,

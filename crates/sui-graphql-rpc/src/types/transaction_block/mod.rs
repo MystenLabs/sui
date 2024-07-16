@@ -328,8 +328,11 @@ impl TransactionBlock {
                     &page,
                 )?
                 else {
+                    println!("empty txBounds, early return");
                     return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
                 };
+
+                println!("got through tx bounds");
 
                 // If no filters are selected, or if the filter is composed of only checkpoint
                 // filters, we can directly query the main `transactions` table. Otherwise, we first
@@ -387,31 +390,16 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
-        // `paginate_query` handles (describe scenario) for us but
-        // when empty
-        // or when paginating through, say `is_from_front`, cannot absolutely determine whethere there is or isn't a next page
-        // because `paginate_query` only aware of whether we returned a result set for this particular query
-        // so use tx bounds
         let (scan_prev_page, scan_lo) = tx_bounds.scan_prev_page_and_lo();
         let (scan_next_page, scan_hi) = tx_bounds.scan_next_page_and_hi();
 
-        // if the set of transactions is empty, then leverage `scan` results - i think this can be rolled into the latter two conditions
-
-        // if scan_limit && is_from_front and has_next_page is false, also defer to tx_bounds
+        // When a `scan_limit` is specified, as long as we are still within the scanning range,
+        // there will be previous or subsequent pages to continue scanning through.
         if scan_limit.is_some() {
-            // Ah so the issue is that is_from_front + paginate_results:d means
-            // since we only set has_next_page to true if suffix > 0
-            // then for some query that leverages an after cursor, and we yield only one result
-            // has_next_page will always be false unless we specify an ending cursor
-            // now if scan limit is in play, we know that there will always be a next page as long as ... it is within the range
-            // so basically if you query after = 13, and you get a single result 13, Page wil think that ther eisn't a next page
-            // however we know that unless scanLimited exceeds range, there is a next page
-            // now the question is ... what is the correct ending cursor to use in this scenario?
-            // i believe it should be the last cursor of the list of elements, because it's possible that there are more between the current page and the next within the scan limit
-            // in other words, there might be more between after + some and after + scanlimit
-            // just like how there are more between after+scanLimit and the absolute range end
             if !conn.has_next_page && scan_next_page {
                 conn.has_next_page = true;
+                // Defer to the cursor of the last transaction scanned in the range, unless the
+                // result is empty in which case defer to the `scan_hi` value.
                 if conn.edges.is_empty() {
                     conn.end_cursor = Some(
                         Cursor::new(cursor::TransactionBlockCursor {
@@ -426,6 +414,8 @@ impl TransactionBlock {
 
             if !conn.has_previous_page && scan_prev_page {
                 conn.has_previous_page = true;
+                // Defer to the cursor of the first transaction scanned in the range, unless the
+                // result is empty in which case defer to the `scan_lo` value.
                 if conn.edges.is_empty() {
                     conn.start_cursor = Some(
                         Cursor::new(cursor::TransactionBlockCursor {
