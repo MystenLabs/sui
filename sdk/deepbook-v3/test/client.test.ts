@@ -5,9 +5,9 @@ import path from 'path';
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { DeepBookClient, DeepBookConfig } from '../src';
+import { CoinMap } from '../src/utils/constants';
 import { publishPackage, setupSuiClient, TestToolbox } from './setup';
 import { writeToml } from './helper/toml';
-import { CoinMap } from '../src/utils/constants';
 
 let toolbox!: TestToolbox;
 let coins: CoinMap;
@@ -18,29 +18,29 @@ let deepbookAdminCap: string;
 beforeAll(async () => {
 	toolbox = await setupSuiClient();
 	const tokenSourcesPath = path.join(__dirname, 'data/token');
-	writeToml(tokenSourcesPath, "0x0", "token");
+	writeToml(tokenSourcesPath, '0x0', 'token');
 	let deepRes = await publishPackage(tokenSourcesPath, toolbox);
-	writeToml(tokenSourcesPath, deepRes.packageId, "token");
+	writeToml(tokenSourcesPath, deepRes.packageId, 'token');
 
 	const usdcSourcePath = path.join(__dirname, 'data/usdc');
 	const usdcRes = await publishPackage(usdcSourcePath, toolbox);
 
 	const spamSourcePath = path.join(__dirname, 'data/spam');
 	const spamRes = await publishPackage(spamSourcePath, toolbox);
-	
+
 	const deepbookSourcesPath = path.join(__dirname, 'data/deepbook');
 	let deepbookRes = await publishPackage(deepbookSourcesPath, toolbox);
 
 	deepbookPackageId = deepbookRes.packageId;
 	// @ts-ignore
 	deepbookRegistryId = deepbookRes.publishTxn.objectChanges?.find((change) => {
-		return change.type === "created" && change.objectType.includes("Registry") && !change.objectType.includes("Inner")
-	})?.["objectId"];
+		return change.type === 'created' && change.objectType.includes('Registry') && !change.objectType.includes('Inner')
+	})?.['objectId'];
 
 	// @ts-ignore
 	deepbookAdminCap = deepbookRes.publishTxn.objectChanges?.find((change) => {
-		return change.type === "created" && change.objectType.includes("DeepbookAdminCap");
-	})?.["objectId"];
+		return change.type === 'created' && change.objectType.includes('DeepbookAdminCap');
+	})?.['objectId'];
 	coins = {
 		DEEP: {
 			address: deepRes.packageId,
@@ -57,7 +57,7 @@ beforeAll(async () => {
 			type: `${spamRes.packageId}::spam::SPAM`,
 			scalar: 1000000,
 		},
-	}
+	};
 });
 
 describe('DeepbookClient', () => {
