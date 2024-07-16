@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
@@ -7,13 +8,23 @@ import type { CreatePoolAdminParams, Pool } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { FLOAT_SCALAR, POOL_CREATION_FEE } from '../utils/config.js';
 
+/**
+ * DeepBookAdminContract class for managing admin actions.
+ */
 export class DeepBookAdminContract {
 	#config: DeepBookConfig;
 
+	/**
+	 * @param config Configuration for DeepBookAdminContract
+	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
 	}
 
+	/**
+	 * @returns The admin capability required for admin operations
+	 * @throws Error if the admin capability is not set
+	 */
 	#adminCap() {
 		const adminCap = this.#config.adminCap;
 		if (!adminCap) {
@@ -22,6 +33,11 @@ export class DeepBookAdminContract {
 		return adminCap;
 	}
 
+	/**
+	 * @description Create a new pool as admin
+	 * @param params Parameters for creating pool as admin
+	 * @returns A function that takes a Transaction object
+	 */
 	createPoolAdmin = (params: CreatePoolAdminParams) => (tx: Transaction) => {
 		tx.setSenderIfNotSet(this.#config.address);
 		const { baseCoinKey, quoteCoinKey, tickSize, lotSize, minSize, whitelisted, stablePool } =
@@ -54,6 +70,11 @@ export class DeepBookAdminContract {
 		});
 	};
 
+	/**
+	 * @description Unregister a pool as admin
+	 * @param pool The pool to be unregistered by admin
+	 * @returns A function that takes a Transaction object
+	 */
 	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
@@ -64,6 +85,11 @@ export class DeepBookAdminContract {
 		});
 	};
 
+	/**
+	 * @description Update the allowed versions for a pool
+	 * @param pool The pool to be updated
+	 * @returns A function that takes a Transaction object
+	 */
 	updateAllowedVersions = (pool: Pool) => (tx: Transaction) => {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
@@ -78,9 +104,14 @@ export class DeepBookAdminContract {
 		});
 	};
 
+	/**
+	 * @description Enable a specific version
+	 * @param version The version to be enabled
+	 * @returns A function that takes a Transaction object
+	 */
 	enableVersion = (version: number) => (tx: Transaction) => {
 		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::registry::enable_version`,
 			arguments: [
 				tx.object(this.#config.REGISTRY_ID),
 				tx.pure.u64(version),
@@ -89,9 +120,14 @@ export class DeepBookAdminContract {
 		});
 	};
 
+	/**
+	 * @description Disable a specific version
+	 * @param version The version to be disabled
+	 * @returns A function that takes a Transaction object
+	 */
 	disableVersion = (version: number) => (tx: Transaction) => {
 		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::regsitry::enable_version`,
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::registry::disable_version`,
 			arguments: [
 				tx.object(this.#config.REGISTRY_ID),
 				tx.pure.u64(version),
