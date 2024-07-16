@@ -899,7 +899,7 @@ pub mod tests {
 
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
+            vec!["Query nesting is over 0".to_string()]
         );
         let errs: Vec<_> = exec_query_depth_limit(
             2,
@@ -913,7 +913,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
+            vec!["Query nesting is over 2".to_string()]
         );
     }
 
@@ -956,7 +956,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
+            vec!["Query has over 0 nodes".to_string()]
         );
 
         let err: Vec<_> = exec_query_node_limit(
@@ -971,7 +971,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
+            vec!["Query has over 4 nodes".to_string()]
         );
     }
 
