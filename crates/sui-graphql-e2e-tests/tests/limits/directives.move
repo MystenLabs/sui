@@ -11,7 +11,7 @@
 
 //# run-graphql
 
-fragment Modules on Object  @deprecated {
+fragment Modules on Object @deprecated {
     address
     asMovePackage {
         module(name: "m") {
@@ -39,6 +39,14 @@ fragment Modules on Object  @deprecated {
             }
         }
     }
+}
+
+//# run-graphql
+
+query($id: SuiAddress! @deprecated) {
+  object(id: $id) {
+    address
+  }
 }
 
 //# run-graphql
