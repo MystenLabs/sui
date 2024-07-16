@@ -162,6 +162,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
+//             Enable consensus commit prologue V3 on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2493,6 +2494,12 @@ impl ProtocolConfig {
                 53 => {
                     // Do not allow bridge committee to finalize on mainnet.
                     cfg.bridge_should_try_to_finalize_committee = Some(chain != Chain::Mainnet);
+
+                    // Enable consensus commit prologue V3 on mainnet.
+                    cfg.feature_flags
+                        .record_consensus_determined_version_assignments_in_prologue = true;
+                    cfg.feature_flags
+                        .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
                 }
                 // Use this template when making changes:
                 //
