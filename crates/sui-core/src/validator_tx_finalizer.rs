@@ -114,9 +114,7 @@ impl<C: Clone> ValidatorTxFinalizer<C> {
             agg,
             tx_finalization_delay,
             finalization_timeout,
-            metrics: Arc::new(ValidatorTxFinalizerMetrics::new(
-                prometheus::default_registry(),
-            )),
+            metrics: Arc::new(ValidatorTxFinalizerMetrics::new(&Registry::new())),
         }
     }
 }
