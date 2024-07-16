@@ -120,6 +120,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_read_count: IntCounterVec,
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
+    pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
@@ -301,6 +302,12 @@ impl NodeMetrics {
                 "fetch_blocks_scheduler_inflight",
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
                 registry,
+            ).unwrap(),
+            fetch_blocks_scheduler_skipped: register_int_counter_vec_with_registry!(
+                "fetch_blocks_scheduler_skipped",
+                "Number of times the scheduler skipped fetching blocks",
+                &["reason"],
+                registry
             ).unwrap(),
             synchronizer_fetched_blocks_by_peer: register_int_counter_vec_with_registry!(
                 "synchronizer_fetched_blocks_by_peer",
