@@ -5,7 +5,7 @@ use crate::{
     consistency::Checkpointed,
     filter,
     raw_query::RawQuery,
-    types::cursor::{self, Paginated, RawPaginated, Target},
+    types::cursor::{self, Paginated, RawPaginated, ScanLimited, Target},
 };
 use diesel::{
     backend::Backend,
@@ -43,6 +43,12 @@ pub struct TxLookup {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+impl ScanLimited for Cursor {
+    fn is_scan_limited(&self) -> bool {
+        false
     }
 }
 

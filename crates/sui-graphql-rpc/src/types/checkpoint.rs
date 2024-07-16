@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use super::{
     base64::Base64,
-    cursor::{self, Page, Paginated, Target},
+    cursor::{self, Page, Paginated, ScanLimited, Target},
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
@@ -384,6 +384,12 @@ impl Target<Cursor> for StoredCheckpoint {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+impl ScanLimited for Cursor {
+    fn is_scan_limited(&self) -> bool {
+        false
     }
 }
 

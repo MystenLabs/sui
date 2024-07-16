@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use super::cursor::{self, Page, Paginated, Target};
+use super::cursor::{self, Page, Paginated, ScanLimited, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
@@ -374,5 +374,11 @@ impl Target<Cursor> for StoredEvent {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+impl ScanLimited for Cursor {
+    fn is_scan_limited(&self) -> bool {
+        false
     }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::available_range::AvailableRange;
-use super::cursor::{self, Page, RawPaginated, Target};
+use super::cursor::{self, Page, RawPaginated, ScanLimited, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 use crate::consistency::Checkpointed;
 use crate::data::{Db, DbConnection, QueryExecutor};
@@ -157,6 +157,12 @@ impl Target<Cursor> for StoredBalance {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+impl ScanLimited for Cursor {
+    fn is_scan_limited(&self) -> bool {
+        false
     }
 }
 

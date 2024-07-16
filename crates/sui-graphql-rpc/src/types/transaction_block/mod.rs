@@ -1,11 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    address::Address,
+    base64::Base64,
+    cursor::{Page, Target},
+    digest::Digest,
+    epoch::Epoch,
+    gas::GasInput,
+    sui_address::SuiAddress,
+    transaction_block_effects::{TransactionBlockEffects, TransactionBlockEffectsKind},
+    transaction_block_kind::TransactionBlockKind,
+};
+use crate::{
+    config::ServiceConfig,
+    connection::ScanConnection,
+    data::{self, DataLoader, Db, DbConnection, QueryExecutor},
+    error::Error,
+    server::watermark_task::Watermark,
+};
 use async_graphql::{connection::CursorType, dataloader::Loader, *};
 use connection::Edge;
+use cursor::TxLookup;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
-pub(crate) use filter::TransactionBlockFilter;
 use std::collections::{BTreeMap, HashMap};
 use sui_indexer::{
     models::transactions::StoredTransaction,
@@ -21,33 +39,14 @@ use sui_types::{
         TransactionDataAPI, TransactionExpiration,
     },
 };
-pub(crate) use tx_cursor::Cursor;
-use tx_cursor::TxLookup;
-pub(crate) use tx_lookups::{subqueries, TxBounds};
 
-use crate::{
-    config::ServiceConfig,
-    connection::ScanConnection,
-    data::{self, DataLoader, Db, DbConnection, QueryExecutor},
-    error::Error,
-    server::watermark_task::Watermark,
-};
-
-use super::{
-    address::Address,
-    base64::Base64,
-    cursor::{Page, Target},
-    digest::Digest,
-    epoch::Epoch,
-    gas::GasInput,
-    sui_address::SuiAddress,
-    transaction_block_effects::{TransactionBlockEffects, TransactionBlockEffectsKind},
-    transaction_block_kind::TransactionBlockKind,
-};
-
+mod cursor;
 mod filter;
-mod tx_cursor;
 mod tx_lookups;
+
+pub(crate) use cursor::Cursor;
+pub(crate) use filter::TransactionBlockFilter;
+pub(crate) use tx_lookups::{subqueries, TxBounds};
 
 /// Wraps the actual transaction block data with the checkpoint sequence number at which the data
 /// was viewed, for consistent results on paginating through and resolving nested types.
@@ -312,8 +311,6 @@ impl TransactionBlock {
 
         use transactions::dsl as tx;
 
-        let is_from_front = page.is_from_front();
-
         let (prev, next, transactions, tx_bounds): (
             bool,
             bool,
@@ -421,7 +418,7 @@ impl TransactionBlock {
                 conn.has_next_page = true;
                 if conn.edges.is_empty() {
                     conn.end_cursor = Some(
-                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                        Cursor::new(cursor::TransactionBlockCursor {
                             checkpoint_viewed_at,
                             tx_sequence_number: scan_hi,
                         })
@@ -434,7 +431,7 @@ impl TransactionBlock {
                 conn.has_previous_page = true;
                 if conn.edges.is_empty() {
                     conn.start_cursor = Some(
-                        Cursor::new(tx_cursor::TransactionBlockCursor {
+                        Cursor::new(cursor::TransactionBlockCursor {
                             checkpoint_viewed_at,
                             tx_sequence_number: scan_lo,
                         })

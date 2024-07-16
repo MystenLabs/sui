@@ -7,7 +7,7 @@ use sui_indexer::models::objects::StoredHistoryObject;
 
 use crate::raw_query::RawQuery;
 use crate::types::available_range::AvailableRange;
-use crate::types::cursor::{JsonCursor, Page};
+use crate::types::cursor::{JsonCursor, Page, ScanLimited};
 use crate::types::object::Cursor;
 use crate::{filter, query};
 
@@ -56,6 +56,18 @@ impl Checkpointed for JsonCursor<ConsistentIndexCursor> {
 impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.c
+    }
+}
+
+impl ScanLimited for JsonCursor<ConsistentIndexCursor> {
+    fn is_scan_limited(&self) -> bool {
+        false
+    }
+}
+
+impl ScanLimited for JsonCursor<ConsistentNamedCursor> {
+    fn is_scan_limited(&self) -> bool {
+        false
     }
 }
 

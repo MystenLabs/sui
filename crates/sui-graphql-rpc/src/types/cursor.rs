@@ -22,8 +22,6 @@ use crate::{
     raw_query::RawQuery,
 };
 
-use super::transaction_block::TxBounds;
-
 /// Cursor that hides its value by encoding it as JSON and then Base64.
 pub(crate) struct JsonCursor<C>(OpaqueCursor<C>);
 
@@ -101,6 +99,12 @@ pub(crate) trait RawPaginated<C: CursorType>: Target<C> {
 pub(crate) trait Target<C: CursorType> {
     /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
     fn cursor(&self, checkpoint_viewed_at: u64) -> C;
+}
+
+/// A trait indicating whether a cursor was derived from a `scan_limit` or not. If the latter, then
+/// it came from either tip of the paginated response.
+pub(crate) trait ScanLimited {
+    fn is_scan_limited(&self) -> bool;
 }
 
 impl<C> JsonCursor<C> {
@@ -263,7 +267,9 @@ impl Page<JsonCursor<ConsistentIndexCursor>> {
     }
 }
 
-impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
+// todo introduce additional trait that allows us to check whether the cursor was a scanLimit cursor
+// or from one of the ends
+impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// Treat the cursors of this page as upper- and lowerbound filters for a database `query`.
     /// Returns two booleans indicating whether there is a previous or next page in the range,
     /// followed by an iterator of values in the page, fetched from the database.
@@ -526,6 +532,14 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 (_, None, _, _, _) | (_, _, None, _, _) => {
                     return (false, false, vec![].into_iter());
                 }
+
+                // Move scenarios b and c over only valid if cursor is not from scan limit however,
+                // we can check that if is scan limit cursor, that hmm i am not sure how we do need
+                // to additionally check that the scan limit was reached (i.e. take the bound for
+                // the other side, add the scan limit and check if its sequence number matches the
+                // tip element). in other words if we get an empty result back we've likely
+                // exhausted the scan limit ...
+                // hmm
 
                 // From here onwards, we know that the results are non-empty and if a cursor was
                 // supplied on the end the page is being drawn from, it was found in the results
