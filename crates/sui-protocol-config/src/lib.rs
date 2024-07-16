@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 52;
+const MAX_PROTOCOL_VERSION: u64 = 53;
 
 // Record history of protocol version allocations here:
 //
@@ -161,7 +161,7 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
-// Version 54: Add feature flag to decide whether to attempt to finalize bridge committee
+// Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2490,7 +2490,7 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags.enable_coin_deny_list_v2 = true;
                 }
-                54 => {
+                53 => {
                     // Do not allow bridge committee to finalize on mainnet.
                     cfg.bridge_should_try_to_finalize_committee = Some(chain != Chain::Mainnet);
                 }
