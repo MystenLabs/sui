@@ -4,17 +4,8 @@
 import { GetCoinsParams, SuiClient } from '@mysten/sui/client';
 import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-
 import { RPC } from './constants';
-
-function base64ToUint8Array(base64: string) {
-	var binaryString = atob(base64);
-	var bytes = new Uint8Array(binaryString.length);
-	for (var i = 0; i < binaryString.length; i++) {
-		bytes[i] = binaryString.charCodeAt(i);
-	}
-	return bytes;
-}
+import { fromB64 } from '@mysten/sui/utils';
 
 export class Utils {
 	public static provider: SuiClient = new SuiClient({ url: RPC.get() });
@@ -37,7 +28,7 @@ export class Utils {
 
 	public static async getDeployer(): Promise<Ed25519Keypair> {
 		return Ed25519Keypair.fromSecretKey(
-			base64ToUint8Array('0000000000000000000000000000000000000000000'),
+			fromB64('0000000000000000000000000000000000000000000'),
 		);
 	}
 

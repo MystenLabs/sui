@@ -10,6 +10,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
+import { writeToml } from './helper/toml';
+import { CoinMap } from '../src/utils/constants';
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -56,6 +58,62 @@ export async function setupSuiClient() {
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
 	return new TestToolbox(keypair, client);
+}
+
+export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
+    if (!toolbox) {
+        toolbox = await setupSuiClient();
+    }
+	const tokenSourcesPath = path.join(__dirname, 'data/token');
+	writeToml(tokenSourcesPath, '0x0', 'token');
+	let deepRes = await publishPackage(tokenSourcesPath, toolbox);
+	writeToml(tokenSourcesPath, deepRes.packageId, 'token');
+
+	const usdcSourcePath = path.join(__dirname, 'data/usdc');
+	const usdcRes = await publishPackage(usdcSourcePath, toolbox);
+
+	const spamSourcePath = path.join(__dirname, 'data/spam');
+	const spamRes = await publishPackage(spamSourcePath, toolbox);
+
+    return {
+		DEEP: {
+			address: deepRes.packageId,
+			type: `${deepRes.packageId}::deep::DEEP`,
+			scalar: 1000000,
+		},
+		USDC: {
+			address: usdcRes.packageId,
+			type: `${usdcRes.packageId}::usdc::USDC`,
+			scalar: 1000000,
+		},
+		SPAM: {
+			address: spamRes.packageId,
+			type: `${spamRes.packageId}::spam::SPAM`,
+			scalar: 1000000,
+		},
+	};
+}
+
+export async function publishDeepBook(toolbox?: TestToolbox) {
+    if (!toolbox) {
+        toolbox = await setupSuiClient();
+    }
+
+    const deepbookSourcesPath = path.join(__dirname, 'data/deepbook');
+	let deepbookRes = await publishPackage(deepbookSourcesPath, toolbox);
+
+	const deepbookPackageId = deepbookRes.packageId;
+	// @ts-ignore
+	const deepbookRegistryId = deepbookRes.publishTxn.objectChanges?.find((change) => {
+		return change.type === 'created' && change.objectType.includes('Registry') && !change.objectType.includes('Inner')
+	})?.['objectId'];
+
+	// @ts-ignore
+	const deepbookAdminCap = deepbookRes.publishTxn.objectChanges?.find((change) => {
+		return change.type === 'created' && change.objectType.includes('DeepbookAdminCap');
+	})?.['objectId'];
+
+    return { deepbookPackageId, deepbookRegistryId, deepbookAdminCap };
 }
 
 // TODO: expose these testing utils from @mysten/sui
