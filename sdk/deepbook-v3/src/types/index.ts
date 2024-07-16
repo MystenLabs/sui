@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionObjectArgument } from '@mysten/sui/src/transactions';
+import type { TransactionObjectArgument } from '@mysten/sui/transactions';
 
 // SPDX-License-Identifier: Apache-2.0
 export interface BalanceManager {
@@ -10,7 +10,6 @@ export interface BalanceManager {
 }
 
 export interface Coin {
-	key: string;
 	address: string;
 	type: string;
 	scalar: number;
@@ -18,8 +17,8 @@ export interface Coin {
 
 export interface Pool {
 	address: string;
-	baseCoin: Coin;
-	quoteCoin: Coin;
+	baseCoin: string;
+	quoteCoin: string;
 }
 
 // Trading constants

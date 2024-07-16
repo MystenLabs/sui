@@ -12,6 +12,7 @@ import { FlashLoanContract } from './transactions/flashLoans.js';
 import { GovernanceContract } from './transactions/governance.js';
 import type { BalanceManager, Environment } from './types/index.js';
 import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
+import type { CoinMap, PoolMap } from './utils/constants.js';
 
 /// DeepBook Client. If a private key is provided, then all transactions
 /// will be signed with that key. Otherwise, the default key will be used.
@@ -29,10 +30,22 @@ export class DeepBookClient {
 	flashLoans: FlashLoanContract;
 	governance: GovernanceContract;
 
-	constructor({ client, address, env }: { client: SuiClient; address: string; env: Environment }) {
+	constructor({
+		client,
+		address,
+		env,
+		coins,
+		pools,
+	}: {
+		client: SuiClient;
+		address: string;
+		env: Environment;
+		coins?: CoinMap;
+		pools?: PoolMap;
+	}) {
 		this.#client = client;
 		this.#address = normalizeSuiAddress(address);
-		this.#config = new DeepBookConfig({ client, address: this.#address, env });
+		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
 		this.#balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);
 		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
@@ -88,6 +101,8 @@ export class DeepBookClient {
 	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getQuoteQuantityOut(pool, baseQuantity));
 		const res = await this.#client.devInspectTransactionBlock({
@@ -101,8 +116,8 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			baseOut: baseOut / pool.baseCoin.scalar,
-			quoteOut: quoteOut / pool.quoteCoin.scalar,
+			baseOut: baseOut / baseScalar,
+			quoteOut: quoteOut / quoteScalar,
 			deepRequired: deepRequired / DEEP_SCALAR,
 		};
 	}
@@ -110,6 +125,8 @@ export class DeepBookClient {
 	async getBaseQuantityOut(poolKey: string, baseQuantity: number) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getBaseQuantityOut(pool, baseQuantity));
 		const res = await this.#client.devInspectTransactionBlock({
@@ -123,8 +140,8 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			baseOut: baseOut / pool.baseCoin.scalar,
-			quoteOut: quoteOut / pool.quoteCoin.scalar,
+			baseOut: baseOut / baseScalar,
+			quoteOut: quoteOut / quoteScalar,
 			deepRequired: deepRequired / DEEP_SCALAR,
 		};
 	}
@@ -132,6 +149,8 @@ export class DeepBookClient {
 	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
 		const res = await this.#client.devInspectTransactionBlock({
@@ -146,8 +165,8 @@ export class DeepBookClient {
 		return {
 			baseQuantity,
 			quoteQuantity,
-			baseOut: baseOut / pool.baseCoin.scalar,
-			quoteOut: quoteOut / pool.quoteCoin.scalar,
+			baseOut: baseOut / baseScalar,
+			quoteOut: quoteOut / quoteScalar,
 			deepRequired: deepRequired / DEEP_SCALAR,
 		};
 	}
@@ -215,6 +234,8 @@ export class DeepBookClient {
 	async vaultBalances(poolKey: string) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.vaultBalances(pool));
 		const res = await this.#client.devInspectTransactionBlock({
@@ -227,8 +248,8 @@ export class DeepBookClient {
 		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
 
 		return {
-			base: baseInVault / pool.baseCoin.scalar,
-			quote: quoteInVault / pool.quoteCoin.scalar,
+			base: baseInVault / baseScalar,
+			quote: quoteInVault / quoteScalar,
 			deep: deepInVault / DEEP_SCALAR,
 		};
 	}
@@ -255,8 +276,8 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 		tx.add(this.deepBook.midPrice(pool));
 
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		const res = await this.#client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
