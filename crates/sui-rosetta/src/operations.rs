@@ -29,11 +29,8 @@ use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::TransactionData;
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
-use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
-    OperationIdentifier, OperationStatus, OperationType,
-};
-use crate::Error;
+use crate::types::{AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency, InternalOperation, OperationIdentifier, OperationStatus, OperationType};
+use crate::{Error, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/operations_tests.rs"]
@@ -101,6 +98,7 @@ impl Operations {
             .ok_or_else(|| Error::MissingInput("Operation type".into()))?;
         match type_ {
             OperationType::PaySui => self.pay_sui_ops_to_internal(),
+            OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
             op => Err(Error::UnsupportedOperation(op)),
@@ -132,6 +130,35 @@ impl Operations {
             sender,
             recipients,
             amounts,
+        })
+    }
+
+    fn pay_coin_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut recipients = vec![];
+        let mut amounts = vec![];
+        let mut sender = None;
+        for op in self {
+            if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
+                if amount.value.is_negative() {
+                    sender = Some(account.address)
+                } else {
+                    recipients.push(account.address);
+                    let amount = amount.value.abs();
+                    if amount > u64::MAX as i128 {
+                        return Err(Error::InvalidInput(
+                            "Input amount exceed u64::MAX".to_string(),
+                        ));
+                    }
+                    amounts.push(amount as u64)
+                }
+            }
+        }
+        let sender = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
+        Ok(InternalOperation::PayCoin {
+            sender,
+            recipients,
+            amounts,
+            currency: SUI.clone() // todo: replace this placeholder
         })
     }
 
@@ -234,6 +261,7 @@ impl Operations {
         #[derive(Debug)]
         enum KnownValue {
             GasCoin(u64),
+            Coin(u64)
         }
         fn resolve_result(
             known_results: &[Vec<KnownValue>],
@@ -693,6 +721,18 @@ impl Operation {
             status,
             account: Some(address.into()),
             amount: Some(Amount::new(amount, None)),
+            coin_change: None,
+            metadata: None,
+        }
+    }
+
+    fn pay_coin(status: Option<OperationStatus>, address: SuiAddress, amount: i128, currency: Currency) -> Self {
+        Operation {
+            operation_identifier: Default::default(),
+            type_: OperationType::PayCoin,
+            status,
+            account: Some(address.into()),
+            amount: Some(Amount::new(amount, Some(currency))),
             coin_change: None,
             metadata: None,
         }
