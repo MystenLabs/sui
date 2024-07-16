@@ -109,7 +109,7 @@ export class BalanceManagerContract {
 	};
 
 	/**
-	 * @description Generate a trade proof for the BalanceManager
+	 * @description Generate a trade proof for the BalanceManager. Calls the appropriate function based on whether tradeCap is set.
 	 * @param balanceManager The BalanceManager object
 	 * @returns A function that takes a Transaction object
 	 */
