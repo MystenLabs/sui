@@ -41,7 +41,7 @@ impl Payload for TransferObjectTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Transfer tx failed...");
+            error!("Transfer tx failed... Status: {:?}", effects.status());
         }
 
         let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;

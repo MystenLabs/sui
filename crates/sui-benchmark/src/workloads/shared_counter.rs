@@ -48,7 +48,7 @@ impl Payload for SharedCounterTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Shared counter tx failed...");
+            error!("Shared counter tx failed... Status: {:?}", effects.status());
         }
         self.gas.0 = effects.gas_object().0;
     }

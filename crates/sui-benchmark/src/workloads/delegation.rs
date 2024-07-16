@@ -41,7 +41,7 @@ impl Payload for DelegationTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Delegation tx failed...");
+            error!("Delegation tx failed... Status: {:?}", effects.status());
         }
 
         let coin = match self.coin {
