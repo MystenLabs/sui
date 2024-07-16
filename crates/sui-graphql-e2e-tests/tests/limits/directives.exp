@@ -16,7 +16,7 @@ Response: {
         }
       ],
       "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
+        "code": "BAD_USER_INPUT"
       }
     }
   ]
@@ -35,7 +35,7 @@ Response: {
         }
       ],
       "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
+        "code": "BAD_USER_INPUT"
       }
     }
   ]

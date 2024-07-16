@@ -408,7 +408,7 @@ fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
     for directive in directives {
         if !allowed_directives().contains(&directive.node.name.node.as_str()) {
             return Err(graphql_error_at_pos(
-                code::INTERNAL_SERVER_ERROR,
+                code::BAD_USER_INPUT,
                 format!(
                     "Directive `@{}` is not supported. Supported directives are {}",
                     directive.node.name.node,
