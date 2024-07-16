@@ -253,6 +253,10 @@ pub async fn metadata(
             let amount = amounts.iter().sum::<u64>();
             (Some(amount), vec![])
         }
+        InternalOperation::PayCoin { amounts, .. } => {
+            let amount = amounts.iter().sum::<u64>();
+            (Some(amount), vec![])
+        }
         InternalOperation::Stake { amount, .. } => (*amount, vec![]),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
