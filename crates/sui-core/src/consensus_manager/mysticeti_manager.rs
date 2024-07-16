@@ -100,7 +100,7 @@ impl MysticetiManager {
 impl ConsensusManagerTrait for MysticetiManager {
     async fn start(
         &self,
-        _config: &NodeConfig,
+        config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
@@ -110,6 +110,10 @@ impl ConsensusManagerTrait for MysticetiManager {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
         let network_type = self.pick_network(&epoch_store);
+        let consensus_config = config
+            .consensus_config
+            .as_ref()
+            .expect("Validator is missing consensus config");
 
         let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,
@@ -125,6 +129,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         // TODO(mysticeti): Fill in the other fields
         let parameters = Parameters {
             db_path: Some(self.get_store_path(epoch)),
+            sync_last_proposed_block_timeout: consensus_config.sync_last_proposed_block_timeout(),
             ..Default::default()
         };
 

@@ -425,6 +425,10 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
+    /// Time to wait during consensus start up until the node has synced the last proposed block via the network peers.
+    /// When set to 0 the sync mechanism is disabled. This property is meant to be used for amnesia recovery.
+    pub sync_last_proposed_block_timeout_millis: Option<u64>,
+
     pub narwhal_config: ConsensusParameters,
 }
 
@@ -444,6 +448,12 @@ impl ConsensusConfig {
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
         self.submit_delay_step_override_millis
             .map(Duration::from_millis)
+    }
+
+    pub fn sync_last_proposed_block_timeout(&self) -> Duration {
+        self.sync_last_proposed_block_timeout_millis
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::ZERO)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
