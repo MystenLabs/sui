@@ -77,7 +77,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], await toolbox.address());
+	tx.transferObjects([cap], toolbox.address());
 
 	const { digest } = await toolbox.client.signAndExecuteTransaction({
 		transaction: tx,

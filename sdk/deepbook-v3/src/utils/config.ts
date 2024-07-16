@@ -6,6 +6,8 @@ import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { BalanceManagerContract } from '../transactions/balanceManager.js';
 import type { Environment } from '../types/index.js';
 import {
+	CoinMap,
+	PoolMap,
 	mainnetCoins,
 	mainnetPackageIds,
 	mainnetPools,
@@ -57,6 +59,23 @@ export class DeepBookConfig {
 
 		this.balanceManager = new BalanceManagerContract(this);
 	}
+
+	setPackageId(packageId: string) {
+		this.DEEPBOOK_PACKAGE_ID = packageId;
+	}
+
+	setRegistry(registryId: string) {
+		this.REGISTRY_ID = registryId;
+	}
+
+	setCoins(coins: CoinMap) {
+		this.#coins = coins;
+	}
+
+	setPools(pools: PoolMap) {
+		this.#pools = pools;
+	}
+	
 
 	// Getters
 	getCoin(key: string) {

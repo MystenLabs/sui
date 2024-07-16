@@ -32,11 +32,12 @@
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
-		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run",
+		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run --reporter=basic --disable-console-intercept",
 		"prepare:e2e": "pnpm run --filter @mysten/sui prepare:e2e"
 	},
 	"dependencies": {
-		"@mysten/sui": "workspace:*"
+		"@mysten/sui": "workspace:*",
+		"@iarna/toml": "^2.2.5"
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
