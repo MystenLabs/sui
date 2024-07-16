@@ -11,6 +11,7 @@ use crate::config::{
 };
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
+use crate::extensions::directive_checker::DirectiveChecker;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::datatype::IMoveDatatype;
@@ -468,18 +469,27 @@ impl ServerBuilder {
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
         }
+
         if config.internal_features.logger {
             builder = builder.extension(Logger::default());
         }
+
         if config.internal_features.query_limits_checker {
             builder = builder.extension(QueryLimitsChecker);
         }
+
+        if config.internal_features.directive_checker {
+            builder = builder.extension(DirectiveChecker);
+        }
+
         if config.internal_features.query_timeout {
             builder = builder.extension(Timeout);
         }
+
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
         }
+
         if config.internal_features.apollo_tracing {
             builder = builder.extension(ApolloTracing);
         }
