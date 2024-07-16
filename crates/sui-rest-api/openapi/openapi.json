@@ -20,7 +20,24 @@
   ],
   "paths": {
     "/": {
-      "get": {}
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "operationId": "GetNodeInfo",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeInfo"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "/health": {
       "get": {}
@@ -2704,32 +2721,32 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           },
           "checkpoint_height": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           },
           "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           },
           "lowest_available_checkpoint": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           },
           "lowest_available_checkpoint_objects": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           },
           "software_version": {
             "type": "string"
           },
           "timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           }
         }
       },
@@ -4432,6 +4449,9 @@
     }
   },
   "tags": [
+    {
+      "name": "General"
+    },
     {
       "name": "Objects"
     },
