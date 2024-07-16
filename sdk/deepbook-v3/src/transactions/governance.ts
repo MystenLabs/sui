@@ -16,8 +16,8 @@ export class GovernanceContract {
 	stake =
 		(pool: Pool, balanceManager: BalanceManager, stakeAmount: number) => (tx: Transaction) => {
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
-			const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-			const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+			const baseCoin = this.#config.getCoin(pool.baseCoin);
+			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::stake`,
@@ -33,8 +33,8 @@ export class GovernanceContract {
 
 	unstake = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::unstake`,
@@ -49,8 +49,8 @@ export class GovernanceContract {
 		const pool = this.#config.getPool(poolKey);
 
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
-		const baseCoin = this.#config.getCoin(pool.baseCoin.key);
-		const quoteCoin = this.#config.getCoin(pool.quoteCoin.key);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::submit_proposal`,
