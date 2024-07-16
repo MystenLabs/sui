@@ -584,6 +584,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 11
+                max-scan-limit = 50
             "#,
         )
         .unwrap();
@@ -603,7 +605,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
-                ..Default::default()
+                max_transaction_ids: 11,
+                max_scan_limit: 50,
             },
             ..Default::default()
         };
@@ -667,6 +670,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 42
+                max-scan-limit = 420
 
                 [experiments]
                 test-flag = true
@@ -689,7 +694,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
-                ..Default::default()
+                max_transaction_ids: 42,
+                max_scan_limit: 420,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },
