@@ -30,6 +30,8 @@ pub(crate) struct TransactionBlockCursor {
     pub checkpoint_viewed_at: u64,
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
+    #[serde(rename = "i")]
+    pub is_scan_limited: bool,
 }
 
 /// Results from raw queries in Diesel can only be deserialized into structs that implements
@@ -48,7 +50,7 @@ impl Checkpointed for Cursor {
 
 impl ScanLimited for Cursor {
     fn is_scan_limited(&self) -> bool {
-        false
+        self.is_scan_limited
     }
 }
 
@@ -78,6 +80,7 @@ impl Target<Cursor> for StoredTransaction {
         Cursor::new(TransactionBlockCursor {
             tx_sequence_number: self.tx_sequence_number as u64,
             checkpoint_viewed_at,
+            is_scan_limited: false,
         })
     }
 }
@@ -111,6 +114,7 @@ impl Target<Cursor> for TxLookup {
         Cursor::new(TransactionBlockCursor {
             tx_sequence_number: self.tx_sequence_number as u64,
             checkpoint_viewed_at,
+            is_scan_limited: false,
         })
     }
 }

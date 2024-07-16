@@ -351,12 +351,8 @@ impl TransactionBlock {
                     (prev, next, iter.collect())
                 } else {
                     let subquery = subqueries(&filter, tx_bounds).unwrap();
-                    let (prev, next, results) = page
-                        .paginate_raw_query_with_scan_limit::<TxLookup>(
-                            conn,
-                            checkpoint_viewed_at,
-                            subquery,
-                        )?;
+                    let (prev, next, results) =
+                        page.paginate_raw_query::<TxLookup>(conn, checkpoint_viewed_at, subquery)?;
 
                     let tx_sequence_numbers = results
                         .into_iter()
@@ -421,6 +417,7 @@ impl TransactionBlock {
                         Cursor::new(cursor::TransactionBlockCursor {
                             checkpoint_viewed_at,
                             tx_sequence_number: scan_hi,
+                            is_scan_limited: true,
                         })
                         .encode_cursor(),
                     );
@@ -434,6 +431,7 @@ impl TransactionBlock {
                         Cursor::new(cursor::TransactionBlockCursor {
                             checkpoint_viewed_at,
                             tx_sequence_number: scan_lo,
+                            is_scan_limited: true,
                         })
                         .encode_cursor(),
                     );
