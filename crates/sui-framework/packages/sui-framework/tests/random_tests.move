@@ -51,7 +51,8 @@ module sui::random_tests {
             scenario.ctx(),
         );
         scenario.next_tx(@0x0);
-        let gen1 = random_state.new_generator(scenario.ctx());
+        let mut ctx = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
+        let gen1 = random_state.new_generator(&mut ctx);
         test_scenario::return_shared(random_state);
         scenario.end();
 
@@ -64,7 +65,8 @@ module sui::random_tests {
             scenario.ctx(),
         );
         scenario.next_tx(@0x0);
-        let gen2 = random_state.new_generator(scenario.ctx());
+        let mut ctx = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
+        let gen2 = random_state.new_generator(&mut ctx);
         test_scenario::return_shared(random_state);
         scenario.end();
 
@@ -77,8 +79,9 @@ module sui::random_tests {
             scenario.ctx(),
         );
         scenario.next_tx(@0x0);
-        let gen3 = random_state.new_generator(scenario.ctx());
-        let gen4 = random_state.new_generator(scenario.ctx());
+        let mut ctx = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
+        let gen3 = random_state.new_generator(&mut ctx);
+        let gen4 = random_state.new_generator(&mut ctx);
         test_scenario::return_shared(random_state);
         scenario.end();
 
@@ -102,6 +105,9 @@ module sui::random_tests {
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
             scenario.ctx(),
         );
+
+        // Deterministically set tx context so the RNG seeded by the ctx below is deterministic.
+        *scenario.ctx() = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
 
         // Regression (not critical for security, but still an indication that something is wrong).
         let mut gen = random_state.new_generator(scenario.ctx());
@@ -215,6 +221,9 @@ module sui::random_tests {
             x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
             scenario.ctx(),
         );
+
+        // Deterministically set tx context so the RNG seeded by the ctx below is deterministic.
+        *scenario.ctx() = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
 
         // u256
         let mut gen = random_state.new_generator(scenario.ctx());
@@ -417,6 +426,11 @@ module sui::random_tests {
     fun random_tests_in_range() {
         let mut scenario = test_scenario::begin(@0x0);
 
+        let u128_max = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+        let u64_max = 0xFFFFFFFFFFFFFFFF;
+        let u32_max = 0xFFFFFFFF;
+        let u16_max = 0xFFFF;
+
         random::create_for_testing(scenario.ctx());
         scenario.next_tx(@0x0);
 
@@ -442,8 +456,10 @@ module sui::random_tests {
         let _output = gen.generate_u128_in_range(0, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
         let mut i = 0;
         while (i < 50) {
-            let min = gen.generate_u128();
-            let max = min + (gen.generate_u64() as u128);
+            let (min, max) = (gen.generate_u128(), gen.generate_u128());
+            let (min, max) = if (min < max) (min, max) else (max, min);
+            if (max == u128_max) continue;
+            let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = gen.generate_u128_in_range(min, max);
             assert!(output >= min);
             assert!(output <= max);
@@ -463,8 +479,10 @@ module sui::random_tests {
         assert!((output == 123454321) || (output == 123454321 + 1));
         let mut i = 0;
         while (i < 50) {
-            let min = gen.generate_u64();
-            let max = min + (gen.generate_u32() as u64);
+            let (min, max) = (gen.generate_u64(), gen.generate_u64());
+            let (min, max) = if (min < max) (min, max) else (max, min);
+            if (max == u64_max) continue;
+            let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = gen.generate_u64_in_range(min, max);
             assert!(output >= min);
             assert!(output <= max);
@@ -484,8 +502,10 @@ module sui::random_tests {
         assert!((output == 123454321) || (output == 123454321 + 1));
         let mut i = 0;
         while (i < 50) {
-            let min = gen.generate_u32();
-            let max = min + (gen.generate_u16() as u32);
+            let (min, max) = (gen.generate_u32(), gen.generate_u32());
+            let (min, max) = if (min < max) (min, max) else (max, min);
+            if (max == u32_max) continue;
+            let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = gen.generate_u32_in_range(min, max);
             assert!(output >= min);
             assert!(output <= max);
@@ -505,8 +525,10 @@ module sui::random_tests {
         assert!((output == 12345) || (output == 12345 + 1));
         let mut i = 0;
         while (i < 50) {
-            let min = gen.generate_u16();
-            let max = min + (gen.generate_u8() as u16);
+            let (min, max) = (gen.generate_u16(), gen.generate_u16());
+            let (min, max) = if (min < max) (min, max) else (max, min);
+            if (max == u16_max) continue;
+            let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = gen.generate_u16_in_range(min, max);
             assert!(output >= min);
             assert!(output <= max);

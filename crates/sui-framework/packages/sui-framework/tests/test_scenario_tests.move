@@ -473,7 +473,8 @@ module sui::test_scenario_tests {
     }
 
     // Make sure that we properly handle the case where we receive an object
-    // when dealing with allocated tickets.
+    // and don't need to deallocate the receiving ticket and underlying object
+    // at the end of the transaction.
     #[test]
     fun test_receive_object_multiple_in_row() {
         let sender = @0x0;
@@ -490,9 +491,8 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-
-            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let mut parent: Object = scenario.take_from_sender_by_id(id1);
+            let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
@@ -501,9 +501,8 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-
-            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let mut parent: Object = scenario.take_from_sender_by_id(id1);
+            let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
@@ -532,14 +531,16 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-
+            // allocate a receiving ticket in this transaction, but don't use it or return it.
             test_scenario::most_recent_receiving_ticket<Object>(&id1);
         };
         scenario.next_tx(sender);
         {
-
-            let mut parent = scenario.take_from_sender_by_id<Object>(id1);
-            let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
+            let mut parent: Object = scenario.take_from_sender_by_id(id1);
+            // Get the receiving ticket that was allocated in the previous
+            // transaction, again. If we failed to return unused receiving
+            // tickets at the end of the transaction above this will fail.
+            let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
             assert!(parent.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
@@ -548,6 +549,7 @@ module sui::test_scenario_tests {
         };
         scenario.end();
     }
+
     // Try to receive an object that has been shared. We should be unable to
     // allocate the receiving ticket for this object.
     #[test]
@@ -642,9 +644,9 @@ module sui::test_scenario_tests {
             let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
@@ -685,9 +687,9 @@ module sui::test_scenario_tests {
             let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let mut obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             obj2.value = 42;
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, sender);
@@ -696,7 +698,7 @@ module sui::test_scenario_tests {
         scenario.next_tx(sender);
         {
             let obj = scenario.take_from_sender_by_id<Object>(id2);
-            assert!(obj.value == 42, EValueMismatch);
+            assert!(obj.value == 42);
             scenario.return_to_sender(obj);
         };
         scenario.end();

@@ -95,7 +95,6 @@ pub fn end_transaction(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    // Remove the object from storage. We should never hit this scenario either.
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
@@ -122,18 +121,15 @@ pub fn end_transaction(
     let mut unreceived = BTreeSet::new();
     let loaded_runtime_objects = object_runtime_ref.loaded_runtime_objects();
     for (id, (metadata, value)) in allocated_tickets {
-        match loaded_runtime_objects.get(&id) {
-            Some(_) => {
-                received.insert(id, metadata);
-            }
-            None => {
-                unreceived.insert(id);
-                // This must be untouched since the allocated ticket is still live, so ok to re-insert.
-                object_runtime_ref
-                    .test_inventories
-                    .objects
-                    .insert(id, value);
-            }
+        if loaded_runtime_objects.contains_key(&id) {
+            received.insert(id, metadata);
+        } else {
+            unreceived.insert(id);
+            // This must be untouched since the allocated ticket is still live, so ok to re-insert.
+            object_runtime_ref
+                .test_inventories
+                .objects
+                .insert(id, value);
         }
     }
 

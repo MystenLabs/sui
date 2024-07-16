@@ -100,6 +100,30 @@ module sui::test_scenario {
 
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: address): Scenario {
+        // Randomly seed the transaction context's transaction hash to avoid
+        // object ID collisions in parallel Move tests.
+        //
+        // This is because:
+        // 1. Object IDs are generated from the transaction context based on the
+        //    transaction hash + number of generated IDs thus far in the
+        //    transaction.
+        // 2. In test_scenario we always generate the transaction context with the
+        //    same initial state of for a given sender.
+        // 3. This means that each Move unit test using the test scenario will
+        //    generate the same sequence of object IDs when calling new_object.
+        // 4. The object runtime (and storage) is shared across all Move unit
+        //    tests, and Move unit tests are executed in parallel.
+        //
+        // This set of things leads to situations where multiple Move unit
+        // tests using test scenario can read/write to the shared object
+        // runtime/storage with the same object ID and different values in
+        // parallel leading to race conditions on the state of the object
+        // runtime. 
+        //
+        // By seeding the tx digest pseudo-randomly whenever we start a
+        // transaction we make it basically impossible to run into this type of
+        // "multiple objects with the same ID being read/written in parallel to
+        // the shared runtime" in Move unit tests.
         let mut generator = random::new_generator_for_testing();
         let test_random_tx_hash = generator.generate_bytes(TX_HASH_LENGTH);
         Scenario {
