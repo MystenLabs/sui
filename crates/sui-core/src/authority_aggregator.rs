@@ -9,7 +9,7 @@ use crate::authority_client::{
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
-use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
+use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use std::net::SocketAddr;
@@ -35,7 +35,7 @@ use sui_types::{
     transaction::*,
 };
 use thiserror::Error;
-use tracing::{debug, error, info, trace, warn, Instrument};
+use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrument};
 
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
@@ -1012,6 +1012,7 @@ where
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
+    #[instrument(level = "trace", skip_all)]
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
@@ -1051,11 +1052,15 @@ where
                 committee.clone(),
                 self.authority_clients.clone(),
                 state,
-                |_name, client| {
+                |name, client| {
                     Box::pin(
                         async move {
                             let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
-                            client.handle_transaction(transaction_ref.clone(), client_addr).await
+                            let concise_name = name.concise_owned();
+                            client.handle_transaction(transaction_ref.clone(), client_addr)
+                                .monitor_cancellation()
+                                .instrument(trace_span!("handle_transaction", cancelled = false, authority =? concise_name))
+                                .await
                         },
                     )
                 },
@@ -1475,6 +1480,7 @@ where
             - state.tx_signatures.total_votes()
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn process_certificate(
         &self,
         request: HandleCertificateRequestV3,
@@ -1532,6 +1538,7 @@ where
             move |name, client| {
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
+                    let concise_name = name.concise_owned();
                     if request_ref.include_input_objects || request_ref.include_output_objects {
 
                         // adjust the request to validators we aren't planning on sampling
@@ -1549,16 +1556,12 @@ where
 
                         client
                             .handle_certificate_v3(req, client_addr)
-                            .instrument(
-                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                            )
+                            .instrument(trace_span!("handle_certificate_v3", authority =? concise_name))
                             .await
                     } else {
                         client
                             .handle_certificate_v2(request_ref.certificate, client_addr)
-                            .instrument(
-                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                            )
+                            .instrument(trace_span!("handle_certificate_v2", authority =? concise_name))
                             .await
                             .map(|response| HandleCertificateResponseV3 {
                                 effects: response.signed_effects,
@@ -1771,6 +1774,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
     pub async fn execute_transaction_block(
         &self,
         transaction: &Transaction,
@@ -1779,7 +1783,6 @@ where
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
             .process_transaction(transaction.clone(), client_addr)
-            .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
             ProcessTransactionResult::Certified { certificate, .. } => certificate,
@@ -1802,7 +1805,6 @@ where
                 },
                 client_addr,
             )
-            .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
         Ok(response.effects_cert)
@@ -1810,6 +1812,7 @@ where
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
     /// an given list of validators who are supposed to know about it.
+    #[instrument(level = "trace", skip_all, fields(?tx_digest))]
     pub async fn handle_transaction_info_request_from_some_validators(
         &self,
         tx_digest: &TransactionDigest,

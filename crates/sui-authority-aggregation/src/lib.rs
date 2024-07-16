@@ -4,7 +4,6 @@
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
-use tracing::instrument::Instrument;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -63,17 +62,7 @@ where
         .map(|name| {
             let client = authority_clients[&name].clone();
             let execute = map_each_authority.clone();
-            let concise_name = name.concise_owned();
-            monitored_future!(async move {
-                (
-                    name.clone(),
-                    execute(name, client)
-                        .instrument(
-                            tracing::trace_span!("quorum_map_auth", authority =? concise_name),
-                        )
-                        .await,
-                )
-            })
+            monitored_future!(async move { (name.clone(), execute(name, client).await,) })
         })
         .collect();
 

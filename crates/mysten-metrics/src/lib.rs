@@ -13,7 +13,7 @@ use std::time::Instant;
 use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry, TextEncoder};
 use tap::TapFallible;
-use tracing::warn;
+use tracing::{warn, Span};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -268,6 +268,70 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.f.as_mut().poll(cx)
+    }
+}
+
+pub struct CancelMonitor<F: Sized> {
+    finished: bool,
+    inner: Pin<Box<F>>,
+}
+
+impl<F> CancelMonitor<F>
+where
+    F: Future,
+{
+    pub fn new(inner: F) -> Self {
+        Self {
+            finished: false,
+            inner: Box::pin(inner),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+}
+
+impl<F> Future for CancelMonitor<F>
+where
+    F: Future,
+{
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.as_mut().poll(cx) {
+            Poll::Ready(output) => {
+                self.finished = true;
+                Poll::Ready(output)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<F: Sized> Drop for CancelMonitor<F> {
+    fn drop(&mut self) {
+        if !self.finished {
+            Span::current().record("cancelled", true);
+        }
+    }
+}
+
+/// MonitorCancellation records a cancelled = true span attribute if the future it
+/// is decorating is dropped before completion. The cancelled attribute must be added
+/// at span creation, as you cannot add new attributes after the span is created.
+pub trait MonitorCancellation {
+    fn monitor_cancellation(self) -> CancelMonitor<Self>
+    where
+        Self: Sized + Future;
+}
+
+impl<T> MonitorCancellation for T
+where
+    T: Future,
+{
+    fn monitor_cancellation(self) -> CancelMonitor<Self> {
+        CancelMonitor::new(self)
     }
 }
 
