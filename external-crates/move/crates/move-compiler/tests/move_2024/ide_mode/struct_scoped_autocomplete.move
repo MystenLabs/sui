@@ -1,3 +1,4 @@
+#[allow(ide_path_autocomplete)]
 module a::m {
 
     public struct A(u64) has copy, drop;
@@ -10,6 +11,7 @@ module a::m {
     public fun t1(_s: B): u64 { abort 0 }
 }
 
+#[allow(ide_path_autocomplete)]
 module a::n {
     use a::m::{A,B};
 

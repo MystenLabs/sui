@@ -1,4 +1,3 @@
-
 #[defines_primitive(vector)]
 module std::vector {
     #[syntax(index)]
@@ -7,6 +6,7 @@ module std::vector {
     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 }
 
+#[allow(ide_path_autocomplete,ide_dot_autocomplete)]
 module a::m {
 
     public struct A<T>(vector<T>) has drop;

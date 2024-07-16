@@ -1,31 +1,31 @@
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:3:16
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:16
   │
-3 │         match (0) {
+4 │         match (0) {
   │                ^ Pattern '_0' not covered
   │
   = When '_0' is not 1
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:3:19
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:19
   │  
-3 │           match (0) {
+4 │           match (0) {
   │ ╭───────────────────^
-4 │ │             1 => 0
-5 │ │         }
+5 │ │             1 => 0
+6 │ │         }
   │ ╰─────────^ Missing arms: '_'
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:9:16
-  │
-9 │         match (0) {
-  │                ^ Pattern '_' not covered
+   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:16
+   │
+10 │         match (0) {
+   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:9:19
+   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:19
    │  
- 9 │           match (0) {
+10 │           match (0) {
    │ ╭───────────────────^
-10 │ │         }
+11 │ │         }
    │ ╰─────────^ Missing arms: '_'
 
