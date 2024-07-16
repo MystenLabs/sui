@@ -28,4 +28,47 @@ module InlayHints::type_hints {
         baz!(s, |x_gen_struct| x_gen_struct);
     }
 
+    public struct AnotherStruct<T: drop + copy> has drop, copy {
+        some_field: T,
+    }
+
+    public enum SomeEnum<T: copy + drop> has drop {
+        PositionalFields(u64, AnotherStruct<T>),
+        NamedFields{ num: u64, s: AnotherStruct<T> },
+    }
+
+    public fun unpack_test(some_struct: SomeStruct): u64 {
+        use InlayHints::type_hints::SomeEnum as SE;
+        let SomeStruct { some_field } = some_struct;
+        let s = AnotherStruct { some_field };
+        let SomeStruct { some_field: v } = some_struct;
+        let e = SE::PositionalFields(v, s);
+
+        match (e) {
+            SomeEnum::PositionalFields(num, s) => {
+                num
+            },
+            SE::NamedFields { num: n, s } => {
+                n + s.some_field
+            },
+        }
+    }
+
+    public enum OuterEnum<T1, T2> has drop {
+        PositionalFields(T1, T2),
+        NamedFields { field: T2 },
+    }
+
+    public enum InnerEnum<L, R> has drop {
+        Left(L),
+        Right(R),
+    }
+
+    public fun nested_match_test(e: OuterEnum<u64, InnerEnum<u64, u64>>): u64 {
+        match (e) {
+            OuterEnum::PositionalFields(num, InnerEnum::Left(inner_num)) => num + inner_num,
+            OuterEnum::NamedFields { field: InnerEnum::Right(inner_num) } => inner_num,
+            _ => 42,
+        }
+    }
 }

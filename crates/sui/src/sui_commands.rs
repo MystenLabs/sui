@@ -14,6 +14,7 @@ use move_analyzer::analyzer;
 use move_package::BuildConfig;
 use rand::rngs::OsRng;
 use std::io::{stderr, stdout, Write};
+use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -58,35 +59,43 @@ const CONCURRENCY_LIMIT: usize = 30;
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
+const DEFAULT_FAUCET_PORT: u16 = 9123;
+#[cfg(feature = "indexer")]
+const DEFAULT_GRAPHQL_PORT: u16 = 9125;
+#[cfg(feature = "indexer")]
+const DEFAULT_INDEXER_PORT: u16 = 9124;
 
 #[cfg(feature = "indexer")]
 #[derive(Args)]
 pub struct IndexerFeatureArgs {
-    /// Start an indexer with default host and port: 0.0.0.0:9124, or on the port provided.
+    /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
+    /// a host, or both (e.g., 0.0.0.0:9124).
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-indexer=6124`.
+    /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
     /// The indexer will be started in writer mode and reader mode.
     #[clap(long,
-            default_missing_value = "9124",
+            default_value = "0.0.0.0:9124",
+            default_missing_value = "0.0.0.0:9124",
             num_args = 0..=1,
             require_equals = true,
-            value_name = "INDEXER_PORT"
+            value_name = "INDEXER_HOST_PORT",
         )]
-    with_indexer: Option<u16>,
+    with_indexer: Option<String>,
 
-    /// Start a GraphQL server on localhost and port: 127.0.0.1:9125, or on the port provided.
+    /// Start a GraphQL server with default host and port: 0.0.0.0:9125. This flag accepts also a
+    /// port, a host, or both (e.g., 0.0.0.0:9125).
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-graphql=6125`.
+    /// `--with-graphql=6124` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
     /// Note that GraphQL requires a running indexer, which will be enabled by default if the
     /// `--with-indexer` flag is not set.
     #[clap(
             long,
-            default_missing_value = "9125",
+            default_missing_value = "0.0.0.0:9125",
             num_args = 0..=1,
             require_equals = true,
-            value_name = "GRAPHQL_PORT"
+            value_name = "GRAPHQL_HOST_PORT"
         )]
-    with_graphql: Option<u16>,
+    with_graphql: Option<String>,
 
     /// Port for the Indexer Postgres DB. Default port is 5432.
     #[clap(long, default_value = "5432")]
@@ -155,17 +164,18 @@ pub enum SuiCommand {
         #[clap(long)]
         force_regenesis: bool,
 
-        /// Start a faucet with default host and port: 127.0.0.1:9123, or on the port provided.
+        /// Start a faucet with default host and port: 0.0.0.0:9123. This flag accepts also a
+        /// port, a host, or both (e.g., 0.0.0.0:9123).
         /// When providing a specific value, please use the = sign between the flag and value:
-        /// `--with-faucet=6123`.
+        /// `--with-faucet=6124` or `--with-faucet=0.0.0.0`, or `--with-faucet=0.0.0.0:9123`
         #[clap(
             long,
-            default_missing_value = "9123",
+            default_missing_value = "0.0.0.0:9123",
             num_args = 0..=1,
             require_equals = true,
-            value_name = "FAUCET_PORT"
+            value_name = "FAUCET_HOST_PORT",
         )]
-        with_faucet: Option<u16>,
+        with_faucet: Option<String>,
 
         #[cfg(feature = "indexer")]
         #[clap(flatten)]
@@ -532,7 +542,7 @@ impl SuiCommand {
 /// Starts a local network with the given configuration.
 async fn start(
     config: Option<PathBuf>,
-    with_faucet: Option<u16>,
+    with_faucet: Option<String>,
     #[cfg(feature = "indexer")] indexer_feature_args: IndexerFeatureArgs,
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
@@ -576,18 +586,6 @@ async fn start(
             there is no genesis configuration in the default Sui configuration folder or the given \
             network.config argument.",
         );
-    }
-
-    #[cfg(feature = "indexer")]
-    if let Some(indexer_rpc_port) = with_indexer {
-        tracing::info!("Starting the indexer service at 0.0.0.0:{indexer_rpc_port}");
-    }
-    #[cfg(feature = "indexer")]
-    if let Some(graphql_port) = with_graphql {
-        tracing::info!("Starting the GraphQL service at 127.0.0.1:{graphql_port}");
-    }
-    if let Some(faucet_port) = with_faucet {
-        tracing::info!("Starting the faucet service at 127.0.0.1:{faucet_port}");
     }
 
     let mut swarm_builder = Swarm::builder();
@@ -674,8 +672,10 @@ async fn start(
     let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
 
     #[cfg(feature = "indexer")]
-    if with_indexer.is_some() {
-        let indexer_address = format!("0.0.0.0:{}", with_indexer.unwrap_or_default());
+    if let Some(input) = with_indexer {
+        let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
+            .map_err(|_| anyhow!("Invalid indexer host and port"))?;
+        tracing::info!("Starting the indexer service at {indexer_address}");
         // Start in writer mode
         start_test_indexer::<diesel::PgConnection>(
             Some(pg_address.clone()),
@@ -698,10 +698,13 @@ async fn start(
     }
 
     #[cfg(feature = "indexer")]
-    if with_graphql.is_some() {
+    if let Some(input) = with_graphql {
+        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
+            .map_err(|_| anyhow!("Invalid graphql host and port"))?;
+        tracing::info!("Starting the GraphQL service at {graphql_address}");
         let graphql_connection_config = ConnectionConfig::new(
-            Some(with_graphql.unwrap_or_default()),
-            None,
+            Some(graphql_address.port()),
+            Some(graphql_address.ip().to_string()),
             Some(pg_address),
             None,
             None,
@@ -715,7 +718,11 @@ async fn start(
         .await;
         info!("GraphQL started");
     }
-    if with_faucet.is_some() {
+
+    if let Some(input) = with_faucet {
+        let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
+            .map_err(|_| anyhow!("Invalid faucet host and port"))?;
+        tracing::info!("Starting the faucet service at {faucet_address}");
         let config_dir = if force_regenesis {
             tempdir()?.into_path()
         } else {
@@ -725,12 +732,19 @@ async fn start(
             }
         };
 
+        let host_ip = match faucet_address {
+            SocketAddr::V4(addr) => *addr.ip(),
+            _ => bail!("Faucet configuration requires an IPv4 address"),
+        };
+
         let config = FaucetConfig {
-            port: with_faucet.unwrap_or_default(),
+            host_ip,
+            port: faucet_address.port(),
             num_coins: DEFAULT_FAUCET_NUM_COINS,
             amount: DEFAULT_FAUCET_MIST_AMOUNT,
             ..Default::default()
         };
+
         let prometheus_registry = prometheus::Registry::new();
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
@@ -1011,9 +1025,22 @@ async fn genesis(
     if client_config.active_address.is_none() {
         client_config.active_address = active_address;
     }
+
+    // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
+    // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
+    let localnet_ip =
+        if fullnode_config.json_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            "127.0.0.1".to_string()
+        } else {
+            fullnode_config.json_rpc_address.ip().to_string()
+        };
     client_config.add_env(SuiEnv {
         alias: "localnet".to_string(),
-        rpc: format!("http://{}", fullnode_config.json_rpc_address),
+        rpc: format!(
+            "http://{}:{}",
+            localnet_ip,
+            fullnode_config.json_rpc_address.port()
+        ),
         ws: None,
         basic_auth: None,
     });
@@ -1127,4 +1154,27 @@ fn read_line() -> Result<String, anyhow::Error> {
     let _ = stdout().flush();
     io::stdin().read_line(&mut s)?;
     Ok(s.trim_end().to_string())
+}
+
+/// Parse the input string into a SocketAddr, with a default port if none is provided.
+pub fn parse_host_port(
+    input: String,
+    default_port_if_missing: u16,
+) -> Result<SocketAddr, AddrParseError> {
+    let default_host = "0.0.0.0";
+    let mut input = input;
+    if input.contains("localhost") {
+        input = input.replace("localhost", "127.0.0.1");
+    }
+    if input.contains(':') {
+        input.parse::<SocketAddr>()
+    } else if input.contains('.') {
+        format!("{input}:{default_port_if_missing}").parse::<SocketAddr>()
+    } else if input.is_empty() {
+        format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
+    } else if !input.is_empty() {
+        format!("{default_host}:{input}").parse::<SocketAddr>()
+    } else {
+        format!("{default_host}:{default_port_if_missing}").parse::<SocketAddr>()
+    }
 }

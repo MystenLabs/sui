@@ -3,6 +3,7 @@
 
 use super::available_range::AvailableRange;
 use super::cursor::{self, Page, RawPaginated, Target};
+use super::uint53::UInt53;
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 use crate::consistency::Checkpointed;
 use crate::data::{Db, DbConnection, QueryExecutor};
@@ -26,7 +27,7 @@ pub(crate) struct Balance {
     /// Coin type for the balance, such as 0x2::sui::SUI
     pub(crate) coin_type: MoveType,
     /// How many coins of this type constitute the balance
-    pub(crate) coin_object_count: Option<u64>,
+    pub(crate) coin_object_count: Option<UInt53>,
     /// Total balance across all coin objects of the coin type
     pub(crate) total_balance: Option<BigInt>,
 }
@@ -174,7 +175,7 @@ impl TryFrom<StoredBalance> for Balance {
             .transpose()
             .map_err(|_| Error::Internal("Failed to read balance.".to_string()))?;
 
-        let coin_object_count = count.map(|c| c as u64);
+        let coin_object_count = count.map(|c| UInt53::from(c as u64));
 
         let coin_type = MoveType::new(
             parse_sui_type_tag(&coin_type)

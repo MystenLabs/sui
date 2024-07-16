@@ -48,6 +48,7 @@ use super::{
     transaction_block_effects::{TransactionBlockEffects, TransactionBlockEffectsKind},
     transaction_block_kind::TransactionBlockKind,
     type_filter::FqNameFilter,
+    uint53::UInt53,
 };
 
 /// Wraps the actual transaction block data with the checkpoint sequence number at which the data
@@ -99,9 +100,9 @@ pub(crate) struct TransactionBlockFilter {
 
     /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionBlockKindInput>,
-    pub after_checkpoint: Option<u64>,
-    pub at_checkpoint: Option<u64>,
-    pub before_checkpoint: Option<u64>,
+    pub after_checkpoint: Option<UInt53>,
+    pub at_checkpoint: Option<UInt53>,
+    pub before_checkpoint: Option<UInt53>,
 
     pub sign_address: Option<SuiAddress>,
     pub recv_address: Option<SuiAddress>,
@@ -334,17 +335,19 @@ impl TransactionBlock {
                         }
 
                         if let Some(c) = &filter.after_checkpoint {
-                            query = query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
+                            query =
+                                query.filter(tx::dsl::checkpoint_sequence_number.gt(i64::from(*c)));
                         }
 
                         if let Some(c) = &filter.at_checkpoint {
-                            query = query.filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64));
+                            query =
+                                query.filter(tx::dsl::checkpoint_sequence_number.eq(i64::from(*c)));
                         }
 
                         let before_checkpoint = filter
                             .before_checkpoint
                             .map_or(checkpoint_viewed_at + 1, |c| {
-                                c.min(checkpoint_viewed_at + 1)
+                                u64::from(c).min(checkpoint_viewed_at + 1)
                             });
                         query = query.filter(
                             tx::dsl::checkpoint_sequence_number.lt(before_checkpoint as i64),

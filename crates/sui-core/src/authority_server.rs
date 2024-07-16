@@ -43,6 +43,7 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
+use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -995,7 +996,7 @@ macro_rules! handle_with_decoration {
                 }
             }
             ClientIdSource::XForwardedFor => {
-                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
                             match header_val.parse::<SocketAddr>() {
@@ -1022,6 +1023,11 @@ macro_rules! handle_with_decoration {
                             None
                         }
                     }
+                };
+                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                    do_header_parse(op)
+                } else if let Some(op) = $request.metadata().get("X-Forwarded-For") {
+                    do_header_parse(op)
                 } else {
                     $self.metrics.forwarded_header_not_included.inc();
                     error!("x-forwarded-header not present for request despite node configuring XForwardedFor tracking type");

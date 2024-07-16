@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::{base64::Base64, epoch::Epoch};
+use crate::types::{base64::Base64, epoch::Epoch, uint53::UInt53};
 use async_graphql::*;
 use sui_types::transaction::RandomnessStateUpdate as NativeRandomnessStateUpdate;
 
@@ -23,8 +23,8 @@ impl RandomnessStateUpdateTransaction {
     }
 
     /// Randomness round of the update.
-    async fn randomness_round(&self) -> u64 {
-        self.native.randomness_round.0
+    async fn randomness_round(&self) -> UInt53 {
+        self.native.randomness_round.0.into()
     }
 
     /// Updated random bytes, encoded as Base64.
@@ -33,7 +33,10 @@ impl RandomnessStateUpdateTransaction {
     }
 
     /// The initial version the randomness object was shared at.
-    async fn randomness_obj_initial_shared_version(&self) -> u64 {
-        self.native.randomness_obj_initial_shared_version.value()
+    async fn randomness_obj_initial_shared_version(&self) -> UInt53 {
+        self.native
+            .randomness_obj_initial_shared_version
+            .value()
+            .into()
     }
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/sui-swarm-config/tests/snapshot_tests.rs
-assertion_line: 151
 expression: network_config
 ---
 validator_configs:
@@ -109,6 +108,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -245,6 +245,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -381,6 +382,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -517,6 +519,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -653,6 +656,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -789,6 +793,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google
@@ -925,6 +930,7 @@ validator_configs:
       Unknown:
         - Apple
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
         - Google

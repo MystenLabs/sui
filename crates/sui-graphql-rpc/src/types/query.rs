@@ -13,6 +13,7 @@ use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::suins_registration::NameService;
+use super::uint53::UInt53;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -175,11 +176,32 @@ impl Query {
         DryRunResult::try_from(res).extend()
     }
 
-    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {
+    /// Look up an Owner by its SuiAddress.
+    ///
+    /// `rootVersion` represents the version of the root object in some nested chain of dynamic
+    /// fields. It allows consistent historical queries for the case of wrapped objects, which don't
+    /// have a version. For example, if querying the dynamic field of a table wrapped in a parent
+    /// object, passing the parent object's version here will ensure we get the dynamic field's
+    /// state at the moment that parent's version was created.
+    ///
+    /// Also, if this Owner is an object itself, `rootVersion` will be used to bound its version
+    /// from above when querying `Owner.asObject`. This can be used, for example, to get the
+    /// contents of a dynamic object field when its parent was at `rootVersion`.
+    ///
+    /// If `rootVersion` is omitted, dynamic fields will be from a consistent snapshot of the Sui
+    /// state at the latest checkpoint known to the GraphQL RPC. Similarly, `Owner.asObject` will
+    /// return the object's version at the latest checkpoint.
+    async fn owner(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        root_version: Option<u64>,
+    ) -> Result<Option<Owner>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         Ok(Some(Owner {
             address,
             checkpoint_viewed_at: checkpoint,
+            root_version,
         }))
     }
 
@@ -189,14 +211,16 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        version: Option<u64>,
+        version: Option<UInt53>,
     ) -> Result<Option<Object>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         match version {
-            Some(version) => Object::query(ctx, address, Object::at_version(version, checkpoint))
-                .await
-                .extend(),
+            Some(version) => {
+                Object::query(ctx, address, Object::at_version(version.into(), checkpoint))
+                    .await
+                    .extend()
+            }
             None => Object::query(ctx, address, Object::latest_at(checkpoint))
                 .await
                 .extend(),
@@ -224,9 +248,11 @@ impl Query {
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
-    async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
+    async fn epoch(&self, ctx: &Context<'_>, id: Option<UInt53>) -> Result<Option<Epoch>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        Epoch::query(ctx, id, checkpoint).await.extend()
+        Epoch::query(ctx, id.map(|id| id.into()), checkpoint)
+            .await
+            .extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -378,9 +404,9 @@ impl Query {
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,
-        protocol_version: Option<u64>,
+        protocol_version: Option<UInt53>,
     ) -> Result<ProtocolConfigs> {
-        ProtocolConfigs::query(ctx.data_unchecked(), protocol_version)
+        ProtocolConfigs::query(ctx.data_unchecked(), protocol_version.map(|v| v.into()))
             .await
             .extend()
     }

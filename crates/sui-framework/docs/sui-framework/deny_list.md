@@ -91,6 +91,8 @@ A shared object that stores the addresses that are blocked for a given core type
 
 ## Struct `ConfigWriteCap`
 
+The capability used to write to the deny list config. Ensures that the Configs for the
+DenyList are modified only by this module.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigWriteCap">ConfigWriteCap</a> <b>has</b> drop
@@ -118,6 +120,8 @@ A shared object that stores the addresses that are blocked for a given core type
 
 ## Struct `ConfigKey`
 
+The dynamic object field key used to store the <code>Config</code> for a given type, essentially a
+<code>(per_type_index, per_type_key)</code> pair.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_ConfigKey">ConfigKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -151,6 +155,7 @@ A shared object that stores the addresses that are blocked for a given core type
 
 ## Struct `AddressKey`
 
+The setting key used to store the deny list for a given address in the <code>Config</code>.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_AddressKey">AddressKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -178,6 +183,7 @@ A shared object that stores the addresses that are blocked for a given core type
 
 ## Struct `GlobalPauseKey`
 
+The setting key used to store the global pause setting in the <code>Config</code>.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_GlobalPauseKey">GlobalPauseKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -205,6 +211,8 @@ A shared object that stores the addresses that are blocked for a given core type
 
 ## Struct `PerTypeConfigCreated`
 
+The event emitted when a new <code>Config</code> is created for a given type. This can be useful for
+tracking the <code>ID</code> of a type's <code>Config</code> object.
 
 
 <pre><code><b>struct</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_PerTypeConfigCreated">PerTypeConfigCreated</a> <b>has</b> <b>copy</b>, drop, store

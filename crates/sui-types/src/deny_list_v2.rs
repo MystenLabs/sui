@@ -4,22 +4,23 @@
 use crate::base_types::{EpochId, ObjectID, SuiAddress};
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
-    get_deny_list_root_object, input_object_coin_types_for_denylist_check,
-    DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
+    input_object_coin_types_for_denylist_check, DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
 };
 use crate::dynamic_field::{get_dynamic_field_from_store, DOFWrapper};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::id::UID;
 use crate::object::Object;
-use crate::storage::ObjectStore;
+use crate::storage::{DenyListResult, ObjectStore};
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
-use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_PACKAGE_ID};
+use crate::{MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+
+pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -120,11 +121,14 @@ pub fn check_coin_deny_list_v2_during_signing(
     Ok(())
 }
 
+/// Returns 1) whether the coin deny list check passed,
+///         2) the deny lists checked
+///         2) the number of regulated coin owners checked.
 pub fn check_coin_deny_list_v2_during_execution(
     written_objects: &BTreeMap<ObjectID, Object>,
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
-) -> Result<(), ExecutionError> {
+) -> DenyListResult {
     let mut new_coin_owners = BTreeMap::new();
     for obj in written_objects.values() {
         if obj.is_gas_coin() {
@@ -141,10 +145,34 @@ pub fn check_coin_deny_list_v2_during_execution(
             .or_insert_with(BTreeSet::new)
             .insert(owner);
     }
-    for (coin_type, owners) in new_coin_owners {
-        let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
-            continue;
-        };
+    let num_non_gas_coin_owners = new_coin_owners.values().map(|v| v.len() as u64).sum();
+    let new_regulated_coin_owners = new_coin_owners
+        .into_iter()
+        .filter_map(|(coin_type, owners)| {
+            let deny_list_config = get_per_type_coin_deny_list_v2(&coin_type, object_store)?;
+            Some((coin_type, (deny_list_config, owners)))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let result =
+        check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
+    // `num_non_gas_coin_owners` is used to charge for gas. As such we must be extremely careful
+    // to not use a number that is not consistent across all validators. For example, relying on
+    // the number of coins with a deny list is _not_ consistent since the deny list is created
+    // on the first addition to the deny list. But the total number of coins/owners denied would
+    // be consistent since we rely on the results from the last epoch (i.e. relying on the Config's
+    // internal invariants)
+    DenyListResult {
+        result,
+        num_non_gas_coin_owners,
+    }
+}
+
+fn check_new_regulated_coin_owners(
+    new_regulated_coin_owners: BTreeMap<String, (Config, BTreeSet<SuiAddress>)>,
+    cur_epoch: EpochId,
+    object_store: &dyn ObjectStore,
+) -> Result<(), ExecutionError> {
+    for (coin_type, (deny_list, owners)) in new_regulated_coin_owners {
         if check_global_pause(&deny_list, object_store, Some(cur_epoch)) {
             return Err(ExecutionError::new(
                 ExecutionErrorKind::CoinTypeGlobalPause { coin_type },
@@ -170,8 +198,6 @@ pub fn get_per_type_coin_deny_list_v2(
     coin_type: &String,
     object_store: &dyn ObjectStore,
 ) -> Option<Config> {
-    let deny_list_root =
-        get_deny_list_root_object(object_store).expect("Deny list root object not found");
     let config_key = DOFWrapper {
         name: ConfigKey {
             per_type_index: DENY_LIST_COIN_TYPE_INDEX,
@@ -180,7 +206,7 @@ pub fn get_per_type_coin_deny_list_v2(
     };
     // TODO: Consider caching the config object UID to avoid repeat deserialization.
     let config: Config =
-        get_dynamic_field_from_store(object_store, deny_list_root.id(), &config_key).ok()?;
+        get_dynamic_field_from_store(object_store, SUI_DENY_LIST_OBJECT_ID, &config_key).ok()?;
     Some(config)
 }
 
