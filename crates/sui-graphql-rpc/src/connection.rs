@@ -10,6 +10,13 @@ use async_graphql::connection::{
 };
 use async_graphql::{Object, ObjectType, OutputType, TypeName};
 
+/// Mirrors the `Connection` type from async-graphql, with the exception that if `start_cursor` and/
+/// or `end_cursor` is set on the struct, then when `page_info` is called, it will use those values
+/// before deferring to `edges`. The default implementation derives these cursors from the first and
+/// last element of `edges`, so if `edges` is empty, both are set to null. This is undesirable for
+/// queries that make use of `scan_limit`; when the scan limit is reached, a caller can continue to
+/// paginate forwards or backwards until all candidates in the scanning range have been visited,
+/// even if the current page yields no results.
 pub(crate) struct ScanConnection<
     Cursor,
     Node,
