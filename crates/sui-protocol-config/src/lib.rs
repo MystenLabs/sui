@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 53;
+const MAX_PROTOCOL_VERSION: u64 = 54;
 
 // Record history of protocol version allocations here:
 //
@@ -2536,6 +2536,12 @@ impl ProtocolConfig {
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
+                }
+                54 => {
+                    cfg.feature_flags.random_beacon = false;
+                    cfg.random_beacon_reduction_lower_bound = Some(1600);
+                    cfg.random_beacon_dkg_timeout_round = Some(3000);
+                    cfg.random_beacon_min_round_interval_ms = Some(500);
                 }
                 // Use this template when making changes:
                 //
