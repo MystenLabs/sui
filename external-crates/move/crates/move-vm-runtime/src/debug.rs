@@ -4,9 +4,11 @@
 
 use crate::{
     interpreter::Interpreter,
-    loader::{ast::Function, Loader},
+    loader::{
+        ast::{Bytecode, Function},
+        Loader,
+    },
 };
-use move_binary_format::file_format::Bytecode;
 use move_vm_types::values::{self, Locals};
 use std::{
     collections::BTreeSet,

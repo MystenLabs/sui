@@ -24,7 +24,7 @@ Call Stack:
             [2] MutBorrowLoc(0)
             [3] StLoc(1)
             [4] LdU64(4)
-          > [5] Call(1)
+          > [5] Call(sum)
             [6] StLoc(2)
             [7] MoveLoc(1)
             [8] Pop
@@ -41,7 +41,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -57,7 +57,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -73,7 +73,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -112,7 +112,7 @@ Call Stack:
             [2] MutBorrowLoc(0)
             [3] StLoc(1)
             [4] LdU64(4)
-          > [5] Call(1)
+          > [5] Call(sum)
             [6] StLoc(2)
             [7] MoveLoc(1)
             [8] Pop
@@ -129,7 +129,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -145,7 +145,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)
@@ -161,7 +161,7 @@ Call Stack:
             [9] MoveLoc(0)
             [10] LdU64(1)
             [11] Sub
-          > [12] Call(0)
+          > [12] Call(sum)
             [13] Add
             [14] StLoc(1)
             [15] MoveLoc(1)

@@ -13,6 +13,7 @@ edition = "2021"
 
 [dependencies]
 better_any.workspace = true
+bumpalo.workspace = true
 fail.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true

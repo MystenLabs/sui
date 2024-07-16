@@ -2261,6 +2261,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "better_any",
+ "bumpalo",
  "fail",
  "hex",
  "move-binary-format",
