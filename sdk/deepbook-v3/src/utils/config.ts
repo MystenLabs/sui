@@ -65,6 +65,22 @@ export class DeepBookConfig {
 		this.balanceManager = new BalanceManagerContract(this);
 	}
 
+	setPackageId(packageId: string) {
+		this.DEEPBOOK_PACKAGE_ID = packageId;
+	}
+
+	setRegistryId(registryId: string) {
+		this.REGISTRY_ID = registryId;
+	}
+
+	setCoins(coins: CoinMap) {
+		this.#coins = coins;
+	}
+
+	setPools(pools: PoolMap) {
+		this.#pools = pools;
+	}
+
 	// Getters
 	getCoin(key: string) {
 		const coin = this.#coins[key];
