@@ -824,7 +824,13 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             context.tokens.start_loc(),
             " after an address in a module access chain",
         )?;
-        let name = parse_identifier(context)?;
+        let name = match parse_identifier(context) {
+            Ok(ident) => ident,
+            Err(diag) => {
+                context.env.add_diag(*diag);
+                return Ok(NameAccessChain_::Path(path));
+            }
+        };
         let (mut is_macro, mut tys) =
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {

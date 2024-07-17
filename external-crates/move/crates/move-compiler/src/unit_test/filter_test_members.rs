@@ -197,6 +197,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
                 is_macro: None,
             },
         ],
+        incomplete: false,
     };
     let args_ = vec![sp(
         mloc,

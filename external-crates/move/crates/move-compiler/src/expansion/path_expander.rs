@@ -366,7 +366,11 @@ impl Move2024PathExpander {
                 }
             }
             PN::Path(path) => {
-                let NamePath { root, entries } = path;
+                let NamePath {
+                    root,
+                    entries,
+                    incomplete,
+                } = path;
                 let mut result = match self.resolve_root(context, root.name) {
                     // In Move Legacy, we always treated three-place names as fully-qualified.
                     // For migration mode, if we could have gotten the correct result doing so,
@@ -471,6 +475,12 @@ impl Move2024PathExpander {
                     }
                 }
 
+                if incomplete {
+                    result = NR::ResolutionFailure(
+                        Box::new(result),
+                        NF::InvalidKind("incomplete access chain".to_string()),
+                    );
+                }
                 AccessChainResult {
                     result,
                     ptys_opt,

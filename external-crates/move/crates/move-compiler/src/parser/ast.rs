@@ -363,6 +363,8 @@ pub struct RootPathEntry {
 pub struct NamePath {
     pub root: RootPathEntry,
     pub entries: Vec<PathEntry>,
+    // if parsing of this name path was incomplete
+    pub incomplete: bool,
 }
 
 // See the NameAccess trait below for usage.
@@ -763,6 +765,7 @@ impl NameAccessChain_ {
         NamePath {
             root,
             entries: vec![],
+            incomplete: false,
         }
     }
 }
@@ -1849,7 +1852,11 @@ impl AstDebug for PathEntry {
 
 impl AstDebug for NamePath {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let NamePath { root, entries } = self;
+        let NamePath {
+            root,
+            entries,
+            incomplete: _,
+        } = self;
         w.write(format!("{}::", root));
         w.list(entries, "::", |w, e| {
             e.ast_debug(w);
