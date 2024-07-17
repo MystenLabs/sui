@@ -9,7 +9,7 @@ use sui_sdk2::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
-use crate::openapi::{ApiEndpoint, RouteHandler};
+use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::reader::StateReader;
 use crate::Page;
 use crate::{accept::AcceptFormat, response::ResponseContent, Result};
@@ -26,13 +26,27 @@ impl ApiEndpoint<RestService> for GetCheckpointFull {
         "/checkpoints/{checkpoint}/full"
     }
 
+    fn hidden(&self) -> bool {
+        true
+    }
+
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<CheckpointData>();
-
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("GetCheckpointFull")
+            .path_parameter::<CheckpointSequenceNumber>("checkpoint", generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<CheckpointData>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .response(404, ResponseBuilder::new().build())
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
@@ -83,9 +97,19 @@ impl ApiEndpoint<RestService> for GetCheckpoint {
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<SignedCheckpointSummary>();
-
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("GetCheckpoint")
+            .path_parameter::<CheckpointSequenceNumber>("checkpoint", generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<SignedCheckpointSummary>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .response(404, ResponseBuilder::new().build())
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
@@ -189,9 +213,20 @@ impl ApiEndpoint<RestService> for ListCheckpoints {
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<SignedCheckpointSummary>();
-
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("ListCheckpoints")
+            .query_parameters::<ListCheckpointsQueryParameters>(generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<Vec<SignedCheckpointSummary>>(generator)
+                    .bcs_content()
+                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
+                    .build(),
+            )
+            .response(410, ResponseBuilder::new().build())
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
@@ -238,7 +273,7 @@ async fn list_checkpoints(
     .pipe(Ok)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct ListCheckpointsQueryParameters {
     pub limit: Option<u32>,
     /// The checkpoint to start listing from.
