@@ -1374,6 +1374,7 @@ impl DBBatch {
         }
         let elapsed = timer.stop_and_record();
         if elapsed > 1.0 {
+            warn!(?elapsed, ?db_name, "very slow batch write");
             self.db_metrics
                 .op_metrics
                 .rocksdb_very_slow_batch_writes_count
@@ -1905,6 +1906,7 @@ where
 
         let elapsed = timer.stop_and_record();
         if elapsed > 1.0 {
+            warn!(?elapsed, cf = ?self.cf, "very slow insert");
             self.db_metrics
                 .op_metrics
                 .rocksdb_very_slow_puts_count
