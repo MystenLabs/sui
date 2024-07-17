@@ -14,23 +14,14 @@ use crate::{
     },
 };
 use diesel::{
-    backend::Backend,
-    deserialize::{self, FromSql, QueryableByName},
-    row::NamedRow,
-    sql_types::Nullable,
+    query_dsl::positional_order_dsl::PositionalOrderDsl, CombineDsl, ExpressionMethods,
+    NullableExpressionMethods, QueryDsl,
 };
 use std::fmt::Write;
+use sui_indexer::schema::checkpoints;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use super::{Cursor, TransactionBlockFilter};
-
-/// The `tx_sequence_number` range of the transactions to be queried. Even though the values that
-/// constitute `lo` and `hi` are non-null, the checkpoints themselves may be.
-#[derive(Clone, Debug, Copy)]
-pub(crate) struct StoredTxBounds {
-    pub lo: Option<i64>,
-    pub hi: Option<i64>,
-}
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
@@ -88,14 +79,40 @@ impl TxBounds {
             Some(checkpoint_viewed_at),
         ])
         .unwrap();
-        let from_db: StoredTxBounds =
-            conn.result(move || tx_bounds_query(lo_cp, hi_cp).into_boxed())?;
 
-        // Both `lo` and `hi` must be non-null, or else the result is invalid.
-        let (lo, hi) = match (from_db.lo, from_db.hi) {
-            (Some(lo), Some(hi)) => (lo as u64, hi as u64),
-            _ => return Ok(None),
+        use checkpoints::dsl;
+
+        let from_db: Vec<(Option<i64>, Option<i64>)> = conn.results(move || {
+            // Construct a UNION ALL query ordered on `sequence_number` to get the tx ranges for the
+            // checkpoint range.
+            dsl::checkpoints
+                .select((
+                    dsl::sequence_number.nullable(),
+                    dsl::network_total_transactions.nullable(),
+                ))
+                .filter(dsl::sequence_number.eq(lo_cp.saturating_sub(1) as i64))
+                .union(
+                    dsl::checkpoints
+                        .select((
+                            dsl::sequence_number.nullable(),
+                            dsl::network_total_transactions.nullable() - 1,
+                        ))
+                        .filter(dsl::sequence_number.eq(hi_cp as i64)),
+                )
+                .positional_order_by(1) // order by checkpoint's sequence number, which is the first column
+        })?;
+
+        // Expect exactly two rows, returning early if not.
+        let [(Some(db_lo_cp), Some(lo)), (Some(db_hi_cp), Some(hi))] = from_db.as_slice() else {
+            return Ok(None);
         };
+
+        if *db_lo_cp as u64 != lo_cp.saturating_sub(1) || *db_hi_cp as u64 != hi_cp {
+            return Ok(None);
+        }
+
+        let lo = if lo_cp == 0 { 0 } else { *lo as u64 };
+        let hi = *hi as u64;
 
         if page.after().is_some_and(|x| x.tx_sequence_number >= hi)
             || page.before().is_some_and(|x| x.tx_sequence_number <= lo)
@@ -241,53 +258,6 @@ impl TransactionBlockFilter {
             // If SystemTx, sender if specified must be 0x0. Conversely, if sender is 0x0, kind must be SystemTx.
             || matches!((self.kind, self.sign_address), (Some(kind), Some(signer)) if (kind == TransactionBlockKindInput::SystemTx) != (signer == SuiAddress::from(NativeSuiAddress::ZERO)))
     }
-}
-
-/// `sql_query` raw queries require `QueryableByName`. The default implementation looks for a table
-/// based on the struct name, and it also expects the struct's fields to reflect the table's
-/// columns. We can override this behavior by implementing `QueryableByName` for our struct. For
-/// `TxBounds`, its fields are derived from `checkpoints`, so we can't leverage the default
-/// implementation directly.
-impl<DB> QueryableByName<DB> for StoredTxBounds
-where
-    DB: Backend,
-    i64: FromSql<diesel::sql_types::BigInt, DB>,
-{
-    fn build<'a>(row: &impl NamedRow<'a, DB>) -> deserialize::Result<Self> {
-        let lo = NamedRow::get::<Nullable<diesel::sql_types::BigInt>, _>(row, "lo")?;
-        let hi = NamedRow::get::<Nullable<diesel::sql_types::BigInt>, _>(row, "hi")?;
-
-        Ok(Self { lo, hi })
-    }
-}
-
-/// Constructs a query that selects the first tx_sequence_number of lo_cp and the last
-/// tx_sequence_number of hi_cp. The first tx_sequence_number of lo_cp is the
-/// `network_total_transactions` of lo_cp - 1, and the last tx_sequence_number is the
-/// `network_total_transactions` - 1 of `hi_cp`.
-pub(crate) fn tx_bounds_query(lo_cp: u64, hi_cp: u64) -> RawQuery {
-    let lo = match lo_cp {
-        0 => query!("SELECT 0"),
-        _ => query!(format!(
-            r#"SELECT network_total_transactions
-            FROM checkpoints
-            WHERE sequence_number = {}"#,
-            lo_cp.saturating_sub(1)
-        )),
-    };
-
-    let hi = query!(format!(
-        r#"SELECT network_total_transactions - 1
-        FROM checkpoints
-        WHERE sequence_number = {}"#,
-        hi_cp
-    ));
-
-    query!(
-        "SELECT CAST(({}) AS BIGINT) AS lo, CAST(({}) AS BIGINT) AS hi",
-        lo,
-        hi
-    )
 }
 
 /// Determines the maximum value in an arbitrary number of Option<u64>.
