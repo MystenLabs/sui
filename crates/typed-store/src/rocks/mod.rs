@@ -1347,7 +1347,7 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let db_name = self.rocksdb.db_name();
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_batch_commit_latency_seconds
@@ -1371,6 +1371,19 @@ impl DBBatch {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&db_name);
+        }
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_count
+                .with_label_values(&[&db_name])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_duration_ms
+                .with_label_values(&[&db_name])
+                .inc_by((elapsed * 1000.0) as u64);
         }
         Ok(())
     }
@@ -1863,7 +1876,7 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_put_latency_seconds
@@ -1889,6 +1902,21 @@ where
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())
             .map_err(typed_store_err_from_rocks_err)?;
+
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_count
+                .with_label_values(&[&self.cf])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_duration_ms
+                .with_label_values(&[&self.cf])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
+
         Ok(())
     }
 
