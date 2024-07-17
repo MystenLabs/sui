@@ -471,11 +471,63 @@
       },
       "post": {}
     },
-    "/committee/{epoch}": {
-      "get": {}
+    "/system/committee/{epoch}": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "GetCommittee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "epoch",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidatorCommittee"
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
     },
-    "/committee": {
-      "get": {}
+    "/system/committee": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "GetLatestCommittee",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidatorCommittee"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
     },
     "/system": {
       "get": {
