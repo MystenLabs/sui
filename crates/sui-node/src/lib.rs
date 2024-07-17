@@ -439,7 +439,12 @@ impl SuiNode {
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
+
+        // Initialize Mysten metrics.
         mysten_metrics::init_metrics(&prometheus_registry);
+        // Unsupported (because of the use of static variable) and unnecessary in simtests.
+        #[cfg(not(msim))]
+        mysten_metrics::thread_stall_monitor::start_thread_stall_monitor();
 
         let genesis = config.genesis()?.clone();
 
