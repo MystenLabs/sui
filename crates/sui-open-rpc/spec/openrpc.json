@@ -1300,6 +1300,7 @@
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
+                "authority_capabilities_v2": false,
                 "ban_entry_init": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
@@ -1863,12 +1864,6 @@
                 "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
-                },
-                "scoring_decision_cutoff_value": {
-                  "f64": "2.5"
-                },
-                "scoring_decision_mad_divisor": {
-                  "f64": "2.3"
                 },
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
