@@ -6,13 +6,26 @@ import type { BalanceManager, Pool, ProposalParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { DEEP_SCALAR, FLOAT_SCALAR } from '../utils/config.js';
 
+/**
+ * GovernanceContract class for managing governance operations in DeepBook.
+ */
 export class GovernanceContract {
 	#config: DeepBookConfig;
 
+	/**
+	 * @param config Configuration for GovernanceContract
+	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
 	}
 
+	/**
+	 * @description Stake a specified amount in the pool
+	 * @param pool Pool object
+	 * @param balanceManager BalanceManager object
+	 * @param stakeAmount Amount to stake
+	 * @returns A function that takes a Transaction object
+	 */
 	stake =
 		(pool: Pool, balanceManager: BalanceManager, stakeAmount: number) => (tx: Transaction) => {
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
@@ -31,6 +44,12 @@ export class GovernanceContract {
 			});
 		};
 
+	/**
+	 * @description Unstake from the pool
+	 * @param pool Pool object
+	 * @param balanceManager BalanceManager object
+	 * @returns A function that takes a Transaction object
+	 */
 	unstake = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
@@ -43,6 +62,11 @@ export class GovernanceContract {
 		});
 	};
 
+	/**
+	 * @description Submit a governance proposal
+	 * @param params Parameters for the proposal
+	 * @returns A function that takes a Transaction object
+	 */
 	submitProposal = (params: ProposalParams) => (tx: Transaction) => {
 		const { poolKey, balanceManager, takerFee, makerFee, stakeRequired } = params;
 
@@ -66,6 +90,13 @@ export class GovernanceContract {
 		});
 	};
 
+	/**
+	 * @description Vote on a proposal
+	 * @param pool Pool object
+	 * @param balanceManager BalanceManager object
+	 * @param proposal_id ID of the proposal to vote on
+	 * @returns A function that takes a Transaction object
+	 */
 	vote = (pool: Pool, balanceManager: BalanceManager, proposal_id: string) => (tx: Transaction) => {
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
 
