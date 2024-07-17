@@ -497,6 +497,10 @@ struct FeatureFlags {
     // Enable passkey auth (SIP-9)
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
+
+    // Use AuthorityCapabilitiesV2
+    #[serde(skip_serializing_if = "is_false")]
+    authority_capabilities_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1096,12 +1100,13 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // ==== Ephemeral (consensus only) params deleted ====
+    //
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
-    scoring_decision_mad_divisor: Option<f64>,
+    // scoring_decision_mad_divisor: Option<f64>,
     // The cutoff value for the MED outlier detection
-    scoring_decision_cutoff_value: Option<f64>,
-
+    // scoring_decision_cutoff_value: Option<f64>,
     /// === Execution Version ===
     execution_version: Option<u64>,
 
@@ -1470,6 +1475,10 @@ impl ProtocolConfig {
 
     pub fn passkey_auth(&self) -> bool {
         self.feature_flags.passkey_auth
+    }
+
+    pub fn authority_capabilities_v2(&self) -> bool {
+        self.feature_flags.authority_capabilities_v2
     }
 }
 
@@ -1892,9 +1901,10 @@ impl ProtocolConfig {
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
+            // ==== Ephemeral (consensus only) params deleted ====
             // Const params for consensus scoring decision
-            scoring_decision_mad_divisor: None,
-            scoring_decision_cutoff_value: None,
+            // scoring_decision_mad_divisor: None,
+            // scoring_decision_cutoff_value: None,
 
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
@@ -1979,8 +1989,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.missing_type_is_compatibility_error = true;
                     cfg.gas_model_version = Some(4);
                     cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
-                    cfg.scoring_decision_mad_divisor = Some(2.3);
-                    cfg.scoring_decision_cutoff_value = Some(2.5);
+                    // ==== Ephemeral (consensus only) params deleted ====
+                    // cfg.scoring_decision_mad_divisor = Some(2.3);
+                    // cfg.scoring_decision_cutoff_value = Some(2.5);
                 }
                 6 => {
                     cfg.gas_model_version = Some(5);
@@ -2500,6 +2511,10 @@ impl ProtocolConfig {
                         .record_consensus_determined_version_assignments_in_prologue = true;
                     cfg.feature_flags
                         .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+
+                    if chain == Chain::Unknown {
+                        cfg.feature_flags.authority_capabilities_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

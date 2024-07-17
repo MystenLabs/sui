@@ -31,6 +31,7 @@ use sui_json_rpc_types::{
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_types::digests::Digest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
@@ -38,7 +39,9 @@ use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
+use sui_types::messages_consensus::{
+    AuthorityCapabilitiesV2, ConsensusDeterminedVersionAssignments,
+};
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
@@ -4957,12 +4960,30 @@ fn test_choose_next_system_packages() {
 
     macro_rules! make_capabilities {
         ($v: expr, $name: expr, $packages: expr) => {
-            AuthorityCapabilitiesV1::new(
+            AuthorityCapabilitiesV2::new(
                 $name,
+                Chain::Unknown,
                 SupportedProtocolVersions::new_for_testing(1, $v),
                 $packages,
             )
         };
+
+        ($v: expr, $name: expr, $packages: expr, $digest: expr) => {{
+            let mut cap = AuthorityCapabilitiesV2::new(
+                $name,
+                Chain::Unknown,
+                SupportedProtocolVersions::new_for_testing(1, $v),
+                $packages,
+            );
+
+            for (version, digest) in cap.supported_protocol_versions.versions.iter_mut() {
+                if version.as_u64() == $v {
+                    *digest = $digest;
+                }
+            }
+
+            cap
+        }};
     }
 
     let committee = Committee::new_simple_test_committee().0;
@@ -4982,7 +5003,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(1), vec![]),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5001,7 +5022,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(1), vec![]),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5015,7 +5036,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(2), sort(vec![o1, o2])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5034,7 +5055,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(1), vec![]),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5053,7 +5074,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(2), sort(vec![o1, o2])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5072,7 +5093,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(1), vec![]),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5092,7 +5113,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(2), sort(vec![o1, o2])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5111,7 +5132,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(1), vec![]),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5132,7 +5153,7 @@ fn test_choose_next_system_packages() {
 
     assert_eq!(
         (ver(3), sort(vec![o1, o2])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5152,7 +5173,7 @@ fn test_choose_next_system_packages() {
     // 3 which is the highest supported version
     assert_eq!(
         (ver(3), sort(vec![o1, o2])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
@@ -5173,7 +5194,29 @@ fn test_choose_next_system_packages() {
     // a way to detect that. The upgrade simply won't happen until everyone moves to 3.
     assert_eq!(
         (ver(1), sort(vec![])),
-        AuthorityState::choose_protocol_version_and_system_packages(
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
+            ProtocolVersion::MIN,
+            &protocol_config,
+            &committee,
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
+        )
+    );
+
+    // all validators support 2, but they disagree on the digest of the protocol config for 2, so
+    // no upgrade happens.
+    let digest_a = Digest::random();
+    let digest_b = Digest::random();
+    let capabilities = vec![
+        make_capabilities!(2, v[0].0, vec![o1, o2], digest_a),
+        make_capabilities!(2, v[1].0, vec![o1, o2], digest_a),
+        make_capabilities!(2, v[2].0, vec![o1, o2], digest_b),
+        make_capabilities!(2, v[3].0, vec![o1, o2], digest_b),
+    ];
+
+    assert_eq!(
+        (ver(1), sort(vec![])),
+        AuthorityState::choose_protocol_version_and_system_packages_v2(
             ProtocolVersion::MIN,
             &protocol_config,
             &committee,
