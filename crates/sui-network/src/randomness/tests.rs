@@ -379,8 +379,10 @@ async fn test_byzantine_peer_handling() {
     let mut authority_info = HashMap::new();
 
     for (authority, stake) in committee.members() {
-        let mut config = RandomnessConfig::default();
-        config.max_ignored_peer_weight_factor = Some(0.3);
+        let config = RandomnessConfig {
+            max_ignored_peer_weight_factor: Some(0.3),
+            ..Default::default()
+        };
 
         let (tx, rx) = mpsc::channel(3);
         randomness_rxs.push(rx);
