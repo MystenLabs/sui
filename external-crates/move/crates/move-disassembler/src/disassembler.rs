@@ -452,7 +452,9 @@ impl<'a> Disassembler<'a> {
         if s.len() <= PREVIEW_LEN + 2 {
             s.to_string()
         } else {
-            format!("{}..", &s[..PREVIEW_LEN])
+            let mut preview: String = s.chars().take(PREVIEW_LEN).collect();
+            preview.push_str("..");
+            preview
         }
     }
 
