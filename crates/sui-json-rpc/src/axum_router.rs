@@ -156,10 +156,24 @@ async fn process_raw_request<L: Logger>(
 ) -> MethodResponse {
     let client = match service.client_id_source {
         Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
-        Some(ClientIdSource::XForwardedFor) => {
+        Some(ClientIdSource::XForwardedFor(num_hops)) => {
             let do_header_parse = |header: &HeaderValue| {
                 header.to_str().map(|s| {
-                    match s.parse::<SocketAddr>() {
+                    let header_contents = s.split(',').map(str::trim).collect::<Vec<_>>();
+                    let contents_len = header_contents.len();
+                    if contents_len < num_hops + 1 {
+                        error!(
+                            "X-Forwarded-For header value of {:?} contains {} values, but {} hops were specificed. \
+                            Expected {} values. Skipping traffic controller request handling.",
+                            header_contents,
+                            contents_len,
+                            num_hops,
+                            num_hops + 1,
+                        );
+                        return None;
+                    }
+                    let client_ip = header_contents[contents_len - num_hops - 1];
+                    match client_ip.parse::<SocketAddr>() {
                         Ok(addr) => Some(addr.ip()),
                         Err(err) => {
                             error!(

@@ -26,7 +26,7 @@ const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 pub enum ClientIdSource {
     #[default]
     SocketAddr,
-    XForwardedFor,
+    XForwardedFor(usize),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

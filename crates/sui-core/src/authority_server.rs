@@ -995,11 +995,25 @@ macro_rules! handle_with_decoration {
                     None
                 }
             }
-            ClientIdSource::XForwardedFor => {
+            ClientIdSource::XForwardedFor(num_hops) => {
                 let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
-                            match header_val.parse::<SocketAddr>() {
+                            let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                            let contents_len = header_contents.len();
+                            if contents_len < num_hops + 1 {
+                                error!(
+                                    "X-Forwarded-For header value of {:?} contains {} values, but {} hops were specificed. \
+                                    Expected {} values. Skipping traffic controller request handling.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    num_hops + 1,
+                                );
+                                return None;
+                            }
+                            let client_ip = header_contents[contents_len - num_hops - 1];
+                            match client_ip.parse::<SocketAddr>() {
                                 Ok(socket_addr) => Some(socket_addr.ip()),
                                 Err(err) => {
                                     $self.metrics.forwarded_header_parse_error.inc();
