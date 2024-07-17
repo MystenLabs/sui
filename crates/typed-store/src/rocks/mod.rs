@@ -2385,10 +2385,10 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant deletions.
-    // TODO: revisit when intra-epoch pruning is enabled.
-    pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_min_write_buffer_number_to_merge(2);
+    // Disables write stalling and stopping based on pending compaction bytes.
+    pub fn disable_write_throttling(mut self) -> DBOptions {
+        self.options.set_soft_pending_compaction_bytes_limit(0);
+        self.options.set_hard_pending_compaction_bytes_limit(0);
         self
     }
 }
@@ -2439,7 +2439,9 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
+    // Num threads for compaction and flush.
     opt.increase_parallelism(4);
+
     opt.set_enable_pipelined_write(true);
 
     opt.set_block_based_table_factory(&get_block_options(128));
