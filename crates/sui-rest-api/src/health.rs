@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    openapi::{ApiEndpoint, RouteHandler},
+    openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     reader::StateReader,
     RestService, Result,
 };
@@ -26,12 +26,24 @@ impl ApiEndpoint<RestService> for HealthCheck {
         "/health"
     }
 
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        OperationBuilder::new()
+            .tag("General")
+            .operation_id("HealthCheck")
+            .query_parameters::<Threshold>(generator)
+            .response(200, ResponseBuilder::new().text_content().build())
+            .build()
+    }
+
     fn handler(&self) -> crate::openapi::RouteHandler<RestService> {
         RouteHandler::new(self.method(), health)
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct Threshold {
     pub threshold_seconds: Option<u32>,
 }
