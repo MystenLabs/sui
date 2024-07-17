@@ -2511,6 +2511,10 @@ impl ProtocolConfig {
                         .record_consensus_determined_version_assignments_in_prologue = true;
                     cfg.feature_flags
                         .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+
+                    if chain == Chain::Unknown {
+                        cfg.feature_flags.authority_capabilities_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
