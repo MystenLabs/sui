@@ -213,7 +213,7 @@ struct RandomnessEventLoop {
     mailbox_sender: mpsc::WeakSender<RandomnessMessage>,
     network: anemo::Network,
     allowed_peers: AllowedPeersUpdatable,
-    allowed_peers_map: HashSet<PeerId>,
+    allowed_peers_set: HashSet<PeerId>,
     metrics: Metrics,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
@@ -337,12 +337,12 @@ impl RandomnessEventLoop {
                 Ok(acc)
             },
         )?);
-        self.allowed_peers_map = authority_info
+        self.allowed_peers_set = authority_info
             .values()
             .map(|(peer_id, _)| *peer_id)
             .collect();
         self.allowed_peers
-            .update(Arc::new(self.allowed_peers_map.clone()));
+            .update(Arc::new(self.allowed_peers_set.clone()));
         self.epoch = new_epoch;
         self.authority_info = Arc::new(authority_info);
         self.dkg_output = Some(dkg_output);
@@ -780,14 +780,14 @@ impl RandomnessEventLoop {
         let Some(dkg_output) = &self.dkg_output else {
             return; // can't ignore a peer if we haven't finished DKG
         };
-        if !self.allowed_peers_map.contains(&peer_id) {
+        if !self.allowed_peers_set.contains(&peer_id) {
             return; // peer is already disallowed
         }
         let Some(peer_share_ids) = &self.peer_share_ids else {
             return; // can't ignore a peer if we haven't finished DKG
         };
         let Some(peer_shares) = peer_share_ids.get(&peer_id) else {
-            info!("can't ignore unknown byzantine peer {peer_id:?}");
+            warn!("can't ignore unknown byzantine peer {peer_id:?}");
             return;
         };
         let max_ignored_shares = (self.config.max_ignored_peer_weight_factor()
@@ -802,9 +802,9 @@ impl RandomnessEventLoop {
             peer_shares.len()
         );
         self.blocked_share_id_count += peer_shares.len();
-        self.allowed_peers_map.remove(&peer_id);
+        self.allowed_peers_set.remove(&peer_id);
         self.allowed_peers
-            .update(Arc::new(self.allowed_peers_map.clone()));
+            .update(Arc::new(self.allowed_peers_set.clone()));
     }
 
     fn maybe_start_pending_tasks(&mut self) {

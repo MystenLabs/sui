@@ -124,7 +124,7 @@ impl UnstartedRandomness {
                 mailbox_sender,
                 network,
                 allowed_peers,
-                allowed_peers_map: HashSet::new(),
+                allowed_peers_set: HashSet::new(),
                 metrics,
                 randomness_tx,
 
