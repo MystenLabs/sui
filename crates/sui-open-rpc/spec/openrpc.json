@@ -1662,6 +1662,7 @@
                   "u64": "2"
                 },
                 "max_accumulated_txn_cost_per_object_in_checkpoint": null,
+                "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"

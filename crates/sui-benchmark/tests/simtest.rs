@@ -466,15 +466,21 @@ mod test {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
-                PerObjectCongestionControlMode::TotalGasBudget =>
-                config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    checkpoint_budget_factor
+                PerObjectCongestionControlMode::TotalGasBudget => {
+                    let total_gas_limit = checkpoint_budget_factor
                         * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-                ),
-                PerObjectCongestionControlMode::TotalTxCount => config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    txn_count_limit
-                ),
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
+                    config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(total_gas_limit);
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                },
+                PerObjectCongestionControlMode::TotalTxCount => {
+                    config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                        txn_count_limit
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        txn_count_limit
+                    );
+                },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
