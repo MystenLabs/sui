@@ -42,6 +42,7 @@ impl ApiEndpoint<RestService> for GetObject {
                     .bcs_content()
                     .build(),
             )
+            .response(404, ResponseBuilder::new().build())
             .build()
     }
 
@@ -93,6 +94,7 @@ impl ApiEndpoint<RestService> for GetObjectWithVersion {
                     .bcs_content()
                     .build(),
             )
+            .response(404, ResponseBuilder::new().build())
             .build()
     }
 
