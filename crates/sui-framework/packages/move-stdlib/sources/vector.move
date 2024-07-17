@@ -5,7 +5,6 @@
 /// A variable-sized container that can hold any type. Indexing is 0-based, and
 /// vectors are growable. This module has many native functions.
 module std::vector {
-
     /// Allows calling `.to_string()` on a vector of `u8` to get a utf8 `String`.
     public use fun std::string::utf8 as vector.to_string;
 
@@ -25,42 +24,42 @@ module std::vector {
 
     #[bytecode_instruction]
     /// Create an empty vector.
-    native public fun empty<Element>(): vector<Element>;
+    public native fun empty<Element>(): vector<Element>;
 
     #[bytecode_instruction]
     /// Return the length of the vector.
-    native public fun length<Element>(v: &vector<Element>): u64;
+    public native fun length<Element>(v: &vector<Element>): u64;
 
     #[syntax(index)]
     #[bytecode_instruction]
     /// Acquire an immutable reference to the `i`th element of the vector `v`.
     /// Aborts if `i` is out of bounds.
-    native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
 
     #[bytecode_instruction]
     /// Add element `e` to the end of the vector `v`.
-    native public fun push_back<Element>(v: &mut vector<Element>, e: Element);
+    public native fun push_back<Element>(v: &mut vector<Element>, e: Element);
 
     #[syntax(index)]
     #[bytecode_instruction]
     /// Return a mutable reference to the `i`th element in the vector `v`.
     /// Aborts if `i` is out of bounds.
-    native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 
     #[bytecode_instruction]
     /// Pop an element from the end of vector `v`.
     /// Aborts if `v` is empty.
-    native public fun pop_back<Element>(v: &mut vector<Element>): Element;
+    public native fun pop_back<Element>(v: &mut vector<Element>): Element;
 
     #[bytecode_instruction]
     /// Destroy the vector `v`.
     /// Aborts if `v` is not empty.
-    native public fun destroy_empty<Element>(v: vector<Element>);
+    public native fun destroy_empty<Element>(v: vector<Element>);
 
     #[bytecode_instruction]
     /// Swaps the elements at the `i`th and `j`th indices in the vector `v`.
     /// Aborts if `i` or `j` is out of bounds.
-    native public fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
+    public native fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
 
     /// Return an vector of size one containing element `e`.
     public fun singleton<Element>(e: Element): vector<Element> {
@@ -75,7 +74,7 @@ module std::vector {
         if (len == 0) return ();
 
         let mut front_index = 0;
-        let mut back_index = len -1;
+        let mut back_index = len - 1;
         while (front_index < back_index) {
             v.swap(front_index, back_index);
             front_index = front_index + 1;
@@ -160,6 +159,22 @@ module std::vector {
     }
 
     // === Macros ===
+
+    /// Create a vector of length `n` by calling the function `f` on each index.
+    public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
+        let mut v = vector[];
+        let n = $n;
+        n.do!(|i| v.push_back($f(i)));
+        v
+    }
+
+    /// Count how many elements in the vector `v` satisfy the predicate `f`.
+    public macro fun count<$T>($v: &vector<$T>, $f: |&$T| -> bool): u64 {
+        let v = $v;
+        let mut count = 0;
+        v.do_ref!(|e| if ($f(e)) count = count + 1);
+        count
+    }
 
     /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
     /// Does not preserve the order of elements in the vector (starts from the end of the vector).

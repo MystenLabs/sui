@@ -593,6 +593,25 @@ module std::vector_tests {
     }
 
     #[test]
+    fun test_count_macro() {
+        assert!(vector<u8>[].count!(|e| *e == 2) == 0);
+        assert!(vector[0, 1, 2, 3].count!(|e| *e == 2) == 1);
+        assert!(vector[0, 1, 2, 3].count!(|e| *e % 2 == 0) == vector[0, 2].length());
+    }
+
+    #[test]
+    fun test_tabulate_macro() {
+        let v = vector::tabulate!(10, |i| i);
+        assert!(v == vector[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+        let v = vector::tabulate!(5, |i| 10 - i);
+        assert!(v == vector[10, 9, 8, 7, 6]);
+
+        let v = vector::tabulate!(0, |i| i);
+        assert!(v == vector<u64>[]);
+    }
+
+    #[test]
     fun test_do_macro() {
         vector<u8>[].do!(|_| assert!(false)); // should never run
         vector<u8>[].do_ref!(|_| assert!(false));
