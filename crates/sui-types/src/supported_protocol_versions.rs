@@ -6,7 +6,6 @@ use std::ops::RangeInclusive;
 use crate::{crypto::DefaultHash, digests::Digest};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::{AppId, Intent, IntentScope, IntentVersion};
 pub use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
 /// Models the set of protocol versions supported by a validator.
@@ -71,13 +70,7 @@ impl SupportedProtocolVersionsWithHashes {
     // Ideally this would be in sui-protocol-config, but sui-types depends on sui-protocol-config,
     // so it would introduce a circular dependency.
     fn protocol_config_digest(config: &ProtocolConfig) -> Digest {
-        let intent = Intent {
-            scope: IntentScope::ProtocolConfigDigest,
-            version: IntentVersion::V0,
-            app_id: AppId::Sui,
-        };
         let mut digest = DefaultHash::default();
-        bcs::serialize_into(&mut digest, &intent).expect("serialization cannot fail");
         bcs::serialize_into(&mut digest, &config).expect("serialization cannot fail");
         Digest::new(digest.finalize().into())
     }
