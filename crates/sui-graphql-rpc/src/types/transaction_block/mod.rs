@@ -328,11 +328,8 @@ impl TransactionBlock {
                     &page,
                 )?
                 else {
-                    println!("empty txBounds, early return");
                     return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
                 };
-
-                println!("got through tx bounds");
 
                 // If no filters are selected, or if the filter is composed of only checkpoint
                 // filters, we can directly query the main `transactions` table. Otherwise, we first

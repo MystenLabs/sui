@@ -390,7 +390,6 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // cursors, so the bounds must have been invalid, no matter which end the page was
                 // drawn from.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
-                    println!("paginate_results:a");
                     return (false, false, vec![].into_iter());
                 }
 
@@ -399,13 +398,11 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // the previous page, and should also be at the tip of the current page. This
                 // implies the bound was invalid, so we return an empty result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a && !a.is_scan_limited() => {
-                    println!("paginate_results:b");
                     return (false, false, vec![].into_iter());
                 }
 
                 // Similar to above case, but for back of results.
                 (_, _, Some(l), Some(b), End::Back) if l != *b && !b.is_scan_limited() => {
-                    println!("paginate_results:c");
                     return (false, false, vec![].into_iter());
                 }
 
@@ -413,7 +410,6 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // supplied on the end the page is being drawn from, it was found in the results
                 // (implying a page follows in that direction).
                 (after, Some(f), Some(l), before, End::Front) => {
-                    println!("paginate_results:d");
                     let has_previous_page = after.is_some();
                     // In the scenario where the `after` is not scan limited, we've already checked
                     // earlier for equality. But if it is scan limited, we need to check before
@@ -432,7 +428,6 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
 
                 // Symmetric to the previous case, but drawing from the back.
                 (after, Some(f), Some(l), before, End::Back) => {
-                    println!("paginate_results:e");
                     let has_next_page = before.is_some();
                     let suffix = before.is_some_and(|b| *b == l) as usize;
 
@@ -448,18 +443,15 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
-            println!("paginate_results:f");
             return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
         let mut results = results.into_iter();
         if prefix > 0 {
-            println!("paginate_results:g");
             results.nth(prefix - 1);
         }
         if suffix > 0 {
-            println!("paginate_results:h");
             results.nth_back(suffix - 1);
         }
 

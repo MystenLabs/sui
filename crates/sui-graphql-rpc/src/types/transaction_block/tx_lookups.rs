@@ -126,11 +126,9 @@ impl TxBounds {
     /// adjusted to the larger of the two. The resulting value is additionally modified by the
     /// `scan_limit` if `is_from_front` is false.
     pub(crate) fn scan_lo(&self) -> u64 {
-        println!("starting lo: {}", self.lo);
         let adjusted_lo = self.tx_lo();
-        println!("lo after cursor: {}", adjusted_lo);
 
-        let final_lo = if self.is_from_front {
+        if self.is_from_front {
             adjusted_lo
         } else {
             // If not from the front, then the scan_limit must only be applied to the lower bound
@@ -139,10 +137,7 @@ impl TxBounds {
             } else {
                 adjusted_lo
             }
-        };
-
-        println!("lo after scan limit: {}", final_lo);
-        final_lo
+        }
     }
 
     /// The upper bound `tx_sequence_number` of the range to scan within. This defaults to the max
@@ -150,28 +145,17 @@ impl TxBounds {
     /// adjusted to the smaller of the two. The resulting value is additionally modified by the
     /// `scan_limit` if `is_from_front` is true.
     pub(crate) fn scan_hi(&self) -> u64 {
-        println!("starting hi: {}", self.hi);
         let adjusted_hi = self.tx_hi();
-        println!("hi after cursor: {}", adjusted_hi);
 
-        let final_hi = if self.is_from_front {
+        if self.is_from_front {
             if let Some(scan_limit) = self.scan_limit {
-                println!("the scan limit is: {}", scan_limit);
-                println!(
-                    "lo + scan limit: {}",
-                    self.tx_lo().saturating_add(scan_limit),
-                );
                 adjusted_hi.min(self.tx_lo().saturating_add(scan_limit))
             } else {
-                println!("no scan limit");
                 adjusted_hi
             }
         } else {
             adjusted_hi
-        };
-
-        println!("hi after scan limit: {}", final_hi);
-        final_hi
+        }
     }
 
     /// If the query result does not have a previous page, check whether the scan limit is within
