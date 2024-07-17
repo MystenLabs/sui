@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { afterEach } from 'node:test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { bcs } from '../../src/bcs';
@@ -28,6 +29,10 @@ beforeAll(async () => {
 	vi.spyOn(toolbox.client, 'multiGetObjects');
 	vi.spyOn(toolbox.client, 'getCoins');
 	vi.spyOn(toolbox.client, 'executeTransactionBlock');
+});
+
+afterEach(async () => {
+	await executor.waitForLastTransaction();
 });
 
 afterAll(() => {
