@@ -12,6 +12,7 @@ import { isTransaction } from '../Transaction.js';
 
 export class CachingTransactionExecutor {
 	#client: SuiClient;
+	#lastDigest: string | null = null;
 	cache: ObjectCache;
 
 	constructor({
@@ -29,8 +30,11 @@ export class CachingTransactionExecutor {
 	 * Immutable objects, Shared objects, and Move function definitions will be preserved
 	 */
 	async reset() {
-		await this.cache.clearOwnedObjects();
-		await this.cache.clearCustom();
+		await Promise.all([
+			this.cache.clearOwnedObjects(),
+			this.cache.clearCustom(),
+			this.waitForLastTransaction(),
+		]);
 	}
 
 	async buildTransaction({
@@ -94,6 +98,14 @@ export class CachingTransactionExecutor {
 	}
 
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
+		this.#lastDigest = effects.V2?.transactionDigest ?? null;
 		await this.cache.applyEffects(effects);
+	}
+
+	async waitForLastTransaction() {
+		if (this.#lastDigest) {
+			await this.#client.waitForTransaction({ digest: this.#lastDigest });
+			this.#lastDigest = null;
+		}
 	}
 }
