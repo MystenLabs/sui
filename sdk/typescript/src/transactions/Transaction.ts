@@ -205,10 +205,10 @@ export class Transaction {
 	}
 
 	// Temporary workaround for the wallet interface accidentally serializing transactions via postMessage
-	get pure(): ReturnType<typeof createPure> {
+	get pure(): ReturnType<typeof createPure<Argument>> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value): Argument => {
+			value: createPure<Argument>((value): Argument => {
 				if (isSerializedBcs(value)) {
 					return this.#data.addInput('pure', {
 						$kind: 'Pure',

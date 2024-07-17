@@ -4,16 +4,15 @@
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { Argument } from './data/internal.js';
 
-export function createPure(makePure: (value: SerializedBcs<any, any> | Uint8Array) => Argument) {
+export function createPure<T>(makePure: (value: SerializedBcs<any, any> | Uint8Array) => T) {
 	function pure(
 		/**
 		 * The pure value, serialized to BCS. If this is a Uint8Array, then the value
 		 * is assumed to be raw bytes, and will be used directly.
 		 */
 		value: SerializedBcs<any, any> | Uint8Array,
-	): Argument {
+	): T {
 		return makePure(value);
 	}
 
