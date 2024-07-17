@@ -155,6 +155,9 @@
               },
               "application/bcs": {}
             }
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -198,6 +201,9 @@
               },
               "application/bcs": {}
             }
+          },
+          "404": {
+            "description": ""
           }
         }
       }
