@@ -5812,14 +5812,15 @@ async fn test_consensus_handler_per_object_congestion_control(
         PerObjectCongestionControlMode::None => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => {
             protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(200_000_000);
+                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
                     200_000_000,
                 );
         }
         PerObjectCongestionControlMode::TotalTxCount => {
-            protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(2);
+            protocol_config
+                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(2);
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(2);
         }
@@ -6040,7 +6041,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     protocol_config.set_per_object_congestion_control_mode_for_testing(
         PerObjectCongestionControlMode::TotalGasBudget,
     );
-    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(100_000_000);
+    protocol_config
+        .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(100_000_000);
     protocol_config
         .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(100_000_000);
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);

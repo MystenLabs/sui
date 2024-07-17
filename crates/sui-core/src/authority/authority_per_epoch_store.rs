@@ -1753,7 +1753,7 @@ impl AuthorityPerEpochStore {
         match ConsensusManager::get_consensus_protocol_in_epoch(self) {
             ConsensusProtocol::Narwhal => self
                 .protocol_config()
-                .max_accumulated_txn_cost_per_object_in_checkpoint_as_option(),
+                .max_accumulated_txn_cost_per_object_in_narwhal_commit_as_option(),
             ConsensusProtocol::Mysticeti => self
                 .protocol_config()
                 .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),

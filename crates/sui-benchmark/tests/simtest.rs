@@ -470,11 +470,11 @@ mod test {
                     let total_gas_limit = checkpoint_budget_factor
                         * DEFAULT_VALIDATOR_GAS_PRICE
                         * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
-                    config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(total_gas_limit);
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                 },
                 PerObjectCongestionControlMode::TotalTxCount => {
-                    config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
                         txn_count_limit
                     );
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
