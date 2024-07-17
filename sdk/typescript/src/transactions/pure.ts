@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSerializedBcs, type BcsType, type SerializedBcs } from '@mysten/bcs';
+import { isSerializedBcs } from '@mysten/bcs';
+import type { BcsType, SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
 
@@ -27,7 +28,7 @@ export function createPure<T>(makePure: (value: SerializedBcs<any, any> | Uint8A
 			return makePure(schemaFromName(typeOrSerializedValue).serialize(value as never));
 		}
 
-		if (typeOrSerializedValue instanceof Uint8Array && isSerializedBcs(typeOrSerializedValue)) {
+		if (typeOrSerializedValue instanceof Uint8Array || isSerializedBcs(typeOrSerializedValue)) {
 			return makePure(typeOrSerializedValue);
 		}
 
