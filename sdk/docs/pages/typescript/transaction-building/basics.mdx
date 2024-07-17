@@ -113,6 +113,36 @@ tx.transferObjects([coin], tx.pure.address('0xSomeSuiAddress'));
 tx.transferObjects([coin], tx.pure(bcs.Address.serialize('0xSomeSuiAddress')));
 ```
 
+To pass `vector` or `option` types, you you can pass use the corresponding methods on `tx.pure`, use
+tx.pure as a function with a type argument, or serialize the value before passing it to tx.pure
+using the bcs sdk:
+
+```ts
+import { bcs } from '@mysten/sui/bcs';
+
+tx.moveCall({
+	target: '0x2::foo::bar',
+	arguments: [
+		// using vector and option methods
+		tx.pure.vector('u8', [1, 2, 3]),
+		tx.pure.option('u8', 1),
+		tx.pure.option('u8', null),
+
+		// Using pure with type arguments
+		tx.pure('vector<u8>', [1, 2, 3]),
+		tx.pure('option<u8>', 1),
+		tx.pure('option<u8>', null),
+		tx.pure('vector<option<u8>>', [1, null, 2]),
+
+		// Using bcs.serialize
+		tx.pure(bcs.vector(bcs.U8).serialize([1, 2, 3])),
+		tx.pure(bcs.option(bcs.U8).serialize(1)),
+		tx.pure(bcs.option(bcs.U8).serialize(null)),
+		tx.pure(bcs.vector(bcs.option(bcs.U8)).serialize([1, null, 2])),
+	],
+});
+```
+
 #### Object references
 
 To use an on chain object as a transaction input, you must pass a reference to that object. This can
