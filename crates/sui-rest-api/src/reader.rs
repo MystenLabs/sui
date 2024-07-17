@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use sui_sdk2::types::{CheckpointSequenceNumber, EpochId, ValidatorCommittee};
+use sui_sdk2::types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
 use sui_sdk2::types::{Object, ObjectId, Version};
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectStore;
@@ -97,7 +97,14 @@ impl StateReader {
         &self,
         digest: sui_sdk2::types::TransactionDigest,
     ) -> crate::Result<super::transactions::TransactionResponse> {
-        let (transaction, effects, events) = self.get_transaction(digest)?;
+        let (
+            SignedTransaction {
+                transaction,
+                signatures,
+            },
+            effects,
+            events,
+        ) = self.get_transaction(digest)?;
 
         let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()))?;
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
@@ -109,7 +116,9 @@ impl StateReader {
         };
 
         Ok(crate::transactions::TransactionResponse {
+            digest: transaction.digest(),
             transaction,
+            signatures,
             effects,
             events,
             checkpoint,

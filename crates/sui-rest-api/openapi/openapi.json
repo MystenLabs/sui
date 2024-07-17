@@ -394,6 +394,9 @@
               },
               "application/bcs": {}
             }
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -4066,14 +4069,20 @@
       "TransactionResponse": {
         "type": "object",
         "required": [
+          "digest",
           "effects",
+          "signatures",
           "transaction"
         ],
         "properties": {
           "checkpoint": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "default": null,
+            "type": "string",
+            "format": "u64"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/TransactionDigest"
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
@@ -4081,13 +4090,20 @@
           "events": {
             "$ref": "#/components/schemas/TransactionEvents"
           },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSignature"
+            }
+          },
           "timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "default": null,
+            "type": "string",
+            "format": "u64"
           },
           "transaction": {
-            "$ref": "#/components/schemas/SignedTransaction"
+            "$ref": "#/components/schemas/Transaction"
           }
         }
       },
