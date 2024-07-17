@@ -626,7 +626,7 @@
 
 ><pre>{
 >  epoch {
->    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywidGMiOjI2ODUxMjQ4fQ") {
+>    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywiaSI6ZmFsc2V9") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
