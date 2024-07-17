@@ -263,13 +263,108 @@
       }
     },
     "/checkpoints": {
-      "get": {}
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "operationId": "ListCheckpoints",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "direction",
+            "schema": {
+              "$ref": "#/components/schemas/Direction"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+            "schema": {
+              "description": "The checkpoint to start listing from.\n\nDefaults to the latest checkpoint if not provided.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SignedCheckpointSummary"
+                  }
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "410": {
+            "description": ""
+          }
+        }
+      }
     },
     "/checkpoints/{checkpoint}": {
-      "get": {}
-    },
-    "/checkpoints/{checkpoint}/full": {
-      "get": {}
+      "get": {
+        "tags": [
+          "Checkpoint"
+        ],
+        "operationId": "GetCheckpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedCheckpointSummary"
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
     },
     "/transactions/{transaction}": {
       "get": {
@@ -654,36 +749,8 @@
           }
         ]
       },
-      "CheckpointContents": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/CheckpointTransactionInfo"
-        }
-      },
       "CheckpointContentsDigest": {
         "$ref": "#/components/schemas/Digest"
-      },
-      "CheckpointData": {
-        "type": "object",
-        "required": [
-          "checkpoint_contents",
-          "checkpoint_summary",
-          "transactions"
-        ],
-        "properties": {
-          "checkpoint_contents": {
-            "$ref": "#/components/schemas/CheckpointContents"
-          },
-          "checkpoint_summary": {
-            "$ref": "#/components/schemas/SignedCheckpointSummary"
-          },
-          "transactions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CheckpointTransaction"
-            }
-          }
-        }
       },
       "CheckpointDigest": {
         "$ref": "#/components/schemas/Digest"
@@ -752,77 +819,6 @@
             "description": "CheckpointSummary is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version.",
             "type": "string",
             "format": "base64"
-          }
-        }
-      },
-      "CheckpointTransaction": {
-        "type": "object",
-        "required": [
-          "effects",
-          "input_objects",
-          "output_objects",
-          "transaction"
-        ],
-        "properties": {
-          "effects": {
-            "description": "The effects produced by executing this transaction",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransactionEffects"
-              }
-            ]
-          },
-          "events": {
-            "description": "The events, if any, emitted by this transaciton during execution",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransactionEvents"
-              }
-            ]
-          },
-          "input_objects": {
-            "description": "The state of all inputs to this transaction as they were prior to execution.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "output_objects": {
-            "description": "The state of all output objects created or mutated by this transaction.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "transaction": {
-            "description": "The input Transaction",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SignedTransaction"
-              }
-            ]
-          }
-        }
-      },
-      "CheckpointTransactionInfo": {
-        "type": "object",
-        "required": [
-          "effects",
-          "signatures",
-          "transaction"
-        ],
-        "properties": {
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffectsDigest"
-          },
-          "signatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UserSignature"
-            }
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
@@ -3688,9 +3684,6 @@
           }
         ]
       },
-      "TransactionEffectsDigest": {
-        "$ref": "#/components/schemas/Digest"
-      },
       "TransactionEvents": {
         "type": "array",
         "items": {
@@ -4558,6 +4551,9 @@
   "tags": [
     {
       "name": "Account"
+    },
+    {
+      "name": "Checkpoint"
     },
     {
       "name": "General"
