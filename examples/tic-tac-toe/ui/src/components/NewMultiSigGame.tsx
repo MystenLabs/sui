@@ -130,7 +130,7 @@ function parsePublicKey(key?: string): PublicKey | null {
 	}
 
 	key = key.trim();
-	if (key == '') {
+	if (key === '') {
 		return null;
 	}
 

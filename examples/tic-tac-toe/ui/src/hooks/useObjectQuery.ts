@@ -22,7 +22,9 @@ export function useObjectQuery(
 	const response = useSuiClientQuery('getObject', params, options);
 
 	const invalidate = async () => {
-		await client.invalidateQueries({ queryKey: [ctx.network, 'getObject', params] });
+		await client.invalidateQueries({
+			queryKey: [ctx.network, 'getObject', params],
+		});
 	};
 
 	return [response, invalidate];
