@@ -8,7 +8,7 @@ import type { Transaction, TransactionObjectInput } from './Transaction.js';
 export const Arguments = {
 	pure: createPure((value) => (tx: Transaction) => tx.pure(value)),
 	object: (value: TransactionObjectInput) => (tx: Transaction) => tx.object(value),
-	sharedObject:
+	sharedObjectRef:
 		(...args: Parameters<(typeof Inputs)['SharedObjectRef']>) =>
 		(tx: Transaction) =>
 			tx.sharedObjectRef(...args),
