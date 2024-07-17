@@ -25,8 +25,8 @@ export class DeepBookClient {
 	#client: SuiClient;
 	#balanceManagers: { [key: string]: BalanceManager } = {};
 	#config: DeepBookConfig;
-	#balanceManager: BalanceManagerContract;
 	#address: string;
+	balanceManager: BalanceManagerContract;
 	deepBook: DeepBookContract;
 	deepBookAdmin: DeepBookAdminContract;
 	flashLoans: FlashLoanContract;
@@ -55,7 +55,7 @@ export class DeepBookClient {
 		this.#client = client;
 		this.#address = normalizeSuiAddress(address);
 		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
-		this.#balanceManager = new BalanceManagerContract(this.#config);
+		this.balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);
 		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
 		this.flashLoans = new FlashLoanContract(this.#config);
@@ -86,7 +86,7 @@ export class DeepBookClient {
 		const balanceManager = this.#getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
-		tx.add(this.#balanceManager.checkManagerBalance(balanceManager.address, coin));
+		tx.add(this.balanceManager.checkManagerBalance(balanceManager.address, coin));
 		const res = await this.#client.devInspectTransactionBlock({
 			sender: this.#address,
 			transactionBlock: tx,
