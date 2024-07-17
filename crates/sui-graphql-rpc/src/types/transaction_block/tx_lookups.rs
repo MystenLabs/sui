@@ -192,6 +192,9 @@ impl TxBounds {
 }
 
 impl TransactionBlockFilter {
+    /// Most filter conditions require a scan limit if used in tandem with other filters. The
+    /// exception to this is sender and checkpoint, since sender is denormalized on all tables, and
+    /// the corresponding tx range can be determined for a checkpoint.
     pub(crate) fn requires_scan_limit(&self) -> bool {
         [
             self.function.is_some(),
@@ -207,6 +210,8 @@ impl TransactionBlockFilter {
             > 1
     }
 
+    /// With the exception of `transaction_ids`, other filter conditions are denormalized with the
+    /// sender info, and are handled there.
     pub(crate) fn requires_explicit_sender(&self) -> bool {
         self.transaction_ids.is_some()
             || (self.function.is_none()
