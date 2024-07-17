@@ -10,8 +10,6 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use rand::prelude::StdRng;
-use rand::SeedableRng;
 use std::cmp::min;
 use std::ops::Add;
 #[cfg(test)]
@@ -19,7 +17,6 @@ use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, TransactionDigest};
-use sui_types::committee::CommitteeTrait;
 use sui_types::transaction::VerifiedSignedTransaction;
 use tokio::time::Instant;
 use tracing::{debug, error, trace};
@@ -217,15 +214,10 @@ where
         &self,
         tx_digest: &TransactionDigest,
     ) -> anyhow::Result<(usize, Duration)> {
-        // the 32 is as requirement of the default StdRng::from_seed choice
-        let digest_bytes = tx_digest.into_inner();
-
-        // permute the validators deterministically, based on the digest
-        let mut rng = StdRng::from_seed(digest_bytes);
         let order = self
             .agg
             .committee
-            .shuffle_by_stake_with_rng(None, None, &mut rng);
+            .shuffle_by_stake_from_tx_digest(tx_digest);
         let position = match order.iter().position(|&name| name == self.name) {
             Some(idx) => min(idx, VALIDATOR_INCREMENTAL_COUNT),
             None => {
