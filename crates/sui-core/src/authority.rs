@@ -4911,17 +4911,30 @@ impl RandomnessRoundReceiver {
             // We set a very long timeout so that in case this gets stuck for some reason, the
             // validator will eventually crash rather than continuing in a zombie mode.
             const RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
-            let Ok(mut effects) = tokio::time::timeout(
+            let result = tokio::time::timeout(
                 RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
                 authority_state
                     .get_transaction_cache_reader()
                     .notify_read_executed_effects(&[digest]),
             )
-            .await
-            .unwrap_or_else(|_| panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}")) else {
-                panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
+            .await;
+            let result = match result {
+                Ok(result) => result,
+                Err(_) => {
+                    if cfg!(debug_assertions) {
+                        // Crash on randomness update execution timeout in debug builds.
+                        panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    }
+                    warn!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    // Continue waiting as long as necessary in non-debug builds.
+                    authority_state
+                        .get_transaction_cache_reader()
+                        .notify_read_executed_effects(&[digest])
+                        .await
+                }
             };
 
+            let mut effects = result.unwrap_or_else(|_| panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}"));
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
                 panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
