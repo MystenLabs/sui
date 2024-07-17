@@ -3,7 +3,7 @@
 
 use crate::{
     accept::AcceptFormat,
-    openapi::{ApiEndpoint, RouteHandler},
+    openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler},
     reader::StateReader,
     response::ResponseContent,
     RestService, Result,
@@ -21,15 +21,24 @@ impl ApiEndpoint<RestService> for GetLatestCommittee {
     }
 
     fn path(&self) -> &'static str {
-        "/committee"
+        "/system/committee"
     }
 
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<ValidatorCommittee>();
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("System")
+            .operation_id("GetLatestCommittee")
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<ValidatorCommittee>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
@@ -61,15 +70,26 @@ impl ApiEndpoint<RestService> for GetCommittee {
     }
 
     fn path(&self) -> &'static str {
-        "/committee/{epoch}"
+        "/system/committee/{epoch}"
     }
 
     fn operation(
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<ValidatorCommittee>();
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("System")
+            .operation_id("GetCommittee")
+            .path_parameter::<EpochId>("epoch", generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<ValidatorCommittee>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .response(404, ResponseBuilder::new().build())
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
