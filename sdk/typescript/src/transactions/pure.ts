@@ -5,6 +5,7 @@ import { isSerializedBcs } from '@mysten/bcs';
 import type { BcsType, SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
+import type { Argument } from './data/internal.js';
 
 export function createPure<T>(makePure: (value: SerializedBcs<any, any> | Uint8Array) => T) {
 	function pure<T extends PureTypeName>(
@@ -45,17 +46,17 @@ export function createPure<T>(makePure: (value: SerializedBcs<any, any> | Uint8A
 	pure.string = (value: string) => makePure(bcs.String.serialize(value));
 	pure.address = (value: string) => makePure(bcs.Address.serialize(value));
 	pure.id = pure.address;
-	pure.vector = <T extends PureTypeName>(
-		type: T extends PureTypeName ? ValidPureTypeName<T> : T,
-		value: Iterable<ShapeFromPureTypeName<T>> & { length: number },
+	pure.vector = <Type extends PureTypeName>(
+		type: T extends PureTypeName ? ValidPureTypeName<Type> : Type,
+		value: Iterable<ShapeFromPureTypeName<Type>> & { length: number },
 	) => {
-		return makePure(bcs.vector(schemaFromName(type)).serialize(value));
+		return makePure(bcs.vector(schemaFromName(type as BasePureType)).serialize(value as never));
 	};
-	pure.option = <T extends PureTypeName>(
-		type: T extends PureTypeName ? ValidPureTypeName<T> : T,
-		value: ShapeFromPureTypeName<T> | null | undefined,
+	pure.option = <Type extends PureTypeName>(
+		type: T extends PureTypeName ? ValidPureTypeName<Type> : Type,
+		value: ShapeFromPureTypeName<Type> | null | undefined,
 	) => {
-		return makePure(bcs.option(schemaFromName(type)).serialize(value));
+		return makePure(bcs.option(schemaFromName(type)).serialize(value as never));
 	};
 
 	return pure;
@@ -83,7 +84,7 @@ export type ValidPureTypeName<T extends string> = T extends BasePureType
 			: PureTypeValidationError<T>;
 
 type ShapeFromPureTypeName<T extends PureTypeName> = T extends BasePureType
-	? Parameters<ReturnType<typeof createPure>[T]>[0]
+	? Parameters<ReturnType<typeof createPure<Argument>>[T]>[0]
 	: T extends `vector<${infer U extends PureTypeName}>`
 		? ShapeFromPureTypeName<U>[]
 		: T extends `option<${infer U extends PureTypeName}>`

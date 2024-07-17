@@ -238,7 +238,7 @@ export async function upgradePackage(
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
 		target: '0x2::package::authorize_upgrade',
-		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(Uint8Array.from(digest))],
 	});
 
 	const receipt = tx.upgrade({
