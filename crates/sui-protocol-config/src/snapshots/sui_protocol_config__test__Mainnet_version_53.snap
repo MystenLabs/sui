@@ -50,7 +50,9 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  record_consensus_determined_version_assignments_in_prologue: true
   fresh_vm_on_framework_upgrade: true
+  prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
   enable_coin_deny_list_v2: true
 max_tx_size_bytes: 131072
