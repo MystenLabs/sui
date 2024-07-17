@@ -10,8 +10,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
-import { writeToml } from './helper/toml';
-import { CoinMap } from '../src/utils/constants';
+
+import type { CoinMap } from '../src/utils/constants.js';
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -61,9 +61,9 @@ export async function setupSuiClient() {
 }
 
 export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
-    if (!toolbox) {
-        toolbox = await setupSuiClient();
-    }
+	if (!toolbox) {
+		toolbox = await setupSuiClient();
+	}
 	const tokenSourcesPath = path.join(__dirname, 'data/token');
 	writeToml(tokenSourcesPath, '0x0', 'token');
 	let deepRes = await publishPackage(tokenSourcesPath, toolbox);
@@ -75,7 +75,7 @@ export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
 	const spamSourcePath = path.join(__dirname, 'data/spam');
 	const spamRes = await publishPackage(spamSourcePath, toolbox);
 
-    return {
+	return {
 		DEEP: {
 			address: deepRes.packageId,
 			type: `${deepRes.packageId}::deep::DEEP`,
@@ -95,17 +95,21 @@ export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
 }
 
 export async function publishDeepBook(toolbox?: TestToolbox) {
-    if (!toolbox) {
-        toolbox = await setupSuiClient();
-    }
+	if (!toolbox) {
+		toolbox = await setupSuiClient();
+	}
 
-    const deepbookSourcesPath = path.join(__dirname, 'data/deepbook');
+	const deepbookSourcesPath = path.join(__dirname, 'data/deepbook');
 	let deepbookRes = await publishPackage(deepbookSourcesPath, toolbox);
 
 	const deepbookPackageId = deepbookRes.packageId;
 	// @ts-ignore
 	const deepbookRegistryId = deepbookRes.publishTxn.objectChanges?.find((change) => {
-		return change.type === 'created' && change.objectType.includes('Registry') && !change.objectType.includes('Inner')
+		return (
+			change.type === 'created' &&
+			change.objectType.includes('Registry') &&
+			!change.objectType.includes('Inner')
+		);
 	})?.['objectId'];
 
 	// @ts-ignore
@@ -113,7 +117,7 @@ export async function publishDeepBook(toolbox?: TestToolbox) {
 		return change.type === 'created' && change.objectType.includes('DeepbookAdminCap');
 	})?.['objectId'];
 
-    return { deepbookPackageId, deepbookRegistryId, deepbookAdminCap };
+	return { deepbookPackageId, deepbookRegistryId, deepbookAdminCap };
 }
 
 // TODO: expose these testing utils from @mysten/sui
