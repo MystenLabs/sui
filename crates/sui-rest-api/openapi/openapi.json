@@ -40,7 +40,32 @@
       }
     },
     "/health": {
-      "get": {}
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "operationId": "HealthCheck",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "threshold_seconds",
+            "schema": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          }
+        }
+      }
     },
     "/accounts/{account}/objects": {
       "get": {
