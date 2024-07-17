@@ -523,6 +523,11 @@ impl OperationBuilder {
 
         self
     }
+
+    pub fn request_body(&mut self, request_body: RequestBody) -> &mut Self {
+        self.inner.request_body = Some(ReferenceOr::Item(request_body));
+        self
+    }
 }
 
 #[derive(Default)]

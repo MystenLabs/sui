@@ -469,7 +469,76 @@
           }
         }
       },
-      "post": {}
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "operationId": "ExecuteTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "balance_changes",
+            "description": "Request `BalanceChanges` be included in the Response.",
+            "schema": {
+              "description": "Request `BalanceChanges` be included in the Response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "events",
+            "description": "Request `TransactionEvents` be included in the Response.",
+            "schema": {
+              "description": "Request `TransactionEvents` be included in the Response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input_objects",
+            "description": "Request input `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request input `Object`s be included in the Response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "output_objects",
+            "description": "Request output `Object`s be included in the Response.",
+            "schema": {
+              "description": "Request output `Object`s be included in the Response.",
+              "default": false,
+              "type": "boolean"
+            },
+            "style": "form"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/bcs": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionExecutionResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
     },
     "/system/committee/{epoch}": {
       "get": {
@@ -859,6 +928,37 @@
             }
           }
         ]
+      },
+      "BalanceChange": {
+        "type": "object",
+        "required": [
+          "address",
+          "amount",
+          "coin_type"
+        ],
+        "properties": {
+          "address": {
+            "description": "Owner of the balance change",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Address"
+              }
+            ]
+          },
+          "amount": {
+            "description": "The amount indicate the balance value changes.\n\nA negative amount means spending coin value and positive means receiving coin value.",
+            "type": "string",
+            "format": "i128"
+          },
+          "coin_type": {
+            "description": "Type of the Coin",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TypeTag"
+              }
+            ]
+          }
+        }
       },
       "Bls12381PublicKey": {
         "description": "Base64 encoded data",
@@ -1682,6 +1782,39 @@
       },
       "EffectsAuxiliaryDataDigest": {
         "$ref": "#/components/schemas/Digest"
+      },
+      "EffectsFinality": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "signature"
+            ],
+            "properties": {
+              "signature": {
+                "description": "Validator aggregated signature",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ValidatorAggregatedSignature"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkpoint"
+            ],
+            "properties": {
+              "checkpoint": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          }
+        ]
       },
       "EndOfEpochData": {
         "type": "object",
@@ -4282,6 +4415,43 @@
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Digest"
+      },
+      "TransactionExecutionResponse": {
+        "description": "Response type for the execute transaction endpoint",
+        "type": "object",
+        "required": [
+          "effects",
+          "finality"
+        ],
+        "properties": {
+          "balance_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "finality": {
+            "$ref": "#/components/schemas/EffectsFinality"
+          },
+          "input_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "output_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          }
+        }
       },
       "TransactionExpiration": {
         "oneOf": [

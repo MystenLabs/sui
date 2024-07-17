@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
+use schemars::JsonSchema;
 use sui_sdk2::types::framework::Coin;
 use sui_sdk2::types::{
     Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
@@ -12,7 +13,9 @@ use sui_sdk2::types::{
 };
 use tap::Pipe;
 
-use crate::openapi::{ApiEndpoint, RouteHandler};
+use crate::openapi::{
+    ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
+};
 use crate::response::Bcs;
 use crate::{accept::AcceptFormat, response::ResponseContent};
 use crate::{RestService, Result};
@@ -50,7 +53,19 @@ impl ApiEndpoint<RestService> for ExecuteTransaction {
     ) -> openapiv3::v3_1::Operation {
         generator.subschema_for::<SignedTransaction>();
 
-        openapiv3::v3_1::Operation::default()
+        OperationBuilder::new()
+            .tag("Transactions")
+            .operation_id("ExecuteTransaction")
+            .query_parameters::<ExecuteTransactionQueryParameters>(generator)
+            .request_body(RequestBodyBuilder::new().bcs_content().build())
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<TransactionExecutionResponse>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .build()
     }
 
     fn handler(&self) -> RouteHandler<RestService> {
@@ -160,7 +175,7 @@ async fn execute_transaction(
 }
 
 /// Query parameters for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct ExecuteTransactionQueryParameters {
     // TODO once transaction finality support is more fully implemented up and down the stack, add
     // back in this parameter, which will be mutally-exclusive with the other parameters. When
@@ -181,7 +196,7 @@ pub struct ExecuteTransactionQueryParameters {
 }
 
 /// Response type for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct TransactionExecutionResponse {
     effects: TransactionEffects,
 
@@ -259,9 +274,19 @@ impl<'de> serde::Deserialize<'de> for EffectsFinality {
     }
 }
 
+impl JsonSchema for EffectsFinality {
+    fn schema_name() -> String {
+        ReadableEffectsFinality::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        ReadableEffectsFinality::json_schema(gen)
+    }
+}
+
 #[serde_with::serde_as]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(tag = "untagged")]
+#[derive(serde::Serialize, serde::Deserialize, JsonSchema)]
+#[serde(rename = "EffectsFinality", untagged)]
 enum ReadableEffectsFinality {
     Certified {
         /// Validator aggregated signature
@@ -269,6 +294,7 @@ enum ReadableEffectsFinality {
     },
     Checkpointed {
         #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
+        #[schemars(with = "crate::_schemars::U64")]
         checkpoint: CheckpointSequenceNumber,
     },
 }
