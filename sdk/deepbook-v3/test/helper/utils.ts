@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { GetCoinsParams, SuiClient } from '@mysten/sui/client';
+import type { GetCoinsParams } from '@mysten/sui/client';
+import { SuiClient } from '@mysten/sui/client';
 import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { RPC } from './constants';
 import { fromB64 } from '@mysten/sui/utils';
+
+import { RPC } from './constants.js';
 
 export class Utils {
 	public static provider: SuiClient = new SuiClient({ url: RPC.get() });
@@ -27,9 +29,7 @@ export class Utils {
 	}
 
 	public static async getDeployer(): Promise<Ed25519Keypair> {
-		return Ed25519Keypair.fromSecretKey(
-			fromB64('0000000000000000000000000000000000000000000'),
-		);
+		return Ed25519Keypair.fromSecretKey(fromB64('0000000000000000000000000000000000000000000'));
 	}
 
 	public static async getSigner(): Promise<Ed25519Keypair> {
