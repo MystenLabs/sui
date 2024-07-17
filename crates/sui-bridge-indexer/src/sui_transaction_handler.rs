@@ -37,21 +37,21 @@ pub async fn handle_sui_transactions_loop(
     while let Some(batch) = stream.next().await {
         // unwrap: batch must not be empty
         let (txns, cursor) = batch.last().cloned().unwrap();
-        let token_transfers = batch
+        let data = batch
             .into_iter()
             // TODO: letting it panic so we can capture errors, but we should handle this more gracefully
             .flat_map(|(chunk, _)| process_transactions(chunk, &metrics).unwrap())
             .collect::<Vec<_>>();
 
-        // write batched token transfers to DB
-        if !token_transfers.is_empty() {
-            let last_ckp = txns.last().map(|tx| tx.checkpoint).unwrap_or_default();
+        // write batched transaction data to DB
+        if !data.is_empty() {
             // unwrap: token_transfers is not empty
-            while let Err(err) = write(&pg_pool, token_transfers.clone()) {
+            let last_ckp = txns.last().map(|tx| tx.checkpoint).unwrap_or_default();
+            while let Err(err) = write(&pg_pool, data.clone()) {
                 error!("Failed to write sui transactions to DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
-            info!("Wrote {} token transfers to DB", token_transfers.len());
+            info!("Wrote {} bridge transaction data to DB", data.len());
             metrics.last_committed_sui_checkpoint.set(last_ckp as i64);
         }
 
