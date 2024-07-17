@@ -4316,6 +4316,7 @@ impl AuthorityState {
         Some(res)
     }
 
+    // TODO: delete once authority_capabilities_v2 is deployed everywhere
     fn is_protocol_version_supported_v1(
         current_protocol_version: ProtocolVersion,
         proposed_protocol_version: ProtocolVersion,
@@ -4491,6 +4492,7 @@ impl AuthorityState {
             })
     }
 
+    // TODO: delete once authority_capabilities_v2 is deployed everywhere
     fn choose_protocol_version_and_system_packages_v1(
         current_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
