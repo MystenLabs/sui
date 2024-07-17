@@ -490,7 +490,38 @@
       "get": {}
     },
     "/coins/{coin_type}": {
-      "get": {}
+      "get": {
+        "tags": [
+          "Coins"
+        ],
+        "operationId": "GetCoinInfo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "coin_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/StructTag"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
     },
     "/openapi": {
       "get": {
@@ -869,6 +900,76 @@
           },
           "value": {
             "type": "string"
+          }
+        }
+      },
+      "CoinInfo": {
+        "type": "object",
+        "required": [
+          "coin_type"
+        ],
+        "properties": {
+          "coin_type": {
+            "$ref": "#/components/schemas/StructTag"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/CoinMetadata"
+          },
+          "treasury": {
+            "$ref": "#/components/schemas/CoinTreasury"
+          }
+        }
+      },
+      "CoinMetadata": {
+        "type": "object",
+        "required": [
+          "decimals",
+          "description",
+          "id",
+          "name",
+          "symbol"
+        ],
+        "properties": {
+          "decimals": {
+            "description": "Number of decimal places the coin uses.",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "description": {
+            "description": "Description of the token",
+            "type": "string"
+          },
+          "icon_url": {
+            "description": "URL for the token logo",
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "name": {
+            "description": "Name for the token",
+            "type": "string"
+          },
+          "symbol": {
+            "description": "Symbol for the token",
+            "type": "string"
+          }
+        }
+      },
+      "CoinTreasury": {
+        "type": "object",
+        "required": [
+          "total_supply"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "total_supply": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
           }
         }
       },
@@ -4576,6 +4677,9 @@
     },
     {
       "name": "Checkpoint"
+    },
+    {
+      "name": "Coins"
     },
     {
       "name": "General"
