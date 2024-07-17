@@ -22,7 +22,7 @@ import type { CoinMap, PoolMap } from './utils/constants.js';
  * new coins / pools must be added to the client.
  */
 export class DeepBookClient {
-	#client: SuiClient;
+	client: SuiClient;
 	#balanceManagers: { [key: string]: BalanceManager } = {};
 	#config: DeepBookConfig;
 	#address: string;
@@ -52,7 +52,7 @@ export class DeepBookClient {
 		coins?: CoinMap;
 		pools?: PoolMap;
 	}) {
-		this.#client = client;
+		this.client = client;
 		this.#address = normalizeSuiAddress(address);
 		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
 		this.balanceManager = new BalanceManagerContract(this.#config);
@@ -87,7 +87,7 @@ export class DeepBookClient {
 		const coin = this.#config.getCoin(coinKey);
 
 		tx.add(this.balanceManager.checkManagerBalance(balanceManager.address, coin));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: this.#address,
 			transactionBlock: tx,
 		});
@@ -113,7 +113,7 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 
 		tx.add(this.deepBook.whitelisted(pool));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -137,7 +137,7 @@ export class DeepBookClient {
 		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getQuoteQuantityOut(pool, baseQuantity));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -167,7 +167,7 @@ export class DeepBookClient {
 		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getBaseQuantityOut(pool, quoteQuantity));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -198,7 +198,7 @@ export class DeepBookClient {
 		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.getQuantityOut(pool, baseQuantity, quoteQuantity));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -227,7 +227,7 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 
 		tx.add(this.deepBook.accountOpenOrders(pool, managerKey));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -253,7 +253,7 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 
 		tx.add(this.deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -280,7 +280,7 @@ export class DeepBookClient {
 		const pool = this.#config.getPool(poolKey);
 
 		tx.add(this.deepBook.getLevel2TicksFromMid(pool, ticks));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -308,7 +308,7 @@ export class DeepBookClient {
 		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
 
 		tx.add(this.deepBook.vaultBalances(pool));
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -334,7 +334,7 @@ export class DeepBookClient {
 		const tx = new Transaction();
 		tx.add(this.deepBook.getPoolIdByAssets(baseType, quoteType));
 
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
@@ -360,7 +360,7 @@ export class DeepBookClient {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
-		const res = await this.#client.devInspectTransactionBlock({
+		const res = await this.client.devInspectTransactionBlock({
 			sender: normalizeSuiAddress('0xa'),
 			transactionBlock: tx,
 		});
