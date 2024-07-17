@@ -4094,9 +4094,9 @@ fn syntax_call_return_ty(
     // First, make sure we have a valid function for this. These are never macro calls, so this is
     // just double-checking.
     check_call_target(context, loc, None, macro_, declared, f);
-    let msg = || format!("Invalid call of '{}::{}'", &m, &f);
     // Next we take our args in question and get their types.
     let arg_tys = {
+        let msg = || format!("Invalid call of '{}::{}'", &m, &f);
         let arity = parameters.len();
         make_arg_types(context, loc, msg, arity, argloc, tys)
     };
