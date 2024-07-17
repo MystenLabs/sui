@@ -41,7 +41,7 @@ pub async fn instant_query(
     }
 }
 
-// This will return the average value of the queried metric over the given time range.
+// This will return the median value of the queried metric over the given time range.
 pub async fn range_query(
     auth_header: &str,
     client: Client,
@@ -69,17 +69,31 @@ pub async fn range_query(
         .unwrap_or_else(|| panic!("Expected result of type matrix for {query}"));
 
     if !result.is_empty() {
-        let samples = result.first().unwrap().samples();
-        let sum: f64 = samples.iter().map(|sample| sample.value()).sum();
-        let count = samples.len();
+        let mut samples: Vec<f64> = result
+            .first()
+            .unwrap()
+            .samples()
+            .iter()
+            .filter_map(|sample| {
+                let v = sample.value();
+                if v.is_nan() {
+                    None
+                } else {
+                    Some(v)
+                }
+            })
+            .collect();
+        assert!(!samples.is_empty(), "No valid samples found for {query}");
 
-        let avg = if count > 0 { sum / count as f64 } else { 0.0 };
+        samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let median = (samples[(samples.len() - 1) / 2] + samples[samples.len() / 2]) / 2.;
         debug!(
-            "Got average value {avg} over time range {} - {}",
+            "Got median value {median} over time range {} - {}",
             unix_seconds_to_timestamp_string(start),
             unix_seconds_to_timestamp_string(end)
         );
-        Ok(avg)
+        Ok(median)
     } else {
         Err(anyhow!(
             "Did not get expected response from server for {query}"
