@@ -828,6 +828,7 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             Ok(ident) => ident,
             Err(diag) => {
                 context.env.add_diag(*diag);
+                path.is_incomplete = true;
                 return Ok(NameAccessChain_::Path(path));
             }
         };

@@ -364,7 +364,7 @@ pub struct NamePath {
     pub root: RootPathEntry,
     pub entries: Vec<PathEntry>,
     // if parsing of this name path was incomplete
-    pub incomplete: bool,
+    pub is_incomplete: bool,
 }
 
 // See the NameAccess trait below for usage.
@@ -765,7 +765,7 @@ impl NameAccessChain_ {
         NamePath {
             root,
             entries: vec![],
-            incomplete: false,
+            is_incomplete: false,
         }
     }
 }
@@ -1855,13 +1855,16 @@ impl AstDebug for NamePath {
         let NamePath {
             root,
             entries,
-            incomplete: _,
+            is_incomplete,
         } = self;
         w.write(format!("{}::", root));
         w.list(entries, "::", |w, e| {
             e.ast_debug(w);
             false
         });
+        if *is_incomplete {
+            w.write("_");
+        }
     }
 }
 
