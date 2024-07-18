@@ -34,6 +34,9 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_signing_queue_skipped_actions: IntCounter,
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
 
+    pub(crate) signer_with_cache_hit: IntCounterVec,
+    pub(crate) signer_with_cache_miss: IntCounterVec,
+
     pub(crate) eth_provider_queries: IntCounter,
     pub(crate) gas_coin_balance: IntGauge,
 }
@@ -186,6 +189,20 @@ impl BridgeMetrics {
             last_finalized_eth_block: register_int_gauge_with_registry!(
                 "bridge_last_finalized_eth_block",
                 "The latest finalized eth block that indexer observed",
+                registry,
+            )
+            .unwrap(),
+            signer_with_cache_hit: register_int_counter_vec_with_registry!(
+                "bridge_signer_with_cache_hit",
+                "Total number of hit in signer's cache, by verifier type",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            signer_with_cache_miss: register_int_counter_vec_with_registry!(
+                "bridge_signer_with_cache_miss",
+                "Total number of miss in signer's cache, by verifier type",
+                &["type"],
                 registry,
             )
             .unwrap(),
