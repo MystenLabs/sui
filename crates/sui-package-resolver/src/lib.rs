@@ -464,11 +464,14 @@ impl<S: PackageStore> Resolver<S> {
                 return Ok(());
             };
 
-            if let Some(prev) = type_.replace(tag.clone()) {
-                // SAFETY: We just inserted `tag` in here.
-                let curr = type_.take().unwrap();
-                return Err(Error::InputTypeConflict(ix, prev, curr));
-            };
+            match type_ {
+                None => *type_ = Some(tag.clone()),
+                Some(prev) => {
+                    if prev != tag {
+                        return Err(Error::InputTypeConflict(ix, prev.clone(), tag.clone()));
+                    }
+                }
+            }
 
             Ok(())
         };
@@ -2614,6 +2617,66 @@ mod tests {
                 }
             }
             output += "---\n";
+        }
+
+        insta::assert_snapshot!(output);
+    }
+
+    /// Like the test above, but the inputs are re-used, which we want to detect (but is fine
+    /// because they are assigned the same type at each usage).
+    #[tokio::test]
+    async fn test_pure_input_layouts_overlapping() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        // Helper function to generate a PTB calling 0xe0::m::foo.
+        let ptb = ProgrammableTransaction {
+            inputs: vec![
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&43u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes("hello").unwrap()),
+                I::Pure(bcs::to_bytes("world").unwrap()),
+            ],
+            commands: vec![
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+            ],
+        };
+
+        let inputs = resolver.pure_input_layouts(&ptb).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = String::new();
+        for input in inputs {
+            if let Some(layout) = input {
+                output += &format!("{layout:#}\n");
+            } else {
+                output += "???\n";
+            }
         }
 
         insta::assert_snapshot!(output);
