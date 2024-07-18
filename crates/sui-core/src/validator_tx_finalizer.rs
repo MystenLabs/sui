@@ -10,7 +10,6 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use std::cmp::min;
 use std::ops::Add;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
@@ -18,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, TransactionDigest};
 use sui_types::transaction::VerifiedSignedTransaction;
+use tokio::select;
 use tokio::time::Instant;
 use tracing::{debug, error, trace};
 
@@ -31,8 +31,6 @@ const FINALIZATION_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Incremental delay for validators to wake up to finalize a transaction.
 const VALIDATOR_DELAY_INCREMENTS_SEC: u64 = 10;
-/// Number of validators that will wake up with incremental delays.
-const VALIDATOR_INCREMENTAL_COUNT: usize = 5;
 
 struct ValidatorTxFinalizerMetrics {
     num_finalization_attempts: IntCounter,
@@ -178,11 +176,15 @@ where
     ) -> anyhow::Result<bool> {
         let tx_digest = *tx.digest();
         let (position, tx_finalization_delay) = self.determine_finalization_delay(&tx_digest)?;
-        tokio::time::sleep(tx_finalization_delay).await;
-        trace!(?tx_digest, "Waking up to finalize transaction");
-        if cache_read.is_tx_already_executed(&tx_digest)? {
-            trace!(?tx_digest, "Transaction already finalized");
-            return Ok(false);
+        let digests = [tx_digest];
+        select! {
+            _ = tokio::time::sleep(tx_finalization_delay) => {
+                trace!(?tx_digest, "Waking up to finalize transaction");
+            }
+            _ = cache_read.notify_read_executed_effects_digests(&digests) => {
+                trace!(?tx_digest, "Transaction already finalized");
+                return Ok(false);
+            }
         }
         self.metrics
             .validator_tx_finalizer_attempt_position
@@ -206,10 +208,9 @@ where
     // We want to avoid all validators waking up at the same time to finalize the same transaction.
     // That can lead to a waste of resource and flood the network unnecessarily.
     // Here we use the transaction digest to determine an order of all validators.
-    // The first few will wake up one by one with incremental delays to finalize the transaction.
-    // The rest will wake up at the same time afterward. The hope is that the first few should be
-    // able to finalize the transaction, and the rest will see it already executed and do not need
-    // to do anything.
+    // Validators will wake up one by one with incremental delays to finalize the transaction.
+    // The hope is that the first few should be able to finalize the transaction,
+    // and the rest will see it already executed and do not need to do anything.
     fn determine_finalization_delay(
         &self,
         tx_digest: &TransactionDigest,
@@ -218,17 +219,14 @@ where
             .agg
             .committee
             .shuffle_by_stake_from_tx_digest(tx_digest);
-        let position = match order.iter().position(|&name| name == self.name) {
-            Some(idx) => min(idx, VALIDATOR_INCREMENTAL_COUNT),
-            None => {
+        let position = order
+            .iter()
+            .position(|&name| name == self.name)
+            .ok_or_else(|| {
                 // Somehow the validator is not found in the committee. This should never happen.
                 // TODO: This is where we should report system invariant violation.
-                return Err(anyhow::anyhow!(
-                    "Validator {} not found in the committee",
-                    self.name
-                ));
-            }
-        };
+                anyhow::anyhow!("Validator {} not found in the committee", self.name)
+            })?;
 
         let extra_delay = position as u64 * VALIDATOR_DELAY_INCREMENTS_SEC;
         let delay = self
@@ -606,10 +604,10 @@ mod tests {
                     (3, 90),
                     (4, 100),
                     (5, 110),
-                    (5, 110),
-                    (5, 110),
-                    (5, 110),
-                    (5, 110)
+                    (6, 120),
+                    (7, 130),
+                    (8, 140),
+                    (9, 150)
                 ]
             )
         }
