@@ -1,0 +1,95 @@
+---
+title: Query the Pool
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+This section shows how to query the pool and order status.
+
+## Order status {#order-status}
+
+For limit order, query its data using the following API functions
+
+**Function signature for query order info in Move contract**
+
+```move
+/// Parameters expected by this func
+///
+///   0. `[pool]` Object ID refers to the pool containing the trading pair
+///   1. `[order_id]` order id of the order being queried
+///   2. `[account_cap]` Object ID of the account_cap authorizing the
+///       accessilility to the escrow account
+
+/// Returns the order info of the order being queried
+public fun get_order_status<BaseAsset, QuoteAsset>(
+     pool: &Pool<BaseAsset, QuoteAsset>,
+     order_id: u64,
+     account_cap: &AccountCap
+): &Order
+```
+
+## Pool status {#pool-status}
+
+API functions to query the depth of `level2` orders on both ask-side and bid-side.
+
+**Function signature for get depth of level2 order (ask side) in Move contract**
+
+```move
+/// Parameters expected by this func
+///
+///   0. `[pool]` Object ID refers to the pool containing the trading pair
+///   1. `[price_low]` the lower price of the price interval to query, inclusive
+///   2. `[price_high]` the upper price of the price interval to query, inclusive
+///   3. `[clock]` Object ID of global system clock
+
+/// Returns the list of all valid prices and corresponding depthes
+public fun get_level2_book_status_bid_side<BaseAsset, QuoteAsset>(
+     pool: &Pool<BaseAsset, QuoteAsset>,
+     price_low: u64,
+     price_high: u64,
+     clock: &Clock
+): (vector<u64>, vector<u64>)
+```
+
+## User account status {#user-account-status}
+
+### Open orders {#open-orders}
+
+We provide API function to list all open orders under one account
+
+**Function signature for list all open orders in Move contract**
+
+```move
+/// Parameters expected by this func
+///
+///   0. `[pool]` Object ID refers to the pool containing the trading pair
+///   1. `[account_cap]` Object ID of the account_cap authorizing the
+///       accessilility to the escrow account
+
+/// Returns list of user's all open orders
+public fun list_open_orders<BaseAsset, QuoteAsset>(
+     pool: &Pool<BaseAsset, QuoteAsset>,
+     account_cap: &AccountCap
+): vector<Order>
+```
+
+### Account balance {#order-status}
+
+The API function to query the custodian account balance for users follows. Note that each pool has its own custodian account.
+
+**Function signature for query user balance in Move contract**
+
+```move
+/// Parameters expected by this func
+///
+///   0. `[pool]` Object ID refers to the pool containing the trading pair
+///   1. `[account_cap]` Object ID of the account_cap authorizing the
+///       accessilility to the escrow account
+
+/// Returns user's base_asset_available, base_asset_locked,
+///                quote_asset_available, quote_asset_locked
+public fun usr_balance<BaseAsset, QuoteAsset>(
+     pool: &Pool<BaseAsset, QuoteAsset>,
+     account_cap: &AccountCap
+): (u64, u64, u64, u64)
+```

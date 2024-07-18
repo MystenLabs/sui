@@ -1,0 +1,43 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Dep
+BUILDING A
+warning[W04037]: deprecated usage
+  ┌─ ./sources/l.move:8:13
+  │
+8 │         am::deprecated_function();
+  │             ^^^^^^^^^^^^^^^^^^^ The function 'A::m::deprecated_function' is deprecated: use a different function instead
+  │
+  = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ ./sources/l.move:10:25
+   │
+10 │         mod_deprecated::deprecated_function();
+   │                         ^^^^^^^^^^^^^^^^^^^ The function 'A::mod_deprecated::deprecated_function' is deprecated: This function is deprecated with a deprecated module
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ ./sources/l.move:11:25
+   │
+11 │         mod_deprecated::make_f();
+   │                         ^^^^^^ The 'A::mod_deprecated::make_f' member of the module 'A::mod_deprecated' is deprecated. It is deprecated since its whole module is marked deprecated: This module is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ ./sources/l.move:13:15
+   │
+13 │         l<am::Bar>();
+   │               ^^^ The struct 'A::m::Bar' is deprecated: use a different struct instead
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04037]: deprecated usage
+   ┌─ ./sources/l.move:15:27
+   │
+15 │         l<mod_deprecated::F>();
+   │                           ^ The 'A::mod_deprecated::F' member of the module 'A::mod_deprecated' is deprecated. It is deprecated since its whole module is marked deprecated: This module is deprecated
+   │
+   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

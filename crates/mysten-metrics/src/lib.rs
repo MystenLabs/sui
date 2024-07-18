@@ -13,7 +13,7 @@ use std::time::Instant;
 use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry, TextEncoder};
 use tap::TapFallible;
-use tracing::warn;
+use tracing::{warn, Span};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -26,6 +26,11 @@ pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
+
+pub const TX_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1., 1.5, 2., 2.5,
+    3., 3.5, 4., 4.5, 5., 6., 7., 8., 9., 10., 20., 30., 60., 90.,
+];
 
 #[derive(Debug)]
 pub struct Metrics {
@@ -263,6 +268,70 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.f.as_mut().poll(cx)
+    }
+}
+
+pub struct CancelMonitor<F: Sized> {
+    finished: bool,
+    inner: Pin<Box<F>>,
+}
+
+impl<F> CancelMonitor<F>
+where
+    F: Future,
+{
+    pub fn new(inner: F) -> Self {
+        Self {
+            finished: false,
+            inner: Box::pin(inner),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+}
+
+impl<F> Future for CancelMonitor<F>
+where
+    F: Future,
+{
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.as_mut().poll(cx) {
+            Poll::Ready(output) => {
+                self.finished = true;
+                Poll::Ready(output)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<F: Sized> Drop for CancelMonitor<F> {
+    fn drop(&mut self) {
+        if !self.finished {
+            Span::current().record("cancelled", true);
+        }
+    }
+}
+
+/// MonitorCancellation records a cancelled = true span attribute if the future it
+/// is decorating is dropped before completion. The cancelled attribute must be added
+/// at span creation, as you cannot add new attributes after the span is created.
+pub trait MonitorCancellation {
+    fn monitor_cancellation(self) -> CancelMonitor<Self>
+    where
+        Self: Sized + Future;
+}
+
+impl<T> MonitorCancellation for T
+where
+    T: Future,
+{
+    fn monitor_cancellation(self) -> CancelMonitor<Self> {
+        CancelMonitor::new(self)
     }
 }
 

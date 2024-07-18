@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { SuiClient } from '../../src/client';
 import { Keypair } from '../../src/cryptography';
 import { Transaction } from '../../src/transactions';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {
 	let toolbox: TestToolbox;
@@ -14,8 +15,7 @@ describe('Test dev inspect', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
-		const packagePath = __dirname + '/./data/serializer';
-		({ packageId } = await publishPackage(packagePath));
+		packageId = await toolbox.getPackage(resolve(__dirname, './data/serializer'));
 	});
 
 	it('Dev inspect split + transfer', async () => {

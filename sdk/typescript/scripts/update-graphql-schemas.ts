@@ -30,7 +30,7 @@ const result = execSync(`git branch --remote --list "origin/releases/sui-graphql
 					patch,
 					branch,
 					schema: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-graphql-rpc/schema/current_progress_schema.graphql`,
-			  }
+				}
 			: null;
 	})
 	.filter((x): x is NonNullable<typeof x> => x !== null);

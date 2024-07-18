@@ -1,0 +1,39 @@
+// Checks if symbolication for positional struct fields work correctly and recognizes the visibility
+// modifier.
+{
+  "UseDef": {
+    "project": "tests/move-2024",
+    "file_tests": {
+      "structs.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 8,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 8,
+          "use_ndx": 3
+        }
+      ]
+    }
+  }
+}

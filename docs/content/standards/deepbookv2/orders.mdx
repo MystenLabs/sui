@@ -1,0 +1,108 @@
+---
+title: DeepBook Orders
+sidebar_label: Orders
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+## Order book structure {#order-book-structure}
+
+DeepBook adopts a hyper-efficient approach to store orders. Each pool stores the unfilled maker orders. Taker orders are filled instantaneously within the same transaction the order is submitted. Bid and ask orders are stored separately, each with a two-level nested crit-bit tree. The first level crit-bit tree is ordered using the price of the maker order, and the second level crit-bit tree is ordered using the order id of the maker order.
+
+## Placing orders {#placing-orders}
+
+DeepBook supports the placement of market orders and limit orders. DeepBook also supports a few configurations of limit orders, which is covered in the API section. When users submit a market order, it is matched against the existing maker orders on the order book instantaneously in the same transaction upon submission of the market order. When users submit a limit order, the limit order is first matched against the existing maker orders as a taker order. If the order cannot be fully filled, the remaining quantity can either be injected as a maker order or be dropped, depending on the configuration of the limit order. See the API section for further details.
+
+```move
+struct Order has store, drop {
+    // For each pool, order id is incremental and unique for each opening order.
+    // Orders that are submitted earlier have lower order ids.
+    // 64 bits are sufficient for order ids, whereas 32 bits are not.
+    // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
+    // The highest bit of the order id denotes the order type, 0 for bid, 1 for ask.
+    order_id: u64,
+    // Only used for limit orders.
+    price: u64,
+    quantity: u64,
+    is_bid: bool,
+    // Order can only be canceled by the owner.
+    owner: ID,
+    // Expiration timestamp in ms.
+    expire_timestamp: u64,
+}
+```
+
+## Order matching {#order-matching}
+
+Order matching occurs when a taker order is submitted to the CLOB without a centralized entity or crank involvement. Taker orders are matched against the existing maker orders in the CLOB in the same transaction the taker order is submitted.
+
+## Order tracking {#order-tracking}
+
+DeepBook supports efficient tracking of maker orders. Each unfilled maker order is associated with a unique u64 order id, and users can query the order status using the order id together with the Sui RPC call. Users can also subscribe to the event stream emitted by DeepBook related to changes in order status. DeepBook currently supports the following events, `OrderPlaced`, `OrderFilled` and `OrderCanceled`.
+
+```move
+/// Emitted when a maker order is injected into the order book.
+struct OrderPlaced<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    order_id: u64,
+    is_bid: bool,
+    owner: ID,
+    base_asset_quantity_placed: u64,
+    price: u64
+}
+
+/// Emitted when a maker order is canceled.
+struct OrderCanceled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    order_id: u64,
+    is_bid: bool,
+    owner: ID,
+    base_asset_quantity_canceled: u64,
+    price: u64
+}
+
+/// Emitted only when a maker order is filled.
+struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+    order_id: u64,
+    is_bid: bool,
+    owner: ID,
+    total_quantity: u64,
+    base_asset_quantity_filled: u64,
+    base_asset_quantity_remaining: u64,
+    price: u64
+}
+```
+
+The following example uses the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to connect via websocket to listen to events.
+
+```javascript
+const local_client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443/' });
+const deepbook_client = new DeepBookClient(local_client);
+
+const deepbook = '0x000000000000000000000000000000000000000000000000000000000000dee9';
+const deepbookClobEventsFilter = {
+	MoveModule: { package: deepbook, module: 'clob_v2' },
+};
+
+// Note that these names must be exact
+const moveEventsFilter = {
+	MoveEventType:
+		'0xdee9::clob_v2::OrderPlaced<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
+};
+const orderFilledFilter = {
+	MoveEventType:
+		'0xdee9::clob_v2::OrderFilled<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
+};
+const poolFilter = {
+	MoveEventField: {
+		path: '/pool_id',
+		value: '0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826',
+	},
+};
+
+deepbook_client.suiClient.subscribeEvent({
+	filter: moveEventsFilter,
+	onMessage(event) {
+		console.log(event);
+		// handle subscription notification message here
+	},
+});
+```

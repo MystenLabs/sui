@@ -4,7 +4,10 @@
 use move_cli::base::test::UnitTestResult;
 use move_package::LintFlag;
 use move_unit_test::UnitTestingConfig;
-use std::{fs, io, path::PathBuf};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
 
@@ -12,74 +15,49 @@ const FILTER_ENV: &str = "FILTER";
 
 #[test]
 #[cfg_attr(msim, ignore)]
+fn run_move_stdlib_unit_tests() {
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.extend(["..", "sui-framework", "packages", "move-stdlib"]);
+    check_move_unit_tests(&buf);
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
 fn run_sui_framework_tests() {
-    check_move_unit_tests({
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "sui-framework", "packages", "sui-framework"]);
-        buf
-    });
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.extend(["..", "sui-framework", "packages", "sui-framework"]);
+    check_move_unit_tests(&buf);
 }
 
 #[test]
 #[cfg_attr(msim, ignore)]
 fn run_sui_system_tests() {
-    check_move_unit_tests({
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "sui-framework", "packages", "sui-system"]);
-        buf
-    });
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.extend(["..", "sui-framework", "packages", "sui-system"]);
+    check_move_unit_tests(&buf);
 }
 
 #[test]
 #[cfg_attr(msim, ignore)]
 fn run_deepbook_tests() {
-    check_move_unit_tests({
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "sui-framework", "packages", "deepbook"]);
-        buf
-    });
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.extend(["..", "sui-framework", "packages", "deepbook"]);
+    check_move_unit_tests(&buf);
 }
 #[test]
 #[cfg_attr(msim, ignore)]
 fn run_bridge_tests() {
-    check_move_unit_tests({
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "sui-framework", "packages", "bridge"]);
-        buf
-    });
+    let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.extend(["..", "sui-framework", "packages", "bridge"]);
+    check_move_unit_tests(&buf);
 }
 
-#[test]
-#[cfg_attr(msim, ignore)]
-fn run_sui_programmability_examples_move_unit_tests() {
-    for example in [
-        "basics",
-        "capy",
-        "crypto",
-        "defi",
-        "fungible_tokens",
-        "games",
-        "move_tutorial",
-        "nfts",
-        "objects_tutorial",
-    ] {
-        let path = {
-            let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            buf.extend(["..", "..", "sui_programmability", "examples", example]);
-            buf
-        };
-
-        check_package_builds(path.clone());
-        check_move_unit_tests(path);
-    }
-}
-
-fn check_packages_recursively(path: &PathBuf) -> io::Result<()> {
+fn check_packages_recursively(path: &Path) -> io::Result<()> {
     for entry in fs::read_dir(path).unwrap() {
         let entry = entry?;
         if entry.path().join("Move.toml").exists() {
-            check_package_builds(entry.path());
-            check_move_unit_tests(entry.path());
+            check_package_builds(&entry.path());
+            check_move_unit_tests(&entry.path());
         } else if entry.file_type()?.is_dir() {
             check_packages_recursively(&entry.path())?;
         }
@@ -92,7 +70,7 @@ fn check_packages_recursively(path: &PathBuf) -> io::Result<()> {
 fn run_examples_move_unit_tests() -> io::Result<()> {
     let examples = {
         let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "examples", "move"]);
+        buf.extend(["..", "..", "examples"]);
         buf
     };
 
@@ -102,7 +80,7 @@ fn run_examples_move_unit_tests() -> io::Result<()> {
 }
 
 /// Ensure packages build outside of test mode.
-fn check_package_builds(path: PathBuf) {
+fn check_package_builds(path: &Path) {
     let mut config = BuildConfig::new_for_testing();
     config.config.dev_mode = true;
     config.run_bytecode_verifier = true;
@@ -111,11 +89,11 @@ fn check_package_builds(path: PathBuf) {
     config.config.silence_warnings = false;
     config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
     config
-        .build(path.clone())
+        .build(path)
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
 }
 
-fn check_move_unit_tests(path: PathBuf) {
+fn check_move_unit_tests(path: &Path) {
     let mut config = BuildConfig::new_for_testing();
     // Make sure to verify tests
     config.config.dev_mode = true;

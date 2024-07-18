@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { OwnedObjectRef, SuiClient } from '../../src/client';
 import type { Keypair } from '../../src/cryptography';
 import { Transaction } from '../../src/transactions';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 function getOwnerAddress(o: OwnedObjectRef): string | undefined {
 	// const owner = getObjectOwner(o);
@@ -25,12 +26,11 @@ describe('Transfer to Object', () => {
 	let sharedObjectId: string;
 
 	beforeAll(async () => {
-		const packagePath = __dirname + '/./data/tto';
-		({ packageId } = await publishPackage(packagePath));
+		toolbox = await setup();
+		packageId = await toolbox.getPackage(resolve(__dirname, './data/tto'));
 	});
 
 	beforeEach(async () => {
-		toolbox = await setup();
 		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::tto::start`,
@@ -38,14 +38,14 @@ describe('Transfer to Object', () => {
 			arguments: [],
 		});
 		const x = await validateTransaction(toolbox.client, toolbox.keypair, tx);
-		const y = (x.effects?.created)!.map((o) => getOwnerAddress(o))!;
-		receiveObjectId = (x.effects?.created)!.filter(
+		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
+		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		parentObjectId = (x.effects?.created)!.filter(
+		)[0]!;
+		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		const sharedObject = (x.effects?.created)!.filter((o) => getOwnerAddress(o) === undefined)[0];
+		)[0]!;
+		const sharedObject = x.effects?.created!.filter((o) => getOwnerAddress(o) === undefined)[0]!;
 		sharedObjectId = sharedObject.reference.objectId;
 	});
 

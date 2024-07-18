@@ -147,6 +147,15 @@ impl SharedObjectCongestionTracker {
             }
         }
     }
+
+    // Returns the maximum cost of all objects.
+    pub fn max_cost(&self) -> u64 {
+        self.object_execution_cost
+            .values()
+            .max()
+            .copied()
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]
@@ -466,6 +475,7 @@ mod object_cost_tests {
                 &[(object_id_0, 5), (object_id_1, 10)],
                 mode,
             );
+        assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
         // Read two objects should not change the object execution cost.
         let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)], 10);
@@ -477,6 +487,7 @@ mod object_cost_tests {
                 mode
             )
         );
+        assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)], 10);
@@ -492,6 +503,10 @@ mod object_cost_tests {
                 &[(object_id_0, expected_object_0_cost), (object_id_1, 10)],
                 mode
             )
+        );
+        assert_eq!(
+            shared_object_congestion_tracker.max_cost(),
+            expected_object_0_cost
         );
 
         // Write to all objects should bump all objects' execution cost, including objects that are seen for the first time.
@@ -519,6 +534,10 @@ mod object_cost_tests {
                 ],
                 mode
             )
+        );
+        assert_eq!(
+            shared_object_congestion_tracker.max_cost(),
+            expected_object_cost
         );
     }
 }

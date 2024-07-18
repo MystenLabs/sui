@@ -46,7 +46,7 @@ pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;
-#[cfg(test)]
+#[cfg(all(test, not(msim)))]
 mod network_tests;
 #[cfg(test)]
 pub(crate) mod test_network;
@@ -104,6 +104,16 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
+
+    /// Fetches the latest block from `peer` for the requested `authorities`. The latest blocks
+    /// are returned in the serialised format of `SignedBlocks`. The method can return multiple
+    /// blocks per peer as its possible to have equivocations.
+    async fn fetch_latest_blocks(
+        &self,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+        timeout: Duration,
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
 
 /// Network service for handling requests from peers.
@@ -134,12 +144,19 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    // Handles the request to fetch commits by index range from the peer.
+    /// Handles the request to fetch commits by index range from the peer.
     async fn handle_fetch_commits(
         &self,
         peer: AuthorityIndex,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
+
+    /// Handles the request to fetch the latest block for the provided `authorities`.
+    async fn handle_fetch_latest_blocks(
+        &self,
+        peer: AuthorityIndex,
+        authorities: Vec<AuthorityIndex>,
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

@@ -177,6 +177,4 @@ hash_keccak256_data_cost_per_block: 2
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
-scoring_decision_mad_divisor: 2.3
-scoring_decision_cutoff_value: 2.5
 

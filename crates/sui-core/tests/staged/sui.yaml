@@ -467,6 +467,18 @@ ExecutionFailureStatus:
         STRUCT:
           - congested_objects:
               TYPENAME: CongestedObjects
+    34:
+      AddressDeniedForCoin:
+        STRUCT:
+          - address:
+              TYPENAME: SuiAddress
+          - coin_type: STR
+    35:
+      CoinTypeGlobalPause:
+        STRUCT:
+          - coin_type: STR
+    36:
+      ExecutionCancelledDueToRandomnessUnavailable: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -1097,6 +1109,8 @@ UnchangedSharedKind:
       Cancelled:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    4:
+      PerEpochConfig: UNIT
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

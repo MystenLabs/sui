@@ -7,7 +7,6 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::PositionInfo,
     expansion::ast::{
         AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
     },
@@ -239,6 +238,7 @@ fn module(
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
         package_name: mdef.package_name,
+        address_name: addr_name,
         address: addr_bytes,
         name: module_name.value(),
         module,
@@ -247,7 +247,6 @@ fn module(
     Some(AnnotatedCompiledModule {
         loc: ident_loc,
         attributes,
-        address_name: addr_name,
         module_name_loc: module_name.loc(),
         named_module: module,
         function_infos,
@@ -1062,9 +1061,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         } => {
             let line_no = context
                 .env
-                .file_mapping()
+                .mapped_files()
                 .start_position(&line_number_loc)
-                .line;
+                .user_line();
 
             // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't
             // record the line number essentially.

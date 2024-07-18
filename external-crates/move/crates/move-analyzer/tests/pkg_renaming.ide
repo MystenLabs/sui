@@ -1,0 +1,9 @@
+{
+  "UseDef": {
+    "project": "tests/pkg-naming-error",
+    "file_tests": {
+      "M1.move": [],
+      "M2.move": []
+    }
+  }
+}

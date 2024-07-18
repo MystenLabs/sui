@@ -20,7 +20,7 @@ use crate::{
         VariantName,
     },
     shared::{
-        ide::{AutocompleteInfo, IDEAnnotation, MacroCallInfo},
+        ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
@@ -34,7 +34,7 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, expand, infinite_instantiations, macro_expand, match_compilation,
+        dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
@@ -66,7 +66,7 @@ pub fn program(
         info,
     ));
 
-    extract_macros(&mut context, &nmodules);
+    extract_macros(&mut context, &nmodules, &pre_compiled_lib);
     let mut modules = modules(&mut context, nmodules);
 
     assert!(context.constraints.is_empty());
@@ -92,7 +92,11 @@ pub fn program(
     prog
 }
 
-fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {
+fn extract_macros(
+    context: &mut Context,
+    modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
+    pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
+) {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
         let N::UseFuns {
@@ -118,7 +122,24 @@ fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::Mod
         }
         macro_use_funs
     }
-    let all_macro_definitions = modules.ref_map(|_mident, mdef| {
+
+    // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
+    // should have already produced that error. To avoid unnecessary error handling, we simply
+    // prefer the non-precompiled definitions.
+    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
+        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
+            pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                pre_compiled
+                    .naming
+                    .inner
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !modules.contains_key(mident))
+            }),
+        ))
+        .unwrap();
+
+    let all_macro_definitions = all_modules.map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
             let _macro_loc = f.macro_?;
             if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
@@ -349,7 +370,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     };
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
-    match_compilation::function_body_(context, &mut b_);
+    match_analysis::function_body_(context, &mut b_);
     debug_print!(context.debug.function_translation, ("output" => b_));
     sp(loc, b_)
 }
@@ -2644,6 +2665,10 @@ fn lvalue(
             );
             TL::Ignore
         }
+        NL::Error => {
+            assert!(context.env.has_errors());
+            TL::Ignore
+        }
         NL::Var {
             mut_,
             var,
@@ -3028,7 +3053,9 @@ fn resolve_index_funs_and_type(
             .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
         return (None, context.error_type(loc));
     };
-    let fty = core::make_function_type(context, loc, &m, &f, None);
+    // NOTE: We don't do a visibility check here because we _just_ care about computing the return
+    // type. The visibility check will happen later in `exp_to_borrow_`.
+    let fty = core::make_function_type_no_visibility_check(context, loc, &m, &f, None);
     let mut arg_types = args
         .iter()
         .map(|e| core::ready_tvars(&context.subst, e.ty.clone()))
@@ -3489,7 +3516,7 @@ fn borrow_exp_dotted(
         match accessor {
             ExpDottedAccess::Field(name, ty) => {
                 // report autocomplete information for the IDE
-                ide_report_autocomplete(context, &name.loc(), &ty);
+                ide_report_autocomplete(context, &name.loc(), &exp.ty);
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
@@ -3695,14 +3722,22 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
     if !context.env.ide_mode() {
         return;
     }
-    let ty = core::unfold_type(&context.subst, in_ty.clone());
-    let Some(tn) = type_to_type_name(context, &ty, *at_loc, "autocompletion".to_string()) else {
+    let mut outer_ty = in_ty.clone();
+    core::unfold_type_recur(&context.subst, &mut outer_ty);
+    let ty = sp(in_ty.loc, outer_ty.value.base_type_());
+    let Some(tn) = type_to_type_name_(
+        context,
+        &ty,
+        *at_loc,
+        "autocompletion".to_string(),
+        /* report_error */ false,
+    ) else {
         return;
     };
     let methods = context.find_all_methods(&tn);
     let fields = context.find_all_fields(&tn);
-    let info = AutocompleteInfo { methods, fields };
-    context.add_ide_info(*at_loc, IDEAnnotation::AutocompleteInfo(Box::new(info)));
+    let info = DotAutocompleteInfo { methods, fields };
+    context.add_ide_info(*at_loc, IDEAnnotation::DotAutocompleteInfo(Box::new(info)));
 }
 
 //**************************************************************************************************
@@ -3786,6 +3821,16 @@ fn type_to_type_name(
     loc: Loc,
     error_msg: String,
 ) -> Option<TypeName> {
+    type_to_type_name_(context, ty, loc, error_msg, /* report_error */ true)
+}
+
+fn type_to_type_name_(
+    context: &mut Context,
+    ty: &Type,
+    loc: Loc,
+    error_msg: String,
+    report_error: bool,
+) -> Option<TypeName> {
     use TypeName_ as TN;
     use Type_ as Ty;
     match &ty.value {
@@ -3815,14 +3860,22 @@ fn type_to_type_name(
                     assert!(context.env.has_errors());
                     return None;
                 }
-                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                Ty::Ref(_, _) | Ty::Var(_) => {
+                    context.env.add_diag(ice!((
+                        loc,
+                        "Typing did not unfold type before resolving type name"
+                    )));
+                    return None;
+                }
                 Ty::Apply(_, _, _) => unreachable!(),
             };
-            context.env.add_diag(diag!(
-                TypeSafety::InvalidMethodCall,
-                (loc, format!("Invalid {error_msg}")),
-                (ty.loc, msg),
-            ));
+            if report_error {
+                context.env.add_diag(diag!(
+                    TypeSafety::InvalidMethodCall,
+                    (loc, format!("Invalid {error_msg}")),
+                    (ty.loc, msg),
+                ));
+            }
             None
         }
     }
@@ -3837,7 +3890,7 @@ fn module_call(
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let (call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
@@ -4259,7 +4312,7 @@ fn macro_module_call(
     argloc: Loc,
     nargs: Vec<N::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt, None);
     let args = nargs
         .into_iter()
         .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e)))
@@ -4413,7 +4466,12 @@ fn expand_macro(
     let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
     {
         None => {
-            assert!(context.env.has_errors());
+            if !(context.env.has_errors() || context.env.ide_mode()) {
+                context.env.add_diag(ice!((
+                    call_loc,
+                    "No macro found, but name resolution passed."
+                )));
+            }
             (context.error_type(call_loc), TE::UnresolvedError)
         }
         Some(macro_expand::ExpandedMacro {
@@ -4559,8 +4617,12 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
     }
 
     for (loc, name, fun) in &mdef.functions {
-        if fun.attributes.contains_key_(&TestingAttribute::Test.into()) {
-            // functions with #[test] attribute are implicitly used
+        if fun.attributes.contains_key_(&TestingAttribute::Test.into())
+            || fun
+                .attributes
+                .contains_key_(&TestingAttribute::RandTest.into())
+        {
+            // functions with #[test] or R[random_test] attribute are implicitly used
             continue;
         }
         if is_sui_mode && *name == sui_mode::INIT_FUNCTION_NAME {

@@ -18,10 +18,6 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 use twox_hash::XxHash64;
 
-#[cfg(test)]
-#[path = "unit_tests/overload_monitor_tests.rs"]
-pub mod overload_monitor_tests;
-
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
     /// Whether the authority is overloaded.
@@ -415,6 +411,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     pub async fn test_check_authority_overload() {
+        telemetry_subscribers::init_for_testing();
+
         let config = AuthorityOverloadConfig {
             safe_transaction_ready_rate: 0,
             ..Default::default()

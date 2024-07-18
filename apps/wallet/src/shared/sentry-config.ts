@@ -28,7 +28,7 @@ export function getSentryConfig({
 			? [
 					'ehndjpedolgphielnhnpnkomdhgpaaei', // chrome beta
 					'opcgpfmipidbgpenhmajoajpbobppdil', // chrome prod
-			  ]
+				]
 			: undefined,
 	};
 }

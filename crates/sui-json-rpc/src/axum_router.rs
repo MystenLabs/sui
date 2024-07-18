@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::IpAddr;
 use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use sui_types::traffic_control::RemoteFirewallConfig;
 
 use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
+use hyper::header::HeaderValue;
 use hyper::HeaderMap;
 use jsonrpsee::core::server::helpers::BoundedSubscriptions;
 use jsonrpsee::core::server::helpers::MethodResponse;
@@ -21,7 +23,9 @@ use serde_json::value::RawValue;
 use sui_core::traffic_controller::{
     metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
 };
+use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::{PolicyConfig, Weight};
+use tracing::error;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
@@ -39,6 +43,7 @@ pub struct JsonRpcService<L> {
     methods: Methods,
     rpc_router: RpcRouter,
     traffic_controller: Option<Arc<TrafficController>>,
+    client_id_source: Option<ClientIdSource>,
 }
 
 impl<L> JsonRpcService<L> {
@@ -55,13 +60,14 @@ impl<L> JsonRpcService<L> {
             rpc_router,
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
-            traffic_controller: policy_config.map(|policy| {
+            traffic_controller: policy_config.clone().map(|policy| {
                 Arc::new(TrafficController::spawn(
                     policy,
                     traffic_controller_metrics,
                     remote_fw_config,
                 ))
             }),
+            client_id_source: policy_config.map(|policy| policy.client_id_source),
         }
     }
 }
@@ -124,11 +130,19 @@ pub async fn json_rpc_handler<L: Logger>(
     headers: HeaderMap,
     Json(raw_request): Json<Box<RawValue>>,
 ) -> impl axum::response::IntoResponse {
+    let headers_clone = headers.clone();
     // Get version from header.
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
+    let response = process_raw_request(
+        &service,
+        api_version,
+        raw_request.get(),
+        client_addr,
+        headers_clone,
+    )
+    .await;
 
     ok_response(response.result)
 }
@@ -138,22 +152,58 @@ async fn process_raw_request<L: Logger>(
     api_version: Option<&str>,
     raw_request: &str,
     client_addr: SocketAddr,
+    headers: HeaderMap,
 ) -> MethodResponse {
+    let client = match service.client_id_source {
+        Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
+        Some(ClientIdSource::XForwardedFor) => {
+            let do_header_parse = |header: &HeaderValue| {
+                header.to_str().map(|s| {
+                    match s.parse::<SocketAddr>() {
+                        Ok(addr) => Some(addr.ip()),
+                        Err(err) => {
+                            error!(
+                                "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                Please ensure that your proxy is configured to resolve client domains to an \
+                                IP address before writing header",
+                                s,
+                                err,
+                            );
+                            None
+                        }
+                    }
+                }).unwrap_or_else(|_| {
+                    error!("Failed to parse x-forwarded-for header value of {:?} to string", header);
+                    None
+                })
+            };
+            if let Some(header) = headers.get("x-forwarded-for") {
+                do_header_parse(header)
+            } else if let Some(header) = headers.get("X-Forwarded-For") {
+                do_header_parse(header)
+            } else {
+                error!("X-Forwarded-For header not found in request. Skipping traffic controller request handling.");
+                None
+            }
+        }
+        None => None,
+    };
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
         // check if either IP is blocked, in which case return early
         if let Some(traffic_controller) = &service.traffic_controller {
             if let Err(blocked_response) =
-                handle_traffic_req(traffic_controller.clone(), client_addr).await
+                handle_traffic_req(traffic_controller.clone(), &client).await
             {
                 return blocked_response;
             }
         }
-        let response = process_request(request, api_version, service.call_data()).await;
 
         // handle response tallying
+        let response = process_request(request, api_version, service.call_data()).await;
         if let Some(traffic_controller) = &service.traffic_controller {
-            handle_traffic_resp(traffic_controller.clone(), client_addr, &response);
+            handle_traffic_resp(traffic_controller.clone(), client, &response);
         }
+
         response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
@@ -168,9 +218,9 @@ async fn process_raw_request<L: Logger>(
 
 async fn handle_traffic_req(
     traffic_controller: Arc<TrafficController>,
-    client_ip: SocketAddr,
+    client: &Option<IpAddr>,
 ) -> Result<(), MethodResponse> {
-    if !traffic_controller.check(Some(client_ip.ip()), None).await {
+    if !traffic_controller.check(client, &None).await {
         // Entity in blocklist
         let err_obj =
             ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
@@ -182,14 +232,22 @@ async fn handle_traffic_req(
 
 fn handle_traffic_resp(
     traffic_controller: Arc<TrafficController>,
-    client_ip: SocketAddr,
+    client: Option<IpAddr>,
     response: &MethodResponse,
 ) {
     let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
-        connection_ip: Some(client_ip.ip()),
-        proxy_ip: None,
+        direct: client,
+        through_fullnode: None,
         error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+        // For now, count everything as spam with equal weight
+        // on the rpc node side, including gas-charging endpoints
+        // such as `sui_executeTransactionBlock`, as this can enable
+        // node operators who wish to rate limit their transcation
+        // traffic and incentivize high volume clients to choose a
+        // suitable rpc provider (or run their own). Later we may want
+        // to provide a weight distribution based on the method being called.
+        spam_weight: Weight::one(),
         timestamp: SystemTime::now(),
     });
 }

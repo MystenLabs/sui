@@ -48,7 +48,11 @@ To get started you need to install [pnpm](https://pnpm.io/), then run the follow
 ```bash
 # Install all dependencies
 $ pnpm install
-# Run the build for the TypeScript SDK
+
+# Run `build` for the TypeScript SDK if you're in the `sdk/typescript` project
+$ pnpm run build
+
+# Run `sdk build` for the TypeScript SDK if you're in the root of `sui` repo
 $ pnpm sdk build
 ```
 
@@ -119,8 +123,8 @@ await client.getCoins({
 });
 ```
 
-For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
-with a local validator, a fullnode, and a faucet server. Refer to
+For local development, you can run `cargo run --bin --with-faucet --force-regenesis` to spin up a
+local network with a local validator, a fullnode, and a faucet server. Refer to
 [this guide](https://docs.sui.io/build/sui-local-network) for more information.
 
 ```typescript
@@ -472,49 +476,5 @@ const client = new SuiClient({
 const events = client.queryEvents({
 	query: { Sender: toolbox.address() },
 	limit: 2,
-});
-```
-
-Subscribe to all events created by transactions sent by account
-`0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231`
-
-```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-const client = new SuiClient({
-	url: getFullnodeUrl('testnet'),
-});
-// calls RPC method 'suix_subscribeEvent' with params:
-// [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
-const unsubscribe = await client.subscribeEvent({
-	filter: {
-		Sender: '0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231',
-	},
-	onMessage(event) {
-		// handle subscription notification message here. This function is called once per subscription message.
-	},
-});
-
-// later, to unsubscribe:
-await unsubscribe();
-```
-
-Subscribe to all events created by a package's `nft` module
-
-```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-const client = new SuiClient({
-	url: getFullnodeUrl('testnet'),
-});
-const somePackage = '0x...';
-const devnetNftFilter = {
-	MoveModule: { package: somePackage, module: 'nft' },
-};
-const devNftSub = await client.subscribeEvent({
-	filter: devnetNftFilter,
-	onMessage(event) {
-		// handle subscription notification message here
-	},
 });
 ```

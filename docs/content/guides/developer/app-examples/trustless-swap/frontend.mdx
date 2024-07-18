@@ -166,8 +166,8 @@ export function useTransactionExecution() {
 				transaction: txb,
 			});
 
-			const res = await client.executeTransaction({
-				transaction: signature.bytes,
+			const res = await client.executeTransactionBlock({
+				transactionBlock: signature.bytes,
 				signature: signature.signature,
 				options: {
 					showEffects: true,

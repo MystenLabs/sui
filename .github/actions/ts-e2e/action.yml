@@ -23,13 +23,13 @@ runs:
       id: check_s3
       run: |
         echo "Checking if s3 binaries have been built for ${{ github.sha }}"
-        echo "s3_file_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-test-validator | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+        echo "s3_file_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-pg | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
       shell: bash
 
     - name: cargo build
       if: env.s3_file_exist == '' # if empty, we have not built and uploaded this binary to s3 yet
       run: |
-        cargo build --bin sui-test-validator --bin sui
+        cargo build --bin sui --features indexer
       shell: bash
 
     - name: Dowload from S3
@@ -37,9 +37,7 @@ runs:
       working-directory: ./target/debug
       run: |
         mkdir -p $PWD/target/debug
-        wget -O target/debug/sui-test-validator https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-test-validator
-        chmod +x $PWD/target/debug/sui-test-validator
-        wget -O target/debug/sui-test-validator https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui
+        wget -O target/debug/sui https://sui-releases.s3.us-east-1.amazonaws.com/${{ github.sha }}/debug/sui-pg
         chmod +x $PWD/target/debug/sui
       shell: bash
 
@@ -59,7 +57,7 @@ runs:
 
     - name: Set env
       run: |
-        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
+        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui) start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --with-graphql)" >> $GITHUB_ENV
         echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
       shell: bash
 

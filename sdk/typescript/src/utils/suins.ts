@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const SUI_NS_NAME_REGEX =
-	/^(?:[a-z0-9][a-z0-9-]{0,62}(?:\.[a-z0-9][a-z0-9-]{0,62})*)?@[a-z0-9][a-z0-9-]{0,62}$/i;
-const SUI_NS_DOMAIN_REGEX = /^(?:[a-z0-9][a-z0-9-]{0,62}\.)+sui$/i;
+	/^(?!.*(^(?!@)|[-.@])($|[-.@]))(?:[a-z0-9-]{0,63}(?:\.[a-z0-9-]{0,63})*)?@[a-z0-9-]{0,63}$/i;
+const SUI_NS_DOMAIN_REGEX = /^(?!.*(^|[-.])($|[-.]))(?:[a-z0-9-]{0,63}\.)+sui$/i;
 const MAX_SUI_NS_NAME_LENGTH = 235;
 
 export function isValidSuiNSName(name: string): boolean {

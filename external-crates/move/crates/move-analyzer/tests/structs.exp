@@ -1,0 +1,65 @@
+== structs.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'SomeStruct', start: 18, end: 28
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Move2024::structs::SomeStruct has copy, drop {}
+
+-- test 1 -------------------
+use line: 5, use_ndx: 0
+Use: 'Positional', start: 18, end: 28
+Def: 'Positional', line: 4, def char: 18
+TypeDef: 'Positional', line: 4, char: 18
+On Hover:
+public struct Move2024::structs::Positional has copy, drop {
+	0: u64,
+	1: Move2024::structs::SomeStruct
+}
+
+-- test 2 -------------------
+use line: 5, use_ndx: 1
+Use: 'SomeStruct', start: 34, end: 44
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Move2024::structs::SomeStruct has copy, drop {}
+
+-- test 3 -------------------
+use line: 7, use_ndx: 1
+Use: 'positional', start: 19, end: 29
+Def: 'positional', line: 6, def char: 19
+TypeDef: 'Positional', line: 4, char: 18
+On Hover:
+positional: Move2024::structs::Positional
+
+-- test 4 -------------------
+use line: 7, use_ndx: 2
+Use: 'Positional', start: 31, end: 41
+Def: 'Positional', line: 4, def char: 18
+TypeDef: 'Positional', line: 4, char: 18
+On Hover:
+public struct Move2024::structs::Positional has copy, drop {
+	0: u64,
+	1: Move2024::structs::SomeStruct
+}
+
+-- test 5 -------------------
+use line: 8, use_ndx: 1
+Use: '0', start: 20, end: 21
+Def: 'u64', line: 4, def char: 29
+TypeDef: no info
+On Hover:
+Move2024::structs::Positional
+0: u64
+
+-- test 6 -------------------
+use line: 8, use_ndx: 3
+Use: '1', start: 34, end: 35
+Def: 'SomeStruct', line: 4, def char: 34
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Move2024::structs::Positional
+1: Move2024::structs::SomeStruct
+

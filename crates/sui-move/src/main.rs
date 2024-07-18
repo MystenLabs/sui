@@ -65,7 +65,7 @@ async fn main() {
     debug!("Sui-Move CLI version: {VERSION}");
 
     exit_main!(execute_move_command(
-        args.package_path,
+        args.package_path.as_deref(),
         args.build_config,
         args.cmd
     ));

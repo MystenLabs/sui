@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::compatibility_check::check_all_tables;
 use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
@@ -10,6 +11,7 @@ use crate::config::{
 };
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
+use crate::extensions::directive_checker::DirectiveChecker;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::datatype::IMoveDatatype;
@@ -35,12 +37,16 @@ use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
-use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
+use axum::extract::{
+    connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, Query as AxumQuery, State,
+};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
-use axum::routing::{post, MethodRouter, Route};
-use axum::{headers::Header, Router};
+use axum::routing::{get, post, MethodRouter, Route};
+use axum::Extension;
+use axum::Router;
+use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
@@ -50,8 +56,9 @@ use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandl
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
-use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -62,12 +69,16 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
+/// The default allowed maximum lag between the current timestamp and the checkpoint timestamp.
+const DEFAULT_MAX_CHECKPOINT_LAG: Duration = Duration::from_secs(300);
+
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
     trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
+    db_reader: Db,
 }
 
 impl Server {
@@ -75,6 +86,11 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
+
+        // Compatibility check
+        info!("Starting compatibility check");
+        check_all_tables(&self.db_reader).await?;
+        info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -241,7 +257,9 @@ impl ServerBuilder {
                 .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
-                .route("/health", axum::routing::get(health_checks))
+                .route("/health", get(health_check))
+                .route("/graphql/health", get(health_check))
+                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -292,11 +310,7 @@ impl ServerBuilder {
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([
-                hyper::header::CONTENT_TYPE,
-                VERSION_HEADER.clone(),
-                LIMITS_HEADER.clone(),
-            ]);
+            .allow_headers([hyper::header::CONTENT_TYPE, LIMITS_HEADER.clone()]);
         Ok(cors)
     }
 
@@ -349,6 +363,7 @@ impl ServerBuilder {
             system_package_task,
             trigger_exchange_rates_task,
             state,
+            db_reader,
         })
     }
 
@@ -402,12 +417,16 @@ impl ServerBuilder {
             // Bound each statement in a request with the overall request timeout, to bound DB
             // utilisation (in the worst case we will use 2x the request timeout time in DB wall
             // time).
-            config.service.limits.request_timeout_ms,
+            config.service.limits.request_timeout_ms.into(),
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
-        let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            config.service.limits.clone(),
+            metrics.clone(),
+        );
         let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore::new(loader.clone());
@@ -450,18 +469,27 @@ impl ServerBuilder {
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
         }
+
         if config.internal_features.logger {
             builder = builder.extension(Logger::default());
         }
+
         if config.internal_features.query_limits_checker {
-            builder = builder.extension(QueryLimitsChecker::default());
+            builder = builder.extension(QueryLimitsChecker);
         }
+
+        if config.internal_features.directive_checker {
+            builder = builder.extension(DirectiveChecker);
+        }
+
         if config.internal_features.query_timeout {
             builder = builder.extension(Timeout);
         }
+
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
         }
+
         if config.internal_features.apollo_tracing {
             builder = builder.extension(ApolloTracing);
         }
@@ -490,8 +518,8 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    schema: axum::Extension<SuiGraphQLSchema>,
-    axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
+    schema: Extension<SuiGraphQLSchema>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -567,7 +595,7 @@ impl Drop for MetricsCallbackHandler {
 struct GraphqlErrors(std::sync::Arc<Vec<async_graphql::ServerError>>);
 
 /// Connect via a TCPStream to the DB to check if it is alive
-async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
+async fn db_health_check(State(connection): State<ConnectionConfig>) -> StatusCode {
     let Ok(url) = reqwest::Url::parse(connection.db_url.as_str()) else {
         return StatusCode::INTERNAL_SERVER_ERROR;
     };
@@ -587,6 +615,48 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
     } else {
         StatusCode::OK
     }
+}
+
+#[derive(serde::Deserialize)]
+struct HealthParam {
+    max_checkpoint_lag_ms: Option<u64>,
+}
+
+/// Endpoint for querying the health of the service.
+/// It returns 500 for any internal error, including not connecting to the DB,
+/// and 504 if the checkpoint timestamp is too far behind the current timestamp as per the
+/// max checkpoint timestamp lag query parameter, or the default value if not provided.
+async fn health_check(
+    State(connection): State<ConnectionConfig>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
+    AxumQuery(query_params): AxumQuery<HealthParam>,
+) -> StatusCode {
+    let db_health_check = db_health_check(axum::extract::State(connection)).await;
+    if db_health_check != StatusCode::OK {
+        return db_health_check;
+    }
+
+    let max_checkpoint_lag_ms = query_params
+        .max_checkpoint_lag_ms
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
+
+    let checkpoint_timestamp =
+        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+
+    let now_millis = Utc::now().timestamp_millis();
+
+    // Check for negative timestamp or conversion failure
+    let now: Duration = match u64::try_from(now_millis) {
+        Ok(val) => Duration::from_millis(val),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    if (now - checkpoint_timestamp) > max_checkpoint_lag_ms {
+        return StatusCode::GATEWAY_TIMEOUT;
+    }
+
+    db_health_check
 }
 
 // One server per proc, so this is okay
@@ -618,19 +688,28 @@ pub mod tests {
         connection_config: Option<ConnectionConfig>,
         service_config: Option<ServiceConfig>,
     ) -> ServerBuilder {
-        let connection_config =
-            connection_config.unwrap_or_else(ConnectionConfig::ci_integration_test_cfg);
+        let connection_config = connection_config.unwrap_or_default();
         let service_config = service_config.unwrap_or_default();
 
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let reader = PgManager::reader_with_config(
+            connection_config.db_url.clone(),
+            connection_config.db_pool_size,
+            service_config.limits.request_timeout_ms.into(),
+        )
+        .expect("Failed to create pg connection pool");
+
         let version = Version::for_testing();
         let metrics = metrics();
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            service_config.limits.clone(),
+            metrics.clone(),
+        );
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
             checkpoint: 1,
+            checkpoint_timestamp_ms: 1,
             epoch: 0,
         };
         let state = AppState::new(
@@ -698,8 +777,8 @@ pub mod tests {
             sui_client: &SuiClient,
         ) -> Response {
             let mut cfg = ServiceConfig::default();
-            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
-            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u32;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(None, Some(cfg))
                 .context_data(Some(sui_client.clone()))
@@ -791,7 +870,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -818,10 +897,7 @@ pub mod tests {
             .map(|e| e.message)
             .collect();
 
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 0".to_string()]);
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
@@ -832,10 +908,7 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 2".to_string()]);
     }
 
     pub async fn test_query_node_limit_impl() {
@@ -849,7 +922,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -875,10 +948,7 @@ pub mod tests {
             .into_iter()
             .map(|e| e.message)
             .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 0 nodes".to_string()]);
 
         let err: Vec<_> = exec_query_node_limit(
             4,
@@ -890,13 +960,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 4 nodes".to_string()]);
     }
 
-    pub async fn test_query_default_page_limit_impl() {
+    pub async fn test_query_default_page_limit_impl(connection_config: ConnectionConfig) {
         let service_config = ServiceConfig {
             limits: Limits {
                 default_page_size: 1,
@@ -904,7 +971,7 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(None, Some(service_config)).build_schema();
+        let schema = prep_schema(Some(connection_config), Some(service_config)).build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -969,7 +1036,7 @@ pub mod tests {
         let server_builder = prep_schema(None, None);
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
-            .extension(QueryLimitsChecker::default()) // QueryLimitsChecker is where we actually set the metrics
+            .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
             .build_schema();
 
         schema
@@ -998,5 +1065,21 @@ pub mod tests {
         assert_eq!(req_metrics.input_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.output_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.query_depth.get_sample_sum(), 1. + 3.);
+    }
+
+    pub async fn test_health_check_impl() {
+        let server_builder = prep_schema(None, None);
+        let url = format!(
+            "http://{}:{}/health",
+            server_builder.state.connection.host, server_builder.state.connection.port
+        );
+        server_builder.build_schema();
+
+        let resp = reqwest::get(&url).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
+        let resp = reqwest::get(&url_with_param).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
     }
 }

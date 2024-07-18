@@ -27,7 +27,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
 };
-use tracing::{debug, error, info, instrument, trace_span};
+use tracing::{debug, error, info, instrument, trace_span, warn};
 
 use crate::{
     authority::{
@@ -233,13 +233,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let round = consensus_output.leader_round();
 
+        // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
+        // more than one leader per round so we are not in danger of ignoring any commits.
         assert!(round >= last_committed_round);
         if last_committed_round == round {
             // we can receive the same commit twice after restart
             // It is critical that the writes done by this function are atomic - otherwise we can
             // lose the later parts of a commit if we restart midway through processing it.
-            info!(
-                "Ignoring consensus output for round {} as it is already committed",
+            warn!(
+                "Ignoring consensus output for round {} as it is already committed. NOTE: This is only expected if Narwhal is running.",
                 round
             );
             return;
@@ -570,6 +572,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
+        ConsensusTransactionKind::CapabilityNotificationV2(_) => "capability_notification_v2",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
@@ -870,15 +873,16 @@ mod tests {
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{Batch, Certificate, CommittedSubDag, HeaderV1Builder, ReputationScores};
     use prometheus::Registry;
-    use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
+    use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
         base_types::{random_object_ref, AuthorityName, SuiAddress},
         committee::Committee,
         messages_consensus::{
-            AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
+            AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
         },
         object::Object,
         sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+        supported_protocol_versions::SupportedProtocolVersions,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
         },
@@ -910,7 +914,7 @@ mod tests {
                 .build();
 
         let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config)
+            .with_network_config(&network_config, 0)
             .build()
             .await;
 
@@ -1133,7 +1137,7 @@ mod tests {
 
     fn cap_txn(generation: u64) -> VerifiedSequencedConsensusTransaction {
         txn(ConsensusTransactionKind::CapabilityNotification(
-            AuthorityCapabilities {
+            AuthorityCapabilitiesV1 {
                 authority: Default::default(),
                 generation,
                 supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,

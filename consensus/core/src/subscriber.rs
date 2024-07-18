@@ -74,13 +74,6 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             peer,
             last_received,
         )));
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
-        self.context
-            .metrics
-            .node_metrics
-            .subscriber_connections
-            .with_label_values(&[peer_hostname])
-            .set(1);
     }
 
     pub(crate) fn stop(&self) {
@@ -92,15 +85,17 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 
     fn unsubscribe_locked(&self, peer: AuthorityIndex, subscription: &mut Option<JoinHandle<()>>) {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
+        if let Some(subscription) = subscription.take() {
+            subscription.abort();
+        }
+        // There is a race between shutting down the subscription task and clearing the metric here.
+        // TODO: fix the race when unsubscribe_locked() gets called outside of stop().
         self.context
             .metrics
             .node_metrics
             .subscriber_connections
             .with_label_values(&[peer_hostname])
             .set(0);
-        if let Some(subscription) = subscription.take() {
-            subscription.abort();
-        }
     }
 
     async fn subscription_loop(
@@ -119,11 +114,18 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         let mut retries: i64 = 0;
         let mut delay = INITIAL_RETRY_INTERVAL;
         'subscription: loop {
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(0);
+
             if retries > IMMEDIATE_RETRIES {
                 debug!(
                     "Delaying retry {} of peer {} subscription, in {} seconds",
                     retries,
-                    peer,
+                    peer_hostname,
                     delay.as_secs_f32(),
                 );
                 sleep(delay).await;
@@ -139,6 +141,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 delay = INITIAL_RETRY_INTERVAL;
             }
             retries += 1;
+
             let mut blocks = match network_client
                 .subscribe_blocks(peer, last_received, MAX_RETRY_INTERVAL)
                 .await
@@ -164,9 +167,25 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     continue 'subscription;
                 }
             };
+
+            // Now can consider the subscription successful
+            let peer_hostname = &context.committee.authority(peer).hostname;
+            context
+                .metrics
+                .node_metrics
+                .subscriber_connections
+                .with_label_values(&[peer_hostname])
+                .set(1);
+
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
+                        context
+                            .metrics
+                            .node_metrics
+                            .subscribed_blocks
+                            .with_label_values(&[&peer_hostname])
+                            .inc();
                         let result = authority_service
                             .handle_send_block(peer, block.clone())
                             .await;
@@ -263,6 +282,15 @@ mod test {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
     }

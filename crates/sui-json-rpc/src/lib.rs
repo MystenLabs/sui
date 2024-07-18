@@ -23,6 +23,7 @@ use tracing::info;
 
 pub use balance_changes::*;
 pub use object_changes::*;
+pub use sui_config::node::ServerType;
 use sui_json_rpc_api::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
@@ -73,11 +74,6 @@ pub fn sui_rpc_doc(version: &str) -> Project {
         "Apache-2.0",
         "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE",
     )
-}
-
-pub enum ServerType {
-    WebSocket,
-    Http,
 }
 
 impl JsonRpcServerBuilder {
@@ -155,7 +151,7 @@ impl JsonRpcServerBuilder {
             .on_failure(())
     }
 
-    pub async fn to_router(&self, server_type: Option<ServerType>) -> Result<axum::Router, Error> {
+    pub async fn to_router(&self, server_type: ServerType) -> Result<axum::Router, Error> {
         let routing = self.rpc_doc.method_routing.clone();
 
         let disable_routing = env::var("DISABLE_BACKWARD_COMPATIBILITY")
@@ -196,7 +192,7 @@ impl JsonRpcServerBuilder {
         let mut router = axum::Router::new();
 
         match server_type {
-            Some(ServerType::WebSocket) => {
+            ServerType::WebSocket => {
                 router = router
                     .route(
                         "/",
@@ -207,7 +203,7 @@ impl JsonRpcServerBuilder {
                         axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
                     );
             }
-            Some(ServerType::Http) => {
+            ServerType::Http => {
                 router = router
                     .route(
                         "/",
@@ -222,7 +218,7 @@ impl JsonRpcServerBuilder {
                         axum::routing::post(crate::axum_router::json_rpc_handler),
                     );
             }
-            None => {
+            ServerType::Both => {
                 router = router
                     .route(
                         "/",
@@ -258,7 +254,7 @@ impl JsonRpcServerBuilder {
         self,
         listen_address: SocketAddr,
         _custom_runtime: Option<Handle>,
-        server_type: Option<ServerType>,
+        server_type: ServerType,
         cancel: Option<CancellationToken>,
     ) -> Result<ServerHandle, Error> {
         let app = self.to_router(server_type).await?;

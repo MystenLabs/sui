@@ -53,7 +53,7 @@ impl TestRunner {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_shared_object_deletion(true);
+        protocol_config.set_shared_object_deletion_for_testing(true);
         let authority_state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()

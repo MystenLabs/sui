@@ -10,9 +10,9 @@ use std::{sync::Arc, time::Duration};
 
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use broadcast::{Receiver, Sender};
-use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, EndOfEpochData, VerifiedCheckpoint};
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use tokio::{sync::broadcast, time::timeout};
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -27,6 +27,8 @@ use typed_store::Map;
 /// picks up where it left off in the event of a mid-epoch node crash.
 #[tokio::test]
 pub async fn test_checkpoint_executor_crash_recovery() {
+    telemetry_subscribers::init_for_testing();
+
     let buffer_size = num_cpus::get() * 2;
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
@@ -232,7 +234,6 @@ pub async fn test_checkpoint_executor_cross_epoch() {
                 EpochFlag::default_flags_for_new_epoch(&authority_state.config),
             )
             .unwrap(),
-            &executor,
             accumulator,
             &ExpensiveSafetyCheckConfig::default(),
         )
@@ -384,14 +385,16 @@ async fn init_executor_test(
     let network_config =
         sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
     let state = TestAuthorityBuilder::new()
-        .with_network_config(&network_config)
+        .with_network_config(&network_config, 0)
         .build()
         .await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
+    let epoch_store = state.epoch_store_for_testing();
 
-    let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
+    let accumulator =
+        StateAccumulator::new_for_tests(state.get_accumulator_store().clone(), &epoch_store);
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(

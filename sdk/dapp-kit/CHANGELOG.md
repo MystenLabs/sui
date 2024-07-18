@@ -1,5 +1,76 @@
 # @mysten/dapp-kit
 
+## 0.14.12
+
+### Patch Changes
+
+- 0f27a97: Update dependencies
+- Updated dependencies [7fc464a]
+- Updated dependencies [086b2bc]
+- Updated dependencies [0fb0628]
+- Updated dependencies [cdedf69]
+- Updated dependencies [0f27a97]
+- Updated dependencies [beed646]
+  - @mysten/sui@1.3.0
+  - @mysten/wallet-standard@0.12.12
+  - @mysten/zksend@0.10.1
+
+## 0.14.11
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+  - @mysten/zksend@0.10.0
+  - @mysten/wallet-standard@0.12.11
+
+## 0.14.10
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+  - @mysten/wallet-standard@0.12.10
+  - @mysten/zksend@0.9.10
+
+## 0.14.9
+
+### Patch Changes
+
+- Updated dependencies [805ff4d4c2]
+  - @mysten/wallet-standard@0.12.9
+  - @mysten/zksend@0.9.9
+
+## 0.14.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+  - @mysten/wallet-standard@0.12.8
+  - @mysten/zksend@0.9.8
+
+## 0.14.7
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+  - @mysten/wallet-standard@0.12.7
+  - @mysten/zksend@0.9.7
+
+## 0.14.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+  - @mysten/wallet-standard@0.12.6
+  - @mysten/zksend@0.9.6
+
 ## 0.14.5
 
 ### Patch Changes
@@ -50,8 +121,10 @@
 
 ### Minor Changes
 
-- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
-  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
 
 ### Patch Changes
 
@@ -66,7 +139,8 @@
 
 ### Patch Changes
 
-- 3f8b08dedc: Fix broken theme style tag in canary versions of React when the provider is placed outside of the body tag
+- 3f8b08dedc: Fix broken theme style tag in canary versions of React when the provider is placed
+  outside of the body tag
 - Updated dependencies [eeb19db837]
   - @mysten/zksend@0.8.2
 
@@ -82,7 +156,8 @@
 
 ### Minor Changes
 
-- 807262f394: The `zksend` property on the `WalletProvider` has been replaced with a `stashedWallet` option.
+- 807262f394: The `zksend` property on the `WalletProvider` has been replaced with a `stashedWallet`
+  option.
 
 ### Patch Changes
 
@@ -375,14 +450,12 @@
 ### Minor Changes
 
 - d4d9c9218: Upgrade dapp-kit and the scaffold applications to react-query v5
-- fb0ce3485: Add global connection status info and change the hook interface of `useCurrentWallet` to
-  return an object to encapsulate connection info together. To migrate:
+- fb0ce3485: Add global connection status info and change the hook interface of `useCurrentWallet`
+  to return an object to encapsulate connection info together. To migrate:
 
-  Before:
-  const currentWallet = useCurrentWallet();
+  Before: const currentWallet = useCurrentWallet();
 
-  After:
-  const { currentWallet } = useCurrentWallet();
+  After: const { currentWallet } = useCurrentWallet();
 
 ### Patch Changes
 
@@ -411,7 +484,8 @@
 - 361818abc: execute transaction from dApp rather than wallet in useSignAndExecuteTransactionBlock
 - 2b532bc37: Fix issue where CSS was being overridden by application code
 - 0c5cdc049: Expose types related to theming
-- c7e12c928: Infer the active chain when signing transactions and expose some more descriptive errors
+- c7e12c928: Infer the active chain when signing transactions and expose some more descriptive
+  errors
 
 ### Patch Changes
 
@@ -457,7 +531,8 @@
 
 - b29f66f18: Add theme definitions for our UI components
 - 1227ee1ce: Theme UI components based on provided theme and add design polish
-- 8e9590a8c: Exclude non-Sui accounts from the accounts state when someone connects a multi-chain wallet
+- 8e9590a8c: Exclude non-Sui accounts from the accounts state when someone connects a multi-chain
+  wallet
 
 ## 0.1.0
 

@@ -204,7 +204,7 @@ impl Store for RocksDBStore {
             refs.push(BlockRef::new(round, author, digest));
         }
         let results = self.read_blocks(refs.as_slice())?;
-        let mut blocks = vec![];
+        let mut blocks = Vec::with_capacity(refs.len());
         for (r, block) in refs.into_iter().zip(results.into_iter()) {
             blocks.push(
                 block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),

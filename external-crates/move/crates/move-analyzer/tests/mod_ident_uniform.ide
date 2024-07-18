@@ -1,0 +1,12 @@
+// Checks if module identifiers used during symbolication process at both parsing and typing are the
+// same. They are used as a key to a map and if they look differently, it may lead to a crash due to
+// keys used for insertion/retrieval being different. There are no actual tests as a potential
+// problem would manifest itself in the symbolication algorithm itself.
+{
+  "UseDef": {
+    "project": "tests/mod-ident-uniform",
+    "file_tests": {
+      "M1.move": []
+    }
+  }
+}

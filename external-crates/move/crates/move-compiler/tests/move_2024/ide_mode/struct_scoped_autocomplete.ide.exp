@@ -1,44 +1,44 @@
 warning[W09009]: unused struct field
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:3:21
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:4:21
   │
-3 │     public struct A(u64) has copy, drop;
+4 │     public struct A(u64) has copy, drop;
   │                     ^^^ The '0' field of the 'A' type is unused
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09009]: unused struct field
-  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:6:9
+  ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:7:9
   │
-6 │         a: A
+7 │         a: A
   │         ^ The 'a' field of the 'B' type is unused
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:19:23
    │
-17 │         let _tmp1 = _a.;
-   │                       ^ Autocompletes to: 'a::m::t0'
+19 │         let _tmp1 = _a.;
+   │                       ^ Possible dot names: 'a::m::t0'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:17:24
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:19:24
    │
-17 │         let _tmp1 = _a.;
+19 │         let _tmp1 = _a.;
    │                        ^
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:20:23
    │
-18 │         let _tmp2 = _b.;
-   │                       ^ Autocompletes to: 'a::m::t1'
+20 │         let _tmp2 = _b.;
+   │                       ^ Possible dot names: 'a::m::t1'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:18:24
+   ┌─ tests/move_2024/ide_mode/struct_scoped_autocomplete.move:20:24
    │
-18 │         let _tmp2 = _b.;
+20 │         let _tmp2 = _b.;
    │                        ^
    │                        │
    │                        Unexpected ';'

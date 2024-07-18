@@ -124,7 +124,7 @@ macro_rules! reopen {
     ( $db:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
         (
             $(
-                DBMap::<$K, $V>::reopen($db, Some($cf), &ReadWriteOptions::default()).expect(&format!("Cannot open {} CF.", $cf)[..])
+                DBMap::<$K, $V>::reopen($db, Some($cf), &ReadWriteOptions::default(), false).expect(&format!("Cannot open {} CF.", $cf)[..])
             ),*
         )
     };
@@ -291,7 +291,7 @@ impl RocksDB {
         delegate_call!(self.multi_get_cf_opt(keys, readopts))
     }
 
-    pub fn batched_multi_get_cf_opt<'a, I, K>(
+    pub fn batched_multi_get_cf_opt<I, K>(
         &self,
         cf: &impl AsColumnFamilyRef,
         keys: I,
@@ -299,8 +299,8 @@ impl RocksDB {
         readopts: &ReadOptions,
     ) -> Vec<Result<Option<DBPinnableSlice<'_>>, Error>>
     where
-        K: AsRef<[u8]> + 'a + ?Sized,
-        I: IntoIterator<Item = &'a K>,
+        I: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
     {
         delegate_call!(self.batched_multi_get_cf_opt(cf, keys, sorted_input, readopts))
     }
@@ -727,32 +727,39 @@ pub struct DBMap<K, V> {
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
 
 impl<K, V> DBMap<K, V> {
-    pub(crate) fn new(db: Arc<RocksDB>, opts: &ReadWriteOptions, opt_cf: &str) -> Self {
+    pub(crate) fn new(
+        db: Arc<RocksDB>,
+        opts: &ReadWriteOptions,
+        opt_cf: &str,
+        is_deprecated: bool,
+    ) -> Self {
         let db_cloned = db.clone();
         let db_metrics = DBMetrics::get();
         let db_metrics_cloned = db_metrics.clone();
         let cf = opt_cf.to_string();
         let (sender, mut recv) = tokio::sync::oneshot::channel();
-        tokio::task::spawn(async move {
-            let mut interval =
-                tokio::time::interval(Duration::from_millis(CF_METRICS_REPORT_PERIOD_MILLIS));
-            loop {
-                tokio::select! {
-                    _ = interval.tick() => {
-                        let db = db_cloned.clone();
-                        let cf = cf.clone();
-                        let db_metrics = db_metrics.clone();
-                        if let Err(e) = tokio::task::spawn_blocking(move || {
-                            Self::report_metrics(&db, &cf, &db_metrics);
-                        }).await {
-                            error!("Failed to log metrics with error: {}", e);
+        if !is_deprecated {
+            tokio::task::spawn(async move {
+                let mut interval =
+                    tokio::time::interval(Duration::from_millis(CF_METRICS_REPORT_PERIOD_MILLIS));
+                loop {
+                    tokio::select! {
+                        _ = interval.tick() => {
+                            let db = db_cloned.clone();
+                            let cf = cf.clone();
+                            let db_metrics = db_metrics.clone();
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                Self::report_metrics(&db, &cf, &db_metrics);
+                            }).await {
+                                error!("Failed to log metrics with error: {}", e);
+                            }
                         }
+                        _ = &mut recv => break,
                     }
-                    _ = &mut recv => break,
                 }
-            }
-            debug!("Returning the cf metric logging task for DBMap: {}", &cf);
-        });
+                debug!("Returning the cf metric logging task for DBMap: {}", &cf);
+            });
+        }
         DBMap {
             rocksdb: db.clone(),
             opts: opts.clone(),
@@ -782,7 +789,7 @@ impl<K, V> DBMap<K, V> {
         let cf_key = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
         let cfs = vec![cf_key];
         let rocksdb = open_cf(path, db_options, metric_conf, &cfs)?;
-        Ok(DBMap::new(rocksdb, rw_options, cf_key))
+        Ok(DBMap::new(rocksdb, rw_options, cf_key, false))
     }
 
     /// Reopens an open database as a typed map operating under a specific column family.
@@ -800,8 +807,8 @@ impl<K, V> DBMap<K, V> {
     ///    /// Open the DB with all needed column families first.
     ///    let rocks = open_cf(tempdir().unwrap(), None, MetricConf::default(), &["First_CF", "Second_CF"]).unwrap();
     ///    /// Attach the column families to specific maps.
-    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default()).expect("Failed to open storage");
-    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default()).expect("Failed to open storage");
+    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default(), false).expect("Failed to open storage");
+    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default(), false).expect("Failed to open storage");
     ///    Ok(())
     ///    }
     /// ```
@@ -810,6 +817,7 @@ impl<K, V> DBMap<K, V> {
         db: &Arc<RocksDB>,
         opt_cf: Option<&str>,
         rw_options: &ReadWriteOptions,
+        is_deprecated: bool,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf
             .unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
@@ -818,7 +826,7 @@ impl<K, V> DBMap<K, V> {
         db.cf_handle(&cf_key)
             .ok_or_else(|| TypedStoreError::UnregisteredColumn(cf_key.clone()))?;
 
-        Ok(DBMap::new(db.clone(), rw_options, &cf_key))
+        Ok(DBMap::new(db.clone(), rw_options, &cf_key, is_deprecated))
     }
 
     pub fn batch(&self) -> DBBatch {
@@ -932,7 +940,7 @@ impl<K, V> DBMap<K, V> {
             .rocksdb
             .batched_multi_get_cf_opt(
                 &self.cf(),
-                &(keys_bytes?),
+                keys_bytes?,
                 /*sorted_keys=*/ false,
                 &self.opts.readopts(),
             )
@@ -1278,11 +1286,11 @@ impl<K, V> DBMap<K, V> {
 /// async fn main() -> Result<(), Error> {
 /// let rocks = open_cf(tempfile::tempdir().unwrap(), None, MetricConf::default(), &["First_CF", "Second_CF"]).unwrap();
 ///
-/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default())
+/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &ReadWriteOptions::default(), false)
 ///     .expect("Failed to open storage");
 /// let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 ///
-/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default())
+/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &ReadWriteOptions::default(), false)
 ///     .expect("Failed to open storage");
 /// let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 ///
@@ -1339,7 +1347,7 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let db_name = self.rocksdb.db_name();
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_batch_commit_latency_seconds
@@ -1364,7 +1372,25 @@ impl DBBatch {
                 .write_perf_ctx_metrics
                 .report_metrics(&db_name);
         }
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, ?db_name, "very slow batch write");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_count
+                .with_label_values(&[&db_name])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_duration_ms
+                .with_label_values(&[&db_name])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
         Ok(())
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.batch.size_in_bytes()
     }
 }
 
@@ -1851,7 +1877,7 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_put_latency_seconds
@@ -1877,6 +1903,22 @@ where
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())
             .map_err(typed_store_err_from_rocks_err)?;
+
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, cf = ?self.cf, "very slow insert");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_count
+                .with_label_values(&[&self.cf])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_duration_ms
+                .with_label_values(&[&self.cf])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
+
         Ok(())
     }
 
@@ -2372,6 +2414,13 @@ impl DBOptions {
 
         self
     }
+
+    // Disables write stalling and stopping based on pending compaction bytes.
+    pub fn disable_write_throttling(mut self) -> DBOptions {
+        self.options.set_soft_pending_compaction_bytes_limit(0);
+        self.options.set_hard_pending_compaction_bytes_limit(0);
+        self
+    }
 }
 
 /// Creates a default RocksDB option, to be used when RocksDB option is unspecified.
@@ -2410,8 +2459,7 @@ pub fn default_db_options() -> DBOptions {
     // the next write) may not work well. So sticking to per-db write buffer size limit for now.
     //
     // The environment variables are only meant to be emergency overrides. They may go away in future.
-    // If you need to modify an option, either update the default value, or override the option in
-    // Sui / Narwhal.
+    // It is preferable to update the default value, or override the option in code.
     opt.set_db_write_buffer_size(
         read_size_from_env(ENV_VAR_DB_WRITE_BUFFER_SIZE).unwrap_or(DEFAULT_DB_WRITE_BUFFER_SIZE)
             * 1024
@@ -2421,7 +2469,9 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
+    // Num threads for compaction and flush.
     opt.increase_parallelism(4);
+
     opt.set_enable_pipelined_write(true);
 
     opt.set_block_based_table_factory(&get_block_options(128));

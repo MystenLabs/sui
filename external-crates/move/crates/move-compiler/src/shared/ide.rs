@@ -1,15 +1,29 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt};
-
 use crate::{
-    debug_display, diag, diagnostics::Diagnostic, expansion::ast as E, naming::ast as N,
-    parser::ast as P, shared::string_utils::format_oxford_list, shared::Name, typing::ast as T,
+    debug_display, diag,
+    diagnostics::Diagnostic,
+    expansion::{
+        alias_map_builder::{LeadingAccessEntry, MemberEntry},
+        ast as E,
+    },
+    naming::ast as N,
+    parser::ast as P,
+    shared::string_utils::format_oxford_list,
+    shared::Name,
+    typing::ast as T,
+    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 
+use move_command_line_common::address::NumericalAddress;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
+
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 //*************************************************************************************************
 // Types
@@ -28,9 +42,13 @@ pub enum IDEAnnotation {
     /// An expanded lambda site.
     ExpandedLambda,
     /// Autocomplete information.
-    AutocompleteInfo(Box<AutocompleteInfo>),
+    DotAutocompleteInfo(Box<DotAutocompleteInfo>),
+    /// Autocomplete information.
+    PathAutocompleteInfo(Box<AliasAutocompleteInfo>),
     /// Match Missing Arm.
     MissingMatchArms(Box<MissingMatchArmsInfo>),
+    /// Ellipsis Match Arm.
+    EllipsisMatchEntries(Box<EllipsisMatchEntries>),
 }
 
 #[derive(Debug, Clone)]
@@ -47,13 +65,30 @@ pub struct MacroCallInfo {
     pub by_value_args: Vec<T::SequenceItem>,
 }
 
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct AutocompleteMethod {
+    pub method_name: Symbol,
+    pub target_function: (E::ModuleIdent, P::FunctionName),
+}
+
 #[derive(Debug, Clone)]
-pub struct AutocompleteInfo {
-    /// Methods that are valid autocompletes
-    pub methods: BTreeSet<(E::ModuleIdent, P::FunctionName)>,
-    /// Fields that are valid autocompletes (e.g., for a struct)
-    /// TODO: possibly extend this with type information?
-    pub fields: BTreeSet<Symbol>,
+pub struct DotAutocompleteInfo {
+    /// Methods that are valid auto-completes
+    pub methods: Vec<AutocompleteMethod>,
+    /// Fields that are valid auto-completes (e.g., for a struct) along with their types
+    pub fields: Vec<(Symbol, N::Type)>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct AliasAutocompleteInfo {
+    /// Numerical addresses that are valid autocompletes
+    pub addresses: BTreeSet<(Symbol, NumericalAddress)>,
+    /// Modules that are valid autocompletes
+    pub modules: BTreeSet<(Symbol, E::ModuleIdent)>,
+    /// Members that are valid autocompletes
+    pub members: BTreeSet<(Symbol, E::ModuleIdent, Name)>,
+    /// Type parameters that are valid autocompletes
+    pub type_params: BTreeSet<Symbol>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,9 +139,26 @@ pub enum PatternSuggestion {
     },
 }
 
+#[derive(Debug, Clone)]
+pub enum EllipsisMatchEntries {
+    /// A number of wildcards inserted for the ellipsis for a positional match.
+    Positional(Vec<Symbol>),
+    /// A list of symbols mapped to wildcards that are added to a named match.
+    Named(Vec<Symbol>),
+}
+
 //*************************************************************************************************
 // Impls
 //*************************************************************************************************
+
+impl AutocompleteMethod {
+    pub fn new(method_name: Symbol, target_function: (E::ModuleIdent, P::FunctionName)) -> Self {
+        Self {
+            method_name,
+            target_function,
+        }
+    }
+}
 
 impl IDEInfo {
     pub fn new() -> Self {
@@ -143,6 +195,78 @@ impl IntoIterator for IDEInfo {
     }
 }
 
+impl AliasAutocompleteInfo {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<&BTreeMap<Symbol, LeadingAccessEntry>> for AliasAutocompleteInfo {
+    fn from(names: &BTreeMap<Symbol, LeadingAccessEntry>) -> Self {
+        let mut addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
+        let mut modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
+        let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
+        let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
+
+        for (symbol, entry) in names
+            .iter()
+            .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
+        {
+            match entry {
+                LeadingAccessEntry::Address(addr) => {
+                    addresses.insert((*symbol, *addr));
+                }
+                LeadingAccessEntry::Module(mident) => {
+                    modules.insert((*symbol, *mident));
+                }
+                LeadingAccessEntry::Member(mident, name) => {
+                    members.insert((*symbol, *mident, *name));
+                }
+                LeadingAccessEntry::TypeParam => {
+                    type_params.insert(*symbol);
+                }
+            }
+        }
+
+        AliasAutocompleteInfo {
+            members,
+            modules,
+            addresses,
+            type_params,
+        }
+    }
+}
+
+impl From<&BTreeMap<Symbol, MemberEntry>> for AliasAutocompleteInfo {
+    fn from(names: &BTreeMap<Symbol, MemberEntry>) -> Self {
+        let addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
+        let modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
+        let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
+        let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
+
+        for (symbol, entry) in names
+            .iter()
+            .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
+        {
+            match entry {
+                MemberEntry::Member(mident, name) => {
+                    members.insert((*symbol, *mident, *name));
+                }
+                MemberEntry::TypeParam => {
+                    type_params.insert(*symbol);
+                }
+            }
+        }
+
+        AliasAutocompleteInfo {
+            members,
+            modules,
+            addresses,
+            type_params,
+        }
+    }
+}
+
 impl From<(Loc, IDEAnnotation)> for Diagnostic {
     fn from((loc, ann): (Loc, IDEAnnotation)) -> Self {
         match ann {
@@ -172,23 +296,72 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
             IDEAnnotation::ExpandedLambda => {
                 diag!(IDE::ExpandedLambda, (loc, "expanded lambda"))
             }
-            IDEAnnotation::AutocompleteInfo(info) => {
-                let AutocompleteInfo { methods, fields } = *info;
-                let names = methods
+            IDEAnnotation::PathAutocompleteInfo(info) => {
+                let AliasAutocompleteInfo {
+                    members,
+                    modules,
+                    addresses,
+                    type_params,
+                } = *info;
+                let names = members
                     .into_iter()
-                    .map(|(m, f)| format!("{m}::{f}"))
-                    .chain(fields.into_iter().map(|n| format!("{n}")))
+                    .map(|(name, m, f)| format!("{name} -> {m}::{f}"))
+                    .chain(
+                        modules
+                            .into_iter()
+                            .map(|(name, m)| format!("{name} -> {m}")),
+                    )
+                    .chain(
+                        addresses
+                            .into_iter()
+                            .map(|(name, a)| format!("{name} -> {a}")),
+                    )
+                    .chain(type_params.into_iter().map(|p| format!("{p}")))
                     .collect::<Vec<_>>();
                 let msg = format!(
-                    "Autocompletes to: {}",
+                    "Possible in-scope names: {}",
                     format_oxford_list!("or", "'{}'", names)
                 );
-                diag!(IDE::Autocomplete, (loc, msg))
+                diag!(IDE::PathAutocomplete, (loc, msg))
+            }
+            IDEAnnotation::DotAutocompleteInfo(info) => {
+                let DotAutocompleteInfo { methods, fields } = *info;
+                let names = methods
+                    .into_iter()
+                    .map(
+                        |AutocompleteMethod {
+                             method_name,
+                             target_function: (mident, _),
+                         }| format!("{mident}::{method_name}"),
+                    )
+                    .chain(fields.into_iter().map(|(n, _)| format!("{n}")))
+                    .collect::<Vec<_>>();
+                let msg = format!(
+                    "Possible dot names: {}",
+                    format_oxford_list!("or", "'{}'", names)
+                );
+                diag!(IDE::DotAutocomplete, (loc, msg))
             }
             IDEAnnotation::MissingMatchArms(info) => {
                 let MissingMatchArmsInfo { arms } = *info;
                 let msg = format!("Missing arms: {}", format_oxford_list!("and", "'{}'", arms));
                 diag!(IDE::MissingMatchArms, (loc, msg))
+            }
+            IDEAnnotation::EllipsisMatchEntries(entries) => {
+                let entries = match *entries {
+                    EllipsisMatchEntries::Positional(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    EllipsisMatchEntries::Named(entries) => entries
+                        .iter()
+                        .map(|name| format!("{}: _", name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                let msg = format!("Ellipsis expansion: {}", entries);
+                diag!(IDE::EllipsisExpansion, (loc, msg))
             }
         }
     }

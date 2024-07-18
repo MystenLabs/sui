@@ -9,8 +9,7 @@ use crate::{
         Diagnostic,
     },
     editions::FeatureGate,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, ModuleIdent_, Mutability, Visibility},
-    hlir::translate::{MATCH_TEMP_PREFIX_SYMBOL, NEW_NAME_DELIM},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
@@ -21,16 +20,18 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{
-        ide::{IDEAnnotation, IDEInfo},
+        ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
+        matching::{new_match_var_name, MatchContext},
         program_info::*,
         string_utils::debug_print,
         unique_map::UniqueMap,
         *,
     },
-    typing::match_compilation,
+    typing::deprecation_warnings::Deprecations,
     FullyCompiledProgram,
 };
+use known_attributes::AttributePosition;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -81,11 +82,7 @@ pub enum MacroExpansion {
 }
 
 pub(super) struct TypingDebugFlags {
-    pub(super) match_translation: bool,
-    pub(super) match_specialization: bool,
     pub(super) match_counterexample: bool,
-    pub(super) match_work_queue: bool,
-    pub(super) match_constant_conversion: bool,
     pub(super) autocomplete_resolution: bool,
     pub(super) function_translation: bool,
     pub(super) type_elaboration: bool,
@@ -96,6 +93,8 @@ pub struct Context<'env> {
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
     pub(super) debug: TypingDebugFlags,
+
+    deprecations: Deprecations,
 
     // for generating new variables during match compilation
     next_match_var_id: usize,
@@ -185,12 +184,9 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
+        let deprecations = Deprecations::new(env, &info);
         let debug = TypingDebugFlags {
-            match_translation: false,
-            match_specialization: false,
             match_counterexample: false,
-            match_work_queue: false,
-            match_constant_conversion: false,
             autocomplete_resolution: false,
             function_translation: false,
             type_elaboration: false,
@@ -217,6 +213,7 @@ impl<'env> Context<'env> {
             macro_expansion: vec![],
             lambda_expansion: vec![],
             ide_info: IDEInfo::new(),
+            deprecations,
         }
     }
 
@@ -634,6 +631,25 @@ impl<'env> Context<'env> {
         })
     }
 
+    pub fn emit_warning_if_deprecated(
+        &mut self,
+        mident: &ModuleIdent,
+        name: Name,
+        method_opt: Option<Name>,
+    ) {
+        let in_same_module = self
+            .current_module
+            .is_some_and(|current| current == *mident);
+        if let Some(deprecation) = self.deprecations.get_deprecation(*mident, name) {
+            // Don't register a warning if we are in the module that is deprecated and the actual
+            // member is not deprecated.
+            if deprecation.location == AttributePosition::Module && in_same_module {
+                return;
+            }
+            deprecation.emit_deprecation_warning(self.env, name, method_opt);
+        }
+    }
+
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
         self.modules.module(m)
     }
@@ -720,178 +736,6 @@ impl<'env> Context<'env> {
         *max_variable_color = color;
     }
 
-    //********************************************
-    // Match Compilation Helpers
-    //********************************************
-
-    pub fn is_struct(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
-        matches!(
-            self.datatype_kind(module, datatype_name),
-            DatatypeKind::Struct
-        )
-    }
-
-    pub fn struct_fields(
-        &self,
-        module: &ModuleIdent,
-        struct_name: &DatatypeName,
-    ) -> Option<UniqueMap<Field, usize>> {
-        let fields = match &self.struct_definition(module, struct_name).fields {
-            N::StructFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
-            N::StructFields::Native(_) => None,
-        };
-        assert!(fields.is_some() || self.env.has_errors());
-        fields
-    }
-
-    /// Indicates if the struct is positional. Returns false on native.
-    pub fn struct_is_positional(&self, module: &ModuleIdent, struct_name: &DatatypeName) -> bool {
-        match self.modules.struct_definition(module, struct_name).fields {
-            N::StructFields::Defined(is_positional, _) => is_positional,
-            N::StructFields::Native(_) => false,
-        }
-    }
-
-    /// Returns the enum variant names in sorted order.
-    pub fn enum_variants(
-        &self,
-        module: &ModuleIdent,
-        enum_name: &DatatypeName,
-    ) -> Vec<VariantName> {
-        let mut names = self
-            .enum_definition(module, enum_name)
-            .variants
-            .ref_map(|_, vdef| vdef.index)
-            .clone()
-            .into_iter()
-            .collect::<Vec<_>>();
-        names.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
-        names.into_iter().map(|(name, _ndx)| name).collect()
-    }
-
-    pub fn enum_variant_fields(
-        &self,
-        module: &ModuleIdent,
-        enum_name: &DatatypeName,
-        variant_name: &VariantName,
-    ) -> Option<UniqueMap<Field, usize>> {
-        let Some(variant) = self
-            .enum_definition(module, enum_name)
-            .variants
-            .get(variant_name)
-        else {
-            assert!(self.env.has_errors());
-            return None;
-        };
-        match &variant.fields {
-            N::VariantFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
-            N::VariantFields::Empty => Some(UniqueMap::new()),
-        }
-    }
-
-    /// Indicates if the enum variant is empty.
-    pub fn enum_variant_is_empty(
-        &self,
-        module: &ModuleIdent,
-        enum_name: &DatatypeName,
-        variant_name: &VariantName,
-    ) -> bool {
-        let vdef = self
-            .enum_definition(module, enum_name)
-            .variants
-            .get(variant_name)
-            .expect("ICE should have failed during naming");
-        match &vdef.fields {
-            N::VariantFields::Empty => true,
-            N::VariantFields::Defined(_, _m) => false,
-        }
-    }
-
-    /// Indicates if the enum variant is positional. Returns false on empty or missing.
-    pub fn enum_variant_is_positional(
-        &self,
-        module: &ModuleIdent,
-        enum_name: &DatatypeName,
-        variant_name: &VariantName,
-    ) -> bool {
-        let vdef = self
-            .enum_definition(module, enum_name)
-            .variants
-            .get(variant_name)
-            .expect("ICE should have failed during naming");
-        match &vdef.fields {
-            N::VariantFields::Empty => false,
-            N::VariantFields::Defined(is_positional, _m) => *is_positional,
-        }
-    }
-
-    pub fn make_imm_ref_match_binders(
-        &mut self,
-        pattern_loc: Loc,
-        arg_types: Fields<N::Type>,
-    ) -> Vec<(Field, N::Var, N::Type)> {
-        fn make_imm_ref_ty(ty: N::Type) -> N::Type {
-            match ty {
-                sp!(_, N::Type_::Ref(false, _)) => ty,
-                sp!(loc, N::Type_::Ref(true, inner)) => sp(loc, N::Type_::Ref(false, inner)),
-                ty => {
-                    let loc = ty.loc;
-                    sp(loc, N::Type_::Ref(false, Box::new(ty)))
-                }
-            }
-        }
-
-        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
-        fields
-            .into_iter()
-            .map(|(_, field_name, field_type)| {
-                (
-                    field_name,
-                    self.new_match_var(field_name.to_string(), pattern_loc),
-                    make_imm_ref_ty(field_type),
-                )
-            })
-            .collect::<Vec<_>>()
-    }
-
-    pub fn make_unpack_binders(
-        &mut self,
-        pattern_loc: Loc,
-        arg_types: Fields<N::Type>,
-    ) -> Vec<(Field, N::Var, N::Type)> {
-        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
-        fields
-            .into_iter()
-            .map(|(_, field_name, field_type)| {
-                (
-                    field_name,
-                    self.new_match_var(field_name.to_string(), pattern_loc),
-                    field_type,
-                )
-            })
-            .collect::<Vec<_>>()
-    }
-
-    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
-    /// should only be called in match expansion, which will have its body processed in HLIR
-    /// translation after type expansion.
-    pub fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
-        let id = self.next_match_var_id();
-        let name = format!(
-            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
-            *MATCH_TEMP_PREFIX_SYMBOL,
-        )
-        .into();
-        sp(
-            loc,
-            N::Var_ {
-                name,
-                id: id as u16,
-                color: 1,
-            },
-        )
-    }
-
     fn next_match_var_id(&mut self) -> usize {
         self.next_match_var_id += 1;
         self.next_match_var_id
@@ -902,17 +746,14 @@ impl<'env> Context<'env> {
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_methods(
-        &mut self,
-        tn: &TypeName,
-    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
+    pub fn find_all_methods(&mut self, tn: &TypeName) -> Vec<AutocompleteMethod> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
             .supports_feature(self.current_package(), FeatureGate::DotCall)
         {
             debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
-            return BTreeSet::new();
+            return vec![];
         }
         let cur_color = self.use_funs.last().unwrap().color;
         let mut result = BTreeSet::new();
@@ -923,43 +764,104 @@ impl<'env> Context<'env> {
             if let Some(names) = scope.use_funs.get(tn) {
                 let mut new_names = names
                     .iter()
-                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .map(|(_, method_name, use_fun)| {
+                        AutocompleteMethod::new(*method_name, use_fun.target_function)
+                    })
                     .collect();
                 result.append(&mut new_names);
             }
         });
-        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
-        result
+        let (same, mut different) = result
+            .clone()
+            .into_iter()
+            .partition::<Vec<_>, _>(|a| a.method_name == a.target_function.1.value());
+        // favor aliased completions over those where method name is the same as the target function
+        // name as the former are shadowing the latter - keep the latter only if the aliased set has
+        // no entry with the same target or with the same method name
+        let mut same_filtered = vec![];
+        'outer: for sa in same.into_iter() {
+            for da in different.iter() {
+                if da.method_name == sa.method_name
+                    || da.target_function.1.value() == sa.target_function.1.value()
+                {
+                    continue 'outer;
+                }
+            }
+            same_filtered.push(sa);
+        }
+
+        different.append(&mut same_filtered);
+        different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
+        different
     }
 
     /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_fields(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+    pub fn find_all_fields(&mut self, tn: &TypeName) -> Vec<(Symbol, N::Type)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
-        let fields = match &tn.value {
-            TypeName_::Multiple(_) => BTreeSet::new(),
-            // TODO(cswords): are there any valid builtin fielsd?
-            TypeName_::Builtin(_) => BTreeSet::new(),
-            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => BTreeSet::new(),
+        let fields_info = match &tn.value {
+            TypeName_::Multiple(_) => vec![],
+            // TODO(cswords): are there any valid builtin fields?
+            TypeName_::Builtin(_) => vec![],
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => vec![],
             TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
-                DatatypeKind::Enum => BTreeSet::new(),
+                DatatypeKind::Enum => vec![],
                 DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
-                    N::StructFields::Native(_) => BTreeSet::new(),
+                    N::StructFields::Native(_) => vec![],
                     N::StructFields::Defined(is_positional, fields) => {
                         if *is_positional {
-                            (0..fields.len()).map(|n| format!("{}", n).into()).collect()
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (_, _, (_, t)))| (format!("{}", idx).into(), t.clone()))
+                                .collect::<Vec<_>>()
                         } else {
-                            fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
+                            fields
+                                .key_cloned_iter()
+                                .map(|(k, (_, t))| (k.value(), t.clone()))
+                                .collect::<Vec<_>>()
                         }
                     }
                 },
             },
         };
-        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
-        fields
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
+        fields_info
     }
 
     pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
         self.ide_info.add_ide_annotation(loc, info);
+    }
+}
+
+impl MatchContext<false> for Context<'_> {
+    fn env(&mut self) -> &mut CompilationEnv {
+        self.env
+    }
+
+    fn env_ref(&self) -> &CompilationEnv {
+        self.env
+    }
+
+    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
+    /// should only be called in match expansion, which will have its body processed in HLIR
+    /// translation after type expansion.
+    fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
+        let id = self.next_match_var_id();
+        let name = new_match_var_name(&name, id);
+        // NOTE: Since these variables are only used for counterexample generation, etc., color
+        // does not matter.
+        sp(
+            loc,
+            N::Var_ {
+                name,
+                id: id as u16,
+                color: 0,
+            },
+        )
+    }
+
+    fn program_info(&self) -> &ProgramInfo<false> {
+        &self.modules
     }
 }
 
@@ -1231,6 +1133,7 @@ pub fn make_struct_type(
     n: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
+    context.emit_warning_if_deprecated(m, n.0, None);
     let tn = sp(loc, TypeName_::ModuleType(*m, *n));
     let sdef = context.struct_definition(m, n);
     match ty_args_opt {
@@ -1367,6 +1270,7 @@ pub fn make_enum_type(
     enum_: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
+    context.emit_warning_if_deprecated(mident, enum_.0, None);
     let tn = sp(loc, TypeName_::ModuleType(*mident, *enum_));
     let edef = context.enum_definition(mident, enum_);
     match ty_args_opt {
@@ -1425,6 +1329,7 @@ pub fn make_constant_type(
     c: &ConstantName,
 ) -> Type {
     let in_current_module = Some(m) == context.current_module.as_ref();
+    context.emit_warning_if_deprecated(m, c.0, None);
     let (defined_loc, signature) = {
         let ConstantInfo {
             attributes: _,
@@ -1533,22 +1438,54 @@ pub fn make_method_call_type(
         return None;
     };
 
-    let function_ty = make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+    let target_f = target_f.with_loc(method.loc);
+    let function_ty = make_function_type(
+        context,
+        loc,
+        &target_m,
+        &target_f,
+        ty_args_opt,
+        Some(method),
+    );
 
     Some((target_m, target_f, function_ty))
 }
 
+/// Make a new resolved function type for the provided function and type arguments.
+/// This also checks call visibility, including recording new friends for `public(package)`.
 pub fn make_function_type(
     context: &mut Context,
     loc: Loc,
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
+    method_opt: Option<Name>,
 ) -> ResolvedFunctionType {
-    let in_current_module = match &context.current_module {
-        Some(current) => m == current,
-        None => false,
-    };
+    context.emit_warning_if_deprecated(m, f.0, method_opt);
+    let return_ty = make_function_type_no_visibility_check(context, loc, m, f, ty_args_opt);
+    let finfo = context.function_info(m, f);
+    let defined_loc = finfo.defined_loc;
+    check_function_visibility(
+        context,
+        defined_loc,
+        loc,
+        m,
+        f,
+        finfo.entry,
+        finfo.visibility,
+    );
+    return_ty
+}
+
+/// Make a new resolved function type for the provided function and type arguments.
+/// THIS DOES NOT CHECK CALL VISIBILITY, AND SHOULD BE USED CAREFULLY.
+pub fn make_function_type_no_visibility_check(
+    context: &mut Context,
+    loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    ty_args_opt: Option<Vec<Type>>,
+) -> ResolvedFunctionType {
     let finfo = context.function_info(m, f);
     let macro_ = finfo.macro_;
     let constraints: Vec<_> = finfo
@@ -1596,13 +1533,35 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
+}
+
+fn check_function_visibility(
+    context: &mut Context,
+    defined_loc: Loc,
+    usage_loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    entry_opt: Option<Loc>,
+    visibility: Visibility,
+) {
+    let in_current_module = match &context.current_module {
+        Some(current) => m == current,
+        None => false,
+    };
     let public_for_testing =
-        public_testing_visibility(context.env, context.current_package, f, finfo.entry);
+        public_testing_visibility(context.env, context.current_package, f, entry_opt);
     let is_testing_context = context.is_testing_context();
     let supports_public_package = context
         .env
         .supports_feature(context.current_package, FeatureGate::PublicPackage);
-    match finfo.visibility {
+    match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
@@ -1617,10 +1576,13 @@ pub fn make_function_type(
                 Visibility::PUBLIC,
                 friend_or_package,
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to internal function '{m}::{f}'")),
+                (
+                    usage_loc,
+                    format!("Invalid call to internal function '{m}::{f}'"),
+                ),
                 (defined_loc, internal_msg),
             );
         }
@@ -1656,10 +1618,10 @@ pub fn make_function_type(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
@@ -1671,21 +1633,14 @@ pub fn make_function_type(
             );
             let internal_msg =
                 format!("This function can only be called from a 'friend' of module '{m}'",);
-            visibility_error(
+            report_visibility_error(
                 context,
                 public_for_testing,
-                (loc, msg),
+                (usage_loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Public(_) => (),
-    };
-    ResolvedFunctionType {
-        declared: defined_loc,
-        macro_,
-        ty_args,
-        params,
-        return_: return_ty,
     }
 }
 
@@ -1715,7 +1670,7 @@ pub fn public_testing_visibility(
     callee_entry.map(PublicForTesting::Entry)
 }
 
-fn visibility_error(
+fn report_visibility_error(
     context: &mut Context,
     public_for_testing: Option<PublicForTesting>,
     (call_loc, call_msg): (Loc, impl ToString),
@@ -1743,7 +1698,7 @@ fn visibility_error(
             diag.add_secondary_label((test_loc, test_msg))
         }
     }
-    context.env.add_diag(diag)
+    context.env.add_diag(diag);
 }
 
 pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
@@ -2031,6 +1986,30 @@ pub fn unfold_type(subst: &Subst, sp!(loc, t_): Type) -> Type {
     }
 }
 
+pub fn unfold_type_recur(subst: &Subst, sp!(_loc, t_): &mut Type) {
+    match t_ {
+        Type_::Var(i) => {
+            let last_tvar = forward_tvar(subst, *i);
+            match subst.get(last_tvar) {
+                Some(sp!(_, Type_::Var(_))) => unreachable!(),
+                None => {
+                    *t_ = Type_::Anything;
+                }
+                Some(inner) => {
+                    *t_ = inner.value.clone();
+                }
+            }
+        }
+        Type_::Unit | Type_::Param(_) | Type_::Anything | Type_::UnresolvedError => (),
+        Type_::Ref(_, inner) => unfold_type_recur(subst, inner),
+        Type_::Apply(_, _, args) => args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty)),
+        Type_::Fun(args, ret) => {
+            args.iter_mut().for_each(|ty| unfold_type_recur(subst, ty));
+            unfold_type_recur(subst, ret);
+        }
+    }
+}
+
 // Equivelent to unfold_type, but only returns the loc.
 // The hope is to point to the last loc in a chain of type var's, giving the loc closest to the
 // actual type in the source code
@@ -2237,6 +2216,7 @@ fn instantiate_apply_impl(
             (0..*len).map(|_| AbilitySet::empty()).collect()
         }
         sp!(_, N::TypeName_::ModuleType(m, n)) => {
+            context.emit_warning_if_deprecated(m, n.0, None);
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
             let tps = match context.datatype_kind(m, n) {
                 DatatypeKind::Struct => context.struct_tparams(m, n),

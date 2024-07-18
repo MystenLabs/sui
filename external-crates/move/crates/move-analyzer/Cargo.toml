@@ -10,22 +10,32 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
 codespan-reporting.workspace = true
+crossbeam.workspace = true
 derivative.workspace = true
 dunce.workspace = true
 im.workspace = true
 itertools.workspace = true
+json_comments.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
-tempfile.workspace = true
-url.workspace = true
-vfs.workspace = true
-clap.workspace = true
-crossbeam.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+url.workspace = true
+vfs.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+
+[[test]]
+name = "ide_testsuite"
+harness = false
+

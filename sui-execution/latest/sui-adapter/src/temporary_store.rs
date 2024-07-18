@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
+use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
@@ -18,7 +19,7 @@ use sui_types::execution::{
 use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -31,6 +32,7 @@ use sui_types::{
     object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
+    SUI_DENY_LIST_OBJECT_ID,
 };
 use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
@@ -60,6 +62,14 @@ pub struct TemporaryStore<'backing> {
     /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
     /// any of the objects referenced in this set.
     receiving_objects: Vec<ObjectRef>,
+
+    // TODO: Now that we track epoch here, there are a few places we don't need to pass it around.
+    /// The current epoch.
+    cur_epoch: EpochId,
+
+    /// The set of per-epoch config objects that were loaded during execution, and are not in the
+    /// input objects. This allows us to commit them to the effects.
+    loaded_per_epoch_config_objects: RwLock<BTreeSet<ObjectID>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -71,6 +81,7 @@ impl<'backing> TemporaryStore<'backing> {
         receiving_objects: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
+        cur_epoch: EpochId,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
@@ -102,6 +113,8 @@ impl<'backing> TemporaryStore<'backing> {
             wrapped_object_containers: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
+            cur_epoch,
+            loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
         }
     }
 
@@ -228,6 +241,8 @@ impl<'backing> TemporaryStore<'backing> {
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
+        // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
+        let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -236,6 +251,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_cost_summary,
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
+            loaded_per_epoch_config_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1003,6 +1019,24 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
+    }
+
+    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult {
+        let result = check_coin_deny_list_v2_during_execution(
+            written_objects,
+            self.cur_epoch,
+            self.store.as_object_store(),
+        );
+        // The denylist object is only loaded if there are regulated transfers.
+        // And also if we already have it in the input there is no need to commit it again in the effects.
+        if result.num_non_gas_coin_owners > 0
+            && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID)
+        {
+            self.loaded_per_epoch_config_objects
+                .write()
+                .insert(SUI_DENY_LIST_OBJECT_ID);
+        }
+        result
     }
 }
 

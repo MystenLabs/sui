@@ -237,10 +237,7 @@ impl TestRunner {
             .authority_state
             .execute_certificate(&ct, &epoch_store)
             .await
-            .unwrap()
-            .inner()
-            .clone()
-            .into_data();
+            .unwrap();
 
         if self.aggressive_pruning_enabled {
             self.authority_state

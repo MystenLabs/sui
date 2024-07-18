@@ -34,6 +34,7 @@ impl TestService {
         }
     }
 
+    #[cfg_attr(msim, allow(dead_code))]
     pub(crate) fn add_own_blocks(&mut self, blocks: Vec<Bytes>) {
         self.own_blocks.extend(blocks);
     }
@@ -81,5 +82,13 @@ impl NetworkService for Mutex<TestService> {
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         self.lock().handle_fetch_commits.push((peer, commit_range));
         Ok((vec![], vec![]))
+    }
+
+    async fn handle_fetch_latest_blocks(
+        &self,
+        _peer: AuthorityIndex,
+        _authorities: Vec<AuthorityIndex>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        unimplemented!("Unimplemented")
     }
 }

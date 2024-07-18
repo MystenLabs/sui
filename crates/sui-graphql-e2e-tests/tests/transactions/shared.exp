@@ -7,6 +7,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 
 
 task 2 'programmable'. lines 24-25:
 mutated: object(0,0)
+unchanged_shared: object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'programmable'. lines 27-28:
@@ -31,7 +32,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x4ee7139b5d6f4174c29aafe19065f54db98d788a364a0b530c831e4c1e29b325",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "get"
                 }
@@ -44,17 +45,17 @@ Response: {
               "nodes": [
                 {
                   "__typename": "SharedObjectRead",
-                  "address": "0xf2a29d33149d41cc8cab647800347b8b070859f839c382d88bf303720c9d52ed",
+                  "address": "0x563d2842f82166a5603cfc2374792b4eef15b571ab3cc3066a869cd991ebf144",
                   "version": 2,
-                  "digest": "3ozjeXArXdzBduuSAq5NqoXyw7nkLS41WbKZkCTGa674",
+                  "digest": "Gp5Rr2Nuy61twdaS5SLnyThvnFpQRAE8ZpaNYzaFD7Yo",
                   "object": {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x4ee7139b5d6f4174c29aafe19065f54db98d788a364a0b530c831e4c1e29b325::m::Foo"
+                          "repr": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928::m::Foo"
                         },
                         "json": {
-                          "id": "0xf2a29d33149d41cc8cab647800347b8b070859f839c382d88bf303720c9d52ed",
+                          "id": "0x563d2842f82166a5603cfc2374792b4eef15b571ab3cc3066a869cd991ebf144",
                           "x": "0"
                         }
                       }
@@ -71,7 +72,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x4ee7139b5d6f4174c29aafe19065f54db98d788a364a0b530c831e4c1e29b325",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "inc"
                 }
@@ -91,12 +92,12 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x4ee7139b5d6f4174c29aafe19065f54db98d788a364a0b530c831e4c1e29b325",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "get"
                 },
                 {
-                  "package": "0x4ee7139b5d6f4174c29aafe19065f54db98d788a364a0b530c831e4c1e29b325",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "inc"
                 }

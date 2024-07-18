@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useSignTransactionBlock, useSuiClient } from "@mysten/dapp-kit";
+import { useSignTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { SuiTransactionBlockResponse } from "@mysten/sui/client";
-import { TransactionBlock } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import toast from "react-hot-toast";
 
 /**
@@ -13,10 +13,10 @@ import toast from "react-hot-toast";
  */
 export function useTransactionExecution() {
   const client = useSuiClient();
-  const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
+  const { mutateAsync: signTransactionBlock } = useSignTransaction();
 
   const executeTransaction = async (
-    txb: TransactionBlock,
+    txb: Transaction,
   ): Promise<SuiTransactionBlockResponse | void> => {
     try {
       const signature = await signTransactionBlock({

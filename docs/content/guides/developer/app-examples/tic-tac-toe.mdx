@@ -2,354 +2,209 @@
 title: Tic-Tac-Toe
 ---
 
-This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that marks the board on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a multisig, where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts. This guide compares and contrasts the design philosophies behind the three different games, as well as the pros and cons of each.
+This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that marks the board on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a multisig, where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts.
 
-## tic_tac_toe.move
+## owned.move ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move))
 
 In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
 
-```move
-public struct TicTacToe has key {
-    id: UID,
-    gameboard: vector<vector<Option<Mark>>>,
-    cur_turn: u8,
-    game_status: u8,
-    x_address: address,
-    o_address: address,
-}
-```
+{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Game noComments}
 
-Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a marker object with their intended placement and send it to the admin.
+Because the players don’t own the game board, they cannot directly mutate it. Instead, they indicate their move by creating a `Mark` object with their intended placement and send it to the game object using transfer to object:
 
-```move
-public struct Mark has key, store {
-    id: UID,
-    player: address,
-    row: u64,
-    col: u64,
-}
-```
-The main logic of the game is in the following `create_game` function.
+{@inject: examples/tic-tac-toe/move/sources/owned.move#struct=Mark noComments}
 
-```move
-/// `x_address` and `o_address` are the account address of the two players.
-public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
-    // TODO: Validate sender address, only GameAdmin can create games.
+Games are created with the `new` function:
 
-    let id = object::new(ctx);
-    let game_id = id.to_inner();
-    let gameboard = vector[
-        vector[option::none(), option::none(), option::none()],
-        vector[option::none(), option::none(), option::none()],
-        vector[option::none(), option::none(), option::none()],
-    ];
-    let game = TicTacToe {
-        id,
-        gameboard,
-        cur_turn: 0,
-        game_status: IN_PROGRESS,
-        x_address: x_address,
-        o_address: o_address,
-    };
-    transfer::transfer(game, ctx.sender());
-    let cap = MarkMintCap {
-        id: object::new(ctx),
-        game_id,
-        remaining_supply: 5,
-    };
-    transfer::transfer(cap, x_address);
-    let cap = MarkMintCap {
-        id: object::new(ctx),
-        game_id,
-        remaining_supply: 5,
-    };
-    transfer::transfer(cap, o_address);
-}
-```
+{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=new noComments}
 
 Some things to note:
-- The game exists as an owned object in the game admin’s account.
-- The board is initialized as a 3x3 vector of vectors, instantiated via `option::none()`.
-- Both players get five `MarkMintCap`s each, giving them the capability to place a maximum of five marks each.
+- The game is created and returned by this function, it is up to its creator to send it to the game admin to own.
+- There is an `admin` field, we can ignore this for now, as it is only relevant for the multisig approach.
+- The first player is sent a `TurnCap` which gives them permission to take the next turn, they consume it to make their `Mark`, and the admin mints and sends a new `TurnCap` to the next player if the game has not ended.
 
-When playing the game, the admin operates a service that keeps track of these placement requests. When a request is received (`send_mark_to_game`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
+When playing the game, the admin operates a service that keeps track of marks using events. When a request is received (`send_mark`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
 
-```move
-/// Generate a new mark intended for location (row, col).
-/// This new mark is not yet placed, just transferred to the game.
-public entry fun send_mark_to_game(
-    cap: &mut MarkMintCap,
-    game_address: address,
-    row: u64,
-    col: u64,
-    ctx: &mut TxContext,
-) {
-    if (row > 2 || col > 2) {
-        abort EInvalidLocation
-    };
-    let mark = mint_mark(cap, row, col, ctx);
-    // Once an event is emitted, it should be observed by a game server.
-    // The game server will then call `place_mark` to place this mark.
-    event::emit(MarkSentEvent {
-        game_id: *&cap.game_id,
-        mark_id: object::id(&mark),
-    });
-    transfer::public_transfer(mark, game_address);
-}
+{@inject: examples/tic-tac-toe/move/sources/owned.move#fun=send_mark,place_mark noComments}
 
-public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
-    // If we are placing the mark at the wrong turn, or if game has ended,
-    // destroy the mark.
-    let addr = game.get_cur_turn_address();
-    if (game.game_status != IN_PROGRESS || &addr != &mark.player) {
-        mark.delete();
-        return
-    };
-    let cell = get_cell_mut_ref(game, mark.row, mark.col);
-    if (cell.is_some()) {
-        // There is already a mark in the desired location.
-        // Destroy the mark.
-        mark.delete();
-        return
-    };
-    cell.fill(mark);
-    game.update_winner();
-    game.cur_turn = game.cur_turn + 1;
+To view the entire source code, see the [owned.move source file](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/owned.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
 
-    if (game.game_status != IN_PROGRESS) {
-        // Notify the server that the game ended so that it can delete the game.
-        event::emit(GameEndEvent { game_id: object::id(game) });
-        if (game.game_status == X_WIN) {
-            transfer::transfer(Trophy { id: object::new(ctx) }, *&game.x_address);
-        } else if (game.game_status == O_WIN) {
-            transfer::transfer(Trophy { id: object::new(ctx) }, *&game.o_address);
-        }
-    }
-}
-```
+An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
 
-To view the entire source code, see the [tic_tac_toe.move source file](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
+<details>
+<summary>
+Toggle full source code
+</summary>
+{@inject: examples/tic-tac-toe/move/sources/owned.move}
+</details>
 
-An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects. 
-
-## shared_tic_tac_toe.move
+## shared.move ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/move/sources/shared.move))
 
 In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
 
-As the following code demonstrates, the `TicTacToe` object in this example is almost identical to the one before it. The only difference is that the `gameboard` is represented as `vector<vector<u8>>` instead of `vector<vector<Option<Mark>>>`. The reason for this approach is explained following the code.
+As the following code demonstrates, the `Game` object in this example is almost identical to the one before it. The only differences are that it does not include an `admin` field, which is only relevant for the multisig version of the game, and it does not have `store`, because it only ever exists as a shared object (so it cannot be transferred or wrapped).
 
-```move
-public struct TicTacToe has key {
-    id: UID,
-    gameboard: vector<vector<u8>>,
-    cur_turn: u8,
-    game_status: u8,
-    x_address: address,
-    o_address: address,
-}
-```
+{@inject: examples/tic-tac-toe/move/sources/shared.move#struct=Game noComments}
 
-Take a look at the `create_game` function:
+Take a look at the `new` function:
 
-```move
-/// `x_address` and `o_address` are the account address of the two players.
-public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
-    // TODO: Validate sender address, only GameAdmin can create games.
+{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=new noComments}
 
-    let id = object::new(ctx);
-    let gameboard = vector[
-        vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
-        vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
-        vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
-    ];
-    let game = TicTacToe {
-        id,
-        gameboard,
-        cur_turn: 0,
-        game_status: IN_PROGRESS,
-        x_address: x_address,
-        o_address: o_address,
-    };
-    // Make the game a shared object so that both players can mutate it.
-    transfer::share_object(game);
-}
-```
+Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint a `TurnCap` because the only two addresses that can play this game are `x` and `o`, and this is checked in the next function, `place_mark`:
 
-As the code demonstrates, each position on the board is replaced with `MARK_EMPTY` instead of `option::none()`. Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint `MarkMintCap`s to the two players anymore, because the only two addresses that can play this game are `x_address` and `o_address`, and this is checked in the next function, `place_mark`:
+{@inject: examples/tic-tac-toe/move/sources/shared.move#fun=place_mark noComments}
 
-```move
-public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
-    assert!(row < 3 && col < 3, EInvalidLocation);
-    assert!(game.game_status == IN_PROGRESS, EGameEnded);
-    let addr = game.get_cur_turn_address();
-    assert!(addr == ctx.sender(), EInvalidTurn);
+<details>
+<summary>
+Toggle full source code
+</summary>
+{@inject: examples/tic-tac-toe/move/sources/shared.move}
+</details>
 
-    let cell = &mut game.gameboard[row as u64][col as u64];
-    assert!(*cell == MARK_EMPTY, ECellOccupied);
+## Multisig
 
-    *cell = game.cur_turn % 2;
-    game.update_winner();
-    game.cur_turn = game.cur_turn + 1;
-
-    if (game.game_status != IN_PROGRESS) {
-        // Notify the server that the game ended so that it can delete the game.
-        event::emit(GameEndEvent { game_id: object::id(game) });
-        if (game.game_status == X_WIN) {
-            transfer::transfer(Trophy { id: object::new(ctx) }, game.x_address);
-        } else if (game.game_status == O_WIN) {
-            transfer::transfer(Trophy { id: object::new(ctx) }, game.o_address);
-        }
-    }
-}
-```
-
-You can find the full source code in [shared_tic_tac_toe.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move)
-
-## multisig_tic_tac_toe.move
+Multisig tic-tac-toe uses the same Move code as the owned version of the game, but interacts with it differently. Instead of transferring the game to a third party admin account, the players create a 1-of-2 multisig account to act as the game admin, so that either player can sign on behalf of the "admin". This pattern offers a way to share a resource between up to ten accounts without relying on consensus.
 
 In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, because there are only two players, the previous example is a more convenient use case. However, this example illustrates that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
 
-Examine the two main objects in this game, `TicTacToe`, and `Mark`:
+### Creating a multisig account ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/MultiSig.ts))
 
-```move
-/// TicTacToe struct should be owned by the game-admin.
-/// This should be the multisig 1-out-of-2 account for both players to make moves.
-public struct TicTacToe has key {
-    id: UID,
-    /// Column major 3x3 game board
-    gameboard: vector<u8>,
-    /// Index of current turn
-    cur_turn: u8,
-    x_addr: address,
-    o_addr: address,
-    /// 0 not finished, 1 X Winner, 2 O Winner, 3 Draw
-    finished: u8
-}
+A multisig account is defined by the public keys of its constituent keypairs, their relative weights, and the threshold -- a signature is valid if the sum of weights of constituent keys having signed the signature exceeds the threshold. In our case, there are at most two constituent keypairs, they each have a weight of 1 and the threshold is also 1. A multisig cannot mention the same public key twice, so keys are deduplicated before the multisig is formed to deal with the case where a player is playing themselves:
 
-/// Mark is passed between game-admin (Multisig 1-out-of-2), x-player and o-player.
-public struct Mark has key {
-    id: UID,
-    /// Column major 3x3 placement
-    placement: Option<u8>,
-    /// Flag that sets when the Mark is owned by a player
-    during_turn: bool,
-    /// Multi-sig account to place the mark
-    game_owners: address,
-    /// TicTacToe object this mark is part of
-    game_id: ID
-}
-``` 
+```typescript title="examples/tic-tac-toe/ui/src/MultiSig.ts"
+export function multiSigPublicKey(keys: PublicKey[]): MultiSigPublicKey {
+  const deduplicated: { [key: string]: PublicKey } = {};
+  for (const key of keys) {
+    deduplicated[key.toSuiAddress()] = key;
+  }
 
-The biggest difference in this `TicTacToe` object is that gameboard is a `vector<u8>`, but otherwise the main functionality of the gameboard is the same. The `Mark` object makes a reappearance in this version, as we need a way to identify the current player’s turn (this was accomplished in the shared version of the game in the `TicTacToe` object itself).
-
-The `create_game` function is fairly similar to one in the previous two versions:
-
-```move
-/// This should be called by a multisig (1 out of 2) address.
-/// x_addr and o_addr should be the two addresses part-taking in the multisig.
-public fun create_game(x_addr: address, o_addr: address, ctx: &mut TxContext) {
-    let id = object::new(ctx);
-    let game_id = id.to_inner();
-
-    let tic_tac_toe = TicTacToe {
-        id,
-        gameboard: vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY,
-                           MARK_EMPTY, MARK_EMPTY, MARK_EMPTY,
-                           MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
-        cur_turn: 0,
-        x_addr,
-        o_addr,
-        finished: 0
-    };
-    let mark = Mark {
-        id: object::new(ctx),
-        placement: option::none(),
-        during_turn: true, // Mark is passed to x_addr
-        game_owners: ctx.sender(),
-        game_id
-    };
-
-    transfer::transfer(tic_tac_toe, ctx.sender());
-    transfer::transfer(mark, x_addr);
+  return MultiSigPublicKey.fromPublicKeys({
+    threshold: 1,
+    publicKeys: Object.values(deduplicated).map((publicKey) => {
+      return { publicKey, weight: 1 };
+    }),
+  });
 }
 ```
 
-Now take a look at `send_mark_to_game` and `place_mark`:
+<details>
+<summary>
+Toggle full source code
+</summary>
+{@inject: examples/tic-tac-toe/ui/src/MultiSig.ts}
+</details>
 
-```move
-/// This is called by the one of the two addresses participating in the multisig, but not from
-/// the multisig itself.
-/// row: [0 - 2], col: [0 - 2]
-public fun send_mark_to_game(mark: Mark, row: u8, col: u8) {
-    // Mark.during_turn prevents multisig-acc from editing mark.placement after it has been sent to it.
-    assert!(mark.during_turn, ETriedToCheat);
+Note that an address on Sui can be derived from a public key (this fact is used in the previous example to deduplicate public keys based on their accompanying address), but the opposite is not true. This means that to start a game of multisig tic-tac-toe, players must exchange public keys, instead of addresses.
 
-    mark.placement.fill(get_index(row, col));
-    mark.during_turn = false;
-    let game_owners = mark.game_owners;
-    transfer::transfer(mark, game_owners);
+### Building a multisig transaction ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/hooks/useTransactions.ts))
+
+When creating a multisig game, we make use of `owned::Game`'s `admin` field to store the multisig public key for the admin account. Later, it will be used to form the signature for the second transaction in the move. This does not need to be stored on-chain, but we are doing so for convenience so that when we fetch the `Game`'s contents, we get the public key as well:
+
+```typescript title="examples/tic-tac-toe/ui/src/hooks/useTransactions.ts"
+newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {
+  const admin = multiSigPublicKey([player, opponent]);
+  const tx = new Transaction();
+
+  const game = tx.moveCall({
+    target: `${this.packageId}::owned::new`,
+    arguments: [
+      tx.pure.address(player.toSuiAddress()),
+      tx.pure.address(opponent.toSuiAddress()),
+      tx.pure(bcs.vector(bcs.u8()).serialize(admin.toRawBytes()).toBytes()),
+    ],
+  });
+
+  tx.transferObjects([game], admin.toSuiAddress());
+
+  return tx;
 }
+```
 
-/// This is called by the multisig account to execute the last move by the player who used
-/// `send_mark_to_game`.
-public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
-    assert!(mark.game_id == game.id.to_inner(), EMarkIsFromDifferentGame);
+<details>
+<summary>
+Toggle full source code
+</summary>
+{@inject: examples/tic-tac-toe/ui/src/hooks/useTransactions.ts}
+</details>
 
-    let addr = get_cur_turn_address(game);
-    // Note here we empty the option
-    let placement: u8 = mark.placement.extract();
-    if (game.gameboard.get_cell_by_index(placement) != MARK_EMPTY) {
-        mark.during_turn = true;
-        transfer::transfer(mark, addr);
-        return
-    };
+### Placing a mark ([source](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui/src/pages/Game.tsx))
 
-    // Apply turn
-    let mark_symbol = if (addr == game.x_addr) {
-        MARK_X
-    } else {
-        MARK_O
-    };
-    * &mut game.gameboard[placement as u64] = mark_symbol;
+Placing a mark requires two transactions, just like the owned example, but they are both driven by one of the players. The first transaction is executed by the player as themselves, to send the mark to the game, and the second is executed by the player acting as the admin to place the mark they just sent. In the React frontend, this is performed as follows:
 
-    // Check for winner
-    let winner = game.get_winner();
+```typescript title="examples/tic-tac-toe/ui/src/pages/Game.tsx"
+function OwnedGame({
+  game,
+  trophy,
+  invalidateGame,
+  invalidateTrophy,
+}: {
+  game: GameData;
+  trophy: Trophy;
+  invalidateGame: InvalidateGameQuery;
+  invalidateTrophy: InvalidateTrophyQuery;
+}): ReactElement {
+  const adminKey = game.admin ? new MultiSigPublicKey(new Uint8Array(game.admin)) : null;
 
-    // Game ended!
-    if (winner.is_some()) {
-        let played_as = winner.extract();
-        let (winner, loser, finished) = if (played_as == MARK_X) {
-            (game.x_addr, game.o_addr, 1)
-        } else {
-            (game.o_addr, game.x_addr, 2)
-        };
+  const client = useSuiClient();
+  const signAndExecute = useExecutor();
+  const multiSignAndExecute = useExecutor({
+    execute: ({ bytes, signature }) => {
+      const multiSig = adminKey!!.combinePartialSignatures([signature]);
+      return client.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature: [multiSig, signature],
+        options: {
+          showRawEffects: true,
+        },
+      });
+    },
+  });
 
-        transfer::transfer(
-            TicTacToeTrophy {
-                id: object::new(ctx),
-                winner,
-                loser,
-                played_as,
-                game_id: game.id.to_inner()
-            },
-            winner
+  const [turnCap, invalidateTurnCap] = useTurnCapQuery(game.id);
+  const account = useCurrentAccount();
+  const tx = useTransactions()!!;
+
+  // ...
+
+  const onMove = (row: number, col: number) => {
+    signAndExecute(
+      {
+        tx: tx.sendMark(turnCap?.data!!, row, col),
+        options: { showObjectChanges: true },
+      },
+      ({ objectChanges }) => {
+        const mark = objectChanges?.find(
+          (c) => c.type === 'created' && c.objectType.endsWith('::Mark'),
         );
 
-        mark.delete();
-        * &mut game.finished = finished;
-        return
-    } else if (game.cur_turn >= 8) {    // Draw
-        make.delete();
-        * &mut game.finished = 3;
-        return
-    };
+        if (mark && mark.type === 'created') {
+          const recv = tx.receiveMark(game, mark);
+          recv.setSender(adminKey!!.toSuiAddress());
+          recv.setGasOwner(account?.address!!);
 
-    // Next turn
-    * &mut game.cur_turn = game.cur_turn + 1;
-    addr = game.get_cur_turn_address();
-    mark.during_turn = true;
-    transfer::transfer(mark, addr);
+          multiSignAndExecute({ tx: recv }, () => {
+            invalidateGame();
+            invalidateTrophy();
+            invalidateTurnCap();
+          });
+        }
+      },
+    );
+  };
+
+  // ...
 }
 ```
 
-The first function is straightforward. The player sends the location of the mark to the multisig account. Then in the next function, the multisig actually places down the mark the player requested, as well as all the logic to check to see if there is a winner, end the game, and award a player a trophy if so, or to advance to the next player’s turn if not. See the [multisig_tic-tac-toe repo](https://github.com/MystenLabs/multisig_tic-tac-toe) for the full source code on this version of the game.
+<details>
+<summary>
+Toggle full source code
+</summary>
+{@inject: examples/tic-tac-toe/ui/src/pages/Game.tsx}
+</details>
+
+The first step is to get the multisig public key, which was written to `Game.admin` earlier. Then two executor hooks are created: The first is to sign and execute as the current player, and the second is to sign and execute as the multisig/admin account. After the wallet has serialized and signed the transaction the second executor creates a multisig from the wallet signature and executes the transaction with two signatures: Authorizing on behalf of the multisig and the wallet.
+
+The reason for the two signatures is clearer when looking at the construction of the `recv` transaction: The multisig authorizes access to the `Game`, and the wallet authorizes access to the gas object. This is because the multisig account does not hold any coins of its own, so it relies on the player account to sponsor the transaction.
+
+You can find an example React front-end supporting both the multi-sig and shared variants of the game in the [ui directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/ui), and a CLI written in Rust in the [cli directory](https://github.com/MystenLabs/sui/blob/main/examples/tic-tac-toe/cli).

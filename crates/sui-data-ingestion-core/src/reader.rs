@@ -16,6 +16,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
+use sui_rest_api::Client;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -65,6 +66,7 @@ impl Default for ReaderOptions {
 enum RemoteStore {
     ObjectStore(Box<dyn ObjectStore>),
     Rest(sui_rest_api::Client),
+    Hybrid(Box<dyn ObjectStore>, sui_rest_api::Client),
 }
 
 impl CheckpointReader {
@@ -99,21 +101,41 @@ impl CheckpointReader {
             || self.data_limiter.exceeds()
     }
 
+    async fn fetch_from_object_store(
+        store: &dyn ObjectStore,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> Result<(CheckpointData, usize)> {
+        let path = Path::from(format!("{}.chk", checkpoint_number));
+        let response = store.get(&path).await?;
+        let bytes = response.bytes().await?;
+        Ok((Blob::from_bytes::<CheckpointData>(&bytes)?, bytes.len()))
+    }
+
+    async fn fetch_from_full_node(
+        client: &Client,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> Result<(CheckpointData, usize)> {
+        let checkpoint = client.get_full_checkpoint(checkpoint_number).await?;
+        let size = bcs::serialized_size(&checkpoint)?;
+        Ok((checkpoint, size))
+    }
+
     async fn remote_fetch_checkpoint_internal(
         store: &RemoteStore,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<(CheckpointData, usize)> {
         match store {
             RemoteStore::ObjectStore(store) => {
-                let path = Path::from(format!("{}.chk", checkpoint_number));
-                let response = store.get(&path).await?;
-                let bytes = response.bytes().await?;
-                Ok((Blob::from_bytes::<CheckpointData>(&bytes)?, bytes.len()))
+                Self::fetch_from_object_store(store, checkpoint_number).await
             }
             RemoteStore::Rest(client) => {
-                let checkpoint = client.get_full_checkpoint(checkpoint_number).await?;
-                let size = bcs::serialized_size(&checkpoint)?;
-                Ok((checkpoint, size))
+                Self::fetch_from_full_node(client, checkpoint_number).await
+            }
+            RemoteStore::Hybrid(store, client) => {
+                match Self::fetch_from_full_node(client, checkpoint_number).await {
+                    Ok(result) => Ok(result),
+                    Err(_) => Self::fetch_from_object_store(store, checkpoint_number).await,
+                }
             }
         }
     }
@@ -155,7 +177,15 @@ impl CheckpointReader {
             .remote_store_url
             .clone()
             .expect("remote store url must be set");
-        let store = if url.ends_with("/rest") {
+        let store = if let Some((fn_url, remote_url)) = url.split_once('|') {
+            let object_store = create_remote_store_client(
+                remote_url.to_string(),
+                self.remote_store_options.clone(),
+                self.options.timeout_secs,
+            )
+            .expect("failed to create remote store client");
+            RemoteStore::Hybrid(object_store, sui_rest_api::Client::new(fn_url))
+        } else if url.ends_with("/rest") {
             RemoteStore::Rest(sui_rest_api::Client::new(url))
         } else {
             let object_store = create_remote_store_client(
@@ -220,25 +250,28 @@ impl CheckpointReader {
         })
         .await?;
 
+        let mut read_source: &str = "local";
         if self.remote_store_url.is_some()
             && (checkpoints.is_empty()
                 || checkpoints[0].checkpoint_summary.sequence_number
                     > self.current_checkpoint_number)
         {
             checkpoints = self.remote_fetch();
+            read_source = "remote";
         } else {
             // cancel remote fetcher execution because local reader has made progress
             self.remote_fetcher_receiver = None;
         }
 
         info!(
-            "Reader. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            "Read from {}. Current checkpoint number: {}, pruning watermark: {}, new updates: {:?}",
+            read_source,
             self.current_checkpoint_number,
             self.last_pruned_watermark,
             checkpoints.len(),
         );
         for checkpoint in checkpoints {
-            if self.remote_store_url.is_none()
+            if read_source == "local"
                 && checkpoint.checkpoint_summary.sequence_number > self.current_checkpoint_number
             {
                 break;
@@ -324,6 +357,8 @@ impl CheckpointReader {
         watcher
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
+        self.gc_processed_files(self.last_pruned_watermark)
+            .expect("Failed to clean the directory");
 
         loop {
             tokio::select! {

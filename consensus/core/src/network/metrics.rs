@@ -14,6 +14,9 @@ pub(crate) struct NetworkMetrics {
     pub(crate) network_type: IntGaugeVec,
     pub(crate) inbound: Arc<NetworkRouteMetrics>,
     pub(crate) outbound: Arc<NetworkRouteMetrics>,
+    #[cfg_attr(msim, allow(dead_code))]
+    pub(crate) tcp_connection_metrics: Arc<TcpConnectionMetrics>,
+    pub(crate) quinn_connection_metrics: Arc<QuinnConnectionMetrics>,
 }
 
 impl NetworkMetrics {
@@ -28,11 +31,55 @@ impl NetworkMetrics {
             .unwrap(),
             inbound: Arc::new(NetworkRouteMetrics::new("inbound", registry)),
             outbound: Arc::new(NetworkRouteMetrics::new("outbound", registry)),
+            tcp_connection_metrics: Arc::new(TcpConnectionMetrics::new(registry)),
+            quinn_connection_metrics: Arc::new(QuinnConnectionMetrics::new(registry)),
         }
     }
 }
 
-#[derive(Clone)]
+#[cfg_attr(msim, allow(dead_code))]
+pub(crate) struct TcpConnectionMetrics {
+    /// Send buffer size of consensus TCP socket.
+    pub(crate) socket_send_buffer_size: IntGauge,
+    /// Receive buffer size of consensus TCP socket.
+    pub(crate) socket_recv_buffer_size: IntGauge,
+    /// Max send buffer size of TCP socket.
+    pub(crate) socket_send_buffer_max_size: IntGauge,
+    /// Max receive buffer size of TCP socket.
+    pub(crate) socket_recv_buffer_max_size: IntGauge,
+}
+
+impl TcpConnectionMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            socket_send_buffer_size: register_int_gauge_with_registry!(
+                "tcp_socket_send_buffer_size",
+                "Send buffer size of consensus TCP socket.",
+                registry
+            )
+            .unwrap(),
+            socket_recv_buffer_size: register_int_gauge_with_registry!(
+                "tcp_socket_recv_buffer_size",
+                "Receive buffer size of consensus TCP socket.",
+                registry
+            )
+            .unwrap(),
+            socket_send_buffer_max_size: register_int_gauge_with_registry!(
+                "tcp_socket_send_buffer_max_size",
+                "Max send buffer size of TCP socket.",
+                registry
+            )
+            .unwrap(),
+            socket_recv_buffer_max_size: register_int_gauge_with_registry!(
+                "tcp_socket_recv_buffer_max_size",
+                "Max receive buffer size of TCP socket.",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub(crate) struct QuinnConnectionMetrics {
     /// The connection status of known peers. 0 if not connected, 1 if connected.
     pub network_peer_connected: IntGaugeVec,
@@ -80,33 +127,33 @@ impl QuinnConnectionMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
             network_peer_connected: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_connected"),
+                "quinn_network_peer_connected",
                 "The connection status of a peer. 0 if not connected, 1 if connected",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peers: register_int_gauge_with_registry!(
-                format!("quinn_network_peers"),
+                "quinn_network_peers",
                 "The number of connected peers.",
                 registry
             )
             .unwrap(),
             network_peer_disconnects: register_int_counter_vec_with_registry!(
-                format!("quinn_network_peer_disconnects"),
+                "quinn_network_peer_disconnects",
                 "Number of disconnect events per peer.",
                 &["peer_id", "hostname", "reason"],
                 registry
             )
             .unwrap(),
             socket_receive_buffer_size: register_int_gauge_with_registry!(
-                format!("quinn_socket_receive_buffer_size"),
+                "quinn_socket_receive_buffer_size",
                 "Receive buffer size of Anemo socket.",
                 registry
             )
             .unwrap(),
             socket_send_buffer_size: register_int_gauge_with_registry!(
-                format!("quinn_socket_send_buffer_size"),
+                "quinn_socket_send_buffer_size",
                 "Send buffer size of Anemo socket.",
                 registry
             )
@@ -114,42 +161,42 @@ impl QuinnConnectionMetrics {
 
             // PathStats
             network_peer_rtt: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_rtt"),
+                "quinn_network_peer_rtt",
                 "The rtt for a peer connection in ms.",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_lost_packets: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_lost_packets"),
+                "quinn_network_peer_lost_packets",
                 "The total number of lost packets for a peer connection.",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_lost_bytes: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_lost_bytes"),
+                "quinn_network_peer_lost_bytes",
                 "The total number of lost bytes for a peer connection.",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_sent_packets: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_sent_packets"),
+                "quinn_network_peer_sent_packets",
                 "The total number of sent packets for a peer connection.",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_congestion_events: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_congestion_events"),
+                "quinn_network_peer_congestion_events",
                 "The total number of congestion events for a peer connection.",
                 &["peer_id", "hostname"],
                 registry
             )
             .unwrap(),
             network_peer_congestion_window: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_congestion_window"),
+                "quinn_network_peer_congestion_window",
                 "The congestion window for a peer connection.",
                 &["peer_id", "hostname"],
                 registry
@@ -158,21 +205,21 @@ impl QuinnConnectionMetrics {
 
             // FrameStats
             network_peer_closed_connections: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_closed_connections"),
+                "quinn_network_peer_closed_connections",
                 "The number of closed connections for a peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_max_data: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_max_data"),
+                "quinn_network_peer_max_data",
                 "The number of max data frames for a peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_data_blocked: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_data_blocked"),
+                "quinn_network_peer_data_blocked",
                 "The number of data blocked frames for a peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry
@@ -181,21 +228,21 @@ impl QuinnConnectionMetrics {
 
             // UDPStats
             network_peer_udp_datagrams: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_udp_datagrams"),
+                "quinn_network_peer_udp_datagrams",
                 "The total number datagrams observed by the UDP peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_udp_bytes: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_udp_bytes"),
+                "quinn_network_peer_udp_bytes",
                 "The total number bytes observed by the UDP peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry
             )
             .unwrap(),
             network_peer_udp_transmits: register_int_gauge_vec_with_registry!(
-                format!("quinn_network_peer_udp_transmits"),
+                "quinn_network_peer_udp_transmits",
                 "The total number transmits observed by the UDP peer connection.",
                 &["peer_id", "hostname", "direction"],
                 registry

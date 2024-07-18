@@ -29,6 +29,7 @@ Response: {
 task 4 'programmable'. lines 35-37:
 created: object(4,0)
 mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 5 'create-checkpoint'. lines 39-39:

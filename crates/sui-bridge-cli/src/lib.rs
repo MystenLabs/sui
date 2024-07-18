@@ -57,7 +57,7 @@ pub enum BridgeCommand {
     #[clap(name = "create-bridge-client-key")]
     CreateBridgeClientKey {
         path: PathBuf,
-        #[clap(name = "use-ecdsa", long, default_value = "false")]
+        #[clap(long = "use-ecdsa", default_value = "false")]
         use_ecdsa: bool,
     },
     /// Read bridge key from a file and print related information
@@ -65,13 +65,13 @@ pub enum BridgeCommand {
     #[clap(name = "examine-key")]
     ExamineKey {
         path: PathBuf,
-        #[clap(name = "is-validator-key", long)]
+        #[clap(long = "is-validator-key")]
         is_validator_key: bool,
     },
     #[clap(name = "create-bridge-node-config-template")]
     CreateBridgeNodeConfigTemplate {
         path: PathBuf,
-        #[clap(name = "run-client", long)]
+        #[clap(long = "run-client")]
         run_client: bool,
     },
     /// Governance client to facilitate and execute Bridge governance actions
@@ -84,6 +84,9 @@ pub enum BridgeCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+        /// If true, only collect signatures but not execute on chain
+        #[clap(long = "dry-run")]
+        dry_run: bool,
     },
     /// Given proxy address of SuiBridge contract, print other contract addresses
     #[clap(name = "print-eth-bridge-addresses")]
@@ -104,6 +107,10 @@ pub enum BridgeCommand {
     PrintBridgeCommitteeInfo {
         #[clap(long = "sui-rpc-url")]
         sui_rpc_url: String,
+        #[clap(long, default_value = "false")]
+        hex: bool,
+        #[clap(long, default_value = "false")]
+        ping: bool,
     },
     /// Client to facilitate and execute Bridge actions
     #[clap(name = "client")]
@@ -188,7 +195,7 @@ pub enum GovernanceClientCommands {
         implementation_address: EthAddress,
         /// Function selector with params types, e.g. `foo(uint256,bool,string)`
         #[clap(name = "function-selector", long)]
-        function_selector: String,
+        function_selector: Option<String>,
         /// Params to be passed to the function, e.g. `420,false,hello`
         #[clap(name = "params", use_value_delimiter = true, long)]
         params: Vec<String>,
@@ -212,7 +219,7 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             nonce: *nonce,
             chain_id,
             blocklist_type: *blocklist_type,
-            blocklisted_members: pubkeys_hex.clone(),
+            members_to_update: pubkeys_hex.clone(),
         }),
         GovernanceClientCommands::UpdateLimit {
             nonce,
@@ -281,13 +288,19 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             implementation_address,
             function_selector,
             params,
-        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            nonce: *nonce,
-            chain_id,
-            proxy_address: *proxy_address,
-            new_impl_address: *implementation_address,
-            call_data: encode_call_data(function_selector, params),
-        }),
+        } => {
+            let call_data = match function_selector {
+                Some(function_selector) => encode_call_data(function_selector, params),
+                None => vec![],
+            };
+            BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                nonce: *nonce,
+                chain_id,
+                proxy_address: *proxy_address,
+                new_impl_address: *implementation_address,
+                call_data,
+            })
+        }
     }
 }
 
@@ -390,7 +403,6 @@ pub struct LoadedBridgeCliConfig {
     /// Key pair for Sui operations
     sui_key: SuiKeyPair,
     /// Key pair for Eth operations, must be Secp256k1 key
-    // pub eth_key: SuiKeyPair,
     eth_signer: EthSigner,
 }
 
@@ -498,7 +510,7 @@ pub enum BridgeClientCommands {
     #[clap(name = "deposit-native-ether-on-eth")]
     DepositNativeEtherOnEth {
         #[clap(long)]
-        ether_amount: u64,
+        ether_amount: f64,
         #[clap(long)]
         target_chain: u8,
         #[clap(long)]
@@ -538,7 +550,12 @@ impl BridgeClientCommands {
                     config.eth_bridge_proxy_address,
                     Arc::new(config.eth_signer().clone()),
                 );
-                let amount = U256::from(ether_amount) * U256::exp10(18);
+                // Note: even with f64 there may still be loss of precision even there are a lot of 0s
+                let int_part = ether_amount.trunc() as u64;
+                let frac_part = ether_amount.fract();
+                let int_wei = U256::from(int_part) * U256::exp10(18);
+                let frac_wei = U256::from((frac_part * 1_000_000_000_000_000_000f64) as u64);
+                let amount = int_wei + frac_wei;
                 let eth_tx = eth_sui_bridge
                     .bridge_eth(sui_recipient_address.to_vec().into(), target_chain)
                     .value(amount);

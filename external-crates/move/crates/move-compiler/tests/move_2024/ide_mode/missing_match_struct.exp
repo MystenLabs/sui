@@ -1,18 +1,30 @@
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:16
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:9
   │
-6 │         match (s) {
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:1:31
+  │
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:7:16
+  │
+7 │         match (s) {
   │                ^ Pattern '_' not covered
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-12 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'x' in '0x42::m::S'
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-12 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'y' in '0x42::m::S'
 

@@ -36,8 +36,8 @@ export function GasFees({ sender, transaction }: Props) {
 					{isPending
 						? 'Estimating...'
 						: isError
-						? 'Gas estimation failed'
-						: `${isSponsored ? 0 : gasBudget} ${GAS_SYMBOL}`}
+							? 'Gas estimation failed'
+							: `${isSponsored ? 0 : gasBudget} ${GAS_SYMBOL}`}
 				</DescriptionItem>
 				{isSponsored && (
 					<>

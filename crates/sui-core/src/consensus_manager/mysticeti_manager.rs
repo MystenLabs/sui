@@ -16,6 +16,7 @@ use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
@@ -83,7 +84,12 @@ impl MysticetiManager {
             match type_str.to_lowercase().as_str() {
                 "anemo" => return ConsensusNetwork::Anemo,
                 "tonic" => return ConsensusNetwork::Tonic,
-                _ => {}
+                _ => {
+                    info!(
+                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
+                        type_str
+                    );
+                }
             }
         }
         epoch_store.protocol_config().consensus_network()

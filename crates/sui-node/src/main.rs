@@ -14,11 +14,11 @@ use sui_config::node::RunWithRange;
 use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
 use sui_node::metrics;
-use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::multiaddr::Multiaddr;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();

@@ -19,6 +19,7 @@ use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,
 };
+use sui_json_rpc_types::CheckpointPage;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -28,7 +29,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
     TransactionFilter,
 };
-use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldName;
@@ -686,23 +686,24 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the loaded child objects response for the provided digest, or an error upon failure.
-    ///
-    /// Loaded child objects ([SuiLoadedChildObject](sui_json_rpc_types::SuiLoadedChildObject)) are the non-input objects that the transaction at the digest loaded
-    /// in response to dynamic field accesses.
-    pub async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiRpcResult<SuiLoadedChildObjectsResponse> {
-        Ok(self.api.http.get_loaded_child_objects(digest).await?)
-    }
-
     /// Return the protocol config, or an error upon failure.
     pub async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
     ) -> SuiRpcResult<ProtocolConfigResponse> {
         Ok(self.api.http.get_protocol_config(version).await?)
+    }
+
+    pub async fn try_get_object_before_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> SuiRpcResult<SuiPastObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .try_get_object_before_version(object_id, version)
+            .await?)
     }
 }
 

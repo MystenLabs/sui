@@ -30,9 +30,7 @@ mod test {
         clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
         register_fail_point_if, register_fail_points, sim_test,
     };
-    use sui_protocol_config::{
-        PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, SupportedProtocolVersions,
-    };
+    use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -41,6 +39,7 @@ mod test {
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::transaction::{
         DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     };
@@ -87,6 +86,29 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(test_cluster, 60).await;
+    }
+
+    // Ensure that with half the committee enabling v2 and half not,
+    // we still arrive at the same root state hash (we do not split brain
+    // fork).
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_accumulator_v2_partial_upgrade() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = init_test_cluster_builder(4, 1000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .with_state_accumulator_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
+            .build()
+            .await
+            .into();
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -226,7 +248,7 @@ mod test {
         }
         state
             .database_for_testing()
-            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store(), None)
             .await;
     }
 
@@ -391,7 +413,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(4, 1000).await;
+        let test_cluster = build_test_cluster(10, 1000).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
@@ -412,11 +434,19 @@ mod test {
     // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
+        let mode;
         let checkpoint_budget_factor; // The checkpoint congestion control budget in respect to transaction budget.
+        let txn_count_limit; // When using transaction count as congestion control mode, the limit of transactions per object per commit.
         let max_deferral_rounds;
         {
             let mut rng = thread_rng();
+            mode = if rng.gen_bool(0.5) {
+                PerObjectCongestionControlMode::TotalGasBudget
+            } else {
+                PerObjectCongestionControlMode::TotalTxCount
+            };
             checkpoint_budget_factor = rng.gen_range(1..20);
+            txn_count_limit = rng.gen_range(1..=10);
             max_deferral_rounds = if rng.gen_bool(0.5) {
                 rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
@@ -425,20 +455,28 @@ mod test {
         }
 
         info!(
-            "test_simulated_load_shared_object_congestion_control setup. checkpoint_budget_factor: {:?}, max_deferral_rounds: {:?}.",
-            checkpoint_budget_factor, max_deferral_rounds
+            "test_simulated_load_shared_object_congestion_control setup.
+             mode: {:?}, checkpoint_budget_factor: {:?},
+             max_deferral_rounds: {:?},
+             txn_count_limit: {:?}",
+            mode, checkpoint_budget_factor, max_deferral_rounds, txn_count_limit
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
-            config.set_per_object_congestion_control_mode(
-                PerObjectCongestionControlMode::TotalGasBudget,
-            );
-            config.set_max_accumulated_txn_cost_per_object_in_checkpoint(
-                checkpoint_budget_factor
-                    * DEFAULT_VALIDATOR_GAS_PRICE
-                    * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-            );
-            config.set_max_deferral_rounds_for_congestion_control(max_deferral_rounds);
+            config.set_per_object_congestion_control_mode_for_testing(mode);
+            match mode {
+                PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
+                PerObjectCongestionControlMode::TotalGasBudget =>
+                config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                    checkpoint_budget_factor
+                        * DEFAULT_VALIDATOR_GAS_PRICE
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+                ),
+                PerObjectCongestionControlMode::TotalTxCount => config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
+                    txn_count_limit
+                ),
+            }
+            config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
         });
 
@@ -460,6 +498,18 @@ mod test {
         }
 
         test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config).await;
+    }
+
+    // Tests cluster liveness when DKG has failed.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_dkg_failure() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            config
+        });
+
+        let test_cluster = build_test_cluster(4, 30_000).await;
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -677,7 +727,7 @@ mod test {
         let test_cluster = build_test_cluster(6, 20_000).await;
 
         // Network should continue as long as nodes are participating in DKG representing
-        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // stake equal to 2f+1 PLUS proportion of stake represented by the
         // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
         // In this case we make sure it still works with 5/6 validators.
         let eligible_nodes: HashSet<_> = test_cluster

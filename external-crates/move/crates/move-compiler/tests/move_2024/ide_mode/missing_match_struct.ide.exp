@@ -1,26 +1,26 @@
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:16
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:7:16
   │
-6 │         match (s) {
+7 │         match (s) {
   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:6:19
+  ┌─ tests/move_2024/ide_mode/missing_match_struct.move:7:19
   │  
-6 │           match (s) {
+7 │           match (s) {
   │ ╭───────────────────^
-7 │ │         }
+8 │ │         }
   │ ╰─────────^ Missing arms: '0x42::m::S { x , y }'
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-12 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'x' in '0x42::m::S'
 
 error[E04016]: too few arguments
-   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:12:13
+   ┌─ tests/move_2024/ide_mode/missing_match_struct.move:13:13
    │
-12 │             S { } => 0
+13 │             S { } => 0
    │             ^^^^^ Missing pattern for field 'y' in '0x42::m::S'
 

@@ -1,16 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::TokenTransfer as DBTokenTransfer;
 use crate::models::TokenTransferData as DBTokenTransferData;
+use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use std::fmt::{Display, Formatter};
+use sui_types::base_types::{SuiAddress, TransactionDigest};
 
 pub mod config;
+pub mod eth_worker;
+pub mod latest_eth_syncer;
+pub mod metrics;
 pub mod models;
-pub mod postgres_writer;
+pub mod postgres_manager;
 pub mod schema;
-pub mod worker;
+pub mod sui_checkpoint_ingestion;
+pub mod sui_transaction_handler;
+pub mod sui_transaction_queries;
+pub mod sui_worker;
+pub mod types;
 
+#[derive(Clone)]
+pub enum ProcessedTxnData {
+    TokenTransfer(TokenTransfer),
+    Error(SuiTxnError),
+}
+
+#[derive(Clone)]
+pub struct SuiTxnError {
+    tx_digest: TransactionDigest,
+    sender: SuiAddress,
+    timestamp_ms: u64,
+    failure_status: String,
+    cmd_idx: Option<u64>,
+}
+
+#[derive(Clone)]
 pub struct TokenTransfer {
     chain_id: u8,
     nonce: u64,
@@ -24,6 +48,7 @@ pub struct TokenTransfer {
     data: Option<TokenTransferData>,
 }
 
+#[derive(Clone)]
 pub struct TokenTransferData {
     sender_address: Vec<u8>,
     destination_chain: u8,
@@ -63,7 +88,21 @@ impl TokenTransfer {
     }
 }
 
+impl SuiTxnError {
+    fn to_db(&self) -> SuiErrorTransactions {
+        SuiErrorTransactions {
+            txn_digest: self.tx_digest.inner().to_vec(),
+            sender_address: self.sender.to_vec(),
+            timestamp_ms: self.timestamp_ms as i64,
+            failure_status: self.failure_status.clone(),
+            cmd_idx: self.cmd_idx.map(|idx| idx as i64),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
+    DepositedUnfinalized,
     Deposited,
     Approved,
     Claimed,
@@ -72,6 +111,7 @@ pub(crate) enum TokenTransferStatus {
 impl Display for TokenTransferStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
+            TokenTransferStatus::DepositedUnfinalized => "DepositedUnfinalized",
             TokenTransferStatus::Deposited => "Deposited",
             TokenTransferStatus::Approved => "Approved",
             TokenTransferStatus::Claimed => "Claimed",
@@ -80,6 +120,7 @@ impl Display for TokenTransferStatus {
     }
 }
 
+#[derive(Clone)]
 enum BridgeDataSource {
     Sui,
     Eth,

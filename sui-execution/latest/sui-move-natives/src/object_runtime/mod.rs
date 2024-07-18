@@ -22,7 +22,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
-use object_store::ChildObjectStore;
+use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -40,6 +40,7 @@ use sui_types::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use tracing::error;
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
@@ -201,7 +202,7 @@ impl<'a> ObjectRuntime<'a> {
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction. In that case, we also skip adding it
         // to new_ids.
-        let was_present = self.state.deleted_ids.remove(&id);
+        let was_present = self.state.deleted_ids.shift_remove(&id);
         if !was_present {
             // mark the id as new
             self.state.new_ids.insert(id);
@@ -229,7 +230,7 @@ impl<'a> ObjectRuntime<'a> {
                 ));
         };
 
-        let was_new = self.state.new_ids.remove(&id);
+        let was_new = self.state.new_ids.shift_remove(&id);
         if !was_new {
             self.state.deleted_ids.insert(id);
         }
@@ -401,6 +402,51 @@ impl<'a> ObjectRuntime<'a> {
             .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
+    pub(crate) fn config_setting_unsequenced_read(
+        &mut self,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
+        field_setting_ty: &Type,
+        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_object_type: &MoveObjectType,
+    ) -> Option<Value> {
+        match self.child_object_store.config_setting_unsequenced_read(
+            config_id,
+            name_df_id,
+            field_setting_ty,
+            field_setting_layout,
+            field_setting_object_type,
+        ) {
+            Err(e) => {
+                error!(
+                    "Failed to read config setting.
+                    config_id: {config_id},
+                    name_df_id: {name_df_id},
+                    field_setting_object_type:  {field_setting_object_type:?},
+                    error: {e}"
+                );
+                None
+            }
+            Ok(ObjectResult::MismatchedType) | Ok(ObjectResult::Loaded(None)) => None,
+            Ok(ObjectResult::Loaded(Some(value))) => Some(value),
+        }
+    }
+
+    pub(super) fn config_setting_cache_update(
+        &mut self,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
+        setting_value_object_type: MoveObjectType,
+        value: Option<Value>,
+    ) {
+        self.child_object_store.config_setting_cache_update(
+            config_id,
+            name_df_id,
+            setting_value_object_type,
+            value,
+        )
+    }
+
     // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)
@@ -412,9 +458,7 @@ impl<'a> ObjectRuntime<'a> {
         self.state.finish(loaded_child_objects, child_effects)
     }
 
-    pub(crate) fn all_active_child_objects(
-        &self,
-    ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
+    pub(crate) fn all_active_child_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
         self.child_object_store.all_active_objects()
     }
 

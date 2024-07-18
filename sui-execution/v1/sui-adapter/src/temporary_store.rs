@@ -18,7 +18,7 @@ use sui_types::execution::{
 use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -358,6 +358,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_cost_summary,
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
+            BTreeSet::new(),
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1111,6 +1112,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
         unreachable!("Unused in v1")
+    }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> DenyListResult {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v1");
     }
 }
 

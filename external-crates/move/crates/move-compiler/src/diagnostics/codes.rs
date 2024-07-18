@@ -289,6 +289,7 @@ codes!(
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
+        DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -377,10 +378,12 @@ codes!(
         AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
     ],
     IDE: [
-        Autocomplete: { msg: "IDE autocomplete", severity: Note },
+        DotAutocomplete: { msg: "IDE dot autocomplete", severity: Note },
         MacroCallInfo: { msg: "IDE macro call info", severity: Note },
         ExpandedLambda: { msg: "IDE expanded lambda", severity: Note },
         MissingMatchArms: { msg: "IDE missing match arms", severity: Note },
+        EllipsisExpansion: { msg: "IDE ellipsis expansion", severity: Note },
+        PathAutocomplete: { msg: "IDE path autocomplete", severity: Note },
     ],
 );
 
