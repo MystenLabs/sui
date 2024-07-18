@@ -217,6 +217,7 @@ where
     ) -> anyhow::Result<(usize, Duration)> {
         let order = self
             .agg
+            .load()
             .committee
             .shuffle_by_stake_from_tx_digest(tx_digest);
         let position = order
@@ -464,11 +465,12 @@ mod tests {
     async fn test_validator_tx_finalizer_auth_agg_reconfig() {
         let (sender, _) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
-        let (_states, auth_agg, _clients) = create_validators(gas_object).await;
+        let (states, auth_agg, _clients) = create_validators(gas_object).await;
         let finalizer1 = ValidatorTxFinalizer::new_for_testing(
             auth_agg.clone(),
-            std::time::Duration::from_secs(10),
-            std::time::Duration::from_secs(60),
+            states[0].name,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
         );
         let mut new_auth_agg = (**auth_agg.load()).clone();
         let mut new_committee = (*new_auth_agg.committee).clone();
@@ -577,7 +579,7 @@ mod tests {
         let finalizers = (0..10)
             .map(|idx| {
                 ValidatorTxFinalizer::new(
-                    auth_agg.clone(),
+                    Arc::new(ArcSwap::new(auth_agg.clone())),
                     auth_agg.committee.voting_rights[idx].0,
                     &Registry::new(),
                 )

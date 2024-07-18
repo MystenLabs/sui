@@ -1418,7 +1418,7 @@ impl SuiNode {
         let enable_validator_tx_finalizer =
             config.enable_validator_tx_finalizer && chain != Chain::Mainnet;
         let validator_tx_finalizer = enable_validator_tx_finalizer.then_some(Arc::new(
-            ValidatorTxFinalizer::new(auth_agg, prometheus_registry),
+            ValidatorTxFinalizer::new(auth_agg, state.name, prometheus_registry),
         ));
         let validator_service = ValidatorService::new(
             state.clone(),
