@@ -14,18 +14,18 @@ config();
 		throw new Error('Private key not found');
 	}
 
-	const dbMM = new DeepBookMarketMaker(privateKey, 'testnet');
+	const mmClient = new DeepBookMarketMaker(privateKey, 'testnet');
 
-	dbMM.dbClient.addBalanceManager(
+	mmClient.dbClient.addBalanceManager(
 		'MANAGER_1', // Key of manager
 		'0x9f4acee19891c08ec571629df0a81786a8df72f71f4e38d860564c9e54265179', // Address of manager
 	);
 
 	const tx = new Transaction();
 
-	dbMM.placeLimitOrderExample(tx);
+	mmClient.placeLimitOrderExample(tx);
 
-	let res = await dbMM.signAndExecute(tx);
+	let res = await mmClient.signAndExecute(tx);
 
 	console.dir(res, { depth: null });
 })();
