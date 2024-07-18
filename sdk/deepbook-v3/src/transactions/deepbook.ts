@@ -409,6 +409,7 @@ export class DeepBookContract {
 					tx.pure.u64((priceLow * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
 					tx.pure.u64((priceHigh * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar),
 					tx.pure.bool(isBid),
+					tx.object(SUI_CLOCK_OBJECT_ID),
 				],
 				typeArguments: [baseCoin.type, quoteCoin.type],
 			});
@@ -426,7 +427,11 @@ export class DeepBookContract {
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::get_level2_ticks_from_mid`,
-			arguments: [tx.object(pool.address), tx.pure.u64(tickFromMid)],
+			arguments: [
+				tx.object(pool.address),
+				tx.pure.u64(tickFromMid),
+				tx.object(SUI_CLOCK_OBJECT_ID),
+			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
