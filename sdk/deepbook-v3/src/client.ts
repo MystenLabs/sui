@@ -10,7 +10,7 @@ import { DeepBookContract } from './transactions/deepbook.js';
 import { DeepBookAdminContract } from './transactions/deepbookAdmin.js';
 import { FlashLoanContract } from './transactions/flashLoans.js';
 import { GovernanceContract } from './transactions/governance.js';
-import type { Environment } from './types/index.js';
+import type { BalanceManager, Environment } from './types/index.js';
 import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
 import type { CoinMap, PoolMap } from './utils/constants.js';
 
@@ -42,18 +42,26 @@ export class DeepBookClient {
 		client,
 		address,
 		env,
+		balanceManagers,
 		coins,
 		pools,
 	}: {
 		client: SuiClient;
 		address: string;
 		env: Environment;
+		balanceManagers?: { [key: string]: BalanceManager };
 		coins?: CoinMap;
 		pools?: PoolMap;
 	}) {
 		this.client = client;
 		this.#address = normalizeSuiAddress(address);
-		this.#config = new DeepBookConfig({ address: this.#address, env, coins, pools });
+		this.#config = new DeepBookConfig({
+			address: this.#address,
+			env,
+			balanceManagers,
+			coins,
+			pools,
+		});
 		this.balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);
 		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
@@ -379,23 +387,5 @@ export class DeepBookClient {
 			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
 
 		return adjusted_mid_price;
-	}
-
-	/**
-	 * @description Add a balance manager
-	 * @param managerKey Key for the balance manager
-	 * @param managerId ID of the balance manager
-	 * @param tradeCapId Optional tradeCap ID
-	 */
-	addBalanceManager(managerKey: string, managerId: string, tradeCapId?: string) {
-		this.#config.balanceManagers[managerKey] = {
-			address: managerId,
-			tradeCap: tradeCapId,
-		};
-		this.balanceManager = new BalanceManagerContract(this.#config);
-		this.deepBook = new DeepBookContract(this.#config);
-		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
-		this.flashLoans = new FlashLoanContract(this.#config);
-		this.governance = new GovernanceContract(this.#config);
 	}
 }

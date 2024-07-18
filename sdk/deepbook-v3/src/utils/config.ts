@@ -37,16 +37,16 @@ export class DeepBookConfig {
 		env,
 		address,
 		adminCap,
+		balanceManagers,
 		coins,
 		pools,
-		balanceManagers,
 	}: {
 		env: Environment;
 		address: string;
 		adminCap?: string;
+		balanceManagers?: { [key: string]: BalanceManager };
 		coins?: CoinMap;
 		pools?: PoolMap;
-		balanceManagers?: { [key: string]: BalanceManager };
 	}) {
 		this.address = normalizeSuiAddress(address);
 		this.adminCap = adminCap;

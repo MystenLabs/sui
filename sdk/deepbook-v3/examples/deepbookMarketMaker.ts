@@ -7,13 +7,18 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { Transaction } from '@mysten/sui/transactions';
 
 import { DeepBookClient } from '../src/index.js'; // Adjust path according to new structure
+import type { BalanceManager } from '../src/types/index.js';
 
 export class DeepBookMarketMaker {
 	dbClient: DeepBookClient;
 	keypair: Keypair;
 	suiClient: SuiClient;
 
-	constructor(keypair: string | Keypair, env: 'testnet' | 'mainnet') {
+	constructor(
+		keypair: string | Keypair,
+		env: 'testnet' | 'mainnet',
+		balanceManagers?: { [key: string]: BalanceManager },
+	) {
 		if (typeof keypair === 'string') {
 			keypair = this.getSignerFromPK(keypair);
 		}
@@ -26,6 +31,7 @@ export class DeepBookMarketMaker {
 			address: address,
 			env: env,
 			client: suiClient,
+			balanceManagers: balanceManagers,
 		});
 		this.suiClient = suiClient;
 	}
@@ -102,9 +108,9 @@ export class DeepBookMarketMaker {
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
 				clientOrderId: 888,
-				price: 0.1,
+				price: 1,
 				quantity: 10,
-				isBid: true,
+				isBid: false,
 				// orderType default: no restriction
 				// selfMatchingOption default: allow self matching
 				// payWithDeep default: true

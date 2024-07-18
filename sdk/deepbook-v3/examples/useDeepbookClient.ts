@@ -14,12 +14,14 @@ config();
 		throw new Error('Private key not found');
 	}
 
-	const mmClient = new DeepBookMarketMaker(privateKey, 'testnet');
-
-	mmClient.dbClient.addBalanceManager(
-		'MANAGER_1', // Key of manager
-		'0x9f4acee19891c08ec571629df0a81786a8df72f71f4e38d860564c9e54265179', // Address of manager
-	);
+	// Initialize with balance managers if created
+	const balanceManagers = {
+		MANAGER_1: {
+			address: '',
+			tradeCap: '',
+		},
+	};
+	const mmClient = new DeepBookMarketMaker(privateKey, 'testnet', balanceManagers);
 
 	const tx = new Transaction();
 
@@ -31,7 +33,8 @@ config();
 	mmClient.dbClient.balanceManager.depositIntoManager('MANAGER_1', 1, 'SUI')(tx);
 
 	// Example PTB call
-	mmClient.flashLoanExample(tx);
+	await mmClient.placeLimitOrderExample(tx);
+	await mmClient.flashLoanExample(tx);
 
 	let res = await mmClient.signAndExecute(tx);
 
