@@ -10,7 +10,7 @@ import { DeepBookContract } from './transactions/deepbook.js';
 import { DeepBookAdminContract } from './transactions/deepbookAdmin.js';
 import { FlashLoanContract } from './transactions/flashLoans.js';
 import { GovernanceContract } from './transactions/governance.js';
-import type { BalanceManager, Environment } from './types/index.js';
+import type { Environment } from './types/index.js';
 import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
 import type { CoinMap, PoolMap } from './utils/constants.js';
 
@@ -23,7 +23,6 @@ import type { CoinMap, PoolMap } from './utils/constants.js';
  */
 export class DeepBookClient {
 	client: SuiClient;
-	#balanceManagers: { [key: string]: BalanceManager } = {};
 	#config: DeepBookConfig;
 	#address: string;
 	balanceManager: BalanceManagerContract;
@@ -67,19 +66,6 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description Add a balance manager
-	 * @param managerKey Key for the balance manager
-	 * @param managerId ID of the balance manager
-	 * @param tradeCapId Optional tradeCap ID
-	 */
-	addBalanceManager(managerKey: string, managerId: string, tradeCapId?: string) {
-		this.#balanceManagers[managerKey] = {
-			address: managerId,
-			tradeCap: tradeCapId,
-		};
-	}
-
-	/**
 	 * @description Check the balance of a balance manager for a specific coin
 	 * @param managerKey Key of the balance manager
 	 * @param coinKey Key of the coin
@@ -87,7 +73,7 @@ export class DeepBookClient {
 	 */
 	async checkManagerBalance(managerKey: string, coinKey: string) {
 		const tx = new Transaction();
-		const balanceManager = this.getBalanceManager(managerKey);
+		const balanceManager = this.#config.getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
 		tx.add(this.balanceManager.checkManagerBalance(balanceManager.address, coin));
@@ -378,15 +364,20 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description Get the balance manager by key
-	 * @param managerKey Key of the balance manager
-	 * @returns The BalanceManager object
+	 * @description Add a balance manager
+	 * @param managerKey Key for the balance manager
+	 * @param managerId ID of the balance manager
+	 * @param tradeCapId Optional tradeCap ID
 	 */
-	getBalanceManager(managerKey: string): BalanceManager {
-		if (!Object.hasOwn(this.#balanceManagers, managerKey)) {
-			throw new Error(`Balance manager with key ${managerKey} not found.`);
-		}
-
-		return this.#balanceManagers[managerKey];
+	addBalanceManager(managerKey: string, managerId: string, tradeCapId?: string) {
+		this.#config.balanceManagers[managerKey] = {
+			address: managerId,
+			tradeCap: tradeCapId,
+		};
+		this.balanceManager = new BalanceManagerContract(this.#config);
+		this.deepBook = new DeepBookContract(this.#config);
+		this.deepBookAdmin = new DeepBookAdminContract(this.#config);
+		this.flashLoans = new FlashLoanContract(this.#config);
+		this.governance = new GovernanceContract(this.#config);
 	}
 }

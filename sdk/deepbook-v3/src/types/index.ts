@@ -38,7 +38,7 @@ export enum SelfMatchingOptions {
 
 export interface PlaceLimitOrderParams {
 	poolKey: string;
-	balanceManager: BalanceManager;
+	balanceManagerKey: string;
 	clientOrderId: number;
 	price: number;
 	quantity: number;

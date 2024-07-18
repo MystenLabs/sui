@@ -36,7 +36,7 @@ export class DeepBookContract {
 	placeLimitOrder = (params: PlaceLimitOrderParams) => (tx: Transaction) => {
 		const {
 			poolKey,
-			balanceManager,
+			balanceManagerKey,
 			clientOrderId,
 			price,
 			quantity,
@@ -49,6 +49,7 @@ export class DeepBookContract {
 
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const inputPrice = (price * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar;
