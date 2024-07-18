@@ -21,6 +21,7 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
+import { useCoinMetadataOverrides } from '_src/ui/app/hooks/useCoinMetadataOverride';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -114,6 +115,7 @@ export function TokenRow({
 
 	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
+	const coinMetadataOverrides = useCoinMetadataOverrides();
 	return (
 		<Tag
 			className={clsx(
@@ -126,7 +128,7 @@ export function TokenRow({
 				<CoinIcon coinType={coinType} size="md" />
 				<div className="flex flex-col gap-1 items-start">
 					<Text variant="body" color="gray-90" weight="semibold" truncate>
-						{coinMeta?.name || symbol}
+						{coinMetadataOverrides[coinBalance.coinType]?.name || coinMeta?.name || symbol}
 					</Text>
 
 					{renderActions && (

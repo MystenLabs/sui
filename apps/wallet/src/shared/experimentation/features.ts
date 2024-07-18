@@ -29,6 +29,7 @@ export enum FEATURES {
 	WALLET_DEFI = 'wallet-defi',
 	WALLET_FEE_ADDRESS = 'wallet-fee-address',
 	DEEP_BOOK_CONFIGS = 'deep-book-configs',
+	TOKEN_METADATA_OVERRIDES = 'token-metadata-overrides',
 }
 
 export function setAttributes(network?: { apiEnv: API_ENV; customRPC?: string | null }) {
