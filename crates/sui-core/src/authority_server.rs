@@ -999,20 +999,18 @@ macro_rules! handle_with_decoration {
                 let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
-                            match header_val.parse::<SocketAddr>() {
-                                Ok(socket_addr) => Some(socket_addr.ip()),
-                                Err(err) => {
+                            header_val.parse::<IpAddr>().ok().or_else(|| {
+                                header_val.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
                                     $self.metrics.forwarded_header_parse_error.inc();
                                     error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
                                         Please ensure that your proxy is configured to resolve client domains to an \
                                         IP address before writing header",
                                         header_val,
-                                        err,
                                     );
                                     None
-                                }
-                            }
+                                })
+                            })
                         }
                         Err(e) => {
                             // TODO: once we have confirmed that no legitimate traffic

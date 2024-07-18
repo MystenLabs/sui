@@ -158,24 +158,25 @@ async fn process_raw_request<L: Logger>(
         Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
         Some(ClientIdSource::XForwardedFor) => {
             let do_header_parse = |header: &HeaderValue| {
-                header.to_str().map(|s| {
-                    match s.parse::<SocketAddr>() {
-                        Ok(addr) => Some(addr.ip()),
-                        Err(err) => {
-                            error!(
-                                "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
-                                Please ensure that your proxy is configured to resolve client domains to an \
-                                IP address before writing header",
-                                s,
-                                err,
-                            );
-                            None
-                        }
+                match header.to_str() {
+                    Ok(header_val) => {
+                        header_val.parse::<IpAddr>().ok().or_else(|| {
+                            header_val.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
+                                error!(
+                                    "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
+                                    Please ensure that your proxy is configured to resolve client domains to an \
+                                    IP address before writing header",
+                                    header_val,
+                                );
+                                None
+                            })
+                        })
                     }
-                }).unwrap_or_else(|_| {
-                    error!("Failed to parse x-forwarded-for header value of {:?} to string", header);
-                    None
-                })
+                    Err(e) => {
+                        error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
+                        None
+                    } 
+                }
             };
             if let Some(header) = headers.get("x-forwarded-for") {
                 do_header_parse(header)
