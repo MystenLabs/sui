@@ -51,7 +51,7 @@ export interface PlaceLimitOrderParams {
 
 export interface PlaceMarketOrderParams {
 	poolKey: string;
-	balanceManager: BalanceManager;
+	balanceManagerKey: string;
 	clientOrderId: number;
 	quantity: number;
 	isBid: boolean;

@@ -85,7 +85,7 @@ export class DeepBookContract {
 	placeMarketOrder = (params: PlaceMarketOrderParams) => (tx: Transaction) => {
 		const {
 			poolKey,
-			balanceManager,
+			balanceManagerKey,
 			clientOrderId,
 			quantity,
 			isBid,
@@ -95,6 +95,7 @@ export class DeepBookContract {
 
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
