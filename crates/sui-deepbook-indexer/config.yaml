@@ -1,12 +1,14 @@
 # config.yaml format:
 # Database connection URL
-db_url: postgres://dariorussi:dariodb@localhost:5432/deepbook
+# db_url: postgres://dariorussi:dariodb@localhost:5432/deepbook
+db_url: postgres://<USER>:<DB>@localhost:5432/<TABLE>
 
 # URL of the remote store
 remote_store_url: http://checkpoints.testnet.sui.io
 # remote_store_url: http://sjc-bnt-rpc-00.mystenlabs.com:9000/rest
 # Path to the checkpoints
-checkpoints_path: /Users/dariorussi/tmp/deepbook_indexer/checkpoints
+# checkpoints_path: /Users/dariorussi/tmp/deepbook_indexer/checkpoints
+checkpoints_path: <local_dir>/checkpoints
 # Number of concurrent operations
 concurrency: 1
 
