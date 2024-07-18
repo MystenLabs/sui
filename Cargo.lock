@@ -12606,6 +12606,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-deepbook-indexer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backoff",
+ "bcs",
+ "bin-version",
+ "chrono",
+ "clap",
+ "diesel",
+ "futures",
+ "hex-literal 0.3.4",
+ "mysten-metrics",
+ "prometheus",
+ "serde",
+ "serde_yaml 0.8.26",
+ "sui-config",
+ "sui-data-ingestion-core",
+ "sui-sdk 1.30.0",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "test-cluster",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-e2e-tests"
 version = "1.30.0"
 dependencies = [
