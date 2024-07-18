@@ -153,6 +153,7 @@
 		"@scure/bip39": "^1.2.1",
 		"@suchipi/femver": "^1.0.0",
 		"bech32": "^2.0.0",
+		"bignumber.js": "^9.1.1",
 		"gql.tada": "^1.7.0",
 		"graphql": "^16.8.1",
 		"tweetnacl": "^1.0.3",
