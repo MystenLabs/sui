@@ -190,6 +190,9 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
+
+    #[serde(default = "bool_true")]
+    pub enable_validator_tx_finalizer: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
