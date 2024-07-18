@@ -39,16 +39,18 @@ export class DeepBookConfig {
 		adminCap,
 		coins,
 		pools,
+		balanceManagers,
 	}: {
 		env: Environment;
 		address: string;
 		adminCap?: string;
 		coins?: CoinMap;
 		pools?: PoolMap;
+		balanceManagers?: { [key: string]: BalanceManager };
 	}) {
 		this.address = normalizeSuiAddress(address);
 		this.adminCap = adminCap;
-		this.balanceManagers = {};
+		this.balanceManagers = balanceManagers || {};
 
 		if (env === 'mainnet') {
 			this.#coins = coins || mainnetCoins;

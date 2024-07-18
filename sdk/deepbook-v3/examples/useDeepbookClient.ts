@@ -23,7 +23,15 @@ config();
 
 	const tx = new Transaction();
 
-	mmClient.placeLimitOrderExample(tx);
+	// Read only call
+	console.log(await mmClient.dbClient.checkManagerBalance('MANAGER_1', 'SUI'));
+	console.log(await mmClient.dbClient.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
+
+	// Balance manager contract call
+	mmClient.dbClient.balanceManager.depositIntoManager('MANAGER_1', 1, 'SUI')(tx);
+
+	// Example PTB call
+	mmClient.flashLoanExample(tx);
 
 	let res = await mmClient.signAndExecute(tx);
 

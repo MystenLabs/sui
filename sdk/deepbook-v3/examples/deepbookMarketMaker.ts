@@ -102,9 +102,9 @@ export class DeepBookMarketMaker {
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
 				clientOrderId: 888,
-				price: 1,
+				price: 0.1,
 				quantity: 10,
-				isBid: false,
+				isBid: true,
 				// orderType default: no restriction
 				// selfMatchingOption default: allow self matching
 				// payWithDeep default: true

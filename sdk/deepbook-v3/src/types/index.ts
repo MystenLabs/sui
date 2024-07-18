@@ -61,7 +61,7 @@ export interface PlaceMarketOrderParams {
 
 export interface ProposalParams {
 	poolKey: string;
-	balanceManager: BalanceManager;
+	balanceManagerKey: string;
 	takerFee: number;
 	makerFee: number;
 	stakeRequired: number;

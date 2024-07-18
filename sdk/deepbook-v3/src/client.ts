@@ -73,10 +73,9 @@ export class DeepBookClient {
 	 */
 	async checkManagerBalance(managerKey: string, coinKey: string) {
 		const tx = new Transaction();
-		const balanceManager = this.#config.getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
-		tx.add(this.balanceManager.checkManagerBalance(balanceManager.address, coin));
+		tx.add(this.balanceManager.checkManagerBalance(managerKey, coinKey));
 		const res = await this.client.devInspectTransactionBlock({
 			sender: this.#address,
 			transactionBlock: tx,
@@ -241,6 +240,8 @@ export class DeepBookClient {
 	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.add(this.deepBook.getLevel2Range(pool, priceLow, priceHigh, isBid));
 		const res = await this.client.devInspectTransactionBlock({
@@ -254,8 +255,12 @@ export class DeepBookClient {
 		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
 
 		return {
-			prices: parsed_prices,
-			quantities: parsed_quantities,
+			prices: parsed_prices.map(
+				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			),
+			quantities: parsed_quantities.map(
+				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			),
 		};
 	}
 
@@ -268,6 +273,8 @@ export class DeepBookClient {
 	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
 		const tx = new Transaction();
 		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
 		tx.add(this.deepBook.getLevel2TicksFromMid(pool, ticks));
 		const res = await this.client.devInspectTransactionBlock({
@@ -275,14 +282,25 @@ export class DeepBookClient {
 			transactionBlock: tx,
 		});
 
-		const prices = res.results![0].returnValues![0][0];
-		const parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(prices));
-		const quantities = res.results![0].returnValues![1][0];
-		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
+		const bid_prices = res.results![0].returnValues![0][0];
+		const bid_parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(bid_prices));
+		const bid_quantities = res.results![0].returnValues![1][0];
+		const bid_parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(bid_quantities));
+
+		const ask_prices = res.results![0].returnValues![2][0];
+		const ask_parsed_prices = bcs.vector(bcs.u64()).parse(new Uint8Array(ask_prices));
+		const ask_quantities = res.results![0].returnValues![3][0];
+		const ask_parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(ask_quantities));
 
 		return {
-			prices: parsed_prices,
-			quantities: parsed_quantities,
+			bid_prices: bid_parsed_prices.map(
+				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			),
+			bid_quantities: bid_parsed_quantities.map((quantity) => Number(quantity) / FLOAT_SCALAR),
+			ask_prices: ask_parsed_prices.map(
+				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			),
+			ask_quantities: ask_parsed_quantities.map((quantity) => Number(quantity) / FLOAT_SCALAR),
 		};
 	}
 
