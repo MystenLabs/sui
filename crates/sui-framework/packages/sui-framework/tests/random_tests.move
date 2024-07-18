@@ -107,10 +107,10 @@ module sui::random_tests {
         );
 
         // Deterministically set tx context so the RNG seeded by the ctx below is deterministic.
-        *scenario.ctx() = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
+        let mut ctx = tx_context::new_from_hint(@0x0, 1, 0, 0, 0);
 
         // Regression (not critical for security, but still an indication that something is wrong).
-        let mut gen = random_state.new_generator(scenario.ctx());
+        let mut gen = random_state.new_generator(&mut ctx);
         let o256 = gen.generate_u256();
         assert!(o256 == 85985798878417437391783029796051418802193098452099584085821130568389745847195);
         let o128 = gen.generate_u128();

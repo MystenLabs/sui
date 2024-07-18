@@ -5,9 +5,6 @@
 module sui::test_scenario_tests {
     use sui::test_scenario;
 
-    const EIdBytesMismatch: u64 = 0;
-    const EValueMismatch: u64 = 1;
-
     public struct Object has key, store {
         id: UID,
         value: u64,
@@ -196,8 +193,8 @@ module sui::test_scenario_tests {
             assert!(scenario.has_most_recent_for_sender<Object>());
             let received_obj = scenario.take_from_sender<Object>();
             let Object { id: received_id, value } = received_obj;
-            assert!(received_id.to_inner() == id_bytes, EIdBytesMismatch);
-            assert!(value == 100, EValueMismatch);
+            assert!(received_id.to_inner() == id_bytes);
+            assert!(value == 100);
             received_id.delete();
         };
         // check that the object is no longer accessible after deletion
@@ -228,7 +225,7 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         let ids = scenario.ids_for_sender<Object>();
-        assert!(ids == vector[id1, id2, id3], EValueMismatch);
+        assert!(ids == vector[id1, id2, id3]);
         scenario.end();
     }
 
@@ -255,9 +252,9 @@ module sui::test_scenario_tests {
             let obj1 = scenario.take_from_sender_by_id<Object>(id1);
             let obj3 = scenario.take_from_sender_by_id<Object>(id3);
             let obj2 = scenario.take_from_sender_by_id<Object>(id2);
-            assert!(obj1.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(obj1.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             scenario.return_to_sender(obj1);
             scenario.return_to_sender(obj2);
             scenario.return_to_sender(obj3);
@@ -303,9 +300,9 @@ module sui::test_scenario_tests {
             let obj1 = scenario.take_shared_by_id<Object>(id1);
             let obj3 = scenario.take_shared_by_id<Object>(id3);
             let obj2 = scenario.take_shared_by_id<Object>(id2);
-            assert!(obj1.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(obj1.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             test_scenario::return_shared(obj1);
             test_scenario::return_shared(obj2);
             test_scenario::return_shared(obj3);
@@ -326,7 +323,7 @@ module sui::test_scenario_tests {
         {
             assert!(test_scenario::has_most_recent_shared<Object>());
             let obj1 = scenario.take_shared<Object>();
-            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj1.value == 10);
             test_scenario::return_shared(obj1);
         };
         scenario.end();
@@ -345,7 +342,7 @@ module sui::test_scenario_tests {
         {
             assert!(test_scenario::has_most_recent_shared<Object>());
             let obj1 = scenario.take_shared<Object>();
-            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj1.value == 10);
             let Object { id, value: _ } = obj1;
             id.delete();
         };
@@ -375,9 +372,9 @@ module sui::test_scenario_tests {
             let obj1 = scenario.take_immutable_by_id<Object>(id1);
             let obj3 = scenario.take_immutable_by_id<Object>(id3);
             let obj2 = scenario.take_immutable_by_id<Object>(id2);
-            assert!(obj1.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(obj1.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             test_scenario::return_immutable(obj1);
             test_scenario::return_immutable(obj2);
             test_scenario::return_immutable(obj3);
@@ -398,7 +395,7 @@ module sui::test_scenario_tests {
         {
             assert!(test_scenario::has_most_recent_immutable<Object>());
             let obj1 = scenario.take_immutable<Object>();
-            assert!(obj1.value == 10, EValueMismatch);
+            assert!(obj1.value == 10);
             test_scenario::return_immutable(obj1);
         };
         scenario.end();
@@ -433,9 +430,9 @@ module sui::test_scenario_tests {
             let t3 = test_scenario::receiving_ticket_by_id<Object>(id3);
             let obj2 = transfer::receive(&mut parent.id, t2);
             let obj3 = transfer::receive(&mut parent.id, t3);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
-            assert!(obj3.value == 30, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
+            assert!(obj3.value == 30);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
             transfer::public_transfer(obj3, id1_addr)
@@ -464,8 +461,8 @@ module sui::test_scenario_tests {
             let mut parent = scenario.take_from_sender_by_id<Object>(id1);
             let t2 = test_scenario::most_recent_receiving_ticket<Object>(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
         };
@@ -494,8 +491,8 @@ module sui::test_scenario_tests {
             let mut parent: Object = scenario.take_from_sender_by_id(id1);
             let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
         };
@@ -504,8 +501,8 @@ module sui::test_scenario_tests {
             let mut parent: Object = scenario.take_from_sender_by_id(id1);
             let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
         };
@@ -542,8 +539,8 @@ module sui::test_scenario_tests {
             // tickets at the end of the transaction above this will fail.
             let t2: transfer::Receiving<Object> = test_scenario::most_recent_receiving_ticket(&id1);
             let obj2 = transfer::receive(&mut parent.id, t2);
-            assert!(parent.value == 10, EValueMismatch);
-            assert!(obj2.value == 20, EValueMismatch);
+            assert!(parent.value == 10);
+            assert!(obj2.value == 20);
             scenario.return_to_sender(parent);
             transfer::public_transfer(obj2, id1_addr);
         };
