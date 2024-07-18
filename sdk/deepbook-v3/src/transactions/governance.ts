@@ -30,7 +30,7 @@ export class GovernanceContract {
 		(poolKey: string, balanceManagerKey: string, stakeAmount: number) => (tx: Transaction) => {
 			const pool = this.#config.getPool(poolKey);
 			const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
-			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -55,7 +55,7 @@ export class GovernanceContract {
 	unstake = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
 		const pool = this.#config.getPool(poolKey);
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -76,7 +76,7 @@ export class GovernanceContract {
 
 		const pool = this.#config.getPool(poolKey);
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -104,7 +104,7 @@ export class GovernanceContract {
 	vote = (poolKey: string, balanceManagerKey: string, proposal_id: string) => (tx: Transaction) => {
 		const pool = this.#config.getPool(poolKey);
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vote`,

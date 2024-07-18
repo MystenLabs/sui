@@ -4,7 +4,7 @@
 import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
-import type { CreatePoolAdminParams, Pool } from '../types/index.js';
+import type { CreatePoolAdminParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { FLOAT_SCALAR, POOL_CREATION_FEE } from '../utils/config.js';
 
@@ -75,7 +75,8 @@ export class DeepBookAdminContract {
 	 * @param pool The pool to be unregistered by admin
 	 * @returns A function that takes a Transaction object
 	 */
-	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
+	unregisterPoolAdmin = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -90,7 +91,8 @@ export class DeepBookAdminContract {
 	 * @param pool The pool to be updated
 	 * @returns A function that takes a Transaction object
 	 */
-	updateAllowedVersions = (pool: Pool) => (tx: Transaction) => {
+	updateAllowedVersions = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({

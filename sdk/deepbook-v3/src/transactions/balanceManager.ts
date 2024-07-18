@@ -3,7 +3,6 @@
 import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
-import type { BalanceManager } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 
 /**
@@ -121,7 +120,8 @@ export class BalanceManagerContract {
 	 * @param balanceManager The BalanceManager object
 	 * @returns A function that takes a Transaction object
 	 */
-	generateProof = (balanceManager: BalanceManager) => (tx: Transaction) => {
+	generateProof = (balanceManagerKey: string) => (tx: Transaction) => {
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		return tx.add(
 			balanceManager.tradeCap
 				? this.generateProofAsTrader(balanceManager.address, balanceManager.tradeCap)

@@ -5,13 +5,7 @@ import type { Transaction } from '@mysten/sui/transactions';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
 
 import { OrderType, SelfMatchingOptions } from '../types/index.js';
-import type {
-	BalanceManager,
-	PlaceLimitOrderParams,
-	PlaceMarketOrderParams,
-	Pool,
-	SwapParams,
-} from '../types/index.js';
+import type { PlaceLimitOrderParams, PlaceMarketOrderParams, SwapParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { DEEP_SCALAR, FLOAT_SCALAR, GAS_BUDGET, MAX_TIMESTAMP } from '../utils/config.js';
 
@@ -55,7 +49,7 @@ export class DeepBookContract {
 		const inputPrice = (price * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar;
 		const inputQuantity = quantity * baseCoin.scalar;
 
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::place_limit_order`,
@@ -98,7 +92,7 @@ export class DeepBookContract {
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::place_market_order`,
@@ -126,11 +120,13 @@ export class DeepBookContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	modifyOrder =
-		(pool: Pool, balanceManager: BalanceManager, orderId: number, newQuantity: number) =>
+		(poolKey: string, balanceManagerKey: string, orderId: number, newQuantity: number) =>
 		(tx: Transaction) => {
+			const pool = this.#config.getPool(poolKey);
+			const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::modify_order`,
@@ -154,11 +150,13 @@ export class DeepBookContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	cancelOrder =
-		(pool: Pool, balanceManager: BalanceManager, orderId: number) => (tx: Transaction) => {
+		(poolKey: string, balanceManagerKey: string, orderId: number) => (tx: Transaction) => {
 			tx.setGasBudgetIfNotSet(GAS_BUDGET);
+			const pool = this.#config.getPool(poolKey);
+			const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::cancel_order`,
@@ -179,11 +177,13 @@ export class DeepBookContract {
 	 * @param balanceManager BalanceManager object
 	 * @returns A function that takes a Transaction object
 	 */
-	cancelAllOrders = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
+	cancelAllOrders = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
+		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::cancel_all_orders`,
@@ -203,10 +203,12 @@ export class DeepBookContract {
 	 * @param balanceManager BalanceManager object
 	 * @returns A function that takes a Transaction object
 	 */
-	withdrawSettledAmounts = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
+	withdrawSettledAmounts = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::withdraw_settled_amounts`,
@@ -221,7 +223,9 @@ export class DeepBookContract {
 	 * @param referencePool Reference pool object
 	 * @returns A function that takes a Transaction object
 	 */
-	addDeepPricePoint = (targetPool: Pool, referencePool: Pool) => (tx: Transaction) => {
+	addDeepPricePoint = (targetPoolKey: string, referencePoolKey: string) => (tx: Transaction) => {
+		const targetPool = this.#config.getPool(targetPoolKey);
+		const referencePool = this.#config.getPool(referencePoolKey);
 		const targetBaseCoin = this.#config.getCoin(targetPool.baseCoin);
 		const targetQuoteCoin = this.#config.getCoin(targetPool.quoteCoin);
 		const referenceBaseCoin = this.#config.getCoin(referencePool.baseCoin);
@@ -248,10 +252,12 @@ export class DeepBookContract {
 	 * @param balanceManager BalanceManager object
 	 * @returns A function that takes a Transaction object
 	 */
-	claimRebates = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
+	claimRebates = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::claim_rebates`,
@@ -265,7 +271,8 @@ export class DeepBookContract {
 	 * @param pool Pool object
 	 * @returns A function that takes a Transaction object
 	 */
-	burnDeep = (pool: Pool) => (tx: Transaction) => {
+	burnDeep = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -280,7 +287,8 @@ export class DeepBookContract {
 	 * @param pool Pool object
 	 * @returns A function that takes a Transaction object
 	 */
-	midPrice = (pool: Pool) => (tx: Transaction) => {
+	midPrice = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -296,7 +304,8 @@ export class DeepBookContract {
 	 * @param pool Pool object
 	 * @returns A function that takes a Transaction object
 	 */
-	whitelisted = (pool: Pool) => (tx: Transaction) => {
+	whitelisted = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -312,7 +321,8 @@ export class DeepBookContract {
 	 * @param baseQuantity Base quantity to convert
 	 * @returns A function that takes a Transaction object
 	 */
-	getQuoteQuantityOut = (pool: Pool, baseQuantity: number) => (tx: Transaction) => {
+	getQuoteQuantityOut = (poolKey: string, baseQuantity: number) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -333,7 +343,8 @@ export class DeepBookContract {
 	 * @param quoteQuantity Quote quantity to convert
 	 * @returns A function that takes a Transaction object
 	 */
-	getBaseQuantityOut = (pool: Pool, quoteQuantity: number) => (tx: Transaction) => {
+	getBaseQuantityOut = (poolKey: string, quoteQuantity: number) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const quoteScalar = quoteCoin.scalar;
@@ -357,7 +368,8 @@ export class DeepBookContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	getQuantityOut =
-		(pool: Pool, baseQuantity: number, quoteQuantity: number) => (tx: Transaction) => {
+		(poolKey: string, baseQuantity: number, quoteQuantity: number) => (tx: Transaction) => {
+			const pool = this.#config.getPool(poolKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 			const quoteScalar = quoteCoin.scalar;
@@ -380,7 +392,8 @@ export class DeepBookContract {
 	 * @param managerId ID of the balance manager
 	 * @returns A function that takes a Transaction object
 	 */
-	accountOpenOrders = (pool: Pool, managerId: string) => (tx: Transaction) => {
+	accountOpenOrders = (poolKey: string, managerId: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -400,7 +413,8 @@ export class DeepBookContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	getLevel2Range =
-		(pool: Pool, priceLow: number, priceHigh: number, isBid: boolean) => (tx: Transaction) => {
+		(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) => (tx: Transaction) => {
+			const pool = this.#config.getPool(poolKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -423,7 +437,8 @@ export class DeepBookContract {
 	 * @param tickFromMid Number of ticks from mid-price
 	 * @returns A function that takes a Transaction object
 	 */
-	getLevel2TicksFromMid = (pool: Pool, tickFromMid: number) => (tx: Transaction) => {
+	getLevel2TicksFromMid = (poolKey: string, tickFromMid: number) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -443,7 +458,8 @@ export class DeepBookContract {
 	 * @param pool Pool object
 	 * @returns A function that takes a Transaction object
 	 */
-	vaultBalances = (pool: Pool) => (tx: Transaction) => {
+	vaultBalances = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
