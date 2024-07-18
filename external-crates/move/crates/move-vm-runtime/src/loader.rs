@@ -1339,7 +1339,7 @@ impl Loader {
     // Return an instantiated type given a generic and an instantiation.
     // Stopgap to avoid a recursion that is either taking too long or using too
     // much memory
-    fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
+    pub(crate) fn subst(&self, ty: &Type, ty_args: &[Type]) -> PartialVMResult<Type> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
@@ -1355,6 +1355,15 @@ impl Loader {
             }
         }
         ty.subst(ty_args)
+    }
+
+    #[cfg(feature = "gas-profiler")]
+    pub(crate) fn make_type(
+        &self,
+        module: &CompiledModule,
+        tok: &SignatureToken,
+    ) -> PartialVMResult<Type> {
+        self.module_cache.read().make_type(module, tok)
     }
 
     // Verify the kind (constraints) of an instantiation.
@@ -1386,7 +1395,7 @@ impl Loader {
         self.module_cache.read().function_at(idx)
     }
 
-    fn get_module(
+    pub(crate) fn get_module(
         &self,
         link_context: AccountAddress,
         runtime_id: &ModuleId,
