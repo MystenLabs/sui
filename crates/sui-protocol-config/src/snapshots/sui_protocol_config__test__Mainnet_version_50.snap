@@ -269,4 +269,3 @@ random_beacon_reduction_allowed_delta: 800
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 max_deferral_rounds_for_congestion_control: 10
-
