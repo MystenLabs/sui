@@ -4,8 +4,7 @@
 module demo::demo_bear {
     use std::string::{String, utf8};
 
-    use sui::object::{Self, UID};
-    use sui::tx_context::{TxContext, sender};
+    use sui::tx_context::sender;
     use sui::package;
     use sui::display;
 
