@@ -10,7 +10,9 @@ pub mod query;
 
 #[derive(Debug, Display, Deserialize, PartialEq)]
 pub enum QueryType {
+    // Checks the last instant value of the query.
     Instant,
+    // Checks the median value of the query over time.
     Range {
         // Both start & end accepts specific time formats
         //  - "%Y-%m-%d %H:%M:%S" (UTC)
