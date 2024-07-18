@@ -2,30 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Transaction } from '@mysten/sui/transactions';
 
-import { Utils } from '../test/helper/utils.js'; // Correct path
 import { DeepBookMarketMaker } from './deepbookMarketMaker.js';
 
-console.log('8888888888');
 (async () => {
-	const keypair = Utils.getSignerFromPK(
+	const dbMM = new DeepBookMarketMaker(
 		'',
+		'testnet',
 	);
 
-	const mm = new DeepBookMarketMaker(keypair, 'testnet');
-
-	mm.dbClient.addBalanceManager(
+	dbMM.dbClient.addBalanceManager(
 		'MANAGER_1',
 		'0x9f4acee19891c08ec571629df0a81786a8df72f71f4e38d860564c9e54265179',
 	);
 
 	const tx = new Transaction();
 
-	mm.dbClient.addBalanceManager(
-		'MANAGER_1',
-		'0x9f4acee19891c08ec571629df0a81786a8df72f71f4e38d860564c9e54265179',
-	);
-
-	let res = Utils.signAndExecuteWithClientAndSigner(tx, mm.suiClient, keypair);
+	let res = await dbMM.signAndExecuteWithClientAndSigner(tx);
+	// remove from name
 
 	console.dir(res, { depth: null });
 })();

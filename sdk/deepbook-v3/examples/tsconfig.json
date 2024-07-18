@@ -1,6 +1,6 @@
 {
 	"extends": "../tsconfig.esm.json",
-	"include": ["./**/*", "../src", "../test"],
+	"include": ["./**/*", "../src"],
 	"compilerOptions": {
 		"rootDir": "../..",
 		"noEmit": true,

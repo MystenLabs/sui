@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import type { Keypair } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { Transaction } from '@mysten/sui/transactions';
 
 import { DeepBookClient } from '../src/index.js'; // Adjust path according to new structure
 
@@ -10,7 +13,10 @@ export class DeepBookMarketMaker {
 	keypair: Keypair;
 	suiClient: SuiClient;
 
-	constructor(keypair: Keypair, env: 'testnet' | 'mainnet') {
+	constructor(keypair: string | Keypair, env: 'testnet' | 'mainnet') {
+		if (typeof keypair === 'string') {
+			keypair = this.getSignerFromPK(keypair);
+		}
 		this.keypair = keypair;
 		const suiClient = new SuiClient({
 			url: getFullnodeUrl(env),
@@ -23,4 +29,25 @@ export class DeepBookMarketMaker {
 		});
 		this.suiClient = suiClient;
 	}
+
+	getSignerFromPK = (privateKey: string) => {
+		const { schema, secretKey } = decodeSuiPrivateKey(privateKey);
+		if (schema === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
+
+		throw new Error(`Unsupported schema: ${schema}`);
+	};
+
+	signAndExecuteWithClientAndSigner = async (tx: Transaction) => {
+		// remove arguments
+		return this.suiClient.signAndExecuteTransaction({
+			transaction: tx,
+			signer: this.keypair,
+			options: {
+				showEffects: true,
+				showObjectChanges: true,
+			},
+		});
+	};
+
+	// placeCustomOrder = //
 }
