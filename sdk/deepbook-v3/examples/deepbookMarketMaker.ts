@@ -20,7 +20,7 @@ export class DeepBookMarketMaker {
 		balanceManagers?: { [key: string]: BalanceManager },
 	) {
 		if (typeof keypair === 'string') {
-			keypair = this.getSignerFromPK(keypair);
+			keypair = this.#getSignerFromPK(keypair);
 		}
 		this.keypair = keypair;
 		const suiClient = new SuiClient({
@@ -36,7 +36,7 @@ export class DeepBookMarketMaker {
 		this.suiClient = suiClient;
 	}
 
-	getSignerFromPK = (privateKey: string) => {
+	#getSignerFromPK = (privateKey: string) => {
 		const { schema, secretKey } = decodeSuiPrivateKey(privateKey);
 		if (schema === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
 

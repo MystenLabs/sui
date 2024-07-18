@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import type { Transaction } from '@mysten/sui/transactions';
+import type { Transaction, TransactionObjectArgument } from '@mysten/sui/transactions';
 
 import type { DeepBookConfig } from '../utils/config.js';
 
@@ -44,7 +44,12 @@ export class FlashLoanContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	returnBaseAsset =
-		(poolKey: string, borrowAmount: number, baseCoinInput: any, flashLoan: any) =>
+		(
+			poolKey: string,
+			borrowAmount: number,
+			baseCoinInput: TransactionObjectArgument,
+			flashLoan: TransactionObjectArgument,
+		) =>
 		(tx: Transaction) => {
 			const pool = this.#config.getPool(poolKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
@@ -90,7 +95,12 @@ export class FlashLoanContract {
 	 * @returns A function that takes a Transaction object
 	 */
 	returnQuoteAsset =
-		(poolKey: string, borrowAmount: number, quoteCoinInput: any, flashLoan: any) =>
+		(
+			poolKey: string,
+			borrowAmount: number,
+			quoteCoinInput: TransactionObjectArgument,
+			flashLoan: TransactionObjectArgument,
+		) =>
 		(tx: Transaction) => {
 			const pool = this.#config.getPool(poolKey);
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
