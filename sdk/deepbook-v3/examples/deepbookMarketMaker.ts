@@ -9,8 +9,7 @@ import type { Transaction } from '@mysten/sui/transactions';
 import { DeepBookClient } from '../src/index.js'; // Adjust path according to new structure
 import type { BalanceManager } from '../src/types/index.js';
 
-export class DeepBookMarketMaker {
-	dbClient: DeepBookClient;
+export class DeepBookMarketMaker extends DeepBookClient {
 	keypair: Keypair;
 	suiClient: SuiClient;
 
@@ -19,24 +18,32 @@ export class DeepBookMarketMaker {
 		env: 'testnet' | 'mainnet',
 		balanceManagers?: { [key: string]: BalanceManager },
 	) {
+		let resolvedKeypair: Keypair;
+
 		if (typeof keypair === 'string') {
-			keypair = this.#getSignerFromPK(keypair);
+			resolvedKeypair = DeepBookMarketMaker.getSignerFromPK(keypair);
+		} else {
+			resolvedKeypair = keypair;
 		}
-		this.keypair = keypair;
-		const suiClient = new SuiClient({
-			url: getFullnodeUrl(env),
-		});
-		const address = keypair.toSuiAddress();
-		this.dbClient = new DeepBookClient({
+
+		const address = resolvedKeypair.toSuiAddress();
+
+		super({
 			address: address,
 			env: env,
-			client: suiClient,
+			client: new SuiClient({
+				url: getFullnodeUrl(env),
+			}),
 			balanceManagers: balanceManagers,
 		});
-		this.suiClient = suiClient;
+
+		this.keypair = resolvedKeypair;
+		this.suiClient = new SuiClient({
+			url: getFullnodeUrl(env),
+		});
 	}
 
-	#getSignerFromPK = (privateKey: string) => {
+	static getSignerFromPK = (privateKey: string) => {
 		const { schema, secretKey } = decodeSuiPrivateKey(privateKey);
 		if (schema === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
 
@@ -66,13 +73,11 @@ export class DeepBookMarketMaker {
 	// Return 1 DEEP to DEEP_SUI pool
 	flashLoanExample = async (tx: Transaction) => {
 		const borrowAmount = 1;
-		const [deepCoin, flashLoan] = tx.add(
-			this.dbClient.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount),
-		);
+		const [deepCoin, flashLoan] = tx.add(this.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount));
 
 		// Execute trade using borrowed DEEP
 		const [baseOut, quoteOut, deepOut] = tx.add(
-			this.dbClient.deepBook.swapExactQuoteForBase({
+			this.deepBook.swapExactQuoteForBase({
 				poolKey: 'SUI_DBUSDC',
 				amount: 0.5,
 				deepAmount: 1,
@@ -85,7 +90,7 @@ export class DeepBookMarketMaker {
 
 		// Execute second trade to get back DEEP for repayment
 		const [baseOut2, quoteOut2, deepOut2] = tx.add(
-			this.dbClient.deepBook.swapExactQuoteForBase({
+			this.deepBook.swapExactQuoteForBase({
 				poolKey: 'DEEP_SUI',
 				amount: 10,
 				deepAmount: 0,
@@ -97,14 +102,14 @@ export class DeepBookMarketMaker {
 
 		// Return borrowed DEEP
 		const loanRemain = tx.add(
-			this.dbClient.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
+			this.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
 		);
 		tx.transferObjects([loanRemain], this.getActiveAddress());
 	};
 
 	placeLimitOrderExample = async (tx: Transaction) => {
 		tx.add(
-			this.dbClient.deepBook.placeLimitOrder({
+			this.deepBook.placeLimitOrder({
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
 				clientOrderId: 888,

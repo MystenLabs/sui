@@ -17,7 +17,7 @@ config();
 	// Initialize with balance managers if created
 	const balanceManagers = {
 		MANAGER_1: {
-			address: '0x9f4acee19891c08ec571629df0a81786a8df72f71f4e38d860564c9e54265179',
+			address: '',
 			tradeCap: '',
 		},
 	};
@@ -26,13 +26,13 @@ config();
 	const tx = new Transaction();
 
 	// // Read only call
-	// console.log(await mmClient.dbClient.checkManagerBalance('MANAGER_1', 'SUI'));
-	// console.log(await mmClient.dbClient.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
+	console.log(await mmClient.checkManagerBalance('MANAGER_1', 'SUI'));
+	console.log(await mmClient.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
 
-	// // Balance manager contract call
-	// mmClient.dbClient.balanceManager.depositIntoManager('MANAGER_1', 1, 'SUI')(tx);
+	// Balance manager contract call
+	mmClient.balanceManager.depositIntoManager('MANAGER_1', 1, 'SUI')(tx);
 
-	// // Example PTB call
+	// Example PTB call
 	mmClient.placeLimitOrderExample(tx);
 	mmClient.flashLoanExample(tx);
 
