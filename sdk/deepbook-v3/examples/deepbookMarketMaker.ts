@@ -21,7 +21,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 		let resolvedKeypair: Keypair;
 
 		if (typeof keypair === 'string') {
-			resolvedKeypair = DeepBookMarketMaker.getSignerFromPK(keypair);
+			resolvedKeypair = DeepBookMarketMaker.#getSignerFromPK(keypair);
 		} else {
 			resolvedKeypair = keypair;
 		}
@@ -43,7 +43,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 		});
 	}
 
-	static getSignerFromPK = (privateKey: string) => {
+	static #getSignerFromPK = (privateKey: string) => {
 		const { schema, secretKey } = decodeSuiPrivateKey(privateKey);
 		if (schema === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
 
