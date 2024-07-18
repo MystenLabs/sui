@@ -66,12 +66,12 @@ export class DeepBookMarketMaker {
 	// Return 1 DEEP to DEEP_SUI pool
 	flashLoanExample = async (tx: Transaction) => {
 		const borrowAmount = 1;
-		const [deepCoin, flashLoan] = await tx.add(
+		const [deepCoin, flashLoan] = tx.add(
 			this.dbClient.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount),
 		);
 
 		// Execute trade using borrowed DEEP
-		const [baseOut, quoteOut, deepOut] = await tx.add(
+		const [baseOut, quoteOut, deepOut] = tx.add(
 			this.dbClient.deepBook.swapExactQuoteForBase({
 				poolKey: 'SUI_DBUSDC',
 				amount: 0.5,
@@ -84,7 +84,7 @@ export class DeepBookMarketMaker {
 		tx.transferObjects([baseOut, quoteOut, deepOut], this.getActiveAddress());
 
 		// Execute second trade to get back DEEP for repayment
-		const [baseOut2, quoteOut2, deepOut2] = await tx.add(
+		const [baseOut2, quoteOut2, deepOut2] = tx.add(
 			this.dbClient.deepBook.swapExactQuoteForBase({
 				poolKey: 'DEEP_SUI',
 				amount: 10,
@@ -96,7 +96,7 @@ export class DeepBookMarketMaker {
 		tx.transferObjects([quoteOut2, deepOut2], this.getActiveAddress());
 
 		// Return borrowed DEEP
-		const loanRemain = await tx.add(
+		const loanRemain = tx.add(
 			this.dbClient.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
 		);
 		tx.transferObjects([loanRemain], this.getActiveAddress());
@@ -104,7 +104,7 @@ export class DeepBookMarketMaker {
 
 	placeLimitOrderExample = async (tx: Transaction) => {
 		tx.add(
-			await this.dbClient.deepBook.placeLimitOrder({
+			this.dbClient.deepBook.placeLimitOrder({
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
 				clientOrderId: 888,
