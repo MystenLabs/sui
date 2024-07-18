@@ -37,7 +37,7 @@ export class DeepBookMarketMaker {
 		throw new Error(`Unsupported schema: ${schema}`);
 	};
 
-	signAndExecuteWithClientAndSigner = async (tx: Transaction) => {
+	signAndExecute = async (tx: Transaction) => {
 		// remove arguments
 		return this.suiClient.signAndExecuteTransaction({
 			transaction: tx,
@@ -49,5 +49,7 @@ export class DeepBookMarketMaker {
 		});
 	};
 
-	// placeCustomOrder = //
+	getActiveAddress() {
+		return this.keypair.getPublicKey().toSuiAddress();
+	}
 }

@@ -87,7 +87,7 @@ export class DeepBookClient {
 	 */
 	async checkManagerBalance(managerKey: string, coinKey: string) {
 		const tx = new Transaction();
-		const balanceManager = this.#getBalanceManager(managerKey);
+		const balanceManager = this.getBalanceManager(managerKey);
 		const coin = this.#config.getCoin(coinKey);
 
 		tx.add(this.balanceManager.checkManagerBalance(balanceManager.address, coin));
@@ -382,7 +382,7 @@ export class DeepBookClient {
 	 * @param managerKey Key of the balance manager
 	 * @returns The BalanceManager object
 	 */
-	#getBalanceManager(managerKey: string): BalanceManager {
+	getBalanceManager(managerKey: string): BalanceManager {
 		if (!Object.hasOwn(this.#balanceManagers, managerKey)) {
 			throw new Error(`Balance manager with key ${managerKey} not found.`);
 		}
