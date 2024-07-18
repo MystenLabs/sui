@@ -10,7 +10,7 @@ services:
     hostname: validator1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -37,7 +37,7 @@ services:
     hostname: validator2
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -64,7 +64,7 @@ services:
     hostname: validator3
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -91,7 +91,7 @@ services:
     hostname: validator4
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -118,7 +118,7 @@ services:
     container_name: fullnode1
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=info,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error
+      - RUST_LOG=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
@@ -156,12 +156,12 @@ services:
       - PRIMARY_GAS_OWNER=0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60
       - GENESIS_BLOB_PATH=/opt/sui/config/genesis.blob
       - KEYSTORE_PATH=/opt/sui/config/sui.keystore
-      - STRESS_TARGET_QPS=10
+      - STRESS_TARGET_QPS=3
       - STRESS_SHARED_COUNTER=1
       - STRESS_TRANSFER_OBJECT=1
       - STRESS_DELEGATION=0
       - BATCH_PAYMENT=1
-      - BATCH_PAYMENT_SIZE=100
+      - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
     volumes:
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
