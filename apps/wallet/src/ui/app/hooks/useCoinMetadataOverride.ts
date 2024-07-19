@@ -7,7 +7,7 @@ import { useFeature } from '@growthbook/growthbook-react';
 interface CoinMetadataOverride {
 	[coinType: string]: {
 		name?: string;
-		iconUrl: string;
+		iconUrl?: string;
 	};
 }
 
