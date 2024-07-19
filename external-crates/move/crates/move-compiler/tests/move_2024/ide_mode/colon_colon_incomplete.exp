@@ -1,23 +1,14 @@
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:10:9
    │
-10 │         a::
-   │         ^ Expected fully defined access chain in this position, not an address
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:11:5
-   │
-11 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
+10 │         A
+   │         ^ Expected a type, function, or constant in this position, not an address
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
    │
-14 │         a::m::
-   │         ^^^^ Expected fully defined access chain in this position, not a module
+14 │         a::
+   │         ^ Expected fully defined access chain in this position, not an address
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:15:5
@@ -31,13 +22,28 @@ error[E01002]: unexpected token
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
-18 │         a::m::SomeEnum::
-   │         ^^^^^^^^^^^^^^ Expected fully defined access chain in this position, not a module member
+18 │         a::m::
+   │         ^^^^ Expected fully defined access chain in this position, not a module
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:19:5
    │
 19 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
+   │
+22 │         a::m::SomeEnum::
+   │         ^^^^^^^^^^^^^^ Expected fully defined access chain in this position, not a module member
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:23:5
+   │
+23 │     }
    │     ^
    │     │
    │     Unexpected '}'

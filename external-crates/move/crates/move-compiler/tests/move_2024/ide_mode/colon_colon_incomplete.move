@@ -6,6 +6,10 @@ module a::m {
 
     public fun foo() {}
 
+    public fun pkg_complete() {
+        A
+    }
+
     public fun mod_complete() {
         a::
     }
