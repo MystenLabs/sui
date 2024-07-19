@@ -4,48 +4,21 @@ error[E03006]: unexpected name in this position
 10 │         A
    │         ^ Expected a type, function, or constant in this position, not an address
 
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
    │
 14 │         a::
    │         ^^^ Incomplete name in this position. Expected an identifier after '::'
 
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:15:5
-   │
-15 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
-
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
 18 │         a::m::
    │         ^^^^^^ Incomplete name in this position. Expected an identifier after '::'
 
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:19:5
-   │
-19 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
-
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
    │
 22 │         a::m::SomeEnum::
    │         ^^^^^^^^^^^^^^^^ Incomplete name in this position. Expected an identifier after '::'
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:23:5
-   │
-23 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
 

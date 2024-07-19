@@ -28,62 +28,35 @@ note[I15006]: IDE path autocomplete
 14 │         a::
    │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
    │
 14 │         a::
    │         ^^^ Incomplete name in this position. Expected an identifier after '::'
 
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:15:5
-   │
-15 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
-
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
 18 │         a::m::
    │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
 18 │         a::m::
    │         ^^^^^^ Incomplete name in this position. Expected an identifier after '::'
 
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:19:5
-   │
-19 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
-
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
    │
 22 │         a::m::SomeEnum::
    │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
 
-error[E03006]: unexpected name in this position
+error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
    │
 22 │         a::m::SomeEnum::
    │         ^^^^^^^^^^^^^^^^ Incomplete name in this position. Expected an identifier after '::'
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:23:5
-   │
-23 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier
 
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:27:1
