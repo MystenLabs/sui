@@ -7,7 +7,7 @@ error[E04001]: restricted visibility
 6 │         S{ u: $u }
   │         ^^^^^^^^^^ Invalid instantiation of 'a::m::S'
   │
-  = This visibility error occurs in a macro body while by expanding the macro 'a::m::make_s'
+  = This visibility error occurs in a macro body while expanding the macro 'a::m::make_s'
   = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E04029]: invalid function call
@@ -102,7 +102,7 @@ error[E04001]: restricted visibility
 39 │         S{ u: $u }
    │         ^^^^^^^^^^ Invalid instantiation of '0x42::m::S'
    │
-   = This visibility error occurs in a macro body while by expanding the macro '0x42::m::make_s'
+   = This visibility error occurs in a macro body while expanding the macro '0x42::m::make_s'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E01002]: unexpected token

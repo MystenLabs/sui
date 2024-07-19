@@ -1846,7 +1846,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 report_visibility_error(
                     context,
                     (eloc, format!("Invalid instantiation of '{m}::{e}::{v}'")),
-                    (context.enum_declared_loc(&m, &e), "Enum variants may only be be constructed in the module in which they are declared")
+                    (
+                        context.enum_declared_loc(&m, &e),
+                        "Enum variants may only be constructed in the module in which they are declared"
+                    )
                 );
             }
             (bt, TE::PackVariant(m, e, v, targs, tfields))

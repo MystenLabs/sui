@@ -15,7 +15,7 @@ error[E04001]: restricted visibility
 14 │             let s = S { };
    │                     ^^^^^ Invalid instantiation of 'a::m::S'
    │
-   = This visibility error occurs in a macro body while by expanding the macros 'a::m::test' and 'a::l::test'
+   = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E04001]: restricted visibility
@@ -27,6 +27,6 @@ error[E04001]: restricted visibility
 15 │             let S { } = s;
    │                 ^^^^^ Invalid deconstruction binding of 'a::m::S'
    │
-   = This visibility error occurs in a macro body while by expanding the macros 'a::m::test' and 'a::l::test'
+   = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 

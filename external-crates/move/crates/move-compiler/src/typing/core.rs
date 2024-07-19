@@ -1735,7 +1735,7 @@ fn report_visibility_error_(
             "macro"
         };
         diag.add_note(format!(
-            "This visibility error occurs in a macro body while by expanding the {macro_s} {names}"
+            "This visibility error occurs in a macro body while expanding the {macro_s} {names}"
         ));
         diag.add_note(
             "Visibility inside of expanded macros is resolved in the scope of the caller.",
