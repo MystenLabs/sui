@@ -5,8 +5,6 @@ module a::l {
 }
 
 module a::m {
-    use a::l;
-
     public struct S { }
 
     public macro fun test() {
