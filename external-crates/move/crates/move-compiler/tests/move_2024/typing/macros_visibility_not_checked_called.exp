@@ -6,6 +6,9 @@ error[E04001]: restricted visibility
   ·
 9 │         package();
   │         ^^^^^^^^^ Invalid call to 'public(package)' visible function 'a::m::package'
+  │
+  = This visibility error occurs in a macro body while by expanding the macro 'a::m::t0'
+  = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:10:9
@@ -15,6 +18,9 @@ error[E04001]: restricted visibility
    ·
 10 │         private();
    │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   │
+   = This visibility error occurs in a macro body while by expanding the macro 'a::m::t0'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:14:9
@@ -24,6 +30,9 @@ error[E04001]: restricted visibility
    ·
 14 │         private();
    │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   │
+   = This visibility error occurs in a macro body while by expanding the macro 'a::m::t1'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:30:9

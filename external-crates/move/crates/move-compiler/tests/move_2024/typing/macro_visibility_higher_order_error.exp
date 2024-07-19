@@ -1,0 +1,32 @@
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:8:12
+  │
+8 │     use a::l;
+  │            ^ Unused 'use' of alias 'l'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:14:21
+   │
+10 │     public struct S { }
+   │                   - Struct may only be constructed in the module in which they are declared
+   ·
+14 │             let s = S { };
+   │                     ^^^^^ Invalid instantiation of 'a::m::S'
+   │
+   = This visibility error occurs in a macro body while by expanding the macros 'a::m::test' and 'a::l::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:15:17
+   │
+10 │     public struct S { }
+   │                   - Struct may only be deconstructed in the module in which they are declared
+   ·
+15 │             let S { } = s;
+   │                 ^^^^^ Invalid deconstruction binding of 'a::m::S'
+   │
+   = This visibility error occurs in a macro body while by expanding the macros 'a::m::test' and 'a::l::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
