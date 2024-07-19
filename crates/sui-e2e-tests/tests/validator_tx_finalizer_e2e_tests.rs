@@ -22,15 +22,15 @@ async fn test_validator_tx_finalizer_fastpath_tx() {
         .build();
     let tx = cluster.sign_transaction(&tx_data);
     let tx_digest = *tx.digest();
+    // Only broadcast to get a certificate, but do not execute it.
     cluster
         .authority_aggregator()
-        .authority_clients
-        .values()
-        .next()
-        .unwrap()
-        .handle_transaction(tx, None)
+        .process_transaction(tx, None)
         .await
         .unwrap();
+    // Validators wait for 60s before the first one wakes up. Since 2f+1 signed the tx, i.e.
+    // 5 validators have signed the tx, in the worst case where the other 2 wake up first,
+    // it would take 60 + 3 * 10 = 90s for a validator to finalize this.
     tokio::time::sleep(Duration::from_secs(120)).await;
     for node in cluster.all_node_handles() {
         node.with(|n| assert!(n.state().is_tx_already_executed(&tx_digest).unwrap()));
@@ -53,13 +53,10 @@ async fn test_validator_tx_finalizer_consensus_tx() {
         .build();
     let tx = cluster.sign_transaction(&tx_data);
     let tx_digest = *tx.digest();
+    // Only broadcast to get a certificate, but do not execute it.
     cluster
         .authority_aggregator()
-        .authority_clients
-        .values()
-        .next()
-        .unwrap()
-        .handle_transaction(tx, None)
+        .process_transaction(tx, None)
         .await
         .unwrap();
     tokio::time::sleep(Duration::from_secs(120)).await;
