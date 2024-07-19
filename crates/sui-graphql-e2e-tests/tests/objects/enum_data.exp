@@ -3,37 +3,19 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-<<<<<<< HEAD
-task 1 'publish'. lines 6-54:
+task 1, lines 6-54:
+//# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10510800,  storage_rebate: 0, non_refundable_storage_fee: 0
-||||||| parent of a57c9da547 (update tests)
-task 1 'publish'. lines 6-54:
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
-=======
-task 1, lines 6-54:
-//# publish --upgradeable --sender A
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
->>>>>>> a57c9da547 (update tests)
 
-<<<<<<< HEAD
-task 2 'programmable'. lines 56-58:
-created: object(2,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3032400,  storage_rebate: 0, non_refundable_storage_fee: 0
-||||||| parent of a57c9da547 (update tests)
-task 2 'programmable'. lines 56-58:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
-=======
 task 2, lines 56-58:
 //# programmable --inputs @A
 //> 0: P0::m::foo();
 //> TransferObjects([Result(0)], Input(0))
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
->>>>>>> a57c9da547 (update tests)
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3032400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 60:
 //# create-checkpoint

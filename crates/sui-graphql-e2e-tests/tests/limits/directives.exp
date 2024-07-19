@@ -43,8 +43,8 @@ Response: {
   ]
 }
 
-<<<<<<< HEAD
-task 3 'run-graphql'. lines 44-50:
+task 3, lines 44-50:
+//# run-graphql
 Response: {
   "data": null,
   "errors": [
@@ -63,53 +63,30 @@ Response: {
   ]
 }
 
-task 4 'run-graphql'. lines 52-56:
-||||||| parent of a57c9da547 (update tests)
-task 3 'run-graphql'. lines 44-48:
-=======
-task 3, lines 44-48:
+task 4, lines 52-56:
 //# run-graphql
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {}
 }
 
-<<<<<<< HEAD
-task 5 'run-graphql'. lines 58-62:
-||||||| parent of a57c9da547 (update tests)
-task 4 'run-graphql'. lines 50-54:
-=======
-task 4, lines 50-54:
+task 5, lines 58-62:
 //# run-graphql
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "chainIdentifier": "3989ac57"
   }
 }
 
-<<<<<<< HEAD
-task 6 'run-graphql'. lines 64-68:
-||||||| parent of a57c9da547 (update tests)
-task 5 'run-graphql'. lines 56-60:
-=======
-task 5, lines 56-60:
+task 6, lines 64-68:
 //# run-graphql
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "chainIdentifier": "3989ac57"
   }
 }
 
-<<<<<<< HEAD
-task 7 'run-graphql'. lines 70-74:
-||||||| parent of a57c9da547 (update tests)
-task 6 'run-graphql'. lines 62-66:
-=======
-task 6, lines 62-66:
+task 7, lines 70-74:
 //# run-graphql
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {}
 }

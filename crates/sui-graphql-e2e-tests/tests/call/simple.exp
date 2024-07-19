@@ -75,17 +75,9 @@ task 9, line 41:
 //# advance-epoch 6
 Epoch advanced: 5
 
-<<<<<<< HEAD
-task 10 'view-checkpoint'. lines 43-43:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: BDEsevJNRZ9x9xxb3eCdVtrHpu1EQP6gz2fTCGjcswdL,
-||||||| parent of a57c9da547 (update tests)
-task 10 'view-checkpoint'. lines 43-43:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: EANv9gfNqrc3zQszFfPeZbsf8ytTgrjbhPuRKL1JFDjR,
-=======
 task 10, line 43:
 //# view-checkpoint
-CheckpointSummary { epoch: 5, seq: 10, content_digest: EANv9gfNqrc3zQszFfPeZbsf8ytTgrjbhPuRKL1JFDjR,
->>>>>>> a57c9da547 (update tests)
+CheckpointSummary { epoch: 5, seq: 10, content_digest: BDEsevJNRZ9x9xxb3eCdVtrHpu1EQP6gz2fTCGjcswdL,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 11, lines 45-50:

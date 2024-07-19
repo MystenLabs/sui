@@ -236,14 +236,8 @@ Response: {
   }
 }
 
-<<<<<<< HEAD
-task 9 'run-graphql'. lines 144-171:
-||||||| parent of a57c9da547 (update tests)
-task 9 'run-graphql'. lines 144-170:
-=======
-task 9, lines 144-170:
+task 9, lines 144-171:
 //# run-graphql --show-usage
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -268,14 +262,8 @@ Response: {
   }
 }
 
-<<<<<<< HEAD
-task 10 'run-graphql'. lines 173-222:
-||||||| parent of a57c9da547 (update tests)
-task 10 'run-graphql'. lines 172-221:
-=======
-task 10, lines 172-221:
+task 10, lines 173-222:
 //# run-graphql --show-usage
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -305,14 +293,8 @@ Response: {
   }
 }
 
-<<<<<<< HEAD
-task 11 'run-graphql'. lines 224-249:
-||||||| parent of a57c9da547 (update tests)
-task 11 'run-graphql'. lines 223-248:
-=======
-task 11, lines 223-248:
+task 11, lines 224-249:
 //# run-graphql --show-usage
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": {
     "transactionBlocks": {
@@ -338,8 +320,8 @@ Response: {
   }
 }
 
-<<<<<<< HEAD
-task 12 'run-graphql'. lines 251-272:
+task 12, lines 251-272:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "fragmentSpread": {
@@ -369,13 +351,8 @@ Response: {
   }
 }
 
-task 13 'run-graphql'. lines 274-286:
-||||||| parent of a57c9da547 (update tests)
-task 12 'run-graphql'. lines 250-260:
-=======
-task 12, lines 250-260:
+task 13, lines 274-286:
 //# run-graphql --show-usage
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": null,
   "extensions": {
@@ -407,14 +384,8 @@ Response: {
   ]
 }
 
-<<<<<<< HEAD
-task 14 'run-graphql'. lines 288-298:
-||||||| parent of a57c9da547 (update tests)
-task 13 'run-graphql'. lines 262-272:
-=======
-task 13, lines 262-272:
+task 14, lines 288-298:
 //# run-graphql --show-usage
->>>>>>> a57c9da547 (update tests)
 Response: {
   "data": null,
   "extensions": {
@@ -440,7 +411,8 @@ Response: {
   ]
 }
 
-task 15 'run-graphql'. lines 300-310:
+task 15, lines 300-310:
+//# run-graphql --show-usage
 Response: {
   "data": null,
   "errors": [

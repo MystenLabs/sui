@@ -158,7 +158,7 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
             Some(data)
         };
 
-        let task_text = "//#".to_owned() + command_text.replace("\n", "\n//#").as_str();
+        let task_text = "//#".to_owned() + command_text.replace('\n', "\n//#").as_str();
 
         tasks.push(TaskInput {
             command,

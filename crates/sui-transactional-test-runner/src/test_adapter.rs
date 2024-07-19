@@ -192,10 +192,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
         >,
     ) -> Option<String> {
         match &task.command {
-            TaskCommand::Init(_, _)
-            | TaskCommand::PrintBytecode(_)
-            | TaskCommand::Publish(_, _)
-            | TaskCommand::Run(_, _) => None,
             TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
                 let data_str = std::fs::read_to_string(task.data.as_ref()?)
                     .ok()?
@@ -203,7 +199,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .to_string();
                 Some(format!("{}\n{}", task.task_text, data_str))
             }
-            TaskCommand::Subcommand(..) => None,
+            TaskCommand::Init(_, _)
+            | TaskCommand::PrintBytecode(_)
+            | TaskCommand::Publish(_, _)
+            | TaskCommand::Run(_, _)
+            | TaskCommand::Subcommand(..) => None,
         }
     }
 
