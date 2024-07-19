@@ -656,9 +656,16 @@ impl SuiNode {
                 .set_killswitch_tombstone_pruning(true);
         }
 
+        let authority_name = config.protocol_public_key();
+        let enable_validator_tx_finalizer =
+            config.enable_validator_tx_finalizer && chain_identifier.chain() != Chain::Mainnet;
+        let validator_tx_finalizer = enable_validator_tx_finalizer.then_some(Arc::new(
+            ValidatorTxFinalizer::new(auth_agg.clone(), authority_name, &prometheus_registry),
+        ));
+
         info!("create authority state");
         let state = AuthorityState::new(
-            config.protocol_public_key(),
+            authority_name,
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
@@ -674,6 +681,7 @@ impl SuiNode {
             config.clone(),
             config.indirect_objects_threshold,
             archive_readers,
+            validator_tx_finalizer,
         )
         .await;
         // ensure genesis txn was executed
@@ -786,7 +794,6 @@ impl SuiNode {
                 connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
-                auth_agg.clone(),
             )
             .await?;
             // This is only needed during cold start.
@@ -1151,7 +1158,6 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
-        auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1186,8 +1192,6 @@ impl SuiNode {
             &config,
             state.clone(),
             consensus_adapter.clone(),
-            auth_agg,
-            epoch_store.get_chain_identifier().chain(),
             &registry_service.default_registry(),
         )
         .await?;
@@ -1416,15 +1420,8 @@ impl SuiNode {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
-        auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
-        chain: Chain,
         prometheus_registry: &Registry,
     ) -> Result<tokio::task::JoinHandle<Result<()>>> {
-        let enable_validator_tx_finalizer =
-            config.enable_validator_tx_finalizer && chain != Chain::Mainnet;
-        let validator_tx_finalizer = enable_validator_tx_finalizer.then_some(Arc::new(
-            ValidatorTxFinalizer::new(auth_agg, state.name, prometheus_registry),
-        ));
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1432,7 +1429,6 @@ impl SuiNode {
             TrafficControllerMetrics::new(prometheus_registry),
             config.policy_config.clone(),
             config.firewall_config.clone(),
-            validator_tx_finalizer,
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1754,7 +1750,6 @@ impl SuiNode {
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
-                            self.auth_agg.clone(),
                         )
                         .await?,
                     )
