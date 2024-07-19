@@ -11,7 +11,7 @@ use prometheus::{
     Registry,
 };
 use std::ops::Add;
-#[cfg(test)]
+#[cfg(any(msim, test))]
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,7 +37,7 @@ struct ValidatorTxFinalizerMetrics {
     num_successful_finalizations: IntCounter,
     finalization_latency: Histogram,
     validator_tx_finalizer_attempt_position: Histogram,
-    #[cfg(test)]
+    #[cfg(any(msim, test))]
     num_finalization_attempts_for_testing: AtomicU64,
     #[cfg(test)]
     num_successful_finalizations_for_testing: AtomicU64,
@@ -72,7 +72,7 @@ impl ValidatorTxFinalizerMetrics {
                 registry,
             )
             .unwrap(),
-            #[cfg(test)]
+            #[cfg(any(msim, test))]
             num_finalization_attempts_for_testing: AtomicU64::new(0),
             #[cfg(test)]
             num_successful_finalizations_for_testing: AtomicU64::new(0),
@@ -81,7 +81,7 @@ impl ValidatorTxFinalizerMetrics {
 
     fn start_finalization(&self) -> Instant {
         self.num_finalization_attempts.inc();
-        #[cfg(test)]
+        #[cfg(any(msim, test))]
         self.num_finalization_attempts_for_testing
             .fetch_add(1, Relaxed);
         Instant::now()
@@ -143,6 +143,13 @@ impl<C: Clone> ValidatorTxFinalizer<C> {
     #[cfg(test)]
     pub(crate) fn auth_agg(&self) -> &Arc<ArcSwap<AuthorityAggregator<C>>> {
         &self.agg
+    }
+
+    #[cfg(any(msim, test))]
+    pub fn num_finalization_attempts_for_testing(&self) -> u64 {
+        self.metrics
+            .num_finalization_attempts_for_testing
+            .load(Relaxed)
     }
 }
 

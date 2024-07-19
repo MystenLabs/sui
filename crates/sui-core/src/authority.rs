@@ -802,7 +802,7 @@ pub struct AuthorityState {
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
 
-    validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
+    pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
