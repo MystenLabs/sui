@@ -50,6 +50,7 @@ async fn test_profiler() {
         executor_version: None,
         protocol_version: None,
         profile_output: Some(profile_output),
+        config_objects: None,
     };
 
     let command_result =

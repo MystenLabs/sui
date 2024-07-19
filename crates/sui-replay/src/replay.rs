@@ -33,13 +33,16 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_core::authority::NodeStateDump;
 use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
-use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
+use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
@@ -239,6 +242,7 @@ pub struct LocalExec {
     // Whether or not to enable the gas profiler, the PathBuf contains either a user specified
     // filepath or the default current directory and name format for the profile output
     pub enable_profiler: Option<PathBuf>,
+    pub config_and_versions: Option<Vec<(ObjectID, SequenceNumber)>>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -322,6 +326,7 @@ impl LocalExec {
         executor_version: Option<i64>,
         protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
+        config_and_versions: Option<Vec<(ObjectID, SequenceNumber)>>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         info!("Using RPC URL: {}", rpc_url);
         LocalExec::new_from_fn_url(&rpc_url)
@@ -335,6 +340,7 @@ impl LocalExec {
                 executor_version,
                 protocol_version,
                 enable_profiler,
+                config_and_versions,
             )
             .await
     }
@@ -384,6 +390,7 @@ impl LocalExec {
             executor_version: None,
             protocol_version: None,
             enable_profiler: None,
+            config_and_versions: None,
         })
     }
 
@@ -426,6 +433,7 @@ impl LocalExec {
             executor_version: None,
             protocol_version: None,
             enable_profiler: None,
+            config_and_versions: None,
         })
     }
 
@@ -663,6 +671,7 @@ impl LocalExec {
                     &tx,
                     expensive_safety_check_config.clone(),
                     use_authority,
+                    None,
                     None,
                     None,
                     None,
@@ -995,10 +1004,12 @@ impl LocalExec {
         executor_version: Option<i64>,
         protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
+        config_and_versions: Option<Vec<(ObjectID, SequenceNumber)>>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         self.executor_version = executor_version;
         self.protocol_version = protocol_version;
         self.enable_profiler = enable_profiler;
+        self.config_and_versions = config_and_versions;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -1419,6 +1430,33 @@ impl LocalExec {
             .await
     }
 
+    fn add_config_objects_if_needed(
+        &self,
+        status: &SuiExecutionStatus,
+    ) -> Vec<(ObjectID, SequenceNumber)> {
+        match parse_effect_error_for_denied_coins(status) {
+            Some(coin_type) => {
+                let Some(mut config_id_and_version) = self.config_and_versions.clone() else {
+                    panic!("Need to specify the config object ID and version for '{coin_type}' in order to replay this transaction");
+                };
+                // NB: the version of the deny list object doesn't matter
+                if !config_id_and_version
+                    .iter()
+                    .any(|(id, _)| id == &SUI_DENY_LIST_OBJECT_ID)
+                {
+                    let deny_list_oid_version = self.download_latest_object(&SUI_DENY_LIST_OBJECT_ID)
+                        .ok()
+                        .flatten()
+                        .expect("Unable to download the deny list object for a transaction that requires it")
+                        .version();
+                    config_id_and_version.push((SUI_DENY_LIST_OBJECT_ID, deny_list_oid_version));
+                }
+                config_id_and_version
+            }
+            None => vec![],
+        }
+    }
+
     async fn resolve_tx_components(
         &self,
         tx_digest: &TransactionDigest,
@@ -1430,6 +1468,8 @@ impl LocalExec {
             sui_json_rpc_types::SuiTransactionBlockData::V1(tx) => tx.sender,
         };
         let SuiTransactionBlockEffects::V1(effects) = tx_info.clone().effects.unwrap();
+
+        let config_objects = self.add_config_objects_if_needed(effects.status());
 
         let raw_tx_bytes = tx_info.clone().raw_transaction;
         let orig_tx: SenderSignedData = bcs::from_bytes(&raw_tx_bytes).unwrap();
@@ -1491,6 +1531,7 @@ impl LocalExec {
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
             receiving_objs,
+            config_objects,
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
             protocol_version: self.get_protocol_config(epoch_id, chain).await?.version,
@@ -1518,6 +1559,8 @@ impl LocalExec {
         let orig_tx = dp.node_state_dump.sender_signed_data.clone();
         let effects = dp.node_state_dump.computed_effects.clone();
         let effects = SuiTransactionBlockEffects::try_from(effects).unwrap();
+        // Config objects don't show up in the node state dump so they need to be provided.
+        let config_objects = self.add_config_objects_if_needed(effects.status());
 
         // Fetch full transaction content
         //let tx_info = self.fetcher.get_transaction(tx_digest).await?;
@@ -1577,6 +1620,7 @@ impl LocalExec {
             dependencies: effects.dependencies().to_vec(),
             effects,
             receiving_objs,
+            config_objects,
             protocol_version: protocol_config.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
@@ -1758,6 +1802,10 @@ impl LocalExec {
 
         // Fetch the receiving objects
         self.multi_download_and_store(&tx_info.receiving_objs)
+            .await?;
+
+        // Fetch specified config objects if any
+        self.multi_download_and_store(&tx_info.config_objects)
             .await?;
 
         // Prep the object runtime for dynamic fields
@@ -2127,4 +2175,39 @@ pub fn get_executor(
     let silent = true;
     sui_execution::executor(&protocol_config, silent, enable_profiler)
         .expect("Creating an executor should not fail here")
+}
+
+fn parse_effect_error_for_denied_coins(status: &SuiExecutionStatus) -> Option<String> {
+    let SuiExecutionStatus::Failure { error } = status else {
+        return None;
+    };
+    parse_denied_error_string(error)
+}
+
+fn parse_denied_error_string(error: &str) -> Option<String> {
+    let regulated_regex = regex::Regex::new(
+        r#"CoinTypeGlobalPause.*?"(.*?)"|AddressDeniedForCoin.*coin_type:.*?"(.*?)""#,
+    )
+    .unwrap();
+
+    let caps = regulated_regex.captures(error)?;
+    Some(caps.get(1).or(caps.get(2))?.as_str().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_denied_error_string;
+    #[test]
+    fn test_regex_regulated_coin_errors() {
+        let test_bank = vec![
+            "CoinTypeGlobalPause { coin_type: \"39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN\" }",
+            "AddressDeniedForCoin { address: B, coin_type: \"39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN\" }"
+        ];
+        let expected_string =
+            "39a572c071784c280ee8ee8c683477e059d1381abc4366f9a58ffac3f350a254::rcoin::RCOIN";
+
+        for test in &test_bank {
+            assert!(parse_denied_error_string(test).unwrap() == expected_string);
+        }
+    }
 }

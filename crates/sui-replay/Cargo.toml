@@ -36,6 +36,7 @@ move-core-types.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tabled.workspace = true
+regex.workspace = true
 
 shared-crypto.workspace = true
 sui-config.workspace = true

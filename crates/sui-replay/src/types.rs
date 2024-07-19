@@ -50,6 +50,8 @@ pub struct OnChainTransactionInfo {
     pub dependencies: Vec<TransactionDigest>,
     #[serde(skip)]
     pub receiving_objs: Vec<(ObjectID, SequenceNumber)>,
+    #[serde(skip)]
+    pub config_objects: Vec<(ObjectID, SequenceNumber)>,
     // TODO: There are two problems with this being a json-rpc type:
     // 1. The json-rpc type is not a perfect mirror with TransactionEffects since v2. We lost the
     // ability to replay effects v2 specific forks. We need to fix this asap. Unfortunately at the moment
