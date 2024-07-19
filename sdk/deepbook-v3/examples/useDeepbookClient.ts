@@ -21,7 +21,12 @@ config();
 			tradeCap: '',
 		},
 	};
-	const mmClient = new DeepBookMarketMaker(privateKey, 'testnet', balanceManagers);
+	const mmClient = new DeepBookMarketMaker(
+		privateKey,
+		'testnet',
+		balanceManagers,
+		process.env.ADMIN_CAP,
+	);
 
 	const tx = new Transaction();
 
@@ -30,7 +35,7 @@ config();
 	console.log(await mmClient.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
 
 	// Balance manager contract call
-	mmClient.balanceManager.depositIntoManager('MANAGER_1', 1, 'SUI')(tx);
+	mmClient.balanceManager.depositIntoManager('MANAGER_1', 'SUI', 10)(tx);
 
 	// Example PTB call
 	mmClient.placeLimitOrderExample(tx);
