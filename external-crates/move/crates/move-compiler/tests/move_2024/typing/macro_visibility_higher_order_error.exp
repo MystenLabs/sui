@@ -10,10 +10,13 @@ error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:14:21
    │
 10 │     public struct S { }
-   │                   - Struct may only be constructed in the module in which they are declared
+   │                   - Struct defined in module 'a::m'
    ·
 14 │             let s = S { };
-   │                     ^^^^^ Invalid instantiation of 'a::m::S'
+   │                     ^^^^^ Struct 'a::m::S' can only be instantiated within its defining module 'a::m'
+   ·
+24 │         test!();
+   │         ------- While expanding this macro
    │
    = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
@@ -22,10 +25,13 @@ error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/macro_visibility_higher_order_error.move:15:17
    │
 10 │     public struct S { }
-   │                   - Struct may only be deconstructed in the module in which they are declared
+   │                   - Struct defined in module 'a::m'
    ·
 15 │             let S { } = s;
-   │                 ^^^^^ Invalid deconstruction binding of 'a::m::S'
+   │                 ^^^^^ Struct 'a::m::S' can only be used in deconstruction binding within its defining module 'a::m'
+   ·
+24 │         test!();
+   │         ------- While expanding this macro
    │
    = This visibility error occurs in a macro body while expanding the macros 'a::m::test' and 'a::l::test'
    = Visibility inside of expanded macros is resolved in the scope of the caller.

@@ -1734,6 +1734,17 @@ fn report_visibility_error_(
         } else {
             "macro"
         };
+        match context.macro_expansion.first() {
+            Some(MacroExpansion::Call(call)) => {
+                diag.add_secondary_label((call.invocation, "While expanding this macro"));
+            }
+            _ => {
+                context.env.add_diag(ice!((
+                    call_loc,
+                    "Error when dealing with macro visibilities"
+                )));
+            }
+        };
         diag.add_note(format!(
             "This visibility error occurs in a macro body while expanding the {macro_s} {names}"
         ));

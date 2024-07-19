@@ -1808,11 +1808,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Invalid instantiation of '{m}::{n}'")),
+                    (eloc, format!("Struct '{m}::{n}' can only be instantiated within its defining module '{m}'")),
                     (
                         context.struct_declared_loc(&m, &n),
-                        "Struct may only be constructed in the module in which they are declared",
-                    ),
+                        format!("Struct defined in module '{m}'")
+                    )
                 );
             }
             (bt, TE::Pack(m, n, targs, tfields))
@@ -1845,10 +1845,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Invalid instantiation of '{m}::{e}::{v}'")),
+                    (eloc, format!("Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'")),
                     (
                         context.enum_declared_loc(&m, &e),
-                        "Enum variants may only be constructed in the module in which they are declared"
+                        format!("Enum defined in module '{m}'")
                     )
                 );
             }
@@ -2260,8 +2260,11 @@ fn match_pattern_(
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Invalid pattern of '{m}::{enum_}::{variant}'")),
-                    (context.enum_declared_loc(&m, &enum_), "Enum variants may only be matched in the module in which they are declared")
+                    (loc, format!("Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'")),
+                    (
+                        context.enum_declared_loc(&m, &enum_),
+                        format!("Enum defined in module '{m}'")
+                    )
                 );
             }
             let bt = rtype!(bt);
@@ -2734,10 +2737,10 @@ fn lvalue(
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Invalid deconstruction {verb} of '{m}::{n}'")),
+                    (loc, format!("Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'")),
                     (
                         context.struct_declared_loc(&m, &n),
-                        "Struct may only be deconstructed in the module in which they are declared",
+                        format!("Struct defined in module '{m}'")
                     ),
                 );
             }
