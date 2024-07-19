@@ -697,4 +697,93 @@ module std::vector_tests {
         assert!(vector[0, 1, 2, 3].all!(|e| *e < 4));
         assert!(!vector[0, 1, 2, 3].all!(|e| *e < 3));
     }
+
+    #[test, expected_failure]
+    fun zip_do_macro_fail() {
+        let v1 = vector[1u64];
+        let v2 = vector[4u64, 5];
+        let mut res = vector[];
+        v1.zip_do!(v2, |a, b| res.push_back(a + b));
+    }
+
+    #[test]
+    fun zip_do_macro() {
+        let v1 = vector[1u64, 2, 3];
+        let v2 = vector[4u64, 5, 6];
+        let mut res = vector[];
+        v1.zip_do!(v2, |a, b| res.push_back(a + b));
+        assert!(res == vector[5, 7, 9]);
+    }
+
+    #[test, expected_failure]
+    fun zip_do_reverse_macro_fail() {
+        let v1 = vector[1u64];
+        let v2 = vector[4u64, 5];
+        let mut res = vector[];
+        v2.zip_do_reverse!(v1, |a, b| res.push_back(a + b));
+    }
+
+    #[test]
+    fun zip_do_reverse_macro() {
+        let v1 = vector[1u64, 2, 3];
+        let v2 = vector[4u64, 5, 6];
+        let mut res = vector[];
+        v2.zip_do_reverse!(v1, |a, b| res.push_back(a + b));
+        assert!(res == vector[9, 7, 5]);
+    }
+
+    #[test, expected_failure]
+    fun zip_do_ref_macro_fail() {
+        let v1 = vector[1u64];
+        let v2 = vector[4u64, 5];
+        let mut res = vector[];
+        v2.zip_do_ref!(&v1, |a, b| res.push_back(*a + *b));
+    }
+
+    #[test]
+    fun zip_do_ref_macro() {
+        let v1 = vector[1u64, 2, 3];
+        let v2 = vector[4u64, 5, 6];
+        let mut res = vector[];
+        v1.zip_do_ref!(&v2, |a, b| res.push_back(*a + *b));
+        assert!(res == vector[5, 7, 9]);
+    }
+
+    #[test, expected_failure]
+    fun zip_do_mut_macro_fail() {
+        let mut v1 = vector[1u64];
+        let mut v2 = vector[4u64, 5];
+        v1.zip_do_mut!(&mut v2, |a, b| {
+            let c = *a;
+            *a = *b;
+            *b = c;
+        });
+    }
+
+    #[test]
+    fun zip_do_mut_macro() {
+        let mut v1 = vector[1u64, 2, 3];
+        let mut v2 = vector[4u64, 5, 6];
+        v1.zip_do_mut!(&mut v2, |a, b| {
+            let c = *a;
+            *a = *b;
+            *b = c;
+        });
+        assert!(v1 == vector[4, 5, 6]);
+        assert!(v2 == vector[1, 2, 3]);
+    }
+
+    #[test]
+    fun zip_map_macro() {
+        let v1 = vector[1u64, 2, 3];
+        let v2 = vector[4u64, 5, 6];
+        assert!(v1.zip_map!(v2, |a, b| a + b) == vector[5, 7, 9]);
+    }
+
+    #[test]
+    fun zip_map_ref_macro() {
+        let v1 = vector[1u64, 2, 3];
+        let v2 = vector[4u64, 5, 6];
+        assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[9, 7, 5]);
+    }
 }

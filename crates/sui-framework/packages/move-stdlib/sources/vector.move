@@ -282,4 +282,77 @@ module std::vector {
             true
         }
     }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
+    /// Consumes both vectors.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_do<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+        let v1 = $v1;
+        let mut v2 = $v2;
+        v2.reverse();
+        let len = v1.length();
+        assert!(len == v2.length());
+        v1.do!(|el1| $f(el1, v2.pop_back()));
+    }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
+    /// Starts from the end of the vectors.
+    public macro fun zip_do_reverse<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+        let v1 = $v1;
+        let mut v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        v1.destroy!(|el1| $f(el1, v2.pop_back()));
+    }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of references to
+    /// elements.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: |&$T1, &$T2|) {
+        let v1 = $v1;
+        let v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        len.do!(|i| $f(&v1[i], &v2[i]));
+    }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of mutable
+    /// references to elements.
+    public macro fun zip_do_mut<$T1, $T2>(
+        $v1: &mut vector<$T1>,
+        $v2: &mut vector<$T2>,
+        $f: |&mut $T1, &mut $T2|,
+    ) {
+        let v1 = $v1;
+        let v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        len.do!(|i| $f(&mut v1[i], &mut v2[i]));
+    }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements. The
+    /// returned values are collected into a new vector.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_map<$T1, $T2, $U>(
+        $v1: vector<$T1>,
+        $v2: vector<$T2>,
+        $f: |$T1, $T2| -> $U,
+    ): vector<$U> {
+        let mut r = vector[];
+        zip_do!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
+        r
+    }
+
+    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of references to
+    /// elements. Unlike `zip_map` this function does not consume the vectors.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_map_ref<$T1, $T2, $U>(
+        $v1: &vector<$T1>,
+        $v2: &vector<$T2>,
+        $f: |&$T1, &$T2| -> $U,
+    ): vector<$U> {
+        let mut r = vector[];
+        zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
+        r
+    }
 }
