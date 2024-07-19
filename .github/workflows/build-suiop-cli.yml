@@ -24,5 +24,5 @@ jobs:
           # we could generate a different secret for this
           # for separation of concerns:
           token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
-          event-type: build-binaries
+          event-type: build-suiop-cli-binaries
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
