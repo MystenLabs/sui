@@ -1863,7 +1863,10 @@ impl AstDebug for NamePath {
             false
         });
         if *is_incomplete {
-            w.write("_");
+            if !entries.is_empty() {
+                w.write("::");
+            }
+            w.write("_#incomplete#_");
         }
     }
 }
