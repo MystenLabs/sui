@@ -32,26 +32,32 @@ pub fn make_ascii_titlecase(in_s: &str) -> String {
 }
 
 /// Formats a string into an oxford list as: `format_oxford_list("or", "{}", vs);`. Calls `iter()`
-/// and `len()` on `vs`.
+/// and `len()` on `vs`. If you already have an iter, you can pass `ITER` as a first parameter.
 ///
 /// This will use `or` as the separator for the last two elements, interspersing commas as
 /// appropriate:
+///
 /// ```text
-/// format_oxford_list("or", "{}", [1]);
+/// format_oxford_list!("or", "{}", [1]);
 /// ==> "1"
 ///
-/// format_oxford_list("or", "{}", [1, 2]);
+/// format_oxford_list!("or", "{}", [1, 2]);
 /// ==> "1 or 2"
 ///
-/// format_oxford_list("or", "{}", [1, 2, 3]);
+/// format_oxford_list!("or", "{}", [1, 2, 3]);
+/// ==> "1, 2, or 3"
+///
+/// format_oxford_list!(ITER, "or", "{}", [1, 2, 3].iter());
 /// ==> "1, 2, or 3"
 ///```
-///
 macro_rules! format_oxford_list {
     ($sep:expr, $format_str:expr, $e:expr) => {{
-        let in_entries = $e;
-        let e_len = in_entries.len();
-        let mut entries = in_entries.iter();
+        let entries = $e;
+        format_oxford_list!(ITER, $sep, $format_str, entries.iter())
+    }};
+    (ITER, $sep:expr, $format_str:expr, $e:expr) => {{
+        let mut entries = $e;
+        let e_len = entries.len();
         match e_len {
             0 => String::new(),
             1 => format!($format_str, entries.next().unwrap()),
