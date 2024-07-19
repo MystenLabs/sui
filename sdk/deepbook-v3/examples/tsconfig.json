@@ -7,6 +7,6 @@
 		"moduleResolution": "Node",
 		"emitDeclarationOnly": false,
 		"resolveJsonModule": true,
-		"module": "esnext",
+		"module": "esnext"
 	}
 }
