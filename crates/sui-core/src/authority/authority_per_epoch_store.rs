@@ -4,8 +4,8 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
+use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
-use fastcrypto_tbls::{dkg, dkg_v0};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
@@ -97,11 +97,11 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
+use sui_types::messages_consensus::VersionedDkgConfirmation;
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, ConsensusTransaction,
     ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -524,20 +524,26 @@ pub struct AuthorityEpochTables {
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
     pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+    pub(crate) dkg_processed_messages: DBMap<PartyId, Vec<u8>>,
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
     pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
+    pub(crate) dkg_used_messages: DBMap<u64, Vec<u8>>,
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
-    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfimation>,
+    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfirmation>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
+    pub(crate) dkg_confirmations: DBMap<PartyId, Vec<u8>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
@@ -3635,12 +3641,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        let versioned_dkg_message = match self.protocol_config.dkg_version() {
-                            // old message was not an enum
-                            0 => bcs::from_bytes(bytes).map(VersionedDkgMessage::V0),
-                            _ => bcs::from_bytes(bytes),
-                        };
-                        match versioned_dkg_message {
+                        match bcs::from_bytes(bytes) {
                             Ok(message) => randomness_manager.add_message(authority, message)?,
                             Err(e) => {
                                 warn!(
@@ -3673,14 +3674,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-
-                        let versioned_dkg_confirmation = match self.protocol_config.dkg_version() {
-                            // old message was not an enum
-                            0 => bcs::from_bytes(bytes).map(VersionedDkgConfimation::V0),
-                            _ => bcs::from_bytes(bytes),
-                        };
-
-                        match versioned_dkg_confirmation {
+                        match bcs::from_bytes(bytes) {
                             Ok(message) => {
                                 randomness_manager.add_confirmation(batch, authority, message)?
                             }

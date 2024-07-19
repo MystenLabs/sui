@@ -14,7 +14,7 @@ use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1};
+use fastcrypto_tbls::{dkg, dkg_v1};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -288,26 +288,20 @@ impl ConsensusTransactionKind {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum VersionedDkgMessage {
-    V0(dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>),
+    V0(), // deprecated
     V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VersionedDkgConfimation {
-    V0(dkg::Confirmation<bls12381::G2Element>),
+pub enum VersionedDkgConfirmation {
+    V0(), // deprecated
     V1(dkg::Confirmation<bls12381::G2Element>),
 }
 
 impl Debug for VersionedDkgMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionedDkgMessage::V0(msg) => write!(
-                f,
-                "DKG V0 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
-                msg.sender,
-                msg.vss_pk.degree(),
-                msg.encrypted_shares.len(),
-            ),
+            VersionedDkgMessage::V0() => panic!("BUG: invalid VersionedDkgMessage version"),
             VersionedDkgMessage::V1(msg) => write!(
                 f,
                 "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
@@ -322,7 +316,7 @@ impl Debug for VersionedDkgMessage {
 impl VersionedDkgMessage {
     pub fn sender(&self) -> u16 {
         match self {
-            VersionedDkgMessage::V0(msg) => msg.sender,
+            VersionedDkgMessage::V0() => panic!("BUG: invalid VersionedDkgMessage version"),
             VersionedDkgMessage::V1(msg) => msg.sender,
         }
     }
@@ -331,24 +325,9 @@ impl VersionedDkgMessage {
         dkg_version: u64,
         party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
-        match dkg_version {
-            0 => {
-                let msg = party.create_message(&mut rand::thread_rng())?;
-                Ok(VersionedDkgMessage::V0(msg))
-            }
-            1 => {
-                let msg = party.create_message_v1(&mut rand::thread_rng())?;
-                Ok(VersionedDkgMessage::V1(msg))
-            }
-            _ => panic!("BUG: invalid DKG version"),
-        }
-    }
-
-    pub fn unwrap_v0(self) -> dkg_v0::Message<bls12381::G2Element, bls12381::G2Element> {
-        match self {
-            VersionedDkgMessage::V0(msg) => msg,
-            _ => panic!("BUG: expected V0 message"),
-        }
+        assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
+        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        Ok(VersionedDkgMessage::V1(msg))
     }
 
     pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {
@@ -357,42 +336,40 @@ impl VersionedDkgMessage {
             _ => panic!("BUG: expected V1 message"),
         }
     }
+
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgMessage::V1(_), 1))
+    }
 }
 
-impl VersionedDkgConfimation {
+impl VersionedDkgConfirmation {
     pub fn sender(&self) -> u16 {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.sender,
-            VersionedDkgConfimation::V1(msg) => msg.sender,
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.sender,
         }
     }
 
     pub fn num_of_complaints(&self) -> usize {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
-            VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
-        }
-    }
-
-    pub fn unwrap_v0(&self) -> &dkg::Confirmation<bls12381::G2Element> {
-        match self {
-            VersionedDkgConfimation::V0(msg) => msg,
-            _ => panic!("BUG: expected V0 confirmation"),
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.complaints.len(),
         }
     }
 
     pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
         match self {
-            VersionedDkgConfimation::V1(msg) => msg,
+            VersionedDkgConfirmation::V1(msg) => msg,
             _ => panic!("BUG: expected V1 confirmation"),
         }
     }
 
-    pub fn expect_v1(self) -> Self {
-        match self {
-            VersionedDkgConfimation::V1(_) => self,
-            _ => panic!("BUG: expected V1 confirmation"),
-        }
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgConfirmation::V1(_), 1))
     }
 }
 
@@ -483,13 +460,8 @@ impl ConsensusTransaction {
         authority: AuthorityName,
         versioned_message: &VersionedDkgMessage,
     ) -> Self {
-        let message = match versioned_message {
-            VersionedDkgMessage::V0(msg) => {
-                // Old version does not use the enum, so we need to serialize it separately.
-                bcs::to_bytes(msg).expect("message serialization should not fail")
-            }
-            _ => bcs::to_bytes(versioned_message).expect("message serialization should not fail"),
-        };
+        let message =
+            bcs::to_bytes(versioned_message).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         message.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -500,17 +472,10 @@ impl ConsensusTransaction {
     }
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        versioned_confirmation: &VersionedDkgConfimation,
+        versioned_confirmation: &VersionedDkgConfirmation,
     ) -> Self {
-        let confirmation = match versioned_confirmation {
-            VersionedDkgConfimation::V0(msg) => {
-                // Old version does not use the enum, so we need to serialize it separately.
-                bcs::to_bytes(msg).expect("message serialization should not fail")
-            }
-            _ => bcs::to_bytes(versioned_confirmation)
-                .expect("message serialization should not fail"),
-        };
-
+        let confirmation =
+            bcs::to_bytes(versioned_confirmation).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         confirmation.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
