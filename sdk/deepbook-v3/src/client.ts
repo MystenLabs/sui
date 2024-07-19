@@ -125,7 +125,8 @@ export class DeepBookClient {
 	 * @description Get the quote quantity out for a given base quantity
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} baseQuantity Base quantity to convert
-	 * @returns {Promise<{ baseQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with base quantity, base out, quote out, and deep required for the dry run
+	 * @returns {Promise<{ baseQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>}
+	 * An object with base quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
 		const tx = new Transaction();
@@ -155,7 +156,8 @@ export class DeepBookClient {
 	 * @description Get the base quantity out for a given quote quantity
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} quoteQuantity Quote quantity to convert
-	 * @returns {Promise<{ quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with quote quantity, base out, quote out, and deep required for the dry run
+	 * @returns {Promise<{ quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>}
+	 * An object with quote quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getBaseQuantityOut(poolKey: string, quoteQuantity: number) {
 		const tx = new Transaction();
@@ -186,7 +188,8 @@ export class DeepBookClient {
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} baseQuantity Base quantity to convert
 	 * @param {number} quoteQuantity Quote quantity to convert
-	 * @returns {Promise<{ baseQuantity: number, quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with base quantity, quote quantity, base out, quote out, and deep required for the dry run
+	 * @returns {Promise<{ baseQuantity: number, quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>}
+	 * An object with base quantity, quote quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
 		const tx = new Transaction();
@@ -242,7 +245,8 @@ export class DeepBookClient {
 	 * @param {number} priceLow Lower bound of the price range
 	 * @param {number} priceHigh Upper bound of the price range
 	 * @param {boolean} isBid Whether to get bid or ask orders
-	 * @returns {Promise<{ prices: Array<number>, quantities: Array<number> }>} An object with arrays of prices and quantities
+	 * @returns {Promise<{ prices: Array<number>, quantities: Array<number> }>}
+	 * An object with arrays of prices and quantities
 	 */
 	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
 		const tx = new Transaction();
@@ -275,7 +279,8 @@ export class DeepBookClient {
 	 * @description Get level 2 order book ticks from mid-price for a pool
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} ticks Number of ticks from mid-price
-	 * @returns {Promise<{ bid_prices: Array<number>, bid_quantities: Array<number>, ask_prices: Array<number>, ask_quantities: Array<number> }>} An object with arrays of prices and quantities
+	 * @returns {Promise<{ bid_prices: Array<number>, bid_quantities: Array<number>, ask_prices: Array<number>, ask_quantities: Array<number> }>}
+	 * An object with arrays of prices and quantities
 	 */
 	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
 		const tx = new Transaction();
@@ -314,7 +319,8 @@ export class DeepBookClient {
 	/**
 	 * @description Get the vault balances for a pool
 	 * @param {string} poolKey Key of the pool
-	 * @returns {Promise<{ base: number, quote: number, deep: number }>} An object with base, quote, and deep balances in the vault
+	 * @returns {Promise<{ base: number, quote: number, deep: number }>}
+	 * An object with base, quote, and deep balances in the vault
 	 */
 	async vaultBalances(poolKey: string) {
 		const tx = new Transaction();
