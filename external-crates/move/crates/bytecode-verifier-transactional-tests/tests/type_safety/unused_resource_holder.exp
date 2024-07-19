@@ -1,6 +1,7 @@
 processed 4 tasks
 
-task 1 'run'. lines 18-33:
+task 1, lines 18-33:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }
 
-task 3 'run'. lines 51-66:
+task 3, lines 51-66:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::m'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,

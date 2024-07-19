@@ -1,6 +1,7 @@
 processed 6 tasks
 
-task 0 'print-bytecode'. lines 1-8:
+task 0, lines 1-8:
+//# print-bytecode
 // Move bytecode v6
 module 1.m {
 
@@ -14,7 +15,8 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 10-18:
+task 1, lines 10-18:
+//# print-bytecode
 // Move bytecode v6
 module 2.m {
 
@@ -28,7 +30,8 @@ B0:
 }
 }
 
-task 2 'print-bytecode'. lines 20-26:
+task 2, lines 20-26:
+//# print-bytecode
 // Move bytecode v6
 module 3.m {
 
@@ -42,7 +45,8 @@ B0:
 }
 }
 
-task 3 'print-bytecode'. lines 28-35:
+task 3, lines 28-35:
+//# print-bytecode
 // Move bytecode v6
 module 4.m {
 
@@ -56,10 +60,12 @@ B0:
 }
 }
 
-task 4 'print-bytecode'. lines 37-46:
+task 4, lines 37-46:
+//# print-bytecode
 Error: ParserError: Invalid Token: invalid token kind for statement Slash
 
-task 5 'print-bytecode'. lines 48-58:
+task 5, lines 48-58:
+//# print-bytecode
 // Move bytecode v6
 module 6.m {
 

@@ -1,16 +1,19 @@
 processed 8 tasks
 
-task 1 'publish'. lines 6-29:
+task 1, lines 6-29:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6604400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 31-31:
+task 2, line 31:
+//# run tto::M1::start
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'view-object'. lines 33-33:
+task 3, line 33:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
 Contents: tto::M1::A {
@@ -21,7 +24,8 @@ Contents: tto::M1::A {
     },
 }
 
-task 4 'view-object'. lines 35-37:
+task 4, lines 35-37:
+//# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
 Contents: tto::M1::B {
@@ -32,11 +36,15 @@ Contents: tto::M1::B {
     },
 }
 
-task 5 'programmable'. lines 38-40:
+task 5, lines 38-40:
+//# programmable --inputs object(2,0) receiving(2,1) @tto
+//> 0: tto::M1::receiver(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
 
-task 6 'view-object'. lines 42-42:
+task 6, line 42:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 4
 Contents: tto::M1::A {
@@ -47,7 +55,8 @@ Contents: tto::M1::A {
     },
 }
 
-task 7 'view-object'. lines 44-44:
+task 7, line 44:
+//# view-object 2,1
 Owner: Account Address ( tto )
 Version: 4
 Contents: tto::M1::B {

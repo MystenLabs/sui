@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 2 'print-bytecode'. lines 16-36:
+task 2, lines 16-36:
+//# print-bytecode 
 // Move bytecode v6
 module 1.M {
 use 0000000000000000000000000000000000000000000000000000000000000001::T;

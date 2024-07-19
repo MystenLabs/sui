@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 1 'run'. lines 19-32:
+task 1, lines 19-32:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::m'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 3)],
 }
 
-task 2 'run'. lines 34-46:
+task 2, lines 34-46:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::m'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,

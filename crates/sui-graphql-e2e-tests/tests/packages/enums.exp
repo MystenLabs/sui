@@ -3,15 +3,18 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-17:
+task 1, lines 6-17:
+//# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 19-19:
+task 2, line 19:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 21-66:
+task 3, lines 21-66:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -100,15 +103,18 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 68-81:
+task 4, lines 68-81:
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 83-83:
+task 5, line 83:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 85-148:
+task 6, lines 85-148:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -281,7 +287,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 150-185:
+task 7, lines 150-185:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {

@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'run'. lines 1-9:
+task 0, lines 1-9:
+//# run --type-args u64
 Error: Function execution failed with VMError: {
     major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
     sub_status: None,

@@ -1,39 +1,51 @@
 processed 23 tasks
 
-task 1 'create-checkpoint'. lines 6-8:
+task 1, lines 6-8:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'create-checkpoint'. lines 11-13:
+task 3, lines 11-13:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 5 'create-checkpoint'. lines 16-18:
+task 5, lines 16-18:
+//# create-checkpoint
 Checkpoint created: 3
 
-task 7 'create-checkpoint'. lines 21-23:
+task 7, lines 21-23:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 9 'create-checkpoint'. lines 26-28:
+task 9, lines 26-28:
+//# create-checkpoint
 Checkpoint created: 5
 
-task 11 'create-checkpoint'. lines 31-33:
+task 11, lines 31-33:
+//# create-checkpoint
 Checkpoint created: 6
 
-task 13 'create-checkpoint'. lines 36-38:
+task 13, lines 36-38:
+//# create-checkpoint
 Checkpoint created: 7
 
-task 15 'advance-epoch'. lines 41-41:
+task 15, line 41:
+//# advance-epoch
 Epoch advanced: 0
 
-task 16 'create-checkpoint'. lines 43-45:
+task 16, lines 43-45:
+//# create-checkpoint
 Checkpoint created: 9
 
-task 19 'create-checkpoint'. lines 51-51:
+task 19, line 51:
+//# create-checkpoint
 Checkpoint created: 10
 
-task 20 'advance-epoch'. lines 53-53:
+task 20, line 53:
+//# advance-epoch
 Epoch advanced: 1
 
-task 21 'run-graphql'. lines 55-66:
+task 21, lines 55-66:
+//# run-graphql
 Response: {
   "data": {
     "checkpoints": {
@@ -113,7 +125,8 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 68-86:
+task 22, lines 68-86:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {

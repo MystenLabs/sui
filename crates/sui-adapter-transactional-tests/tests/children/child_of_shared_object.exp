@@ -3,32 +3,38 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-17:
+task 1, lines 6-17:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'publish'. lines 19-45:
+task 2, lines 19-45:
+//# publish --dependencies t3
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7668400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'publish'. lines 48-72:
+task 3, lines 48-72:
+//# publish --dependencies t2 t3
 created: object(3,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8215600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'run'. lines 74-74:
+task 4, line 74:
+//# run t3::o3::create --sender A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 5 'run'. lines 76-76:
+task 5, line 76:
+//# run t2::o2::create_shared --args object(4,0) --sender A
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
 
-task 6 'view-object'. lines 78-78:
+task 6, line 78:
+//# view-object 4,0
 Owner: Object ID: ( fake(5,0) )
 Version: 3
 Contents: t3::o3::Obj3 {
@@ -39,7 +45,8 @@ Contents: t3::o3::Obj3 {
     },
 }
 
-task 7 'view-object'. lines 80-82:
+task 7, lines 80-82:
+//# view-object 5,1
 Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
@@ -50,5 +57,6 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 8 'run'. lines 83-83:
+task 8, line 83:
+//# run t1::o1::use_o2_o3 --args object(5,1) object(4,0) --sender A
 Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(4,0), parent_id: object(5,0) }

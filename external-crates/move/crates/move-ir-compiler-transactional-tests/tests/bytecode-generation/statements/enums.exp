@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'print-bytecode'. lines 1-71:
+task 0, lines 1-71:
+//# print-bytecode
 // Move bytecode v7
 module 3d8.M {
 

@@ -1,6 +1,7 @@
 processed 5 tasks
 
-task 0 'print-bytecode'. lines 1-43:
+task 0, lines 1-43:
+//# print-bytecode
 // Move bytecode v7
 module 1.Enums {
 
@@ -60,7 +61,8 @@ Jump tables:
 }
 }
 
-task 3 'run'. lines 101-101:
+task 3, line 101:
+//# run 0x1::Enums::call_fail_1 --type-args u64
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,
@@ -69,7 +71,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(3), 3)],
 }
 
-task 4 'run'. lines 103-103:
+task 4, line 103:
+//# run 0x1::Enums::call_fail_3 --type-args u64
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,

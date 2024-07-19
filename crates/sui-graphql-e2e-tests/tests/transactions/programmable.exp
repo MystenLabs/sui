@@ -3,15 +3,18 @@ processed 21 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-16:
+task 1, lines 6-16:
+//# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 18-18:
+task 2, line 18:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 20-199:
+task 3, lines 20-199:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -170,15 +173,18 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 201-216:
+task 4, lines 201-216:
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 218-218:
+task 5, line 218:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 220-399:
+task 6, lines 220-399:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -441,20 +447,36 @@ Response: {
   }
 }
 
-task 7 'programmable'. lines 401-404:
+task 7, lines 401-404:
+//# programmable --sender A --inputs 41u64 @A
+//> 0: MakeMoveVec<u64>([Input(0)]);
+//> 1: P0::m::new(Result(0));
+//> sui::transfer::public_transfer<P0::m::Foo>(Result(1), Input(1))
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'programmable'. lines 406-415:
+task 8, lines 406-415:
+//# programmable --sender A --inputs 42u64 43u64 1000 @A
+//> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
+//> 1: MakeMoveVec<u64>([]);
+//> 2: SplitCoins(Gas, [Input(2), Input(2)]);
+//> 3: P0::m::new(Result(0));
+//> 4: TransferObjects([Result(3)], Input(3));
+//> 5: P0::m::new(Result(1));
+//> 6: P0::m::burn(Result(5));
+//> 7: MergeCoins(NestedResult(2,0), [NestedResult(2,1)]);
+//> TransferObjects([NestedResult(2,0)], Input(3))
 created: object(8,0), object(8,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3328800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9 'create-checkpoint'. lines 417-417:
+task 9, line 417:
+//# create-checkpoint
 Checkpoint created: 3
 
-task 10 'run-graphql'. lines 419-607:
+task 10, lines 419-607:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -842,14 +864,18 @@ Response: {
   }
 }
 
-task 11 'programmable'. lines 609-610:
+task 11, lines 609-610:
+//# programmable --sender A --inputs 1000
+//> SplitCoins(Gas, [Input(0)])
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
 
-task 12 'create-checkpoint'. lines 612-612:
+task 12, line 612:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 13 'run-graphql'. lines 614-793:
+task 13, lines 614-793:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -975,7 +1001,8 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 795-805:
+task 14, lines 795-805:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1033,7 +1060,8 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 807-817:
+task 15, lines 807-817:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1051,7 +1079,8 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 819-829:
+task 16, lines 819-829:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1101,7 +1130,8 @@ Response: {
   }
 }
 
-task 17 'run-graphql'. lines 831-838:
+task 17, lines 831-838:
+//# run-graphql
 Response: {
   "data": {
     "address": {
@@ -1112,7 +1142,8 @@ Response: {
   }
 }
 
-task 18 'run-graphql'. lines 840-845:
+task 18, lines 840-845:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1128,7 +1159,8 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 847-852:
+task 19, lines 847-852:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1144,7 +1176,8 @@ Response: {
   }
 }
 
-task 20 'run-graphql'. lines 854-864:
+task 20, lines 854-864:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {

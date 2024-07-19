@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'publish'. lines 1-23:
+task 0, lines 1-23:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 11)],
 }
 
-task 1 'run'. lines 25-25:
+task 1, line 25:
+//# run 0x42::m::foo --gas-budget 100000
 Error: Function execution failed with VMError: {
     major_status: LINKER_ERROR,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Function execution failed with VMError: {
     offsets: [],
 }
 
-task 2 'run'. lines 27-45:
+task 2, lines 27-45:
+//# run --gas-budget 100000
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,
