@@ -150,6 +150,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Bigint,
+        min_tx_sequence_number -> Bigint,
+        max_tx_sequence_number -> Bigint,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Bigint,
         transaction_digest -> Blob,
@@ -226,6 +234,7 @@ macro_rules! for_all_tables {
             objects_history,
             objects_snapshot,
             packages,
+            pruner_cp_watermark,
             transactions,
             tx_calls,
             tx_changed_objects,

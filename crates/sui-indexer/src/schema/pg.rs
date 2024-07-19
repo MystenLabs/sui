@@ -24,6 +24,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     display (object_type) {
         object_type -> Text,
         id -> Bytea,
@@ -277,6 +285,8 @@ macro_rules! for_all_tables {
     ($action:path) => {
         $action!(
             checkpoints,
+            pruner_cp_watermark,
+            display,
             epochs,
             events,
             events_partition_0,

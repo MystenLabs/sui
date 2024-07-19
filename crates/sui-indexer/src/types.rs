@@ -45,6 +45,8 @@ pub struct IndexedCheckpoint {
     pub successful_tx_num: usize,
     pub end_of_epoch_data: Option<EndOfEpochData>,
     pub end_of_epoch: bool,
+    pub min_tx_sequence_number: u64,
+    pub max_tx_sequence_number: u64,
 }
 
 impl IndexedCheckpoint {
@@ -57,6 +59,9 @@ impl IndexedCheckpoint {
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
             - checkpoint.epoch_rolling_gas_cost_summary.storage_rebate as i64;
         let tx_digests = contents.iter().map(|t| t.transaction).collect::<Vec<_>>();
+        let max_tx_sequence_number = checkpoint.network_total_transactions - 1;
+        // NOTE: + 1u64 first to avoid subtraction with overflow
+        let min_tx_sequence_number = max_tx_sequence_number + 1u64 - tx_digests.len() as u64;
         let auth_sig = &checkpoint.auth_sig().signature;
         Self {
             sequence_number: checkpoint.sequence_number,
@@ -78,6 +83,8 @@ impl IndexedCheckpoint {
             timestamp_ms: checkpoint.timestamp_ms,
             validator_signature: auth_sig.clone(),
             checkpoint_commitments: checkpoint.checkpoint_commitments.clone(),
+            min_tx_sequence_number,
+            max_tx_sequence_number,
         }
     }
 }
