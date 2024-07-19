@@ -32,7 +32,8 @@ use crate::{
     typing::{
         ast::{self as T},
         core::{
-            self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
+            self, public_testing_visibility, report_visibility_error, Context, PublicForTesting,
+            ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
@@ -1798,21 +1799,21 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 subtype(
                     context,
                     arg.exp.loc,
-                    || format!("Invalid argument for field '{}' for '{}::{}'", f, &m, &n),
+                    || format!("Invalid argument for field '{f}' for '{m}::{n}'"),
                     arg.ty.clone(),
                     fty.clone(),
                 );
                 (idx, (fty, *arg))
             });
             if !context.is_current_module(&m) {
-                let msg = format!(
-                    "Invalid instantiation of '{}::{}'.\nAll structs can only be constructed in \
-                     the module in which they are declared",
-                    &m, &n,
+                report_visibility_error(
+                    context,
+                    (eloc, format!("Struct '{m}::{n}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        context.struct_declared_loc(&m, &n),
+                        format!("Struct defined in module '{m}'")
+                    )
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
             }
             (bt, TE::Pack(m, n, targs, tfields))
         }
@@ -1835,26 +1836,21 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 subtype(
                     context,
                     arg.exp.loc,
-                    || {
-                        format!(
-                            "Invalid argument for field '{}' for '{}::{}::{}'",
-                            f, &m, &e, &v
-                        )
-                    },
+                    || format!("Invalid argument for field '{f}' for '{m}::{e}::{v}'"),
                     arg.ty.clone(),
                     fty.clone(),
                 );
                 (idx, (fty, *arg))
             });
             if !context.is_current_module(&m) {
-                let msg = format!(
-                    "Invalid instantiation of '{}::{}::{}'.\nAll enum variants can only be \
-                    constructed in the module in which they are declared",
-                    &m, &e, &v
+                report_visibility_error(
+                    context,
+                    (eloc, format!("Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        context.enum_declared_loc(&m, &e),
+                        format!("Enum defined in module '{m}'")
+                    )
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
             }
             (bt, TE::PackVariant(m, e, v, targs, tfields))
         }
@@ -2262,14 +2258,14 @@ fn match_pattern_(
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
-                let msg = format!(
-                    "Invalid pattern for '{}::{}::{}'.\n All enums can only be \
-                     matched in the module in which they are declared",
-                    &m, &enum_, &variant
+                report_visibility_error(
+                    context,
+                    (loc, format!("Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'")),
+                    (
+                        context.enum_declared_loc(&m, &enum_),
+                        format!("Enum defined in module '{m}'")
+                    )
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
             let bt = rtype!(bt);
             let pat_ = if field_error {
@@ -2739,14 +2735,14 @@ fn lvalue(
                 (idx, (fty, tl))
             });
             if !context.is_current_module(&m) {
-                let msg = format!(
-                    "Invalid deconstruction {} of '{}::{}'.\n All structs can only be \
-                     deconstructed in the module in which they are declared",
-                    verb, &m, &n,
+                report_visibility_error(
+                    context,
+                    (loc, format!("Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'")),
+                    (
+                        context.struct_declared_loc(&m, &n),
+                        format!("Struct defined in module '{m}'")
+                    ),
                 );
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
             match ref_mut {
                 None => TL::Unpack(m, n, targs, tfields),
