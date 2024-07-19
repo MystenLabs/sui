@@ -221,6 +221,18 @@ impl<'env, 'map> Context<'env, 'map> {
             .name_access_chain_to_module_ident(inner_context, chain)
     }
 
+    fn error_ide_autocomplete_suggestion(&mut self, loc: Loc) {
+        let Context {
+            path_expander,
+            defn_context: inner_context,
+            ..
+        } = self;
+        path_expander
+            .as_mut()
+            .unwrap()
+            .ide_autocomplete_suggestion(inner_context, loc)
+    }
+
     pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
         let diag = self.spec_deprecated_diag(loc, is_error);
         self.env().add_diag(diag);
@@ -2328,7 +2340,11 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             let result = type_(context, *result);
             ET::Fun(args, Box::new(result))
         }
-        PT::UnresolvedError => ET::UnresolvedError,
+        PT::UnresolvedError => {
+            // Treat an unresolved error as a leading access
+            context.error_ide_autocomplete_suggestion(loc);
+            ET::UnresolvedError
+        }
     };
     sp(loc, t_)
 }

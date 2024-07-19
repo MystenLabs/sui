@@ -2941,21 +2941,28 @@ fn parse_type_(
             ));
         }
         _ => {
-            let tn = if whitespace_sensitive_ty_args {
-                parse_name_access_chain(
-                    context,
-                    /* macros */ false,
-                    /* tyargs */ true,
-                    || "a type name",
-                )?
+            if context.at_stop_set() {
+                context
+                    .env
+                    .add_diag(*unexpected_token_error(context.tokens, "a type name"));
+                Type_::UnresolvedError
             } else {
-                parse_name_access_chain_with_tyarg_whitespace(
-                    context,
-                    /* macros */ false,
-                    || "a type name",
-                )?
-            };
-            Type_::Apply(Box::new(tn))
+                let tn = if whitespace_sensitive_ty_args {
+                    parse_name_access_chain(
+                        context,
+                        /* macros */ false,
+                        /* tyargs */ true,
+                        || "a type name",
+                    )?
+                } else {
+                    parse_name_access_chain_with_tyarg_whitespace(
+                        context,
+                        /* macros */ false,
+                        || "a type name",
+                    )?
+                };
+                Type_::Apply(Box::new(tn))
+            }
         }
     };
     let end_loc = context.tokens.previous_end_loc();
