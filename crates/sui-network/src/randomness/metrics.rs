@@ -31,6 +31,7 @@ impl Metrics {
         if let Some(inner) = &self.0 {
             inner.current_epoch.set(epoch as i64);
             inner.highest_round_generated.set(-1);
+            inner.num_ignored_byzantine_peers.set(0);
         }
     }
 
@@ -61,6 +62,12 @@ impl Metrics {
             .as_ref()
             .map(|inner| &inner.round_observation_latency)
     }
+
+    pub fn inc_num_ignored_byzantine_peers(&self) {
+        if let Some(inner) = &self.0 {
+            inner.num_ignored_byzantine_peers.inc();
+        }
+    }
 }
 
 struct Inner {
@@ -69,6 +76,7 @@ struct Inner {
     num_rounds_pending: IntGauge,
     round_generation_latency: Histogram,
     round_observation_latency: Histogram,
+    num_ignored_byzantine_peers: IntGauge,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -105,6 +113,11 @@ impl Inner {
                 "randomness_round_observation_latency",
                 "Time taken from when partial signatures are sent for a round of randomness to when the value is observed in an executed checkpoint",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            num_ignored_byzantine_peers: register_int_gauge_with_registry!(
+                "randomness_num_ignored_byzantine_peers",
+                "The number of byzantine peers that have been ignored by the randomness newtork loop in the current epoch",
                 registry
             ).unwrap(),
         }

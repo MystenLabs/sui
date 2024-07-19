@@ -805,6 +805,7 @@ impl RandomnessEventLoop {
         self.allowed_peers_set.remove(&peer_id);
         self.allowed_peers
             .update(Arc::new(self.allowed_peers_set.clone()));
+        self.metrics.inc_num_ignored_byzantine_peers();
     }
 
     fn maybe_start_pending_tasks(&mut self) {
