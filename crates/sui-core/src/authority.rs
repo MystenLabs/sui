@@ -159,6 +159,8 @@ pub use crate::checkpoints::checkpoint_executor::{
     init_checkpoint_timeout_config, CheckpointTimeoutConfig,
 };
 
+use crate::authority_client::NetworkAuthorityClient;
+use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
@@ -799,6 +801,8 @@ pub struct AuthorityState {
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
+
+    validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -951,9 +955,22 @@ impl AuthorityState {
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
-            Ok(s) => Ok(HandleTransactionResponse {
-                status: TransactionStatus::Signed(s.into_inner().into_sig()),
-            }),
+            Ok(s) => {
+                if self.is_validator(epoch_store) {
+                    if let Some(validator_tx_finalizer) = &self.validator_tx_finalizer {
+                        let tx = s.clone();
+                        let validator_tx_finalizer = validator_tx_finalizer.clone();
+                        let cache_reader = self.get_transaction_cache_reader().clone();
+                        let epoch_store = epoch_store.clone();
+                        spawn_monitored_task!(epoch_store.within_alive_epoch(
+                            validator_tx_finalizer.track_signed_tx(cache_reader, tx)
+                        ));
+                    }
+                }
+                Ok(HandleTransactionResponse {
+                    status: TransactionStatus::Signed(s.into_inner().into_sig()),
+                })
+            }
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
@@ -2641,6 +2658,7 @@ impl AuthorityState {
         config: NodeConfig,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
+        validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2696,6 +2714,7 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
             config,
             overload_info: AuthorityOverloadInfo::default(),
+            validator_tx_finalizer,
         });
 
         // Start a task to execute ready certificates.
@@ -4442,8 +4461,8 @@ impl AuthorityState {
                     cap.available_system_packages,
                 );
 
-                // A validator that only supports the current protosl version is also voting
-                // against any change, because framework upgrades aways require a protocol version
+                // A validator that only supports the current protocol version is also voting
+                // against any change, because framework upgrades always require a protocol version
                 // bump.
                 cap.supported_protocol_versions
                     .get_version_digest(proposed_protocol_version)

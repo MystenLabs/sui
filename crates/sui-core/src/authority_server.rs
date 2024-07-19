@@ -23,9 +23,7 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusTransaction;
-use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV3, TransactionStatus,
-};
+use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
@@ -49,8 +47,6 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority_client::NetworkAuthorityClient;
-use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -298,7 +294,6 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
-    validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
 }
 
 impl ValidatorService {
@@ -309,7 +304,6 @@ impl ValidatorService {
         traffic_controller_metrics: TrafficControllerMetrics,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
-        validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
     ) -> Self {
         Self {
             state,
@@ -323,7 +317,6 @@ impl ValidatorService {
                 ))
             }),
             client_id_source: policy_config.map(|policy| policy.client_id_source),
-            validator_tx_finalizer,
         }
     }
 
@@ -338,7 +331,6 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
-            validator_tx_finalizer: None,
         }
     }
 
@@ -372,7 +364,6 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source: _,
-            validator_tx_finalizer,
         } = self.clone();
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -435,20 +426,6 @@ impl ValidatorService {
             return Err(error.into());
         }
 
-        if let Some(validator_tx_finalizer) = validator_tx_finalizer {
-            if let TransactionStatus::Signed(sig) = &info.status {
-                let signed_tx = VerifiedSignedTransaction::new_unchecked(
-                    SignedTransaction::new_from_data_and_sig(
-                        transaction.into_inner().into_data(),
-                        sig.clone(),
-                    ),
-                );
-                spawn_monitored_task!(epoch_store.within_alive_epoch(
-                    validator_tx_finalizer
-                        .track_signed_tx(state.get_transaction_cache_reader().clone(), signed_tx,)
-                ));
-            }
-        }
         Ok((tonic::Response::new(info), Weight::zero()))
     }
 
