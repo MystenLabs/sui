@@ -3532,6 +3532,11 @@ fn borrow_exp_dotted(
                     exp = make_error_exp(context, loc);
                     break;
                 };
+                if matches!(index_base_type.value, Type_::UnresolvedError) {
+                    assert!(context.env.has_errors());
+                    exp = make_error_exp(context, loc);
+                    break;
+                }
                 let (m, f) = if mut_ {
                     if let Some(index_mut) = index_methods.index_mut {
                         index_mut.target_function
@@ -3556,6 +3561,8 @@ fn borrow_exp_dotted(
                 let sp!(argloc, mut args_) = args;
                 args_.insert(0, *exp);
                 let mut_type = sp(index_loc, Type_::Ref(mut_, Box::new(index_base_type)));
+                // Note that `module_call` here never raise parameter subtyping errors, since we
+                // already checked them when processing the index functions.
                 let (ret_ty, e_) = module_call(context, error_loc, m, f, None, argloc, args_);
                 if invariant_no_report(context, mut_type.clone(), ret_ty.clone()).is_err() {
                     let msg = format!(
@@ -4099,17 +4106,32 @@ fn syntax_call_return_ty(
     // the type in the case of a polymorphic return type, e.g.,
     //     fun index<T>(&mut S, x: &T): &T { ... }
     // We don't know what the base type is until we have T in our hand and do this. The subtyping
-    // takes care of this for us. If it fails, however, we're in error mode (explained below).
-    for (arg_ty, (_, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
-        if let Err(_failure) = subtype_no_report(context, arg_ty, param_ty) {
-            valid = false;
-        }
+    // takes care of this for us.
+
+    // For the first argument, since it may be incorrectly mut/imm, we don't report an error.
+    let mut args_params = arg_tys.into_iter().zip(parameters.clone());
+    if let Some((arg_ty, (_, param_ty))) = args_params.next() {
+        let _ = subtype_no_report(context, arg_ty, param_ty);
     }
+
+    // For the other arguments, failure should be reported. If it is, we also mark the call as
+    // invalid, indicating a return type error.
+    for (arg_ty, (param, param_ty)) in args_params {
+        let msg = || {
+            format!(
+                "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
+                &m, &f, &param.value.name
+            )
+        };
+        valid &= subtype_opt(context, loc, msg, arg_ty, param_ty).is_some();
+    }
+
     // The failure case for dotted expressions hands an error expression up the chain: if a field
-    // or syntax index function fails to resolve, we hand up an error and propagate it, instead of
-    // re-attempting to handle it at each step in the accessors (which would cause the user to get
-    // a new error for each part of the access path). Similarly, if our call arguments are wrong,
-    // the path is already bad so we're done trying to resolve it and drop into this error case.
+    // or syntax index function is invalid or failed to resolve, we hand up an error and propagate
+    // it, instead of re-attempting to handle it at each step in the accessors (which would cause
+    // the user to get a new error for each part of the access path). Similarly, if our call
+    // arguments are wrong, the path is already bad so we're done trying to resolve it and drop
+    // into this error case.
     if !valid {
         context.error_type(return_.loc)
     } else {
