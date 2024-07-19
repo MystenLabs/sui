@@ -17,6 +17,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 		keypair: string | Keypair,
 		env: 'testnet' | 'mainnet',
 		balanceManagers?: { [key: string]: BalanceManager },
+		adminCap?: string,
 	) {
 		let resolvedKeypair: Keypair;
 
@@ -35,6 +36,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 				url: getFullnodeUrl(env),
 			}),
 			balanceManagers: balanceManagers,
+			adminCap: adminCap,
 		});
 
 		this.keypair = resolvedKeypair;
@@ -107,7 +109,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 		tx.transferObjects([loanRemain], this.getActiveAddress());
 	};
 
-	placeLimitOrderExample = async (tx: Transaction) => {
+	placeLimitOrderExample = (tx: Transaction) => {
 		tx.add(
 			this.deepBook.placeLimitOrder({
 				poolKey: 'SUI_DBUSDC',
