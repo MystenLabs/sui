@@ -1013,28 +1013,26 @@ macro_rules! handle_with_decoration {
                             let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
                                 error!(
                                     "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
-                                    Expected {} values. Skipping traffic controller request handling.",
+                                    Expected at least {} values. Skipping traffic controller request handling.",
                                     header_contents,
                                     contents_len,
                                     num_hops,
-                                    num_hops + 1,
+                                    contents_len,
                                 );
                                 return None;
                             };
-                            match client_ip.parse::<SocketAddr>() {
-                                Ok(socket_addr) => Some(socket_addr.ip()),
-                                Err(err) => {
+                            client_ip.parse::<IpAddr>().ok().or_else(|| {
+                                client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
                                     $self.metrics.forwarded_header_parse_error.inc();
                                     error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
                                         Please ensure that your proxy is configured to resolve client domains to an \
                                         IP address before writing header",
-                                        header_val,
-                                        err,
+                                        client_ip,
                                     );
                                     None
-                                }
-                            }
+                                })
+                            })
                         }
                         Err(e) => {
                             // TODO: once we have confirmed that no legitimate traffic
