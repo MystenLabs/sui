@@ -16,7 +16,7 @@ export class DeepBookContract {
 	#config: DeepBookConfig;
 
 	/**
-	 * @param config Configuration for DeepBookContract
+	 * @param {DeepBookConfig} config Configuration for DeepBookContract
 	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
@@ -24,7 +24,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Place a limit order
-	 * @param params Parameters for placing a limit order
+	 * @param {PlaceLimitOrderParams} params Parameters for placing a limit order
 	 * @returns A function that takes a Transaction object
 	 */
 	placeLimitOrder = (params: PlaceLimitOrderParams) => (tx: Transaction) => {
@@ -73,7 +73,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Place a market order
-	 * @param params Parameters for placing a market order
+	 * @param {PlaceMarketOrderParams} params Parameters for placing a market order
 	 * @returns A function that takes a Transaction object
 	 */
 	placeMarketOrder = (params: PlaceMarketOrderParams) => (tx: Transaction) => {
@@ -113,10 +113,10 @@ export class DeepBookContract {
 
 	/**
 	 * @description Modify an existing order
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
-	 * @param orderId Order ID to modify
-	 * @param newQuantity New quantity for the order
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
+	 * @param {number} orderId Order ID to modify
+	 * @param {number} newQuantity New quantity for the order
 	 * @returns A function that takes a Transaction object
 	 */
 	modifyOrder =
@@ -144,9 +144,9 @@ export class DeepBookContract {
 
 	/**
 	 * @description Cancel an existing order
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
-	 * @param orderId Order ID to cancel
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
+	 * @param {number} orderId Order ID to cancel
 	 * @returns A function that takes a Transaction object
 	 */
 	cancelOrder =
@@ -173,8 +173,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Cancel all open orders for a balance manager
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	cancelAllOrders = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
@@ -199,8 +199,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Withdraw settled amounts for a balance manager
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	withdrawSettledAmounts = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
@@ -219,8 +219,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Add a deep price point for a target pool using a reference pool
-	 * @param targetPool Target pool object
-	 * @param referencePool Reference pool object
+	 * @param {string} targetPoolKey The key to identify the target pool
+	 * @param {string} referencePoolKey The key to identify the reference pool
 	 * @returns A function that takes a Transaction object
 	 */
 	addDeepPricePoint = (targetPoolKey: string, referencePoolKey: string) => (tx: Transaction) => {
@@ -248,8 +248,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Claim rebates for a balance manager
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	claimRebates = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
@@ -268,7 +268,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Burn DEEP tokens from the pool
-	 * @param pool Pool object
+	 * @param {string} poolKey The key to identify the pool
 	 * @returns A function that takes a Transaction object
 	 */
 	burnDeep = (poolKey: string) => (tx: Transaction) => {
@@ -284,7 +284,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the mid price for a pool
-	 * @param pool Pool object
+	 * @param {string} poolKey The key to identify the pool
 	 * @returns A function that takes a Transaction object
 	 */
 	midPrice = (poolKey: string) => (tx: Transaction) => {
@@ -301,7 +301,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Check if a pool is whitelisted
-	 * @param pool Pool object
+	 * @param {string} poolKey The key to identify the pool
 	 * @returns A function that takes a Transaction object
 	 */
 	whitelisted = (poolKey: string) => (tx: Transaction) => {
@@ -317,8 +317,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the quote quantity out for a given base quantity in
-	 * @param pool Pool object
-	 * @param baseQuantity Base quantity to convert
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} baseQuantity Base quantity to convert
 	 * @returns A function that takes a Transaction object
 	 */
 	getQuoteQuantityOut = (poolKey: string, baseQuantity: number) => (tx: Transaction) => {
@@ -339,8 +339,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the base quantity out for a given quote quantity in
-	 * @param pool Pool object
-	 * @param quoteQuantity Quote quantity to convert
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} quoteQuantity Quote quantity to convert
 	 * @returns A function that takes a Transaction object
 	 */
 	getBaseQuantityOut = (poolKey: string, quoteQuantity: number) => (tx: Transaction) => {
@@ -362,9 +362,9 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the quantity out for a given base or quote quantity
-	 * @param pool Pool object
-	 * @param baseQuantity Base quantity to convert
-	 * @param quoteQuantity Quote quantity to convert
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} baseQuantity Base quantity to convert
+	 * @param {number} quoteQuantity Quote quantity to convert
 	 * @returns A function that takes a Transaction object
 	 */
 	getQuantityOut =
@@ -388,8 +388,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get open orders for a balance manager in a pool
-	 * @param pool Pool object
-	 * @param managerKey Key of the balance manager
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} managerKey Key of the balance manager
 	 * @returns A function that takes a Transaction object
 	 */
 	accountOpenOrders = (poolKey: string, managerKey: string) => (tx: Transaction) => {
@@ -408,10 +408,10 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get level 2 order book specifying range of price
-	 * @param pool Pool object
-	 * @param priceLow Lower bound of the price range
-	 * @param priceHigh Upper bound of the price range
-	 * @param isBid Whether to get bid or ask orders
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} priceLow Lower bound of the price range
+	 * @param {number} priceHigh Upper bound of the price range
+	 * @param {boolean} isBid Whether to get bid or ask orders
 	 * @returns A function that takes a Transaction object
 	 */
 	getLevel2Range =
@@ -435,8 +435,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get level 2 order book ticks from mid-price for a pool
-	 * @param pool Pool object
-	 * @param tickFromMid Number of ticks from mid-price
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} tickFromMid Number of ticks from mid-price
 	 * @returns A function that takes a Transaction object
 	 */
 	getLevel2TicksFromMid = (poolKey: string, tickFromMid: number) => (tx: Transaction) => {
@@ -457,7 +457,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the vault balances for a pool
-	 * @param pool Pool object
+	 * @param {string} poolKey The key to identify the pool
 	 * @returns A function that takes a Transaction object
 	 */
 	vaultBalances = (poolKey: string) => (tx: Transaction) => {
@@ -474,8 +474,8 @@ export class DeepBookContract {
 
 	/**
 	 * @description Get the pool ID by asset types
-	 * @param baseType Type of the base asset
-	 * @param quoteType Type of the quote asset
+	 * @param {string} baseType Type of the base asset
+	 * @param {string} quoteType Type of the quote asset
 	 * @returns A function that takes a Transaction object
 	 */
 	getPoolIdByAssets = (baseType: string, quoteType: string) => (tx: Transaction) => {
@@ -488,7 +488,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Swap exact base amount for quote amount
-	 * @param params Parameters for the swap
+	 * @param {SwapParams} params Parameters for the swap
 	 * @returns A function that takes a Transaction object
 	 */
 	swapExactBaseForQuote = (params: SwapParams) => (tx: Transaction) => {
@@ -529,7 +529,7 @@ export class DeepBookContract {
 
 	/**
 	 * @description Swap exact quote amount for base amount
-	 * @param params Parameters for the swap
+	 * @param {SwapParams} params Parameters for the swap
 	 * @returns A function that takes a Transaction object
 	 */
 	swapExactQuoteForBase = (params: SwapParams) => (tx: Transaction) => {

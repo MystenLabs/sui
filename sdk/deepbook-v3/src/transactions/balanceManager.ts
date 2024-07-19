@@ -12,7 +12,7 @@ export class BalanceManagerContract {
 	#config: DeepBookConfig;
 
 	/**
-	 * @param config Configuration for BalanceManagerContract
+	 * @param {DeepBookConfig} config Configuration for BalanceManagerContract
 	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
@@ -35,9 +35,9 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Deposit funds into the BalanceManager
-	 * @param managerKey The key of the BalanceManager
-	 * @param amountToDeposit The amount to deposit
-	 * @param coin The coin to deposit
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @param {string} coinKey The key of the coin to deposit
+	 * @param {number} amountToDeposit The amount to deposit
 	 * @returns A function that takes a Transaction object
 	 */
 	depositIntoManager =
@@ -59,10 +59,10 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Withdraw funds from the BalanceManager
-	 * @param managerKey The key of the BalanceManager
-	 * @param amountToWithdraw The amount to withdraw
-	 * @param coin The coin to withdraw
-	 * @param recipient The recipient of the withdrawn funds
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @param {string} coinKey The key of the coin to withdraw
+	 * @param {number} amountToWithdraw The amount to withdraw
+	 * @param {string} recipient The recipient of the withdrawn funds
 	 * @returns A function that takes a Transaction object
 	 */
 	withdrawFromManager =
@@ -81,9 +81,9 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Withdraw all funds from the BalanceManager
-	 * @param managerKey The key of the BalanceManager
-	 * @param coin The coin to withdraw
-	 * @param recipient The recipient of the withdrawn funds
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @param {string} coinKey The key of the coin to withdraw
+	 * @param {string} recipient The recipient of the withdrawn funds
 	 * @returns A function that takes a Transaction object
 	 */
 	withdrawAllFromManager =
@@ -101,8 +101,8 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Check the balance of the BalanceManager
-	 * @param managerKey The key of the BalanceManager
-	 * @param coin The coin to check the balance of
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @param {string} coinKey The key of the coin to check the balance of
 	 * @returns A function that takes a Transaction object
 	 */
 	checkManagerBalance = (managerKey: string, coinKey: string) => (tx: Transaction) => {
@@ -117,7 +117,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Generate a trade proof for the BalanceManager. Calls the appropriate function based on whether tradeCap is set.
-	 * @param managerKey The key of the BalanceManager
+	 * @param {string} managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	generateProof = (managerKey: string) => (tx: Transaction) => {
@@ -131,7 +131,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Generate a trade proof as the owner
-	 * @param managerId The ID of the BalanceManager
+	 * @param {string} managerId The ID of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	generateProofAsOwner = (managerId: string) => (tx: Transaction) => {
@@ -143,8 +143,8 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Generate a trade proof as a trader
-	 * @param managerId The ID of the BalanceManager
-	 * @param tradeCapId The ID of the tradeCap
+	 * @param {string} managerId The ID of the BalanceManager
+	 * @param {string} tradeCapId The ID of the tradeCap
 	 * @returns A function that takes a Transaction object
 	 */
 	generateProofAsTrader = (managerId: string, tradeCapId: string) => (tx: Transaction) => {
@@ -156,7 +156,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Get the owner of the BalanceManager
-	 * @param managerKey The key of the BalanceManager
+	 * @param {string} managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	owner = (managerKey: string) => (tx: Transaction) => {
@@ -169,7 +169,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Get the ID of the BalanceManager
-	 * @param managerKey The key of the BalanceManager
+	 * @param {string} managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	id = (managerKey: string) => (tx: Transaction) => {

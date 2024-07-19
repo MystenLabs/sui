@@ -11,7 +11,7 @@ export class FlashLoanContract {
 	#config: DeepBookConfig;
 
 	/**
-	 * @param config Configuration object for DeepBook
+	 * @param {DeepBookConfig} config Configuration object for DeepBook
 	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
@@ -19,8 +19,8 @@ export class FlashLoanContract {
 
 	/**
 	 * @description Borrow base asset from the pool
-	 * @param pool Pool object
-	 * @param borrowAmount Amount to borrow
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} borrowAmount The amount to borrow
 	 * @returns A function that takes a Transaction object
 	 */
 	borrowBaseAsset = (poolKey: string, borrowAmount: number) => (tx: Transaction) => {
@@ -37,10 +37,10 @@ export class FlashLoanContract {
 
 	/**
 	 * @description Return base asset to the pool after a flash loan.
-	 * @param poolKey The key to identify the pool.
-	 * @param borrowAmount The amount of the base asset to return.
-	 * @param baseCoinInput Coin object representing the base asset to be returned.
-	 * @param flashLoan FlashLoan object representing the loan to be settled.
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} borrowAmount The amount of the base asset to return
+	 * @param {TransactionObjectArgument} baseCoinInput Coin object representing the base asset to be returned
+	 * @param {TransactionObjectArgument} flashLoan FlashLoan object representing the loan to be settled
 	 * @returns A function that takes a Transaction object
 	 */
 	returnBaseAsset =
@@ -70,8 +70,8 @@ export class FlashLoanContract {
 
 	/**
 	 * @description Borrow quote asset from the pool
-	 * @param pool Pool object
-	 * @param borrowAmount Amount to borrow
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} borrowAmount The amount to borrow
 	 * @returns A function that takes a Transaction object
 	 */
 	borrowQuoteAsset = (poolKey: string, borrowAmount: number) => (tx: Transaction) => {
@@ -88,10 +88,10 @@ export class FlashLoanContract {
 
 	/**
 	 * @description Return quote asset to the pool after a flash loan.
-	 * @param poolKey The key to identify the pool.
-	 * @param borrowAmount The amount of the quote asset to return.
-	 * @param quoteCoinInput Coin object representing the quote asset to be returned.
-	 * @param flashLoan FlashLoan object representing the loan to be settled.
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {number} borrowAmount The amount of the quote asset to return
+	 * @param {TransactionObjectArgument} quoteCoinInput Coin object representing the quote asset to be returned
+	 * @param {TransactionObjectArgument} flashLoan FlashLoan object representing the loan to be settled
 	 * @returns A function that takes a Transaction object
 	 */
 	returnQuoteAsset =

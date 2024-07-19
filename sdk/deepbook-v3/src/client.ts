@@ -15,11 +15,7 @@ import { DEEP_SCALAR, DeepBookConfig, FLOAT_SCALAR } from './utils/config.js';
 import type { CoinMap, PoolMap } from './utils/constants.js';
 
 /**
- * DeepBook Client. If a private key is provided, then all transactions
- * will be signed with that key. Otherwise, the default key will be used.
- * Placing orders requires a balance manager to be set.
- * Client is initialized with default Coins and Pools. To trade on more pools,
- * new coins / pools must be added to the client.
+ * DeepBookClient class for managing DeepBook operations.
  */
 export class DeepBookClient {
 	client: SuiClient;
@@ -32,11 +28,13 @@ export class DeepBookClient {
 	governance: GovernanceContract;
 
 	/**
-	 * @param client SuiClient instance
-	 * @param address Address of the client
-	 * @param env Environment configuration
-	 * @param coins Optional initial CoinMap
-	 * @param pools Optional initial PoolMap
+	 * @param {SuiClient} client SuiClient instance
+	 * @param {string} address Address of the client
+	 * @param {Environment} env Environment configuration
+	 * @param {Object.<string, BalanceManager>} [balanceManagers] Optional initial BalanceManager map
+	 * @param {CoinMap} [coins] Optional initial CoinMap
+	 * @param {PoolMap} [pools] Optional initial PoolMap
+	 * @param {string} [adminCap] Optional admin capability
 	 */
 	constructor({
 		client,
@@ -78,9 +76,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Check the balance of a balance manager for a specific coin
-	 * @param managerKey Key of the balance manager
-	 * @param coinKey Key of the coin
-	 * @returns An object with coin type and balance
+	 * @param {string} managerKey Key of the balance manager
+	 * @param {string} coinKey Key of the coin
+	 * @returns {Promise<{ coinType: string, balance: number }>} An object with coin type and balance
 	 */
 	async checkManagerBalance(managerKey: string, coinKey: string) {
 		const tx = new Transaction();
@@ -105,8 +103,8 @@ export class DeepBookClient {
 
 	/**
 	 * @description Check if a pool is whitelisted
-	 * @param poolKey Key of the pool
-	 * @returns Boolean indicating if the pool is whitelisted
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<boolean>} Boolean indicating if the pool is whitelisted
 	 */
 	async whitelisted(poolKey: string) {
 		const tx = new Transaction();
@@ -125,9 +123,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the quote quantity out for a given base quantity
-	 * @param poolKey Key of the pool
-	 * @param baseQuantity Base quantity to convert
-	 * @returns An object with base quantity, base out, quote out, and deep required for the dry run
+	 * @param {string} poolKey Key of the pool
+	 * @param {number} baseQuantity Base quantity to convert
+	 * @returns {Promise<{ baseQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with base quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {
 		const tx = new Transaction();
@@ -155,9 +153,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the base quantity out for a given quote quantity
-	 * @param poolKey Key of the pool
-	 * @param quoteQuantity Quote quantity to convert
-	 * @returns An object with quote quantity, base out, quote out, and deep required for the dry run
+	 * @param {string} poolKey Key of the pool
+	 * @param {number} quoteQuantity Quote quantity to convert
+	 * @returns {Promise<{ quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with quote quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getBaseQuantityOut(poolKey: string, quoteQuantity: number) {
 		const tx = new Transaction();
@@ -185,10 +183,10 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the output quantities for given base and quote quantities. Only one quantity can be non-zero
-	 * @param poolKey Key of the pool
-	 * @param baseQuantity Base quantity to convert
-	 * @param quoteQuantity Quote quantity to convert
-	 * @returns An object with base quantity, quote quantity, base out, quote out, and deep required for the dry run
+	 * @param {string} poolKey Key of the pool
+	 * @param {number} baseQuantity Base quantity to convert
+	 * @param {number} quoteQuantity Quote quantity to convert
+	 * @returns {Promise<{ baseQuantity: number, quoteQuantity: number, baseOut: number, quoteOut: number, deepRequired: number }>} An object with base quantity, quote quantity, base out, quote out, and deep required for the dry run
 	 */
 	async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {
 		const tx = new Transaction();
@@ -217,9 +215,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get open orders for a balance manager in a pool
-	 * @param poolKey Key of the pool
-	 * @param managerKey Key of the balance manager
-	 * @returns An array of open order IDs
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey Key of the balance manager
+	 * @returns {Promise<Array>} An array of open order IDs
 	 */
 	async accountOpenOrders(poolKey: string, managerKey: string) {
 		const tx = new Transaction();
@@ -240,11 +238,11 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get level 2 order book specifying range of price
-	 * @param poolKey Key of the pool
-	 * @param priceLow Lower bound of the price range
-	 * @param priceHigh Upper bound of the price range
-	 * @param isBid Whether to get bid or ask orders
-	 * @returns An object with arrays of prices and quantities
+	 * @param {string} poolKey Key of the pool
+	 * @param {number} priceLow Lower bound of the price range
+	 * @param {number} priceHigh Upper bound of the price range
+	 * @param {boolean} isBid Whether to get bid or ask orders
+	 * @returns {Promise<{ prices: Array<number>, quantities: Array<number> }>} An object with arrays of prices and quantities
 	 */
 	async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {
 		const tx = new Transaction();
@@ -275,9 +273,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get level 2 order book ticks from mid-price for a pool
-	 * @param poolKey Key of the pool
-	 * @param ticks Number of ticks from mid-price
-	 * @returns An object with arrays of prices and quantities
+	 * @param {string} poolKey Key of the pool
+	 * @param {number} ticks Number of ticks from mid-price
+	 * @returns {Promise<{ bid_prices: Array<number>, bid_quantities: Array<number>, ask_prices: Array<number>, ask_quantities: Array<number> }>} An object with arrays of prices and quantities
 	 */
 	async getLevel2TicksFromMid(poolKey: string, ticks: number) {
 		const tx = new Transaction();
@@ -315,8 +313,8 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the vault balances for a pool
-	 * @param poolKey Key of the pool
-	 * @returns An object with base, quote, and deep balances in the vault
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ base: number, quote: number, deep: number }>} An object with base, quote, and deep balances in the vault
 	 */
 	async vaultBalances(poolKey: string) {
 		const tx = new Transaction();
@@ -343,9 +341,9 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the pool ID by asset types
-	 * @param baseType Type of the base asset
-	 * @param quoteType Type of the quote asset
-	 * @returns The address of the pool
+	 * @param {string} baseType Type of the base asset
+	 * @param {string} quoteType Type of the quote asset
+	 * @returns {Promise<string>} The address of the pool
 	 */
 	async getPoolIdByAssets(baseType: string, quoteType: string) {
 		const tx = new Transaction();
@@ -366,8 +364,8 @@ export class DeepBookClient {
 
 	/**
 	 * @description Get the mid price for a pool
-	 * @param poolKey Key of the pool
-	 * @returns The mid price
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<number>} The mid price
 	 */
 	async midPrice(poolKey: string) {
 		const tx = new Transaction();
