@@ -188,7 +188,6 @@ codes!(
         InvalidName: { msg: "invalid name", severity: BlockingError },
         InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
         InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
-        IncompleteAccessChain: { msg: "incomplete access chain", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [

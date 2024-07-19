@@ -8,7 +8,7 @@ error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
    │
 14 │         a::
-   │         ^^^ Expected fully defined access chain in this position
+   │         ^^^ Incomplete name in this position. Expected an identifier after '::'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:15:5
@@ -23,7 +23,7 @@ error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
 18 │         a::m::
-   │         ^^^^^^ Expected fully defined access chain in this position
+   │         ^^^^^^ Incomplete name in this position. Expected an identifier after '::'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:19:5
@@ -38,7 +38,7 @@ error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
    │
 22 │         a::m::SomeEnum::
-   │         ^^^^^^^^^^^^^^^^ Expected fully defined access chain in this position
+   │         ^^^^^^^^^^^^^^^^ Incomplete name in this position. Expected an identifier after '::'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:23:5

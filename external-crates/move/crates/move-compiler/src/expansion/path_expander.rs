@@ -863,7 +863,7 @@ fn access_chain_resolution_error(result: AccessChainNameResult) -> Diagnostic {
 }
 
 fn access_chain_incomplete_error(loc: Loc) -> Diagnostic {
-    let msg = "Expected fully defined access chain in this position";
+    let msg = "Incomplete name in this position. Expected an identifier after '::'";
     diag!(NameResolution::NamePositionMismatch, (loc, msg))
 }
 
