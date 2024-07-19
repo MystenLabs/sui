@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 36-63:
+task 1, lines 36-63:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
     sub_status: None,

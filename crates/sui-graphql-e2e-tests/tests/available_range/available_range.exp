@@ -1,6 +1,7 @@
 processed 5 tasks
 
-task 1 'run-graphql'. lines 6-28:
+task 1, lines 6-28:
+//# run-graphql
 Response: {
   "data": {
     "availableRange": {
@@ -24,13 +25,16 @@ Response: {
   }
 }
 
-task 2 'create-checkpoint'. lines 30-30:
+task 2, line 30:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'create-checkpoint'. lines 33-33:
+task 3, line 33:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 4 'run-graphql'. lines 36-58:
+task 4, lines 36-58:
+//# run-graphql
 Response: {
   "data": {
     "availableRange": {

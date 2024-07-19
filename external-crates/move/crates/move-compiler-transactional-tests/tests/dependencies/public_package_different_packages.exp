@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 2 'publish'. lines 11-17:
+task 2, lines 11-17:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Y'. Got VMError: {
     major_status: LOOKUP_FAILED,
     sub_status: None,

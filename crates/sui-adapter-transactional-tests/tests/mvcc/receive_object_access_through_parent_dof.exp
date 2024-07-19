@@ -3,17 +3,20 @@ processed 16 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-76:
+task 1, lines 6-76:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 12509600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 78-78:
+task 2, line 78:
+//# run tto::M1::start --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 18749200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 80-80:
+task 3, line 80:
+//# view-object 2,0
 Owner: Object ID: ( fake(2,7) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
@@ -30,7 +33,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 4 'view-object'. lines 82-82:
+task 4, line 82:
+//# view-object 2,1
 Owner: Object ID: ( _ )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
@@ -47,7 +51,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 5 'view-object'. lines 84-84:
+task 5, line 84:
+//# view-object 2,2
 Owner: Object ID: ( fake(2,6) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
@@ -64,7 +69,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 6 'view-object'. lines 86-86:
+task 6, line 86:
+//# view-object 2,3
 Owner: Object ID: ( fake(2,7) )
 Version: 2
 Contents: sui::dynamic_field::Field<u64, tto::M1::A> {
@@ -101,7 +107,8 @@ Contents: sui::dynamic_field::Field<u64, tto::M1::A> {
     },
 }
 
-task 7 'view-object'. lines 88-88:
+task 7, line 88:
+//# view-object 2,4
 Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: tto::M1::A {
@@ -127,7 +134,8 @@ Contents: tto::M1::A {
     ],
 }
 
-task 8 'view-object'. lines 90-90:
+task 8, line 90:
+//# view-object 2,5
 Owner: Object ID: ( fake(2,1) )
 Version: 2
 Contents: tto::M1::A {
@@ -150,7 +158,8 @@ Contents: tto::M1::A {
     ],
 }
 
-task 9 'view-object'. lines 92-92:
+task 9, line 92:
+//# view-object 2,6
 Owner: Account Address ( fake(2,8) )
 Version: 2
 Contents: tto::M1::A {
@@ -171,7 +180,8 @@ Contents: tto::M1::A {
     ],
 }
 
-task 10 'view-object'. lines 94-94:
+task 10, line 94:
+//# view-object 2,7
 Owner: Object ID: ( fake(2,2) )
 Version: 2
 Contents: tto::M1::A {
@@ -191,7 +201,8 @@ Contents: tto::M1::A {
     ],
 }
 
-task 11 'view-object'. lines 96-96:
+task 11, line 96:
+//# view-object 2,8
 Owner: Account Address ( A )
 Version: 2
 Contents: tto::M1::A {
@@ -212,7 +223,8 @@ Contents: tto::M1::A {
     ],
 }
 
-task 12 'view-object'. lines 98-101:
+task 12, lines 98-101:
+//# view-object 2,9
 Owner: Account Address ( fake(2,8) )
 Version: 2
 Contents: tto::M1::Wrapper<tto::M1::A> {
@@ -239,16 +251,19 @@ Contents: tto::M1::Wrapper<tto::M1::A> {
     },
 }
 
-task 13 'run'. lines 102-102:
+task 13, line 102:
+//# run tto::M1::receive_b_parent --args object(2,8) receiving(2,9) --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 2
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
 
-task 14 'run'. lines 104-104:
+task 14, line 104:
+//# run tto::M1::receive_b_parent --args object(2,8) receiving(2,6) --sender A
 created: object(14,0)
 mutated: object(0,0), object(2,6), object(2,8)
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 3521232, non_refundable_storage_fee: 35568
 
-task 15 'run'. lines 106-106:
+task 15, line 106:
+//# run tto::M1::receive_wrapped --args object(2,8) receiving(2,9) --sender A
 created: object(15,0)
 mutated: object(0,0), object(2,8), object(2,9)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 4093056, non_refundable_storage_fee: 41344

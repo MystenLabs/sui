@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 11-24:
+task 1, lines 11-24:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CALL_TYPE_MISMATCH_ERROR,
     sub_status: None,

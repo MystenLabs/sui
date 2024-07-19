@@ -1,4 +1,5 @@
 processed 2 tasks
 
-task 1 'run'. lines 24-24:
+task 1, line 24:
+//# run 0x42::M::t
 return values: 42
