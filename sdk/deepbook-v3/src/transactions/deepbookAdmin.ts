@@ -4,7 +4,7 @@
 import { coinWithBalance } from '@mysten/sui/transactions';
 import type { Transaction } from '@mysten/sui/transactions';
 
-import type { CreatePoolAdminParams, Pool } from '../types/index.js';
+import type { CreatePoolAdminParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { FLOAT_SCALAR, POOL_CREATION_FEE } from '../utils/config.js';
 
@@ -15,7 +15,7 @@ export class DeepBookAdminContract {
 	#config: DeepBookConfig;
 
 	/**
-	 * @param config Configuration for DeepBookAdminContract
+	 * @param {DeepBookConfig} config Configuration for DeepBookAdminContract
 	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
@@ -35,7 +35,7 @@ export class DeepBookAdminContract {
 
 	/**
 	 * @description Create a new pool as admin
-	 * @param params Parameters for creating pool as admin
+	 * @param {CreatePoolAdminParams} params Parameters for creating pool as admin
 	 * @returns A function that takes a Transaction object
 	 */
 	createPoolAdmin = (params: CreatePoolAdminParams) => (tx: Transaction) => {
@@ -72,10 +72,11 @@ export class DeepBookAdminContract {
 
 	/**
 	 * @description Unregister a pool as admin
-	 * @param pool The pool to be unregistered by admin
+	 * @param {string} poolKey The key of the pool to be unregistered by admin
 	 * @returns A function that takes a Transaction object
 	 */
-	unregisterPoolAdmin = (pool: Pool) => (tx: Transaction) => {
+	unregisterPoolAdmin = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -87,10 +88,11 @@ export class DeepBookAdminContract {
 
 	/**
 	 * @description Update the allowed versions for a pool
-	 * @param pool The pool to be updated
+	 * @param {string} poolKey The key of the pool to be updated
 	 * @returns A function that takes a Transaction object
 	 */
-	updateAllowedVersions = (pool: Pool) => (tx: Transaction) => {
+	updateAllowedVersions = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		tx.moveCall({
@@ -106,7 +108,7 @@ export class DeepBookAdminContract {
 
 	/**
 	 * @description Enable a specific version
-	 * @param version The version to be enabled
+	 * @param {number} version The version to be enabled
 	 * @returns A function that takes a Transaction object
 	 */
 	enableVersion = (version: number) => (tx: Transaction) => {
@@ -122,7 +124,7 @@ export class DeepBookAdminContract {
 
 	/**
 	 * @description Disable a specific version
-	 * @param version The version to be disabled
+	 * @param {number} version The version to be disabled
 	 * @returns A function that takes a Transaction object
 	 */
 	disableVersion = (version: number) => (tx: Transaction) => {

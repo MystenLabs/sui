@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Transaction } from '@mysten/sui/transactions';
 
-import type { BalanceManager, Pool, ProposalParams } from '../types/index.js';
+import type { ProposalParams } from '../types/index.js';
 import type { DeepBookConfig } from '../utils/config.js';
 import { DEEP_SCALAR, FLOAT_SCALAR } from '../utils/config.js';
 
@@ -13,7 +13,7 @@ export class GovernanceContract {
 	#config: DeepBookConfig;
 
 	/**
-	 * @param config Configuration for GovernanceContract
+	 * @param {DeepBookConfig} config Configuration for GovernanceContract
 	 */
 	constructor(config: DeepBookConfig) {
 		this.#config = config;
@@ -21,14 +21,16 @@ export class GovernanceContract {
 
 	/**
 	 * @description Stake a specified amount in the pool
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
-	 * @param stakeAmount Amount to stake
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
+	 * @param {number} stakeAmount The amount to stake
 	 * @returns A function that takes a Transaction object
 	 */
 	stake =
-		(pool: Pool, balanceManager: BalanceManager, stakeAmount: number) => (tx: Transaction) => {
-			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		(poolKey: string, balanceManagerKey: string, stakeAmount: number) => (tx: Transaction) => {
+			const pool = this.#config.getPool(poolKey);
+			const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
+			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -46,12 +48,14 @@ export class GovernanceContract {
 
 	/**
 	 * @description Unstake from the pool
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
-	unstake = (pool: Pool, balanceManager: BalanceManager) => (tx: Transaction) => {
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+	unstake = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -64,15 +68,15 @@ export class GovernanceContract {
 
 	/**
 	 * @description Submit a governance proposal
-	 * @param params Parameters for the proposal
+	 * @param {ProposalParams} params Parameters for the proposal
 	 * @returns A function that takes a Transaction object
 	 */
 	submitProposal = (params: ProposalParams) => (tx: Transaction) => {
-		const { poolKey, balanceManager, takerFee, makerFee, stakeRequired } = params;
+		const { poolKey, balanceManagerKey, takerFee, makerFee, stakeRequired } = params;
 
 		const pool = this.#config.getPool(poolKey);
-
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 
@@ -92,13 +96,15 @@ export class GovernanceContract {
 
 	/**
 	 * @description Vote on a proposal
-	 * @param pool Pool object
-	 * @param balanceManager BalanceManager object
-	 * @param proposal_id ID of the proposal to vote on
+	 * @param {string} poolKey The key to identify the pool
+	 * @param {string} balanceManagerKey The key to identify the BalanceManager
+	 * @param {string} proposal_id The ID of the proposal to vote on
 	 * @returns A function that takes a Transaction object
 	 */
-	vote = (pool: Pool, balanceManager: BalanceManager, proposal_id: string) => (tx: Transaction) => {
-		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManager));
+	vote = (poolKey: string, balanceManagerKey: string, proposal_id: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
+		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::vote`,
