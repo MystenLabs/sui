@@ -163,6 +163,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 //             Enable deny list v2 on testnet and mainnet.
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 //             Enable consensus commit prologue V3 on testnet.
+//             Turn on shared object congestion control in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1147,9 +1148,11 @@ pub struct ProtocolConfig {
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
 
-    /// The max accumulated txn execution cost per object in a checkpoint. Transactions
+    /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
     /// in a checkpoint will be deferred once their touch shared objects hit this limit.
-    max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+    /// This config is meant to be used when consensus protocol is Narwhal, where each
+    /// consensus commit corresponding to 1 checkpoint (or 2 if randomness is enabled)
+    max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
@@ -1168,6 +1171,12 @@ pub struct ProtocolConfig {
     // Note: this is not a feature flag because we want to distinguish between
     // `None` and `Some(false)`, as committee was already finalized on Testnet.
     bridge_should_try_to_finalize_committee: Option<bool>,
+
+    /// The max accumulated txn execution cost per object in a mysticeti. Transactions
+    /// in a commit will be deferred once their touch shared objects hit this limit.
+    /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
+    /// but for mysticeti commits due to that mysticeti has higher commit rate.
+    max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 }
 
 // feature flags
@@ -1937,7 +1946,7 @@ impl ProtocolConfig {
 
             consensus_max_transactions_in_block_bytes: None,
 
-            max_accumulated_txn_cost_per_object_in_checkpoint: None,
+            max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
 
@@ -1948,6 +1957,8 @@ impl ProtocolConfig {
             max_soft_bundle_size: None,
 
             bridge_should_try_to_finalize_committee: None,
+
+            max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2470,7 +2481,7 @@ impl ProtocolConfig {
 
                     // Turn on shared object congestion control in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(100);
+                        cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
@@ -2514,6 +2525,14 @@ impl ProtocolConfig {
 
                     if chain == Chain::Unknown {
                         cfg.feature_flags.authority_capabilities_v2 = true;
+                    }
+
+                    // Turns on shared object congestion control on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
+                        cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::TotalTxCount;
                     }
                 }
                 // Use this template when making changes:

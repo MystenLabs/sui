@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_config::node::{ConsensusProtocol, ExpensiveSafetyCheckConfig};
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -66,6 +66,7 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
+use crate::consensus_manager::ConsensusManager;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
@@ -1748,6 +1749,17 @@ impl AuthorityPerEpochStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    fn get_max_accumulated_txn_cost_per_object_in_commit(&self) -> Option<u64> {
+        match ConsensusManager::get_consensus_protocol_in_epoch(self) {
+            ConsensusProtocol::Narwhal => self
+                .protocol_config()
+                .max_accumulated_txn_cost_per_object_in_narwhal_commit_as_option(),
+            ConsensusProtocol::Mysticeti => self
+                .protocol_config()
+                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
+        }
+    }
+
     fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,
@@ -1774,15 +1786,14 @@ impl AuthorityPerEpochStore {
             ));
         }
 
-        if let Some(max_accumulated_txn_cost_per_object_in_checkpoint) = self
-            .protocol_config()
-            .max_accumulated_txn_cost_per_object_in_checkpoint_as_option()
+        if let Some(max_accumulated_txn_cost_per_object_in_commit) =
+            self.get_max_accumulated_txn_cost_per_object_in_commit()
         {
             // Defer transaction if it uses shared objects that are congested.
             if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     cert,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     previously_deferred_tx_digests,
                     commit_round,
                 )
