@@ -45,6 +45,7 @@ export class DeepBookClient {
 		balanceManagers,
 		coins,
 		pools,
+		adminCap,
 	}: {
 		client: SuiClient;
 		address: string;
@@ -52,6 +53,7 @@ export class DeepBookClient {
 		balanceManagers?: { [key: string]: BalanceManager };
 		coins?: CoinMap;
 		pools?: PoolMap;
+		adminCap?: string;
 	}) {
 		this.client = client;
 		this.#address = normalizeSuiAddress(address);
@@ -61,6 +63,7 @@ export class DeepBookClient {
 			balanceManagers,
 			coins,
 			pools,
+			adminCap,
 		});
 		this.balanceManager = new BalanceManagerContract(this.#config);
 		this.deepBook = new DeepBookContract(this.#config);

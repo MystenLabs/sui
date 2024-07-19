@@ -35,13 +35,13 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Deposit funds into the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @param amountToDeposit The amount to deposit
 	 * @param coin The coin to deposit
 	 * @returns A function that takes a Transaction object
 	 */
 	depositIntoManager =
-		(managerKey: string, amountToDeposit: number, coinKey: string) => (tx: Transaction) => {
+		(managerKey: string, coinKey: string, amountToDeposit: number) => (tx: Transaction) => {
 			tx.setSenderIfNotSet(this.#config.address);
 			const managerId = this.#config.getBalanceManager(managerKey).address;
 			const coin = this.#config.getCoin(coinKey);
@@ -59,14 +59,14 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Withdraw funds from the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @param amountToWithdraw The amount to withdraw
 	 * @param coin The coin to withdraw
 	 * @param recipient The recipient of the withdrawn funds
 	 * @returns A function that takes a Transaction object
 	 */
 	withdrawFromManager =
-		(managerKey: string, amountToWithdraw: number, coinKey: string, recipient: string) =>
+		(managerKey: string, coinKey: string, amountToWithdraw: number, recipient: string) =>
 		(tx: Transaction) => {
 			const managerId = this.#config.getBalanceManager(managerKey).address;
 			const coin = this.#config.getCoin(coinKey);
@@ -81,7 +81,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Withdraw all funds from the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @param coin The coin to withdraw
 	 * @param recipient The recipient of the withdrawn funds
 	 * @returns A function that takes a Transaction object
@@ -101,7 +101,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Check the balance of the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @param coin The coin to check the balance of
 	 * @returns A function that takes a Transaction object
 	 */
@@ -117,11 +117,11 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Generate a trade proof for the BalanceManager. Calls the appropriate function based on whether tradeCap is set.
-	 * @param balanceManager The BalanceManager object
+	 * @param managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
-	generateProof = (balanceManagerKey: string) => (tx: Transaction) => {
-		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
+	generateProof = (managerKey: string) => (tx: Transaction) => {
+		const balanceManager = this.#config.getBalanceManager(managerKey);
 		return tx.add(
 			balanceManager.tradeCap
 				? this.generateProofAsTrader(balanceManager.address, balanceManager.tradeCap)
@@ -156,7 +156,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Get the owner of the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	owner = (managerKey: string) => (tx: Transaction) => {
@@ -169,7 +169,7 @@ export class BalanceManagerContract {
 
 	/**
 	 * @description Get the ID of the BalanceManager
-	 * @param managerId The ID of the BalanceManager
+	 * @param managerKey The key of the BalanceManager
 	 * @returns A function that takes a Transaction object
 	 */
 	id = (managerKey: string) => (tx: Transaction) => {

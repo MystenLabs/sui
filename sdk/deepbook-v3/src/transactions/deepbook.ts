@@ -389,17 +389,19 @@ export class DeepBookContract {
 	/**
 	 * @description Get open orders for a balance manager in a pool
 	 * @param pool Pool object
-	 * @param managerId ID of the balance manager
+	 * @param managerKey Key of the balance manager
 	 * @returns A function that takes a Transaction object
 	 */
-	accountOpenOrders = (poolKey: string, managerId: string) => (tx: Transaction) => {
+	accountOpenOrders = (poolKey: string, managerKey: string) => (tx: Transaction) => {
 		const pool = this.#config.getPool(poolKey);
+		const manager = this.#config.getBalanceManager(managerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		console.log(manager.address);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::account_open_orders`,
-			arguments: [tx.object(pool.address), tx.pure.id(managerId)],
+			arguments: [tx.object(pool.address), tx.pure.id(manager.address)],
 			typeArguments: [baseCoin.type, quoteCoin.type],
 		});
 	};
@@ -492,6 +494,10 @@ export class DeepBookContract {
 	swapExactBaseForQuote = (params: SwapParams) => (tx: Transaction) => {
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		tx.setSenderIfNotSet(this.#config.address);
+
+		if (params.quoteCoin) {
+			throw new Error('quoteCoin is not accepted for swapping base asset');
+		}
 		const { poolKey, amount: baseAmount, deepAmount, minOut: minQuote } = params;
 
 		let pool = this.#config.getPool(poolKey);
@@ -529,6 +535,10 @@ export class DeepBookContract {
 	swapExactQuoteForBase = (params: SwapParams) => (tx: Transaction) => {
 		tx.setGasBudgetIfNotSet(GAS_BUDGET);
 		tx.setSenderIfNotSet(this.#config.address);
+
+		if (params.baseCoin) {
+			throw new Error('baseCoin is not accepted for swapping quote asset');
+		}
 		const { poolKey, amount: quoteAmount, deepAmount, minOut: minBase } = params;
 
 		let pool = this.#config.getPool(poolKey);
