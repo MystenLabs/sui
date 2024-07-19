@@ -826,8 +826,10 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         )?;
         let name = match parse_identifier(context) {
             Ok(ident) => ident,
-            Err(diag) => {
-                context.env.add_diag(*diag);
+            Err(_) => {
+                // diagnostic for this is reported in path expansion (as a parsing error) when we
+                // detect incomplete chaing (adding "default" diag here would make error reporting
+                // somewhat redundant in this case)
                 path.is_incomplete = true;
                 return Ok(NameAccessChain_::Path(path));
             }
