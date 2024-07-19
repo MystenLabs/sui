@@ -7,7 +7,7 @@ pub use pg_indexer_store::PgIndexerStore;
 pub mod indexer_store;
 pub mod package_resolver;
 mod pg_indexer_store;
-mod pg_partition_manager;
+pub mod pg_partition_manager;
 
 pub mod diesel_macro {
     thread_local! {

@@ -117,7 +117,8 @@ impl Indexer {
                 "Starting indexer pruner with epochs to keep: {}",
                 epochs_to_keep
             );
-            let pruner = Pruner::new(store.clone(), epochs_to_keep, metrics.clone());
+            assert!(epochs_to_keep > 0, "Epochs to keep must be positive");
+            let pruner: Pruner<S, T> = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
             spawn_monitored_task!(pruner.start(CancellationToken::new()));
         }
 
