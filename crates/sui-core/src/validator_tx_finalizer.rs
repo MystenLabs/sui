@@ -5,7 +5,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::execution_cache::TransactionCacheRead;
 use arc_swap::ArcSwap;
-use mysten_metrics::TX_LATENCY_SEC_BUCKETS;
+use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
@@ -61,7 +61,7 @@ impl ValidatorTxFinalizerMetrics {
             finalization_latency: register_histogram_with_registry!(
                 "validator_tx_finalizer_finalization_latency",
                 "Latency of transaction finalization",
-                TX_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
