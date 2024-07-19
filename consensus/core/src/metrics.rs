@@ -132,7 +132,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
     pub(crate) last_commit_index: IntGauge,
-    pub(crate) last_own_block_round: IntGauge,
+    pub(crate) last_known_own_block_round: IntGauge,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
@@ -322,8 +322,8 @@ impl NodeMetrics {
                 &["authority", "type"],
                 registry,
             ).unwrap(),
-            last_own_block_round: register_int_gauge_with_registry!(
-                "last_own_block_round",
+            last_known_own_block_round: register_int_gauge_with_registry!(
+                "last_known_own_block_round",
                 "The highest round of our own block as this has been synced from peers during an amnesia recovery",
                 registry,
             ).unwrap(),

@@ -319,7 +319,7 @@ where
         );
 
         // First shutdown components calling into Core.
-        self.synchronizer.stop().await;
+        self.synchronizer.stop().await.ok();
         self.commit_syncer.stop().await;
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
@@ -496,7 +496,6 @@ mod tests {
         }
     }
 
-    // TODO: create a fixture
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_amnesia_success(
@@ -566,7 +565,7 @@ mod tests {
 
         // now create a new directory to simulate amnesia. The node will start having participated previously
         // to consensus but now will attempt to synchronize the last own block and recover from there.
-        let (authority, receiver) = make_authority(
+        let (authority, mut receiver) = make_authority(
             index,
             &TempDir::new().unwrap(),
             committee.clone(),
@@ -574,9 +573,17 @@ mod tests {
             network_type,
         )
         .await;
-        output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
         sleep(Duration::from_secs(5)).await;
+
+        // We wait until we see at least one committed block authored from this authority
+        'outer: while let Some(result) = receiver.recv().await {
+            for block in result.blocks {
+                if block.author() == index {
+                    break 'outer;
+                }
+            }
+        }
 
         // Stop all authorities and exit.
         for authority in authorities {
@@ -645,12 +652,15 @@ mod tests {
         // Now reset the panic hook
         let _default_panic_handler = std::panic::take_hook();
 
+        // We expect this test to panic as all the other peers are down and the node that tries to
+        // recover its last produced block fails.
         let panic_info = occurred_panic.lock().unwrap().take().unwrap();
         assert!(panic_info.contains(
             "No peer has returned any acceptable result, can not safely update min round"
         ));
     }
 
+    // TODO: create a fixture
     async fn make_authority(
         index: AuthorityIndex,
         db_dir: &TempDir,

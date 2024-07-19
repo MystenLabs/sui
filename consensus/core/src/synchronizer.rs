@@ -19,11 +19,10 @@ use parking_lot::{Mutex, RwLock};
 #[cfg(not(test))]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 use sui_macros::fail_point_async;
-#[cfg(test)]
-use tokio::task::JoinError;
+use tap::TapFallible;
 use tokio::{
     sync::{mpsc::error::TrySendError, oneshot},
-    task::JoinSet,
+    task::{JoinError, JoinSet},
     time::{sleep, sleep_until, timeout, Instant},
 };
 use tracing::{debug, error, info, trace, warn};
@@ -192,13 +191,7 @@ impl SynchronizerHandle {
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
     }
 
-    pub(crate) async fn stop(&self) {
-        let mut tasks = self.tasks.lock().await;
-        tasks.abort_all();
-    }
-
-    #[cfg(test)]
-    async fn stop_and_wait_on(&self) -> Result<(), JoinError> {
+    pub(crate) async fn stop(&self) -> Result<(), JoinError> {
         let mut tasks = self.tasks.lock().await;
         tasks.abort_all();
         while let Some(result) = tasks.join_next().await {
@@ -733,46 +726,50 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
                 tokio::pin!(timer);
 
-                // Get the highest of all the results
-                let mut total_stake = 0;
-                let mut highest_round = 0;
-                'main_loop: loop {
-                    tokio::select! {
-                        Some((result, authority_index)) = results.next() => {
-                            match result {
-                                Ok(result) => {
-                                    let mut blocks = Vec::new();
-                                    for serialized_block in result {
-                                        let Ok(signed_block) = bcs::from_bytes(&serialized_block) else {
-                                            warn!("Malformed block received from peer {authority_index} while fetching own last block, skipping.");
-                                            continue 'main_loop;
-                                        };
-
-                                        if let Err(e) = block_verifier.verify(&signed_block) {
+                let process_blocks = |blocks: Vec<Bytes>, authority_index: AuthorityIndex| -> ConsensusResult<Vec<VerifiedBlock>> {
+                                    let mut result = Vec::new();
+                                    for serialized_block in blocks {
+                                        let signed_block = bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
+                                        block_verifier.verify(&signed_block).tap_err(|err|{
                                             context
                                                 .metrics
                                                 .node_metrics
                                                 .invalid_blocks
                                                 .with_label_values(&[&signed_block.author().to_string(), "synchronizer_own_block"])
                                                 .inc();
-                                            warn!("Invalid block received from {}: {}", authority_index, e);
-                                            continue 'main_loop;
-                                        }
+                                            warn!("Invalid block received from {}: {}", authority_index, err);
+                                        })?;
 
                                         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
                                         if verified_block.author() != context.own_index {
-                                            continue 'main_loop;
+                                            return Err(ConsensusError::UnexpectedLastOwnBlock { index: authority_index, block_ref: verified_block.reference()});
                                         }
-                                        blocks.push(verified_block);
+                                        result.push(verified_block);
                                     }
+                                    Ok(result)
+                };
 
-                                    let max_round = blocks.into_iter().map(|b|b.round()).max().unwrap_or(0);
-                                    highest_round = highest_round.max(max_round);
+                // Get the highest of all the results
+                let mut total_stake = 0;
+                let mut highest_round = 0;
+                loop {
+                    tokio::select! {
+                        result = results.next() => {
+                            let Some((result, authority_index)) = result else {
+                                break;
+                            };
+                            match result {
+                                Ok(result) => {
+                                    match process_blocks(result, authority_index) {
+                                        Ok(blocks) => {
+                                            let max_round = blocks.into_iter().map(|b|b.round()).max().unwrap_or(0);
+                                            highest_round = highest_round.max(max_round);
 
-                                    total_stake += context.committee.stake(authority_index);
-
-                                    if results.is_empty() {
-                                        break;
+                                            total_stake += context.committee.stake(authority_index);
+                                        },
+                                        Err(err) => {
+                                            warn!("Invalid result returned from {authority_index} while fetching last own block: {err}");
+                                        }
                                     }
                                 },
                                 Err(err) => {
@@ -793,7 +790,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     panic!("No peer has returned any acceptable result, can not safely update min round");
                 }
 
-                context.metrics.node_metrics.last_own_block_round.set(highest_round as i64);
+                context.metrics.node_metrics.last_known_own_block_round.set(highest_round as i64);
 
                 info!("{} out of {} total stake returned acceptable results for our own last block with highest round {}", total_stake, context.committee.total_stake(), highest_round);
                 if let Err(err) = core_dispatcher.set_last_known_proposed_round(highest_round) {
