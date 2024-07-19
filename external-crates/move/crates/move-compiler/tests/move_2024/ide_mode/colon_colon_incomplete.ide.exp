@@ -73,3 +73,11 @@ error[E01002]: unexpected token
    │     Unexpected '}'
    │     Expected an identifier
 
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:23:1
+   │  
+23 │ ╭ module a::m2 {
+24 │ │     public fun foo() {}
+25 │ │ }
+   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> a::m2', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+

@@ -19,3 +19,7 @@ module a::m {
     }
 
 }
+
+module a::m2 {
+    public fun foo() {}
+}
