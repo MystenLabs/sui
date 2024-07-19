@@ -1218,7 +1218,7 @@ impl Locals {
         let local_values = params
             .into_iter()
             .map(|v| v.0)
-            .chain(iter::repeat_with(|| ValueImpl::Invalid).take(invalids_len))
+            .chain((0..invalids_len).map(|_| ValueImpl::Invalid))
             .collect();
         Self(Rc::new(RefCell::new(local_values)))
     }
