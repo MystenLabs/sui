@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { normalizeSuiAddress } from '@mysten/sui/src/utils/sui-types.js';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { BalanceManagerContract } from '../transactions/balanceManager.js';
-import type { Environment } from '../types/index.js';
+import type { BalanceManager, Environment } from '../types/index.js';
 import type { CoinMap, PoolMap } from './constants.js';
 import {
 	mainnetCoins,
@@ -23,6 +23,7 @@ export const DEEP_SCALAR = 1000000;
 export class DeepBookConfig {
 	#coins: CoinMap;
 	#pools: PoolMap;
+	balanceManagers: { [key: string]: BalanceManager };
 	address: string;
 
 	DEEPBOOK_PACKAGE_ID: string;
@@ -36,17 +37,20 @@ export class DeepBookConfig {
 		env,
 		address,
 		adminCap,
+		balanceManagers,
 		coins,
 		pools,
 	}: {
 		env: Environment;
 		address: string;
 		adminCap?: string;
+		balanceManagers?: { [key: string]: BalanceManager };
 		coins?: CoinMap;
 		pools?: PoolMap;
 	}) {
 		this.address = normalizeSuiAddress(address);
 		this.adminCap = adminCap;
+		this.balanceManagers = balanceManagers || {};
 
 		if (env === 'mainnet') {
 			this.#coins = coins || mainnetCoins;
@@ -98,5 +102,18 @@ export class DeepBookConfig {
 		}
 
 		return pool;
+	}
+
+	/**
+	 * @description Get the balance manager by key
+	 * @param managerKey Key of the balance manager
+	 * @returns The BalanceManager object
+	 */
+	getBalanceManager(managerKey: string): BalanceManager {
+		if (!Object.hasOwn(this.balanceManagers, managerKey)) {
+			throw new Error(`Balance manager with key ${managerKey} not found.`);
+		}
+
+		return this.balanceManagers[managerKey];
 	}
 }
