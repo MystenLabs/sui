@@ -25,7 +25,7 @@ config();
 
 	const tx = new Transaction();
 
-	// // Read only call
+	// Read only call
 	console.log(await mmClient.checkManagerBalance('MANAGER_1', 'SUI'));
 	console.log(await mmClient.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
 
