@@ -28,6 +28,9 @@ pub(crate) struct CertifiedVoteScoringStrategyV2 {}
 
 impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
     fn calculate_scores_for_leader(&self, subdag: &UnscoredSubdag, leader_slot: Slot) -> Vec<u64> {
+        let _scope = mysten_metrics::monitored_scope(
+            "CertifiedVoteScoringStrategyV2::calculate_scores_for_leader",
+        );
         let num_authorities = subdag.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -50,6 +53,9 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
 
         let mut all_votes: HashMap<BlockRef, (bool, StakeAggregator<QuorumThreshold>)> =
             HashMap::new();
+
+        let get_vote_cert_stakes =
+            mysten_metrics::monitored_scope("CertifiedVoteScoringStrategyV2::get_vote_cert_stakes");
         for potential_cert in decision_blocks {
             let authority = potential_cert.reference().author;
             for reference in potential_cert.ancestors() {
@@ -70,7 +76,10 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
                 };
             }
         }
+        drop(get_vote_cert_stakes);
 
+        let accumulate_scores =
+            mysten_metrics::monitored_scope("CertifiedVoteScoringStrategyV2::accumulate_scores");
         for (vote_ref, (is_vote, stake_agg)) in all_votes {
             if is_vote {
                 let authority = vote_ref.author;
@@ -85,6 +94,7 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
                 scores_per_authority[authority] += stake_agg.stake();
             }
         }
+        drop(accumulate_scores);
 
         scores_per_authority
     }

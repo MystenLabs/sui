@@ -604,6 +604,7 @@ impl Core {
 
                 // TODO: refcount subdags
                 let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
+                // TODO(ARUN): Score subdags and dont add them to memory.
                 self.dag_state
                     .write()
                     .add_unscored_committed_subdags(subdags.clone());

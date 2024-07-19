@@ -9,6 +9,7 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use mysten_metrics::monitored_scope;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -64,6 +65,7 @@ impl<'a> ReputationScoreCalculator<'a> {
     }
 
     pub(crate) fn calculate(&mut self) -> ReputationScores {
+        let _scope = mysten_metrics::monitored_scope("ReputationScoreCalculator::calculate");
         let leaders = self.unscored_subdag.committed_leaders.clone();
         for leader in leaders {
             let leader_slot = Slot::from(leader);
@@ -202,6 +204,7 @@ impl UnscoredSubdag {
         leader_slot: Slot,
         from: &VerifiedBlock,
     ) -> Option<BlockRef> {
+        let _scope = monitored_scope("UnscoredSubdag::find_supported_leader_block");
         if from.round() < leader_slot.round {
             return None;
         }
@@ -234,6 +237,7 @@ impl UnscoredSubdag {
         potential_vote: &VerifiedBlock,
         leader_block: &VerifiedBlock,
     ) -> bool {
+        let _scope = monitored_scope("UnscoredSubdag::is_vote");
         let reference = leader_block.reference();
         let leader_slot = Slot::from(reference);
         self.find_supported_leader_block(leader_slot, potential_vote) == Some(reference)
@@ -245,6 +249,7 @@ impl UnscoredSubdag {
         leader_block: &VerifiedBlock,
         all_votes: &mut HashMap<BlockRef, bool>,
     ) -> bool {
+        let _scope = monitored_scope("UnscoredSubdag::is_certificate");
         let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         for reference in potential_certificate.ancestors() {
             let is_vote = if let Some(is_vote) = all_votes.get(reference) {
@@ -278,6 +283,7 @@ impl UnscoredSubdag {
     }
 
     pub(crate) fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        let _scope = monitored_scope("UnscoredSubdag::get_blocks_at_slot");
         let mut blocks = vec![];
         for (_block_ref, block) in self.blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
@@ -289,6 +295,7 @@ impl UnscoredSubdag {
     }
 
     pub(crate) fn get_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
+        let _scope = monitored_scope("UnscoredSubdag::get_blocks_at_round");
         let mut blocks = vec![];
         for (_block_ref, block) in self.blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
@@ -304,6 +311,7 @@ impl UnscoredSubdag {
     }
 
     pub(crate) fn get_block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+        let _scope = monitored_scope("UnscoredSubdag::get_block");
         self.blocks.get(block_ref).cloned()
     }
 }
