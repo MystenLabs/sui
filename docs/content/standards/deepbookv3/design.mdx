@@ -39,6 +39,21 @@ The `Governance` module stores data related to the pool's trading params. These 
 
 Every epoch, users with non zero stake can submit a proposal to change these parameters. The proposed fees are bounded.
 
+<style jsx>{`
+  table {
+    width: 100%;
+    display: inline-table;
+  }
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 15%;
+  }
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 15%;
+  }
+`}</style>
+
 | min_value (bps) | max_value (bps) | Pool type | Taker or maker |
 | --- | --- | --- | --- |
 | 5 | 10 | Volatile | Taker |
@@ -96,7 +111,7 @@ Every transaction that a user performs on DeepBook resets their settled and owed
 
 The vault also stores the `DeepPrice` struct. This object holds up to 100 data points representing the conversion rate between the pool's base or quote asset and DEEP. These data points are sourced from a whitelisted pool, DEEP/USDC or DEEP/SUI. This conversion rate is used to determine the quantity of DEEP tokens required to pay for trading fees.
 
-### `BigVector`
+### BigVector
 
 `BigVector` is an arbitrary sized vector-like data structure, implemented using an on-chain B+ Tree to support almost constant time (log base max_fan_out) random access, insertion and removal.
 
@@ -143,4 +158,10 @@ Finally, the function calculates the partial taker fills and maker order quantit
 
 ### Vault
 
-The `settle_balance_manager` function in `Vault` is responsible for managing the transfer of any settled and owed amounts for the `BalanceManager`. It starts by validating that the trader is authorized to use the `BalanceManager`. For each asset type, if the `balances_out` exceeds the `balances_in`, the difference is split from the vault's balance and deposited into the `BalanceManager`. Conversely, if the `balances_in` exceeds the `balances_out`, the difference is withdrawn from the `BalanceManager` and joined to the vault's balance. This process is repeated for base, quote, and DEEP asset balances, ensuring all asset balances are accurately reflected and settled between the vault and the `BalanceManager`.
+The `settle_balance_manager` function in `Vault` is responsible for managing the transfer of any settled and owed amounts for the `BalanceManager`. 
+
+First, the function validates that a trader is authorized to use the `BalanceManager`. 
+
+Then, for each asset type the process compares `balances_out` against `balances_in`. If the `balances_out` total exceeds `balances_in`, the function splits the difference from the vault's balance and deposits it into the `BalanceManager`. Conversely, if the `balances_in` total exceeds `balances_out`, the function withdraws the difference from the `BalanceManager` and joins it to the vault's balance. 
+
+This process is repeated for base, quote, and DEEP asset balances, ensuring all asset balances are accurately reflected and settled between the vault and the `BalanceManager`.
