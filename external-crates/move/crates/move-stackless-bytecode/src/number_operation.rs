@@ -8,7 +8,7 @@
 
 use move_model::{
     ast::TempIndex,
-    model::{FieldId, FunId, FunctionEnv, ModuleId, NodeId, StructEnv, DatatypeId},
+    model::{DatatypeId, FieldId, FunId, FunctionEnv, ModuleId, NodeId, StructEnv},
     ty::Type,
 };
 use std::collections::BTreeMap;

@@ -2,11 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::ModuleId,
-};
+use crate::{account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId};
 use anyhow::{bail, Result};
 use std::collections::btree_map::{self, BTreeMap};
 
