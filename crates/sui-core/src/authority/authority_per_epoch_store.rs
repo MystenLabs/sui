@@ -4,8 +4,8 @@
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
+use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
-use fastcrypto_tbls::{dkg, dkg_v0};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_config::node::{ConsensusProtocol, ExpensiveSafetyCheckConfig};
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -66,6 +66,7 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
+use crate::consensus_manager::ConsensusManager;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
@@ -96,11 +97,11 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
+use sui_types::messages_consensus::VersionedDkgConfirmation;
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind,
+    check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, ConsensusTransaction,
+    ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use sui_types::messages_consensus::{VersionedDkgConfimation, VersionedDkgMessage};
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -488,6 +489,7 @@ pub struct AuthorityEpochTables {
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
+    authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
@@ -522,20 +524,26 @@ pub struct AuthorityEpochTables {
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
     pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+    pub(crate) dkg_processed_messages: DBMap<PartyId, Vec<u8>>,
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
     pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_used_messages: DBMap<u64, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
+    pub(crate) dkg_used_messages: DBMap<u64, Vec<u8>>,
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
-    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfimation>,
+    pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfirmation>,
+    /// This table is no longer used (can be removed when DBMap supports removing tables)
+    #[allow(dead_code)]
     #[deprecated]
-    pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
+    pub(crate) dkg_confirmations: DBMap<PartyId, Vec<u8>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
@@ -1747,6 +1755,17 @@ impl AuthorityPerEpochStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    fn get_max_accumulated_txn_cost_per_object_in_commit(&self) -> Option<u64> {
+        match ConsensusManager::get_consensus_protocol_in_epoch(self) {
+            ConsensusProtocol::Narwhal => self
+                .protocol_config()
+                .max_accumulated_txn_cost_per_object_in_narwhal_commit_as_option(),
+            ConsensusProtocol::Mysticeti => self
+                .protocol_config()
+                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
+        }
+    }
+
     fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,
@@ -1773,15 +1792,14 @@ impl AuthorityPerEpochStore {
             ));
         }
 
-        if let Some(max_accumulated_txn_cost_per_object_in_checkpoint) = self
-            .protocol_config()
-            .max_accumulated_txn_cost_per_object_in_checkpoint_as_option()
+        if let Some(max_accumulated_txn_cost_per_object_in_commit) =
+            self.get_max_accumulated_txn_cost_per_object_in_commit()
         {
             // Defer transaction if it uses shared objects that are congested.
             if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     cert,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     previously_deferred_tx_digests,
                     commit_round,
                 )
@@ -2127,9 +2145,10 @@ impl AuthorityPerEpochStore {
     pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
         let authority = &capabilities.authority;
+        let tables = self.tables()?;
 
         // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = self.tables()?.authority_capabilities.get(authority)? {
+        if let Some(cap) = tables.authority_capabilities.get(authority)? {
             if cap.generation >= capabilities.generation {
                 debug!(
                     "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
@@ -2138,16 +2157,50 @@ impl AuthorityPerEpochStore {
                 return Ok(());
             }
         }
-        self.tables()?
+        tables
             .authority_capabilities
             .insert(authority, capabilities)?;
         Ok(())
     }
 
-    pub fn get_capabilities(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+    /// Record most recently advertised capabilities of all authorities
+    pub fn record_capabilities_v2(&self, capabilities: &AuthorityCapabilitiesV2) -> SuiResult {
+        info!("received capabilities v2 {:?}", capabilities);
+        let authority = &capabilities.authority;
+        let tables = self.tables()?;
+
+        // Read-compare-write pattern assumes we are only called from the consensus handler task.
+        if let Some(cap) = tables.authority_capabilities_v2.get(authority)? {
+            if cap.generation >= capabilities.generation {
+                debug!(
+                    "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
+                    capabilities, cap
+                );
+                return Ok(());
+            }
+        }
+        tables
+            .authority_capabilities_v2
+            .insert(authority, capabilities)?;
+        Ok(())
+    }
+
+    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
+        assert!(!self.protocol_config.authority_capabilities_v2());
         let result: Result<Vec<AuthorityCapabilitiesV1>, TypedStoreError> = self
             .tables()?
             .authority_capabilities
+            .values()
+            .map_into()
+            .collect();
+        Ok(result?)
+    }
+
+    pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {
+        assert!(self.protocol_config.authority_capabilities_v2());
+        let result: Result<Vec<AuthorityCapabilitiesV2>, TypedStoreError> = self
+            .tables()?
+            .authority_capabilities_v2
             .values()
             .map_into()
             .collect();
@@ -2451,13 +2504,25 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+                kind:
+                    ConsensusTransactionKind::CapabilityNotification(AuthorityCapabilitiesV1 {
+                        authority,
+                        ..
+                    }),
+                ..
+            })
+            | SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::CapabilityNotificationV2(AuthorityCapabilitiesV2 {
+                        authority,
+                        ..
+                    }),
                 ..
             }) => {
-                if transaction.sender_authority() != capabilities.authority {
+                if transaction.sender_authority() != *authority {
                     warn!(
                         "CapabilityNotification authority {} does not match its author from consensus {}",
-                        capabilities.authority, transaction.certificate_author_index
+                        authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -3185,6 +3250,14 @@ impl AuthorityPerEpochStore {
         authority_metrics
             .consensus_handler_cancelled_transactions
             .inc_by(cancelled_txns.len() as u64);
+        authority_metrics
+            .consensus_handler_max_object_costs
+            .with_label_values(&["regular_commit"])
+            .set(shared_object_congestion_tracker.max_cost() as i64);
+        authority_metrics
+            .consensus_handler_max_object_costs
+            .with_label_values(&["randomness_commit"])
+            .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
@@ -3507,6 +3580,28 @@ impl AuthorityPerEpochStore {
                 Ok(ConsensusCertificateResult::ConsensusMessage)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
+                ..
+            }) => {
+                let authority = capabilities.authority;
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    debug!(
+                        "Received CapabilityNotificationV2 from {:?}",
+                        authority.concise()
+                    );
+                    self.record_capabilities_v2(capabilities)?;
+                } else {
+                    debug!(
+                        "Ignoring CapabilityNotificationV2 from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
+                Ok(ConsensusCertificateResult::ConsensusMessage)
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::NewJWKFetched(authority, jwk_id, jwk),
                 ..
             }) => {
@@ -3546,12 +3641,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        let versioned_dkg_message = match self.protocol_config.dkg_version() {
-                            // old message was not an enum
-                            0 => bcs::from_bytes(bytes).map(VersionedDkgMessage::V0),
-                            _ => bcs::from_bytes(bytes),
-                        };
-                        match versioned_dkg_message {
+                        match bcs::from_bytes(bytes) {
                             Ok(message) => randomness_manager.add_message(authority, message)?,
                             Err(e) => {
                                 warn!(
@@ -3584,14 +3674,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-
-                        let versioned_dkg_confirmation = match self.protocol_config.dkg_version() {
-                            // old message was not an enum
-                            0 => bcs::from_bytes(bytes).map(VersionedDkgConfimation::V0),
-                            _ => bcs::from_bytes(bytes),
-                        };
-
-                        match versioned_dkg_confirmation {
+                        match bcs::from_bytes(bytes) {
                             Ok(message) => {
                                 randomness_manager.add_confirmation(batch, authority, message)?
                             }

@@ -68,7 +68,7 @@ export function useGameQuery(id: string): [UseGameQueryResult, InvalidateGameQue
 	);
 
 	// Wait for the query to succeed before doing any further work.
-	if (response.status != 'success') {
+	if (response.status !== 'success') {
 		return [response as UseGameQueryResult, invalidate];
 	}
 
@@ -81,7 +81,7 @@ export function useGameQuery(id: string): [UseGameQueryResult, InvalidateGameQue
 	const { type, content } = data;
 
 	let mType;
-	if (!type || !(mType = type.match(reType)) || !content || content.dataType != 'moveObject') {
+	if (!type || !(mType = type.match(reType)) || !content || content.dataType !== 'moveObject') {
 		return [toError(response, 'Object is not a Game'), invalidate];
 	}
 

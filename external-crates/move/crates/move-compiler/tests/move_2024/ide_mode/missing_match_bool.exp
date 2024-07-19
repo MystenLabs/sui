@@ -1,12 +1,24 @@
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:3:16
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:1:9
   │
-3 │         match (true) {
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:1:31
+  │
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
+
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:16
+  │
+4 │         match (true) {
   │                ^^^^ Pattern 'false' not covered
 
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:9:16
-  │
-9 │         match (true) {
-  │                ^^^^ Pattern '_' not covered
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:16
+   │
+10 │         match (true) {
+   │                ^^^^ Pattern '_' not covered
 

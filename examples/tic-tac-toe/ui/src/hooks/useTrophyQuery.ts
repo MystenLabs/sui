@@ -36,6 +36,7 @@ export function useTrophyQuery(game?: Game): [UseTrophyQueryResponse, Invalidate
 	const response = useQuery({
 		enabled: !!game,
 		refetchInterval: REFETCH_INTERVAL,
+		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: ['game-end-state', game?.id],
 		queryFn: async () => {
 			const { results } = await client.devInspectTransactionBlock({
@@ -54,7 +55,9 @@ export function useTrophyQuery(game?: Game): [UseTrophyQueryResponse, Invalidate
 	});
 
 	const invalidate = async () => {
-		await queryClient.invalidateQueries({ queryKey: ['game-end-state', game?.id] });
+		await queryClient.invalidateQueries({
+			queryKey: ['game-end-state', game?.id],
+		});
 	};
 
 	return [response, invalidate];

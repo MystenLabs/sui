@@ -74,7 +74,7 @@ impl SharedObjectCongestionTracker {
     pub fn should_defer_due_to_object_congestion(
         &self,
         cert: &VerifiedExecutableTransaction,
-        max_accumulated_txn_cost_per_object_in_checkpoint: u64,
+        max_accumulated_txn_cost_per_object_in_commit: u64,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
@@ -89,7 +89,7 @@ impl SharedObjectCongestionTracker {
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
 
-        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_checkpoint {
+        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_commit {
             return None;
         }
 
@@ -146,6 +146,15 @@ impl SharedObjectCongestionTracker {
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() < end_cost);
             }
         }
+    }
+
+    // Returns the maximum cost of all objects.
+    pub fn max_cost(&self) -> u64 {
+        self.object_execution_cost
+            .values()
+            .max()
+            .copied()
+            .unwrap_or(0)
     }
 }
 
@@ -264,8 +273,8 @@ mod object_cost_tests {
 
         let tx_gas_budget = 100;
 
-        // Set max_accumulated_txn_cost_per_object_in_checkpoint to only allow 1 transaction to go through.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = match mode {
+        // Set max_accumulated_txn_cost_per_object_in_commit to only allow 1 transaction to go through.
+        let max_accumulated_txn_cost_per_object_in_commit = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
@@ -301,7 +310,7 @@ mod object_cost_tests {
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     &HashMap::new(),
                     0,
                 )
@@ -319,7 +328,7 @@ mod object_cost_tests {
             assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     &HashMap::new(),
                     0,
                 )
@@ -336,7 +345,7 @@ mod object_cost_tests {
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
-                        max_accumulated_txn_cost_per_object_in_checkpoint,
+                        max_accumulated_txn_cost_per_object_in_commit,
                         &HashMap::new(),
                         0,
                     )
@@ -361,7 +370,7 @@ mod object_cost_tests {
         let shared_obj_0 = ObjectID::random();
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
         // Make should_defer_due_to_object_congestion always defer transactions.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = 0;
+        let max_accumulated_txn_cost_per_object_in_commit = 0;
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(mode);
 
         // Insert a random pre-existing transaction.
@@ -383,7 +392,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {
@@ -410,7 +419,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {
@@ -438,7 +447,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {
@@ -466,6 +475,7 @@ mod object_cost_tests {
                 &[(object_id_0, 5), (object_id_1, 10)],
                 mode,
             );
+        assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
         // Read two objects should not change the object execution cost.
         let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)], 10);
@@ -477,6 +487,7 @@ mod object_cost_tests {
                 mode
             )
         );
+        assert_eq!(shared_object_congestion_tracker.max_cost(), 10);
 
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)], 10);
@@ -492,6 +503,10 @@ mod object_cost_tests {
                 &[(object_id_0, expected_object_0_cost), (object_id_1, 10)],
                 mode
             )
+        );
+        assert_eq!(
+            shared_object_congestion_tracker.max_cost(),
+            expected_object_0_cost
         );
 
         // Write to all objects should bump all objects' execution cost, including objects that are seen for the first time.
@@ -519,6 +534,10 @@ mod object_cost_tests {
                 ],
                 mode
             )
+        );
+        assert_eq!(
+            shared_object_congestion_tracker.max_cost(),
+            expected_object_cost
         );
     }
 }

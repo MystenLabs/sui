@@ -94,7 +94,6 @@ members = [
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
   "crates/sui-cluster-test",
-  "crates/sui-common",
   "crates/sui-config",
   "crates/sui-core",
   "crates/sui-cost",
@@ -566,10 +565,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "729145c130be00908d40804bb0eececa46e84340", features = ["experimental"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a3d5b18b7ca9370e099a7dbb25aca276af580608" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a3d5b18b7ca9370e099a7dbb25aca276af580608" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a3d5b18b7ca9370e099a7dbb25aca276af580608", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a3d5b18b7ca9370e099a7dbb25aca276af580608", features = ["experimental"] }
 passkey-types = { version = "0.2.0" }
 passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
@@ -606,7 +605,6 @@ sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
-sui-common = { path = "crates/sui-common" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }

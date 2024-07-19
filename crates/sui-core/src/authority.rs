@@ -47,6 +47,7 @@ use sui_config::NodeConfig;
 use sui_types::crypto::RandomnessRound;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
+use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::type_resolver::into_struct_layout;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
@@ -101,7 +102,6 @@ use sui_types::messages_checkpoint::{
     CheckpointResponseV2, CheckpointSequenceNumber, CheckpointSummary, CheckpointSummaryResponse,
     CheckpointTimestamp, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
 };
-use sui_types::messages_consensus::AuthorityCapabilitiesV1;
 use sui_types::messages_grpc::{
     HandleTransactionResponse, LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind,
     ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
@@ -280,6 +280,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
+    pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -682,6 +683,12 @@ impl AuthorityMetrics {
             consensus_handler_cancelled_transactions: register_int_counter_with_registry!(
                 "consensus_handler_cancelled_transactions",
                 "Number of transactions cancelled by consensus handler",
+                registry,
+            ).unwrap(),
+            consensus_handler_max_object_costs: register_int_gauge_vec_with_registry!(
+                "consensus_handler_max_congestion_control_object_costs",
+                "Max object costs for congestion control in the current consensus commit",
+                &["commit_type"],
                 registry,
             ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
@@ -4309,7 +4316,8 @@ impl AuthorityState {
         Some(res)
     }
 
-    fn is_protocol_version_supported(
+    // TODO: delete once authority_capabilities_v2 is deployed everywhere
+    fn is_protocol_version_supported_v1(
         current_protocol_version: ProtocolVersion,
         proposed_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
@@ -4396,7 +4404,96 @@ impl AuthorityState {
             })
     }
 
-    fn choose_protocol_version_and_system_packages(
+    fn is_protocol_version_supported_v2(
+        current_protocol_version: ProtocolVersion,
+        proposed_protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+        capabilities: Vec<AuthorityCapabilitiesV2>,
+        mut buffer_stake_bps: u64,
+    ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
+        if proposed_protocol_version > current_protocol_version + 1
+            && !protocol_config.advance_to_highest_supported_protocol_version()
+        {
+            return None;
+        }
+
+        if buffer_stake_bps > 10000 {
+            warn!("clamping buffer_stake_bps to 10000");
+            buffer_stake_bps = 10000;
+        }
+
+        // For each validator, gather the protocol version and system packages that it would like
+        // to upgrade to in the next epoch.
+        let mut desired_upgrades: Vec<_> = capabilities
+            .into_iter()
+            .filter_map(|mut cap| {
+                // A validator that lists no packages is voting against any change at all.
+                if cap.available_system_packages.is_empty() {
+                    return None;
+                }
+
+                cap.available_system_packages.sort();
+
+                info!(
+                    "validator {:?} supports {:?} with system packages: {:?}",
+                    cap.authority.concise(),
+                    cap.supported_protocol_versions,
+                    cap.available_system_packages,
+                );
+
+                // A validator that only supports the current protosl version is also voting
+                // against any change, because framework upgrades aways require a protocol version
+                // bump.
+                cap.supported_protocol_versions
+                    .get_version_digest(proposed_protocol_version)
+                    .map(|digest| (digest, cap.available_system_packages, cap.authority))
+            })
+            .collect();
+
+        // There can only be one set of votes that have a majority, find one if it exists.
+        desired_upgrades.sort();
+        desired_upgrades
+            .into_iter()
+            .group_by(|(digest, packages, _authority)| (*digest, packages.clone()))
+            .into_iter()
+            .find_map(|((digest, packages), group)| {
+                // should have been filtered out earlier.
+                assert!(!packages.is_empty());
+
+                let mut stake_aggregator: StakeAggregator<(), true> =
+                    StakeAggregator::new(Arc::new(committee.clone()));
+
+                for (_, _, authority) in group {
+                    stake_aggregator.insert_generic(authority, ());
+                }
+
+                let total_votes = stake_aggregator.total_votes();
+                let quorum_threshold = committee.quorum_threshold();
+                let f = committee.total_votes() - committee.quorum_threshold();
+
+                // multiple by buffer_stake_bps / 10000, rounded up.
+                let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
+                let effective_threshold = quorum_threshold + buffer_stake;
+
+                info!(
+                    protocol_config_digest = ?digest,
+                    ?total_votes,
+                    ?quorum_threshold,
+                    ?buffer_stake_bps,
+                    ?effective_threshold,
+                    ?proposed_protocol_version,
+                    ?packages,
+                    "support for upgrade"
+                );
+
+                let has_support = total_votes >= effective_threshold;
+                has_support.then_some((proposed_protocol_version, packages))
+            })
+    }
+
+    // TODO: delete once authority_capabilities_v2 is deployed everywhere
+    fn choose_protocol_version_and_system_packages_v1(
         current_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
         committee: &Committee,
@@ -4406,7 +4503,32 @@ impl AuthorityState {
         let mut next_protocol_version = current_protocol_version;
         let mut system_packages = vec![];
 
-        while let Some((version, packages)) = Self::is_protocol_version_supported(
+        while let Some((version, packages)) = Self::is_protocol_version_supported_v1(
+            current_protocol_version,
+            next_protocol_version + 1,
+            protocol_config,
+            committee,
+            capabilities.clone(),
+            buffer_stake_bps,
+        ) {
+            next_protocol_version = version;
+            system_packages = packages;
+        }
+
+        (next_protocol_version, system_packages)
+    }
+
+    fn choose_protocol_version_and_system_packages_v2(
+        current_protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+        capabilities: Vec<AuthorityCapabilitiesV2>,
+        buffer_stake_bps: u64,
+    ) -> (ProtocolVersion, Vec<ObjectRef>) {
+        let mut next_protocol_version = current_protocol_version;
+        let mut system_packages = vec![];
+
+        while let Some((version, packages)) = Self::is_protocol_version_supported_v2(
             current_protocol_version,
             next_protocol_version + 1,
             protocol_config,
@@ -4586,15 +4708,27 @@ impl AuthorityState {
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
-            Self::choose_protocol_version_and_system_packages(
-                epoch_store.protocol_version(),
-                epoch_store.protocol_config(),
-                epoch_store.committee(),
-                epoch_store
-                    .get_capabilities()
-                    .expect("read capabilities from db cannot fail"),
-                buffer_stake_bps,
-            );
+            if epoch_store.protocol_config().authority_capabilities_v2() {
+                Self::choose_protocol_version_and_system_packages_v2(
+                    epoch_store.protocol_version(),
+                    epoch_store.protocol_config(),
+                    epoch_store.committee(),
+                    epoch_store
+                        .get_capabilities_v2()
+                        .expect("read capabilities from db cannot fail"),
+                    buffer_stake_bps,
+                )
+            } else {
+                Self::choose_protocol_version_and_system_packages_v1(
+                    epoch_store.protocol_version(),
+                    epoch_store.protocol_config(),
+                    epoch_store.committee(),
+                    epoch_store
+                        .get_capabilities_v1()
+                        .expect("read capabilities from db cannot fail"),
+                    buffer_stake_bps,
+                )
+            };
 
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
@@ -4904,17 +5038,30 @@ impl RandomnessRoundReceiver {
             // We set a very long timeout so that in case this gets stuck for some reason, the
             // validator will eventually crash rather than continuing in a zombie mode.
             const RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
-            let Ok(mut effects) = tokio::time::timeout(
+            let result = tokio::time::timeout(
                 RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
                 authority_state
                     .get_transaction_cache_reader()
                     .notify_read_executed_effects(&[digest]),
             )
-            .await
-            .unwrap_or_else(|_| panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}")) else {
-                panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
+            .await;
+            let result = match result {
+                Ok(result) => result,
+                Err(_) => {
+                    if cfg!(debug_assertions) {
+                        // Crash on randomness update execution timeout in debug builds.
+                        panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    }
+                    warn!("randomness state update transaction execution timed out at epoch {epoch}, round {round}");
+                    // Continue waiting as long as necessary in non-debug builds.
+                    authority_state
+                        .get_transaction_cache_reader()
+                        .notify_read_executed_effects(&[digest])
+                        .await
+                }
             };
 
+            let mut effects = result.unwrap_or_else(|_| panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}"));
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
                 panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");

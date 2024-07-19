@@ -3,10 +3,9 @@
 
 use crate::models::SuiProgressStore;
 use crate::models::TokenTransfer as DBTokenTransfer;
-use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::schema::sui_progress_store::txn_digest;
-use crate::schema::token_transfer_data;
-use crate::{schema, schema::token_transfer, TokenTransfer};
+use crate::schema::{sui_error_transactions, token_transfer_data};
+use crate::{schema, schema::token_transfer, ProcessedTxnData};
 use diesel::result::Error;
 use diesel::BoolExpressionMethods;
 use diesel::{
@@ -29,16 +28,25 @@ pub fn get_connection_pool(database_url: String) -> PgPool {
 }
 
 // TODO: add retry logic
-pub fn write(pool: &PgPool, token_txns: Vec<TokenTransfer>) -> Result<(), anyhow::Error> {
+pub fn write(pool: &PgPool, token_txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::Error> {
     if token_txns.is_empty() {
         return Ok(());
     }
-    let (transfers, data): (Vec<DBTokenTransfer>, Vec<Option<DBTokenTransferData>>) = token_txns
-        .iter()
-        .map(|t| (t.to_db(), t.to_data_maybe()))
-        .unzip();
-
-    let data = data.into_iter().flatten().collect::<Vec<_>>();
+    let (transfers, data, errors) = token_txns.iter().fold(
+        (vec![], vec![], vec![]),
+        |(mut transfers, mut data, mut errors), d| {
+            match d {
+                ProcessedTxnData::TokenTransfer(t) => {
+                    transfers.push(t.to_db());
+                    if let Some(d) = t.to_data_maybe() {
+                        data.push(d)
+                    }
+                }
+                ProcessedTxnData::Error(e) => errors.push(e.to_db()),
+            }
+            (transfers, data, errors)
+        },
+    );
 
     let connection = &mut pool.get()?;
     connection.transaction(|conn| {
@@ -48,6 +56,10 @@ pub fn write(pool: &PgPool, token_txns: Vec<TokenTransfer>) -> Result<(), anyhow
             .execute(conn)?;
         diesel::insert_into(token_transfer::table)
             .values(&transfers)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(sui_error_transactions::table)
+            .values(&errors)
             .on_conflict_do_nothing()
             .execute(conn)
     })?;

@@ -85,9 +85,12 @@ impl SuiTxValidator {
                         return Err(SuiError::InvalidDkgMessageSize.into());
                     }
                 }
+
+                ConsensusTransactionKind::CapabilityNotification(_) => {}
+
                 ConsensusTransactionKind::EndOfPublish(_)
-                | ConsensusTransactionKind::CapabilityNotification(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
+                | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
             }
         }

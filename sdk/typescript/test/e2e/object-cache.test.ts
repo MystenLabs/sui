@@ -56,6 +56,10 @@ describe('CachingTransactionExecutor', async () => {
 		)[0]!;
 	});
 
+	afterEach(async () => {
+		await executor.waitForLastTransaction();
+	});
+
 	afterEach(() => {
 		vi.clearAllMocks();
 	});

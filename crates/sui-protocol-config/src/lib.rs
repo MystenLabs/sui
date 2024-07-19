@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 52;
+const MAX_PROTOCOL_VERSION: u64 = 53;
 
 // Record history of protocol version allocations here:
 //
@@ -161,7 +161,9 @@ const MAX_PROTOCOL_VERSION: u64 = 52;
 //             Enable enums on testnet.
 //             Add support for passkey in devnet.
 //             Enable deny list v2 on testnet and mainnet.
-// Version 54: Add feature flag to decide whether to attempt to finalize bridge committee
+// Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
+//             Enable consensus commit prologue V3 on testnet.
+//             Turn on shared object congestion control in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -496,6 +498,10 @@ struct FeatureFlags {
     // Enable passkey auth (SIP-9)
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
+
+    // Use AuthorityCapabilitiesV2
+    #[serde(skip_serializing_if = "is_false")]
+    authority_capabilities_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1095,12 +1101,13 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // ==== Ephemeral (consensus only) params deleted ====
+    //
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
-    scoring_decision_mad_divisor: Option<f64>,
+    // scoring_decision_mad_divisor: Option<f64>,
     // The cutoff value for the MED outlier detection
-    scoring_decision_cutoff_value: Option<f64>,
-
+    // scoring_decision_cutoff_value: Option<f64>,
     /// === Execution Version ===
     execution_version: Option<u64>,
 
@@ -1132,7 +1139,8 @@ pub struct ProtocolConfig {
     /// Minimum interval between consecutive rounds of generated randomness.
     random_beacon_min_round_interval_ms: Option<u64>,
 
-    /// Version of the random beacon DKG protocol, 0 when not set.
+    /// Version of the random beacon DKG protocol.
+    /// 0 was deprecated (and currently not supported), 1 is the default version.
     random_beacon_dkg_version: Option<u64>,
 
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
@@ -1141,9 +1149,11 @@ pub struct ProtocolConfig {
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
 
-    /// The max accumulated txn execution cost per object in a checkpoint. Transactions
+    /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
     /// in a checkpoint will be deferred once their touch shared objects hit this limit.
-    max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+    /// This config is meant to be used when consensus protocol is Narwhal, where each
+    /// consensus commit corresponding to 1 checkpoint (or 2 if randomness is enabled)
+    max_accumulated_txn_cost_per_object_in_narwhal_commit: Option<u64>,
 
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
@@ -1162,6 +1172,12 @@ pub struct ProtocolConfig {
     // Note: this is not a feature flag because we want to distinguish between
     // `None` and `Some(false)`, as committee was already finalized on Testnet.
     bridge_should_try_to_finalize_committee: Option<bool>,
+
+    /// The max accumulated txn execution cost per object in a mysticeti. Transactions
+    /// in a commit will be deferred once their touch shared objects hit this limit.
+    /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
+    /// but for mysticeti commits due to that mysticeti has higher commit rate.
+    max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
 }
 
 // feature flags
@@ -1337,7 +1353,8 @@ impl ProtocolConfig {
     }
 
     pub fn dkg_version(&self) -> u64 {
-        self.random_beacon_dkg_version.unwrap_or(0)
+        // Version 0 was deprecated and removed, the default is 1 if not set.
+        self.random_beacon_dkg_version.unwrap_or(1)
     }
 
     pub fn enable_bridge(&self) -> bool {
@@ -1469,6 +1486,10 @@ impl ProtocolConfig {
 
     pub fn passkey_auth(&self) -> bool {
         self.feature_flags.passkey_auth
+    }
+
+    pub fn authority_capabilities_v2(&self) -> bool {
+        self.feature_flags.authority_capabilities_v2
     }
 }
 
@@ -1891,9 +1912,10 @@ impl ProtocolConfig {
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
+            // ==== Ephemeral (consensus only) params deleted ====
             // Const params for consensus scoring decision
-            scoring_decision_mad_divisor: None,
-            scoring_decision_cutoff_value: None,
+            // scoring_decision_mad_divisor: None,
+            // scoring_decision_cutoff_value: None,
 
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
@@ -1926,7 +1948,7 @@ impl ProtocolConfig {
 
             consensus_max_transactions_in_block_bytes: None,
 
-            max_accumulated_txn_cost_per_object_in_checkpoint: None,
+            max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
 
@@ -1937,6 +1959,8 @@ impl ProtocolConfig {
             max_soft_bundle_size: None,
 
             bridge_should_try_to_finalize_committee: None,
+
+            max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1978,8 +2002,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.missing_type_is_compatibility_error = true;
                     cfg.gas_model_version = Some(4);
                     cfg.feature_flags.scoring_decision_with_validity_cutoff = true;
-                    cfg.scoring_decision_mad_divisor = Some(2.3);
-                    cfg.scoring_decision_cutoff_value = Some(2.5);
+                    // ==== Ephemeral (consensus only) params deleted ====
+                    // cfg.scoring_decision_mad_divisor = Some(2.3);
+                    // cfg.scoring_decision_cutoff_value = Some(2.5);
                 }
                 6 => {
                     cfg.gas_model_version = Some(5);
@@ -2458,7 +2483,7 @@ impl ProtocolConfig {
 
                     // Turn on shared object congestion control in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
-                        cfg.max_accumulated_txn_cost_per_object_in_checkpoint = Some(100);
+                        cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
@@ -2490,9 +2515,27 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags.enable_coin_deny_list_v2 = true;
                 }
-                54 => {
+                53 => {
                     // Do not allow bridge committee to finalize on mainnet.
                     cfg.bridge_should_try_to_finalize_committee = Some(chain != Chain::Mainnet);
+
+                    // Enable consensus commit prologue V3 on mainnet.
+                    cfg.feature_flags
+                        .record_consensus_determined_version_assignments_in_prologue = true;
+                    cfg.feature_flags
+                        .prepend_prologue_tx_in_consensus_commit_in_checkpoints = true;
+
+                    if chain == Chain::Unknown {
+                        cfg.feature_flags.authority_capabilities_v2 = true;
+                    }
+
+                    // Turns on shared object congestion control on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
+                        cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::TotalTxCount;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -1,10 +1,18 @@
 # Change Log
 
+## 1.0.3
+
+### Patch Changes
+
+- 7fc464a: Remove unique symbols from types to improve compatability between version
+- 0f27a97: Update dependencies
+
 ## 1.0.2
 
 ### Patch Changes
 
-- 369b924343: Improve error messages when attempting to serialze non-array values that should be arrays
+- 369b924343: Improve error messages when attempting to serialze non-array values that should be
+  arrays
 
 ## 1.0.1
 
@@ -16,8 +24,10 @@
 
 ### Major Changes
 
-- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
-  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
 
 ## 0.11.1
 
@@ -53,7 +63,8 @@
 
 ### Minor Changes
 
-- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues, and the generated generics can't be exported
+- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues,
+  and the generated generics can't be exported
 
 ## 0.8.1
 
@@ -65,7 +76,8 @@
 
 ### Minor Changes
 
-- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated documentation
+- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated
+  documentation
 - e4484852b: Add isSerializedBcs helper
 
 ## 0.7.4
@@ -97,14 +109,17 @@
 
 ### Minor Changes
 
-- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator`
+  (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to
+  `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the
+  `ValidatorSet` type and replaced them with a `total_stake` field.
 - 5c3b00cde: Add object id to staking pool and pool id to staked sui.
-- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the
+  validator set object.
 - a8049d159: Fixes the issue with deep nested generics by introducing array type names
 
-  - all of the methods (except for aliasing) now allow passing in arrays instead
-    of strings to allow for easier composition of generics and avoid using template
-    strings
+  - all of the methods (except for aliasing) now allow passing in arrays instead of strings to allow
+    for easier composition of generics and avoid using template strings
 
   ```js
   // new syntax
@@ -123,7 +138,10 @@
   Similar approach applies to `bcs.ser()` and `bcs.de()` as well as to other register\* methods
 
 - a0955c479: Switch from 20 to 32-byte address. Match Secp256k1.deriveKeypair with Ed25519.
-- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various
+  capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument
+  names, RPC endpoints, Move functions, and object fields have been updated with this new naming
+  convention.
 - 77bdf907f: When parsing u64, u128, and u256 values with bcs, they are now string encoded.
 
 ## 0.6.1

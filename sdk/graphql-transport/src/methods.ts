@@ -1330,7 +1330,7 @@ export const RPC_METHODS: {
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
 		const configTypeMap: Record<string, string> = {
-			max_accumulated_txn_cost_per_object_in_checkpoint: 'u64',
+			max_accumulated_txn_cost_per_object_in_narwhal_commit: 'u64',
 			max_arguments: 'u32',
 			max_gas_payment_objects: 'u32',
 			max_modules_in_publish: 'u32',
@@ -1361,6 +1361,7 @@ export const RPC_METHODS: {
 			binary_field_instantiations: 'u16',
 			binary_friend_decls: 'u16',
 			max_package_dependencies: 'u32',
+			bridge_should_try_to_finalize_committee: 'bool',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {

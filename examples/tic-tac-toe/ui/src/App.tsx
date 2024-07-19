@@ -6,7 +6,7 @@ import './App.css';
 import { ConnectButton, useCurrentAccount, useSuiClientContext } from '@mysten/dapp-kit';
 import { isValidSuiObjectId, normalizeSuiObjectId } from '@mysten/sui/utils';
 import { FrameIcon } from '@radix-ui/react-icons';
-import { Box, Container, Flex, Heading, Link, Text } from '@radix-ui/themes';
+import { Box, Container, Flex, Heading, Link } from '@radix-ui/themes';
 import { Error } from 'components/Error';
 import { networkConfig, useNetworkVariable } from 'config';
 import Game from 'pages/Game';

@@ -1347,7 +1347,7 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let db_name = self.rocksdb.db_name();
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_batch_commit_latency_seconds
@@ -1371,6 +1371,20 @@ impl DBBatch {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&db_name);
+        }
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, ?db_name, "very slow batch write");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_count
+                .with_label_values(&[&db_name])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_duration_ms
+                .with_label_values(&[&db_name])
+                .inc_by((elapsed * 1000.0) as u64);
         }
         Ok(())
     }
@@ -1863,7 +1877,7 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_put_latency_seconds
@@ -1889,6 +1903,22 @@ where
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())
             .map_err(typed_store_err_from_rocks_err)?;
+
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, cf = ?self.cf, "very slow insert");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_count
+                .with_label_values(&[&self.cf])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_duration_ms
+                .with_label_values(&[&self.cf])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
+
         Ok(())
     }
 
@@ -2385,10 +2415,10 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant deletions.
-    // TODO: revisit when intra-epoch pruning is enabled.
-    pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_min_write_buffer_number_to_merge(2);
+    // Disables write stalling and stopping based on pending compaction bytes.
+    pub fn disable_write_throttling(mut self) -> DBOptions {
+        self.options.set_soft_pending_compaction_bytes_limit(0);
+        self.options.set_hard_pending_compaction_bytes_limit(0);
         self
     }
 }
@@ -2439,7 +2469,9 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
+    // Num threads for compaction and flush.
     opt.increase_parallelism(4);
+
     opt.set_enable_pipelined_write(true);
 
     opt.set_block_based_table_factory(&get_block_options(128));

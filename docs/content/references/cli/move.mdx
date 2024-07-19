@@ -16,13 +16,13 @@ Usage: sui move [OPTIONS] <COMMAND>
 
 Commands:
   build
-  coverage 	Inspect test coverage for this package. A previous test run with the `--coverage` flag must have previously been run
+  coverage 	  Inspect test coverage for this package. A previous test run with the `--coverage` flag must have previously been run
   disassemble
-  new      	Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`
-  prove    	Run the Move Prover on the package at `path`. If no path is provided defaults to current directory. Use `.. prove .. -- <options>` to pass on options to the
-               	prover
-  test     	Run Move unit tests in this package
-  help     	Print this message or the help of the given subcommand(s)
+  manage-package  Record addresses (Object IDs) for where this package is published on chain (this command sets variables in Move.lock)
+  migrate         Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory
+  new             Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`
+  test     	  Run Move unit tests in this package
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
   -p, --path <PACKAGE_PATH>                 	Path to a package which the command should be run with respect to

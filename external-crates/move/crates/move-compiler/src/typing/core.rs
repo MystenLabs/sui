@@ -24,7 +24,7 @@ use crate::{
         known_attributes::TestingAttribute,
         matching::{new_match_var_name, MatchContext},
         program_info::*,
-        string_utils::debug_print,
+        string_utils::{debug_print, format_oxford_list},
         unique_map::UniqueMap,
         *,
     },
@@ -477,6 +477,19 @@ impl<'env> Context<'env> {
         }
     }
 
+    pub fn expanding_macros_names(&self) -> Option<String> {
+        if self.macro_expansion.is_empty() {
+            return None;
+        }
+        let names = self
+            .macro_expansion
+            .iter()
+            .filter_map(|exp| exp.maybe_name())
+            .map(|(m, f)| format!("{m}::{f}"))
+            .collect::<Vec<_>>();
+        Some(format_oxford_list!("and", "'{}'", names))
+    }
+
     pub fn current_call_color(&self) -> Color {
         self.use_funs.last().unwrap().color.unwrap()
     }
@@ -862,6 +875,15 @@ impl MatchContext<false> for Context<'_> {
 
     fn program_info(&self) -> &ProgramInfo<false> {
         &self.modules
+    }
+}
+
+impl MacroExpansion {
+    fn maybe_name(&self) -> Option<(ModuleIdent, FunctionName)> {
+        match self {
+            MacroExpansion::Call(call) => Some((call.module, call.function)),
+            MacroExpansion::Argument { .. } => None,
+        }
     }
 }
 
@@ -1576,7 +1598,7 @@ fn check_function_visibility(
                 Visibility::PUBLIC,
                 friend_or_package,
             );
-            report_visibility_error(
+            report_visibility_error_(
                 context,
                 public_for_testing,
                 (
@@ -1618,7 +1640,7 @@ fn check_function_visibility(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
-            report_visibility_error(
+            report_visibility_error_(
                 context,
                 public_for_testing,
                 (usage_loc, msg),
@@ -1633,7 +1655,7 @@ fn check_function_visibility(
             );
             let internal_msg =
                 format!("This function can only be called from a 'friend' of module '{m}'",);
-            report_visibility_error(
+            report_visibility_error_(
                 context,
                 public_for_testing,
                 (usage_loc, msg),
@@ -1670,7 +1692,15 @@ pub fn public_testing_visibility(
     callee_entry.map(PublicForTesting::Entry)
 }
 
-fn report_visibility_error(
+pub fn report_visibility_error(
+    context: &mut Context,
+    call_msg: (Loc, impl ToString),
+    defn_msg: (Loc, impl ToString),
+) {
+    report_visibility_error_(context, None, call_msg, defn_msg)
+}
+
+fn report_visibility_error_(
     context: &mut Context,
     public_for_testing: Option<PublicForTesting>,
     (call_loc, call_msg): (Loc, impl ToString),
@@ -1697,6 +1727,30 @@ fn report_visibility_error(
             };
             diag.add_secondary_label((test_loc, test_msg))
         }
+    }
+    if let Some(names) = context.expanding_macros_names() {
+        let macro_s = if context.macro_expansion.len() > 1 {
+            "macros"
+        } else {
+            "macro"
+        };
+        match context.macro_expansion.first() {
+            Some(MacroExpansion::Call(call)) => {
+                diag.add_secondary_label((call.invocation, "While expanding this macro"));
+            }
+            _ => {
+                context.env.add_diag(ice!((
+                    call_loc,
+                    "Error when dealing with macro visibilities"
+                )));
+            }
+        };
+        diag.add_note(format!(
+            "This visibility error occurs in a macro body while expanding the {macro_s} {names}"
+        ));
+        diag.add_note(
+            "Visibility inside of expanded macros is resolved in the scope of the caller.",
+        );
     }
     context.env.add_diag(diag);
 }

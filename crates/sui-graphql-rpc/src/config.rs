@@ -159,6 +159,7 @@ pub struct Experiments {
 #[GraphQLConfig]
 pub struct InternalFeatureConfig {
     pub(crate) query_limits_checker: bool,
+    pub(crate) directive_checker: bool,
     pub(crate) feature_gate: bool,
     pub(crate) logger: bool,
     pub(crate) query_timeout: bool,
@@ -459,6 +460,7 @@ impl Default for InternalFeatureConfig {
     fn default() -> Self {
         Self {
             query_limits_checker: true,
+            directive_checker: true,
             feature_gate: true,
             logger: true,
             query_timeout: true,

@@ -62,16 +62,9 @@ describe('Test Move call with a vector of objects as input', () => {
 		await destroyObjects([(await mintObject(7))!, await mintObject(42)], /* withType */ false);
 	});
 
-	it(
-		'Test object vector with type hint',
-		async () => {
-			await destroyObjects([await mintObject(7), await mintObject(42)], /* withType */ true);
-		},
-		{
-			// TODO: This test is currently flaky, so adding a retry to unblock merging
-			retry: 10,
-		},
-	);
+	it('Test object vector with type hint', async () => {
+		await destroyObjects([await mintObject(7), await mintObject(42)], /* withType */ true);
+	});
 
 	it('Test regular arg mixed with object vector arg', async () => {
 		const coins = await toolbox.getGasObjectsOwnedByAddress();

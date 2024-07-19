@@ -75,6 +75,19 @@ else
 fi
 
 echo "Checking for changes to snapshot files matching $NETWORK_PATTERN"
+
+# The fields `scoring_decision_mad_divisor`, `scoring_decision_cutoff_value` were removed from the protocol config,
+# but they are still present in older snapshot files. We need to delete them from the snapshot files before 
+# checking if the git repo is clean.
+# TODO: Remove this workaround once commit 3959d9af51172824b0e4f20802c71e416596c7df has been release to all networks.
+SED=$(which gsed)
+if [ -z "$SED" ]; then
+  SED=$(which sed)
+fi
+
+grep -lE 'scoring_decision_mad_divisor|scoring_decision_cutoff_value' crates/sui-protocol-config/src/snapshots/$NETWORK_PATTERN | xargs $SED -Ei '/(scoring_decision_mad_divisor|scoring_decision_cutoff_value)/d'
+git add .
+
 check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release" "$NETWORK_PATTERN"
 
 # remove any snapshot file changes that were ignored

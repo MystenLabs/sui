@@ -55,7 +55,7 @@ impl Payload for BatchPaymentTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
             effects.print_gas_summary();
-            error!("Batch payment failed...");
+            error!("Batch payment failed... Status: {:?}", effects.status());
         }
 
         self.state.update(effects);

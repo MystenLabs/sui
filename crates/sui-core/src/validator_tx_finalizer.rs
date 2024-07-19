@@ -4,16 +4,20 @@
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::execution_cache::TransactionCacheRead;
-use mysten_metrics::TX_LATENCY_SEC_BUCKETS;
+use arc_swap::ArcSwap;
+use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
+use std::ops::Add;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::base_types::{AuthorityName, TransactionDigest};
 use sui_types::transaction::VerifiedSignedTransaction;
+use tokio::select;
 use tokio::time::Instant;
 use tracing::{debug, error, trace};
 
@@ -25,10 +29,14 @@ const TX_FINALIZATION_DELAY: Duration = Duration::from_secs(60);
 /// If a transaction can not be finalized within 1 min of being woken up, give up.
 const FINALIZATION_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Incremental delay for validators to wake up to finalize a transaction.
+const VALIDATOR_DELAY_INCREMENTS_SEC: u64 = 10;
+
 struct ValidatorTxFinalizerMetrics {
     num_finalization_attempts: IntCounter,
     num_successful_finalizations: IntCounter,
     finalization_latency: Histogram,
+    validator_tx_finalizer_attempt_position: Histogram,
     #[cfg(test)]
     num_finalization_attempts_for_testing: AtomicU64,
     #[cfg(test)]
@@ -53,7 +61,14 @@ impl ValidatorTxFinalizerMetrics {
             finalization_latency: register_histogram_with_registry!(
                 "validator_tx_finalizer_finalization_latency",
                 "Latency of transaction finalization",
-                TX_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            validator_tx_finalizer_attempt_position: register_histogram_with_registry!(
+                "validator_tx_finalizer_attempt_position",
+                "Position of the validator in the committee that attempted to finalize the transaction after waking up",
+                vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
                 registry,
             )
             .unwrap(),
@@ -87,17 +102,22 @@ impl ValidatorTxFinalizerMetrics {
 /// after the transaction has been signed, and then attempting to finalize
 /// the transaction if it has not yet been done by a fullnode.
 pub struct ValidatorTxFinalizer<C: Clone> {
-    agg: Arc<AuthorityAggregator<C>>,
+    agg: Arc<ArcSwap<AuthorityAggregator<C>>>,
+    name: AuthorityName,
     tx_finalization_delay: Duration,
     finalization_timeout: Duration,
     metrics: Arc<ValidatorTxFinalizerMetrics>,
 }
 
 impl<C: Clone> ValidatorTxFinalizer<C> {
-    #[allow(dead_code)]
-    pub(crate) fn new(agg: Arc<AuthorityAggregator<C>>, registry: &Registry) -> Self {
+    pub fn new(
+        agg: Arc<ArcSwap<AuthorityAggregator<C>>>,
+        name: AuthorityName,
+        registry: &Registry,
+    ) -> Self {
         Self {
             agg,
+            name,
             tx_finalization_delay: TX_FINALIZATION_DELAY,
             finalization_timeout: FINALIZATION_TIMEOUT,
             metrics: Arc::new(ValidatorTxFinalizerMetrics::new(registry)),
@@ -106,16 +126,23 @@ impl<C: Clone> ValidatorTxFinalizer<C> {
 
     #[cfg(test)]
     pub(crate) fn new_for_testing(
-        agg: Arc<AuthorityAggregator<C>>,
+        agg: Arc<ArcSwap<AuthorityAggregator<C>>>,
+        name: AuthorityName,
         tx_finalization_delay: Duration,
         finalization_timeout: Duration,
     ) -> Self {
         Self {
             agg,
+            name,
             tx_finalization_delay,
             finalization_timeout,
             metrics: Arc::new(ValidatorTxFinalizerMetrics::new(&Registry::new())),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn auth_agg(&self) -> &Arc<ArcSwap<AuthorityAggregator<C>>> {
+        &self.agg
     }
 }
 
@@ -147,13 +174,21 @@ where
         cache_read: Arc<dyn TransactionCacheRead>,
         tx: VerifiedSignedTransaction,
     ) -> anyhow::Result<bool> {
-        tokio::time::sleep(self.tx_finalization_delay).await;
         let tx_digest = *tx.digest();
-        trace!(?tx_digest, "Waking up to finalize transaction");
-        if cache_read.is_tx_already_executed(&tx_digest)? {
-            trace!(?tx_digest, "Transaction already finalized");
-            return Ok(false);
+        let (position, tx_finalization_delay) = self.determine_finalization_delay(&tx_digest)?;
+        let digests = [tx_digest];
+        select! {
+            _ = tokio::time::sleep(tx_finalization_delay) => {
+                trace!(?tx_digest, "Waking up to finalize transaction");
+            }
+            _ = cache_read.notify_read_executed_effects_digests(&digests) => {
+                trace!(?tx_digest, "Transaction already finalized");
+                return Ok(false);
+            }
         }
+        self.metrics
+            .validator_tx_finalizer_attempt_position
+            .observe(position as f64);
         let start_time = self.metrics.start_finalization();
         debug!(
             ?tx_digest,
@@ -162,11 +197,43 @@ where
         tokio::time::timeout(
             self.finalization_timeout,
             self.agg
+                .load()
                 .execute_transaction_block(tx.into_unsigned().inner(), None),
         )
         .await??;
         self.metrics.finalization_succeeded(start_time);
         Ok(true)
+    }
+
+    // We want to avoid all validators waking up at the same time to finalize the same transaction.
+    // That can lead to a waste of resource and flood the network unnecessarily.
+    // Here we use the transaction digest to determine an order of all validators.
+    // Validators will wake up one by one with incremental delays to finalize the transaction.
+    // The hope is that the first few should be able to finalize the transaction,
+    // and the rest will see it already executed and do not need to do anything.
+    fn determine_finalization_delay(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> anyhow::Result<(usize, Duration)> {
+        let order = self
+            .agg
+            .load()
+            .committee
+            .shuffle_by_stake_from_tx_digest(tx_digest);
+        let position = order
+            .iter()
+            .position(|&name| name == self.name)
+            .ok_or_else(|| {
+                // Somehow the validator is not found in the committee. This should never happen.
+                // TODO: This is where we should report system invariant violation.
+                anyhow::anyhow!("Validator {} not found in the committee", self.name)
+            })?;
+
+        let extra_delay = position as u64 * VALIDATOR_DELAY_INCREMENTS_SEC;
+        let delay = self
+            .tx_finalization_delay
+            .add(Duration::from_secs(extra_delay));
+        Ok((position, delay))
     }
 }
 
@@ -177,7 +244,9 @@ mod tests {
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
+    use arc_swap::ArcSwap;
     use async_trait::async_trait;
+    use prometheus::Registry;
     use std::collections::BTreeMap;
     use std::iter;
     use std::net::SocketAddr;
@@ -185,6 +254,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering::Relaxed;
     use std::sync::Arc;
+    use std::time::Duration;
     use sui_macros::sim_test;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_test_transaction_builder::TestTransactionBuilder;
@@ -328,8 +398,9 @@ mod tests {
         let (states, auth_agg, clients) = create_validators(gas_object).await;
         let finalizer1 = ValidatorTxFinalizer::new_for_testing(
             auth_agg.clone(),
-            std::time::Duration::from_secs(1),
-            std::time::Duration::from_secs(60),
+            states[0].name,
+            Duration::from_secs(1),
+            Duration::from_secs(60),
         );
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
@@ -339,7 +410,7 @@ mod tests {
             finalizer1.track_signed_tx(cache_read, signed_tx).await;
         });
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, true);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, true);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             1
@@ -360,8 +431,9 @@ mod tests {
         let (states, auth_agg, clients) = create_validators(gas_object).await;
         let finalizer1 = ValidatorTxFinalizer::new_for_testing(
             auth_agg.clone(),
-            std::time::Duration::from_secs(10),
-            std::time::Duration::from_secs(60),
+            states[0].name,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
         );
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
@@ -376,7 +448,7 @@ mod tests {
         });
         states[0].reconfigure_for_testing().await;
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, false);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, false);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             0
@@ -390,6 +462,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_validator_tx_finalizer_auth_agg_reconfig() {
+        let (sender, _) = get_account_key_pair();
+        let gas_object = Object::with_owner_for_testing(sender);
+        let (states, auth_agg, _clients) = create_validators(gas_object).await;
+        let finalizer1 = ValidatorTxFinalizer::new_for_testing(
+            auth_agg.clone(),
+            states[0].name,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
+        );
+        let mut new_auth_agg = (**auth_agg.load()).clone();
+        let mut new_committee = (*new_auth_agg.committee).clone();
+        new_committee.epoch = 100;
+        new_auth_agg.committee = Arc::new(new_committee);
+        auth_agg.store(Arc::new(new_auth_agg));
+        assert_eq!(
+            finalizer1.auth_agg().load().committee.epoch,
+            100,
+            "AuthorityAggregator not updated"
+        );
+    }
+
+    #[tokio::test]
     async fn test_validator_tx_finalizer_already_executed() {
         telemetry_subscribers::init_for_testing();
         let (sender, keypair) = get_account_key_pair();
@@ -398,8 +493,9 @@ mod tests {
         let (states, auth_agg, clients) = create_validators(gas_object).await;
         let finalizer1 = ValidatorTxFinalizer::new_for_testing(
             auth_agg.clone(),
-            std::time::Duration::from_secs(20),
-            std::time::Duration::from_secs(60),
+            states[0].name,
+            Duration::from_secs(20),
+            Duration::from_secs(60),
         );
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
@@ -413,11 +509,12 @@ mod tests {
                 .await;
         });
         auth_agg
+            .load()
             .execute_transaction_block(&signed_tx.into_inner().into_unsigned(), None)
             .await
             .unwrap();
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, true);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, true);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             0
@@ -439,8 +536,9 @@ mod tests {
         let (states, auth_agg, clients) = create_validators(gas_object).await;
         let finalizer1 = ValidatorTxFinalizer::new_for_testing(
             auth_agg.clone(),
-            std::time::Duration::from_secs(10),
-            std::time::Duration::from_secs(30),
+            states[0].name,
+            Duration::from_secs(10),
+            Duration::from_secs(30),
         );
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
@@ -457,7 +555,7 @@ mod tests {
                 .await;
         });
         handle.await.unwrap();
-        check_quorum_execution(&auth_agg, &clients, &tx_digest, false);
+        check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, false);
         assert_eq!(
             metrics.num_finalization_attempts_for_testing.load(Relaxed),
             1
@@ -470,11 +568,58 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_validator_tx_finalizer_determine_finalization_delay() {
+        let network_config = ConfigBuilder::new_with_temp_dir()
+            .committee_size(NonZeroUsize::new(10).unwrap())
+            .build();
+        let (auth_agg, _) = AuthorityAggregatorBuilder::from_network_config(&network_config)
+            .build_network_clients();
+        let auth_agg = Arc::new(auth_agg);
+        let finalizers = (0..10)
+            .map(|idx| {
+                ValidatorTxFinalizer::new(
+                    Arc::new(ArcSwap::new(auth_agg.clone())),
+                    auth_agg.committee.voting_rights[idx].0,
+                    &Registry::new(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for _ in 0..100 {
+            let tx_digest = TransactionDigest::random();
+            let mut delays: Vec<_> = finalizers
+                .iter()
+                .map(|finalizer| {
+                    finalizer
+                        .determine_finalization_delay(&tx_digest)
+                        .map(|(pos, delay)| (pos, delay.as_secs()))
+                        .unwrap()
+                })
+                .collect();
+            delays.sort();
+            assert_eq!(
+                delays,
+                vec![
+                    (0, 60),
+                    (1, 70),
+                    (2, 80),
+                    (3, 90),
+                    (4, 100),
+                    (5, 110),
+                    (6, 120),
+                    (7, 130),
+                    (8, 140),
+                    (9, 150)
+                ]
+            )
+        }
+    }
+
     async fn create_validators(
         gas_object: Object,
     ) -> (
         Vec<Arc<AuthorityState>>,
-        Arc<AuthorityAggregator<MockAuthorityClient>>,
+        Arc<ArcSwap<AuthorityAggregator<MockAuthorityClient>>>,
         BTreeMap<AuthorityName, MockAuthorityClient>,
     ) {
         let network_config = ConfigBuilder::new_with_temp_dir()
@@ -503,7 +648,11 @@ mod tests {
             .collect();
         let auth_agg = AuthorityAggregatorBuilder::from_network_config(&network_config)
             .build_custom_clients(clients.clone());
-        (authority_states, Arc::new(auth_agg), clients)
+        (
+            authority_states,
+            Arc::new(ArcSwap::new(Arc::new(auth_agg))),
+            clients,
+        )
     }
 
     async fn create_tx(

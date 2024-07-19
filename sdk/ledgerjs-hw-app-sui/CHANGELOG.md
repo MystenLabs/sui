@@ -1,11 +1,19 @@
 # @mysten/ledgerjs-hw-app-sui
 
+## 0.4.1
+
+### Patch Changes
+
+- 0f27a97: Update dependencies
+
 ## 0.4.0
 
 ### Minor Changes
 
-- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
-  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
 
 ## 0.3.1
 
@@ -29,6 +37,10 @@
 
 ### Minor Changes
 
-- a6690ac7d: Changed the default behavior of `publish` to publish an upgreadeable-by-sender package instead of immutable.
-- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- a6690ac7d: Changed the default behavior of `publish` to publish an upgreadeable-by-sender package
+  instead of immutable.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various
+  capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument
+  names, RPC endpoints, Move functions, and object fields have been updated with this new naming
+  convention.
 - 3709957cf: Published initial version of library

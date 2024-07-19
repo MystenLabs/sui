@@ -39,6 +39,7 @@ use sui_rest_api::RestMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -213,6 +214,7 @@ use simulator::*;
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
 use sui_core::safe_client::SafeClientMetricsBase;
+use sui_core::validator_tx_finalizer::ValidatorTxFinalizer;
 use sui_types::execution_config_utils::to_binary_config;
 
 pub struct SuiNode {
@@ -253,7 +255,7 @@ pub struct SuiNode {
     /// Use ArcSwap so that we could mutate it without taking mut reference.
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
-    auth_agg: ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>,
+    auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -437,7 +439,12 @@ impl SuiNode {
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
+
+        // Initialize Mysten metrics.
         mysten_metrics::init_metrics(&prometheus_registry);
+        // Unsupported (because of the use of static variable) and unnecessary in simtests.
+        #[cfg(not(msim))]
+        mysten_metrics::thread_stall_monitor::start_thread_stall_monitor();
 
         let genesis = config.genesis()?.clone();
 
@@ -477,12 +484,14 @@ impl SuiNode {
         let auth_agg = {
             let safe_client_metrics_base = SafeClientMetricsBase::new(&prometheus_registry);
             let auth_agg_metrics = Arc::new(AuthAggMetrics::new(&prometheus_registry));
-            Arc::new(AuthorityAggregator::new_from_epoch_start_state(
-                epoch_start_configuration.epoch_start_state(),
-                &committee_store,
-                safe_client_metrics_base,
-                auth_agg_metrics,
-            ))
+            Arc::new(ArcSwap::new(Arc::new(
+                AuthorityAggregator::new_from_epoch_start_state(
+                    epoch_start_configuration.epoch_start_state(),
+                    &committee_store,
+                    safe_client_metrics_base,
+                    auth_agg_metrics,
+                ),
+            )))
         };
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
@@ -711,7 +720,7 @@ impl SuiNode {
         let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_auth_aggregator(
-                    auth_agg.clone(),
+                    auth_agg.load_full(),
                     state.clone(),
                     end_of_epoch_receiver,
                     &config.db_path(),
@@ -777,6 +786,7 @@ impl SuiNode {
                 connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
+                auth_agg.clone(),
             )
             .await?;
             // This is only needed during cold start.
@@ -817,7 +827,7 @@ impl SuiNode {
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
 
-            auth_agg: ArcSwap::new(auth_agg),
+            auth_agg,
         };
 
         info!("SuiNode started!");
@@ -1141,6 +1151,7 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
+        auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1175,6 +1186,8 @@ impl SuiNode {
             &config,
             state.clone(),
             consensus_adapter.clone(),
+            auth_agg,
+            epoch_store.get_chain_identifier().chain(),
             &registry_service.default_registry(),
         )
         .await?;
@@ -1403,8 +1416,15 @@ impl SuiNode {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
+        auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
+        chain: Chain,
         prometheus_registry: &Registry,
     ) -> Result<tokio::task::JoinHandle<Result<()>>> {
+        let enable_validator_tx_finalizer =
+            config.enable_validator_tx_finalizer && chain != Chain::Mainnet;
+        let validator_tx_finalizer = enable_validator_tx_finalizer.then_some(Arc::new(
+            ValidatorTxFinalizer::new(auth_agg, state.name, prometheus_registry),
+        ));
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
@@ -1412,6 +1432,7 @@ impl SuiNode {
             TrafficControllerMetrics::new(prometheus_registry),
             config.policy_config.clone(),
             config.firewall_config.clone(),
+            validator_tx_finalizer,
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1509,8 +1530,23 @@ impl SuiNode {
 
                 let config = cur_epoch_store.protocol_config();
                 let binary_config = to_binary_config(config);
-                let transaction = ConsensusTransaction::new_capability_notification(
-                    AuthorityCapabilitiesV1::new(
+                let transaction = if config.authority_capabilities_v2() {
+                    ConsensusTransaction::new_capability_notification_v2(
+                        AuthorityCapabilitiesV2::new(
+                            self.state.name,
+                            cur_epoch_store.get_chain_identifier().chain(),
+                            self.config
+                                .supported_protocol_versions
+                                .expect("Supported versions should be populated")
+                                // no need to send digests of versions less than the current version
+                                .truncate_below(config.version),
+                            self.state
+                                .get_available_system_packages(&binary_config)
+                                .await,
+                        ),
+                    )
+                } else {
+                    ConsensusTransaction::new_capability_notification(AuthorityCapabilitiesV1::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
@@ -1518,8 +1554,8 @@ impl SuiNode {
                         self.state
                             .get_available_system_packages(&binary_config)
                             .await,
-                    ),
-                );
+                    ))
+                };
                 info!(?transaction, "submitting capabilities to consensus");
                 components
                     .consensus_adapter
@@ -1718,6 +1754,7 @@ impl SuiNode {
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
                             self.metrics.clone(),
+                            self.auth_agg.clone(),
                         )
                         .await?,
                     )

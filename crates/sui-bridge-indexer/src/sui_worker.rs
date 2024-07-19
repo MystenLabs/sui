@@ -3,8 +3,8 @@
 
 use crate::postgres_manager::{write, PgPool};
 use crate::{
-    metrics::BridgeIndexerMetrics, BridgeDataSource, TokenTransfer, TokenTransferData,
-    TokenTransferStatus,
+    metrics::BridgeIndexerMetrics, BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer,
+    TokenTransferData, TokenTransferStatus,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ use sui_bridge::events::{
 };
 use sui_data_ingestion_core::Worker;
 use sui_types::event::Event;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::{
     base_types::ObjectID,
     effects::TransactionEffectsAPI,
@@ -65,28 +66,41 @@ impl SuiBridgeWorker {
         tx: &CheckpointTransaction,
         checkpoint: u64,
         timestamp_ms: u64,
-    ) -> Result<Vec<TokenTransfer>> {
+    ) -> Result<Vec<ProcessedTxnData>> {
         self.metrics.total_sui_bridge_transactions.inc();
-        if let Some(events) = &tx.events {
-            let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {
-                if let Some(data) =
-                    Self::process_sui_event(ev, tx, checkpoint, timestamp_ms, &self.metrics)?
-                {
-                    result.push(data);
-                }
-                Ok::<_, anyhow::Error>(result)
-            })?;
+        match &tx.events {
+            Some(events) => {
+                let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {
+                    if let Some(data) =
+                        Self::process_sui_event(ev, tx, checkpoint, timestamp_ms, &self.metrics)?
+                    {
+                        result.push(data);
+                    }
+                    Ok::<_, anyhow::Error>(result)
+                })?;
 
-            if !token_transfers.is_empty() {
-                info!(
-                    "SUI: Extracted {} bridge token transfer data entries for tx {}.",
-                    token_transfers.len(),
-                    tx.transaction.digest()
-                );
+                if !token_transfers.is_empty() {
+                    info!(
+                        "SUI: Extracted {} bridge token transfer data entries for tx {}.",
+                        token_transfers.len(),
+                        tx.transaction.digest()
+                    );
+                }
+                Ok(token_transfers)
             }
-            Ok(token_transfers)
-        } else {
-            Ok(vec![])
+            None => {
+                if let ExecutionStatus::Failure { error, command } = tx.effects.status() {
+                    Ok(vec![ProcessedTxnData::Error(SuiTxnError {
+                        tx_digest: *tx.transaction.digest(),
+                        sender: tx.transaction.sender_address(),
+                        timestamp_ms,
+                        failure_status: error.to_string(),
+                        cmd_idx: command.map(|idx| idx as u64),
+                    })])
+                } else {
+                    Ok(vec![])
+                }
+            }
         }
     }
 
@@ -96,14 +110,14 @@ impl SuiBridgeWorker {
         checkpoint: u64,
         timestamp_ms: u64,
         metrics: &BridgeIndexerMetrics,
-    ) -> Result<Option<TokenTransfer>> {
+    ) -> Result<Option<ProcessedTxnData>> {
         Ok(if ev.type_.address == BRIDGE_ADDRESS {
             match ev.type_.name.as_str() {
                 "TokenDepositedEvent" => {
                     info!("Observed Sui Deposit {:?}", ev);
                     metrics.total_sui_token_deposited.inc();
                     let move_event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
-                    Some(TokenTransfer {
+                    Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: move_event.source_chain,
                         nonce: move_event.seq_num,
                         block_height: checkpoint,
@@ -120,13 +134,13 @@ impl SuiBridgeWorker {
                             token_id: move_event.token_type,
                             amount: move_event.amount_sui_adjusted,
                         }),
-                    })
+                    }))
                 }
                 "TokenTransferApproved" => {
                     info!("Observed Sui Approval {:?}", ev);
                     metrics.total_sui_token_transfer_approved.inc();
                     let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
-                    Some(TokenTransfer {
+                    Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: event.message_key.source_chain,
                         nonce: event.message_key.bridge_seq_num,
                         block_height: checkpoint,
@@ -137,13 +151,13 @@ impl SuiBridgeWorker {
                         gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                         data_source: BridgeDataSource::Sui,
                         data: None,
-                    })
+                    }))
                 }
                 "TokenTransferClaimed" => {
                     info!("Observed Sui Claim {:?}", ev);
                     metrics.total_sui_token_transfer_claimed.inc();
                     let event: MoveTokenTransferClaimed = bcs::from_bytes(&ev.contents)?;
-                    Some(TokenTransfer {
+                    Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: event.message_key.source_chain,
                         nonce: event.message_key.bridge_seq_num,
                         block_height: checkpoint,
@@ -154,7 +168,7 @@ impl SuiBridgeWorker {
                         gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
                         data_source: BridgeDataSource::Sui,
                         data: None,
-                    })
+                    }))
                 }
                 _ => {
                     metrics.total_sui_bridge_txn_other.inc();
