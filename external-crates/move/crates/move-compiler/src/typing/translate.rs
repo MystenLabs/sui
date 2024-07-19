@@ -4123,7 +4123,7 @@ fn syntax_call_return_ty(
                 &m, &f, &param.value.name
             )
         };
-        valid &= subtype_impl(context, loc, msg, arg_ty, param_ty).is_ok();
+        valid &= subtype_opt(context, loc, msg, arg_ty, param_ty).is_some();
     }
 
     // The failure case for dotted expressions hands an error expression up the chain: if a field
