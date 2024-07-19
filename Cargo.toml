@@ -700,3 +700,5 @@ field_names = "0.2.0"
 include_dir = "0.7.3"
 semver = "1.0.16"
 spinners = "4.1.0"
+
+mimalloc = "0.1.43"
