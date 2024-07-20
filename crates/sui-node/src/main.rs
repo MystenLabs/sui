@@ -20,6 +20,11 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
 
