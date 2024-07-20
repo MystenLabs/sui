@@ -6695,6 +6695,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7201,6 +7202,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-trace-format"
+version = "0.0.3"
+dependencies = [
+ "anyhow",
+ "enum-compat-util",
+ "indexmap 2.2.6",
+ "move-binary-format",
+ "move-core-types",
+ "move-proc-macros",
+ "ref-cast",
+ "serde",
+ "serde_json",
+ "variant_count",
+]
+
+[[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -7251,6 +7268,7 @@ dependencies = [
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
+ "move-trace-format",
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
@@ -7289,11 +7307,13 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
+ "serde_json",
  "smallvec",
  "tracing",
 ]
@@ -7372,6 +7392,7 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
+ "move-trace-format",
  "move-vm-profiler",
  "serde",
  "smallvec",
