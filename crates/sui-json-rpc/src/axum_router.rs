@@ -156,33 +156,54 @@ async fn process_raw_request<L: Logger>(
 ) -> MethodResponse {
     let client = match service.client_id_source {
         Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
-        Some(ClientIdSource::XForwardedFor) => {
-            let do_header_parse = |header: &HeaderValue| {
-                header.to_str().map(|s| {
-                    match s.parse::<SocketAddr>() {
-                        Ok(addr) => Some(addr.ip()),
-                        Err(err) => {
-                            error!(
-                                "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
-                                Please ensure that your proxy is configured to resolve client domains to an \
-                                IP address before writing header",
-                                s,
-                                err,
+        Some(ClientIdSource::XForwardedFor(num_hops)) => {
+            let do_header_parse = |header: &HeaderValue| match header.to_str() {
+                Ok(header_val) => {
+                    let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                    if num_hops == 0 {
+                        error!(
+                                "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                                number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
+                                to this node. Skipping traffic controller request handling.",
+                                header_contents,
                             );
-                            None
-                        }
+                        return None;
                     }
-                }).unwrap_or_else(|_| {
-                    error!("Failed to parse x-forwarded-for header value of {:?} to string", header);
+                    let contents_len = header_contents.len();
+                    let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
+                        error!(
+                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                Expected {} values. Skipping traffic controller request handling.",
+                                header_contents,
+                                contents_len,
+                                num_hops,
+                                num_hops + 1,
+                            );
+                        return None;
+                    };
+                    client_ip.parse::<IpAddr>().ok().or_else(|| {
+                        client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
+                                error!(
+                                    "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
+                                    Please ensure that your proxy is configured to resolve client domains to an \
+                                    IP address before writing header",
+                                    client_ip,
+                                );
+                                None
+                            })
+                        })
+                }
+                Err(e) => {
+                    error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
                     None
-                })
+                }
             };
             if let Some(header) = headers.get("x-forwarded-for") {
                 do_header_parse(header)
             } else if let Some(header) = headers.get("X-Forwarded-For") {
                 do_header_parse(header)
             } else {
-                error!("X-Forwarded-For header not found in request. Skipping traffic controller request handling.");
+                error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
                 None
             }
         }
