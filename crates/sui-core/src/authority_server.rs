@@ -1008,24 +1008,44 @@ macro_rules! handle_with_decoration {
                     None
                 }
             }
-            ClientIdSource::XForwardedFor => {
+            ClientIdSource::XForwardedFor(num_hops) => {
                 let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
-                            match header_val.parse::<SocketAddr>() {
-                                Ok(socket_addr) => Some(socket_addr.ip()),
-                                Err(err) => {
+                            let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                            if *num_hops == 0 {
+                                error!(
+                                    "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                                    number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
+                                    to this node. Skipping traffic controller request handling.",
+                                    header_contents,
+                                );
+                                return None;
+                            }
+                            let contents_len = header_contents.len();
+                            let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
+                                error!(
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                    Expected at least {} values. Skipping traffic controller request handling.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    contents_len,
+                                );
+                                return None;
+                            };
+                            client_ip.parse::<IpAddr>().ok().or_else(|| {
+                                client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
                                     $self.metrics.forwarded_header_parse_error.inc();
                                     error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
                                         Please ensure that your proxy is configured to resolve client domains to an \
                                         IP address before writing header",
-                                        header_val,
-                                        err,
+                                        client_ip,
                                     );
                                     None
-                                }
-                            }
+                                })
+                            })
                         }
                         Err(e) => {
                             // TODO: once we have confirmed that no legitimate traffic
@@ -1043,7 +1063,7 @@ macro_rules! handle_with_decoration {
                     do_header_parse(op)
                 } else {
                     $self.metrics.forwarded_header_not_included.inc();
-                    error!("x-forwarded-header not present for request despite node configuring XForwardedFor tracking type");
+                    error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
                     None
                 }
             }
