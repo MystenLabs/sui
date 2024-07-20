@@ -8,13 +8,23 @@ note[I15006]: IDE path autocomplete
    · │
 24 │ │ 
 25 │ │ }
-   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   │ ╰─^ Possible in-scope names
+   │  
+   = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:10:9
    │
 10 │         A
-   │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   │         ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:10:9
@@ -26,7 +36,12 @@ note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
    │
 14 │         a::
-   │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   │         ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:14:9
@@ -38,7 +53,12 @@ note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
    │
 18 │         a::m::
-   │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   │         ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:18:9
@@ -50,7 +70,12 @@ note[I15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
    │
 22 │         a::m::SomeEnum::
-   │         ^ Possible in-scope names: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'Self -> a::m', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   │         ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
+   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/ide_mode/colon_colon_incomplete.move:22:9
@@ -64,5 +89,10 @@ note[I15006]: IDE path autocomplete
 27 │ ╭ module a::m2 {
 28 │ │     public fun foo() {}
 29 │ │ }
-   │ ╰─^ Possible in-scope names: 'Option -> std::option::Option', 'Self -> a::m2', 'option -> std::option', 'vector -> std::vector', 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   │ ╰─^ Possible in-scope names
+   │  
+   = members: 'Option -> std::option::Option' or 'foo -> a::m2::foo'
+   = modules: 'Self -> a::m2', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
 
