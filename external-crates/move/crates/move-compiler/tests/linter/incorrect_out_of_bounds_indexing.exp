@@ -1,0 +1,8 @@
+warning[Lint W00012]: Array index out of bounds: attempting to access index {} in array '{}' with size known at compile time.
+   ┌─ tests/linter/incorrect_out_of_bounds_indexing.move:11:9
+   │
+11 │         vector::borrow(&arr2, 7);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 7 in array 'arr2' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
