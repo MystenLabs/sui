@@ -1,0 +1,16 @@
+warning[Lint W02015]: Prefer using named constants with 'abort' and 'assert' for clarity
+  ┌─ tests/linter/incorrect_abort_constant.move:6:15
+  │
+6 │         abort 100
+  │               ^^^ Prefer using a named constant.
+  │
+  = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02015]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/incorrect_abort_constant.move:11:16
+   │
+11 │         assert!(x == false, 2);
+   │                ^^^^^^^^^^^^^^^ Prefer using a named constant.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
