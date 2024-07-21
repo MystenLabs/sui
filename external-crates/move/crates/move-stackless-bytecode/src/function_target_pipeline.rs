@@ -158,6 +158,7 @@ impl<'a> fmt::Display for ProcessorResultDisplay<'a> {
 /// A processing pipeline for function targets.
 #[derive(Default)]
 pub struct FunctionTargetPipeline {
+    max_loop: usize,
     processors: Vec<Box<dyn FunctionTargetProcessor>>,
 }
 
@@ -279,22 +280,33 @@ impl FunctionTargetsHolder {
         func_env: &FunctionEnv,
         processor: &dyn FunctionTargetProcessor,
         scc_opt: Option<&[FunctionEnv]>,
-    ) {
+    ) -> bool {
         let id = func_env.get_qualified_id();
+        let mut changed = false;
         for variant in self.get_target_variants(func_env) {
             // Remove data so we can own it.
             let data = self.remove_target_data(&id, &variant);
+            let org_code = data.code.clone();
             if let Some(processed_data) =
                 processor.process_and_maybe_remove(self, func_env, data, scc_opt)
             {
                 // Put back processed data.
-                self.insert_target_data(&id, variant, processed_data);
+                self.insert_target_data(&id, variant, processed_data.clone());
+                if org_code != processed_data.code {
+                    changed = true;
+                }
             }
         }
+        changed
     }
 }
 
 impl FunctionTargetPipeline {
+    /// Sets the maximum number of loop iterations.
+    pub fn set_max_loop(&mut self, max_loop: usize) {
+        self.max_loop = max_loop
+    }
+
     /// Adds a processor to this pipeline. Processor will be called in the order they have been
     /// added.
     pub fn add_processor(&mut self, processor: Box<dyn FunctionTargetProcessor>) {
@@ -483,42 +495,58 @@ impl FunctionTargetPipeline {
         let topological_order = Self::sort_targets_in_topological_order(env, targets);
         info!("transforming bytecode");
         hook_before_pipeline(targets);
-        for (step_count, processor) in self.processors.iter().enumerate() {
-            if processor.is_single_run() {
-                processor.run(env, targets);
-            } else {
-                processor.initialize(env, targets);
-                for item in &topological_order {
-                    match item {
-                        Either::Left(fid) => {
-                            let func_env = env.get_function(*fid);
-                            targets.process(&func_env, processor.as_ref(), None);
-                        }
-                        Either::Right(scc) => 'fixedpoint: loop {
-                            let scc_env: Vec<_> =
-                                scc.iter().map(|fid| env.get_function(*fid)).collect();
-                            for fid in scc {
+        let max_loop = self.max_loop.max(1);
+        let mut loop_cnt = 0;
+        let mut changed = true;
+        while changed && (loop_cnt < max_loop) {
+            loop_cnt += 1;
+            // reset changed to assume processors wlll not change anything
+            changed = false;
+            for (step_count, processor) in self.processors.iter().enumerate() {
+                if processor.is_single_run() {
+                    processor.run(env, targets);
+                } else {
+                    processor.initialize(env, targets);
+                    for item in &topological_order {
+                        match item {
+                            Either::Left(fid) => {
                                 let func_env = env.get_function(*fid);
-                                targets.process(&func_env, processor.as_ref(), Some(&scc_env));
-                            }
-
-                            // check for fixedpoint in summaries
-                            for fid in scc {
-                                let func_env = env.get_function(*fid);
-                                for (_, target) in targets.get_targets(&func_env) {
-                                    if !target.data.annotations.reached_fixedpoint() {
-                                        continue 'fixedpoint;
-                                    }
+                                if targets.process(&func_env, processor.as_ref(), None) {
+                                    changed = true;
                                 }
                             }
-                            // fixedpoint reached when execution hits this line
-                            break 'fixedpoint;
-                        },
+                            Either::Right(scc) => 'fixedpoint: loop {
+                                let scc_env: Vec<_> =
+                                    scc.iter().map(|fid| env.get_function(*fid)).collect();
+                                for fid in scc {
+                                    let func_env = env.get_function(*fid);
+                                    if targets.process(
+                                        &func_env,
+                                        processor.as_ref(),
+                                        Some(&scc_env),
+                                    ) {
+                                        changed = true;
+                                    }
+                                }
+
+                                // check for fixedpoint in summaries
+                                for fid in scc {
+                                    let func_env = env.get_function(*fid);
+                                    for (_, target) in targets.get_targets(&func_env) {
+                                        if !target.data.annotations.reached_fixedpoint() {
+                                            continue 'fixedpoint;
+                                        }
+                                    }
+                                }
+                                // fixedpoint reached when execution hits this line
+                                break 'fixedpoint;
+                            },
+                        }
                     }
+                    processor.finalize(env, targets);
                 }
-                processor.finalize(env, targets);
+                hook_after_each_processor(step_count + 1, processor.as_ref(), targets);
             }
-            hook_after_each_processor(step_count + 1, processor.as_ref(), targets);
         }
     }
 

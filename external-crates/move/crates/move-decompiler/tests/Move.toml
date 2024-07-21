@@ -1,0 +1,15 @@
+[package]
+name = "tests"
+version = "0.0.0"
+
+
+[addresses]
+NamedAddr = "0xbad2"
+sui_framework = "0x1"
+admin_addr = "0xbeef"
+mint_nft = "0x1234"
+source_addr = "0x2345"
+
+[dependencies]
+SuiFramework = { local = "../../../../../sui/crates/sui-framework" }
+SuiToken = { local = "../../../../../sui/crates/sui-token" }

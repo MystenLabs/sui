@@ -1,0 +1,5 @@
+!build/**/*.mv
+build/**/BuildInfo.yaml
+build/**/dependencies/
+build/**/source_maps/
+build/**/sources/

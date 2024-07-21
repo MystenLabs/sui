@@ -399,7 +399,7 @@ pub struct GlobalEnv {
     doc_comments: BTreeMap<FileId, BTreeMap<ByteIndex, String>>,
     /// A mapping from file hash to file name and associated FileId. Though this information is
     /// already in `source_files`, we can't get it out of there so need to book keep here.
-    file_hash_map: BTreeMap<FileHash, (String, FileId)>,
+    pub file_hash_map: BTreeMap<FileHash, (String, FileId)>,
     /// A mapping from file id to associated alias map.
     file_alias_map: BTreeMap<FileId, Rc<BTreeMap<Symbol, NumericalAddress>>>,
     /// Bijective mapping between FileId and a plain int. FileId's are themselves wrappers around
@@ -937,6 +937,128 @@ impl GlobalEnv {
         });
     }
 
+    /// Attaches a bytecode module to the module in the environment. This functions expects
+    /// the `self.module_data[module_id]` to be already initialized using the `self.add`
+    /// function.
+    pub fn attach_compiled_module(
+        &mut self,
+        module_id: ModuleId,
+        module: CompiledModule,
+        source_map: SourceMap,
+    ) {
+        {
+            let mod_data = &mut self.module_data[module_id.0 as usize];
+            mod_data.struct_idx_to_id.clear();
+            mod_data.function_idx_to_id.clear();
+        }
+
+        // Attach indices pointing into the compiled module to function and struct data
+        for idx in 0..module.struct_defs.len() {
+            let def_idx = StructDefinitionIndex(idx as u16);
+            let handle_idx = module.struct_def_at(def_idx).struct_handle;
+            let handle = module.datatype_handle_at(handle_idx);
+            let struct_id = DatatypeId(
+                self.symbol_pool
+                    .make(module.identifier_at(handle.name).as_str()),
+            );
+            let mod_data = &mut self.module_data[module_id.0 as usize];
+            if let Some(_struct_data) = mod_data.struct_data.get_mut(&struct_id) {
+                mod_data.struct_idx_to_id.insert(def_idx, struct_id);
+            } else {
+                panic!("attaching mismatching bytecode module")
+            }
+        }
+        for idx in 0..module.function_defs.len() {
+            let def_idx = FunctionDefinitionIndex(idx as u16);
+            let handle_idx = module.function_def_at(def_idx).function;
+            let handle = module.function_handle_at(handle_idx);
+            let name_str = module.identifier_at(handle.name).as_str();
+            let fun_id = if name_str.starts_with(SCRIPT_BYTECODE_FUN_NAME) {
+                // This is a pseudo script module, which has exactly one function. Determine
+                // the name of this function.
+                let mod_data = &self.module_data[module_id.0 as usize];
+                *mod_data
+                    .function_data
+                    .iter()
+                    .next()
+                    .expect("script has function")
+                    .0
+            } else {
+                FunId(self.symbol_pool.make(name_str))
+            };
+
+            // While releasing any mutation, compute the called functions if needed.
+            let fun_data = &self.module_data[module_id.0 as usize]
+                .function_data
+                .get(&fun_id)
+                .unwrap();
+            let called_funs = if fun_data.called_funs.borrow().is_none() {
+                Some(self.get_called_funs_from_bytecode(&module, def_idx))
+            } else {
+                None
+            };
+
+            let mod_data = &mut self.module_data[module_id.0 as usize];
+            if let Some(fun_data) = mod_data.function_data.get_mut(&fun_id) {
+                fun_data.def_idx = def_idx;
+                fun_data.handle_idx = handle_idx;
+                mod_data.function_idx_to_id.insert(def_idx, fun_id);
+                if let Some(called_funs) = called_funs {
+                    fun_data.called_funs = RefCell::new(Some(called_funs));
+                }
+            } else {
+                panic!("attaching mismatching bytecode module")
+            }
+        }
+        let friend_modules = self.get_friend_modules_from_bytecode(&module);
+        let mod_data = &mut self.module_data[module_id.0 as usize];
+        mod_data.used_modules = Default::default();
+        mod_data.friend_modules = RefCell::new(Some(friend_modules));
+        mod_data.module = module;
+        mod_data.source_map = source_map;
+    }
+
+    fn get_called_funs_from_bytecode(
+        &self,
+        module: &CompiledModule,
+        def_idx: FunctionDefinitionIndex,
+    ) -> BTreeSet<QualifiedId<FunId>> {
+        let function_definition = module.function_def_at(def_idx);
+        let called_funs: BTreeSet<QualifiedId<FunId>> = match function_definition.code.as_ref() {
+            Some(unit) => unit
+                .code
+                .iter()
+                .filter_map(|c| {
+                    let handle_idx = match c {
+                        Bytecode::Call(i) => Some(*i),
+                        Bytecode::CallGeneric(i) => {
+                            Some(module.function_instantiation_at(*i).handle)
+                        }
+                        _ => None,
+                    };
+                    handle_idx.map(|idx| {
+                        ModuleEnv::get_used_function_from_compiled_module(self, idx, module)
+                            .get_qualified_id()
+                    })
+                })
+                .collect(),
+            None => BTreeSet::default(),
+        };
+        called_funs
+    }
+
+    fn get_friend_modules_from_bytecode(
+        &self,
+        compiled_module: &CompiledModule,
+    ) -> BTreeSet<ModuleId> {
+        compiled_module
+            .immediate_friends()
+            .into_iter()
+            .map(|storage_id| self.to_module_name(&storage_id))
+            .flat_map(|name| self.find_module(&name))
+            .map(|module_env| module_env.get_id())
+            .collect()
+    }
     /// Creates data for a named constant.
     pub fn create_named_constant_data(
         &self,
@@ -1420,7 +1542,7 @@ pub struct ModuleData {
     pub id: ModuleId,
 
     /// Attributes attached to this module.
-    attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
 
     /// Module byte code.
     pub module: CompiledModule,
@@ -1453,10 +1575,10 @@ pub struct ModuleData {
     pub loc: Loc,
 
     /// A cache for the modules used by this one.
-    used_modules: RefCell<BTreeMap<bool, BTreeSet<ModuleId>>>,
+    pub used_modules: RefCell<BTreeMap<bool, BTreeSet<ModuleId>>>,
 
     /// A cache for the modules declared as friends by this one.
-    friend_modules: RefCell<Option<BTreeSet<ModuleId>>>,
+    pub friend_modules: RefCell<Option<BTreeSet<ModuleId>>>,
 }
 
 impl ModuleData {
@@ -1758,6 +1880,23 @@ impl<'env> ModuleEnv<'env> {
             .find_module(&self.env.to_module_name(&declaring_module))
             .expect("unexpected reference to module not found in global env");
         module_env.into_function(FunId::new(self.env.symbol_pool.make(fname)))
+    }
+
+    fn get_used_function_from_compiled_module<'a>(
+        env: &'a GlobalEnv,
+        idx: FunctionHandleIndex,
+        module: &CompiledModule,
+    ) -> FunctionEnv<'a> {
+        let function_handle = module.function_handle_at(idx);
+        let module_handle = module.module_handle_at(function_handle.module);
+        let module_name = env.to_module_name(&module.module_id_for_handle(module_handle));
+        let module_env = env
+            .find_module(&module_name)
+            .expect("unexpected reference to module not found in global env");
+        module_env.into_function(FunId::new(
+            env.symbol_pool
+                .make(module.identifier_at(function_handle.name).as_str()),
+        ))
     }
 
     /// Gets the function id from a definition index.
@@ -2542,24 +2681,24 @@ impl<'env> VariantEnv<'env> {
 #[derive(Debug)]
 pub struct StructData {
     /// The name of this struct.
-    name: Symbol,
+    pub name: Symbol,
 
     /// The location of this struct.
-    loc: Loc,
+    pub loc: Loc,
 
     /// Attributes attached to this structure.
-    attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
 
     /// List of function argument names. Not in bytecode but obtained from AST.
     /// Information about this struct.
-    info: StructInfo,
+    pub info: StructInfo,
 
     /// Field definitions.
-    field_data: BTreeMap<FieldId, FieldData>,
+    pub field_data: BTreeMap<FieldId, FieldData>,
 }
 
 #[derive(Debug)]
-enum StructInfo {
+pub enum StructInfo {
     /// Struct is declared in Move and info found in VM format.
     Declared {
         /// The definition index of this struct in its module.
@@ -3041,35 +3180,35 @@ pub struct Parameter(pub Symbol, pub Type);
 #[derive(Debug)]
 pub struct FunctionData {
     /// Name of this function.
-    name: Symbol,
+    pub name: Symbol,
 
     /// Location of this function.
-    loc: Loc,
+    pub loc: Loc,
 
     /// The definition index of this function in its module.
-    def_idx: FunctionDefinitionIndex,
+    pub def_idx: FunctionDefinitionIndex,
 
     /// The handle index of this function in its module.
-    handle_idx: FunctionHandleIndex,
+    pub handle_idx: FunctionHandleIndex,
 
     /// Attributes attached to this function.
-    attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
 
     /// List of function argument names. Not in bytecode but obtained from AST.
-    arg_names: Vec<Symbol>,
+    pub arg_names: Vec<Symbol>,
 
     /// List of type argument names. Not in bytecode but obtained from AST.
     #[allow(unused)]
-    type_arg_names: Vec<Symbol>,
+    pub type_arg_names: Vec<Symbol>,
 
     /// A cache for the called functions.
-    called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 
     /// A cache for the calling functions.
-    calling_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub calling_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 
     /// A cache for the transitive closure of the called functions.
-    transitive_closure_of_called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
+    pub transitive_closure_of_called_funs: RefCell<Option<BTreeSet<QualifiedId<FunId>>>>,
 }
 
 impl FunctionData {

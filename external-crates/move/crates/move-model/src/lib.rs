@@ -50,6 +50,7 @@ pub mod pragmas;
 pub mod symbol;
 pub mod ty;
 pub mod well_known;
+pub mod revela_helper;
 
 // =================================================================================================
 // Entry Point
