@@ -301,7 +301,7 @@ pub enum VersionedDkgConfirmation {
 impl Debug for VersionedDkgMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionedDkgMessage::V0() => panic!("BUG: invalid VersionedDkgMessage version"),
+            VersionedDkgMessage::V0() => write!(f, "Deprecated VersionedDkgMessage version 0"),
             VersionedDkgMessage::V1(msg) => write!(
                 f,
                 "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
