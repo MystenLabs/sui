@@ -1,6 +1,10 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
+
+diesel::table! {
+    chain_identifier (checkpoint_digest) {
+        checkpoint_digest -> Bytea,
+    }
+}
 
 diesel::table! {
     checkpoints (sequence_number) {
@@ -284,6 +288,7 @@ diesel::table! {
 macro_rules! for_all_tables {
     ($action:path) => {
         $action!(
+            chain_identifier,
             checkpoints,
             pruner_cp_watermark,
             display,
