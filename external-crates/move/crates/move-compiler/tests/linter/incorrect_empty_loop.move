@@ -1,12 +1,13 @@
 module 0x42::M {
 
-    #[allow(lint(constant_naming))]
-    const Another_BadName: u64 = 42; // Should trigger a warning
-
-    #[allow(lint(empty_loop))]
+    // This should also trigger the lint for having a condition that always evaluates to true
     public fun while_infinite_loop_always_true() {
         while (true) {
             // Intentionally left empty for testing
         }
+    }
+
+    public fun infinite_loop_always_true() {
+        loop {}
     }
 }
