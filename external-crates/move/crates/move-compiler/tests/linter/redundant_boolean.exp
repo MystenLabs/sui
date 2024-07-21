@@ -1,0 +1,16 @@
+warning[Lint W08001]: 
+  ┌─ tests/custom_rules/redundant_boolean.exp.move:9:9
+  │
+9 │         true || y
+  │         ^^^^^^^^^ This expression always evaluates to true regardless of the other operand..Consider refactoring it to true
+  │
+  = This warning can be suppressed with '#[allow(lint(redundant_boolean_expressions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W08001]: 
+   ┌─ tests/custom_rules/redundant_boolean.exp.move:14:9
+   │
+14 │         false || y // Should trigger a warning
+   │         ^^^^^^^^^^ This expression always evaluates to true regardless of the other operand..Consider refactoring it to y
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_boolean_expressions))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

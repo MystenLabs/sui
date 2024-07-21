@@ -1,0 +1,96 @@
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:4:13
+  │
+4 │         if (x == true) {};
+  │             ^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:5:13
+  │
+5 │         if (x == false) {};
+  │             ^^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression using logical negation '!'.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:6:13
+  │
+6 │         if (x != true) {};
+  │             ^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression using logical negation '!'.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:7:13
+  │
+7 │         if (x != false) {};
+  │             ^^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:8:13
+  │
+8 │         if (x == true || ERROR_NUM == 2) {};
+  │             ^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:9:13
+  │
+9 │         if (x == true && x != false) {};
+  │             ^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+  ┌─ tests/linter/boolean_comparison.move:9:26
+  │
+9 │         if (x == true && x != false) {};
+  │                          ^^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+  │
+  = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+   ┌─ tests/linter/boolean_comparison.move:12:13
+   │
+12 │         if (true == x) {};
+   │             ^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+   │
+   = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+   ┌─ tests/linter/boolean_comparison.move:13:13
+   │
+13 │         if (condition() == true) {};
+   │             ^^^^^^^^^^^^^^^^^^^ This boolean comparison is unnecessary. Consider simplifying this expression to the variable or function itself.
+   │
+   = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+   ┌─ tests/linter/boolean_comparison.move:17:9
+   │
+17 │         y && true // Should trigger a warning
+   │         ^^^^^^^^^ This boolean comparison is unnecessary. This expression always evaluates to y regardless of the other operand.
+   │
+   = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+   ┌─ tests/linter/boolean_comparison.move:22:9
+   │
+22 │         true || y
+   │         ^^^^^^^^^ This boolean comparison is unnecessary. This expression always evaluates to true regardless of the other operand.
+   │
+   = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00004]: unnecessary boolean comparison to true or false
+   ┌─ tests/linter/boolean_comparison.move:27:9
+   │
+27 │         false || y // Should trigger a warning
+   │         ^^^^^^^^^^ This boolean comparison is unnecessary. This expression always evaluates to y regardless of the other operand.
+   │
+   = This warning can be suppressed with '#[allow(lint(bool_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
