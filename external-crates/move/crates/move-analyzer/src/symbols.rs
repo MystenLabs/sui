@@ -403,6 +403,40 @@ impl CursorContext {
             loc,
         }
     }
+
+    pub fn find_access_chain(&self) -> Option<P::NameAccessChain> {
+        // TODO: handle access chains in uses, attributes and friend declarations
+        use CursorPosition as CP;
+        let chain = match &self.position {
+            CP::Exp(sp!(_, exp)) => match exp {
+                P::Exp_::Name(chain) | P::Exp_::Call(chain, _) | P::Exp_::Pack(chain, _) => {
+                    Some(chain.clone())
+                }
+                _ => None,
+            },
+            CP::Binding(sp!(_, bind)) => {
+                if let P::Bind_::Unpack(chain, _) = bind {
+                    Some(*(chain.clone()))
+                } else {
+                    None
+                }
+            }
+            CP::Type(sp!(_, ty)) => {
+                if let P::Type_::Apply(chain) = ty {
+                    Some(*(chain.clone()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(c) = &chain {
+            if c.loc.contains(&self.loc) {
+                return chain;
+            }
+        }
+        None
+    }
 }
 
 #[derive(Clone, Debug)]

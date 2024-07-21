@@ -1215,13 +1215,16 @@ impl PathExpander for LegacyPathExpander {
         if context.env.ide_mode() && context.is_source_definition {
             let mut info = AliasAutocompleteInfo::new();
             for (name, addr) in context.named_address_mapping.unwrap().iter() {
-                info.addresses.insert((*name, *addr));
+                info.addresses.insert(*name, *addr);
             }
             for (_, name, (_, mident)) in self.aliases.modules.iter() {
-                info.modules.insert((*name, *mident));
+                info.modules.insert(*name, *mident);
             }
             for (_, name, (_, (mident, member))) in self.aliases.members.iter() {
-                info.members.insert((*name, *mident, *member));
+                info.members
+                    .entry(*mident)
+                    .or_default()
+                    .insert(*name, *member);
             }
             let annotation = IDEAnnotation::PathAutocompleteInfo(Box::new(info));
             context.env.add_ide_annotation(loc, annotation)

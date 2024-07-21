@@ -82,11 +82,11 @@ pub struct DotAutocompleteInfo {
 #[derive(Default, Debug, Clone)]
 pub struct AliasAutocompleteInfo {
     /// Numerical addresses that are valid autocompletes
-    pub addresses: BTreeSet<(Symbol, NumericalAddress)>,
+    pub addresses: BTreeMap<Symbol, NumericalAddress>,
     /// Modules that are valid autocompletes
-    pub modules: BTreeSet<(Symbol, E::ModuleIdent)>,
+    pub modules: BTreeMap<Symbol, E::ModuleIdent>,
     /// Members that are valid autocompletes
-    pub members: BTreeSet<(Symbol, E::ModuleIdent, Name)>,
+    pub members: BTreeMap<E::ModuleIdent, BTreeMap<Symbol, Name>>,
     /// Type parameters that are valid autocompletes
     pub type_params: BTreeSet<Symbol>,
 }
@@ -213,9 +213,9 @@ impl
             BTreeMap<Symbol, MemberEntry>,
         ),
     ) -> Self {
-        let mut addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
-        let mut modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
-        let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
+        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+        let mut modules: BTreeMap<Symbol, E::ModuleIdent> = BTreeMap::new();
+        let mut members: BTreeMap<E::ModuleIdent, BTreeMap<Symbol, Name>> = BTreeMap::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
         for (symbol, entry) in leading_names
@@ -224,13 +224,13 @@ impl
         {
             match entry {
                 LeadingAccessEntry::Address(addr) => {
-                    addresses.insert((*symbol, *addr));
+                    addresses.insert(*symbol, *addr);
                 }
                 LeadingAccessEntry::Module(mident) => {
-                    modules.insert((*symbol, *mident));
+                    modules.insert(*symbol, *mident);
                 }
                 LeadingAccessEntry::Member(mident, name) => {
-                    members.insert((*symbol, *mident, *name));
+                    members.entry(*mident).or_default().insert(*symbol, *name);
                 }
                 LeadingAccessEntry::TypeParam => {
                     type_params.insert(*symbol);
@@ -245,7 +245,7 @@ impl
         {
             match entry {
                 MemberEntry::Member(mident, name) => {
-                    members.insert((*symbol, *mident, *name));
+                    members.entry(*mident).or_default().insert(*symbol, *name);
                 }
                 MemberEntry::TypeParam => {
                     type_params.insert(*symbol);
@@ -300,9 +300,13 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 } = *info;
 
                 let members = members
-                    .into_iter()
-                    .map(|(name, m, f)| format!("{name} -> {m}::{f}"));
-                let member_names = format_oxford_list!(ITER, "or", "'{}'", members);
+                    .iter()
+                    .flat_map(|(m, mems)| {
+                        mems.iter()
+                            .map(|(name, f)| format!("{name} -> {}::{}", m.value, f))
+                    })
+                    .collect::<Vec<_>>();
+                let member_names = format_oxford_list!(ITER, "or", "'{}'", members.iter());
                 let modules = modules
                     .into_iter()
                     .map(|(name, m)| format!("{name} -> {m}"));
