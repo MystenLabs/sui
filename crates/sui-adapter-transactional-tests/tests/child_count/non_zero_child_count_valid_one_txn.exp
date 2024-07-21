@@ -3,17 +3,20 @@ processed 4 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 10-35:
+task 1, lines 10-35:
+//# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 37-37:
+task 2, line 37:
+//# run test::m::share --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 39-39:
+task 3, line 39:
+//# view-object 2,1
 Owner: Shared( 2 )
 Version: 2
 Contents: test::m::S {

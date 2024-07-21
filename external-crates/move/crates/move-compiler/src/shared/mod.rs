@@ -10,7 +10,7 @@ use crate::{
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, DiagnosticsFormat, FileName, MappedFiles, WarningFilters,
+        Diagnostic, Diagnostics, DiagnosticsFormat, WarningFilters,
     },
     editions::{
         check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
@@ -20,7 +20,10 @@ use crate::{
     hlir::ast as H,
     naming::ast as N,
     parser::ast as P,
-    shared::ide::{IDEAnnotation, IDEInfo},
+    shared::{
+        files::{FileName, MappedFiles},
+        ide::{IDEAnnotation, IDEInfo},
+    },
     sui_mode,
     typing::{
         ast as T,
@@ -46,8 +49,10 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod files;
 pub mod ide;
 pub mod known_attributes;
+pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
 pub mod string_utils;
@@ -185,6 +190,9 @@ pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
 pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
+pub const FILTER_DEPRECATED: &str = "deprecated_usage";
+pub const FILTER_IDE_PATH_AUTOCOMPLETE: &str = "ide_path_autocomplete";
+pub const FILTER_IDE_DOT_AUTOCOMPLETE: &str = "ide_dot_autocomplete";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -276,12 +284,12 @@ impl CompilationEnv {
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
-        use crate::diagnostics::codes::{TypeSafety, UnusedItem};
+        use crate::diagnostics::codes::{TypeSafety, UnusedItem, IDE};
         visitors.extend([
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
+        let mut known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
             (
                 FILTER_ALL.into(),
                 BTreeSet::from([WarningFilter::All(None)]),
@@ -326,7 +334,14 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
             known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
+            known_code_filter!(FILTER_DEPRECATED, TypeSafety::DeprecatedUsage),
         ]);
+        if flags.ide_mode() {
+            known_filters_.extend([
+                known_code_filter!(FILTER_IDE_PATH_AUTOCOMPLETE, IDE::PathAutocomplete),
+                known_code_filter!(FILTER_IDE_DOT_AUTOCOMPLETE, IDE::DotAutocomplete),
+            ]);
+        }
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
 
@@ -387,7 +402,7 @@ impl CompilationEnv {
         self.mapped_files.add(file_hash, file_name, source_text)
     }
 
-    pub fn file_mapping(&self) -> &MappedFiles {
+    pub fn mapped_files(&self) -> &MappedFiles {
         &self.mapped_files
     }
 
@@ -453,10 +468,7 @@ impl CompilationEnv {
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
-        match self.diags.max_severity() {
-            Some(max) if max >= threshold => true,
-            Some(_) | None => false,
-        }
+        self.diags.max_severity_at_or_above_severity(threshold)
     }
 
     pub fn check_diags_at_or_above_severity(
@@ -478,10 +490,7 @@ impl CompilationEnv {
     /// Should only be called after compilation is finished
     pub fn take_final_warning_diags(&mut self) -> Diagnostics {
         let final_diags = self.take_final_diags();
-        debug_assert!(final_diags
-            .max_severity()
-            .map(|s| s == Severity::Warning)
-            .unwrap_or(true));
+        debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
     }
 
@@ -665,10 +674,20 @@ impl CompilationEnv {
     }
 
     pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        if self.flags().ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.add_diag(diag);
+            }
+        }
         self.ide_information.extend(info);
     }
 
     pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        if self.flags().ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.add_diag(diag);
+        }
         self.ide_information.add_ide_annotation(loc, info);
     }
 }
@@ -763,7 +782,11 @@ pub struct Flags {
     #[clap(skip)]
     keep_testing_functions: bool,
 
-    /// If set, all warnings are silenced
+    /// If set, we are in IDE testing mode. This will report IDE annotations as diagnostics.
+    #[clap(skip = false)]
+    ide_test_mode: bool,
+
+    /// If set, we are in IDE mode.
     #[clap(skip = false)]
     ide_mode: bool,
 }
@@ -779,6 +802,7 @@ impl Flags {
             json_errors: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -792,6 +816,7 @@ impl Flags {
             silence_warnings: false,
             keep_testing_functions: false,
             ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -826,6 +851,13 @@ impl Flags {
     pub fn set_json_errors(self, value: bool) -> Self {
         Self {
             json_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_test_mode(self, value: bool) -> Self {
+        Self {
+            ide_test_mode: value,
             ..self
         }
     }
@@ -867,6 +899,10 @@ impl Flags {
 
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn ide_test_mode(&self) -> bool {
+        self.ide_test_mode
     }
 
     pub fn ide_mode(&self) -> bool {

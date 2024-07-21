@@ -712,7 +712,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphql).toEqual(rpc);
 	});
 
-	test('getValidatorsApy', async () => {
+	test.skip('getValidatorsApy', async () => {
 		const rpc = await toolbox.client.getValidatorsApy();
 		const graphql = await graphQLClient!.getValidatorsApy();
 

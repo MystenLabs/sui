@@ -47,7 +47,8 @@ export async function signAndExecuteTransaction(
 
 	const transactionBlock = Transaction.from(await input.transaction.toJSON());
 	const { digest, rawEffects, rawTransaction } = await signAndExecuteTransactionBlock({
-		...input,
+		account: input.account,
+		chain: input.chain,
 		transactionBlock,
 		options: {
 			showRawEffects: true,
@@ -90,8 +91,9 @@ export async function signTransaction(
 
 	const transaction = Transaction.from(await input.transaction.toJSON());
 	const { transactionBlockBytes, signature } = await signTransactionBlock({
-		...input,
 		transactionBlock: transaction,
+		account: input.account,
+		chain: input.chain,
 	});
 
 	return { bytes: transactionBlockBytes, signature };

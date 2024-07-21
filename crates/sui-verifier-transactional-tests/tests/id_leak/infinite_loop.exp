@@ -1,11 +1,13 @@
 processed 2 tasks
 
-task 0 'publish'. lines 6-28:
+task 0, lines 6-28:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4970400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 1 'publish'. lines 30-59:
+task 1, lines 30-59:
+//# publish
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5168000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

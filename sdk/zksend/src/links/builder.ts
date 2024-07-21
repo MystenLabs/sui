@@ -179,7 +179,7 @@ export class ZkSendLinkBuilder {
 						options: {
 							showType: true,
 						},
-				  })
+					})
 				: []
 			).map((res, i) => {
 				if (!res.data || res.error) {
@@ -231,7 +231,7 @@ export class ZkSendLinkBuilder {
 					balances: this.balances,
 					objects: [...this.objectIds],
 					gasEstimateFromDryRun,
-			  })
+				})
 			: gasEstimateFromDryRun * 2n;
 
 		// Ensure that rounded gas is not less than the calculated gas
@@ -396,13 +396,15 @@ export class ZkSendLinkBuilder {
 
 		for (const link of links) {
 			const receiver = link.keypair.toSuiAddress();
-			contract.new(transaction, { arguments: [store, receiver] });
+			transaction.add(contract.new({ arguments: [store, receiver] }));
 
 			link.objectRefs.forEach(({ ref, type }) => {
-				contract.add(transaction, {
-					arguments: [store, receiver, ref],
-					typeArguments: [type],
-				});
+				transaction.add(
+					contract.add({
+						arguments: [store, receiver, ref],
+						typeArguments: [type],
+					}),
+				);
 			});
 
 			link.objectIds.forEach((id) => {
@@ -410,10 +412,12 @@ export class ZkSendLinkBuilder {
 				if (!object) {
 					throw new Error(`Object ${id} not found`);
 				}
-				contract.add(transaction, {
-					arguments: [store, receiver, object.ref],
-					typeArguments: [object.type],
-				});
+				transaction.add(
+					contract.add({
+						arguments: [store, receiver, object.ref],
+						typeArguments: [object.type],
+					}),
+				);
 			});
 		}
 
@@ -426,10 +430,12 @@ export class ZkSendLinkBuilder {
 			const balances = linksWithCoin.map((link) => link.balances.get(coinType)!);
 			const splits = transaction.splitCoins(merged, balances);
 			for (const [i, link] of linksWithCoin.entries()) {
-				contract.add(transaction, {
-					arguments: [store, link.keypair.toSuiAddress(), splits[i]],
-					typeArguments: [`0x2::coin::Coin<${coinType}>`],
-				});
+				transaction.add(
+					contract.add({
+						arguments: [store, link.keypair.toSuiAddress(), splits[i]],
+						typeArguments: [`0x2::coin::Coin<${coinType}>`],
+					}),
+				);
 			}
 		}
 

@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'run'. lines 1-9:
+task 0, lines 1-9:
+//# run --type-args bool
 Error: Function execution failed with VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,

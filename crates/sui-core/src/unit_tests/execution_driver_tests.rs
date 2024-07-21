@@ -7,8 +7,7 @@ use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
-use crate::authority_server::ValidatorService;
-use crate::authority_server::ValidatorServiceMetrics;
+use crate::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
@@ -20,6 +19,7 @@ use crate::test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
     make_transfer_object_move_transaction,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
@@ -27,7 +27,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use itertools::Itertools;
 use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -294,6 +293,12 @@ async fn execute_shared_on_first_three_authorities(
 async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
 
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
+
     // ---- Initialize a network with three accounts, each with 10 gas objects.
 
     const NUM_ACCOUNTS: usize = 3;
@@ -471,6 +476,12 @@ async fn try_sign_on_first_three_authorities(
 async fn test_per_object_overload() {
     telemetry_subscribers::init_for_testing();
 
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
+
     // Initialize a network with 1 account and 2000 gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
     const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
@@ -592,6 +603,12 @@ async fn test_per_object_overload() {
 #[tokio::test]
 async fn test_txn_age_overload() {
     telemetry_subscribers::init_for_testing();
+
+    // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_random_beacon_for_testing(false);
+        config
+    });
 
     // Initialize a network with 1 account and 3 gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
@@ -757,13 +774,10 @@ async fn test_authority_txn_signing_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
-        TrafficControllerMetrics::new_for_tests(),
-        None,
-        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
@@ -889,13 +903,10 @@ async fn test_authority_txn_execution_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
-        TrafficControllerMetrics::new_for_tests(),
-        None,
-        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.

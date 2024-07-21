@@ -1,0 +1,4445 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sui Node Api",
+    "description": "REST Api for interacting with the Sui Blockchain",
+    "contact": {
+      "name": "Mysten Labs",
+      "url": "https://github.com/MystenLabs/sui"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    },
+    "version": "0.0.0"
+  },
+  "servers": [
+    {
+      "url": "/v2"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {}
+    },
+    "/health": {
+      "get": {}
+    },
+    "/accounts/{account}/objects": {
+      "get": {}
+    },
+    "/objects/{object_id}": {
+      "get": {
+        "tags": [
+          "Objects"
+        ],
+        "operationId": "GetObject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ObjectId"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Object"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
+    "/objects/{object_id}/version/{version}": {
+      "get": {
+        "tags": [
+          "Objects"
+        ],
+        "operationId": "GetObjectWithVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ObjectId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Object"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
+    "/objects/{object_id}/dynamic-fields": {
+      "get": {
+        "tags": [
+          "Objects"
+        ],
+        "operationId": "ListDynamicFields",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ObjectId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "$ref": "#/components/schemas/ObjectId"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DynamicFieldInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkpoints": {
+      "get": {}
+    },
+    "/checkpoints/{checkpoint}": {
+      "get": {}
+    },
+    "/checkpoints/{checkpoint}/full": {
+      "get": {}
+    },
+    "/transactions/{transaction}": {
+      "get": {
+        "tags": [
+          "Transactions"
+        ],
+        "operationId": "GetTransaction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "get": {
+        "tags": [
+          "Transactions"
+        ],
+        "operationId": "ListTransactions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "direction",
+            "schema": {
+              "$ref": "#/components/schemas/Direction"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "headers": {
+              "x-sui-cursor": {
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TransactionResponse"
+                  }
+                }
+              },
+              "application/bcs": {}
+            }
+          },
+          "410": {
+            "description": ""
+          }
+        }
+      },
+      "post": {}
+    },
+    "/committee/{epoch}": {
+      "get": {}
+    },
+    "/committee": {
+      "get": {}
+    },
+    "/system": {
+      "get": {}
+    },
+    "/system/protocol": {
+      "get": {}
+    },
+    "/system/protocol/{version}": {
+      "get": {}
+    },
+    "/system/gas": {
+      "get": {}
+    },
+    "/coins/{coin_type}": {
+      "get": {}
+    },
+    "/openapi": {
+      "get": {
+        "tags": [
+          "OpenApi"
+        ],
+        "operationId": "OpenApi Explorer",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/html; charset=utf-8": {}
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "OpenApi"
+        ],
+        "operationId": "openapi.json",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/openapi.yaml": {
+      "get": {
+        "tags": [
+          "OpenApi"
+        ],
+        "operationId": "openapi.yaml",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActiveJwk": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "jwk",
+          "jwk_id"
+        ],
+        "properties": {
+          "epoch": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "jwk": {
+            "$ref": "#/components/schemas/Jwk"
+          },
+          "jwk_id": {
+            "$ref": "#/components/schemas/JwkId"
+          }
+        }
+      },
+      "Address": {
+        "title": "Address",
+        "description": "A 32-byte Sui address, encoded as a hex string.",
+        "examples": [
+          "0x0000000000000000000000000000000000000000000000000000000000000002"
+        ],
+        "type": "string",
+        "format": "hex",
+        "maxLength": 66,
+        "pattern": "0x[a-z0-9]{1,64}"
+      },
+      "Argument": {
+        "anyOf": [
+          {
+            "title": "Gas",
+            "type": "string",
+            "enum": [
+              "gas"
+            ]
+          },
+          {
+            "title": "Input",
+            "type": "object",
+            "required": [
+              "input"
+            ],
+            "properties": {
+              "input": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "title": "Result",
+            "type": "object",
+            "required": [
+              "result"
+            ],
+            "properties": {
+              "result": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "title": "NestedResult",
+            "type": "object",
+            "required": [
+              "result"
+            ],
+            "properties": {
+              "result": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint16",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint16",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            }
+          }
+        ]
+      },
+      "Bls12381PublicKey": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Bls12381Signature": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Bn254FieldElement": {
+        "description": "Radix-10 encoded 256-bit unsigned integer",
+        "type": "string",
+        "format": "u256"
+      },
+      "CancelledTransaction": {
+        "type": "object",
+        "required": [
+          "digest",
+          "version_assignments"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "version_assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VersionAssignment"
+            }
+          }
+        }
+      },
+      "ChangedObject": {
+        "type": "object",
+        "required": [
+          "id_operation",
+          "input_state",
+          "object_id",
+          "output_state"
+        ],
+        "properties": {
+          "id_operation": {
+            "description": "Whether this object ID is created or deleted in this transaction. This information isn't required by the protocol but is useful for providing more detailed semantics on object changes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdOperation"
+              }
+            ]
+          },
+          "input_state": {
+            "description": "State of the object in the store prior to this transaction.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectIn"
+              }
+            ]
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "output_state": {
+            "description": "State of the object in the store after this transaction.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectOut"
+              }
+            ]
+          }
+        }
+      },
+      "CheckpointCommitment": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "digest",
+              "type"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/Digest"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ecmh_live_object_set"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CheckpointContents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CheckpointTransactionInfo"
+        }
+      },
+      "CheckpointContentsDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "CheckpointData": {
+        "type": "object",
+        "required": [
+          "checkpoint_contents",
+          "checkpoint_summary",
+          "transactions"
+        ],
+        "properties": {
+          "checkpoint_contents": {
+            "$ref": "#/components/schemas/CheckpointContents"
+          },
+          "checkpoint_summary": {
+            "$ref": "#/components/schemas/SignedCheckpointSummary"
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointTransaction"
+            }
+          }
+        }
+      },
+      "CheckpointDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "CheckpointSummary": {
+        "type": "object",
+        "required": [
+          "content_digest",
+          "epoch",
+          "epoch_rolling_gas_cost_summary",
+          "network_total_transactions",
+          "sequence_number",
+          "timestamp_ms"
+        ],
+        "properties": {
+          "checkpoint_commitments": {
+            "description": "Commitments to checkpoint-specific state (e.g. txns in checkpoint, objects read/written in checkpoint).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
+          "content_digest": {
+            "$ref": "#/components/schemas/CheckpointContentsDigest"
+          },
+          "end_of_epoch_data": {
+            "description": "Present only on the final checkpoint of the epoch.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochData"
+              }
+            ]
+          },
+          "epoch": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "epoch_rolling_gas_cost_summary": {
+            "description": "The running total gas costs of all transactions included in the current epoch so far until this checkpoint.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GasCostSummary"
+              }
+            ]
+          },
+          "network_total_transactions": {
+            "description": "Total number of transactions committed since genesis, including those in this checkpoint.",
+            "type": "string",
+            "format": "u64"
+          },
+          "previous_digest": {
+            "$ref": "#/components/schemas/CheckpointDigest"
+          },
+          "sequence_number": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "timestamp_ms": {
+            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
+            "type": "string",
+            "format": "u64"
+          },
+          "version_specific_data": {
+            "description": "CheckpointSummary is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version.",
+            "type": "string",
+            "format": "base64"
+          }
+        }
+      },
+      "CheckpointTransaction": {
+        "type": "object",
+        "required": [
+          "effects",
+          "input_objects",
+          "output_objects",
+          "transaction"
+        ],
+        "properties": {
+          "effects": {
+            "description": "The effects produced by executing this transaction",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionEffects"
+              }
+            ]
+          },
+          "events": {
+            "description": "The events, if any, emitted by this transaciton during execution",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionEvents"
+              }
+            ]
+          },
+          "input_objects": {
+            "description": "The state of all inputs to this transaction as they were prior to execution.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "output_objects": {
+            "description": "The state of all output objects created or mutated by this transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "transaction": {
+            "description": "The input Transaction",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignedTransaction"
+              }
+            ]
+          }
+        }
+      },
+      "CheckpointTransactionInfo": {
+        "type": "object",
+        "required": [
+          "effects",
+          "signatures",
+          "transaction"
+        ],
+        "properties": {
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffectsDigest"
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSignature"
+            }
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      },
+      "CircomG1": {
+        "description": "A G1 point in BN254 serialized as a vector of three strings which is the canonical decimal representation of the projective coordinates in Fq.",
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Bn254FieldElement"
+        },
+        "maxItems": 3,
+        "minItems": 3
+      },
+      "CircomG2": {
+        "description": "A G2 point in BN254 serialized as a vector of three vectors each being a vector of two strings which are the canonical decimal representation of the coefficients of the projective coordinates in Fq2.",
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Bn254FieldElement"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "maxItems": 3,
+        "minItems": 3
+      },
+      "Claim": {
+        "description": "A claim consists of value and index_mod_4.",
+        "type": "object",
+        "required": [
+          "index_mod_4",
+          "value"
+        ],
+        "properties": {
+          "index_mod_4": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "Command": {
+        "description": "A single command in a programmable transaction.",
+        "oneOf": [
+          {
+            "description": "A call to either an entry or a public Move function",
+            "type": "object",
+            "required": [
+              "arguments",
+              "command",
+              "function",
+              "module",
+              "package",
+              "type_arguments"
+            ],
+            "properties": {
+              "arguments": {
+                "description": "The arguments to the function.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Argument"
+                }
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "move_call"
+                ]
+              },
+              "function": {
+                "description": "The function to be called.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Identifier"
+                  }
+                ]
+              },
+              "module": {
+                "description": "The specific module in the package containing the function.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Identifier"
+                  }
+                ]
+              },
+              "package": {
+                "description": "The package containing the module and function.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ObjectId"
+                  }
+                ]
+              },
+              "type_arguments": {
+                "description": "The type arguments to the function.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TypeTag"
+                }
+              }
+            }
+          },
+          {
+            "description": "`(Vec<forall T:key+store. T>, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created.",
+            "type": "object",
+            "required": [
+              "address",
+              "command",
+              "objects"
+            ],
+            "properties": {
+              "address": {
+                "$ref": "#/components/schemas/Argument"
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "transfer_objects"
+                ]
+              },
+              "objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Argument"
+                }
+              }
+            }
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
+            "type": "object",
+            "required": [
+              "amounts",
+              "coin",
+              "command"
+            ],
+            "properties": {
+              "amounts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Argument"
+                }
+              },
+              "coin": {
+                "$ref": "#/components/schemas/Argument"
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "split_coins"
+                ]
+              }
+            }
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<Coin<T>>)` It merges n-coins into the first coin",
+            "type": "object",
+            "required": [
+              "coin",
+              "coins_to_merge",
+              "command"
+            ],
+            "properties": {
+              "coin": {
+                "$ref": "#/components/schemas/Argument"
+              },
+              "coins_to_merge": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Argument"
+                }
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "merge_coins"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
+            "type": "object",
+            "required": [
+              "command",
+              "dependencies",
+              "modules"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "publish"
+                ]
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectId"
+                }
+              },
+              "modules": {
+                "type": "array",
+                "items": {
+                  "description": "Base64 encoded data",
+                  "type": "string",
+                  "format": "base64"
+                }
+              }
+            }
+          },
+          {
+            "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
+            "type": "object",
+            "required": [
+              "command",
+              "elements"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "make_move_vector"
+                ]
+              },
+              "elements": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Argument"
+                }
+              },
+              "type": {
+                "$ref": "#/components/schemas/TypeTag"
+              }
+            }
+          },
+          {
+            "description": "Upgrades a Move package Takes (in order): 1. A vector of serialized modules for the package. 2. A vector of object ids for the transitive dependencies of the new package. 3. The object ID of the package being upgraded. 4. An argument holding the `UpgradeTicket` that must have been produced from an earlier command in the same programmable transaction.",
+            "type": "object",
+            "required": [
+              "command",
+              "dependencies",
+              "modules",
+              "package",
+              "ticket"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "upgrade"
+                ]
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectId"
+                }
+              },
+              "modules": {
+                "type": "array",
+                "items": {
+                  "description": "Base64 encoded data",
+                  "type": "string",
+                  "format": "base64"
+                }
+              },
+              "package": {
+                "$ref": "#/components/schemas/ObjectId"
+              },
+              "ticket": {
+                "$ref": "#/components/schemas/Argument"
+              }
+            }
+          }
+        ]
+      },
+      "CommandArgumentError": {
+        "oneOf": [
+          {
+            "description": "The type of the value does not match the expected type",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "type_mismatch"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The argument cannot be deserialized into a value of the specified type",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_bcs_bytes"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The argument cannot be instantiated from raw bytes",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_usage_of_pure_argument"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Invalid argument to private entry function. Private entry functions cannot take arguments from other Move functions.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_argument_to_private_entry_function"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Out of bounds access to input or results",
+            "type": "object",
+            "required": [
+              "index",
+              "kind"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "index_out_of_bounds"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Out of bounds access to subresult",
+            "type": "object",
+            "required": [
+              "kind",
+              "result",
+              "subresult"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "secondary_index_out_of_bounds"
+                ]
+              },
+              "result": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              },
+              "subresult": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "Invalid usage of result. Expected a single result but found either no return value or multiple.",
+            "type": "object",
+            "required": [
+              "kind",
+              "result"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_result_arity"
+                ]
+              },
+              "result": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "Invalid usage of Gas coin. The Gas coin can only be used by-value with a TransferObjects command.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_gas_coin_usage"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Invalid usage of move value.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_value_usage"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Immutable objects cannot be passed by-value.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_object_by_value"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Immutable objects cannot be passed by mutable reference, &mut.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid_object_by_mut_ref"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Shared object operations such a wrapping, freezing, or converting to owned are not allowed.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "shared_object_operation_not_allowed"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ConsensusCommitDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "ConsensusDeterminedVersionAssignments": {
+        "oneOf": [
+          {
+            "description": "Cancelled transaction version assignment.",
+            "type": "object",
+            "required": [
+              "cancelled_transactions",
+              "kind"
+            ],
+            "properties": {
+              "cancelled_transactions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CancelledTransaction"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "cancelled_transactions"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Digest": {
+        "description": "A representation of a 32 byte digest",
+        "type": "string",
+        "format": "base58"
+      },
+      "Direction": {
+        "type": "string",
+        "enum": [
+          "ascending",
+          "descending"
+        ]
+      },
+      "DynamicFieldInfo": {
+        "description": "DynamicFieldInfo",
+        "type": "object",
+        "required": [
+          "dynamic_field_type",
+          "field_id",
+          "name_type",
+          "name_value",
+          "parent"
+        ],
+        "properties": {
+          "dynamic_field_type": {
+            "$ref": "#/components/schemas/DynamicFieldType"
+          },
+          "dynamic_object_id": {
+            "description": "ObjectId of the child object when `dynamic_field_type == DynamicFieldType::Object`",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            ]
+          },
+          "field_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "name_type": {
+            "$ref": "#/components/schemas/TypeTag"
+          },
+          "name_value": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "parent": {
+            "$ref": "#/components/schemas/ObjectId"
+          }
+        }
+      },
+      "DynamicFieldType": {
+        "type": "string",
+        "enum": [
+          "field",
+          "object"
+        ]
+      },
+      "Ed25519PublicKey": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Ed25519Signature": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "EffectsAuxiliaryDataDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "EndOfEpochData": {
+        "type": "object",
+        "required": [
+          "epoch_commitments",
+          "next_epoch_committee",
+          "next_epoch_protocol_version"
+        ],
+        "properties": {
+          "epoch_commitments": {
+            "description": "Commitments to epoch specific state (e.g. live object set)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointCommitment"
+            }
+          },
+          "next_epoch_committee": {
+            "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorCommitteeMember"
+            }
+          },
+          "next_epoch_protocol_version": {
+            "description": "The protocol version that is in effect during the epoch that starts immediately after this checkpoint.",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "EndOfEpochTransactionKind": {
+        "description": "EndOfEpochTransactionKind",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "computation_charge",
+              "epoch",
+              "epoch_start_timestamp_ms",
+              "kind",
+              "non_refundable_storage_fee",
+              "protocol_version",
+              "storage_charge",
+              "storage_rebate",
+              "system_packages"
+            ],
+            "properties": {
+              "computation_charge": {
+                "description": "The total amount of gas charged for computation during the epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch": {
+                "description": "The next (to become) epoch ID.",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch_start_timestamp_ms": {
+                "description": "Unix timestamp when epoch started",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "change_epoch"
+                ]
+              },
+              "non_refundable_storage_fee": {
+                "description": "The non-refundable storage fee.",
+                "type": "string",
+                "format": "u64"
+              },
+              "protocol_version": {
+                "description": "The protocol version in effect in the new epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "storage_charge": {
+                "description": "The total amount of gas charged for storage during the epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "storage_rebate": {
+                "description": "The amount of storage rebate refunded to the txn senders.",
+                "type": "string",
+                "format": "u64"
+              },
+              "system_packages": {
+                "description": "System packages (specifically framework and move stdlib) that are written before the new epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn, the validator must write out the modules below.  Modules are provided with the version they will be upgraded to, their modules in serialized form (which include their package ID), and a list of their transitive dependencies.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SystemPackage"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authenticator_state_create"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "authenticator_obj_initial_shared_version",
+              "kind",
+              "min_epoch"
+            ],
+            "properties": {
+              "authenticator_obj_initial_shared_version": {
+                "description": "The initial version of the authenticator object that it was shared at.",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authenticator_state_expire"
+                ]
+              },
+              "min_epoch": {
+                "description": "expire JWKs that have a lower epoch than this",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "randomness_state_create"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "deny_list_state_create"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "chain_id",
+              "kind"
+            ],
+            "properties": {
+              "chain_id": {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "bridge_state_create"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "bridge_object_version",
+              "kind"
+            ],
+            "properties": {
+              "bridge_object_version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "bridge_committee_init"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Event": {
+        "description": "Specific type of event",
+        "type": "object",
+        "required": [
+          "contents",
+          "module",
+          "package_id",
+          "sender",
+          "type"
+        ],
+        "properties": {
+          "contents": {
+            "description": "Base64 encoded data",
+            "type": "string",
+            "format": "base64"
+          },
+          "module": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "package_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "type": {
+            "$ref": "#/components/schemas/StructTag"
+          }
+        }
+      },
+      "ExecutionError": {
+        "oneOf": [
+          {
+            "description": "Insufficient Gas",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "insufficient_gas"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Invalid Gas Object.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invalid_gas_object"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Invariant Violation",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invariant_violation"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Attempted to used feature that is not supported yet",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "feature_not_yet_supported"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Move object is larger than the maximum allowed size",
+            "type": "object",
+            "required": [
+              "error",
+              "max_object_size",
+              "object_size"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "object_too_big"
+                ]
+              },
+              "max_object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Package is larger than the maximum allowed size",
+            "type": "object",
+            "required": [
+              "error",
+              "max_object_size",
+              "object_size"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "package_too_big"
+                ]
+              },
+              "max_object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Circular Object Ownership",
+            "type": "object",
+            "required": [
+              "error",
+              "object"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "circular_object_ownership"
+                ]
+              },
+              "object": {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            }
+          },
+          {
+            "description": "Insufficient coin balance for requested operation",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "insufficient_coin_balance"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Coin balance overflowed an u64",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "coin_balance_overflow"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Publish Error, Non-zero Address. The modules in the package must have their self-addresses set to zero.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "publish_error_non_zero_address"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Sui Move Bytecode Verification Error.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "sui_move_verification_error"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Error from a non-abort instruction. Possible causes: Arithmetic error, stack overflow, max value depth, etc.\"",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "move_primitive_runtime_error"
+                ]
+              },
+              "location": {
+                "$ref": "#/components/schemas/MoveLocation"
+              }
+            }
+          },
+          {
+            "description": "Move runtime abort",
+            "type": "object",
+            "required": [
+              "code",
+              "error",
+              "location"
+            ],
+            "properties": {
+              "code": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "move_abort"
+                ]
+              },
+              "location": {
+                "$ref": "#/components/schemas/MoveLocation"
+              }
+            }
+          },
+          {
+            "description": "Bytecode verification error.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "vm_verification_or_deserialization_error"
+                ]
+              }
+            }
+          },
+          {
+            "description": "MoveVm invariant violation",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "vm_invariant_violation"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Function not found",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "function_not_found"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Arity mismatch for Move function. The number of arguments does not match the number of parameters",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "arity_mismatch"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Type arity mismatch for Move function. Mismatch between the number of actual versus expected type arguments.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "type_arity_mismatch"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Non Entry Function Invoked. Move Call must start with an entry function.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "non_entry_function_invoked"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Invalid command argument",
+            "type": "object",
+            "required": [
+              "argument",
+              "error",
+              "kind"
+            ],
+            "properties": {
+              "argument": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "command_argument_error"
+                ]
+              },
+              "kind": {
+                "$ref": "#/components/schemas/CommandArgumentError"
+              }
+            }
+          },
+          {
+            "description": "Type argument error",
+            "type": "object",
+            "required": [
+              "error",
+              "kind",
+              "type_argument"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "type_argument_error"
+                ]
+              },
+              "kind": {
+                "$ref": "#/components/schemas/TypeArgumentError"
+              },
+              "type_argument": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "Unused result without the drop ability.",
+            "type": "object",
+            "required": [
+              "error",
+              "result",
+              "subresult"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "unused_value_without_drop"
+                ]
+              },
+              "result": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              },
+              "subresult": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "Invalid public Move function signature. Unsupported return type for return value",
+            "type": "object",
+            "required": [
+              "error",
+              "index"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invalid_public_function_return_type"
+                ]
+              },
+              "index": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "Invalid Transfer Object, object does not have public transfer.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invalid_transfer_object"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Effects from the transaction are too large",
+            "type": "object",
+            "required": [
+              "current_size",
+              "error",
+              "max_size"
+            ],
+            "properties": {
+              "current_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "effects_too_large"
+                ]
+              },
+              "max_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Publish or Upgrade is missing dependency",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "publish_upgrade_missing_dependency"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Publish or Upgrade dependency downgrade.\n\nIndirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "publish_upgrade_dependency_downgrade"
+                ]
+              }
+            }
+          },
+          {
+            "title": "PackageUpgradeError",
+            "description": "Invalid package upgrade",
+            "type": "object",
+            "required": [
+              "error",
+              "kind"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "package_upgrade_error"
+                ]
+              },
+              "kind": {
+                "$ref": "#/components/schemas/PackageUpgradeError"
+              }
+            }
+          },
+          {
+            "description": "Indicates the transaction tried to write objects too large to storage",
+            "type": "object",
+            "required": [
+              "error",
+              "max_object_size",
+              "object_size"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "written_objects_too_large"
+                ]
+              },
+              "max_object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "object_size": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Certificate is on the deny list",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "certificate_denied"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Sui Move Bytecode verification timed out.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "sui_move_verification_timedout"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The requested shared object operation is not allowed",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "shared_object_operation_not_allowed"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Requested shared object has been deleted",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "input_object_deleted"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "FailureStatus": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "command": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "error": {
+            "$ref": "#/components/schemas/ExecutionError"
+          }
+        }
+      },
+      "GasCostSummary": {
+        "description": "Summary of gas charges.\n\nStorage is charged independently of computation. There are 3 parts to the storage charges: `storage_cost`: it is the charge of storage at the time the transaction is executed. The cost of storage is the number of bytes of the objects being mutated multiplied by a variable storage cost per byte `storage_rebate`: this is the amount a user gets back when manipulating an object. The `storage_rebate` is the `storage_cost` for an object minus fees. `non_refundable_storage_fee`: not all the value of the object storage cost is given back to user and there is a small fraction that is kept by the system. This value tracks that charge.\n\nWhen looking at a gas cost summary the amount charged to the user is `computation_cost + storage_cost - storage_rebate` and that is the amount that is deducted from the gas coins. `non_refundable_storage_fee` is collected from the objects being mutated/deleted and it is tracked by the system in storage funds.\n\nObjects deleted, including the older versions of objects mutated, have the storage field on the objects added up to a pool of \"potential rebate\". This rebate then is reduced by the \"nonrefundable rate\" such that: `potential_rebate(storage cost of deleted/mutated objects) = storage_rebate + non_refundable_storage_fee`",
+        "type": "object",
+        "required": [
+          "computation_cost",
+          "non_refundable_storage_fee",
+          "storage_cost",
+          "storage_rebate"
+        ],
+        "properties": {
+          "computation_cost": {
+            "description": "Cost of computation/execution",
+            "type": "string",
+            "format": "u64"
+          },
+          "non_refundable_storage_fee": {
+            "description": "The fee for the rebate. The portion of the storage rebate kept by the system.",
+            "type": "string",
+            "format": "u64"
+          },
+          "storage_cost": {
+            "description": "Storage cost, it's the sum of all storage cost for all objects created or mutated.",
+            "type": "string",
+            "format": "u64"
+          },
+          "storage_rebate": {
+            "description": "The amount of storage cost refunded to the user for all objects deleted or mutated in the transaction.",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "GasPayment": {
+        "type": "object",
+        "required": [
+          "budget",
+          "objects",
+          "owner",
+          "price"
+        ],
+        "properties": {
+          "budget": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectReference"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "price": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "GenesisObject": {
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          {
+            "$ref": "#/components/schemas/Package"
+          }
+        ],
+        "required": [
+          "object_id",
+          "owner",
+          "type",
+          "version"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "type": {
+            "type": "string"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "IdOperation": {
+        "type": "string",
+        "enum": [
+          "none",
+          "created",
+          "deleted"
+        ]
+      },
+      "Identifier": {
+        "title": "Identifier",
+        "description": "A Move Identifier",
+        "examples": [
+          "sui"
+        ],
+        "type": "string",
+        "pattern": "(?:[a-zA-Z][a-zA-Z0-9_]{0,127})|(?:_[a-zA-Z0-9_]{0,127})"
+      },
+      "InputArgument": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "value"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "pure"
+                ]
+              },
+              "value": {
+                "description": "Base64 encoded data",
+                "type": "string",
+                "format": "base64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "digest",
+              "object_id",
+              "type",
+              "version"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "immutable_or_owned"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "initial_shared_version",
+              "mutable",
+              "object_id",
+              "type"
+            ],
+            "properties": {
+              "initial_shared_version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "mutable": {
+                "type": "boolean"
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "shared"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "digest",
+              "object_id",
+              "type",
+              "version"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "receiving"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          }
+        ]
+      },
+      "Jwk": {
+        "description": "Struct that contains info for a JWK. A list of them for different kids can be retrieved from the JWK endpoint (e.g. <https://www.googleapis.com/oauth2/v3/certs>). The JWK is used to verify the JWT token.",
+        "type": "object",
+        "required": [
+          "alg",
+          "e",
+          "kty",
+          "n"
+        ],
+        "properties": {
+          "alg": {
+            "description": "Algorithm parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.4>",
+            "type": "string"
+          },
+          "e": {
+            "description": "RSA public exponent, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>",
+            "type": "string"
+          },
+          "kty": {
+            "description": "Key type parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.1>",
+            "type": "string"
+          },
+          "n": {
+            "description": "RSA modulus, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>",
+            "type": "string"
+          }
+        }
+      },
+      "JwkId": {
+        "description": "Key to identify a JWK, consists of iss and kid.",
+        "type": "object",
+        "required": [
+          "iss",
+          "kid"
+        ],
+        "properties": {
+          "iss": {
+            "description": "iss string that identifies the OIDC provider.",
+            "type": "string"
+          },
+          "kid": {
+            "description": "kid string that identifies the JWK.",
+            "type": "string"
+          }
+        }
+      },
+      "ModifiedAtVersion": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "version"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "MoveLocation": {
+        "type": "object",
+        "required": [
+          "function",
+          "instruction",
+          "module",
+          "package"
+        ],
+        "properties": {
+          "function": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "function_name": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "instruction": {
+            "description": "Index into the code stream for a jump. The offset is relative to the beginning of the instruction stream.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectId"
+          }
+        }
+      },
+      "MoveStruct": {
+        "type": "object",
+        "required": [
+          "contents",
+          "has_public_transfer"
+        ],
+        "properties": {
+          "contents": {
+            "description": "Base64 encoded data",
+            "type": "string",
+            "format": "base64"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MultisigCommittee": {
+        "type": "object",
+        "required": [
+          "members",
+          "threshold"
+        ],
+        "properties": {
+          "members": {
+            "description": "A list of committee members and their corresponding weight.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MultisigMember"
+            }
+          },
+          "threshold": {
+            "description": "If the total weight of the public keys corresponding to verified signatures is larger than threshold, the Multisig is verified.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
+      },
+      "MultisigMember": {
+        "type": "object",
+        "required": [
+          "public_key",
+          "weight"
+        ],
+        "properties": {
+          "public_key": {
+            "$ref": "#/components/schemas/MultisigMemberPublicKey"
+          },
+          "weight": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        }
+      },
+      "MultisigMemberPublicKey": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Ed25519PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "ed25519"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256k1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256k1"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256r1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256r1"
+                ]
+              }
+            }
+          },
+          {
+            "description": "A wrapper struct to retrofit in [enum PublicKey] for zkLogin. Useful to construct [struct MultiSigPublicKey].",
+            "type": "object",
+            "required": [
+              "address_seed",
+              "iss",
+              "scheme"
+            ],
+            "properties": {
+              "address_seed": {
+                "$ref": "#/components/schemas/Bn254FieldElement"
+              },
+              "iss": {
+                "type": "string"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "zklogin"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "MultisigMemberSignature": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "ed25519"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Ed25519Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256k1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256k1Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256r1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256r1Signature"
+              }
+            }
+          },
+          {
+            "description": "An zk login authenticator with all the necessary fields.",
+            "type": "object",
+            "required": [
+              "inputs",
+              "max_epoch",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "inputs": {
+                "$ref": "#/components/schemas/ZkLoginInputs"
+              },
+              "max_epoch": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "zklogin"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/SimpleSignature"
+              }
+            }
+          }
+        ]
+      },
+      "NodeInfo": {
+        "type": "object",
+        "required": [
+          "chain",
+          "chain_id",
+          "checkpoint_height",
+          "epoch",
+          "lowest_available_checkpoint",
+          "lowest_available_checkpoint_objects",
+          "software_version",
+          "timestamp_ms"
+        ],
+        "properties": {
+          "chain": {
+            "type": "string"
+          },
+          "chain_id": {
+            "$ref": "#/components/schemas/CheckpointDigest"
+          },
+          "checkpoint_height": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "lowest_available_checkpoint": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "lowest_available_checkpoint_objects": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "software_version": {
+            "type": "string"
+          },
+          "timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "Object": {
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          {
+            "$ref": "#/components/schemas/Package"
+          }
+        ],
+        "required": [
+          "object_id",
+          "owner",
+          "previous_transaction",
+          "storage_rebate",
+          "type",
+          "version"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "previous_transaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "storage_rebate": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "ObjectDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "ObjectId": {
+        "$ref": "#/components/schemas/Address"
+      },
+      "ObjectIn": {
+        "description": "If an object exists (at root-level) in the store prior to this transaction, it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be NonExist.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "not_exist"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The old version, digest and owner.",
+            "type": "object",
+            "required": [
+              "digest",
+              "owner",
+              "state",
+              "version"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/Owner"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "exist"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          }
+        ]
+      },
+      "ObjectOut": {
+        "oneOf": [
+          {
+            "description": "Same definition as in ObjectIn.",
+            "type": "object",
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "not_exist"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Any written object, including all of mutated, created, unwrapped today.",
+            "type": "object",
+            "required": [
+              "digest",
+              "owner",
+              "state"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/Owner"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "object_write"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Packages writes need to be tracked separately with version because we don't use lamport version for package publish and upgrades.",
+            "type": "object",
+            "required": [
+              "digest",
+              "state",
+              "version"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "package_write"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          }
+        ]
+      },
+      "ObjectReference": {
+        "type": "object",
+        "required": [
+          "digest",
+          "object_id",
+          "version"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "ObjectReferenceWithOwner": {
+        "type": "object",
+        "required": [
+          "owner",
+          "reference"
+        ],
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/ObjectReference"
+          }
+        }
+      },
+      "Owner": {
+        "oneOf": [
+          {
+            "title": "Address Owned",
+            "description": "Object is exclusively owned by a single address, and is mutable.",
+            "type": "object",
+            "required": [
+              "address"
+            ],
+            "properties": {
+              "address": {
+                "$ref": "#/components/schemas/Address"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "title": "Object Owned",
+            "description": "Object is exclusively owned by a single object, and is mutable.",
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "title": "Shared Object",
+            "description": "Object is shared, can be used by any address, and is mutable.",
+            "type": "object",
+            "required": [
+              "shared"
+            ],
+            "properties": {
+              "shared": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "title": "Immutable",
+            "description": "Object is immutable, and hence ownership doesn't matter.",
+            "type": "string",
+            "enum": [
+              "immutable"
+            ]
+          }
+        ]
+      },
+      "Package": {
+        "type": "object",
+        "required": [
+          "linkage_table",
+          "modules",
+          "type_origin_table"
+        ],
+        "properties": {
+          "linkage_table": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/UpgradeInfo"
+            }
+          },
+          "modules": {
+            "type": "object",
+            "additionalProperties": {
+              "description": "Base64 encoded data",
+              "type": "string",
+              "format": "base64"
+            }
+          },
+          "type_origin_table": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeOrigin"
+            }
+          }
+        }
+      },
+      "PackageUpgradeError": {
+        "oneOf": [
+          {
+            "description": "Unable to fetch package",
+            "type": "object",
+            "required": [
+              "kind",
+              "package_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "unable_to_fetch_package"
+                ]
+              },
+              "package_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            }
+          },
+          {
+            "description": "Object is not a package",
+            "type": "object",
+            "required": [
+              "kind",
+              "object_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "not_a_package"
+                ]
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            }
+          },
+          {
+            "description": "Package upgrade is incompatible with previous version",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "incompatible_upgrade"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Digest in upgrade ticket and computed digest differ",
+            "type": "object",
+            "required": [
+              "digest",
+              "kind"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/Digest"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "digest_does_not_match"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Upgrade policy is not valid",
+            "type": "object",
+            "required": [
+              "kind",
+              "policy"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "unknown_upgrade_policy"
+                ]
+              },
+              "policy": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "PackageId does not matach PackageId in upgrade ticket",
+            "type": "object",
+            "required": [
+              "kind",
+              "package_id",
+              "ticket_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "package_id_does_not_match"
+                ]
+              },
+              "package_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              },
+              "ticket_id": {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            }
+          }
+        ]
+      },
+      "Secp256k1PublicKey": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Secp256k1Signature": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Secp256r1PublicKey": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "Secp256r1Signature": {
+        "description": "Base64 encoded data",
+        "type": "string",
+        "format": "base64"
+      },
+      "SignedCheckpointSummary": {
+        "type": "object",
+        "required": [
+          "checkpoint",
+          "signature"
+        ],
+        "properties": {
+          "checkpoint": {
+            "$ref": "#/components/schemas/CheckpointSummary"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/ValidatorAggregatedSignature"
+          }
+        }
+      },
+      "SignedTransaction": {
+        "type": "object",
+        "required": [
+          "signatures",
+          "transaction"
+        ],
+        "properties": {
+          "signatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSignature"
+            }
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
+      "SimpleSignature": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Ed25519PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "ed25519"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Ed25519Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256k1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256k1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256k1Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256r1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256r1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256r1Signature"
+              }
+            }
+          }
+        ]
+      },
+      "StructTag": {
+        "title": "StructTag",
+        "description": "A Move StructTag",
+        "examples": [
+          "0x2::coin::Coin<0x2::sui::SUI>"
+        ],
+        "type": "string"
+      },
+      "SystemPackage": {
+        "type": "object",
+        "required": [
+          "dependencies",
+          "modules",
+          "version"
+        ],
+        "properties": {
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectId"
+            }
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "description": "Base64 encoded data",
+              "type": "string",
+              "format": "base64"
+            }
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "Transaction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "expiration",
+              "gas_payment",
+              "kind",
+              "sender",
+              "version"
+            ],
+            "properties": {
+              "expiration": {
+                "$ref": "#/components/schemas/TransactionExpiration"
+              },
+              "gas_payment": {
+                "$ref": "#/components/schemas/GasPayment"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/TransactionKind"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/Address"
+              },
+              "version": {
+                "type": "string",
+                "enum": [
+                  "1"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TransactionDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "TransactionEffects": {
+        "description": "The response from processing a transaction or a certified transaction",
+        "oneOf": [
+          {
+            "description": "The response from processing a transaction or a certified transaction",
+            "type": "object",
+            "required": [
+              "created",
+              "deleted",
+              "dependencies",
+              "epoch",
+              "gas_object",
+              "gas_used",
+              "modified_at_versions",
+              "mutated",
+              "shared_objects",
+              "success",
+              "transaction_digest",
+              "unwrapped",
+              "unwrapped_then_deleted",
+              "version",
+              "wrapped"
+            ],
+            "properties": {
+              "created": {
+                "description": "ObjectReference and owner of new objects created.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReferenceWithOwner"
+                }
+              },
+              "deleted": {
+                "description": "Object Refs of objects now deleted (the new refs).",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReference"
+                }
+              },
+              "dependencies": {
+                "description": "The set of transaction digests this transaction depends on.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionDigest"
+                }
+              },
+              "epoch": {
+                "description": "The epoch when this transaction was executed.",
+                "type": "string",
+                "format": "u64"
+              },
+              "events_digest": {
+                "description": "The digest of the events emitted during execution, can be None if the transaction does not emit any event.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionEventsDigest"
+                  }
+                ]
+              },
+              "gas_object": {
+                "description": "The updated gas object reference. Have a dedicated field for convenient access. It's also included in mutated.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ObjectReferenceWithOwner"
+                  }
+                ]
+              },
+              "gas_used": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "modified_at_versions": {
+                "description": "The version that every modified (mutated or deleted) object had before it was modified by this transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ModifiedAtVersion"
+                }
+              },
+              "mutated": {
+                "description": "ObjectReference and owner of mutated objects, including gas object.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReferenceWithOwner"
+                }
+              },
+              "shared_objects": {
+                "description": "The object references of the shared objects used in this transaction. Empty if no shared objects were used.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReference"
+                }
+              },
+              "status": {
+                "$ref": "#/components/schemas/FailureStatus"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "transaction_digest": {
+                "description": "The transaction digest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionDigest"
+                  }
+                ]
+              },
+              "unwrapped": {
+                "description": "ObjectReference and owner of objects that are unwrapped in this transaction. Unwrapped objects are objects that were wrapped into other objects in the past, and just got extracted out.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReferenceWithOwner"
+                }
+              },
+              "unwrapped_then_deleted": {
+                "description": "Object refs of objects previously wrapped in other objects but now deleted.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReference"
+                }
+              },
+              "version": {
+                "type": "string",
+                "enum": [
+                  "1"
+                ]
+              },
+              "wrapped": {
+                "description": "Object refs of objects now wrapped in other objects.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectReference"
+                }
+              }
+            }
+          },
+          {
+            "description": "The response from processing a transaction or a certified transaction",
+            "type": "object",
+            "required": [
+              "changed_objects",
+              "dependencies",
+              "epoch",
+              "gas_used",
+              "lamport_version",
+              "success",
+              "transaction_digest",
+              "unchanged_shared_objects",
+              "version"
+            ],
+            "properties": {
+              "auxiliary_data_digest": {
+                "description": "Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately. Storing it separately allows us to avoid bloating the effects with data that are not critical. It also provides more flexibility on the format and type of the data.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/EffectsAuxiliaryDataDigest"
+                  }
+                ]
+              },
+              "changed_objects": {
+                "description": "Objects whose state are changed in the object store.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChangedObject"
+                }
+              },
+              "dependencies": {
+                "description": "The set of transaction digests this transaction depends on.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionDigest"
+                }
+              },
+              "epoch": {
+                "description": "The epoch when this transaction was executed.",
+                "type": "string",
+                "format": "u64"
+              },
+              "events_digest": {
+                "description": "The digest of the events emitted during execution, can be None if the transaction does not emit any event.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionEventsDigest"
+                  }
+                ]
+              },
+              "gas_object_index": {
+                "description": "The updated gas object reference, as an index into the `changed_objects` vector. Having a dedicated field for convenient access. System transaction that don't require gas will leave this as None.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              },
+              "gas_used": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "lamport_version": {
+                "description": "The version number of all the written Move objects by this transaction.",
+                "type": "string",
+                "format": "u64"
+              },
+              "status": {
+                "$ref": "#/components/schemas/FailureStatus"
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "transaction_digest": {
+                "description": "The transaction digest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TransactionDigest"
+                  }
+                ]
+              },
+              "unchanged_shared_objects": {
+                "description": "Shared objects that are not mutated in this transaction. Unlike owned objects, read-only shared objects' version are not committed in the transaction, and in order for a node to catch up and execute it without consensus sequencing, the version needs to be committed in the effects.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/UnchangedSharedObject"
+                }
+              },
+              "version": {
+                "type": "string",
+                "enum": [
+                  "2"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TransactionEffectsDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "TransactionEvents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Event"
+        }
+      },
+      "TransactionEventsDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
+      "TransactionExpiration": {
+        "oneOf": [
+          {
+            "description": "Validators wont sign a transaction unless the expiration Epoch is greater than or equal to the current epoch",
+            "type": "object",
+            "required": [
+              "epoch"
+            ],
+            "properties": {
+              "epoch": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "TransactionKind": {
+        "oneOf": [
+          {
+            "description": "A series of commands where the results of one command can be used in future commands",
+            "type": "object",
+            "required": [
+              "commands",
+              "inputs",
+              "kind"
+            ],
+            "properties": {
+              "commands": {
+                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              },
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/InputArgument"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "programmable_transaction"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "computation_charge",
+              "epoch",
+              "epoch_start_timestamp_ms",
+              "kind",
+              "non_refundable_storage_fee",
+              "protocol_version",
+              "storage_charge",
+              "storage_rebate",
+              "system_packages"
+            ],
+            "properties": {
+              "computation_charge": {
+                "description": "The total amount of gas charged for computation during the epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch": {
+                "description": "The next (to become) epoch ID.",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch_start_timestamp_ms": {
+                "description": "Unix timestamp when epoch started",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "change_epoch"
+                ]
+              },
+              "non_refundable_storage_fee": {
+                "description": "The non-refundable storage fee.",
+                "type": "string",
+                "format": "u64"
+              },
+              "protocol_version": {
+                "description": "The protocol version in effect in the new epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "storage_charge": {
+                "description": "The total amount of gas charged for storage during the epoch.",
+                "type": "string",
+                "format": "u64"
+              },
+              "storage_rebate": {
+                "description": "The amount of storage rebate refunded to the txn senders.",
+                "type": "string",
+                "format": "u64"
+              },
+              "system_packages": {
+                "description": "System packages (specifically framework and move stdlib) that are written before the new epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn, the validator must write out the modules below.  Modules are provided with the version they will be upgraded to, their modules in serialized form (which include their package ID), and a list of their transitive dependencies.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SystemPackage"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "objects"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "genesis"
+                ]
+              },
+              "objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GenesisObject"
+                }
+              }
+            }
+          },
+          {
+            "description": "Only commit_timestamp_ms is passed to the move call currently. However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.",
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "description": "Unix timestamp from consensus",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch": {
+                "description": "Epoch of the commit prologue transaction",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "consensus_commit_prologue"
+                ]
+              },
+              "round": {
+                "description": "Consensus round of the commit",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "authenticator_obj_initial_shared_version",
+              "epoch",
+              "kind",
+              "new_active_jwks",
+              "round"
+            ],
+            "properties": {
+              "authenticator_obj_initial_shared_version": {
+                "description": "The initial version of the authenticator object that it was shared at.",
+                "type": "string",
+                "format": "u64"
+              },
+              "epoch": {
+                "description": "Epoch of the authenticator state update transaction",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authenticator_state_update"
+                ]
+              },
+              "new_active_jwks": {
+                "description": "newly active jwks",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ActiveJwk"
+                }
+              },
+              "round": {
+                "description": "Consensus round of the authenticator state update",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commands",
+              "kind"
+            ],
+            "properties": {
+              "commands": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EndOfEpochTransactionKind"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "end_of_epoch"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "random_bytes",
+              "randomness_obj_initial_shared_version",
+              "randomness_round"
+            ],
+            "properties": {
+              "epoch": {
+                "description": "Epoch of the randomness state update transaction",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "randomness_state_update"
+                ]
+              },
+              "random_bytes": {
+                "description": "Updated random bytes",
+                "type": "string",
+                "format": "base64"
+              },
+              "randomness_obj_initial_shared_version": {
+                "description": "The initial version of the randomness object that it was shared at.",
+                "type": "string",
+                "format": "u64"
+              },
+              "randomness_round": {
+                "description": "Randomness round of the update",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "description": "Unix timestamp from consensus",
+                "type": "string",
+                "format": "u64"
+              },
+              "consensus_commit_digest": {
+                "description": "Digest of consensus output",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsensusCommitDigest"
+                  }
+                ]
+              },
+              "epoch": {
+                "description": "Epoch of the commit prologue transaction",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "consensus_commit_prologue_v2"
+                ]
+              },
+              "round": {
+                "description": "Consensus round of the commit",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "consensus_determined_version_assignments",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "description": "Unix timestamp from consensus",
+                "type": "string",
+                "format": "u64"
+              },
+              "consensus_commit_digest": {
+                "description": "Digest of consensus output",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsensusCommitDigest"
+                  }
+                ]
+              },
+              "consensus_determined_version_assignments": {
+                "description": "Stores consensus handler determined shared object version assignments.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsensusDeterminedVersionAssignments"
+                  }
+                ]
+              },
+              "epoch": {
+                "description": "Epoch of the commit prologue transaction",
+                "type": "string",
+                "format": "u64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "consensus_commit_prologue_v3"
+                ]
+              },
+              "round": {
+                "description": "Consensus round of the commit",
+                "type": "string",
+                "format": "u64"
+              },
+              "sub_dag_index": {
+                "description": "The sub DAG index of the consensus commit. This field will be populated if there are multiple consensus commits per round.",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          }
+        ]
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "required": [
+          "effects",
+          "transaction"
+        ],
+        "properties": {
+          "checkpoint": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/SignedTransaction"
+          }
+        }
+      },
+      "TypeArgumentError": {
+        "oneOf": [
+          {
+            "description": "A type was not found in the module specified",
+            "type": "string",
+            "enum": [
+              "type_not_found"
+            ]
+          },
+          {
+            "description": "A type provided did not match the specified constraint",
+            "type": "string",
+            "enum": [
+              "constraint_not_satisfied"
+            ]
+          }
+        ]
+      },
+      "TypeOrigin": {
+        "description": "Identifies a struct and the module it was defined in",
+        "type": "object",
+        "required": [
+          "module_name",
+          "package",
+          "struct_name"
+        ],
+        "properties": {
+          "module_name": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "struct_name": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        }
+      },
+      "TypeTag": {
+        "title": "TypeTag",
+        "description": "A Move TypeTag",
+        "examples": [
+          "vector<u8>"
+        ],
+        "type": "string"
+      },
+      "UnchangedSharedKind": {
+        "oneOf": [
+          {
+            "description": "Read-only shared objects from the input. We don't really need ObjectDigest for protocol correctness, but it will make it easier to verify untrusted read.",
+            "type": "object",
+            "required": [
+              "digest",
+              "kind",
+              "version"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "read_only_root"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Deleted shared objects that appear mutably/owned in the input.",
+            "type": "object",
+            "required": [
+              "kind",
+              "version"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "mutate_deleted"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Deleted shared objects that appear as read-only in the input.",
+            "type": "object",
+            "required": [
+              "kind",
+              "version"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "read_deleted"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Shared objects in cancelled transaction. The sequence number embed cancellation reason.",
+            "type": "object",
+            "required": [
+              "kind",
+              "version"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "cancelled"
+                ]
+              },
+              "version": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              }
+            }
+          },
+          {
+            "description": "Read of a per-epoch config object that should remain the same during an epoch.",
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "per_epoch_config"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UnchangedSharedObject": {
+        "type": "object",
+        "required": [
+          "kind",
+          "object_id"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/UnchangedSharedKind"
+          },
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          }
+        }
+      },
+      "UpgradeInfo": {
+        "description": "Upgraded package info for the linkage table",
+        "type": "object",
+        "required": [
+          "upgraded_id",
+          "upgraded_version"
+        ],
+        "properties": {
+          "upgraded_id": {
+            "description": "Id of the upgraded packages",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectId"
+              }
+            ]
+          },
+          "upgraded_version": {
+            "description": "Version of the upgraded package",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "UserSignature": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Ed25519PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "ed25519"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Ed25519Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256k1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256k1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256k1Signature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "public_key",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "public_key": {
+                "$ref": "#/components/schemas/Secp256r1PublicKey"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "secp256r1"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/Secp256r1Signature"
+              }
+            }
+          },
+          {
+            "description": "The struct that contains signatures and public keys necessary for authenticating a Multisig.",
+            "type": "object",
+            "required": [
+              "bitmap",
+              "committee",
+              "scheme",
+              "signatures"
+            ],
+            "properties": {
+              "bitmap": {
+                "description": "A bitmap that indicates the position of which public key the signature should be authenticated with.",
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              },
+              "committee": {
+                "description": "The public key encoded with each public key with its signature scheme used along with the corresponding weight.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MultisigCommittee"
+                  }
+                ]
+              },
+              "legacy_bitmap": {
+                "description": "Legacy encoding for the bitmap.",
+                "type": "string",
+                "format": "base64"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "multisig"
+                ]
+              },
+              "signatures": {
+                "description": "The plain signature encoded with signature scheme.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MultisigMemberSignature"
+                }
+              }
+            }
+          },
+          {
+            "description": "An zk login authenticator with all the necessary fields.",
+            "type": "object",
+            "required": [
+              "inputs",
+              "max_epoch",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "inputs": {
+                "$ref": "#/components/schemas/ZkLoginInputs"
+              },
+              "max_epoch": {
+                "description": "Radix-10 encoded 64-bit unsigned integer",
+                "type": "string",
+                "format": "u64"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "zklogin"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/SimpleSignature"
+              }
+            }
+          }
+        ]
+      },
+      "ValidatorAggregatedSignature": {
+        "type": "object",
+        "required": [
+          "bitmap",
+          "epoch",
+          "signature"
+        ],
+        "properties": {
+          "bitmap": {
+            "description": "Base64 encoded data",
+            "type": "string",
+            "format": "base64"
+          },
+          "epoch": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/Bls12381Signature"
+          }
+        }
+      },
+      "ValidatorCommittee": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "members"
+        ],
+        "properties": {
+          "epoch": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidatorCommitteeMember"
+            }
+          }
+        }
+      },
+      "ValidatorCommitteeMember": {
+        "type": "object",
+        "required": [
+          "public_key",
+          "stake"
+        ],
+        "properties": {
+          "public_key": {
+            "$ref": "#/components/schemas/Bls12381PublicKey"
+          },
+          "stake": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "VersionAssignment": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "version"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectId"
+          },
+          "version": {
+            "description": "Radix-10 encoded 64-bit unsigned integer",
+            "type": "string",
+            "format": "u64"
+          }
+        }
+      },
+      "ZkLoginInputs": {
+        "description": "All inputs required for the zk login proof verification and other public inputs.",
+        "type": "object",
+        "required": [
+          "address_seed",
+          "header_base64",
+          "iss_base64_details",
+          "proof_points"
+        ],
+        "properties": {
+          "address_seed": {
+            "$ref": "#/components/schemas/Bn254FieldElement"
+          },
+          "header_base64": {
+            "type": "string"
+          },
+          "iss_base64_details": {
+            "$ref": "#/components/schemas/Claim"
+          },
+          "proof_points": {
+            "$ref": "#/components/schemas/ZkLoginProof"
+          }
+        }
+      },
+      "ZkLoginProof": {
+        "description": "The struct for zk login proof.",
+        "type": "object",
+        "required": [
+          "a",
+          "b",
+          "c"
+        ],
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/CircomG1"
+          },
+          "b": {
+            "$ref": "#/components/schemas/CircomG2"
+          },
+          "c": {
+            "$ref": "#/components/schemas/CircomG1"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Objects"
+    },
+    {
+      "name": "OpenApi"
+    },
+    {
+      "name": "Transactions"
+    }
+  ]
+}

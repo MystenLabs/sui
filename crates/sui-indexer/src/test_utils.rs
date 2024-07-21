@@ -40,7 +40,7 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer<T: R2D2Connection + Send>(
+pub async fn start_test_indexer<T: R2D2Connection + Send + 'static>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
@@ -57,7 +57,7 @@ pub async fn start_test_indexer<T: R2D2Connection + Send>(
     .await
 }
 
-pub async fn start_test_indexer_impl<T: R2D2Connection>(
+pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,

@@ -54,11 +54,14 @@ it from the bytes (as a `Uint8Array`) of the `PublicKey`, as in the following co
 import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
 
 const keypair = new Ed25519Keypair();
-const bytes = keypair.getPublicKey().toBytes();
 
+// method 1
+const bytes = keypair.getPublicKey().toRawBytes();
 const publicKey = new Ed25519PublicKey(bytes);
-
 const address = publicKey.toSuiAddress();
+
+// method 2
+const address = keypair.getPublicKey().toSuiAddress();
 ```
 
 ## Verifying signatures without a key pair
@@ -132,7 +135,7 @@ You can derive a `Keypair` by converting the 33-byte secret key encoded in Bech3
 `Uint8Array` and passing it to the `fromSecretKey` method of a `Keypair` class.
 
 ```typescript
-import { decodeSuiPrivateKey, encodeSuiPrivateKey } from '@mysten/sui/cryptography/keypair';
+import { decodeSuiPrivateKey, encodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 const encoded = encodeSuiPrivateKey(

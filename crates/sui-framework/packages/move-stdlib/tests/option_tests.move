@@ -5,8 +5,6 @@
 
 #[test_only]
 module std::option_tests {
-    use std::option;
-
     #[test]
     fun option_none_is_none() {
         let none = option::none<u64>();
@@ -170,5 +168,53 @@ module std::option_tests {
     fun into_vec_none() {
         let v: vector<u64> = option::none().to_vec();
         assert!(v.is_empty());
+    }
+
+    // === Macros ===
+
+    #[test]
+    fun do_destroy() {
+        let mut counter = 0;
+        option::some(5).destroy!(|x| counter = x);
+        option::some(10).do!(|x| counter = counter + x);
+
+        assert!(counter == 15);
+    }
+
+    #[test]
+    fun do_ref_mut() {
+        let mut counter = 0;
+        let mut opt = option::some(5);
+        opt.do_mut!(|x| *x = 100);
+        opt.do_ref!(|x| counter = *x);
+
+        assert!(counter == 100);
+    }
+
+    #[test]
+    fun map_map_ref() {
+        assert!(option::some(5).map!(|x| vector[x]) == option::some(vector[5]));
+        assert!(option::some(5).map_ref!(|x| vector[*x]) == option::some(vector[5]));
+        assert!(option::none<u8>().map!(|x| vector[x]) == option::none());
+        assert!(option::none<u8>().map_ref!(|x| vector[*x]) == option::none());
+    }
+
+    #[test]
+    fun filter() {
+        assert!(option::some(5).filter!(|x| *x == 5) == option::some(5));
+        assert!(option::some(5).filter!(|x| *x == 6) == option::none());
+    }
+
+    #[test]
+    fun is_some_and() {
+        assert!(option::some(5).is_some_and!(|x| *x == 5));
+        assert!(!option::some(5).is_some_and!(|x| *x == 6));
+        assert!(!option::none().is_some_and!(|x| *x == 5));
+    }
+
+    #[test]
+    fun destroy_or() {
+        assert!(option::none().destroy_or!(10) == 10);
+        assert!(option::some(5).destroy_or!(10) == 5);
     }
 }

@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use move_command_line_common::files::FileHash;
 use move_compiler::shared::ide as CI;
 use move_ir_types::location::Loc;
 
@@ -10,7 +11,12 @@ use move_ir_types::location::Loc;
 pub struct CompilerInfo {
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
     pub expanded_lambdas: BTreeSet<Loc>,
-    pub autocomplete_info: BTreeMap<Loc, CI::AutocompleteInfo>,
+    pub dot_autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::DotAutocompleteInfo>>,
+    /// Locations of binders in enum variants that are expanded from an ellipsis (and should
+    /// not be displayed in any way by the IDE)
+    pub ellipsis_binders: BTreeSet<Loc>,
+    /// Locations of guard expressions
+    pub guards: BTreeMap<FileHash, BTreeSet<Loc>>,
 }
 
 impl CompilerInfo {
@@ -37,12 +43,26 @@ impl CompilerInfo {
                 CI::IDEAnnotation::ExpandedLambda => {
                     self.expanded_lambdas.insert(loc);
                 }
-                CI::IDEAnnotation::AutocompleteInfo(info) => {
+                CI::IDEAnnotation::DotAutocompleteInfo(info) => {
                     // TODO: what if we find two autocomplete info sets? Intersection may be better
                     // than union, as it's likely in a lambda body.
-                    if let Some(_old) = self.autocomplete_info.insert(loc, *info) {
+                    if let Some(_old) = self
+                        .dot_autocomplete_info
+                        .entry(loc.file_hash())
+                        .or_default()
+                        .insert(loc, *info)
+                    {
                         eprintln!("Repeated autocomplete info");
                     }
+                }
+                CI::IDEAnnotation::MissingMatchArms(_) => {
+                    // TODO: Not much to do with this yet.
+                }
+                CI::IDEAnnotation::EllipsisMatchEntries(_) => {
+                    self.ellipsis_binders.insert(loc);
+                }
+                CI::IDEAnnotation::PathAutocompleteInfo(_) => {
+                    // TODO: Integrate this into the provided compiler information.
                 }
             }
         }
@@ -56,7 +76,27 @@ impl CompilerInfo {
         self.expanded_lambdas.contains(loc)
     }
 
-    pub fn get_autocomplete_info(&mut self, loc: &Loc) -> Option<&CI::AutocompleteInfo> {
-        self.autocomplete_info.get(loc)
+    pub fn get_autocomplete_info(
+        &self,
+        fhash: FileHash,
+        loc: &Loc,
+    ) -> Option<&CI::DotAutocompleteInfo> {
+        self.dot_autocomplete_info.get(&fhash).and_then(|a| {
+            a.iter().find_map(|(aloc, ainfo)| {
+                if aloc.contains(loc) {
+                    Some(ainfo)
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc, gloc: &Loc) -> bool {
+        self.guards
+            .get(&fhash)
+            .and_then(|guard_locs| guard_locs.get(gloc))
+            .is_some()
+            && gloc.contains(loc)
     }
 }

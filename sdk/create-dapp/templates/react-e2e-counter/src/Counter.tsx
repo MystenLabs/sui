@@ -10,10 +10,21 @@ import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { useNetworkVariable } from "./networkConfig";
 
 export function Counter({ id }: { id: string }) {
-  const client = useSuiClient();
-  const currentAccount = useCurrentAccount();
   const counterPackageId = useNetworkVariable("counterPackageId");
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
+  const currentAccount = useCurrentAccount();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
+    execute: async ({ bytes, signature }) =>
+      await suiClient.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature,
+        options: {
+          // Raw effects are required so the effects can be reported back to the wallet
+          showRawEffects: true,
+          showEffects: true,
+        },
+      }),
+  });
   const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
     id,
     options: {
@@ -42,10 +53,8 @@ export function Counter({ id }: { id: string }) {
         transaction: tx,
       },
       {
-        onSuccess: (tx) => {
-          client.waitForTransaction({ digest: tx.digest }).then(() => {
-            refetch();
-          });
+        onSuccess: async () => {
+          await refetch();
         },
       },
     );

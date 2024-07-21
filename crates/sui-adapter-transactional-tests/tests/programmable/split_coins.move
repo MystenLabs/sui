@@ -14,12 +14,10 @@ module test::m1 {
         100
     }
 
-    public fun transfer_(mut v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
-        while (!vector::is_empty(&v)) {
-            let c = vector::pop_back(&mut v);
+    public fun transfer_(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
+        v.do!(|c| {
             transfer::public_transfer(c, r);
-        };
-        vector::destroy_empty(v);
+        });
     }
 }
 

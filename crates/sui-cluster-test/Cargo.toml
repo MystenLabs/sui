@@ -1,6 +1,6 @@
 [package]
 name = "sui-cluster-test"
-version = "0.1.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -29,7 +29,6 @@ sui-indexer.workspace = true
 sui-faucet.workspace = true
 sui-graphql-rpc.workspace = true
 sui-swarm.workspace = true
-sui.workspace = true
 sui-swarm-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true

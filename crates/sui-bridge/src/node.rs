@@ -9,7 +9,7 @@ use crate::{
     events::init_all_struct_tags,
     metrics::BridgeMetrics,
     orchestrator::BridgeOrchestrator,
-    server::{handler::BridgeRequestHandler, run_server},
+    server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
@@ -30,11 +30,12 @@ use tracing::info;
 
 pub async fn run_bridge_node(
     config: BridgeNodeConfig,
+    metadata: BridgeNodePublicMetadata,
     prometheus_registry: prometheus::Registry,
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
-    let (server_config, client_config) = config.validate().await?;
+    let (server_config, client_config) = config.validate(metrics.clone()).await?;
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {
@@ -55,8 +56,10 @@ pub async fn run_bridge_node(
             server_config.sui_client,
             server_config.eth_client,
             server_config.approved_governance_actions,
+            metrics.clone(),
         ),
         metrics,
+        Arc::new(metadata),
     ))
 }
 
@@ -83,7 +86,7 @@ async fn start_client_components(
     let mut all_handles = vec![];
     let (task_handles, eth_events_rx, _) =
         EthSyncer::new(client_config.eth_client.clone(), eth_contracts_to_watch)
-            .run()
+            .run(metrics.clone())
             .await
             .expect("Failed to start eth syncer");
     all_handles.extend(task_handles);
@@ -102,6 +105,8 @@ async fn start_client_components(
             .expect("Failed to get committee"),
     );
     let bridge_auth_agg = BridgeAuthorityAggregator::new(committee);
+    let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
+    let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
@@ -110,12 +115,19 @@ async fn start_client_components(
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
-        metrics,
+        token_type_tags_rx,
+        metrics.clone(),
     )
     .await;
 
-    let orchestrator =
-        BridgeOrchestrator::new(sui_client, sui_events_rx, eth_events_rx, store.clone());
+    let orchestrator = BridgeOrchestrator::new(
+        sui_client,
+        sui_events_rx,
+        eth_events_rx,
+        store.clone(),
+        token_type_tags_tx,
+        metrics,
+    );
 
     all_handles.extend(orchestrator.run(bridge_action_executor).await);
     Ok(all_handles)
@@ -381,7 +393,13 @@ mod tests {
             db_path: None,
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -438,7 +456,13 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
@@ -506,7 +530,13 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let _handle = run_bridge_node(config, Registry::new()).await.unwrap();
+        let _handle = run_bridge_node(
+            config,
+            BridgeNodePublicMetadata::empty_for_testing(),
+            Registry::new(),
+        )
+        .await
+        .unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.

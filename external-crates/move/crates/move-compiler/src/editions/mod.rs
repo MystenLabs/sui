@@ -50,6 +50,8 @@ pub enum FeatureGate {
     CleverAssertions,
     NoParensCast,
     TypeHoles,
+    Lambda,
+    ModuleLabel,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -132,7 +134,7 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::Enums];
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::NestedUse,
@@ -152,6 +154,9 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::MacroFuns,
     FeatureGate::TypeHoles,
     FeatureGate::CleverAssertions,
+    FeatureGate::Lambda,
+    FeatureGate::ModuleLabel,
+    FeatureGate::Enums,
 ];
 
 const DEVELOPMENT_FEATURES: &[FeatureGate] = &[];
@@ -276,6 +281,8 @@ impl FeatureGate {
             FeatureGate::CleverAssertions => "Clever `assert!`, `abort`, and `#[error]` are",
             FeatureGate::NoParensCast => "'as' without parentheses is",
             FeatureGate::TypeHoles => "'_' placeholders for type inference are",
+            FeatureGate::Lambda => "lambda expressions are",
+            FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
         }
     }
 }

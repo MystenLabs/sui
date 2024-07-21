@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
-use diesel::dsl::max;
+use diesel::dsl::{max, min};
 use diesel::r2d2::R2D2Connection;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
@@ -28,6 +28,7 @@ use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::StoredCheckpoint;
+use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
@@ -39,8 +40,8 @@ use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-    tx_senders,
+    pruner_cp_watermark, transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects,
+    tx_recipients, tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
@@ -65,6 +66,15 @@ macro_rules! chunk {
             .map(|c| c.collect())
             .collect::<Vec<Vec<_>>>()
     }};
+}
+
+macro_rules! prune_tx_indice_table {
+    ($table:ident, $conn:expr, $min_tx:expr, $max_tx:expr, $context_msg:expr) => {
+        diesel::delete($table::table.filter($table::tx_sequence_number.between($min_tx, $max_tx)))
+            .execute($conn)
+            .map_err(IndexerError::from)
+            .context($context_msg)?;
+    };
 }
 
 // In one DB transaction, the update could be chunked into
@@ -188,6 +198,80 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 .map(|v| v.map(|v| v as u64))
         })
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
+    }
+
+    fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::dsl::checkpoints
+                .select((
+                    min(checkpoints::sequence_number),
+                    max(checkpoints::sequence_number),
+                ))
+                .first::<(Option<i64>, Option<i64>)>(conn)
+                .map(|(min, max)| {
+                    (
+                        min.unwrap_or_default() as u64,
+                        max.unwrap_or_default() as u64,
+                    )
+                })
+        })
+        .context("Failed reading min and max checkpoint sequence numbers from PostgresDB")
+    }
+
+    fn get_prunable_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select((min(epochs::epoch), max(epochs::epoch)))
+                .first::<(Option<i64>, Option<i64>)>(conn)
+                .map(|(min, max)| {
+                    (
+                        min.unwrap_or_default() as u64,
+                        max.unwrap_or_default() as u64,
+                    )
+                })
+        })
+        .context("Failed reading min and max epoch numbers from PostgresDB")
+    }
+
+    fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            pruner_cp_watermark::dsl::pruner_cp_watermark
+                .select(min(pruner_cp_watermark::checkpoint_sequence_number))
+                .first::<Option<i64>>(conn)
+                .map(|v| v.unwrap_or_default() as u64)
+        })
+        .context("Failed reading min prunable checkpoint sequence number from PostgresDB")
+    }
+
+    fn get_checkpoint_range_for_epoch(
+        &self,
+        epoch: u64,
+    ) -> Result<(u64, Option<u64>), IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select((epochs::first_checkpoint_id, epochs::last_checkpoint_id))
+                .filter(epochs::epoch.eq(epoch as i64))
+                .first::<(i64, Option<i64>)>(conn)
+                .map(|(min, max)| (min as u64, max.map(|v| v as u64)))
+        })
+        .context("Failed reading checkpoint range from PostgresDB")
+    }
+
+    fn get_transaction_range_for_checkpoint(
+        &self,
+        checkpoint: u64,
+    ) -> Result<(u64, u64), IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            pruner_cp_watermark::dsl::pruner_cp_watermark
+                .select((
+                    pruner_cp_watermark::min_tx_sequence_number,
+                    pruner_cp_watermark::max_tx_sequence_number,
+                ))
+                .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint as i64))
+                .first::<(i64, i64)>(conn)
+                .map(|(min, max)| (min as u64, max as u64))
+        })
+        .context("Failed reading transaction range from PostgresDB")
     }
 
     fn get_latest_object_snapshot_checkpoint_sequence_number(
@@ -521,6 +605,27 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .metrics
             .checkpoint_db_commit_latency_checkpoints
             .start_timer();
+
+        let stored_cp_txs = checkpoints.iter().map(StoredCpTx::from).collect::<Vec<_>>();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for stored_cp_tx_chunk in stored_cp_txs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    insert_or_ignore_into!(pruner_cp_watermark::table, stored_cp_tx_chunk, conn);
+                }
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            info!(
+                "Persisted {} pruner_cp_watermark rows.",
+                stored_cp_txs.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist pruner_cp_watermark with error: {}", e);
+        })?;
 
         let stored_checkpoints = checkpoints
             .iter()
@@ -993,6 +1098,107 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         Ok(())
     }
 
+    fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::delete(
+                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                )
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed to prune checkpoints table")?;
+
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
+    fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::delete(epochs::table.filter(epochs::epoch.eq(epoch as i64)))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed to prune epochs table")?;
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
+    fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                prune_tx_indice_table!(
+                    tx_senders,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_senders table"
+                );
+                prune_tx_indice_table!(
+                    tx_recipients,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_recipients table"
+                );
+                prune_tx_indice_table![
+                    tx_input_objects,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_input_objects table"
+                ];
+                prune_tx_indice_table![
+                    tx_changed_objects,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_changed_objects table"
+                ];
+                prune_tx_indice_table![
+                    tx_calls,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_calls table"
+                ];
+                prune_tx_indice_table![
+                    tx_digests,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_digests table"
+                ];
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
+    fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::delete(
+                    pruner_cp_watermark::table
+                        .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
+                )
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed to prune pruner_cp_watermark table")?;
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
     fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
@@ -1057,6 +1263,16 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
+            .await
+    }
+
+    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_prunable_epoch_range())
+            .await
+    }
+
+    async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_available_checkpoint_range())
             .await
     }
 
@@ -1435,6 +1651,75 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
         self.execute_in_blocking_worker(move |this| this.advance_epoch(epoch))
             .await
+    }
+
+    async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError> {
+        let (mut min_cp, max_cp) = match self.get_checkpoint_range_for_epoch(epoch)? {
+            (min_cp, Some(max_cp)) => Ok((min_cp, max_cp)),
+            _ => Err(IndexerError::PostgresReadError(format!(
+                "Failed to get checkpoint range for epoch {}",
+                epoch
+            ))),
+        }?;
+
+        // NOTE: for disaster recovery, min_cp is the min cp of the current epoch, which is likely
+        // partially pruned already. min_prunable_cp is the min cp to be pruned.
+        // By std::cmp::max, we will resume the pruning process from the next checkpoint, instead of
+        // the first cp of the current epoch.
+        let min_prunable_cp = self.get_min_prunable_checkpoint()?;
+        min_cp = std::cmp::max(min_cp, min_prunable_cp);
+        for cp in min_cp..=max_cp {
+            // NOTE: the order of pruning tables is crucial:
+            // 1. prune checkpoints table, checkpoints table is the source table of available range,
+            // we prune it first to make sure that we always have full data for checkpoints within the available range;
+            // 2. then prune tx_* tables;
+            // 3. then prune pruner_cp_watermark table, which is the checkpoint pruning watermark table and also tx seq source
+            // of a checkpoint to prune tx_* tables;
+            // 4. lastly we prune epochs table when all checkpoints of the epoch have been pruned.
+            info!(
+                "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
+                cp, epoch, min_prunable_cp
+            );
+            self.execute_in_blocking_worker(move |this| this.prune_checkpoints_table(cp))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to prune checkpoint {}: {}", cp, e);
+                });
+
+            let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp)?;
+            self.execute_in_blocking_worker(move |this| {
+                this.prune_tx_indices_table(min_tx, max_tx)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to prune transactions for cp {}: {}", cp, e);
+            });
+            info!(
+                "Pruned transactions for checkpoint {} from tx {} to tx {}",
+                cp, min_tx, max_tx
+            );
+            self.metrics.last_pruned_transaction.set(max_tx as i64);
+
+            self.execute_in_blocking_worker(move |this| this.prune_cp_tx_table(cp))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!(
+                        "Failed to prune pruner_cp_watermark table for cp {}: {}",
+                        cp,
+                        e
+                    );
+                });
+            info!("Pruned checkpoint {} of epoch {}", cp, epoch);
+            self.metrics.last_pruned_checkpoint.set(cp as i64);
+        }
+
+        // NOTE: prune epochs table last, otherwise get_checkpoint_range_for_epoch would fail.
+        self.execute_in_blocking_worker(move |this| this.prune_epochs_table(epoch))
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to prune epoch table for epoch {}: {}", epoch, e);
+            });
+        Ok(())
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(

@@ -1,0 +1,63 @@
+---
+title: Flash Loans
+description: Use DeepBook to perform flash loans, uncollaterized loans that are borrowed and repaid within the same programmable transaction block.
+---
+
+{@include: ../../snippets/deepbook.mdx}
+
+Flash loans by definition are uncollaterized loans that are borrowed and repaid within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBook pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned. 
+
+The quantity borrowed can be the maximum amount that the pool owns. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds. If the funds are borrowed, then there are no funds to move.
+
+## API
+
+Following are the endpoints that the `Pool` exposes for flash loans.
+
+### Borrow flash loan base
+
+Borrow base assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
+
+```move
+public fun borrow_flashloan_base<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    base_amount: u64,
+    ctx: &mut TxContext,
+): (Coin<BaseAsset>, FlashLoan)
+```
+​
+### Borrow flash loan quote
+
+Borrow quote assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
+
+```move
+public fun borrow_flashloan_quote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    quote_amount: u64,
+    ctx: &mut TxContext,
+): (Coin<QuoteAsset>, FlashLoan)
+```
+​
+### Retrieve flash loan base
+
+Return the flash loaned base assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned, otherwise the transaction fails.
+
+```move
+public fun return_flashloan_base<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    coin: Coin<BaseAsset>,
+    flash_loan: FlashLoan,
+)
+```
+​
+### Retrieve flash loan quote
+
+Return the flash loaned quote assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned,
+otherwise the transaction fails.
+
+```move
+public fun return_flashloan_quote<BaseAsset, QuoteAsset>(
+    self: &mut Pool<BaseAsset, QuoteAsset>,
+    coin: Coin<QuoteAsset>,
+    flash_loan: FlashLoan,
+)
+```

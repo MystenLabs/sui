@@ -326,6 +326,12 @@ impl MoveObjectType {
             && self.name().as_str() == "DenyCap"
     }
 
+    pub fn is_coin_deny_cap_v2(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "coin"
+            && self.name().as_str() == "DenyCapV2"
+    }
+
     pub fn is_dynamic_field(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
@@ -365,6 +371,14 @@ impl MoveObjectType {
                 Coin::is_coin(s) && s.type_params.len() == 1 && inner == &s.type_params[0]
             }
             MoveObjectType_::Other(o) => s == o,
+        }
+    }
+
+    pub fn other(&self) -> Option<&StructTag> {
+        if let MoveObjectType_::Other(s) = &self.0 {
+            Some(s)
+        } else {
+            None
         }
     }
 
@@ -497,6 +511,17 @@ impl ObjectInfo {
             type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
+        }
+    }
+
+    pub fn from_object(object: &Object) -> Self {
+        Self {
+            object_id: object.id(),
+            version: object.version(),
+            digest: object.digest(),
+            type_: object.into(),
+            owner: object.owner,
+            previous_transaction: object.previous_transaction,
         }
     }
 }
@@ -739,6 +764,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::ZkLoginAuthenticator(zklogin) => {
                 SuiAddress::try_from_unpadded(&zklogin.inputs)
             }
+            GenericSignature::PasskeyAuthenticator(s) => Ok(SuiAddress::from(&s.get_pk()?)),
         }
     }
 }
@@ -1007,6 +1033,8 @@ impl SequenceNumber {
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
     pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
+    pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
+        SequenceNumber(SequenceNumber::MAX.value() + 3);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1056,7 +1084,9 @@ impl SequenceNumber {
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self == &SequenceNumber::CANCELLED_READ || self == &SequenceNumber::CONGESTED
+        self == &SequenceNumber::CANCELLED_READ
+            || self == &SequenceNumber::CONGESTED
+            || self == &SequenceNumber::RANDOMNESS_UNAVAILABLE
     }
 
     pub fn is_valid(&self) -> bool {
@@ -1378,6 +1408,10 @@ impl<T> SizeOneVec<T> {
 
     pub fn element_mut(&mut self) -> &mut T {
         &mut self.e
+    }
+
+    pub fn into_inner(self) -> T {
+        self.e
     }
 
     pub fn iter(&self) -> std::iter::Once<&T> {

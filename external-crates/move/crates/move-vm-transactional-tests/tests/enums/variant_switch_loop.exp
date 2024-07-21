@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-22:
+task 0, lines 1-22:
+//# print-bytecode
 // Move bytecode v7
 module 1.InfiniteSwith {
 
@@ -31,7 +32,8 @@ B0:
 }
 }
 
-task 2 'run'. lines 48-58:
+task 2, lines 48-58:
+//# run --gas-budget 10000
 Error: Function execution failed with VMError: {
     major_status: OUT_OF_GAS,
     sub_status: None,

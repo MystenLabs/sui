@@ -66,6 +66,8 @@ pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 )]
 pub struct TypeOrigin {
     pub module_name: String,
+    // `struct_name` alias to support backwards compatibility with the old name
+    #[serde(alias = "struct_name")]
     pub datatype_name: String,
     pub package: ObjectID,
 }

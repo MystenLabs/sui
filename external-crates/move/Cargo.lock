@@ -1299,6 +1299,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_comments"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
+
+[[package]]
 name = "keccak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1523,10 +1529,12 @@ dependencies = [
  "clap 4.5.4",
  "codespan-reporting",
  "crossbeam",
+ "datatest-stable",
  "derivative",
  "dunce",
  "im",
  "itertools",
+ "json_comments",
  "lsp-server",
  "lsp-types",
  "move-command-line-common",
@@ -1534,6 +1542,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",
@@ -1692,7 +1701,6 @@ dependencies = [
  "move-coverage",
  "move-disassembler",
  "move-docgen",
- "move-errmapgen",
  "move-ir-types",
  "move-package",
  "move-prover",
@@ -1714,9 +1722,11 @@ name = "move-command-line-common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "difference",
  "dirs-next",
  "hex",
+ "move-binary-format",
  "move-core-types",
  "num-bigint",
  "once_cell",
@@ -1738,6 +1748,7 @@ dependencies = [
  "datatest-stable",
  "dunce",
  "hex",
+ "lsp-types",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",
@@ -1855,30 +1866,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-errmapgen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "codespan-reporting",
- "datatest-stable",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "move-prover",
- "serde",
-]
-
-[[package]]
-name = "move-explain"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "clap 4.5.4",
- "move-command-line-common",
- "move-core-types",
-]
-
-[[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
 dependencies = [
@@ -1890,6 +1877,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-verifier",
  "move-command-line-common",
+ "move-core-types",
  "move-ir-to-bytecode",
  "serde_json",
 ]
@@ -2025,7 +2013,6 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-docgen",
- "move-errmapgen",
  "move-model",
  "move-prover-test-utils",
  "move-stackless-bytecode",
@@ -2086,7 +2073,6 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-errmapgen",
  "move-package",
  "move-prover",
  "move-stdlib-natives",
@@ -2223,6 +2209,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
+ "rand 0.8.5",
  "rayon",
  "regex",
 ]

@@ -231,9 +231,9 @@ pub enum KeyToolCommand {
         max_epoch: EpochId,
         #[clap(long, default_value = "devnet")]
         network: String,
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         fixed: bool, // if true, use a fixed kp generated from [0; 32] seed.
-        #[clap(long, default_value = "true")]
+        #[clap(long, default_value = "false")]
         test_multisig: bool, // if true, use a multisig address with zklogin and a traditional kp.
         #[clap(long, default_value = "false")]
         sign_with_sk: bool, // if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
@@ -1106,6 +1106,14 @@ impl KeyToolCommand {
                     "https://example.com/callback",
                     &jwt_randomness,
                 )?;
+                let url_13 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("us-east-1".to_string(), "ambrus".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "t1eouauaitlirg57nove8kvj8",
+                    "https://api.ambrus.studio/callback",
+                    &jwt_randomness,
+                )?;
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
@@ -1119,6 +1127,7 @@ impl KeyToolCommand {
                 println!("Visit URL (Microsoft): {url_10}");
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
+                println!("Visit URL (AWS - Ambrus): {url_13}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 

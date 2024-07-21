@@ -145,8 +145,7 @@ pub fn publish(
         }
 
         if !has_error {
-            let (changeset, events) = session.finish().0?;
-            assert!(events.is_empty());
+            let changeset = session.finish().0?;
             if verbose {
                 explain_publish_changeset(&changeset);
             }

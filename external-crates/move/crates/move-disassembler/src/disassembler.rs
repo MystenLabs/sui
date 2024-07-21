@@ -22,10 +22,13 @@ use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceName},
 };
+use move_command_line_common::display::{try_render_constant, RenderResult};
 use move_compiler::compiled_unit::CompiledUnit;
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
 use move_ir_types::location::Loc;
+
+const PREVIEW_LEN: usize = 4;
 
 /// Holds the various options that we support while disassembling code.
 #[derive(Debug, Default, Parser)]
@@ -437,10 +440,21 @@ impl<'a> Disassembler<'a> {
     }
 
     fn preview_const(slice: &[u8]) -> String {
-        if slice.len() <= 4 {
+        // Account for the .. in the preview
+        if slice.len() <= PREVIEW_LEN + 2 {
             hex::encode(slice)
         } else {
-            format!("{}..", hex::encode(&slice[..4]))
+            format!("{}..", hex::encode(&slice[..PREVIEW_LEN]))
+        }
+    }
+
+    fn preview_string(s: &str) -> String {
+        if s.len() <= PREVIEW_LEN + 2 {
+            s.to_string()
+        } else {
+            let mut preview: String = s.chars().take(PREVIEW_LEN).collect();
+            preview.push_str("..");
+            preview
         }
     }
 
@@ -522,6 +536,7 @@ impl<'a> Disassembler<'a> {
     fn disassemble_instruction(
         &self,
         parameters: &Signature,
+        constants: &[(String, String)],
         instruction: &Bytecode,
         locals_sigs: &Signature,
         function_source_map: &FunctionSourceMap,
@@ -529,13 +544,20 @@ impl<'a> Disassembler<'a> {
     ) -> Result<String> {
         match instruction {
             Bytecode::LdConst(idx) => {
-                let constant = self.source_mapper.bytecode.constant_at(*idx);
-                Ok(format!(
-                    "LdConst[{}]({:?}: {})",
-                    idx,
-                    &constant.type_,
-                    Self::preview_const(&constant.data),
-                ))
+                let constant = constants
+                    .get(idx.0 as usize)
+                    .map(|(ty_str, val_str)| {
+                        format!("{}: {}", ty_str, Self::preview_string(val_str))
+                    })
+                    .unwrap_or_else(|| {
+                        let constant = self.source_mapper.bytecode.constant_at(*idx);
+                        format!(
+                            "{:?}: {}",
+                            &constant.type_,
+                            Self::preview_const(&constant.data)
+                        )
+                    });
+                Ok(format!("LdConst[{}]({})", idx, constant,))
             }
             Bytecode::CopyLoc(local_idx) => {
                 let name =
@@ -958,6 +980,7 @@ impl<'a> Disassembler<'a> {
         function_source_map: &FunctionSourceMap,
         function_name: &IdentStr,
         parameters: SignatureIndex,
+        constants: &[(String, String)],
         code: &CodeUnit,
     ) -> Result<Vec<String>> {
         if !self.options.print_code {
@@ -976,6 +999,7 @@ impl<'a> Disassembler<'a> {
             .map(|instruction| {
                 self.disassemble_instruction(
                     parameters,
+                    constants,
                     instruction,
                     locals_sigs,
                     function_source_map,
@@ -1097,6 +1121,7 @@ impl<'a> Disassembler<'a> {
         type_parameters: &[AbilitySet],
         parameters: SignatureIndex,
         code: Option<&CodeUnit>,
+        constants: &[(String, String)],
     ) -> Result<String> {
         debug_assert_eq!(
             function_source_map.parameters.len(),
@@ -1171,8 +1196,13 @@ impl<'a> Disassembler<'a> {
             Some(code) => {
                 let locals =
                     self.disassemble_locals(function_source_map, code.locals, params.len())?;
-                let bytecode =
-                    self.disassemble_bytecode(function_source_map, name, parameters, code)?;
+                let bytecode = self.disassemble_bytecode(
+                    function_source_map,
+                    name,
+                    parameters,
+                    constants,
+                    code,
+                )?;
                 let jump_tables = self.disassemble_jump_tables(code)?;
                 Self::format_function_body(locals, bytecode, jump_tables)
             }
@@ -1346,25 +1376,14 @@ impl<'a> Disassembler<'a> {
         ))
     }
 
-    pub fn disassemble_constant(
-        &self,
-        constant_index: usize,
-        Constant { type_, data }: &Constant,
-    ) -> Result<String> {
-        let data_str = match type_ {
-            SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8 => {
-                match bcs::from_bytes::<Vec<u8>>(data)
-                    .ok()
-                    .and_then(|data| String::from_utf8(data).ok())
-                {
-                    Some(str) => "\"".to_owned() + &str + "\" // interpreted as UTF8 string",
-                    None => hex::encode(data),
-                }
-            }
-            _ => hex::encode(data),
+    pub fn disassemble_constant(&self, constant: &Constant) -> Result<(String, String)> {
+        let data_str = match try_render_constant(constant) {
+            RenderResult::NotRendered => hex::encode(&constant.data),
+            RenderResult::AsValue(v_str) => v_str,
+            RenderResult::AsString(s) => "\"".to_owned() + &s + "\" // interpreted as UTF8 string",
         };
-        let type_str = self.disassemble_sig_tok(type_.clone(), &[])?;
-        Ok(format!("\t{constant_index} => {}: {}", type_str, data_str))
+        let type_str = self.disassemble_sig_tok(constant.type_.clone(), &[])?;
+        Ok((type_str, data_str))
     }
 
     pub fn disassemble(&self) -> Result<String> {
@@ -1388,14 +1407,13 @@ impl<'a> Disassembler<'a> {
             .map(|i| self.disassemble_enum_def(EnumDefinitionIndex(i as TableIndex)))
             .collect::<Result<Vec<String>>>()?;
 
-        let constants: Vec<String> = self
+        let constants: Vec<(String, String)> = self
             .source_mapper
             .bytecode
             .constant_pool()
             .iter()
-            .enumerate()
-            .map(|(i, constant)| self.disassemble_constant(i, constant))
-            .collect::<Result<Vec<String>>>()?;
+            .map(|constant| self.disassemble_constant(constant))
+            .collect::<Result<Vec<(String, String)>>>()?;
 
         let function_defs: Vec<String> = (0..self.source_mapper.bytecode.function_defs.len())
             .map(|i| {
@@ -1416,6 +1434,7 @@ impl<'a> Disassembler<'a> {
                     &function_handle.type_parameters,
                     function_handle.parameters,
                     function_definition.code.as_ref(),
+                    &constants,
                 )
             })
             .collect::<Result<Vec<String>>>()?;
@@ -1429,7 +1448,12 @@ impl<'a> Disassembler<'a> {
         } else {
             format!(
                 "\nConstants [\n{constants}\n]\n",
-                constants = constants.join("\n")
+                constants = constants
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (ty, s))| format!("\t{i} => {ty}: {s}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             )
         };
         Ok(format!(

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import type { BaseSchema, Input, Output } from 'valibot';
+import type { GenericSchema, InferInput, InferOutput } from 'valibot';
 import {
 	array,
 	bigint,
 	boolean,
-	custom,
+	check,
 	integer,
 	is,
+	lazy,
 	literal,
 	nullable,
 	nullish,
@@ -17,7 +18,7 @@ import {
 	object,
 	optional,
 	parse,
-	recursive,
+	pipe,
 	string,
 	union,
 	unknown,
@@ -31,7 +32,7 @@ import type { Argument } from './internal.js';
 export const ObjectRef = object({
 	digest: string(),
 	objectId: string(),
-	version: union([number([integer()]), string(), bigint()]),
+	version: union([pipe(number(), integer()), string(), bigint()]),
 });
 
 const ObjectArg = safeEnum({
@@ -46,61 +47,59 @@ const ObjectArg = safeEnum({
 
 export const NormalizedCallArg = safeEnum({
 	Object: ObjectArg,
-	Pure: array(number([integer()])),
+	Pure: array(pipe(number(), integer())),
 });
 
 const TransactionInput = union([
 	object({
 		kind: literal('Input'),
-		index: number([integer()]),
+		index: pipe(number(), integer()),
 		value: unknown(),
 		type: optional(literal('object')),
 	}),
 	object({
 		kind: literal('Input'),
-		index: number([integer()]),
+		index: pipe(number(), integer()),
 		value: unknown(),
 		type: literal('pure'),
 	}),
 ]);
 
 const TransactionExpiration = union([
-	object({ Epoch: number([integer()]) }),
+	object({ Epoch: pipe(number(), integer()) }),
 	object({ None: nullable(literal(true)) }),
 ]);
 
-const StringEncodedBigint = union(
-	[number(), string(), bigint()],
-	[
-		custom((val) => {
-			if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
+const StringEncodedBigint = pipe(
+	union([number(), string(), bigint()]),
+	check((val) => {
+		if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
 
-			try {
-				BigInt(val as string);
-				return true;
-			} catch {
-				return false;
-			}
-		}),
-	],
+		try {
+			BigInt(val as string);
+			return true;
+		} catch {
+			return false;
+		}
+	}),
 );
 
-export const TypeTag: BaseSchema<TypeTagType> = union([
+export const TypeTag: GenericSchema<TypeTagType> = union([
 	object({ bool: nullable(literal(true)) }),
 	object({ u8: nullable(literal(true)) }),
 	object({ u64: nullable(literal(true)) }),
 	object({ u128: nullable(literal(true)) }),
 	object({ address: nullable(literal(true)) }),
 	object({ signer: nullable(literal(true)) }),
-	object({ vector: recursive(() => TypeTag) }),
-	object({ struct: recursive(() => StructTag) }),
+	object({ vector: lazy(() => TypeTag) }),
+	object({ struct: lazy(() => StructTag) }),
 	object({ u16: nullable(literal(true)) }),
 	object({ u32: nullable(literal(true)) }),
 	object({ u256: nullable(literal(true)) }),
 ]);
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
-export const StructTag: BaseSchema<StructTagType> = object({
+export const StructTag: GenericSchema<StructTagType> = object({
 	address: string(),
 	module: string(),
 	name: string(),
@@ -117,11 +116,11 @@ const GasConfig = object({
 const TransactionArgumentTypes = [
 	TransactionInput,
 	object({ kind: literal('GasCoin') }),
-	object({ kind: literal('Result'), index: number([integer()]) }),
+	object({ kind: literal('Result'), index: pipe(number(), integer()) }),
 	object({
 		kind: literal('NestedResult'),
-		index: number([integer()]),
-		resultIndex: number([integer()]),
+		index: pipe(number(), integer()),
+		resultIndex: pipe(number(), integer()),
 	}),
 ] as const;
 
@@ -130,9 +129,10 @@ export const TransactionArgument = union([...TransactionArgumentTypes]);
 
 const MoveCallTransaction = object({
 	kind: literal('MoveCall'),
-	target: string([
-		custom((target) => target.split('::').length === 3),
-	]) as BaseSchema<`${string}::${string}::${string}`>,
+	target: pipe(
+		string(),
+		check((target) => target.split('::').length === 3),
+	) as GenericSchema<`${string}::${string}::${string}`>,
 	typeArguments: array(string()),
 	arguments: array(TransactionArgument),
 });
@@ -163,13 +163,13 @@ const MakeMoveVecTransaction = object({
 
 const PublishTransaction = object({
 	kind: literal('Publish'),
-	modules: array(array(number([integer()]))),
+	modules: array(array(pipe(number(), integer()))),
 	dependencies: array(string()),
 });
 
 const UpgradeTransaction = object({
 	kind: literal('Upgrade'),
-	modules: array(array(number([integer()]))),
+	modules: array(array(pipe(number(), integer()))),
 	dependencies: array(string()),
 	packageId: string(),
 	ticket: TransactionArgument,
@@ -196,71 +196,73 @@ export const SerializedTransactionDataV1 = object({
 	transactions: array(TransactionType),
 });
 
-export type SerializedTransactionDataV1 = Output<typeof SerializedTransactionDataV1>;
+export type SerializedTransactionDataV1 = InferOutput<typeof SerializedTransactionDataV1>;
 
 export function serializeV1TransactionData(
 	transactionData: TransactionData,
 ): SerializedTransactionDataV1 {
-	const inputs: Output<typeof TransactionInput>[] = transactionData.inputs.map((input, index) => {
-		if (input.Object) {
-			return {
-				kind: 'Input',
-				index,
-				value: {
-					Object: input.Object.ImmOrOwnedObject
-						? {
-								ImmOrOwned: input.Object.ImmOrOwnedObject,
-						  }
-						: input.Object.Receiving
-						? {
-								Receiving: {
-									digest: input.Object.Receiving.digest,
-									version: input.Object.Receiving.version,
-									objectId: input.Object.Receiving.objectId,
-								},
-						  }
-						: {
-								Shared: {
-									mutable: input.Object.SharedObject.mutable,
-									initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
-									objectId: input.Object.SharedObject.objectId,
-								},
-						  },
-				},
-				type: 'object',
-			};
-		}
-		if (input.Pure) {
-			return {
-				kind: 'Input',
-				index,
-				value: {
-					Pure: Array.from(fromB64(input.Pure.bytes)),
-				},
-				type: 'pure',
-			};
-		}
+	const inputs: InferOutput<typeof TransactionInput>[] = transactionData.inputs.map(
+		(input, index) => {
+			if (input.Object) {
+				return {
+					kind: 'Input',
+					index,
+					value: {
+						Object: input.Object.ImmOrOwnedObject
+							? {
+									ImmOrOwned: input.Object.ImmOrOwnedObject,
+								}
+							: input.Object.Receiving
+								? {
+										Receiving: {
+											digest: input.Object.Receiving.digest,
+											version: input.Object.Receiving.version,
+											objectId: input.Object.Receiving.objectId,
+										},
+									}
+								: {
+										Shared: {
+											mutable: input.Object.SharedObject.mutable,
+											initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
+											objectId: input.Object.SharedObject.objectId,
+										},
+									},
+					},
+					type: 'object',
+				};
+			}
+			if (input.Pure) {
+				return {
+					kind: 'Input',
+					index,
+					value: {
+						Pure: Array.from(fromB64(input.Pure.bytes)),
+					},
+					type: 'pure',
+				};
+			}
 
-		if (input.UnresolvedPure) {
-			return {
-				kind: 'Input',
-				type: 'pure',
-				index,
-				value: input.UnresolvedPure.value,
-			};
-		}
+			if (input.UnresolvedPure) {
+				return {
+					kind: 'Input',
+					type: 'pure',
+					index,
+					value: input.UnresolvedPure.value,
+				};
+			}
 
-		if (input.UnresolvedObject) {
-			return {
-				kind: 'Input',
-				type: 'object',
-				index,
-				value: input.UnresolvedObject.objectId,
-			};
-		}
+			if (input.UnresolvedObject) {
+				return {
+					kind: 'Input',
+					type: 'object',
+					index,
+					value: input.UnresolvedObject.objectId,
+				};
+			}
 
-		throw new Error('Invalid input');
-	});
+			throw new Error('Invalid input');
+		},
+	);
 
 	return {
 		version: 1,
@@ -269,8 +271,8 @@ export function serializeV1TransactionData(
 			transactionData.expiration?.$kind === 'Epoch'
 				? { Epoch: Number(transactionData.expiration.Epoch) }
 				: transactionData.expiration
-				? { None: true }
-				: null,
+					? { None: true }
+					: null,
 		gasConfig: {
 			owner: transactionData.gasData.owner ?? undefined,
 			budget: transactionData.gasData.budget ?? undefined,
@@ -278,7 +280,7 @@ export function serializeV1TransactionData(
 			payment: transactionData.gasData.payment ?? undefined,
 		},
 		inputs,
-		transactions: transactionData.commands.map((command): Output<typeof TransactionType> => {
+		transactions: transactionData.commands.map((command): InferOutput<typeof TransactionType> => {
 			if (command.MakeMoveVec) {
 				return {
 					kind: 'MakeMoveVec',
@@ -349,8 +351,8 @@ export function serializeV1TransactionData(
 
 function convertTransactionArgument(
 	arg: Argument,
-	inputs: Output<typeof TransactionInput>[],
-): Output<typeof TransactionArgument> {
+	inputs: InferOutput<typeof TransactionInput>[],
+): InferOutput<typeof TransactionArgument> {
 	if (arg.$kind === 'GasCoin') {
 		return { kind: 'GasCoin' };
 	}
@@ -524,12 +526,12 @@ export function transactionDataFromV1(data: SerializedTransactionDataV1): Transa
 
 			throw new Error(`Unknown transaction ${Object.keys(transaction)}`);
 		}),
-	} satisfies Input<typeof TransactionData>);
+	} satisfies InferInput<typeof TransactionData>);
 }
 
 function parseV1TransactionArgument(
-	arg: Output<typeof TransactionArgument>,
-): Input<typeof Argument> {
+	arg: InferOutput<typeof TransactionArgument>,
+): InferInput<typeof Argument> {
 	switch (arg.kind) {
 		case 'GasCoin': {
 			return { GasCoin: true };

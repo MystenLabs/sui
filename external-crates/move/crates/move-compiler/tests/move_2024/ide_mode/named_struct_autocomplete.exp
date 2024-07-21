@@ -1,16 +1,22 @@
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:13:24
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:24
    │
-13 │         let _tmp1 = _s.;
+14 │         let _tmp1 = _s.;
    │                        ^
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:14:26
+   ┌─ tests/move_2024/ide_mode/named_struct_autocomplete.move:15:26
    │
-14 │         let _tmp2 = _s.a.;
+15 │         let _tmp2 = _s.a.;
    │                          ^
    │                          │
    │                          Unexpected ';'

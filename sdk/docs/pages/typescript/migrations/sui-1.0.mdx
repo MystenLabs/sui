@@ -342,8 +342,8 @@ The `useSignTransactionBlock` has been named to `useSignTransaction` and now ret
 of transactionBlockBytes
 
 ```diff
-- const { signTransactionBlock } = useSignTransactionBlock()
-+ const { signTransaction } = useSignTransaction()
+- const { mutate: signTransactionBlock } = useSignTransactionBlock()
++ const { mutate: signTransaction } = useSignTransaction()
   ...
 - const { signature, transactionBlockBytes } = await signTransactionBlock({ transactionBlock })
 + const { signature, bytes } = await signTransaction({ transaction })
@@ -361,7 +361,7 @@ By default useSignAndExecuteTransactionBlock will now return an object with the 
 and the bcs encoded transaction effects:
 
 ```ts
-const { signAndExecuteTransaction } = useSignAndExecuteTransaction()
+const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction()
 ...
 const { digest, effects } = await signAndExecuteTransaction({ transaction })
 ```
@@ -369,14 +369,15 @@ const { digest, effects } = await signAndExecuteTransaction({ transaction })
 To fetch additional data, you can provide a customized `execute` function:
 
 ```diff
+- const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock()
 - const { digest, objectChanges } = await signAndExecuteTransactionBlock({
 -   transactionBlock: transaction,
 -   options: {
 -     showObjectChanges: true,
+-   },
 - })
 
-+ const { digest, objectChanges } = await signAndExecuteTransaction({
-+ 	transaction,
++ const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock({
 + 	execute: async ({ bytes, signature }) =>
 + 		await suiClient.executeTransactionBlock({
 + 			transactionBlock: bytes,
@@ -388,6 +389,10 @@ To fetch additional data, you can provide a customized `execute` function:
 + 				showObjectChanges: true,
 + 			},
 + 		}),
++ });
+
++ const { digest, objectChanges } = await signAndExecuteTransaction({
++ 	transaction,
 + });
 ```
 

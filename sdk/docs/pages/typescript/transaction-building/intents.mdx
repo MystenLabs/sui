@@ -26,6 +26,9 @@ import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 
 const tx = new Transaction();
 
+// Setting the sender is required for the CoinWithBalance intent to resolve coins when not using the gas coin
+tx.setSender(keypair.toSuiAddress());
+
 tx.transferObjects(
 	[
 		// Create a SUI coin (balance is in MIST)

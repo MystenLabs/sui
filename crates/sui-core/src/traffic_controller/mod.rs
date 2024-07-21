@@ -26,14 +26,17 @@ use std::time::{Duration, Instant, SystemTime};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
-type BlocklistT = Arc<DashMap<IpAddr, SystemTime>>;
+pub const METRICS_INTERVAL_SECS: u64 = 2;
+pub const DEFAULT_DRAIN_TIMEOUT_SECS: u64 = 300;
+
+type Blocklist = Arc<DashMap<IpAddr, SystemTime>>;
 
 #[derive(Clone)]
 struct Blocklists {
-    connection_ips: BlocklistT,
-    proxy_ips: BlocklistT,
+    clients: Blocklist,
+    proxied_clients: Blocklist,
 }
 
 #[derive(Clone)]
@@ -80,24 +83,34 @@ impl TrafficController {
             .as_ref()
             .map(|config| config.drain_path.exists())
             .unwrap_or(false);
+        metrics
+            .deadmans_switch_enabled
+            .set(mem_drainfile_present as i64);
 
         let ret = Self {
             tally_channel: tx,
             blocklists: Blocklists {
-                connection_ips: Arc::new(DashMap::new()),
-                proxy_ips: Arc::new(DashMap::new()),
+                clients: Arc::new(DashMap::new()),
+                proxied_clients: Arc::new(DashMap::new()),
             },
             metrics: metrics.clone(),
             dry_run_mode: policy_config.dry_run,
         };
-        let blocklists = ret.blocklists.clone();
+        let tally_loop_blocklists = ret.blocklists.clone();
+        let clear_loop_blocklists = ret.blocklists.clone();
+        let tally_loop_metrics = metrics.clone();
+        let clear_loop_metrics = metrics.clone();
         spawn_monitored_task!(run_tally_loop(
             rx,
             policy_config,
             fw_config,
-            blocklists,
-            metrics,
+            tally_loop_blocklists,
+            tally_loop_metrics,
             mem_drainfile_present,
+        ));
+        spawn_monitored_task!(run_clear_blocklists_loop(
+            clear_loop_blocklists,
+            clear_loop_metrics,
         ));
         ret
     }
@@ -132,9 +145,9 @@ impl TrafficController {
     }
 
     /// Handle check with dry-run mode considered
-    pub async fn check(&self, connection_ip: Option<IpAddr>, proxy_ip: Option<IpAddr>) -> bool {
+    pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
         match (
-            self.check_impl(connection_ip, proxy_ip).await,
+            self.check_impl(client, proxied_client).await,
             self.dry_run_mode(),
         ) {
             // check succeeded
@@ -142,8 +155,8 @@ impl TrafficController {
             // check failed while in dry-run mode
             (false, true) => {
                 debug!(
-                    "Dry run mode: Blocked request from connection IP {:?}, proxy IP: {:?}",
-                    connection_ip, proxy_ip
+                    "Dry run mode: Blocked request from client {:?}, proxied client: {:?}",
+                    client, proxied_client
                 );
                 self.metrics.num_dry_run_blocked_requests.inc();
                 true
@@ -156,21 +169,22 @@ impl TrafficController {
     /// Returns true if the connection is allowed, false if it is blocked
     pub async fn check_impl(
         &self,
-        connection_ip: Option<IpAddr>,
-        proxy_ip: Option<IpAddr>,
+        client: &Option<IpAddr>,
+        proxied_client: &Option<IpAddr>,
     ) -> bool {
-        let connection_check = self.check_and_clear_blocklist(
-            connection_ip,
-            self.blocklists.connection_ips.clone(),
+        let client_check = self.check_and_clear_blocklist(
+            client,
+            self.blocklists.clients.clone(),
             &self.metrics.connection_ip_blocklist_len,
         );
-        let proxy_check = self.check_and_clear_blocklist(
-            proxy_ip,
-            self.blocklists.proxy_ips.clone(),
+        let proxied_client_check = self.check_and_clear_blocklist(
+            proxied_client,
+            self.blocklists.proxied_clients.clone(),
             &self.metrics.proxy_ip_blocklist_len,
         );
-        let (conn_check, proxy_check) = futures::future::join(connection_check, proxy_check).await;
-        conn_check && proxy_check
+        let (client_check, proxied_client_check) =
+            futures::future::join(client_check, proxied_client_check).await;
+        client_check && proxied_client_check
     }
 
     pub fn dry_run_mode(&self) -> bool {
@@ -179,19 +193,19 @@ impl TrafficController {
 
     async fn check_and_clear_blocklist(
         &self,
-        ip: Option<IpAddr>,
-        blocklist: BlocklistT,
+        client: &Option<IpAddr>,
+        blocklist: Blocklist,
         blocklist_len_gauge: &IntGauge,
     ) -> bool {
-        let ip = match ip {
-            Some(ip) => ip,
+        let client = match client {
+            Some(client) => client,
             None => return true,
         };
         let now = SystemTime::now();
         // the below two blocks cannot be nested, otherwise we will deadlock
         // due to aquiring the lock on get, then holding across the remove
         let (should_block, should_remove) = {
-            match blocklist.get(&ip) {
+            match blocklist.get(client) {
                 Some(expiration) if now >= *expiration => (false, true),
                 None => (false, false),
                 _ => (true, false),
@@ -199,9 +213,32 @@ impl TrafficController {
         };
         if should_remove {
             blocklist_len_gauge.dec();
-            blocklist.remove(&ip);
+            blocklist.remove(client);
         }
         !should_block
+    }
+}
+
+/// Although we clear IPs from the blocklist lazily when they are checked,
+/// it's possible that over time we may accumulate a large number of stale
+/// IPs in the blocklist for clients that are added, then once blocked,
+/// never checked again. This function runs periodically to clear out any
+/// such stale IPs. This also ensures that the blocklist length metric
+/// accurately reflects TTL.
+async fn run_clear_blocklists_loop(blocklists: Blocklists, metrics: Arc<TrafficControllerMetrics>) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let now = SystemTime::now();
+        blocklists.clients.retain(|_, expiration| now < *expiration);
+        blocklists
+            .proxied_clients
+            .retain(|_, expiration| now < *expiration);
+        metrics
+            .connection_ip_blocklist_len
+            .set(blocklists.clients.len() as i64);
+        metrics
+            .proxy_ip_blocklist_len
+            .set(blocklists.proxied_clients.len() as i64);
     }
 }
 
@@ -224,7 +261,8 @@ async fn run_tally_loop(
     let timeout = fw_config
         .as_ref()
         .map(|fw_config| fw_config.drain_timeout_secs)
-        .unwrap_or(300);
+        .unwrap_or(DEFAULT_DRAIN_TIMEOUT_SECS);
+    let mut metric_timer = Instant::now();
 
     loop {
         tokio::select! {
@@ -278,9 +316,53 @@ async fn run_tally_loop(
                         warn!("Draining Node firewall.");
                         File::create(&fw_config.drain_path)
                             .expect("Failed to touch nodefw drain file");
+                        metrics.deadmans_switch_enabled.set(1);
                     }
                 }
             }
+        }
+
+        // every N seconds, we update metrics and logging that would be too
+        // spammy to be handled while processing each tally
+        if metric_timer.elapsed() > Duration::from_secs(METRICS_INTERVAL_SECS) {
+            if let TrafficControlPolicy::FreqThreshold(spam_policy) = &spam_policy {
+                if let Some(highest_direct_rate) = spam_policy.highest_direct_rate() {
+                    metrics
+                        .highest_direct_spam_rate
+                        .set(highest_direct_rate.0 as i64);
+                    trace!("Recent highest direct spam rate: {:?}", highest_direct_rate);
+                }
+                if let Some(highest_proxied_rate) = spam_policy.highest_proxied_rate() {
+                    metrics
+                        .highest_proxied_spam_rate
+                        .set(highest_proxied_rate.0 as i64);
+                    trace!(
+                        "Recent highest proxied spam rate: {:?}",
+                        highest_proxied_rate
+                    );
+                }
+            }
+            if let TrafficControlPolicy::FreqThreshold(error_policy) = &error_policy {
+                if let Some(highest_direct_rate) = error_policy.highest_direct_rate() {
+                    metrics
+                        .highest_direct_error_rate
+                        .set(highest_direct_rate.0 as i64);
+                    trace!(
+                        "Recent highest direct error rate: {:?}",
+                        highest_direct_rate
+                    );
+                }
+                if let Some(highest_proxied_rate) = error_policy.highest_proxied_rate() {
+                    metrics
+                        .highest_proxied_error_rate
+                        .set(highest_proxied_rate.0 as i64);
+                    trace!(
+                        "Recent highest proxied error rate: {:?}",
+                        highest_proxied_rate
+                    );
+                }
+            }
+            metric_timer = Instant::now();
         }
     }
 }
@@ -295,7 +377,7 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !tally.error_weight.is_sampled().await {
+    if !tally.error_weight.is_sampled() {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
@@ -329,7 +411,7 @@ async fn handle_spam_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if !policy_config.spam_sample_rate.is_sampled().await {
+    if !(tally.spam_weight.is_sampled() && policy_config.spam_sample_rate.is_sampled()) {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
@@ -360,39 +442,39 @@ async fn handle_policy_response(
     metrics: Arc<TrafficControllerMetrics>,
 ) {
     let PolicyResponse {
-        block_connection_ip,
-        block_proxy_ip,
+        block_client,
+        block_proxied_client,
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
         proxy_blocklist_ttl_sec,
         ..
     } = policy_config;
-    if let Some(ip) = block_connection_ip {
+    if let Some(client) = block_client {
         if blocklists
-            .connection_ips
+            .clients
             .insert(
-                ip,
+                client,
                 SystemTime::now() + Duration::from_secs(*connection_blocklist_ttl_sec),
             )
             .is_none()
         {
-            // Only increment the metric if the IP was not already blocked
-            debug!("Blocking connection IP");
+            // Only increment the metric if the client was not already blocked
+            debug!("Blocking client: {:?}", client);
             metrics.connection_ip_blocklist_len.inc();
         }
     }
-    if let Some(ip) = block_proxy_ip {
+    if let Some(client) = block_proxied_client {
         if blocklists
-            .proxy_ips
+            .proxied_clients
             .insert(
-                ip,
+                client,
                 SystemTime::now() + Duration::from_secs(*proxy_blocklist_ttl_sec),
             )
             .is_none()
         {
-            // Only increment the metric if the IP was not already blocked
-            debug!("Blocking proxy IP");
+            // Only increment the metric if the client was not already blocked
+            debug!("Blocking proxied client: {:?}", client);
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
@@ -406,8 +488,8 @@ async fn delegate_policy_response(
     metrics: Arc<TrafficControllerMetrics>,
 ) -> Result<(), reqwest::Error> {
     let PolicyResponse {
-        block_connection_ip,
-        block_proxy_ip,
+        block_client,
+        block_proxied_client,
     } = response;
     let PolicyConfig {
         connection_blocklist_ttl_sec,
@@ -415,16 +497,16 @@ async fn delegate_policy_response(
         ..
     } = policy_config;
     let mut addresses = vec![];
-    if let Some(ip) = block_connection_ip {
-        debug!("Delegating connection IP blocking to firewall");
+    if let Some(client_id) = block_client {
+        debug!("Delegating client blocking to firewall");
         addresses.push(BlockAddress {
-            source_address: ip.to_string(),
+            source_address: client_id.to_string(),
             destination_port,
             ttl: *connection_blocklist_ttl_sec,
         });
     }
-    if let Some(ip) = block_proxy_ip {
-        debug!("Delegating proxy IP blocking to firewall");
+    if let Some(ip) = block_proxied_client {
+        debug!("Delegating proxied client blocking to firewall");
         addresses.push(BlockAddress {
             source_address: ip.to_string(),
             destination_port,
@@ -603,18 +685,19 @@ impl TrafficSim {
         let start = Instant::now();
 
         while start.elapsed() < duration {
-            let connection_ip = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
-            let allowed = controller.check(connection_ip, None).await;
+            let client = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
+            let allowed = controller.check(&client, &None).await;
             if allowed {
                 if currently_blocked {
                     total_time_blocked += time_blocked_start.elapsed();
                     currently_blocked = false;
                 }
                 controller.tally(TrafficTally::new(
-                    connection_ip,
+                    client,
                     // TODO add proxy IP for testing
                     None,
-                    // TODO add weight adjustment
+                    // TODO add weight adjustments
+                    Weight::one(),
                     Weight::one(),
                 ));
             } else {

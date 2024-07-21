@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'publish'. lines 1-25:
+task 0, lines 1-25:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::PolymorphicEnums'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 13)],
 }
 
-task 1 'publish'. lines 27-51:
+task 1, lines 27-51:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::MonomorphicEnums'. Got VMError: {
     major_status: MOVELOC_UNAVAILABLE_ERROR,
     sub_status: None,

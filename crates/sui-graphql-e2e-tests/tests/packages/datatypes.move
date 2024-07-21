@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator --protocol-version 51
 
 //# run-graphql
 
@@ -72,7 +72,7 @@ module P0::m {
 //# run-graphql
 # Get all datatypes in the module and print out their common fields
 fragment Datatypes on Object {
-   address 
+   address
    asMovePackage {
        module(name: "m") {
            datatypes {
@@ -98,7 +98,7 @@ fragment Datatypes on Object {
 //# run-graphql
 # Get all datatypes in the module, print out their common fields, and then try to cast them either to an enum or a struct.
 fragment Datatypes on Object {
-   address 
+   address
    asMovePackage {
        module(name: "m") {
            datatypes {

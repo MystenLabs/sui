@@ -85,9 +85,12 @@ impl SuiTxValidator {
                         return Err(SuiError::InvalidDkgMessageSize.into());
                     }
                 }
+
+                ConsensusTransactionKind::CapabilityNotification(_) => {}
+
                 ConsensusTransactionKind::EndOfPublish(_)
-                | ConsensusTransactionKind::CapabilityNotification(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
+                | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
             }
         }
@@ -167,6 +170,8 @@ impl TransactionVerifier for SuiTxValidator {
         _protocol_config: &ProtocolConfig,
         batch: &[&[u8]],
     ) -> Result<(), ValidationError> {
+        let _scope = monitored_scope("ValidateBatch");
+
         let txs = batch
             .iter()
             .map(|tx| {
@@ -241,7 +246,7 @@ mod tests {
                 .build();
 
         let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config)
+            .with_network_config(&network_config, 0)
             .build()
             .await;
         let name1 = state.name;

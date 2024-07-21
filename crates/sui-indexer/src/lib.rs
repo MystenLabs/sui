@@ -202,7 +202,7 @@ pub async fn build_json_rpc_server<T: R2D2Connection>(
         .start(
             default_socket_addr,
             custom_runtime,
-            Some(ServerType::Http),
+            ServerType::Http,
             Some(cancel),
         )
         .await?)

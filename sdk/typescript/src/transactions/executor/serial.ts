@@ -72,6 +72,10 @@ export class SerialTransactionExecutor {
 		return this.#cache.reset();
 	}
 
+	waitForLastTransaction() {
+		return this.#cache.waitForLastTransaction();
+	}
+
 	executeTransaction(transaction: Transaction | Uint8Array) {
 		return this.#queue.runTask(async () => {
 			const bytes = isTransaction(transaction)

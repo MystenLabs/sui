@@ -1084,7 +1084,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Datatype(_) | Type::Datatype(_) if abilities.has_key() => {
+                    Type::Datatype(_) | Type::DatatypeInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .vm
                             .get_runtime()

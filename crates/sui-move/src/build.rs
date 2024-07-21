@@ -6,7 +6,7 @@ use clap::Parser;
 use move_cli::base;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path};
 use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
 
 const LAYOUTS_DIR: &str = "layouts";
@@ -34,13 +34,13 @@ pub struct Build {
 impl Build {
     pub fn execute(
         &self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
-        let build_config = resolve_lock_file_path(build_config, Some(rerooted_path.clone()))?;
+        let build_config = resolve_lock_file_path(build_config, Some(&rerooted_path))?;
         Self::execute_internal(
-            rerooted_path,
+            &rerooted_path,
             build_config,
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
@@ -49,7 +49,7 @@ impl Build {
     }
 
     pub fn execute_internal(
-        rerooted_path: PathBuf,
+        rerooted_path: &Path,
         config: MoveBuildConfig,
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
@@ -59,8 +59,9 @@ impl Build {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
+            chain_id: None,
         }
-        .build(rerooted_path.clone())?;
+        .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {
@@ -81,18 +82,18 @@ impl Build {
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
             // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let mut layout_filename = pkg.path;
-            layout_filename.push("build");
-            layout_filename.push(pkg.package.compiled_package_info.package_name.as_str());
-            layout_filename.push(LAYOUTS_DIR);
-            layout_filename.push(STRUCT_LAYOUTS_FILENAME);
+            let layout_filename = rerooted_path
+                .join("build")
+                .join(pkg.package.compiled_package_info.package_name.as_str())
+                .join(LAYOUTS_DIR)
+                .join(STRUCT_LAYOUTS_FILENAME);
             fs::write(layout_filename, layout_str)?
         }
 
         pkg.package
             .compiled_package_info
             .build_flags
-            .update_lock_file_toolchain_version(&rerooted_path, env!("CARGO_PKG_VERSION").into())?;
+            .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
 
         Ok(())
     }

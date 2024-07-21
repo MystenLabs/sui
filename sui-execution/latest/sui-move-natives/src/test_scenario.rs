@@ -30,12 +30,15 @@ use std::{
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
+    config,
     digests::{ObjectDigest, TransactionDigest},
+    dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
     storage::ChildObjectResolver,
+    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -133,9 +136,11 @@ pub fn end_transaction(
             ));
         }
     };
-    let all_active_child_objects = object_runtime_ref
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let all_active_child_objects_with_values = object_runtime_ref
         .all_active_child_objects()
-        .map(|(id, _, _)| *id)
+        .filter(|child| child.copied_value.is_some())
+        .map(|child| *child.id)
         .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
     let mut new_object_values = IndexMap::new();
@@ -148,18 +153,18 @@ pub fn end_transaction(
     for id in deleted_object_ids
         .iter()
         .chain(writes.keys())
-        .chain(&all_active_child_objects)
+        .chain(&all_active_child_objects_with_values)
     {
         for addr_inventory in inventories.address_inventories.values_mut() {
             for s in addr_inventory.values_mut() {
-                s.remove(id);
+                s.shift_remove(id);
             }
         }
         for s in &mut inventories.shared_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         for s in &mut inventories.immutable_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         inventories.taken.remove(id);
     }
@@ -167,6 +172,7 @@ pub fn end_transaction(
     let mut created = vec![];
     let mut written = vec![];
     for (id, (owner, ty, value)) in writes {
+        // write configs to cache
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -229,13 +235,15 @@ pub fn end_transaction(
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
-        object_runtime_ref.all_active_child_objects(),
+        object_runtime_ref
+            .all_active_child_objects()
+            .filter_map(|child| Some((child.id, child.ty, child.copied_value?))),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
-        || taken_shared_or_imm
-            .keys()
-            .any(|id| all_wrapped.contains(id) || all_active_child_objects.contains(id));
+        || taken_shared_or_imm.keys().any(|id| {
+            all_wrapped.contains(id) || all_active_child_objects_with_values.contains(id)
+        });
     // if incorrect handling, return with an 'abort'
     if incorrect_shared_or_imm_handling {
         return Ok(NativeResult::err(
@@ -251,6 +259,23 @@ pub fn end_transaction(
 
     // new input objects are remaining taken objects not written/deleted
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let mut config_settings = vec![];
+    for child in object_runtime_ref.all_active_child_objects() {
+        let s: StructTag = child.move_type.clone().into();
+        let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
+            && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
+        if is_setting {
+            config_settings.push((
+                *child.owner,
+                *child.id,
+                child.move_type.clone(),
+                child.copied_value,
+            ));
+        }
+    }
+    for (config, setting, ty, value) in config_settings {
+        object_runtime_ref.config_setting_cache_update(config, setting, ty, value)
+    }
     object_runtime_ref.state.input_objects = object_runtime_ref
         .test_inventories
         .taken
@@ -260,7 +285,7 @@ pub fn end_transaction(
     // update inventories
     // check for bad updates to immutable values
     for (id, (ty, value)) in new_object_values {
-        debug_assert!(!all_active_child_objects.contains(&id));
+        debug_assert!(!all_active_child_objects_with_values.contains(&id));
         if let Some(prev_value) = object_runtime_ref
             .test_inventories
             .taken_immutable_values
@@ -284,7 +309,7 @@ pub fn end_transaction(
         object_runtime_ref.test_inventories.objects.remove(id);
     }
     // remove active child objects
-    for id in all_active_child_objects {
+    for id in all_active_child_objects_with_values {
         object_runtime_ref.test_inventories.objects.remove(&id);
     }
 

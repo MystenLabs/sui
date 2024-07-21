@@ -23,8 +23,6 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Deref;
@@ -33,7 +31,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::{Committee, CommitteeTrait};
+use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 
 use tap::prelude::*;
@@ -378,6 +376,9 @@ impl ConsensusAdapter {
             recovered.len()
         );
         for transaction in recovered {
+            if transaction.is_end_of_publish() {
+                info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
+            }
             self.submit_unchecked(&[transaction], epoch_store);
         }
     }
@@ -418,9 +419,9 @@ impl ConsensusAdapter {
         let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
+        const DEFAULT_LATENCY: Duration = Duration::from_secs(1); // > p50 consensus latency with global deployment
         const MIN_LATENCY: Duration = Duration::from_millis(150);
-        const MAX_LATENCY: Duration = Duration::from_secs(10);
+        const MAX_LATENCY: Duration = Duration::from_secs(3);
 
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
         self.metrics
@@ -512,7 +513,7 @@ impl ConsensusAdapter {
         committee: &Committee,
         tx_digest: &TransactionDigest,
     ) -> (usize, usize, usize) {
-        let positions = order_validators_for_submission(committee, tx_digest);
+        let positions = committee.shuffle_by_stake_from_tx_digest(tx_digest);
 
         self.check_submission_wrt_connectivity_and_scores(positions)
     }
@@ -747,6 +748,7 @@ impl ConsensusAdapter {
                 transactions[0].kind,
                 ConsensusTransactionKind::EndOfPublish(_)
                     | ConsensusTransactionKind::CapabilityNotification(_)
+                    | ConsensusTransactionKind::CapabilityNotificationV2(_)
                     | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
                     | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
             ) {
@@ -879,6 +881,7 @@ impl ConsensusAdapter {
         };
         if send_end_of_publish {
             // sending message outside of any locks scope
+            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -961,18 +964,6 @@ pub fn get_position_in_list(
         .0
 }
 
-pub fn order_validators_for_submission(
-    committee: &Committee,
-    tx_digest: &TransactionDigest,
-) -> Vec<AuthorityName> {
-    // the 32 is as requirement of the default StdRng::from_seed choice
-    let digest_bytes = tx_digest.into_inner();
-
-    // permute the validators deterministically, based on the digest
-    let mut rng = StdRng::from_seed(digest_bytes);
-    committee.shuffle_by_stake_with_rng(None, None, &mut rng)
-}
-
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
@@ -992,6 +983,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             // reconfig_guard lock is dropped here.
         };
         if send_end_of_publish {
+            info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
@@ -1132,7 +1124,7 @@ pub fn position_submit_certificate(
     ourselves: &AuthorityName,
     tx_digest: &TransactionDigest,
 ) -> usize {
-    let validators = order_validators_for_submission(committee, tx_digest);
+    let validators = committee.shuffle_by_stake_from_tx_digest(tx_digest);
     get_position_in_list(*ourselves, validators)
 }
 
@@ -1229,8 +1221,8 @@ mod adapter_tests {
 
         assert_eq!(position, 7);
 
-        // delay_step * position = 3 * 2 * 7 = 42
-        assert_eq!(delay_step, Duration::from_secs(42));
+        // delay_step * position * 2 = 1 * 7 * 2 = 14
+        assert_eq!(delay_step, Duration::from_secs(14));
         assert!(!positions_moved > 0);
     }
 

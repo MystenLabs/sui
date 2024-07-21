@@ -15,7 +15,10 @@ use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
+use crate::messages_consensus::{
+    ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
+    ConsensusDeterminedVersionAssignments,
+};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
@@ -47,7 +50,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::ProtocolConfig;
 use tap::Pipe;
 use tracing::trace;
 
@@ -286,6 +289,8 @@ pub enum TransactionKind {
     RandomnessStateUpdate(RandomnessStateUpdate),
     // V2 ConsensusCommitPrologue also includes the digest of the current consensus output.
     ConsensusCommitPrologueV2(ConsensusCommitPrologueV2),
+
+    ConsensusCommitPrologueV3(ConsensusCommitPrologueV3),
     // .. more transaction types go here
 }
 
@@ -424,133 +429,47 @@ impl EndOfEpochTransactionKind {
         match self {
             Self::ChangeEpoch(_) => (),
             Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_jwk_consensus_updates());
+                if !config.enable_jwk_consensus_updates() {
+                    return Err(UserInputError::Unsupported(
+                        "authenticator state updates not enabled".to_string(),
+                    ));
+                }
             }
             Self::RandomnessStateCreate => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.random_beacon());
+                if !config.random_beacon() {
+                    return Err(UserInputError::Unsupported(
+                        "random beacon not enabled".to_string(),
+                    ));
+                }
             }
             Self::DenyListStateCreate => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_coin_deny_list());
+                if !config.enable_coin_deny_list_v1() {
+                    return Err(UserInputError::Unsupported(
+                        "coin deny list not enabled".to_string(),
+                    ));
+                }
             }
-            Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
-                // Transaction should have been rejected earlier (or never formed).
-                assert!(config.enable_bridge());
+            Self::BridgeStateCreate(_) => {
+                if !config.enable_bridge() {
+                    return Err(UserInputError::Unsupported(
+                        "bridge not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::BridgeCommitteeInit(_) => {
+                if !config.enable_bridge() {
+                    return Err(UserInputError::Unsupported(
+                        "bridge not enabled".to_string(),
+                    ));
+                }
+                if !config.should_try_to_finalize_bridge_committee() {
+                    return Err(UserInputError::Unsupported(
+                        "should not try to finalize committee yet".to_string(),
+                    ));
+                }
             }
         }
         Ok(())
-    }
-}
-
-impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // When adding new cases, they must be guarded by a feature flag and return
-        // UnsupportedFeatureError if the flag is not set.
-        match &self {
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => Ok(()),
-            TransactionKind::ProgrammableTransaction(pt) => {
-                // NB: we don't use the `receiving_objects` method here since we don't want to check
-                // for any validity requirements such as duplicate receiving inputs at this point.
-                if !protocol_config.receiving_objects_supported() {
-                    let has_receiving_objects = pt
-                        .inputs
-                        .iter()
-                        .any(|arg| !arg.receiving_objects().is_empty());
-                    if has_receiving_objects {
-                        return Err(SuiError::UnsupportedFeatureError {
-                            error: format!(
-                                "receiving objects is not supported at {:?}",
-                                protocol_config.version
-                            ),
-                        });
-                    }
-                }
-                Ok(())
-            }
-            TransactionKind::AuthenticatorStateUpdate(_) => {
-                if protocol_config.enable_jwk_consensus_updates() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "authenticator state updates not enabled".to_string(),
-                    })
-                }
-            }
-            TransactionKind::RandomnessStateUpdate(_) => {
-                if protocol_config.random_beacon() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "randomness state updates not enabled".to_string(),
-                    })
-                }
-            }
-            TransactionKind::EndOfEpochTransaction(txns) => {
-                if !protocol_config.end_of_epoch_transaction_supported() {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "EndOfEpochTransaction is not supported".to_string(),
-                    })
-                } else {
-                    for tx in txns {
-                        match tx {
-                            EndOfEpochTransactionKind::ChangeEpoch(_) => (),
-                            EndOfEpochTransactionKind::AuthenticatorStateCreate
-                            | EndOfEpochTransactionKind::AuthenticatorStateExpire(_) => {
-                                if !protocol_config.enable_jwk_consensus_updates() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "authenticator state updates not enabled"
-                                            .to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::RandomnessStateCreate => {
-                                if !protocol_config.random_beacon() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "random beacon not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::DenyListStateCreate => {
-                                if !protocol_config.enable_coin_deny_list() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "coin deny list not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::BridgeStateCreate(_) => {
-                                if !protocol_config.enable_bridge() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "bridge not enabled".to_string(),
-                                    });
-                                }
-                            }
-                            EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
-                                if !protocol_config.enable_bridge() {
-                                    return Err(SuiError::UnsupportedFeatureError {
-                                        error: "bridge not enabled".to_string(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-
-                    Ok(())
-                }
-            }
-            TransactionKind::ConsensusCommitPrologueV2(_) => {
-                if protocol_config.include_consensus_digest_in_prologue() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "ConsensusCommitPrologueV2 is not supported".to_string(),
-                    })
-                }
-            }
-        }
     }
 }
 
@@ -602,7 +521,17 @@ impl CallArg {
                     }
                 );
             }
-            CallArg::Object(_) => (),
+            CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::Receiving(_) => {
+                    if !config.receiving_objects_supported() {
+                        return Err(UserInputError::Unsupported(format!(
+                            "receiving objects is not supported at {:?}",
+                            config.version
+                        )));
+                    }
+                }
+            },
         }
         Ok(())
     }
@@ -1043,10 +972,17 @@ impl ProgrammableTransaction {
             command.validity_check(config)?;
         }
 
+        // If randomness is used, it must be enabled by protocol config.
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if let Some(random_index) = inputs.iter().position(|obj| {
             matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
         }) {
+            fp_ensure!(
+                config.random_beacon(),
+                UserInputError::Unsupported(
+                    "randomness is not enabled on this network".to_string(),
+                )
+            );
             let mut used_random_object = false;
             let random_index = random_index.try_into().unwrap();
             for command in commands {
@@ -1237,6 +1173,7 @@ impl TransactionKind {
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => true,
@@ -1284,7 +1221,9 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)))
             }
 
-            Self::ConsensusCommitPrologue(_) | Self::ConsensusCommitPrologueV2(_) => {
+            Self::ConsensusCommitPrologue(_)
+            | Self::ConsensusCommitPrologueV2(_)
+            | Self::ConsensusCommitPrologueV3(_) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1328,6 +1267,7 @@ impl TransactionKind {
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
@@ -1351,7 +1291,9 @@ impl TransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
-            Self::ConsensusCommitPrologue(_) | Self::ConsensusCommitPrologueV2(_) => {
+            Self::ConsensusCommitPrologue(_)
+            | Self::ConsensusCommitPrologueV2(_)
+            | Self::ConsensusCommitPrologueV3(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1409,11 +1351,27 @@ impl TransactionKind {
             // and no validity or limit checks are performed.
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ConsensusCommitPrologueV2(_) => (),
+            | TransactionKind::ConsensusCommitPrologue(_) => (),
+            TransactionKind::ConsensusCommitPrologueV2(_) => {
+                if !config.include_consensus_digest_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV2 is not supported".to_string(),
+                    ));
+                }
+            }
+            TransactionKind::ConsensusCommitPrologueV3(_) => {
+                if !config.record_consensus_determined_version_assignments_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV3 is not supported".to_string(),
+                    ));
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.end_of_epoch_transaction_supported());
+                if !config.end_of_epoch_transaction_supported() {
+                    return Err(UserInputError::Unsupported(
+                        "EndOfEpochTransaction is not supported".to_string(),
+                    ));
+                }
 
                 for tx in txns {
                     tx.validity_check(config)?;
@@ -1421,12 +1379,18 @@ impl TransactionKind {
             }
 
             TransactionKind::AuthenticatorStateUpdate(_) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.enable_jwk_consensus_updates());
+                if !config.enable_jwk_consensus_updates() {
+                    return Err(UserInputError::Unsupported(
+                        "authenticator state updates not enabled".to_string(),
+                    ));
+                }
             }
             TransactionKind::RandomnessStateUpdate(_) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.random_beacon());
+                if !config.random_beacon() {
+                    return Err(UserInputError::Unsupported(
+                        "randomness state updates not enabled".to_string(),
+                    ));
+                }
             }
         };
         Ok(())
@@ -1461,6 +1425,7 @@ impl TransactionKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
+            Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1492,6 +1457,16 @@ impl Display for TransactionKind {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
                 writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
                 writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
+            }
+            Self::ConsensusCommitPrologueV3(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V3")?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+                writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
+                writeln!(
+                    writer,
+                    "Consensus determined version assignment: {:?}",
+                    p.consensus_determined_version_assignments
+                )?;
             }
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
@@ -1532,42 +1507,8 @@ pub enum TransactionExpiration {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionData {
     V1(TransactionDataV1),
-}
-
-impl VersionedProtocolMessage for TransactionData {
-    fn message_version(&self) -> Option<u64> {
-        Some(match self {
-            Self::V1(_) => 1,
-        })
-    }
-
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // First check the gross version
-        let (message_version, supported) = match self {
-            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
-            //
-            // Suppose we remove support for V1 after protocol version 12: we can do it like so:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
-        };
-
-        if !supported.is_version_supported(protocol_config.version) {
-            return Err(SuiError::WrongMessageVersion {
-                error: format!(
-                    "TransactionDataV{} is not supported at {:?}. (Supported range is {:?}",
-                    message_version, protocol_config.version, supported
-                ),
-            });
-        }
-
-        // Now check interior versioned data
-        self.kind()
-            .check_version_and_features_supported(protocol_config)?;
-
-        Ok(())
-    }
+    // When new variants are introduced, it is important that we check version support
+    // in the validity_check function based on the protocol config.
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -1942,6 +1883,12 @@ impl TransactionData {
         )
     }
 
+    pub fn message_version(&self) -> u64 {
+        match self {
+            TransactionData::V1(_) => 1,
+        }
+    }
+
     pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
         (
             self.kind().clone(),
@@ -2273,6 +2220,10 @@ impl SenderSignedData {
         self.0.element()
     }
 
+    pub fn into_inner(self) -> SenderSignedTransaction {
+        self.0.into_inner()
+    }
+
     pub fn inner_mut(&mut self) -> &mut SenderSignedTransaction {
         self.0.element_mut()
     }
@@ -2337,16 +2288,37 @@ impl SenderSignedData {
     }
 
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
-        if !config.zklogin_auth() && self.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            });
-        }
-
-        if !config.supports_upgraded_multisig() && self.has_upgraded_multisig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            });
+        for sig in &self.inner().tx_signatures {
+            match sig {
+                GenericSignature::MultiSig(_) => {
+                    if !config.supports_upgraded_multisig() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "upgraded multisig format not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
+                GenericSignature::ZkLoginAuthenticator(_) => {
+                    if !config.zklogin_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zklogin is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
+                GenericSignature::PasskeyAuthenticator(_) => {
+                    if !config.passkey_auth() {
+                        return Err(SuiError::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "passkey is not enabled on this network".to_string(),
+                            ),
+                        });
+                    }
+                }
+                GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
+            }
         }
 
         Ok(())
@@ -2393,45 +2365,9 @@ impl SenderSignedData {
         );
 
         tx_data
-            .check_version_and_features_supported(config)
-            .map_err(Into::<SuiError>::into)?;
-        tx_data
             .validity_check(config)
             .map_err(Into::<SuiError>::into)?;
 
-        Ok(())
-    }
-}
-
-impl VersionedProtocolMessage for SenderSignedData {
-    fn message_version(&self) -> Option<u64> {
-        self.transaction_data().message_version()
-    }
-
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        self.transaction_data()
-            .check_version_and_features_supported(protocol_config)?;
-
-        // This code does nothing right now. Its purpose is to cause a compiler error when a
-        // new signature type is added.
-        //
-        // When adding a new signature type, check if current_protocol_version
-        // predates support for the new type. If it does, return
-        // SuiError::WrongMessageVersion
-        for sig in &self.inner().tx_signatures {
-            match sig {
-                GenericSignature::MultiSig(_) => {
-                    if !protocol_config.supports_upgraded_multisig() {
-                        return Err(SuiError::UnsupportedFeatureError {
-                            error: "multisig format not enabled on this network".to_string(),
-                        });
-                    }
-                }
-                GenericSignature::Signature(_)
-                | GenericSignature::MultiSigLegacy(_)
-                | GenericSignature::ZkLoginAuthenticator(_) => (),
-            }
-        }
         Ok(())
     }
 }
@@ -2440,6 +2376,7 @@ impl Message for SenderSignedData {
     type DigestType = TransactionDigest;
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
+    /// Computes the tx digest that encodes the Rust type prefix from Signable trait.
     fn digest(&self) -> Self::DigestType {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
@@ -2606,6 +2543,29 @@ impl VerifiedTransaction {
             consensus_commit_digest,
         }
         .pipe(TransactionKind::ConsensusCommitPrologueV2)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue_v3(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+        consensus_commit_digest: ConsensusCommitDigest,
+        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+    ) -> Self {
+        ConsensusCommitPrologueV3 {
+            epoch,
+            round,
+            // sub_dag_index is reserved for when we have multi commits per round.
+            sub_dag_index: None,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+            consensus_determined_version_assignments:
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(
+                    cancelled_txn_version_assignment,
+                ),
+        }
+        .pipe(TransactionKind::ConsensusCommitPrologueV3)
         .pipe(Self::new_system_transaction)
     }
 
@@ -2800,18 +2760,6 @@ impl CertifiedTransaction {
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
-
-pub trait VersionedProtocolMessage {
-    /// Return version of message. Some messages depend on their enclosing messages to know the
-    /// version number, so not every implementor implements this.
-    fn message_version(&self) -> Option<u64> {
-        None
-    }
-
-    /// Check that the version of the message is the correct one to use at this protocol version.
-    /// Also checks whether the feauures used by the message are supported by the protocol config.
-    fn check_version_and_features_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
@@ -3095,22 +3043,34 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
-    pub fn get_congested_objects(&self) -> Option<Vec<ObjectID>> {
-        let mut contains_cancelled_read = false;
-        let mut congested_objects = Vec::new();
+    // Returns IDs of objects responsible for a tranaction being cancelled, and the corresponding
+    // reason for cancellation.
+    pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
+        let mut contains_cancelled = false;
+        let mut cancel_reason = None;
+        let mut cancelled_objects = Vec::new();
         for obj in &self.objects {
             if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
-                contains_cancelled_read = true;
-                if version == SequenceNumber::CONGESTED {
-                    congested_objects.push(obj.id());
+                contains_cancelled = true;
+                if version == SequenceNumber::CONGESTED
+                    || version == SequenceNumber::RANDOMNESS_UNAVAILABLE
+                {
+                    // Verify we don't have multiple cancellation reasons.
+                    assert!(cancel_reason.is_none() || cancel_reason == Some(version));
+                    cancel_reason = Some(version);
+                    cancelled_objects.push(obj.id());
                 }
             }
         }
 
-        if !congested_objects.is_empty() {
-            Some(congested_objects)
+        if !cancelled_objects.is_empty() {
+            Some((
+                cancelled_objects,
+                cancel_reason
+                    .expect("there should be a cancel reason if there are cancelled objects"),
+            ))
         } else {
-            assert!(!contains_cancelled_read);
+            assert!(!contains_cancelled);
             None
         }
     }

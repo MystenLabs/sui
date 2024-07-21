@@ -7,7 +7,7 @@ Generating pseudo-random values in Move is similar to solutions in other languag
 
 ```move
 entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
-  let generator = new_generator(r, ctx); // generator is a PRG
+  let mut generator = new_generator(r, ctx); // generator is a PRG
   Dice { value: random::generate_u8_in_range(&mut generator, 1, 6) }
 }
 ```
@@ -41,7 +41,7 @@ module games::dice {
     assert!(coin::value(&fee) == 1000000, EInvalidAmount);
     transfer::public_transfer(fee, CREATOR_ADDRESS);
     // Roll the dice
-    let generator = new_generator(r, ctx);
+    let mut generator = new_generator(r, ctx);
     if (guess == random::generate_u8_in_range(&mut generator, 1, 6)) {
       option::some(GuessedCorrectly {})
     } else {
@@ -110,10 +110,11 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 Developers should be aware that some resources that are available to transactions are limited. If a function that reads `Random` consumes more resources in the unhappy path flow than in the happy path flow, an attacker can use that difference to revert the transaction in the unhappy flow as previously demonstrated. Concretely, gas is such a resource. Consider the following code:
 
 ```move
-entry fun play(r: &Random, payment: Coin<SUI>, ...) {
+// Insecure implementation, do not use.
+entry fun insecure_play(r: &Random, payment: Coin<SUI>, ...) {
   ...
-  let generator = new_generator(r, ctx);
-  let win = random::generate_bool(generator);
+  let mut generator = new_generator(r, ctx);
+  let win = random::generate_bool(&mut generator);
   if (win) { // happy flow
     ... cheap computation ...
   } else {
@@ -122,7 +123,7 @@ entry fun play(r: &Random, payment: Coin<SUI>, ...) {
 }
 ```
 
-Observe that the gas costs of a transaction that calls `play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
+Observe that the gas costs of a transaction that calls `insecure_play` depends on the value of `win` - An attacker could call this function with a gas object that has enough balance to cover the happy flow but not the unhappy one, resulting in it either winning or reverting the transaction (but never losing the payment).
 
 In many cases this is not an issue, like when selecting a raffle winner, lottery numbers, or a random NFT. However, in the cases where it can be problematic, you can do one of the following:
 

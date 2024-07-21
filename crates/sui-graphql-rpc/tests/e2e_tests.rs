@@ -14,6 +14,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
     use sui_types::gas_coin::GAS;
@@ -26,6 +27,33 @@ mod tests {
     use tempfile::tempdir;
     use tokio::time::sleep;
 
+    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
+        let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
+        let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
+
+        sim.create_checkpoint();
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config.clone(),
+            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+            Arc::new(sim),
+            None,
+            data_ingestion_path,
+        )
+        .await;
+
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
+
+        (connection_config, cluster)
+    }
+
     #[tokio::test]
     #[serial]
     async fn test_simple_client_validator_cluster() {
@@ -33,10 +61,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
@@ -90,9 +117,8 @@ mod tests {
             "{{\"data\":{{\"chainIdentifier\":\"{}\"}}}}",
             chain_id_actual
         );
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config,
+            ConnectionConfig::default(),
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
@@ -120,26 +146,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_response() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config,
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-            Arc::new(sim),
-            None,
-            data_ingestion_path,
-        )
-        .await;
-        cluster
-            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
-            .await;
+        let (_, cluster) = prep_cluster().await;
 
         let query = r#"
             {
@@ -168,26 +175,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_variables() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config,
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-            Arc::new(sim),
-            None,
-            data_ingestion_path,
-        )
-        .await;
-        cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
-            .await;
+        let (_, cluster) = prep_cluster().await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -331,10 +319,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -442,9 +429,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         let test_cluster = cluster.validator_fullnode_handle;
         test_cluster.wait_for_epoch_all_nodes(1).await;
@@ -555,10 +542,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -649,10 +635,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -720,10 +705,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -808,10 +792,9 @@ mod tests {
             .with_env()
             .init();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
 
         cluster
             .validator_fullnode_handle
@@ -855,9 +838,9 @@ mod tests {
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+            sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
+                .await;
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
@@ -882,7 +865,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_query_default_page_limit() {
-        test_query_default_page_limit_impl().await;
+        let (connection_config, _) = prep_cluster().await;
+        test_query_default_page_limit_impl(connection_config).await;
     }
 
     #[tokio::test]
@@ -895,5 +879,22 @@ mod tests {
     #[serial]
     async fn test_query_complexity_metrics() {
         test_query_complexity_metrics_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_health_check() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        println!("Cluster started");
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
+        test_health_check_impl().await;
     }
 }

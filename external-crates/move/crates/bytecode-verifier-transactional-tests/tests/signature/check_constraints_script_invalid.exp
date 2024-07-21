@@ -1,6 +1,7 @@
 processed 9 tasks
 
-task 1 'run'. lines 17-24:
+task 1, lines 17-24:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 2 'run'. lines 26-33:
+task 2, lines 26-33:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 3 'run'. lines 35-42:
+task 3, lines 35-42:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 4 'run'. lines 44-51:
+task 4, lines 44-51:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 5 'run'. lines 53-60:
+task 5, lines 53-60:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -45,7 +50,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 6 'run'. lines 62-69:
+task 6, lines 62-69:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -54,7 +60,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 7 'run'. lines 71-78:
+task 7, lines 71-78:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
@@ -63,7 +70,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 8 'run'. lines 80-87:
+task 8, lines 80-87:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,

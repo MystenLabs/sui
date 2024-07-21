@@ -34,8 +34,8 @@ during development. In a production application, however, you should use the
 - `testnet`
 - `mainnet`
 
-For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
-with a local validator, a Full node, and a faucet server. Refer to
+For local development, you can run `cargo run --bin sui -- start --with-faucet --force-regenesis` to
+spin up a local network with a local validator, a Full node, and a faucet server. Refer to
 [the Local Network guide](https://docs.sui.io/guides/developer/getting-started/local-network) for
 more information.
 
@@ -56,75 +56,6 @@ const committeeInfo = await client.call('suix_getCommitteeInfo', []);
 
 For a full list of available RPC methods, see the
 [RPC documentation](https://docs.sui.io/references/sui-api).
-
-## Subscribing to events with SuiClient
-
-In addition to calling RPC methods, you can use `SuiClient` to subscribe to network events:
-
-```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-const client = new SuiClient({
-	url: getFullnodeUrl('testnet'),
-});
-
-// naming the function unsubscribe may seem counterintuitive here, but you call it later to unsubscribe from the event
-const unsubscribe = await client.subscribeEvent({
-	filter: {
-		Sender: '<SENDER_ADDRESS>',
-	},
-	onMessage(event) {
-		// handle subscription notification message here. This function is called once per subscription message.
-	},
-});
-
-// later, to unsubscribe
-await unsubscribe();
-```
-
-## Using subscriptions in Node.js
-
-If you are using `SuiClient` in an environment that does not support the `WebSocket` API, including
-Node.js, you may need to provide your own implementation of the `WebSocket` API when creating your
-SuiClient. You can either use a global polyfill for the WebSocket class, or pass a compatible
-WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
-
-```typescript
-import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui/client';
-import { WebSocket } from 'ws';
-
-new SuiClient({
-	transport: new SuiHTTPTransport({
-		url: getFullnodeUrl('mainnet'),
-		// The typescript definitions may not match perfectly, casting to never avoids these minor incompatibilities
-		WebSocketConstructor: WebSocket as never,
-	}),
-});
-```
-
-## Subscribing to transactions with SuiClient
-
-Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
-
-```typescript
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-const client = new SuiClient({
-	url: getFullnodeUrl('testnet'),
-});
-
-const unsubscribe = await client.subscribeTransaction({
-	filter: {
-		FromAddress: '<SUI_ADDRESS>',
-	},
-	onMessage(event) {
-		// This function is called once per transaction.
-	},
-});
-
-// later, to unsubscribe:
-await unsubscribe();
-```
 
 ## Customizing the transport
 

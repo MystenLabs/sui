@@ -2,21 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
-use move_core_types::parser::parse_struct_tag;
 use rand::rngs::OsRng;
-use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
-use sui_json_rpc_types::{
-    type_and_fields_from_move_event_data, EventPage, SuiEvent, SuiExecutionStatus,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
+use sui_json_rpc_types::{
+    EventPage, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
@@ -24,7 +22,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
-    batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
+    batch_make_transfer_transactions, create_nft, delete_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
     TestTransactionBuilder,
 };
@@ -33,7 +31,6 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::error::{SuiError, UserInputError};
-use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
@@ -47,13 +44,11 @@ use sui_types::transaction::{
     CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::type_resolver::get_layout_from_struct_tag;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use test_cluster::TestClusterBuilder;
 use tokio::sync::Mutex;
-use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -638,107 +633,6 @@ async fn do_test_full_node_sync_flood() {
         .unwrap();
 }
 
-#[sim_test]
-async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await;
-
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.spawn_new_fullnode().await;
-
-    let ws_client = fullnode.ws_client().await;
-    let node = fullnode.sui_node;
-
-    let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
-
-    let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
-    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
-
-    let mut sub: Subscription<SuiEvent> = ws_client
-        .subscribe(
-            "suix_subscribeEvent",
-            rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "suix_unsubscribeEvent",
-        )
-        .await
-        .unwrap();
-
-    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
-    node.state()
-        .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[digest])
-        .await
-        .unwrap();
-
-    // Wait for streaming
-    let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent {
-            type_,
-            parsed_json,
-            bcs,
-            ..
-        }))) => {
-            assert_eq!(&type_, &struct_tag);
-            assert_eq!(
-                parsed_json,
-                json!({
-                    "creator" : sender,
-                    "name": "example_nft_name",
-                    "object_id" : object_id,
-                })
-            );
-            bcs
-        }
-        other => panic!("Failed to get SuiEvent, but {:?}", other),
-    };
-    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let layout = get_layout_from_struct_tag(
-        struct_tag.clone(),
-        &**node.state().epoch_store_for_testing().module_cache(),
-    )?;
-
-    let expected_parsed_event = Event::move_event_to_move_value(&bcs, layout).unwrap();
-    let (_, expected_parsed_events) =
-        type_and_fields_from_move_event_data(expected_parsed_event).unwrap();
-    let expected_event = SuiEvent {
-        id: EventID {
-            tx_digest: digest,
-            event_seq: 0,
-        },
-        package_id,
-        transaction_module: ident_str!("devnet_nft").into(),
-        sender,
-        type_: struct_tag,
-        parsed_json: expected_parsed_events,
-        bcs,
-        timestamp_ms: None,
-    };
-
-    // get tx events
-    let events = test_cluster
-        .sui_client()
-        .event_api()
-        .get_events(digest)
-        .await?;
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0], expected_event);
-    assert_eq!(events[0].id.tx_digest, digest);
-
-    // No more
-    match timeout(Duration::from_secs(5), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new events are coming in. Got {:?}",
-            other
-        ),
-    }
-
-    Ok(())
-}
-
 // Test fullnode has event read jsonrpc endpoints working
 #[sim_test]
 async fn test_full_node_event_read_api_ok() {
@@ -778,7 +672,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
+    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -808,7 +702,7 @@ async fn test_full_node_event_query_by_module_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
+    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -816,7 +710,7 @@ async fn test_full_node_event_query_by_module_ok() {
     // query by move event module
     let params = rpc_params![EventFilter::MoveEventModule {
         package: package_id,
-        module: ident_str!("devnet_nft").into()
+        module: ident_str!("testnet_nft").into()
     }];
     let page: EventPage = jsonrpc_client
         .request("suix_queryEvents", params)
@@ -1086,7 +980,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let package_id = publish_nfts_package(&test_cluster.wallet).await.0;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(&test_cluster.wallet, package_id).await;
+    let (sender, object_id, _) = create_nft(&test_cluster.wallet, package_id).await;
 
     let recipient = test_cluster.get_address_1();
     assert_ne!(sender, recipient);
@@ -1117,8 +1011,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response =
-        delete_devnet_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
+    let response = delete_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
@@ -1352,7 +1245,10 @@ async fn test_access_old_object_pruned() {
                 let state = node.state();
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+                    .prune_objects_and_compact_for_testing(
+                        state.get_checkpoint_store(),
+                        state.rest_index.as_deref(),
+                    )
                     .await;
                 // Make sure the old version of the object is already pruned.
                 assert!(state

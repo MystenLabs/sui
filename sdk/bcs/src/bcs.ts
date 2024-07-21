@@ -167,7 +167,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 				if (value.length !== size) {
@@ -220,7 +220,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 				if (value.length !== size) {
@@ -252,7 +252,7 @@ export const bcs = {
 					return { Some: value };
 				},
 				output: (value) => {
-					if ('Some' in value) {
+					if (value.$kind === 'Some') {
 						return value.Some;
 					}
 
@@ -291,7 +291,7 @@ export const bcs = {
 			...options,
 			validate: (value) => {
 				options?.validate?.(value);
-				if (!('length' in value)) {
+				if (!value || typeof value !== 'object' || !('length' in value)) {
 					throw new TypeError(`Expected array, found ${typeof value}`);
 				}
 			},

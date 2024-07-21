@@ -47,6 +47,8 @@ impl Extension for TimeoutExt {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let document = next.run(ctx, query, variables).await?;
+        *self.query.lock().unwrap() = Some(ctx.stringify_execute_doc(&document, variables));
+
         let is_mutation = document
             .operations
             .iter()
@@ -69,9 +71,9 @@ impl Extension for TimeoutExt {
         // increase the timeout if the request is a mutation
         let is_mutation = self.is_mutation.load(Ordering::Relaxed);
         let request_timeout = if is_mutation {
-            Duration::from_millis(cfg.limits.mutation_timeout_ms)
+            Duration::from_millis(cfg.limits.mutation_timeout_ms.into())
         } else {
-            Duration::from_millis(cfg.limits.request_timeout_ms)
+            Duration::from_millis(cfg.limits.request_timeout_ms.into())
         };
 
         timeout(request_timeout, next.run(ctx, operation_name))

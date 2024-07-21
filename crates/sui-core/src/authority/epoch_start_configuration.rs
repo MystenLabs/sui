@@ -9,7 +9,7 @@ use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, is_bridge_committee_initiated};
-use sui_types::deny_list::get_deny_list_obj_initial_shared_version;
+use sui_types::deny_list_v1::get_deny_list_obj_initial_shared_version;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointTimestamp};
@@ -41,36 +41,60 @@ pub trait EpochStartConfigTrait {
     }
 }
 
+// IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
+// When cherry-picking changes from one branch to another, the value of variants must never
+// change.
+//
+// Unlikely: If you cherry pick a change from one branch to another, and there is a collision
+// in the value of some variant, the branch which has been released should take precedence.
+// In this case, the picked-from branch is inconsistent with the released branch, and must
+// be fixed.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum EpochFlag {
-    InMemoryCheckpointRoots,
-    PerEpochFinalizedTransactions,
-    ObjectLockSplitTables,
-    WritebackCacheEnabled,
+    // The deprecated flags have all been in production for long enough that
+    // we can have deleted the old code paths they were guarding.
+    // We retain them here in order not to break deserialization.
+    _InMemoryCheckpointRootsDeprecated = 0,
+    _PerEpochFinalizedTransactionsDeprecated = 1,
+    _ObjectLockSplitTablesDeprecated = 2,
+
+    WritebackCacheEnabled = 3,
+
+    // This flag was "burned" because it was deployed with a broken version of the code. The
+    // new flags below are required to enable state accumulator v2
+    _StateAccumulatorV2EnabledDeprecated = 4,
+    StateAccumulatorV2EnabledTestnet = 5,
+    StateAccumulatorV2EnabledMainnet = 6,
+
+    ExecutedInEpochTable = 7,
 }
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
-        Self::default_flags_impl(&config.execution_cache)
+        Self::default_flags_impl(&config.execution_cache, config.state_accumulator_v2)
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default())
+        Self::default_flags_impl(&Default::default(), true)
     }
 
-    fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
-        let mut new_flags = vec![
-            EpochFlag::InMemoryCheckpointRoots,
-            EpochFlag::PerEpochFinalizedTransactions,
-            EpochFlag::ObjectLockSplitTables,
-        ];
+    fn default_flags_impl(
+        cache_config: &ExecutionCacheConfig,
+        enable_state_accumulator_v2: bool,
+    ) -> Vec<Self> {
+        let mut new_flags = vec![EpochFlag::ExecutedInEpochTable];
 
         if matches!(
             choose_execution_cache(cache_config),
             ExecutionCacheConfigType::WritebackCache
         ) {
             new_flags.push(EpochFlag::WritebackCacheEnabled);
+        }
+
+        if enable_state_accumulator_v2 {
+            new_flags.push(EpochFlag::StateAccumulatorV2EnabledTestnet);
+            new_flags.push(EpochFlag::StateAccumulatorV2EnabledMainnet);
         }
 
         new_flags
@@ -81,10 +105,26 @@ impl fmt::Display for EpochFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Important - implementation should return low cardinality values because this is used as metric key
         match self {
-            EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
-            EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
-            EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
+            EpochFlag::_InMemoryCheckpointRootsDeprecated => {
+                write!(f, "InMemoryCheckpointRoots (DEPRECATED)")
+            }
+            EpochFlag::_PerEpochFinalizedTransactionsDeprecated => {
+                write!(f, "PerEpochFinalizedTransactions (DEPRECATED)")
+            }
+            EpochFlag::_ObjectLockSplitTablesDeprecated => {
+                write!(f, "ObjectLockSplitTables (DEPRECATED)")
+            }
             EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
+            EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
+            }
+            EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
+            EpochFlag::StateAccumulatorV2EnabledTestnet => {
+                write!(f, "StateAccumulatorV2EnabledTestnet")
+            }
+            EpochFlag::StateAccumulatorV2EnabledMainnet => {
+                write!(f, "StateAccumulatorV2EnabledMainnet")
+            }
         }
     }
 }
@@ -129,6 +169,26 @@ impl EpochStartConfiguration {
         }))
     }
 
+    pub fn new_at_next_epoch_for_testing(&self) -> Self {
+        // We only need to implement this function for the latest version.
+        // When a new version is introduced, this function should be updated.
+        match self {
+            Self::V6(config) => {
+                Self::V6(EpochStartConfigurationV6 {
+                    system_state: config.system_state.new_at_next_epoch_for_testing(),
+                    epoch_digest: config.epoch_digest,
+                    flags: config.flags.clone(),
+                    authenticator_obj_initial_shared_version: config.authenticator_obj_initial_shared_version,
+                    randomness_obj_initial_shared_version: config.randomness_obj_initial_shared_version,
+                    coin_deny_list_obj_initial_shared_version: config.coin_deny_list_obj_initial_shared_version,
+                    bridge_obj_initial_shared_version: config.bridge_obj_initial_shared_version,
+                    bridge_committee_initiated: config.bridge_committee_initiated,
+                })
+            }
+            _ => panic!("This function is only implemented for the latest version of EpochStartConfiguration"),
+        }
+    }
+
     pub fn epoch_data(&self) -> EpochData {
         EpochData::new(
             self.epoch_start_state().epoch(),
@@ -139,10 +199,6 @@ impl EpochStartConfiguration {
 
     pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
         self.epoch_start_state().epoch_start_timestamp_ms()
-    }
-
-    pub fn object_lock_split_tables_enabled(&self) -> bool {
-        self.flags().contains(&EpochFlag::ObjectLockSplitTables)
     }
 }
 

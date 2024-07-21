@@ -88,6 +88,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 							applicationUrl: txRequest.origin,
 							approvedTransaction: approved,
 							receivedFailureWarning: false,
+							type: txRequest.tx.justSign ? 'sign' : 'sign-and-execute',
 						});
 					}
 				}}
@@ -135,6 +136,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 						applicationUrl: txRequest.origin,
 						approvedTransaction: isConfirmed,
 						receivedFailureWarning: true,
+						type: txRequest.tx.justSign ? 'sign' : 'sign-and-execute',
 					});
 					setConfirmationVisible(false);
 				}}

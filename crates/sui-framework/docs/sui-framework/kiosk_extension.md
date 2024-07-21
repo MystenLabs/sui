@@ -114,7 +114,7 @@ dynamic field.
  the ability to store any data they want.
 </dd>
 <dt>
-<code>permissions: u128</code>
+<code>permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a></code>
 </dt>
 <dd>
  Bitmap of permissions that the extension has (can be revoked any
@@ -185,7 +185,7 @@ to identify the extension witness.
 Trying to add an extension while not being the owner of the Kiosk.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>: u64 = 0;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -196,7 +196,7 @@ Extension is trying to access a permissioned action while not having
 the required permission.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>: u64 = 2;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -206,7 +206,7 @@ the required permission.
 Extension is not installed in the Kiosk.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>: u64 = 3;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -217,7 +217,7 @@ Value that represents the <code>lock</code> and <code>place</code> permission in
 permissions bitmap.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a>: u128 = 2;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_LOCK">LOCK</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 2;
 </code></pre>
 
 
@@ -227,7 +227,7 @@ permissions bitmap.
 Value that represents the <code>place</code> permission in the permissions bitmap.
 
 
-<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a>: u128 = 1;
+<pre><code><b>const</b> <a href="kiosk_extension.md#0x2_kiosk_extension_PLACE">PLACE</a>: <a href="../move-stdlib/u128.md#0x1_u128">u128</a> = 1;
 </code></pre>
 
 
@@ -241,7 +241,7 @@ extension witness is required to allow extensions define their set of
 permissions in the custom <code>add</code> call.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: u128, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_add">add</a>&lt;Ext: drop&gt;(_ext: Ext, self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -254,7 +254,7 @@ permissions in the custom <code>add</code> call.
     _ext: Ext,
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
-    permissions: u128,
+    permissions: <a href="../move-stdlib/u128.md#0x1_u128">u128</a>,
     ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);

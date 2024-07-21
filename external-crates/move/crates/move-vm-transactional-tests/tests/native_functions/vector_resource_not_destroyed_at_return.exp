@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-14:
+task 0, lines 1-14:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
     major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
     sub_status: None,

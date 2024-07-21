@@ -1,6 +1,6 @@
 [package]
 name = "sui-bridge"
-version = "0.1.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -10,7 +10,7 @@ edition = "2021"
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
-sui-common.workspace = true
+sui-authority-aggregation.workspace = true
 arc-swap.workspace = true
 num_enum.workspace = true
 move-core-types.workspace = true
@@ -57,3 +57,4 @@ sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
+maplit = "1.0.2"

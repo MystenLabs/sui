@@ -21,7 +21,6 @@ mod checked {
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
     };
-    use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
@@ -36,13 +35,12 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObject;
+    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -610,6 +608,7 @@ mod checked {
                 inputs,
                 results,
                 user_events,
+                state_view,
                 ..
             } = self;
             let tx_digest = tx_context.digest();
@@ -828,6 +827,15 @@ mod checked {
                         ));
                     }
                 }
+            }
+
+            if protocol_config.enable_coin_deny_list_v2() {
+                let DenyListResult {
+                    result,
+                    num_non_gas_coin_owners,
+                } = state_view.check_coin_deny_list(&written_objects);
+                gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+                result?;
             }
 
             let user_events = user_events
@@ -1532,19 +1540,6 @@ mod checked {
                     )
                 }
             }
-        }
-
-        //
-        // TODO: later we will clean up the interface with the runtime and the functions below
-        //       will likely be exposed via extensions
-        //
-
-        fn load_resource(
-            &mut self,
-            _addr: AccountAddress,
-            _ty: &Type,
-        ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
-            panic!("load_resource should never be called for LinkageView")
         }
 
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {

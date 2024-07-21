@@ -44,7 +44,7 @@ pub fn run() {
     );
 
     let (connection, io_threads) = Connection::stdio();
-    let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
+    let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
     let pkg_deps = Arc::new(Mutex::new(
         BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
     ));
@@ -135,7 +135,7 @@ pub fn run() {
 
     let symbolicator_runner = symbols::SymbolicatorRunner::new(
         ide_files_root.clone(),
-        symbols.clone(),
+        symbols_map.clone(),
         pkg_deps.clone(),
         diag_sender,
         lint,
@@ -153,25 +153,33 @@ pub fn run() {
                 ide_files_root.clone(),
                 p.as_path(),
                 lint,
+                None,
             ) {
-                let mut old_symbols = symbols.lock().unwrap();
-                (*old_symbols).merge(new_symbols);
+                let mut old_symbols_map = symbols_map.lock().unwrap();
+                old_symbols_map.insert(p, new_symbols);
             }
         }
     }
 
     let context = Context {
         connection,
-        symbols: symbols.clone(),
+        symbols: symbols_map.clone(),
         inlay_type_hints: initialize_params
             .initialization_options
             .as_ref()
             .and_then(|init_options| init_options.get("inlayHintsType"))
             .and_then(serde_json::Value::as_bool)
             .unwrap_or_default(),
+        inlay_param_hints: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("inlayHintsParam"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
     };
 
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
+    eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
     context
         .connection
@@ -292,22 +300,22 @@ fn on_request(
             on_completion_request(context, request, ide_files_root.clone(), pkg_dependencies)
         }
         lsp_types::request::GotoDefinition::METHOD => {
-            symbols::on_go_to_def_request(context, request, &context.symbols.lock().unwrap());
+            symbols::on_go_to_def_request(context, request);
         }
         lsp_types::request::GotoTypeDefinition::METHOD => {
-            symbols::on_go_to_type_def_request(context, request, &context.symbols.lock().unwrap());
+            symbols::on_go_to_type_def_request(context, request);
         }
         lsp_types::request::References::METHOD => {
-            symbols::on_references_request(context, request, &context.symbols.lock().unwrap());
+            symbols::on_references_request(context, request);
         }
         lsp_types::request::HoverRequest::METHOD => {
-            symbols::on_hover_request(context, request, &context.symbols.lock().unwrap());
+            symbols::on_hover_request(context, request);
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {
-            symbols::on_document_symbol_request(context, request, &context.symbols.lock().unwrap());
+            symbols::on_document_symbol_request(context, request);
         }
         lsp_types::request::InlayHintRequest::METHOD => {
-            inlay_hints::on_inlay_hint_request(context, request, &context.symbols.lock().unwrap());
+            inlay_hints::on_inlay_hint_request(context, request);
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

@@ -11,7 +11,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::clock::Clock;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::DefaultHash;
-use sui_types::deny_list::{get_coin_deny_list, PerTypeDenyList};
+use sui_types::deny_list_v1::{get_coin_deny_list, PerTypeDenyList};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::messages_checkpoint::{
@@ -140,9 +140,9 @@ impl Genesis {
         self.sui_system_object().reference_gas_price()
     }
 
-    // TODO: No need to return SuiResult.
+    // TODO: No need to return SuiResult. Also consider return &.
     pub fn committee(&self) -> SuiResult<Committee> {
-        Ok(self.committee_with_network().committee)
+        Ok(self.committee_with_network().committee().clone())
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {

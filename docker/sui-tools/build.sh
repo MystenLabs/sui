@@ -8,7 +8,7 @@ set -e
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOCKERFILE="$DIR/Dockerfile"
-GIT_REVISION="$(git describe --always --dirty --exclude '*')"
+GIT_REVISION="$(git describe --always --abbrev=12 --dirty --exclude '*')"
 BUILD_DATE="$(date -u +'%Y-%m-%d')"
 
 echo

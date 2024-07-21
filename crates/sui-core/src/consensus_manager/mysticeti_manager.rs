@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
 use fastcrypto::ed25519;
-use mysten_metrics::{RegistryID, RegistryService};
+use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
@@ -15,7 +15,8 @@ use sui_protocol_config::ConsensusNetwork;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::{mpsc::unbounded_channel, Mutex};
+use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
@@ -83,7 +84,12 @@ impl MysticetiManager {
             match type_str.to_lowercase().as_str() {
                 "anemo" => return ConsensusNetwork::Anemo,
                 "tonic" => return ConsensusNetwork::Tonic,
-                _ => {}
+                _ => {
+                    info!(
+                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
+                        type_str
+                    );
+                }
             }
         }
         epoch_store.protocol_config().consensus_network()
@@ -130,10 +136,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
-        // is the one we want to go with.
-        #[allow(clippy::disallowed_methods)]
-        let (commit_sender, commit_receiver) = unbounded_channel();
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let consumer = CommitConsumer::new(

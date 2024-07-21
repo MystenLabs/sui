@@ -380,6 +380,23 @@ impl AuthorityPerpetualTables {
         }
     }
 
+    pub fn range_iter_live_object_set(
+        &self,
+        lower_bound: Option<ObjectID>,
+        upper_bound: Option<ObjectID>,
+        include_wrapped_object: bool,
+    ) -> LiveSetIter<'_> {
+        let lower_bound = lower_bound.as_ref().map(ObjectKey::min_for_id);
+        let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
+
+        LiveSetIter {
+            iter: self.objects.iter_with_bounds(lower_bound, upper_bound),
+            tables: self,
+            prev: None,
+            include_wrapped_object,
+        }
+    }
+
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
         self.objects.checkpoint_db(path).map_err(Into::into)
@@ -505,6 +522,13 @@ impl LiveObject {
         match self {
             LiveObject::Normal(obj) => obj.compute_object_reference(),
             LiveObject::Wrapped(key) => (key.0, key.1, ObjectDigest::OBJECT_DIGEST_WRAPPED),
+        }
+    }
+
+    pub fn to_normal(self) -> Option<Object> {
+        match self {
+            LiveObject::Normal(object) => Some(object),
+            LiveObject::Wrapped(_) => None,
         }
     }
 }

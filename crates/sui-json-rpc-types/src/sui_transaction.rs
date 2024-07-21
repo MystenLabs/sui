@@ -35,6 +35,7 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -47,7 +48,7 @@ use sui_types::sui_serde::{
 use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
+    TransactionData, TransactionDataAPI, TransactionKind,
 };
 use sui_types::type_resolver::{get_layout_from_struct_tag, LayoutResolver};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -402,6 +403,7 @@ pub enum SuiTransactionBlockKind {
     /// The transaction which occurs only at the end of the epoch
     EndOfEpochTransaction(SuiEndOfEpochTransaction),
     ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
+    ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3),
     // .. more transaction types go here
 }
 
@@ -434,6 +436,14 @@ impl Display for SuiTransactionBlockKind {
                     writer,
                     "Epoch: {}, Round: {}, Timestamp: {}, ConsensusCommitDigest: {}",
                     p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
+                )?;
+            }
+            Self::ConsensusCommitPrologueV3(p) => {
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V3")?;
+                writeln!(
+                    writer,
+                    "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {}",
+                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -474,6 +484,17 @@ impl SuiTransactionBlockKind {
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
+                })
+            }
+            TransactionKind::ConsensusCommitPrologueV3(p) => {
+                Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    sub_dag_index: p.sub_dag_index,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                    consensus_determined_version_assignments: p
+                        .consensus_determined_version_assignments,
                 })
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
@@ -562,6 +583,17 @@ impl SuiTransactionBlockKind {
                     consensus_commit_digest: p.consensus_commit_digest,
                 })
             }
+            TransactionKind::ConsensusCommitPrologueV3(p) => {
+                Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    sub_dag_index: p.sub_dag_index,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                    consensus_determined_version_assignments: p
+                        .consensus_determined_version_assignments,
+                })
+            }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from_with_package_resolver(
                     p,
@@ -639,6 +671,7 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
+            Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1414,9 +1447,7 @@ impl SuiTransactionBlockData {
         data: TransactionData,
         module_cache: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
-        let message_version = data
-            .message_version()
-            .expect("TransactionData defines message_version()");
+        let message_version = data.message_version();
         let sender = data.sender();
         let gas_data = SuiGasData {
             payment: data
@@ -1446,9 +1477,7 @@ impl SuiTransactionBlockData {
         data: TransactionData,
         package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<Self, anyhow::Error> {
-        let message_version = data
-            .message_version()
-            .expect("TransactionData defines message_version()");
+        let message_version = data.message_version();
         let sender = data.sender();
         let gas_data = SuiGasData {
             payment: data
@@ -1575,6 +1604,25 @@ pub struct SuiConsensusCommitPrologueV2 {
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiConsensusCommitPrologueV3 {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub round: u64,
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
+    pub sub_dag_index: Option<u64>,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub commit_timestamp_ms: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
 }
 
 #[serde_as]
@@ -2268,40 +2316,6 @@ pub enum SuiObjectArg {
         version: SequenceNumber,
         digest: ObjectDigest,
     },
-}
-
-#[serde_as]
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "LoadedChildObject", rename_all = "camelCase")]
-pub struct SuiLoadedChildObject {
-    object_id: ObjectID,
-    #[schemars(with = "AsSequenceNumber")]
-    #[serde_as(as = "AsSequenceNumber")]
-    sequence_number: SequenceNumber,
-}
-
-impl SuiLoadedChildObject {
-    pub fn new(object_id: ObjectID, sequence_number: SequenceNumber) -> Self {
-        Self {
-            object_id,
-            sequence_number,
-        }
-    }
-
-    pub fn object_id(&self) -> ObjectID {
-        self.object_id
-    }
-
-    pub fn sequence_number(&self) -> SequenceNumber {
-        self.sequence_number
-    }
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
-#[serde(rename_all = "camelCase", rename = "LoadedChildObjectsResponse")]
-pub struct SuiLoadedChildObjectsResponse {
-    pub loaded_child_objects: Vec<SuiLoadedChildObject>,
 }
 
 #[derive(Clone)]

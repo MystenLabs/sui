@@ -64,8 +64,8 @@ import { useCurrentWallet } from '@mysten/dapp-kit';
 import { STASHED_WALLET_NAME } from '@mysten/zksend';
 
 function StashedOnly() {
-	const { curentWallet } = useCurrentWallet();
-	const walletIsStashedWallet = curentWallet?.name === STASHED_WALLET_NAME;
+	const { currentWallet } = useCurrentWallet();
+	const walletIsStashedWallet = currentWallet?.name === STASHED_WALLET_NAME;
 
 	// rest of component logic...
 }

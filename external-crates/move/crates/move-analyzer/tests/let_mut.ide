@@ -1,0 +1,26 @@
+// Tests mutability annotation added in Move 2024.
+{
+  "UseDef": {
+    "project": "tests/move-2024",
+    "file_tests": {
+      "let_mut.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 4,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 6,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

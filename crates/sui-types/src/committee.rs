@@ -7,9 +7,10 @@ use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, Author
 use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
-use rand::rngs::ThreadRng;
+use once_cell::sync::OnceCell;
+use rand::rngs::{StdRng, ThreadRng};
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
@@ -224,6 +225,19 @@ impl Committee {
             .is_ok()
     }
 
+    /// Derive a seed deterministically from the transaction digest and shuffle the validators.
+    pub fn shuffle_by_stake_from_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Vec<AuthorityName> {
+        // the 32 is as requirement of the default StdRng::from_seed choice
+        let digest_bytes = tx_digest.into_inner();
+
+        // permute the validators deterministically, based on the digest
+        let mut rng = StdRng::from_seed(digest_bytes);
+        self.shuffle_by_stake_with_rng(None, None, &mut rng)
+    }
+
     // ===== Testing-only methods =====
     //
     pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
@@ -347,13 +361,42 @@ pub struct NetworkMetadata {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommitteeWithNetworkMetadata {
-    pub committee: Committee,
-    pub network_metadata: BTreeMap<AuthorityName, NetworkMetadata>,
+    epoch_id: EpochId,
+    validators: BTreeMap<AuthorityName, (StakeUnit, NetworkMetadata)>,
+
+    #[serde(skip)]
+    committee: OnceCell<Committee>,
 }
 
 impl CommitteeWithNetworkMetadata {
+    pub fn new(
+        epoch_id: EpochId,
+        validators: BTreeMap<AuthorityName, (StakeUnit, NetworkMetadata)>,
+    ) -> Self {
+        Self {
+            epoch_id,
+            validators,
+            committee: OnceCell::new(),
+        }
+    }
     pub fn epoch(&self) -> EpochId {
-        self.committee.epoch()
+        self.epoch_id
+    }
+
+    pub fn validators(&self) -> &BTreeMap<AuthorityName, (StakeUnit, NetworkMetadata)> {
+        &self.validators
+    }
+
+    pub fn committee(&self) -> &Committee {
+        self.committee.get_or_init(|| {
+            Committee::new(
+                self.epoch_id,
+                self.validators
+                    .iter()
+                    .map(|(name, (stake, _))| (*name, *stake))
+                    .collect(),
+            )
+        })
     }
 }
 
@@ -361,8 +404,8 @@ impl Display for CommitteeWithNetworkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CommitteeWithNetworkMetadata (committee={}, network_metadata={:?})",
-            self.committee, self.network_metadata
+            "CommitteeWithNetworkMetadata (epoch={}, validators={:?})",
+            self.epoch_id, self.validators
         )
     }
 }

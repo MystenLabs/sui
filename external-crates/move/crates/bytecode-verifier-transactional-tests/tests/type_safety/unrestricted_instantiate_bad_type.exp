@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'publish'. lines 1-10:
+task 0, lines 1-10:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 1 'publish'. lines 12-21:
+task 1, lines 12-21:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::Test'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,

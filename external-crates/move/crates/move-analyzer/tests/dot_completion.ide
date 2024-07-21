@@ -1,0 +1,41 @@
+// Tests dot completions
+{
+  "Completion": {
+    "project": "tests/completion",
+    "file_tests": {
+      // tests completion for fields and "regular" functions
+      "dot.move": [
+        // simple test
+        {
+          "use_line": 15,
+          "use_col": 10
+        },
+        // with aliasing
+        {
+          "use_line": 21,
+          "use_col": 10
+        },
+        // with shadowing
+        {
+          "use_line": 27,
+          "use_col": 10
+        }
+      ],
+      // tests completion for macros including addition of `!` at the call site
+      // and expansion of lambda parameters into their own snippets
+      "macro_dot.move": [
+        {
+          "use_line": 8,
+          "use_col": 10
+        }
+      ],
+      // tests completions coming from a different module
+      "other_mod_dot.move": [
+        {
+          "use_line": 4,
+          "use_col": 10
+        }
+      ]
+    }
+  }
+}

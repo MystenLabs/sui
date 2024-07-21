@@ -3,7 +3,7 @@
 
 import { toHEX } from '@mysten/bcs';
 import type { PublicKey } from '@mysten/sui/cryptography';
-import { toBigEndianBytes } from '@mysten/sui/zklogin';
+import { toPaddedBigEndianBytes } from '@mysten/sui/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { base64url } from 'jose';
 
@@ -29,7 +29,7 @@ export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness
 	const eph_public_key_0 = publicKeyBytes / 2n ** 128n;
 	const eph_public_key_1 = publicKeyBytes % 2n ** 128n;
 	const bigNum = poseidonHash([eph_public_key_0, eph_public_key_1, maxEpoch, BigInt(randomness)]);
-	const Z = toBigEndianBytes(bigNum, 20);
+	const Z = toPaddedBigEndianBytes(bigNum, 20);
 	const nonce = base64url.encode(Z);
 	if (nonce.length !== NONCE_LENGTH) {
 		throw new Error(`Length of nonce ${nonce} (${nonce.length}) is not equal to ${NONCE_LENGTH}`);

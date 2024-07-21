@@ -23,9 +23,9 @@ use move_command_line_common::{
 };
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{Diagnostics, FilesSourceText, WarningFilters},
+    diagnostics::{Diagnostics, WarningFilters},
     editions::{Edition, Flavor},
-    shared::{NumericalAddress, PackageConfig},
+    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
 };
 use move_core_types::{
@@ -146,6 +146,21 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         subcommand: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>>;
 
+    fn render_command_input(
+        &self,
+        _task: &TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >,
+    ) -> Option<String> {
+        None
+    }
+
     async fn process_error(&self, error: anyhow::Error) -> anyhow::Error;
 
     async fn handle_command(
@@ -171,6 +186,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             command_lines_stop,
             stop_line,
             data,
+            task_text,
         } = task;
         match command {
             TaskCommand::Init { .. } => {
@@ -257,7 +273,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 )
                 .await?;
                 let (module_id, name) = single_entry_function(&modules).unwrap_or_else(|err| {
-                    panic!("{} on lines {}-{}", err, start_line, command_lines_stop)
+                    panic!(
+                        "{} on lines {}-{} for task\n{}",
+                        err, start_line, command_lines_stop, task_text
+                    )
                 });
                 let output = merge_output(warnings_opt, output);
                 store_modules(self, syntax, data, modules);
@@ -320,6 +339,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     command_lines_stop,
                     stop_line,
                     data,
+                    task_text,
                 })
                 .await
             }
@@ -618,14 +638,16 @@ pub fn compile_source_units(
     state: &CompiledState,
     file_name: impl AsRef<Path>,
 ) -> Result<(Vec<AnnotatedCompiledUnit>, Option<String>)> {
-    fn rendered_diags(files: &FilesSourceText, diags: Diagnostics) -> Option<String> {
+    fn rendered_diags(files: &MappedFiles, diags: Diagnostics) -> Option<String> {
         if diags.is_empty() {
             return None;
         }
 
         let ansi_color = read_bool_env_var(move_command_line_common::testing::PRETTY);
         let error_buffer =
-            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags, ansi_color);
+            move_compiler::diagnostics::report_diagnostics_to_buffer_with_mapped_files(
+                files, diags, ansi_color,
+            );
         Some(String::from_utf8(error_buffer).unwrap())
     }
 
@@ -656,14 +678,8 @@ pub fn compile_source_units(
     match units_or_diags {
         Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps.clone() {
-                for (file_name, text) in &pcd.files {
-                    // TODO This is bad. Rethink this when errors are redone
-                    if !files.contains_key(file_name) {
-                        files.insert(*file_name, text.clone());
-                    }
-                }
+                files.extend(pcd.files.clone());
             }
-
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }
         Ok((units, warnings)) => Ok((units, rendered_diags(&files, warnings))),
@@ -676,7 +692,14 @@ pub fn compile_ir_module(
 ) -> Result<CompiledModule> {
     use move_ir_compiler::Compiler as IRCompiler;
     let code = std::fs::read_to_string(file_name).unwrap();
-    IRCompiler::new(state.dep_modules().collect()).into_compiled_module(&code)
+    let named_addresses = state
+        .named_address_mapping
+        .iter()
+        .map(|(name, addr)| (name.clone(), addr.into_inner()))
+        .collect();
+    IRCompiler::new(state.dep_modules().collect())
+        .with_named_addresses(named_addresses)
+        .into_compiled_module(&code)
 }
 
 pub async fn handle_actual_output<'a, Adapter>(
@@ -779,9 +802,11 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     >,
 ) {
     let task_number = task.number;
-    let task_name = task.name.to_owned();
     let start_line = task.start_line;
     let stop_line = task.stop_line;
+    let task_text = adapter
+        .render_command_input(&task)
+        .unwrap_or_else(|| task.task_text.clone());
     let result = adapter.handle_command(task).await;
     let result_string = match result {
         Ok(None) => return,
@@ -790,10 +815,15 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     };
     assert!(!result_string.is_empty());
 
+    let line_number = if start_line == stop_line {
+        format!("line {}", start_line)
+    } else {
+        format!("lines {}-{}", start_line, stop_line)
+    };
+
     writeln!(
         output,
-        "\ntask {} '{}'. lines {}-{}:\n{}",
-        task_number, task_name, start_line, stop_line, result_string
+        "\ntask {task_number}, {line_number}:\n{task_text}\n{result_string}"
     )
     .unwrap();
 }

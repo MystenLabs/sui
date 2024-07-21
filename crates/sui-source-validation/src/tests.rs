@@ -596,7 +596,7 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     BuildConfig::new_for_testing()
-        .build(package.as_ref().to_path_buf())
+        .build(package.as_ref())
         .unwrap()
 }
 

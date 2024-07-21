@@ -7,10 +7,10 @@ use move_binary_format::file_format::{
     AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex,
     Signature as MoveSignature, SignatureIndex, Visibility,
 };
-use move_command_line_common::error_bitset::ErrorBitset;
+use move_command_line_common::display::RenderResult;
+use move_command_line_common::{display::try_render_constant, error_bitset::ErrorBitset};
 use move_core_types::annotated_value::MoveEnumLayout;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::u256::U256;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
@@ -464,11 +464,14 @@ impl<S: PackageStore> Resolver<S> {
                 return Ok(());
             };
 
-            if let Some(prev) = type_.replace(tag.clone()) {
-                // SAFETY: We just inserted `tag` in here.
-                let curr = type_.take().unwrap();
-                return Err(Error::InputTypeConflict(ix, prev, curr));
-            };
+            match type_ {
+                None => *type_ = Some(tag.clone()),
+                Some(prev) => {
+                    if prev != tag {
+                        return Err(Error::InputTypeConflict(ix, prev.clone(), tag.clone()));
+                    }
+                }
+            }
 
             Ok(())
         };
@@ -594,40 +597,16 @@ impl<S: PackageStore> Resolver<S> {
             .and_then(|x| String::from_utf8(x).ok())?;
         let bytes = error_value_constant.data.clone();
 
-        let rendered = match &error_value_constant.type_ {
-            SignatureToken::Vector(inner_ty) if inner_ty.as_ref() == &SignatureToken::U8 => {
-                bcs::from_bytes::<Vec<u8>>(&bytes)
-                    .ok()
-                    .and_then(|x| String::from_utf8(x).ok())
-            }
-            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes).ok().map(|x| x.to_string()),
-            SignatureToken::Address => bcs::from_bytes::<AccountAddress>(&bytes)
-                .ok()
-                .map(|x| x.to_canonical_string(true)),
-            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes).ok().map(|x| x.to_string()),
-
-            SignatureToken::Signer
-            | SignatureToken::Vector(_)
-            | SignatureToken::Datatype(_)
-            | SignatureToken::DatatypeInstantiation(_)
-            | SignatureToken::Reference(_)
-            | SignatureToken::MutableReference(_)
-            | SignatureToken::TypeParameter(_) => None,
-        };
+        let rendered = try_render_constant(error_value_constant);
 
         let error_info = match rendered {
-            None => ErrorConstants::Raw {
+            RenderResult::NotRendered => ErrorConstants::Raw {
                 identifier: error_identifier,
                 bytes,
             },
-            Some(error_constant) => ErrorConstants::Rendered {
+            RenderResult::AsString(s) | RenderResult::AsValue(s) => ErrorConstants::Rendered {
                 identifier: error_identifier,
-                constant: error_constant,
+                constant: s,
             },
         };
 
@@ -2643,6 +2622,66 @@ mod tests {
         insta::assert_snapshot!(output);
     }
 
+    /// Like the test above, but the inputs are re-used, which we want to detect (but is fine
+    /// because they are assigned the same type at each usage).
+    #[tokio::test]
+    async fn test_pure_input_layouts_overlapping() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        // Helper function to generate a PTB calling 0xe0::m::foo.
+        let ptb = ProgrammableTransaction {
+            inputs: vec![
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&43u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes("hello").unwrap()),
+                I::Pure(bcs::to_bytes("world").unwrap()),
+            ],
+            commands: vec![
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+            ],
+        };
+
+        let inputs = resolver.pure_input_layouts(&ptb).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = String::new();
+        for input in inputs {
+            if let Some(layout) = input {
+                output += &format!("{layout:#}\n");
+            } else {
+                output += "???\n";
+            }
+        }
+
+        insta::assert_snapshot!(output);
+    }
+
     #[tokio::test]
     async fn test_pure_input_layouts_conflicting() {
         use CallArg as I;
@@ -2883,7 +2922,7 @@ mod tests {
     fn build_package(dir: &str) -> CompiledPackage {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["tests", "packages", dir]);
-        BuildConfig::new_for_testing().build(path).unwrap()
+        BuildConfig::new_for_testing().build(&path).unwrap()
     }
 
     fn addr(a: &str) -> AccountAddress {

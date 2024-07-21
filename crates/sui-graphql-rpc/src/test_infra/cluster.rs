@@ -20,12 +20,13 @@ use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_types::storage::ReadStore;
+use sui_types::storage::RestStateReader;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -107,7 +108,7 @@ pub async fn start_cluster(
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
-    executor: Arc<dyn ReadStore + Send + Sync>,
+    executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
@@ -121,14 +122,7 @@ pub async fn serve_executor(
         .unwrap();
 
     let executor_server_handle = tokio::spawn(async move {
-        let chain_id = (*executor
-            .get_checkpoint_by_sequence_number(0)
-            .unwrap()
-            .unwrap()
-            .digest())
-        .into();
-
-        sui_rest_api::RestService::new_without_version(executor, chain_id)
+        sui_rest_api::RestService::new_without_version(executor)
             .start_service(executor_server_url, Some("/rest".to_owned()))
             .await;
     });
@@ -243,6 +237,11 @@ async fn wait_for_graphql_checkpoint_catchup(
     checkpoint: u64,
     base_timeout: Duration,
 ) {
+    info!(
+        "Waiting for graphql to catchup to checkpoint {}, base time out is {}",
+        checkpoint,
+        base_timeout.as_secs()
+    );
     let query = r#"
     {
         availableRange {
@@ -263,7 +262,7 @@ async fn wait_for_graphql_checkpoint_catchup(
                 .response_body_json();
 
             let current_checkpoint = resp["data"]["availableRange"]["last"].get("sequenceNumber");
-
+            info!("Current checkpoint: {:?}", current_checkpoint);
             // Indexer has not picked up any checkpoints yet
             let Some(current_checkpoint) = current_checkpoint else {
                 tokio::time::sleep(Duration::from_secs(1)).await;

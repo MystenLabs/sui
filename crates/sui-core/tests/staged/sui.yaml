@@ -244,6 +244,29 @@ ConsensusCommitPrologueV2:
     - commit_timestamp_ms: U64
     - consensus_commit_digest:
         TYPENAME: ConsensusCommitDigest
+ConsensusCommitPrologueV3:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusDeterminedVersionAssignments:
+  ENUM:
+    0:
+      CancelledTransactions:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: ObjectID
+                    - TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -444,6 +467,18 @@ ExecutionFailureStatus:
         STRUCT:
           - congested_objects:
               TYPENAME: CongestedObjects
+    34:
+      AddressDeniedForCoin:
+        STRUCT:
+          - address:
+              TYPENAME: SuiAddress
+          - coin_type: STR
+    35:
+      CoinTypeGlobalPause:
+        STRUCT:
+          - coin_type: STR
+    36:
+      ExecutionCancelledDueToRandomnessUnavailable: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -993,6 +1028,10 @@ TransactionKind:
       ConsensusCommitPrologueV2:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologueV2
+    8:
+      ConsensusCommitPrologueV3:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV3
 TypeArgumentError:
   ENUM:
     0:
@@ -1070,6 +1109,8 @@ UnchangedSharedKind:
       Cancelled:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    4:
+      PerEpochConfig: UNIT
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

@@ -21,6 +21,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 use sui_types::bridge::{
     BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
     APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
@@ -115,18 +116,19 @@ impl BridgeCommittee {
 }
 
 impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
-    // Note:
-    // 1. preference is not supported today.
-    // 2. blocklisted members are always excluded.
+    // Note: blocklisted members are always excluded.
     fn shuffle_by_stake_with_rng(
         &self,
-        // preference is not supported today
-        _preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        // `preferences` is used as a *flag* here to influence the order of validators to be requested.
+        //  * if `Some(_)`, then we will request validators in the order of the voting power
+        //  * if `None`, we still refer to voting power, but they are shuffled by randomness.
+        //  to save gas cost.
+        preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
         // only attempt from these authorities.
         restrict_to: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
         rng: &mut impl Rng,
     ) -> Vec<BridgeAuthorityPublicKeyBytes> {
-        let candidates = self
+        let mut candidates = self
             .members
             .iter()
             .filter_map(|(name, a)| {
@@ -145,14 +147,18 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
                 }
             })
             .collect::<Vec<_>>();
-
-        candidates
-            .choose_multiple_weighted(rng, candidates.len(), |(_, weight)| *weight as f64)
-            // Unwrap safe: it panics when the third parameter is larger than the size of the slice
-            .unwrap()
-            .map(|(name, _)| name)
-            .cloned()
-            .collect()
+        if preferences.is_some() {
+            candidates.sort_by(|(_, a), (_, b)| b.cmp(a));
+            candidates.iter().map(|(name, _)| name.clone()).collect()
+        } else {
+            candidates
+                .choose_multiple_weighted(rng, candidates.len(), |(_, weight)| *weight as f64)
+                // Unwrap safe: it panics when the third parameter is larger than the size of the slice
+                .unwrap()
+                .map(|(name, _)| name)
+                .cloned()
+                .collect()
+        }
     }
 
     fn weight(&self, author: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
@@ -174,6 +180,23 @@ pub enum BridgeActionType {
     EvmContractUpgrade = 5,
     AddTokensOnSui = 6,
     AddTokensOnEvm = 7,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct BridgeActionKey {
+    pub action_type: BridgeActionType,
+    pub chain_id: BridgeChainId,
+    pub seq_num: u64,
+}
+
+impl Debug for BridgeActionKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BridgeActionKey({},{},{})",
+            self.action_type as u8, self.chain_id as u8, self.seq_num
+        )
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, TryFromPrimitive)]
@@ -226,8 +249,7 @@ pub struct BlocklistCommitteeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
     pub blocklist_type: BlocklistType,
-    // TODO: rename this to `members_to_update`
-    pub blocklisted_members: Vec<BridgeAuthorityPublicKeyBytes>,
+    pub members_to_update: Vec<BridgeAuthorityPublicKeyBytes>,
 }
 
 #[derive(
@@ -330,6 +352,14 @@ impl BridgeAction {
         let mut hasher = Keccak256::default();
         hasher.update(&self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
+    }
+
+    pub fn key(&self) -> BridgeActionKey {
+        BridgeActionKey {
+            action_type: self.action_type(),
+            chain_id: self.chain_id(),
+            seq_num: self.seq_number(),
+        }
     }
 
     pub fn chain_id(&self) -> BridgeChainId {
@@ -453,8 +483,46 @@ pub struct EthLog {
     pub block_number: u64,
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
-    // TODO: pull necessary fields from `Log`.
     pub log: Log,
+}
+
+/// The version of EthLog that does not have
+/// `log_index_in_tx`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawEthLog {
+    pub block_number: u64,
+    pub tx_hash: H256,
+    pub log: Log,
+}
+
+pub trait EthEvent {
+    fn block_number(&self) -> u64;
+    fn tx_hash(&self) -> H256;
+    fn log(&self) -> &Log;
+}
+
+impl EthEvent for EthLog {
+    fn block_number(&self) -> u64 {
+        self.block_number
+    }
+    fn tx_hash(&self) -> H256 {
+        self.tx_hash
+    }
+    fn log(&self) -> &Log {
+        &self.log
+    }
+}
+
+impl EthEvent for RawEthLog {
+    fn block_number(&self) -> u64 {
+        self.block_number
+    }
+    fn tx_hash(&self) -> H256 {
+        self.tx_hash
+    }
+    fn log(&self) -> &Log {
+        &self.log
+    }
 }
 
 /// Check if the bridge route is valid
@@ -599,7 +667,7 @@ mod tests {
             nonce: 94,
             chain_id: BridgeChainId::EthSepolia,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![],
+            members_to_update: vec![],
         });
         assert_eq!(action.approval_threshold(), 5001);
 

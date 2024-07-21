@@ -13,7 +13,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    effects::{ChangeSet, Event},
+    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
@@ -28,7 +28,7 @@ use std::{borrow::Borrow, sync::Arc};
 
 pub struct Session<'r, 'l, S> {
     pub(crate) runtime: &'l VMRuntime,
-    pub(crate) data_cache: TransactionDataCache<'l, S>,
+    pub(crate) data_cache: TransactionDataCache<S>,
     pub(crate) native_extensions: NativeContextExtensions<'r>,
 }
 
@@ -154,27 +154,18 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .publish_module_bundle(modules, sender, &mut self.data_cache, gas_meter)
     }
 
-    pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
-        self.data_cache.num_mutated_accounts(sender)
-    }
-
     /// Finish up the session and produce the side effects.
     ///
     /// This function should always succeed with no user errors returned, barring invariant violations.
     ///
     /// This MUST NOT be called if there is a previous invocation that failed with an invariant violation.
-    pub fn finish(self) -> (VMResult<(ChangeSet, Vec<Event>)>, S) {
+    pub fn finish(self) -> (VMResult<ChangeSet>, S) {
         let (res, remote) = self.data_cache.into_effects();
         (res.map_err(|e| e.finish(Location::Undefined)), remote)
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.
-    pub fn finish_with_extensions(
-        self,
-    ) -> (
-        VMResult<(ChangeSet, Vec<Event>, NativeContextExtensions<'r>)>,
-        S,
-    ) {
+    pub fn finish_with_extensions(self) -> (VMResult<(ChangeSet, NativeContextExtensions<'r>)>, S) {
         let Session {
             data_cache,
             native_extensions,
@@ -182,7 +173,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         } = self;
         let (res, remote) = data_cache.into_effects();
         (
-            res.map(|(change_set, events)| (change_set, events, native_extensions))
+            res.map(|change_set| (change_set, native_extensions))
                 .map_err(|e| e.finish(Location::Undefined)),
             remote,
         )

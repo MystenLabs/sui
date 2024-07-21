@@ -54,14 +54,15 @@ For some providers ("Yes" for "Auth Flow Only"), the JWT can be found immediatel
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL                                                                                                                                                                        | Token Exchange URL                                                                                                                  | Auth Flow Only |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| Google   | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                      | N/A                                                                                                                                 | Yes            |
-| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                       | N/A                                                                                                                                 | Yes            |
-| Twitch   | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A                                                                                                                                 | Yes            |
-| Kakao    | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                            | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
-| Apple    | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`            | N/A                                                                                                                                 | Yes            |
-| Slack    | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                            | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | No             |
+| Provider | Auth Flow URL                                                                                                                                                                        | Token Exchange URL                                                                                                                   | Auth Flow Only |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| Google    | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                      | N/A                                                                                                                                 | Yes            |
+| Facebook  | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                       | N/A                                                                                                                                 | Yes            |
+| Twitch    | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` | N/A                                                                                                                                 | Yes            |
+| Kakao     | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                            | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
+| Apple     | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`            | N/A                                                                                                                                 | Yes            |
+| Slack     | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                            | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | Yes            |
+| Microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=$CLIENT_ID&scope=openid&response_type=id_token&nonce=$NONCE&redirect_uri=$REDIRECT_URL`                                                                                                      | Yes            |
 
 ## Decoding JWT
 
@@ -100,7 +101,7 @@ zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](
    - Option 3: Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
    - Option 4: Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please contact us for whitelisting your registered client ID. Only valid JWT authenticated with whitelisted client IDs are accepted.
+Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us. Only valid JWT authenticated with whitelisted client IDs are accepted.
 
 ```bash
 curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
@@ -223,7 +224,9 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. There are zkeys available for Mainnet and Testnet, as well as a test zkey for Devnet. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
+1. Install [Git Large File Storage](https://git-lfs.com/) (an open-source Git extension for large file versioning) before downloading the zkey.
+
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
    - Main zkey (for Mainnet and Testnet)
      ```bash
@@ -242,7 +245,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
      | Mainnet, Testnet | `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
      | Devnet           | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
 
-1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded `zkey` from the same directory as the YAML file.
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
 
 ```yaml
 services:
@@ -334,8 +337,8 @@ const zkLoginSignature: SerializedSignature = getZkLoginSignature({
 Finally, execute the transaction.
 
 ```typescript
-client.executeTransaction({
-	transaction: bytes,
+client.executeTransactionBlock({
+	transactionBlock: bytes,
 	signature: zkLoginSignature,
 });
 ```
@@ -349,6 +352,14 @@ You might want to cache the ephemeral key pair along with the ZKP for future use
 However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process described previously).
 
 Consequently, you should not store them persistently in an unsecure storage location, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof. This is because session storage automatically clears its data when the browser session ends, while data in local storage persists indefinitely.
+
+## Efficiency considerations
+
+Compared to traditional signatures, zkLogin signatures take a longer time to generate. For example, the prover that Mysten Labs maintains typically takes about three seconds to return a proof, which runs on a machine with 16 vCPUs and 64 GB RAM. Using more powerful machines, such as those with physical CPUs or graphics processing units (GPUs), can reduce the proving time further.
+
+Carefully consider how many requests your application needs to make to the prover. Broadly speaking, the right metric to consider is the number of active user sessions and not the number of signatures. This is because you can cache the same ZK proof and reuse it across the session, as previously explained. For example, if you expect a million active user sessions per day, then you need a prover that can handle one or two requests per second (RPS), assuming evenly distributed traffic.
+
+The prover that Mysten Labs maintains is set to auto-scale to handle traffic surges. If you are not sure whether Mysten Labs can handle a specific number of requests or expect a sudden spike in the number of prover requests your application needs to make, please reach out to us on [Discord](https://discord.gg/sui). Our plan is to horizontally scale the prover to handle any RPS you require.
 
 ## Related links
 

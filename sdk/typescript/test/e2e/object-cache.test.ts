@@ -1,28 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OwnedObjectRef } from '../../src/client';
 import { Transaction } from '../../src/transactions';
 import { CachingTransactionExecutor } from '../../src/transactions/executor/caching';
 import { normalizeSuiAddress } from '../../src/utils';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('CachingTransactionExecutor', async () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
+	let rawPackageId: string;
 	let executor: CachingTransactionExecutor;
 	let parentObjectId: OwnedObjectRef;
 	let receiveObjectId: OwnedObjectRef;
 
 	beforeAll(async () => {
-		const packagePath = __dirname + '/./data/tto';
-		packageId = normalizeSuiAddress((await publishPackage(packagePath)).packageId);
+		toolbox = await setup();
+		rawPackageId = packageId = await toolbox.getPackage(resolve(__dirname, './data/tto'));
+		packageId = normalizeSuiAddress(rawPackageId);
 	});
 
 	beforeEach(async () => {
-		toolbox = await setup();
 		executor = new CachingTransactionExecutor({
 			client: toolbox.client,
 		});
@@ -43,13 +45,19 @@ describe('CachingTransactionExecutor', async () => {
 			},
 		});
 
-		const y = (x.effects?.created)!.map((o) => getOwnerAddress(o))!;
-		receiveObjectId = (x.effects?.created)!.filter(
+		await toolbox.client.waitForTransaction({ digest: x.digest });
+
+		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
+		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		parentObjectId = (x.effects?.created)!.filter(
+		)[0]!;
+		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
+		)[0]!;
+	});
+
+	afterEach(async () => {
+		await executor.waitForLastTransaction();
 	});
 
 	afterEach(() => {
@@ -103,7 +111,7 @@ describe('CachingTransactionExecutor', async () => {
 					body: {
 						datatype: {
 							module: 'tto',
-							package: packageId,
+							package: rawPackageId,
 							type: 'A',
 							typeParameters: [],
 						},
@@ -120,7 +128,7 @@ describe('CachingTransactionExecutor', async () => {
 								{
 									datatype: {
 										module: 'tto',
-										package: packageId,
+										package: rawPackageId,
 										type: 'B',
 										typeParameters: [],
 									},
@@ -180,6 +188,7 @@ describe('CachingTransactionExecutor', async () => {
 				showEffects: true,
 			},
 		});
+
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 		expect(result2.effects?.status.status).toBe('success');
 

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -15,8 +14,8 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
+use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
 use sui_core::state_accumulator::StateAccumulator;
-use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
@@ -54,7 +53,10 @@ impl SingleValidator {
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Arc::new(MockConsensusClient::new(validator.clone(), consensus_mode)),
+            Arc::new(MockConsensusClient::new(
+                Arc::downgrade(&validator),
+                consensus_mode,
+            )),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -64,16 +66,13 @@ impl SingleValidator {
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
         ));
-        let validator_service = Arc::new(ValidatorService::new(
+        // TODO: for validator benchmarking purposes, we should allow for traffic control
+        // to be configurable and introduce traffic control benchmarks to test
+        // against different policies
+        let validator_service = Arc::new(ValidatorService::new_for_tests(
             validator,
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
-            TrafficControllerMetrics::new_for_tests(),
-            // TODO: for validator benchmarking purposes, we should allow for this
-            // to be configurable and introduce traffic control benchmarks to test
-            // against different policies
-            None, /* PolicyConfig */
-            None, /* RemoteFirewallConfig */
         ));
         Self {
             validator_service,
@@ -168,8 +167,6 @@ impl SingleValidator {
                     .execute_certificate(&cert, &self.epoch_store)
                     .await
                     .unwrap()
-                    .into_inner()
-                    .into_data()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 let response = self
@@ -278,8 +275,9 @@ impl SingleValidator {
             ckpt_receiver,
             validator.get_checkpoint_store().clone(),
             validator.clone(),
-            Arc::new(StateAccumulator::new(
+            Arc::new(StateAccumulator::new_for_tests(
                 validator.get_accumulator_store().clone(),
+                self.get_epoch_store(),
             )),
         );
         (checkpoint_executor, ckpt_sender)

@@ -40,7 +40,7 @@ pub enum ConnectionStatus {
 
 pub struct AnemoConnectionMonitor {
     network: anemo::NetworkRef,
-    connection_metrics: QuinnConnectionMetrics,
+    connection_metrics: Arc<QuinnConnectionMetrics>,
     known_peers: HashMap<PeerId, String>,
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
     stop: Receiver<()>,
@@ -50,7 +50,7 @@ impl AnemoConnectionMonitor {
     #[must_use]
     pub fn spawn(
         network: anemo::NetworkRef,
-        connection_metrics: QuinnConnectionMetrics,
+        connection_metrics: Arc<QuinnConnectionMetrics>,
         known_peers: HashMap<PeerId, String>,
     ) -> ConnectionMonitorHandle {
         let connection_statuses_outer = Arc::new(DashMap::new());
@@ -276,7 +276,7 @@ mod tests {
         let network_3 = build_network().unwrap();
 
         let registry = Registry::new();
-        let metrics = QuinnConnectionMetrics::new(&registry);
+        let metrics = Arc::new(QuinnConnectionMetrics::new(&registry));
 
         // AND we connect to peer 2
         let peer_2 = network_1.connect(network_2.local_addr()).await.unwrap();
@@ -290,7 +290,7 @@ mod tests {
             AnemoConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), known_peers);
 
         // THEN peer 2 should be already connected
-        assert_network_peers(metrics.clone(), 1).await;
+        assert_network_peers(&metrics, 1).await;
 
         // AND we should have collected connection stats
         let mut labels = HashMap::new();
@@ -314,7 +314,7 @@ mod tests {
         let peer_3 = network_1.connect(network_3.local_addr()).await.unwrap();
 
         // THEN
-        assert_network_peers(metrics.clone(), 2).await;
+        assert_network_peers(&metrics, 2).await;
         assert_eq!(
             *handle.connection_statuses.get(&peer_3).unwrap().value(),
             ConnectionStatus::Connected
@@ -324,7 +324,7 @@ mod tests {
         network_1.disconnect(peer_2).unwrap();
 
         // THEN
-        assert_network_peers(metrics.clone(), 1).await;
+        assert_network_peers(&metrics, 1).await;
         assert_eq!(
             *handle.connection_statuses.get(&peer_2).unwrap().value(),
             ConnectionStatus::Disconnected
@@ -334,17 +334,16 @@ mod tests {
         network_1.disconnect(peer_3).unwrap();
 
         // THEN
-        assert_network_peers(metrics.clone(), 0).await;
+        assert_network_peers(&metrics, 0).await;
         assert_eq!(
             *handle.connection_statuses.get(&peer_3).unwrap().value(),
             ConnectionStatus::Disconnected
         );
     }
 
-    async fn assert_network_peers(metrics: QuinnConnectionMetrics, value: i64) {
-        let m = metrics.clone();
+    async fn assert_network_peers(metrics: &QuinnConnectionMetrics, value: i64) {
         timeout(Duration::from_secs(5), async move {
-            while m.network_peers.get() != value {
+            while metrics.network_peers.get() != value {
                 sleep(Duration::from_millis(500)).await;
             }
         })

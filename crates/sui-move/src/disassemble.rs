@@ -30,10 +30,10 @@ pub struct Disassemble {
 impl Disassemble {
     pub fn execute(
         self,
-        package_path: Option<PathBuf>,
+        package_path: Option<&Path>,
         build_config: BuildConfig,
     ) -> anyhow::Result<()> {
-        if base::reroot_path(Some(self.module_path.clone())).is_ok() {
+        if base::reroot_path(Some(&self.module_path)).is_ok() {
             // disassembling bytecode inside the source package that produced it--use the source info
             let module_name = self
                 .module_path

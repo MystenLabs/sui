@@ -8,7 +8,7 @@ use crate::{
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
     expansion::{
-        alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace},
+        alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace, UnnecessaryAlias},
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
@@ -22,7 +22,10 @@ use crate::{
         ast::{self as P, ModuleName, NameAccess, NamePath, PathEntry, Type},
         syntax::make_loc,
     },
-    shared::*,
+    shared::{
+        ide::{AliasAutocompleteInfo, IDEAnnotation},
+        *,
+    },
 };
 
 use move_ir_types::location::{sp, Loc, Spanned};
@@ -83,6 +86,8 @@ pub trait PathExpander {
         context: &mut DefnContext,
         name_chain: P::NameAccessChain,
     ) -> Option<E::ModuleIdent>;
+
+    fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc);
 }
 
 pub fn make_access_result(
@@ -125,8 +130,6 @@ macro_rules! access_result {
 
 pub(crate) use access_result;
 
-use super::alias_map_builder::UnnecessaryAlias;
-
 //**************************************************************************************************
 // Move 2024 Path Expander
 //**************************************************************************************************
@@ -143,6 +146,7 @@ enum AccessChainNameResult {
     ModuleIdent(Loc, E::ModuleIdent),
     UnresolvedName(Loc, Name),
     ResolutionFailure(Box<AccessChainNameResult>, AccessChainFailure),
+    IncompleteChain(Loc),
 }
 
 struct AccessChainResult {
@@ -215,7 +219,7 @@ impl Move2024PathExpander {
     ) -> AccessChainNameResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
-
+        self.ide_autocomplete_suggestion(context, name.loc);
         match self.aliases.resolve(namespace, &name) {
             Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
                 // We are preserving the name's original location, rather than referring to where
@@ -333,7 +337,7 @@ impl Move2024PathExpander {
             }
         }
 
-        match chain {
+        match chain.clone() {
             PN::Single(path_entry!(name, ptys_opt, is_macro)) => {
                 use crate::naming::ast::BuiltinFunction_;
                 use crate::naming::ast::BuiltinTypeName_;
@@ -363,7 +367,11 @@ impl Move2024PathExpander {
                 }
             }
             PN::Path(path) => {
-                let NamePath { root, entries } = path;
+                let NamePath {
+                    root,
+                    entries,
+                    is_incomplete: incomplete,
+                } = path;
                 let mut result = match self.resolve_root(context, root.name) {
                     // In Move Legacy, we always treated three-place names as fully-qualified.
                     // For migration mode, if we could have gotten the correct result doing so,
@@ -465,9 +473,13 @@ impl Move2024PathExpander {
                             break;
                         }
                         NR::ResolutionFailure(_, _) => break,
+                        NR::IncompleteChain(_) => break,
                     }
                 }
 
+                if incomplete {
+                    result = NR::IncompleteChain(loc);
+                }
                 AccessChainResult {
                     result,
                     ptys_opt,
@@ -572,6 +584,10 @@ impl PathExpander for Move2024PathExpander {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
                         }
+                        NR::IncompleteChain(loc) => {
+                            context.env.add_diag(access_chain_incomplete_error(loc));
+                            return None;
+                        }
                     }
                 }
             },
@@ -649,6 +665,10 @@ impl PathExpander for Move2024PathExpander {
                         context.env.add_diag(access_chain_resolution_error(result));
                         return None;
                     }
+                    NR::IncompleteChain(loc) => {
+                        context.env.add_diag(access_chain_incomplete_error(loc));
+                        return None;
+                    }
                 }
             }
             Access::Term | Access::Pattern => match chain.value {
@@ -680,6 +700,10 @@ impl PathExpander for Move2024PathExpander {
                         }
                         result @ NR::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
+                            return None;
+                        }
+                        NR::IncompleteChain(loc) => {
+                            context.env.add_diag(access_chain_incomplete_error(loc));
                             return None;
                         }
                     }
@@ -732,6 +756,19 @@ impl PathExpander for Move2024PathExpander {
                 context.env.add_diag(access_chain_resolution_error(result));
                 None
             }
+            NR::IncompleteChain(loc) => {
+                context.env.add_diag(access_chain_incomplete_error(loc));
+                None
+            }
+        }
+    }
+
+    fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
+        if context.env.ide_mode() {
+            let info = self.aliases.get_ide_alias_information();
+            context
+                .env
+                .add_ide_annotation(loc, IDEAnnotation::PathAutocompleteInfo(Box::new(info)));
         }
     }
 }
@@ -745,6 +782,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::ModuleIdent(loc, _) => *loc,
             AccessChainNameResult::UnresolvedName(loc, _) => *loc,
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.loc(),
+            AccessChainNameResult::IncompleteChain(loc) => *loc,
         }
     }
 
@@ -756,6 +794,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::UnresolvedName(_, _) => "name".to_string(),
             AccessChainNameResult::Address(_, _) => "address".to_string(),
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+            AccessChainNameResult::IncompleteChain(_) => "".to_string(),
         }
     }
 
@@ -767,6 +806,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::UnresolvedName(_, _) => "a name".to_string(),
             AccessChainNameResult::Address(_, _) => "an address".to_string(),
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+            AccessChainNameResult::IncompleteChain(_) => "".to_string(),
         }
     }
 }
@@ -820,6 +860,11 @@ fn access_chain_resolution_error(result: AccessChainNameResult) -> Diagnostic {
             "ICE compiler miscalled access chain resolution error handler"
         ))
     }
+}
+
+fn access_chain_incomplete_error(loc: Loc) -> Diagnostic {
+    let msg = "Incomplete name in this position. Expected an identifier after '::'";
+    diag!(Syntax::InvalidName, (loc, msg))
 }
 
 //**************************************************************************************************
@@ -882,6 +927,7 @@ impl PathExpander for LegacyPathExpander {
                 PV::ModuleAccess(sp!(ident_loc, single_entry!(name, tyargs, is_macro)))
                     if self.aliases.module_alias_get(&name).is_some() =>
                 {
+                    self.ide_autocomplete_suggestion(context, loc);
                     ice_assert!(context.env, tyargs.is_none(), loc, "Found tyargs");
                     ice_assert!(context.env, is_macro.is_none(), loc, "Found macro");
                     let sp!(_, mident_) = self.aliases.module_alias_get(&name).unwrap();
@@ -973,6 +1019,7 @@ impl PathExpander for LegacyPathExpander {
                 if access == Access::Type {
                     ice_assert!(context.env, is_macro.is_none(), loc, "Found macro");
                 }
+                self.ide_autocomplete_suggestion(context, loc);
                 let access = match self.aliases.member_alias_get(&name) {
                     Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                     None => EN::Name(name),
@@ -982,6 +1029,7 @@ impl PathExpander for LegacyPathExpander {
             (Access::Term, single_entry!(name, tyargs, is_macro))
                 if is_valid_datatype_or_constant_name(name.value.as_str()) =>
             {
+                self.ide_autocomplete_suggestion(context, loc);
                 let access = match self.aliases.member_alias_get(&name) {
                     Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                     None => EN::Name(name),
@@ -1023,15 +1071,9 @@ impl PathExpander for LegacyPathExpander {
                         return None;
                     }
                     // Others
-                    (sp!(_, LN::Name(n1)), [n2]) => match self.aliases.module_alias_get(n1) {
-                        None => {
-                            context.env.add_diag(diag!(
-                                NameResolution::UnboundModule,
-                                (n1.loc, format!("Unbound module alias '{}'", n1))
-                            ));
-                            return None;
-                        }
-                        Some(mident) => {
+                    (sp!(_, LN::Name(n1)), [n2]) => {
+                        self.ide_autocomplete_suggestion(context, n1.loc);
+                        if let Some(mident) = self.aliases.module_alias_get(n1) {
                             let n2_name = n2.name;
                             let (tyargs, is_macro) = if !(path.has_tyargs_last()) {
                                 let mut diag = diag!(
@@ -1051,9 +1093,16 @@ impl PathExpander for LegacyPathExpander {
                                 tyargs,
                                 is_macro.copied(),
                             )
+                        } else {
+                            context.env.add_diag(diag!(
+                                NameResolution::UnboundModule,
+                                (n1.loc, format!("Unbound module alias '{}'", n1))
+                            ));
+                            return None;
                         }
-                    },
+                    }
                     (ln, [n2, n3]) => {
+                        self.ide_autocomplete_suggestion(context, ln.loc);
                         let ident_loc = make_loc(
                             ln.loc.file_hash(),
                             ln.loc.start() as usize,
@@ -1081,7 +1130,8 @@ impl PathExpander for LegacyPathExpander {
                         context.env.add_diag(diag);
                         return None;
                     }
-                    (_ln, [_n1, _n2, ..]) => {
+                    (ln, [_n1, _n2, ..]) => {
+                        self.ide_autocomplete_suggestion(context, ln.loc);
                         let mut diag = diag!(Syntax::InvalidName, (loc, "Too many name segments"));
                         diag.add_note("Names may only have 0, 1, or 2 segments separated by '::'");
                         context.env.add_diag(diag);
@@ -1159,6 +1209,23 @@ impl PathExpander for LegacyPathExpander {
                     }
                 }
             }
+        }
+    }
+
+    fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
+        if context.env.ide_mode() && context.is_source_definition {
+            let mut info = AliasAutocompleteInfo::new();
+            for (name, addr) in context.named_address_mapping.unwrap().iter() {
+                info.addresses.insert((*name, *addr));
+            }
+            for (_, name, (_, mident)) in self.aliases.modules.iter() {
+                info.modules.insert((*name, *mident));
+            }
+            for (_, name, (_, (mident, member))) in self.aliases.members.iter() {
+                info.members.insert((*name, *mident, *member));
+            }
+            let annotation = IDEAnnotation::PathAutocompleteInfo(Box::new(info));
+            context.env.add_ide_annotation(loc, annotation)
         }
     }
 }

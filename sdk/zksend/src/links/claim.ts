@@ -262,10 +262,11 @@ export class ZkSendLink {
 		tx.setSender(sender);
 
 		const store = tx.object(this.#contract.ids.bagStoreId);
+		const command = reclaim
+			? this.#contract.reclaim({ arguments: [store, this.address] })
+			: this.#contract.init_claim({ arguments: [store] });
 
-		const [bag, proof] = reclaim
-			? this.#contract.reclaim(tx, { arguments: [store, this.address] })
-			: this.#contract.init_claim(tx, { arguments: [store] });
+		const [bag, proof] = tx.add(command);
 
 		const objectsToTransfer: TransactionObjectArgument[] = [];
 
@@ -273,7 +274,7 @@ export class ZkSendLink {
 
 		for (const object of objects) {
 			objectsToTransfer.push(
-				this.#contract.claim(tx, {
+				this.#contract.claim({
 					arguments: [
 						bag,
 						proof,
@@ -288,10 +289,11 @@ export class ZkSendLink {
 			);
 		}
 
-		this.#contract.finalize(tx, { arguments: [bag, proof] });
 		if (objectsToTransfer.length > 0) {
 			tx.transferObjects(objectsToTransfer, address);
 		}
+
+		tx.add(this.#contract.finalize({ arguments: [bag, proof] }));
 
 		return tx;
 	}
@@ -331,7 +333,7 @@ export class ZkSendLink {
 
 		const to = tx.pure.address(newLinkKp.toSuiAddress());
 
-		this.#contract.update_receiver(tx, { arguments: [store, this.address, to] });
+		tx.add(this.#contract.update_receiver({ arguments: [store, this.address, to] }));
 
 		return {
 			url: newLink.getLink(),
