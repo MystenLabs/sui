@@ -1,0 +1,13 @@
+warning[Lint W00001]: 
+   ┌─ tests/custom_rules/collapsible_else_if.move:6:16
+   │  
+ 6 │           } else {
+   │ ╭────────────────^
+ 7 │ │             if (x < 0) {
+ 8 │ │                 
+ 9 │ │             }
+10 │ │         }
+   │ ╰─────────^ Detected a collapsible `else { if ... }` expression. Consider refactoring to `else if ...`.
+   │  
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
