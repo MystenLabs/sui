@@ -96,6 +96,10 @@ fi
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
 export TMPDIR=$(mktemp -d)
 
+# Set the example move package for the simtest static initializer
+# https://github.com/MystenLabs/sui/blob/7bc276d534c6c758ac2cfefe96431c2b1318ca01/crates/sui-proc-macros/src/lib.rs#L52
+export SIMTEST_STATIC_INIT_MOVE="../../examples/move/basics"
+
 cargo ${CARGO_COMMAND[@]} \
   --config "build.rustflags = [$RUST_FLAGS]" \
   "${cargo_patch_args[@]}" \
