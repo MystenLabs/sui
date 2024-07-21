@@ -1,0 +1,40 @@
+warning[Lint W01005]: 
+  ┌─ tests/linter/incorrect_combinable_bool.move:6:13
+  │
+6 │         if (x < y || x == y) {}; // should be x <= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: 
+  ┌─ tests/linter/incorrect_combinable_bool.move:7:13
+  │
+7 │         if (x == y || x > y) {}; // should be x >= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: 
+  ┌─ tests/linter/incorrect_combinable_bool.move:8:13
+  │
+8 │         if (x > y || x == y) {}; // should be x >= y
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: 
+  ┌─ tests/linter/incorrect_combinable_bool.move:9:13
+  │
+9 │         if (m == n || m < n) {}; // should be m <= n
+  │             ^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+  │
+  = This warning can be suppressed with '#[allow(lint(combinable_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01005]: 
+   ┌─ tests/linter/incorrect_combinable_bool.move:10:13
+   │
+10 │         if (x == 11 || x < 11) {};
+   │             ^^^^^^^^^^^^^^^^^ Consider simplifying to `<=` or `>=` respectively.
+   │
+   = This warning can be suppressed with '#[allow(lint(combinable_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
