@@ -1,0 +1,40 @@
+warning[Lint W01009]: 
+  ┌─ tests/linter/incorrect_redundant_conditional.move:5:9
+  │  
+5 │ ╭         if (x) {
+6 │ │             false
+7 │ │         } else {
+8 │ │             true
+9 │ │         };
+  │ ╰─────────^ Detected a redundant conditional expression `if (...) false else true`. Consider using the condition directly.
+  │  
+  = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: 
+   ┌─ tests/linter/incorrect_redundant_conditional.move:11:9
+   │  
+11 │ ╭         if (x) {
+12 │ │             true
+13 │ │         } else {
+14 │ │             false
+15 │ │         };
+   │ ╰─────────^ Detected a redundant conditional expression `if (...) true else false`. Consider using the condition directly.
+   │  
+   = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: 
+   ┌─ tests/linter/incorrect_redundant_conditional.move:17:9
+   │
+17 │         if (foo()) true else false;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected a redundant conditional expression `if (...) true else false`. Consider using the condition directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: 
+   ┌─ tests/linter/incorrect_redundant_conditional.move:18:9
+   │
+18 │         if (foo()) (true) else (false);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected a redundant conditional expression `if (...) true else false`. Consider using the condition directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
