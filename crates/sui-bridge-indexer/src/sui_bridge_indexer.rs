@@ -1,0 +1,277 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Error;
+use async_trait::async_trait;
+use diesel::dsl::now;
+use diesel::ExpressionMethods;
+use diesel::{Connection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use tracing::info;
+
+use sui_bridge::events::{
+    MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::event::Event;
+use sui_types::execution_status::ExecutionStatus;
+use sui_types::full_checkpoint_content::CheckpointTransaction;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::BRIDGE_ADDRESS;
+
+use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
+use crate::postgres_manager::PgPool;
+use crate::schema::progress_store::{columns, dsl};
+use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
+use crate::sui_checkpoint_ingestion::Task;
+use crate::{
+    models, schema, BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer,
+    TokenTransferData, TokenTransferStatus,
+};
+
+/// Persistent layer impl
+#[derive(Clone)]
+pub struct PgBridgePersistent {
+    pool: PgPool,
+    bridge_genesis_checkpoint: u64,
+}
+
+impl PgBridgePersistent {
+    pub fn new(pool: PgPool, bridge_genesis_checkpoint: u64) -> Self {
+        Self {
+            pool,
+            bridge_genesis_checkpoint,
+        }
+    }
+}
+
+impl Persistent<ProcessedTxnData> for PgBridgePersistent {
+    fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let connection = &mut self.pool.get()?;
+        connection.transaction(|conn| {
+            for d in data {
+                match d {
+                    ProcessedTxnData::TokenTransfer(t) => {
+                        diesel::insert_into(token_transfer::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+
+                        if let Some(d) = t.to_data_maybe() {
+                            diesel::insert_into(token_transfer_data::table)
+                                .values(&d)
+                                .on_conflict_do_nothing()
+                                .execute(conn)?;
+                        }
+                    }
+                    ProcessedTxnData::Error(e) => {
+                        diesel::insert_into(sui_error_transactions::table)
+                            .values(&e.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+#[async_trait]
+impl IndexerProgressStore for PgBridgePersistent {
+    async fn load(&self, task_name: String) -> anyhow::Result<CheckpointSequenceNumber> {
+        let mut conn = self.pool.get()?;
+        let cp: Option<models::ProgressStore> = dsl::progress_store
+            .find(task_name)
+            .select(models::ProgressStore::as_select())
+            .first(&mut conn)
+            .optional()?;
+        Ok(cp
+            .map(|d| d.checkpoint as u64)
+            .unwrap_or(self.bridge_genesis_checkpoint))
+    }
+
+    async fn save(
+        &mut self,
+        task_name: String,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> anyhow::Result<()> {
+        let mut conn = self.pool.get()?;
+        diesel::insert_into(schema::progress_store::table)
+            .values(&models::ProgressStore {
+                task_name,
+                checkpoint: checkpoint_number as i64,
+                target_checkpoint: i64::MAX,
+                timestamp: None,
+            })
+            .on_conflict(dsl::task_name)
+            .do_update()
+            .set((
+                columns::checkpoint.eq(checkpoint_number as i64),
+                columns::timestamp.eq(now),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    fn tasks(&self) -> Result<Vec<Task>, anyhow::Error> {
+        let mut conn = self.pool.get()?;
+        // get all unfinished tasks
+        let cp: Vec<models::ProgressStore> = dsl::progress_store
+            .order_by(columns::checkpoint.desc())
+            .load(&mut conn)?;
+        Ok(cp.into_iter().map(|d| d.into()).collect())
+    }
+
+    fn register_task(
+        &mut self,
+        task_name: String,
+        checkpoint: u64,
+        target_checkpoint: i64,
+    ) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get()?;
+        diesel::insert_into(schema::progress_store::table)
+            .values(models::ProgressStore {
+                task_name,
+                checkpoint: checkpoint as i64,
+                target_checkpoint,
+                timestamp: None,
+            })
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get()?;
+        diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
+            .set((
+                columns::checkpoint.eq(task.checkpoint as i64),
+                columns::target_checkpoint.eq(task.target_checkpoint as i64),
+                columns::timestamp.eq(now),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+}
+
+/// Data mapper impl
+#[derive(Clone)]
+pub struct SuiBridgeDataMapper;
+
+impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiBridgeDataMapper {
+    fn map(
+        &self,
+        (data, checkpoint_num, timestamp_ms): CheckpointTxnData,
+    ) -> Result<Vec<ProcessedTxnData>, anyhow::Error> {
+        match &data.events {
+            Some(events) => {
+                let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {
+                    if let Some(data) = process_sui_event(ev, &data, checkpoint_num, timestamp_ms)?
+                    {
+                        result.push(data);
+                    }
+                    Ok::<_, anyhow::Error>(result)
+                })?;
+
+                if !token_transfers.is_empty() {
+                    info!(
+                        "SUI: Extracted {} bridge token transfer data entries for tx {}.",
+                        token_transfers.len(),
+                        data.transaction.digest()
+                    );
+                }
+                Ok(token_transfers)
+            }
+            None => {
+                if let ExecutionStatus::Failure { error, command } = data.effects.status() {
+                    Ok(vec![ProcessedTxnData::Error(SuiTxnError {
+                        tx_digest: *data.transaction.digest(),
+                        sender: data.transaction.sender_address(),
+                        timestamp_ms,
+                        failure_status: error.to_string(),
+                        cmd_idx: command.map(|idx| idx as u64),
+                    })])
+                } else {
+                    Ok(vec![])
+                }
+            }
+        }
+    }
+}
+
+fn process_sui_event(
+    ev: &Event,
+    tx: &CheckpointTransaction,
+    checkpoint: u64,
+    timestamp_ms: u64,
+) -> Result<Option<ProcessedTxnData>, anyhow::Error> {
+    Ok(if ev.type_.address == BRIDGE_ADDRESS {
+        match ev.type_.name.as_str() {
+            "TokenDepositedEvent" => {
+                info!("Observed Sui Deposit {:?}", ev);
+                // todo: metrics.total_sui_token_deposited.inc();
+                let move_event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
+                Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    chain_id: move_event.source_chain,
+                    nonce: move_event.seq_num,
+                    block_height: checkpoint,
+                    timestamp_ms,
+                    txn_hash: tx.transaction.digest().inner().to_vec(),
+                    txn_sender: ev.sender.to_vec(),
+                    status: TokenTransferStatus::Deposited,
+                    gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                    data_source: BridgeDataSource::Sui,
+                    data: Some(TokenTransferData {
+                        destination_chain: move_event.target_chain,
+                        sender_address: move_event.sender_address.clone(),
+                        recipient_address: move_event.target_address.clone(),
+                        token_id: move_event.token_type,
+                        amount: move_event.amount_sui_adjusted,
+                    }),
+                }))
+            }
+            "TokenTransferApproved" => {
+                info!("Observed Sui Approval {:?}", ev);
+                // todo: metrics.total_sui_token_transfer_approved.inc();
+                let event: MoveTokenTransferApproved = bcs::from_bytes(&ev.contents)?;
+                Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    chain_id: event.message_key.source_chain,
+                    nonce: event.message_key.bridge_seq_num,
+                    block_height: checkpoint,
+                    timestamp_ms,
+                    txn_hash: tx.transaction.digest().inner().to_vec(),
+                    txn_sender: ev.sender.to_vec(),
+                    status: TokenTransferStatus::Approved,
+                    gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                    data_source: BridgeDataSource::Sui,
+                    data: None,
+                }))
+            }
+            "TokenTransferClaimed" => {
+                info!("Observed Sui Claim {:?}", ev);
+                // todo: metrics.total_sui_token_transfer_claimed.inc();
+                let event: MoveTokenTransferClaimed = bcs::from_bytes(&ev.contents)?;
+                Some(ProcessedTxnData::TokenTransfer(TokenTransfer {
+                    chain_id: event.message_key.source_chain,
+                    nonce: event.message_key.bridge_seq_num,
+                    block_height: checkpoint,
+                    timestamp_ms,
+                    txn_hash: tx.transaction.digest().inner().to_vec(),
+                    txn_sender: ev.sender.to_vec(),
+                    status: TokenTransferStatus::Claimed,
+                    gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                    data_source: BridgeDataSource::Sui,
+                    data: None,
+                }))
+            }
+            _ => {
+                // todo: metrics.total_sui_bridge_txn_other.inc();
+                None
+            }
+        }
+    } else {
+        None
+    })
+}

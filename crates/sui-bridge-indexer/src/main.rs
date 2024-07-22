@@ -1,31 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
-use clap::*;
-use mysten_metrics::spawn_logged_monitored_task;
-use mysten_metrics::start_prometheus_server;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use anyhow::Result;
+use clap::*;
+use tokio::task::JoinHandle;
+use tracing::info;
+
+use mysten_metrics::metered_channel::channel;
+use mysten_metrics::spawn_logged_monitored_task;
+use mysten_metrics::start_prometheus_server;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
+use sui_bridge_indexer::indexer_builder::{
+    IndexerBuilder, SuiCheckpointDatasource, SuiInputObjectFilter,
+};
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
+use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
+use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
-use tokio::task::JoinHandle;
-
-use mysten_metrics::metered_channel::channel;
-use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::sui_checkpoint_ingestion::SuiCheckpointSyncer;
-use sui_config::Config;
-use tracing::info;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
@@ -51,7 +56,6 @@ async fn main() -> Result<()> {
             .join("config.yaml")
     };
     let config = IndexerConfig::load(&config_path)?;
-    let config_clone = config.clone();
 
     // Init metrics server
     let registry_service = start_prometheus_server(
@@ -108,10 +112,24 @@ async fn main() -> Result<()> {
         )
         .await?;
     } else {
-        let pg_pool = get_connection_pool(db_url.clone());
-        SuiCheckpointSyncer::new(pg_pool, config.bridge_genesis_checkpoint)
-            .start(&config_clone, indexer_meterics, ingestion_metrics)
-            .await?;
+        let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
+            config.remote_store_url,
+            config.concurrency as usize,
+            config.checkpoints_path.clone().into(),
+            ingestion_metrics.clone(),
+        );
+        let indexer = IndexerBuilder::new(
+            sui_checkpoint_datasource,
+            SuiInputObjectFilter {
+                object_id: SUI_BRIDGE_OBJECT_ID,
+            },
+            SuiBridgeDataMapper,
+        )
+        .build(PgBridgePersistent::new(
+            get_connection_pool(db_url.clone()),
+            config.bridge_genesis_checkpoint,
+        ));
+        indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
     futures::future::join_all(handles).await;

@@ -44,7 +44,7 @@ impl SuiCheckpointSyncer {
         // Update tasks first
         let tasks = self.tasks()?;
         // checkpoint workers
-        match tasks.latest_checkpoint_task() {
+        match tasks.live_task() {
             None => {
                 // No task in database, start latest checkpoint task and backfill tasks
                 // if resume_from_checkpoint, use it for the latest task, if not set, use bridge_genesis_checkpoint
@@ -234,11 +234,11 @@ impl From<models::ProgressStore> for Task {
 }
 
 pub trait Tasks {
-    fn latest_checkpoint_task(&self) -> Option<Task>;
+    fn live_task(&self) -> Option<Task>;
 }
 
 impl Tasks for Vec<Task> {
-    fn latest_checkpoint_task(&self) -> Option<Task> {
+    fn live_task(&self) -> Option<Task> {
         self.iter().fold(None, |result, other_task| match &result {
             Some(task) if task.checkpoint < other_task.checkpoint => Some(other_task.clone()),
             None => Some(other_task.clone()),
