@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::{Function, Loader, Resolver},
+    loader::{ast::Function, Loader, Resolver},
     native_functions::NativeContext,
     trace,
 };

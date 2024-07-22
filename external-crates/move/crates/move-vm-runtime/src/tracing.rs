@@ -23,7 +23,7 @@ use ::{
 #[cfg(any(debug_assertions, feature = "debugging"))]
 use crate::{
     interpreter::Interpreter,
-    loader::{Function, Loader},
+    loader::{ast::Function, Loader},
 };
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
