@@ -164,6 +164,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 //             Enable consensus commit prologue V3 on testnet.
 //             Turn on shared object congestion control in testnet.
+//             Enable random beacon on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2536,6 +2537,12 @@ impl ProtocolConfig {
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
+
+                    // Enable random beacon on mainnet.
+                    cfg.feature_flags.random_beacon = true;
+                    cfg.random_beacon_reduction_lower_bound = Some(1600);
+                    cfg.random_beacon_dkg_timeout_round = Some(3000);
+                    cfg.random_beacon_min_round_interval_ms = Some(500);
                 }
                 // Use this template when making changes:
                 //
