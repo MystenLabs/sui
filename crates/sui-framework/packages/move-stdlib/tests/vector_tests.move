@@ -655,9 +655,9 @@ module std::vector_tests {
         assert!(e.find_index!(|e| *e == 0).is_none());
         assert!(e.find_index!(|_| true).is_none());
 
-        let r = vector[0, 1, 2, 3];
-        assert!(r.find_index!(|e| *e == 2).unwrap() == 2);
-        assert!(r.find_index!(|e| *e == 4).is_none());
+        let r = vector[0, 10, 100, 1_000];
+        assert!(r.find_index!(|e| *e == 100).destroy_some() == 2);
+        assert!(r.find_index!(|e| *e == 10_000).is_none());
     }
 
     #[test]
