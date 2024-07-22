@@ -63,26 +63,23 @@ pub enum EpochFlag {
     // This flag was "burned" because it was deployed with a broken version of the code. The
     // new flags below are required to enable state accumulator v2
     _StateAccumulatorV2EnabledDeprecated = 4,
-    StateAccumulatorV2EnabledTestnet = 5,
-    StateAccumulatorV2EnabledMainnet = 6,
+    _StateAccumulatorV2EnabledTestnetDeprecated = 5,
+    _StateAccumulatorV2EnabledMainnetDeprecated = 6,
 
     ExecutedInEpochTable = 7,
 }
 
 impl EpochFlag {
     pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
-        Self::default_flags_impl(&config.execution_cache, config.state_accumulator_v2)
+        Self::default_flags_impl(&config.execution_cache)
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default(), true)
+        Self::default_flags_impl(&Default::default())
     }
 
-    fn default_flags_impl(
-        cache_config: &ExecutionCacheConfig,
-        enable_state_accumulator_v2: bool,
-    ) -> Vec<Self> {
+    fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
         let mut new_flags = vec![EpochFlag::ExecutedInEpochTable];
 
         if matches!(
@@ -90,11 +87,6 @@ impl EpochFlag {
             ExecutionCacheConfigType::WritebackCache
         ) {
             new_flags.push(EpochFlag::WritebackCacheEnabled);
-        }
-
-        if enable_state_accumulator_v2 {
-            new_flags.push(EpochFlag::StateAccumulatorV2EnabledTestnet);
-            new_flags.push(EpochFlag::StateAccumulatorV2EnabledMainnet);
         }
 
         new_flags
@@ -119,11 +111,11 @@ impl fmt::Display for EpochFlag {
                 write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
             }
             EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
-            EpochFlag::StateAccumulatorV2EnabledTestnet => {
-                write!(f, "StateAccumulatorV2EnabledTestnet")
+            EpochFlag::_StateAccumulatorV2EnabledTestnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledTestnet (DEPRECATED)")
             }
-            EpochFlag::StateAccumulatorV2EnabledMainnet => {
-                write!(f, "StateAccumulatorV2EnabledMainnet")
+            EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
             }
         }
     }

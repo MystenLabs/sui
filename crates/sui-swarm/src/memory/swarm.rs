@@ -23,8 +23,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, StateAccumulatorV2EnabledConfig,
-    SupportedProtocolVersionsCallback,
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
@@ -57,7 +56,6 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_fw_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
 }
 
 impl SwarmBuilder {
@@ -85,7 +83,6 @@ impl SwarmBuilder {
             fullnode_fw_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
-            state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(true),
         }
     }
 }
@@ -115,7 +112,6 @@ impl<R> SwarmBuilder<R> {
             fullnode_fw_config: self.fullnode_fw_config,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            state_accumulator_v2_enabled_config: self.state_accumulator_v2_enabled_config,
         }
     }
 
@@ -221,14 +217,6 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
         self.supported_protocol_versions_config = c;
-        self
-    }
-
-    pub fn with_state_accumulator_v2_enabled_config(
-        mut self,
-        c: StateAccumulatorV2EnabledConfig,
-    ) -> Self {
-        self.state_accumulator_v2_enabled_config = c;
         self
     }
 
@@ -350,9 +338,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .with_objects(self.additional_objects)
                 .with_supported_protocol_versions_config(
                     self.supported_protocol_versions_config.clone(),
-                )
-                .with_state_accumulator_v2_enabled_config(
-                    self.state_accumulator_v2_enabled_config.clone(),
                 )
                 .build()
         });

@@ -111,11 +111,6 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
-        self.state_accumulator_v2 = enabled;
-        self
-    }
-
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
