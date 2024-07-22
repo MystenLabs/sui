@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
 use diesel::ExpressionMethods;
@@ -15,7 +15,6 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::BRIDGE_ADDRESS;
 
 use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
@@ -32,15 +31,11 @@ use crate::{
 #[derive(Clone)]
 pub struct PgBridgePersistent {
     pool: PgPool,
-    bridge_genesis_checkpoint: u64,
 }
 
 impl PgBridgePersistent {
-    pub fn new(pool: PgPool, bridge_genesis_checkpoint: u64) -> Self {
-        Self {
-            pool,
-            bridge_genesis_checkpoint,
-        }
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
@@ -81,23 +76,19 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
 
 #[async_trait]
 impl IndexerProgressStore for PgBridgePersistent {
-    async fn load(&self, task_name: String) -> anyhow::Result<CheckpointSequenceNumber> {
+    async fn load(&self, task_name: String) -> anyhow::Result<u64> {
         let mut conn = self.pool.get()?;
         let cp: Option<models::ProgressStore> = dsl::progress_store
-            .find(task_name)
+            .find(&task_name)
             .select(models::ProgressStore::as_select())
             .first(&mut conn)
             .optional()?;
         Ok(cp
-            .map(|d| d.checkpoint as u64)
-            .unwrap_or(self.bridge_genesis_checkpoint))
+            .ok_or(anyhow!("Cannot found progress for task {task_name}"))?
+            .checkpoint as u64)
     }
 
-    async fn save(
-        &mut self,
-        task_name: String,
-        checkpoint_number: CheckpointSequenceNumber,
-    ) -> anyhow::Result<()> {
+    async fn save(&mut self, task_name: String, checkpoint_number: u64) -> anyhow::Result<()> {
         let mut conn = self.pool.get()?;
         diesel::insert_into(schema::progress_store::table)
             .values(&models::ProgressStore {

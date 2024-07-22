@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Error;
-use async_trait::async_trait;
 use std::cmp::min;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use anyhow::Error;
+use async_trait::async_trait;
 use tap::TapFallible;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
@@ -25,64 +26,64 @@ use sui_types::transaction::TransactionKind;
 use crate::sui_checkpoint_ingestion::{Task, Tasks};
 
 pub struct IndexerBuilder<D, F, M> {
+    name: String,
     datasource: D,
     filter: F,
     data_mapper: M,
-    back_fill_strategy: BackfillStrategy,
+    backfill_strategy: BackfillStrategy,
 }
 
 impl<D, F, M> IndexerBuilder<D, F, M> {
-    pub fn new(datasource: D, filter: F, data_mapper: M) -> IndexerBuilder<D, F, M> {
+    pub fn new(name: &str, datasource: D, filter: F, data_mapper: M) -> IndexerBuilder<D, F, M> {
         IndexerBuilder {
+            name: name.into(),
             datasource,
             filter,
             data_mapper,
-            back_fill_strategy: BackfillStrategy::Simple,
+            backfill_strategy: BackfillStrategy::Simple,
         }
     }
-    pub fn build<R, P>(self, persistent: P) -> Indexer<P, D, F, M>
+    pub fn build<R, P>(
+        self,
+        start_from_checkpoint: u64,
+        genesis_checkpoint: u64,
+        persistent: P,
+    ) -> Indexer<P, D, F, M>
     where
         P: Persistent<R>,
     {
         Indexer {
-            name: "".to_string(),
+            name: self.name,
             storage: persistent,
             datasource: self.datasource.into(),
-            backfill_strategy: self.back_fill_strategy,
-            start_from_checkpoint: 0,
+            backfill_strategy: self.backfill_strategy,
+            start_from_checkpoint,
             filter: self.filter,
             data_mapper: self.data_mapper,
-            genesis_checkpoint: 0,
+            genesis_checkpoint,
         }
     }
 
-    pub fn with_transaction_filter<NewFilter>(
-        self,
-        filter: NewFilter,
-    ) -> IndexerBuilder<D, NewFilter, M> {
-        IndexerBuilder {
-            datasource: self.datasource,
-            filter,
-            data_mapper: self.data_mapper,
-            back_fill_strategy: self.back_fill_strategy,
-        }
-    }
-
-    pub fn with_back_fill_strategy(mut self, back_fill: BackfillStrategy) -> Self {
-        self.back_fill_strategy = back_fill;
+    pub fn with_backfill_strategy(mut self, backfill: BackfillStrategy) -> Self {
+        self.backfill_strategy = backfill;
         self
     }
+}
 
-    pub fn with_data_processor<NewMapper>(
-        self,
-        data_processor: NewMapper,
-    ) -> IndexerBuilder<D, F, NewMapper> {
-        IndexerBuilder {
-            datasource: self.datasource,
-            filter: self.filter,
-            data_mapper: data_processor,
-            back_fill_strategy: self.back_fill_strategy,
-        }
+#[derive(Clone)]
+pub struct DefaultFilter;
+
+impl<T> DataFilter<T> for DefaultFilter {
+    fn filter(&self, _: &T) -> bool {
+        true
+    }
+}
+
+pub struct DefaultMapper;
+
+impl<T> DataMapper<T, T> for DefaultMapper {
+    fn map(&self, data: T) -> Result<Vec<T>, Error> {
+        Ok(vec![data])
     }
 }
 
@@ -212,12 +213,8 @@ pub trait Persistent<T>: IndexerProgressStore + Sync + Send + Clone {
 
 #[async_trait]
 pub trait IndexerProgressStore: Send {
-    async fn load(&self, task_name: String) -> anyhow::Result<CheckpointSequenceNumber>;
-    async fn save(
-        &mut self,
-        task_name: String,
-        checkpoint_number: CheckpointSequenceNumber,
-    ) -> anyhow::Result<()>;
+    async fn load(&self, task_name: String) -> anyhow::Result<u64>;
+    async fn save(&mut self, task_name: String, checkpoint_number: u64) -> anyhow::Result<()>;
 
     fn tasks(&self) -> Result<Vec<Task>, anyhow::Error>;
 

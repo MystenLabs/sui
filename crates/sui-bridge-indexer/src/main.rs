@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,9 +17,9 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::eth_worker::EthBridgeWorker;
+use sui_bridge_indexer::eth_bridge_indexer::{EthDataMapper, EthFinalizedDatasource};
 use sui_bridge_indexer::indexer_builder::{
-    IndexerBuilder, SuiCheckpointDatasource, SuiInputObjectFilter,
+    DefaultFilter, IndexerBuilder, SuiCheckpointDatasource, SuiInputObjectFilter,
 };
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
@@ -78,7 +77,25 @@ async fn main() -> Result<()> {
     // unwrap safe: db_url must be set in `load_config` above
     let db_url = config.db_url.clone();
 
-    // TODO: retry_with_max_elapsed_time
+    let datastore = PgBridgePersistent::new(get_connection_pool(db_url.clone()));
+
+    let eth_checkpoint_datasource = EthFinalizedDatasource::new(
+        config.eth_sui_bridge_contract_address.clone(),
+        config.eth_rpc_url.clone(),
+        bridge_metrics.clone(),
+    )?;
+    let eth_finalised_indexer = IndexerBuilder::new(
+        "FinalizedEthBridgeIndexer",
+        eth_checkpoint_datasource,
+        DefaultFilter,
+        EthDataMapper { finalized: true },
+    )
+    .build(config.start_block, config.start_block, datastore.clone());
+    let finalised_indexer_fut = spawn_logged_monitored_task!(eth_finalised_indexer.start());
+
+    // TODO: same for unfinalised eth
+
+    /*// TODO: retry_with_max_elapsed_time
     let eth_worker = EthBridgeWorker::new(
         get_connection_pool(db_url.clone()),
         bridge_metrics.clone(),
@@ -101,9 +118,10 @@ async fn main() -> Result<()> {
     let finalized_handle = eth_worker
         .start_indexing_finalized_events(eth_client.clone())
         .await?;
-    let handles = vec![unfinalized_handle, finalized_handle];
+    let handles = vec![unfinalized_handle, finalized_handle];*/
 
     if let Some(sui_rpc_url) = config.sui_rpc_url.clone() {
+        // Todo: impl datasource for sui RPC datasource
         start_processing_sui_checkpoints_by_querying_txns(
             sui_rpc_url,
             db_url.clone(),
@@ -119,20 +137,24 @@ async fn main() -> Result<()> {
             ingestion_metrics.clone(),
         );
         let indexer = IndexerBuilder::new(
+            "SuiBridgeIndexer",
             sui_checkpoint_datasource,
             SuiInputObjectFilter {
                 object_id: SUI_BRIDGE_OBJECT_ID,
             },
             SuiBridgeDataMapper,
         )
-        .build(PgBridgePersistent::new(
-            get_connection_pool(db_url.clone()),
+        .build(
+            config
+                .resume_from_checkpoint
+                .unwrap_or(config.bridge_genesis_checkpoint),
             config.bridge_genesis_checkpoint,
-        ));
+            datastore,
+        );
         indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(handles).await;
+    futures::future::join_all(vec![finalised_indexer_fut]).await;
 
     Ok(())
 }
