@@ -59,21 +59,27 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
         for potential_cert in decision_blocks {
             let authority = potential_cert.reference().author;
             for reference in potential_cert.ancestors() {
-                if let Some((is_vote, stake_agg)) = all_votes.get_mut(reference) {
-                    if *is_vote {
-                        stake_agg.add(authority, &subdag.context.committee);
+                match all_votes.entry(*reference) {
+                    std::collections::hash_map::Entry::Occupied(mut entry) => {
+                        let (is_vote, stake_agg) = entry.get_mut();
+                        if *is_vote {
+                            stake_agg.add(authority, &subdag.context.committee);
+                        }
                     }
-                } else if let Some(potential_vote) = subdag.get_block(reference) {
-                    let is_vote = subdag.is_vote(&potential_vote, leader_block);
-                    let mut stake_agg = StakeAggregator::<QuorumThreshold>::new();
-                    stake_agg.add(authority, &subdag.context.committee);
-                    all_votes.insert(*reference, (is_vote, stake_agg));
-                } else {
-                    tracing::trace!(
-                        "Potential vote not found in unscored committed subdags: {:?}",
-                        reference
-                    );
-                };
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        if let Some(potential_vote) = subdag.get_block(reference) {
+                            let is_vote = subdag.is_vote(&potential_vote, leader_block);
+                            let mut stake_agg = StakeAggregator::<QuorumThreshold>::new();
+                            stake_agg.add(authority, &subdag.context.committee);
+                            entry.insert((is_vote, stake_agg));
+                        } else {
+                            tracing::trace!(
+                                "Potential vote not found in unscored committed subdags: {:?}",
+                                reference
+                            );
+                        }
+                    }
+                }
             }
         }
         drop(get_vote_cert_stakes);
