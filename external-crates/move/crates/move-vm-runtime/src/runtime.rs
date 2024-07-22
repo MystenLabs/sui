@@ -224,7 +224,7 @@ impl VMRuntime {
 
         // Create a list of dummy locals. Each value stored will be used be borrowed and passed
         // by reference to the invoked function
-        let mut dummy_locals = Locals::new(arg_tys.len());
+        let mut dummy_locals = Locals::new_from(vec![], arg_tys.len());
         // Arguments for the invoked function. These can be owned values or references
         let deserialized_args = arg_tys
             .into_iter()
