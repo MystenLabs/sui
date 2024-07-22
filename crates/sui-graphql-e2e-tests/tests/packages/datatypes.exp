@@ -3,7 +3,8 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-54:
+task 1, lines 6-54:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -135,18 +136,22 @@ Response: {
   }
 }
 
-task 2 'publish'. lines 56-66:
+task 2, lines 56-66:
+//# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 68-68:
+task 3, line 68:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'view-object'. lines 70-70:
+task 4, line 70:
+//# view-object 2,0
 2,0::m
 
-task 5 'run-graphql'. lines 72-96:
+task 5, lines 72-96:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -180,7 +185,8 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 98-143:
+task 6, lines 98-143:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -284,7 +290,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 145-174:
+task 7, lines 145-174:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -348,7 +355,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 176-206:
+task 8, lines 176-206:
+//# run-graphql
 Response: {
   "data": {
     "object": {

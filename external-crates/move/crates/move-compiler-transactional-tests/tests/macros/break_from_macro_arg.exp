@@ -1,6 +1,7 @@
 processed 4 tasks
 
-task 3 'run'. lines 27-27:
+task 3, line 27:
+//# run 42::m::t --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),

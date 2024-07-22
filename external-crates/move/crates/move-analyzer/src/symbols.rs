@@ -2984,7 +2984,11 @@ impl<'a> ParsingSymbolicator<'a> {
                 };
             }
             NA::Path(path) => {
-                let P::NamePath { root, entries } = path;
+                let P::NamePath {
+                    root,
+                    entries,
+                    is_incomplete: _,
+                } = path;
                 self.root_path_entry_symbols(root);
                 if let Some(root_loc) = loc_start_to_lsp_position_opt(self.files, &root.name.loc) {
                     if let P::LeadingNameAccess_::Name(n) = root.name.value {

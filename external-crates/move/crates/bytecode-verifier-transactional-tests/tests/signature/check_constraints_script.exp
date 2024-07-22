@@ -1,6 +1,7 @@
 processed 9 tasks
 
-task 1 'run'. lines 19-26:
+task 1, lines 19-26:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -9,7 +10,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 2 'run'. lines 28-35:
+task 2, lines 28-35:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -18,7 +20,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 3 'run'. lines 37-44:
+task 3, lines 37-44:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -27,7 +30,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 4 'run'. lines 46-53:
+task 4, lines 46-53:
+//# run --type-args 0x1::M::K --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -36,7 +40,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 5 'run'. lines 55-62:
+task 5, lines 55-62:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -45,7 +50,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 6 'run'. lines 64-71:
+task 6, lines 64-71:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -54,7 +60,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 7 'run'. lines 73-80:
+task 7, lines 73-80:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),
@@ -63,7 +70,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 8 'run'. lines 82-89:
+task 8, lines 82-89:
+//# run --type-args u64 --args false
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),

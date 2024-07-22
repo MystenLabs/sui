@@ -146,6 +146,7 @@ enum AccessChainNameResult {
     ModuleIdent(Loc, E::ModuleIdent),
     UnresolvedName(Loc, Name),
     ResolutionFailure(Box<AccessChainNameResult>, AccessChainFailure),
+    IncompleteChain(Loc),
 }
 
 struct AccessChainResult {
@@ -336,7 +337,7 @@ impl Move2024PathExpander {
             }
         }
 
-        match chain {
+        match chain.clone() {
             PN::Single(path_entry!(name, ptys_opt, is_macro)) => {
                 use crate::naming::ast::BuiltinFunction_;
                 use crate::naming::ast::BuiltinTypeName_;
@@ -366,7 +367,11 @@ impl Move2024PathExpander {
                 }
             }
             PN::Path(path) => {
-                let NamePath { root, entries } = path;
+                let NamePath {
+                    root,
+                    entries,
+                    is_incomplete: incomplete,
+                } = path;
                 let mut result = match self.resolve_root(context, root.name) {
                     // In Move Legacy, we always treated three-place names as fully-qualified.
                     // For migration mode, if we could have gotten the correct result doing so,
@@ -468,9 +473,13 @@ impl Move2024PathExpander {
                             break;
                         }
                         NR::ResolutionFailure(_, _) => break,
+                        NR::IncompleteChain(_) => break,
                     }
                 }
 
+                if incomplete {
+                    result = NR::IncompleteChain(loc);
+                }
                 AccessChainResult {
                     result,
                     ptys_opt,
@@ -575,6 +584,10 @@ impl PathExpander for Move2024PathExpander {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
                         }
+                        NR::IncompleteChain(loc) => {
+                            context.env.add_diag(access_chain_incomplete_error(loc));
+                            return None;
+                        }
                     }
                 }
             },
@@ -652,6 +665,10 @@ impl PathExpander for Move2024PathExpander {
                         context.env.add_diag(access_chain_resolution_error(result));
                         return None;
                     }
+                    NR::IncompleteChain(loc) => {
+                        context.env.add_diag(access_chain_incomplete_error(loc));
+                        return None;
+                    }
                 }
             }
             Access::Term | Access::Pattern => match chain.value {
@@ -683,6 +700,10 @@ impl PathExpander for Move2024PathExpander {
                         }
                         result @ NR::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
+                            return None;
+                        }
+                        NR::IncompleteChain(loc) => {
+                            context.env.add_diag(access_chain_incomplete_error(loc));
                             return None;
                         }
                     }
@@ -735,6 +756,10 @@ impl PathExpander for Move2024PathExpander {
                 context.env.add_diag(access_chain_resolution_error(result));
                 None
             }
+            NR::IncompleteChain(loc) => {
+                context.env.add_diag(access_chain_incomplete_error(loc));
+                None
+            }
         }
     }
 
@@ -757,6 +782,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::ModuleIdent(loc, _) => *loc,
             AccessChainNameResult::UnresolvedName(loc, _) => *loc,
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.loc(),
+            AccessChainNameResult::IncompleteChain(loc) => *loc,
         }
     }
 
@@ -768,6 +794,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::UnresolvedName(_, _) => "name".to_string(),
             AccessChainNameResult::Address(_, _) => "address".to_string(),
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+            AccessChainNameResult::IncompleteChain(_) => "".to_string(),
         }
     }
 
@@ -779,6 +806,7 @@ impl AccessChainNameResult {
             AccessChainNameResult::UnresolvedName(_, _) => "a name".to_string(),
             AccessChainNameResult::Address(_, _) => "an address".to_string(),
             AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+            AccessChainNameResult::IncompleteChain(_) => "".to_string(),
         }
     }
 }
@@ -832,6 +860,11 @@ fn access_chain_resolution_error(result: AccessChainNameResult) -> Diagnostic {
             "ICE compiler miscalled access chain resolution error handler"
         ))
     }
+}
+
+fn access_chain_incomplete_error(loc: Loc) -> Diagnostic {
+    let msg = "Incomplete name in this position. Expected an identifier after '::'";
+    diag!(Syntax::InvalidName, (loc, msg))
 }
 
 //**************************************************************************************************

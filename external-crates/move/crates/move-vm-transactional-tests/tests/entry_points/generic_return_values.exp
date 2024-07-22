@@ -1,49 +1,65 @@
 processed 17 tasks
 
-task 1 'run'. lines 25-25:
+task 1, line 25:
+//# run 0x42::Test::t1 --type-args u64 --args 0
 return values: 0
 
-task 2 'run'. lines 27-27:
+task 2, line 27:
+//# run 0x42::Test::t1 --type-args u8 --args 0u8
 return values: 0
 
-task 3 'run'. lines 29-29:
+task 3, line 29:
+//# run 0x42::Test::t1 --type-args vector<u8> --args b"wat"
 return values: [119, 97, 116]
 
-task 4 'run'. lines 31-31:
+task 4, line 31:
+//# run 0x42::Test::t1 --type-args 0x42::Test::Cup<u64> --args 0
 return values: { 0 }
 
-task 5 'run'. lines 35-35:
+task 5, line 35:
+//# run 0x42::Test::t2 --type-args u64 --args 0
 return values: [0]
 
-task 6 'run'. lines 37-37:
+task 6, line 37:
+//# run 0x42::Test::t2 --type-args u8 --args 0u8
 return values: [0]
 
-task 7 'run'. lines 39-39:
+task 7, line 39:
+//# run 0x42::Test::t2 --type-args vector<u8> --args b"wat"
 return values: [[119, 97, 116]]
 
-task 8 'run'. lines 41-41:
+task 8, line 41:
+//# run 0x42::Test::t2 --type-args 0x42::Test::Cup<u64> --args 0
 return values: [{ 0 }]
 
-task 9 'run'. lines 45-45:
+task 9, line 45:
+//# run 0x42::Test::t3 --type-args u64 --args 0
 return values: { 0 }
 
-task 10 'run'. lines 47-47:
+task 10, line 47:
+//# run 0x42::Test::t3 --type-args u8 --args 0u8
 return values: { 0 }
 
-task 11 'run'. lines 49-49:
+task 11, line 49:
+//# run 0x42::Test::t3 --type-args vector<u8> --args b"wat"
 return values: { [119, 97, 116] }
 
-task 12 'run'. lines 51-51:
+task 12, line 51:
+//# run 0x42::Test::t3 --type-args 0x42::Test::Cup<u64> --args 0
 return values: { { 0 } }
 
-task 13 'run'. lines 55-55:
+task 13, line 55:
+//# run 0x42::Test::t4 --type-args u64 u8 --args 0 0u8
 return values: 0, 0
 
-task 14 'run'. lines 57-57:
+task 14, line 57:
+//# run 0x42::Test::t4 --type-args u8 bool --args 0u8 false
 return values: false, 0
 
-task 15 'run'. lines 59-59:
+task 15, line 59:
+//# run 0x42::Test::t4 --type-args vector<u8> 0x42::Test::Cup<u64> --args b"wat" 0
 return values: { 0 }, [119, 97, 116]
 
-task 16 'run'. lines 61-61:
+task 16, line 61:
+//# run 0x42::Test::t4 --type-args 0x42::Test::Cup<u64> address --args 0 @0x42
 return values: 0000000000000000000000000000000000000000000000000000000000000042, { 0 }

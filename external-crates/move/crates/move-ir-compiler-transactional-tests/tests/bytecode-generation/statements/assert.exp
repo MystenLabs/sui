@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'print-bytecode'. lines 1-10:
+task 0, lines 1-10:
+//# print-bytecode
 // Move bytecode v6
 module 1.m {
 

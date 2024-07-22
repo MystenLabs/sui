@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'print-bytecode'. lines 1-31:
+task 0, lines 1-31:
+//# print-bytecode
 // Move bytecode v6
 module 3d10.Example {
 struct Coin {
@@ -51,7 +52,8 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 33-46:
+task 1, lines 33-46:
+//# print-bytecode
 // Move bytecode v6
 module 4d10.M {
 

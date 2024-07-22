@@ -3,17 +3,20 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-31:
+task 1, lines 6-31:
+//# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7896400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 33-33:
+task 2, line 33:
+//# run Test::f::create_and_test
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 35-35:
+task 3, line 35:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 2
 Contents: Test::f::S {
@@ -25,11 +28,13 @@ Contents: Test::f::S {
     data: Test::f::F::V1{},
 }
 
-task 4 'run'. lines 37-37:
+task 4, line 37:
+//# run Test::f::update_inner --args object(2,0)
 mutated: object(0,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
-task 5 'view-object'. lines 39-39:
+task 5, line 39:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
 Contents: Test::f::S {
@@ -43,6 +48,7 @@ Contents: Test::f::S {
     },
 }
 
-task 6 'upgrade'. lines 41-72:
+task 6, lines 41-72:
+//# upgrade --package Test --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }

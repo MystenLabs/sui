@@ -705,7 +705,11 @@ fn cursor_completion_items(
                             (vec![], false)
                         }
                         P::NameAccessChain_::Path(path) => {
-                            let P::NamePath { root, entries } = path;
+                            let P::NamePath {
+                                root,
+                                entries,
+                                is_incomplete: _,
+                            } = path;
                             if root.name.loc.contains(&cursor.loc) {
                                 // This is technically unreachable because we wouldn't be at a `::`
                                 (vec![], false)

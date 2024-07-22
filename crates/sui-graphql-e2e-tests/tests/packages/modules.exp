@@ -1,14 +1,17 @@
 processed 6 tasks
 
-task 1 'publish'. lines 6-31:
+task 1, lines 6-31:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 33-33:
+task 2, line 33:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 35-65:
+task 3, lines 35-65:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -48,7 +51,8 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 67-104:
+task 4, lines 67-104:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -145,7 +149,8 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 106-146:
+task 5, lines 106-146:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 Response: {
   "data": {
     "transactionBlocks": {

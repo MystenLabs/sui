@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 6-11:
+task 1, lines 6-11:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(9223372079804448767),
