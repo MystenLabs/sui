@@ -9,7 +9,7 @@ use move_core_types::{account_address::AccountAddress, u256::U256};
 #[test]
 fn locals() -> PartialVMResult<()> {
     const LEN: usize = 4;
-    let mut locals = Locals::new(LEN);
+    let mut locals = Locals::new_from(vec![], LEN);
     for i in 0..LEN {
         assert!(locals.copy_loc(i).is_err());
         assert!(locals.move_loc(i, true).is_err());
@@ -63,7 +63,7 @@ fn struct_pack_and_unpack() -> PartialVMResult<()> {
 
 #[test]
 fn struct_borrow_field() -> PartialVMResult<()> {
-    let mut locals = Locals::new(1);
+    let mut locals = Locals::new_from(vec![], 1);
     locals.store_loc(
         0,
         Value::struct_(Struct::pack(vec![Value::u8(10), Value::bool(false)])),
@@ -91,7 +91,7 @@ fn struct_borrow_field() -> PartialVMResult<()> {
 
 #[test]
 fn struct_borrow_nested() -> PartialVMResult<()> {
-    let mut locals = Locals::new(1);
+    let mut locals = Locals::new_from(vec![], 1);
 
     fn inner(x: u64) -> Value {
         Value::struct_(Struct::pack(vec![Value::u64(x)]))
@@ -130,7 +130,7 @@ fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(GlobalValue::cached(Value::u64(100)).is_err());
     assert!(GlobalValue::cached(Value::bool(false)).is_err());
 
-    let mut locals = Locals::new(1);
+    let mut locals = Locals::new_from(vec![], 1);
     locals.store_loc(0, Value::u8(0), true)?;
     let r = locals.borrow_loc(0)?;
     assert!(GlobalValue::cached(r).is_err());
@@ -140,7 +140,7 @@ fn global_value_non_struct() -> PartialVMResult<()> {
 
 #[test]
 fn leagacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
-    let mut locals = Locals::new(10);
+    let mut locals = Locals::new_from(vec![], 10);
 
     locals.store_loc(0, Value::u128(0), true)?;
     let r = locals.borrow_loc(0)?;
@@ -198,7 +198,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
     ];
 
-    let mut locals = Locals::new(vals.len());
+    let mut locals = Locals::new_from(vec![], vals.len());
     for (idx, val) in vals.iter().enumerate() {
         locals.store_loc(idx, val.copy_value()?, true)?;
 

@@ -4,8 +4,7 @@
 
 use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr,
-    language_storage::ModuleId,
+    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
 
 /// Provide an implementation for bytecodes related to data with a given data store.
