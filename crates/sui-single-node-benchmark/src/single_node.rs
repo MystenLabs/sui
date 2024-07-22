@@ -31,6 +31,7 @@ use sui_types::transaction::{
     VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use tokio::sync::broadcast;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct SingleValidator {
@@ -111,8 +112,14 @@ impl SingleValidator {
     }
 
     pub async fn execute_raw_transaction(&self, transaction: Transaction) -> TransactionEffects {
+        info!("execute_raw_transaction");
+        // Verifies user signature (+ employs a cache)
+        let verified_tx = self
+            .epoch_store
+            .verify_transaction(transaction)
+            .unwrap();
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
-            VerifiedTransaction::new_unchecked(transaction),
+            verified_tx,
             0,
         );
         let effects = self

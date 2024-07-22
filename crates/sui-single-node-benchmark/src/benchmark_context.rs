@@ -219,12 +219,14 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn certify_transactions(
+    pub(crate) async fn verify_and_certify_transactions(
         &self,
         transactions: Vec<Transaction>,
         skip_signing: bool,
     ) -> Vec<CertifiedTransaction> {
         info!("Creating transaction certificates");
+        let start_time = std::time::Instant::now();
+        let tx_count = transactions.len();
         let tasks: FuturesUnordered<_> = transactions
             .into_iter()
             .map(|tx| {
@@ -240,7 +242,12 @@ impl BenchmarkContext {
                             validator_state.name,
                         )
                     } else {
-                        let verified_tx = VerifiedTransaction::new_unchecked(tx.clone());
+                        // info!("verifying transaction");
+                        let verified_tx = validator
+                            .get_epoch_store()
+                            .verify_transaction(tx.clone())
+                            .unwrap();
+                        // let verified_tx = VerifiedTransaction::new_unchecked(tx.clone());
                         validator_state
                             .handle_transaction(validator.get_epoch_store(), verified_tx)
                             .await
@@ -253,7 +260,14 @@ impl BenchmarkContext {
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
-        results.into_iter().map(|r| r.unwrap()).collect()
+        let x = results.into_iter().map(|r| r.unwrap()).collect();
+        let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
+        info!(
+            "verify_and_certify_transactions finished in {}s, TPS={}",
+            elapsed,
+            tx_count as f64 / elapsed
+        );
+        x
     }
 
     pub(crate) async fn benchmark_transaction_execution(

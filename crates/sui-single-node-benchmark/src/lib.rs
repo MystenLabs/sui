@@ -33,7 +33,7 @@ pub async fn run_benchmark(
         return;
     }
 
-    let transactions = ctx.certify_transactions(transactions, skip_signing).await;
+    let transactions = ctx.verify_and_certify_transactions(transactions, skip_signing).await;
     ctx.validator()
         .assigned_shared_object_versions(&transactions)
         .await;
