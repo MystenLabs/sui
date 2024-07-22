@@ -4,7 +4,7 @@
 
 use crate::{
     interpreter::Interpreter,
-    loader::{Function, Loader},
+    loader::{ast::Function, Loader},
 };
 use move_binary_format::file_format::Bytecode;
 use move_vm_types::values::{self, Locals};
