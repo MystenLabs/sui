@@ -51,6 +51,14 @@ pub(crate) enum ConsensusError {
         block_ref: BlockRef,
     },
 
+    #[error(
+        "Unexpected block {block_ref} returned while fetching last own block from peer {index}"
+    )]
+    UnexpectedLastOwnBlock {
+        index: AuthorityIndex,
+        block_ref: BlockRef,
+    },
+
     #[error("Too many blocks have been returned from authority {0} when requesting to fetch missing blocks")]
     TooManyFetchedBlocksReturned(AuthorityIndex),
 
