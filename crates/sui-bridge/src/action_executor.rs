@@ -4,7 +4,9 @@
 //! BridgeActionExecutor receives BridgeActions (from BridgeOrchestrator),
 //! collects bridge authority signatures and submit signatures on chain.
 
+use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::retry_with_max_elapsed_time;
+use crate::types::BridgeCommittee;
 use arc_swap::ArcSwap;
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -23,8 +25,8 @@ use sui_types::{
 };
 
 use crate::events::{
-    TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
-    TokenTransferClaimed,
+    CommitteeMemberUrlUpdateEvent, SuiBridgeEvent, TokenTransferAlreadyApproved,
+    TokenTransferAlreadyClaimed, TokenTransferApproved, TokenTransferClaimed,
 };
 use crate::metrics::BridgeMetrics;
 use crate::{
@@ -48,6 +50,8 @@ pub const SIGNING_CONCURRENCY: usize = 10;
 // 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
 pub const MAX_SIGNING_ATTEMPTS: u64 = 16;
 pub const MAX_EXECUTION_ATTEMPTS: u64 = 16;
+
+const UPDATE_COMMITTEE_RETRY_TIMES: u64 = 3;
 
 async fn delay(attempt_times: u64) {
     let delay_ms = 100 * (2 ^ attempt_times);
@@ -78,6 +82,7 @@ pub struct BridgeActionExecutor<C> {
     store: Arc<BridgeOrchestratorTables>,
     bridge_object_arg: ObjectArg,
     token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+    monitor_rx: tokio::sync::broadcast::Receiver<SuiBridgeEvent>,
     metrics: Arc<BridgeMetrics>,
 }
 
@@ -108,6 +113,7 @@ where
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
         token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        monitor_rx: tokio::sync::broadcast::Receiver<SuiBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let bridge_object_arg = sui_client
@@ -122,6 +128,7 @@ where
             sui_address,
             bridge_object_arg,
             token_config_rx,
+            monitor_rx,
             metrics,
         }
     }
@@ -164,6 +171,7 @@ where
                 sender_clone,
                 receiver,
                 execution_tx_clone,
+                self.monitor_rx,
                 metrics,
             )
         ));
@@ -189,7 +197,7 @@ where
 
     async fn run_signature_aggregation_loop(
         sui_client: Arc<SuiClient<C>>,
-        auth_agg: Arc<BridgeAuthorityAggregator>,
+        mut auth_agg: Arc<BridgeAuthorityAggregator>,
         store: Arc<BridgeOrchestratorTables>,
         signing_queue_sender: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut signing_queue_receiver: mysten_metrics::metered_channel::Receiver<
@@ -198,22 +206,48 @@ where
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
             CertifiedBridgeActionExecutionWrapper,
         >,
+        mut monitor_rx: tokio::sync::broadcast::Receiver<SuiBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_signature_aggregation_loop");
         let semaphore = Arc::new(Semaphore::new(SIGNING_CONCURRENCY));
-        while let Some(action) = signing_queue_receiver.recv().await {
-            Self::handle_signing_task(
-                &semaphore,
-                &auth_agg,
-                &signing_queue_sender,
-                &execution_queue_sender,
-                &sui_client,
-                &store,
-                action,
-                &metrics,
-            )
-            .await;
+        loop {
+            tokio::select! {
+                monitor_event = monitor_rx.recv() => {
+                    match monitor_event {
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            panic!("monitoring broadcast channel closed unexpectedly");
+                        }
+                        Err(other) => {
+                            error!("Unexpected error on monitoring broadcast channel: {:?}", other);
+                        }
+                        Ok(SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event)) => {
+                            info!("Received committee member url update event");
+                            let bridge_committee = get_updated_bridge_committee(sui_client.clone(), event, Duration::from_secs(10)).await;
+                            // TODO: is this the only place to update the bridge committee in bridge node? Should we use ArcSwap?
+                            auth_agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(bridge_committee)));
+                        }
+                        _ => {}
+                    }
+                },
+                action = signing_queue_receiver.recv() => {
+                    if let Some(action) = action {
+                        Self::handle_signing_task(
+                            &semaphore,
+                            &auth_agg,
+                            &signing_queue_sender,
+                            &execution_queue_sender,
+                            &sui_client,
+                            &store,
+                            action,
+                            &metrics,
+                        )
+                        .await;
+                    } else {
+                        panic!("Signing queue closed unexpectedly");
+                    }
+                }
+            }
         }
     }
 
@@ -648,6 +682,49 @@ pub async fn submit_to_executor(
         .map_err(|e| BridgeError::Generic(e.to_string()))
 }
 
+async fn get_updated_bridge_committee<C: SuiClientInner>(
+    sui_client: Arc<SuiClient<C>>,
+    event: CommitteeMemberUrlUpdateEvent,
+    staleness_retry_interval: Duration,
+) -> BridgeCommittee {
+    let mut remaining_retry_times = UPDATE_COMMITTEE_RETRY_TIMES;
+    loop {
+        let Ok(Ok(committee)) = retry_with_max_elapsed_time!(
+            sui_client.get_bridge_committee(),
+            Duration::from_secs(600)
+        ) else {
+            error!("Failed to get bridge committee after retry");
+            continue;
+        };
+        let member = committee.member(&BridgeAuthorityPublicKeyBytes::from(&event.member));
+        if member.is_none() {
+            // This is possible when a node is processing an older event while the member quitted at a later point, which is fine.
+            // Or fullnode returns a stale committee that the member hasn't joined, which is rare and tricy to handle so we just log it.
+            warn!(
+                "Committee member not found in the committee: {:?}",
+                event.member
+            );
+            return committee;
+        }
+        if member.unwrap().base_url == event.new_url {
+            return committee;
+        }
+        // If url does not match, it could be:
+        // 1. the query is sent to a stale fullnode that does not have the latest data yet
+        // 2. the node is processing an older message, and the latest url has changed again
+        // In either case, we retry a few times. If it still fails to match, we assume it's the latter case.
+        tokio::time::sleep(staleness_retry_interval).await;
+        remaining_retry_times -= 1;
+        if remaining_retry_times == 0 {
+            warn!(
+                "Committee member url {:?} does not match onchain record {:?} after retry",
+                event.member, member
+            );
+            return committee;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::events::init_all_struct_tags;
@@ -658,7 +735,9 @@ mod tests {
     use sui_json_rpc_types::SuiTransactionBlockEffects;
     use sui_json_rpc_types::SuiTransactionBlockEvents;
     use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
+    use sui_types::bridge::{BridgeCommitteeSummary, MoveTypeCommitteeMember};
     use sui_types::crypto::get_key_pair;
+    use sui_types::crypto::ToFromBytes;
     use sui_types::gas_coin::GasCoin;
     use sui_types::TypeTag;
     use sui_types::{base_types::random_object_ref, transaction::TransactionData};
@@ -697,6 +776,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _monitor_tx,
         ) = setup().await;
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -888,6 +968,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _monitor_tx,
         ) = setup().await;
         let id_token_map = token_tx.borrow();
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
@@ -1008,6 +1089,7 @@ mod tests {
             _gas_object_ref,
             _sui_address,
             _token_tx,
+            _monitor_tx,
         ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
@@ -1075,6 +1157,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _monitor_tx,
         ) = setup().await;
         let id_token_map = token_tx.borrow();
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
@@ -1137,6 +1220,145 @@ mod tests {
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_updated_bridge_committe() {
+        telemetry_subscribers::init_for_testing();
+        let mut sui_client_mock = SuiMockClient::default();
+        let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
+        let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pk = kp.public().clone();
+        let pk_as_bytes = BridgeAuthorityPublicKeyBytes::from(&pk);
+        let pk_bytes = pk_as_bytes.as_bytes().to_vec();
+        let event = CommitteeMemberUrlUpdateEvent {
+            member: pk,
+            new_url: "http://new.url".to_string(),
+        };
+        let summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://new.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+
+        // Test the regular case, the onchain url matches
+        sui_client_mock.set_bridge_committee(summary.clone());
+        let timer = std::time::Instant::now();
+        let committee =
+            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(2))
+                .await;
+        assert_eq!(
+            committee.member(&pk_as_bytes).unwrap().base_url,
+            "http://new.url"
+        );
+        assert!(timer.elapsed().as_millis() < 500);
+
+        // Test the case where the onchain url is older. Then update onchain url in 1 second.
+        // Since the retry interval is 2 seconds, it should return the next retry.
+        let old_summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://old.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(old_summary.clone());
+        let timer = std::time::Instant::now();
+        // update the url to "http://new.url" in 1 second
+        let mut sui_client_mock_clone = sui_client_mock.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            sui_client_mock_clone.set_bridge_committee(summary.clone());
+        });
+        let committee =
+            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(2))
+                .await;
+        assert_eq!(
+            committee.member(&pk_as_bytes).unwrap().base_url,
+            "http://new.url"
+        );
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 1000 && elapsed < 3000);
+
+        // Test the case where the onchain url is newer. It should retry up to
+        // UPDATE_COMMITTEE_RETRY_TIMES time then return the onchain record.
+        let newer_summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://newer.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(newer_summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_updated_bridge_committee(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_millis(500),
+        )
+        .await;
+        assert_eq!(
+            committee.member(&pk_as_bytes).unwrap().base_url,
+            "http://newer.url"
+        );
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 500 * UPDATE_COMMITTEE_RETRY_TIMES as u128);
+
+        // Test the case where the member ionchain url is newers not found in the committee
+        // It should return the onchain record.
+        let (_, kp2): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pk2 = kp2.public().clone();
+        let pk_as_bytes2 = BridgeAuthorityPublicKeyBytes::from(&pk2);
+        let pk_bytes2 = pk_as_bytes2.as_bytes().to_vec();
+        let newer_summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes2.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes2.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://newer.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(newer_summary.clone());
+        let timer = std::time::Instant::now();
+        let committee =
+            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(1))
+                .await;
+        assert_eq!(
+            committee.member(&pk_as_bytes2).unwrap().base_url,
+            "http://newer.url"
+        );
+        assert!(committee.member(&pk_as_bytes).is_none());
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed < 1000);
     }
 
     fn mock_bridge_authority_sigs(
@@ -1266,6 +1488,7 @@ mod tests {
         ObjectRef,
         SuiAddress,
         tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+        tokio::sync::broadcast::Sender<SuiBridgeEvent>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
@@ -1303,6 +1526,7 @@ mod tests {
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
         let (token_type_tags_tx, token_type_tags_rx) =
             tokio::sync::watch::channel(sui_token_type_tags);
+        let (monitor_tx, monitor_rx) = tokio::sync::broadcast::channel(1000);
         let executor = BridgeActionExecutor::new(
             sui_client.clone(),
             agg.clone(),
@@ -1311,6 +1535,7 @@ mod tests {
             sui_address,
             gas_object_ref.0,
             token_type_tags_rx,
+            monitor_rx,
             metrics,
         )
         .await;
@@ -1334,6 +1559,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_type_tags_tx,
+            monitor_tx,
         )
     }
 }

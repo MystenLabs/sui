@@ -108,6 +108,8 @@ async fn start_client_components(
     let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
     let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
+    let (monitor_tx, monitor_rx) = tokio::sync::broadcast::channel(1000);
+
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
         Arc::new(bridge_auth_agg),
@@ -116,6 +118,7 @@ async fn start_client_components(
         client_config.sui_address,
         client_config.gas_object_ref.0,
         token_type_tags_rx,
+        monitor_rx,
         metrics.clone(),
     )
     .await;
@@ -126,6 +129,7 @@ async fn start_client_components(
         eth_events_rx,
         store.clone(),
         token_type_tags_tx,
+        monitor_tx,
         metrics,
     );
 

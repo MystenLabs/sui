@@ -85,6 +85,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .expect("Recipient should have received ETH coin now")
         .clone();
     assert_eq!(eth_coin.balance, sui_amount);
+    info!("Eth to sui bridge transfer finished");
 
     // Now let the recipient send the coin back to ETH
     let eth_address_1 = EthAddress::random();

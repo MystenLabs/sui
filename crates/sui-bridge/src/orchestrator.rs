@@ -31,6 +31,7 @@ pub struct BridgeOrchestrator<C> {
     eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
     store: Arc<BridgeOrchestratorTables>,
     token_type_tags_tx: tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+    monitor_tx: tokio::sync::broadcast::Sender<SuiBridgeEvent>,
     metrics: Arc<BridgeMetrics>,
 }
 
@@ -44,6 +45,7 @@ where
         eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
         store: Arc<BridgeOrchestratorTables>,
         token_type_tags_tx: tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+        monitor_tx: tokio::sync::broadcast::Sender<SuiBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
@@ -52,6 +54,7 @@ where
             eth_events_rx,
             store,
             token_type_tags_tx,
+            monitor_tx,
             metrics,
         }
     }
@@ -74,6 +77,7 @@ where
             executor_sender_clone,
             self.sui_events_rx,
             self.token_type_tags_tx,
+            self.monitor_tx,
             metrics_clone,
         )));
         let store_clone = self.store.clone();
@@ -106,6 +110,7 @@ where
         executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
         token_type_tags_tx: tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+        monitor_tx: tokio::sync::broadcast::Sender<SuiBridgeEvent>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting sui watcher task");
@@ -150,7 +155,16 @@ where
                 let bridge_event: SuiBridgeEvent = opt_bridge_event.unwrap();
                 info!("Observed Sui bridge event: {:?}", bridge_event);
 
+                // Handle CommitteeMemberUrlUpdateEvent
+                if let SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(e) = &bridge_event {
+                    monitor_tx
+                        .send(SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(e.clone()))
+                        .expect("Sending committee member url update event should not fail");
+                    continue;
+                }
+
                 // Handle NewTokenEvent
+                // TODO: broadcast this event and let the downstream services handle it
                 if let SuiBridgeEvent::NewTokenEvent(e) = &bridge_event {
                     if let std::collections::hash_map::Entry::Vacant(entry) =
                         latest_token_config.entry(e.token_id)
@@ -306,12 +320,14 @@ mod tests {
         // start orchestrator
         let registry = Registry::new();
         let metrics = Arc::new(BridgeMetrics::new(&registry));
+        let (monitor_tx, _monitor_rx) = tokio::sync::broadcast::channel(1000);
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
             sui_events_rx,
             eth_events_rx,
             store.clone(),
             token_type_tags_tx,
+            monitor_tx,
             metrics,
         )
         .run(executor)
@@ -361,12 +377,14 @@ mod tests {
         // start orchestrator
         let registry = Registry::new();
         let metrics = Arc::new(BridgeMetrics::new(&registry));
+        let (monitor_tx, _monitor_rx) = tokio::sync::broadcast::channel(1000);
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
             sui_events_rx,
             eth_events_rx,
             store.clone(),
             token_type_tags_tx,
+            monitor_tx,
             metrics,
         )
         .run(executor)
@@ -425,12 +443,14 @@ mod tests {
         // start orchestrator
         let registry = Registry::new();
         let metrics = Arc::new(BridgeMetrics::new(&registry));
+        let (monitor_tx, _monitor_rx) = tokio::sync::broadcast::channel(1000);
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
             sui_events_rx,
             eth_events_rx,
             store.clone(),
             token_type_tags_tx,
+            monitor_tx,
             metrics,
         )
         .run(executor)
@@ -504,12 +524,14 @@ mod tests {
         // start orchestrator
         let registry = Registry::new();
         let metrics = Arc::new(BridgeMetrics::new(&registry));
+        let (monitor_tx, _monitor_rx) = tokio::sync::broadcast::channel(1000);
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
             sui_events_rx,
             eth_events_rx,
             store.clone(),
             token_type_tags_tx,
+            monitor_tx,
             metrics,
         )
         .run(executor)
