@@ -26,6 +26,7 @@ use crate::{
     error::SuiError,
     id::UID,
 };
+use fastcrypto::encoding::Base64;
 
 pub type BridgeInnerDynamicField = Field<u64, BridgeInnerV1>;
 pub type BridgeRecordDyanmicField = Field<
@@ -413,8 +414,12 @@ pub struct BridgeTreasurySummary {
 #[serde(rename_all = "camelCase")]
 pub struct MoveTypeCommitteeMember {
     pub sui_address: SuiAddress,
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub bridge_pubkey_bytes: Vec<u8>,
     pub voting_power: u64,
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub http_rest_url: Vec<u8>,
     pub blocklisted: bool,
 }
