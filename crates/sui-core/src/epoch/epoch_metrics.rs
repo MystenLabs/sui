@@ -27,12 +27,12 @@ pub struct EpochMetrics {
     // An active validator reconfigures through the following steps:
     // 1. Halt validator (a.k.a. close epoch) and stop accepting user transaction certs.
     // 2. Finishes processing all pending certificates and then send EndOfPublish message.
-    // 3. Stop accepting messages from Narwhal after seeing 2f+1 EndOfPublish messages.
+    // 3. Stop accepting messages from consensus after seeing 2f+1 EndOfPublish messages.
     // 4. Creating the last checkpoint of the epoch by augmenting it with AdvanceEpoch transaction.
     // 5. CheckpointExecutor finishes executing the last checkpoint, and triggers reconfiguration.
-    // 6. During reconfiguration, we tear down Narwhal, reconfigure state (at which point we opens
-    //    up user certs), and start Narwhal again.
-    // 7. After reconfiguration, and eventually Narwhal starts successfully, at some point the first
+    // 6. During reconfiguration, we tear down consensus, reconfigure state (at which point we opens
+    //    up user certs), and start consensus again.
+    // 7. After reconfiguration, and eventually consensus starts successfully, at some point the first
     //    checkpoint of the new epoch will be created.
     // We introduce various metrics to cover the latency of above steps.
     /// The duration from when the epoch is closed (i.e. validator halted) to when all pending
