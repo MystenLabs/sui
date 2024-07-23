@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 55;
+const MAX_PROTOCOL_VERSION: u64 = 56;
 
 // Record history of protocol version allocations here:
 //
@@ -2546,6 +2546,9 @@ impl ProtocolConfig {
                 55 => {
                     cfg.feature_flags.random_beacon = true;
                     cfg.random_beacon_reduction_lower_bound = Some(1000);
+                }
+                56 => {
+                    cfg.feature_flags.random_beacon = false;
                 }
                 // Use this template when making changes:
                 //
