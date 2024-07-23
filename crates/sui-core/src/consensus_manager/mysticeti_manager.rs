@@ -5,7 +5,7 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
 use fastcrypto::ed25519;
 use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
@@ -41,6 +41,7 @@ pub struct MysticetiManager {
     metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
+    boot_counter: Arc<ConsensusAuthorityBootCounter>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -69,6 +70,7 @@ impl MysticetiManager {
             authority: ArcSwapOption::empty(),
             client,
             consensus_handler: Mutex::new(None),
+            boot_counter: Arc::new(ConsensusAuthorityBootCounter::default()),
         }
     }
 
@@ -160,6 +162,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),
+            self.boot_counter.clone(),
         )
         .await;
         let client = authority.transaction_client();

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
@@ -43,6 +44,8 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
+pub type ConsensusAuthorityBootCounter = AtomicU64;
+
 impl ConsensusAuthority {
     pub async fn start(
         network_type: ConsensusNetwork,
@@ -55,6 +58,7 @@ impl ConsensusAuthority {
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
+        boot_counter: Arc<ConsensusAuthorityBootCounter>,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -68,6 +72,7 @@ impl ConsensusAuthority {
                     transaction_verifier,
                     commit_consumer,
                     registry,
+                    boot_counter,
                 )
                 .await;
                 Self::WithAnemo(authority)
@@ -83,6 +88,7 @@ impl ConsensusAuthority {
                     transaction_verifier,
                     commit_consumer,
                     registry,
+                    boot_counter,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -147,6 +153,7 @@ where
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
+        boot_counter: Arc<ConsensusAuthorityBootCounter>,
     ) -> Self {
         info!(
             "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}",
@@ -186,6 +193,10 @@ where
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let sync_last_known_own_block = boot_counter.load(Ordering::SeqCst) == 0
+            && dag_state.read().highest_accepted_round() == 0
+            && context.parameters.sync_last_known_own_block_enabled();
+        info!("Sync last known own block: {sync_last_known_own_block}");
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
@@ -231,6 +242,7 @@ where
             core_signals,
             protocol_keypair,
             dag_state.clone(),
+            sync_last_known_own_block,
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -248,6 +260,7 @@ where
             commit_vote_monitor.clone(),
             block_verifier.clone(),
             dag_state.clone(),
+            sync_last_known_own_block,
         );
 
         let commit_syncer_handle = CommitSyncer::new(
@@ -295,6 +308,9 @@ where
             "Consensus authority started, took {:?}",
             start_time.elapsed()
         );
+
+        // Increment the counter that this node has been running for
+        boot_counter.fetch_add(1, Ordering::SeqCst);
 
         Self {
             context,
@@ -356,7 +372,7 @@ where
 mod tests {
     #![allow(non_snake_case)]
 
-    use std::sync::Mutex;
+    use std::collections::BTreeMap;
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Parameters};
@@ -365,10 +381,11 @@ mod tests {
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::time::sleep;
+    use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
 
     use super::*;
+    use crate::block::GENESIS_ROUND;
     use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier, CommittedSubDag};
 
     #[rstest]
@@ -404,6 +421,7 @@ mod tests {
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
+            Arc::new(ConsensusAuthorityBootCounter::default()),
         )
         .await;
 
@@ -504,166 +522,102 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_success(
+    async fn test_amnesia_recovery_success(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        const NUM_OF_AUTHORITIES: usize = 4;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut output_receivers = vec![];
-        let mut authorities = vec![];
+        let mut authorities = BTreeMap::new();
+        let mut temp_dirs = BTreeMap::new();
 
         for (index, _authority_info) in committee.authorities() {
+            let dir = TempDir::new().unwrap();
             let (authority, receiver) = make_authority(
                 index,
-                &TempDir::new().unwrap(),
+                &dir,
                 committee.clone(),
                 keypairs.clone(),
                 network_type,
             )
             .await;
             output_receivers.push(receiver);
-            authorities.push(authority);
+            authorities.insert(index, authority);
+            temp_dirs.insert(index, dir);
         }
 
-        const NUM_TRANSACTIONS: u8 = 15;
-        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
-        for i in 0..NUM_TRANSACTIONS {
-            let txn = vec![i; 16];
-            submitted_transactions.insert(txn.clone());
-            authorities[i as usize % authorities.len()]
-                .transaction_client()
-                .submit(vec![txn])
+        // Now we take the receiver of authority 1 and we wait until we see at least one block committed from this authority
+        // We wait until we see at least one committed block authored from this authority. That way we'll be 100% sure that
+        // at least one block has been proposed and successfully received by a quorum of nodes.
+        let index_1 = committee.to_authority_index(1).unwrap();
+        'outer: while let Some(result) =
+            timeout(Duration::from_secs(10), output_receivers[index_1].recv())
                 .await
-                .unwrap();
-        }
-
-        for receiver in &mut output_receivers {
-            let mut expected_transactions = submitted_transactions.clone();
-            loop {
-                let committed_subdag =
-                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
-                        .await
-                        .unwrap()
-                        .unwrap();
-                for b in committed_subdag.blocks {
-                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
-                        assert!(
-                            expected_transactions.remove(&txn),
-                            "Transaction not submitted or already seen: {:?}",
-                            txn
-                        );
-                    }
-                }
-                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
-                if expected_transactions.is_empty() {
-                    break;
+                .expect("Timed out while waiting for at least one committed block from authority 1")
+        {
+            for block in result.blocks {
+                if block.round() > GENESIS_ROUND && block.author() == index_1 {
+                    break 'outer;
                 }
             }
         }
 
-        // Stop authority 1.
-        let index = committee.to_authority_index(1).unwrap();
-        authorities.remove(index.value()).stop().await;
+        // Stop authority 1 & 2.
+        // * Authority 1 will be used to wipe out their DB and practically "force" the amnesia recovery.
+        // * Authority 2 is stopped in order to simulate less than f+1 availability which will
+        // make authority 1 retry during amnesia recovery until it has finally managed to successfully get back f+1 responses.
+        // once authority 2 is up and running again.
+        authorities.remove(&index_1).unwrap().stop().await;
+        let index_2 = committee.to_authority_index(2).unwrap();
+        authorities.remove(&index_2).unwrap().stop().await;
         sleep(Duration::from_secs(5)).await;
 
-        // now create a new directory to simulate amnesia. The node will start having participated previously
-        // to consensus but now will attempt to synchronize the last own block and recover from there.
+        // Authority 1: create a new directory to simulate amnesia. The node will start having participated previously
+        // to consensus but now will attempt to synchronize the last own block and recover from there. It won't be able
+        // to do that successfully as authority 2 is still down.
+        let dir = TempDir::new().unwrap();
         let (authority, mut receiver) = make_authority(
-            index,
-            &TempDir::new().unwrap(),
+            index_1,
+            &dir,
+            committee.clone(),
+            keypairs.clone(),
+            network_type,
+        )
+        .await;
+        authorities.insert(index_1, authority);
+        temp_dirs.insert(index_1, dir);
+        sleep(Duration::from_secs(5)).await;
+
+        // Now spin up authority 2 using its earlier directly - so no amnesia recovery should be forced here.
+        // Authority 1 should be able to recover from amnesia successfully.
+        let (authority, _receiver) = make_authority(
+            index_2,
+            &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
             network_type,
         )
         .await;
-        authorities.insert(index.value(), authority);
+        authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
 
         // We wait until we see at least one committed block authored from this authority
         'outer: while let Some(result) = receiver.recv().await {
             for block in result.blocks {
-                if block.author() == index {
+                if block.round() > GENESIS_ROUND && block.author() == index_1 {
                     break 'outer;
                 }
             }
         }
 
         // Stop all authorities and exit.
-        for authority in authorities {
+        for (_, authority) in authorities {
             authority.stop().await;
         }
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_amnesia_failure(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-    ) {
-        telemetry_subscribers::init_for_testing();
-
-        let occurred_panic = Arc::new(Mutex::new(None));
-        let occurred_panic_cloned = occurred_panic.clone();
-
-        let default_panic_handler = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |panic| {
-            let mut l = occurred_panic_cloned.lock().unwrap();
-            *l = Some(panic.to_string());
-            default_panic_handler(panic);
-        }));
-
-        let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
-
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
-        let mut output_receivers = vec![];
-        let mut authorities = vec![];
-
-        for (index, _authority_info) in committee.authorities() {
-            let (authority, receiver) = make_authority(
-                index,
-                &TempDir::new().unwrap(),
-                committee.clone(),
-                keypairs.clone(),
-                network_type,
-            )
-            .await;
-            output_receivers.push(receiver);
-            authorities.push(authority);
-        }
-
-        // Let the network run for a few seconds
-        sleep(Duration::from_secs(5)).await;
-
-        // Stop all authorities
-        while let Some(authority) = authorities.pop() {
-            authority.stop().await;
-        }
-
-        sleep(Duration::from_secs(2)).await;
-
-        let index = AuthorityIndex::new_for_test(0);
-        let (_authority, _receiver) = make_authority(
-            index,
-            &TempDir::new().unwrap(),
-            committee,
-            keypairs,
-            network_type,
-        )
-        .await;
-        sleep(Duration::from_secs(5)).await;
-
-        // Now reset the panic hook
-        let _default_panic_handler = std::panic::take_hook();
-
-        // We expect this test to panic as all the other peers are down and the node that tries to
-        // recover its last produced block fails.
-        let panic_info = occurred_panic.lock().unwrap().take().unwrap();
-        assert!(panic_info.contains(
-            "No peer has returned any acceptable result, can not safely update min round"
-        ));
     }
 
     // TODO: create a fixture
@@ -682,7 +636,7 @@ mod tests {
             dag_state_cached_rounds: 5,
             commit_sync_parallel_fetches: 3,
             commit_sync_batch_size: 3,
-            sync_last_proposed_block_timeout: Duration::from_millis(2_000),
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};
@@ -704,6 +658,7 @@ mod tests {
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
+            Arc::new(ConsensusAuthorityBootCounter::default()),
         )
         .await;
         (authority, receiver)
