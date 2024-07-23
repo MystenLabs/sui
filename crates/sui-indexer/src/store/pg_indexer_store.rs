@@ -993,7 +993,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 if let Some(last_epoch) = &epoch.last_epoch {
                     let last_epoch_id = last_epoch.epoch;
                     let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
-                    info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
+                    info!(last_epoch_id, "Persisting epoch end data.");
                     on_conflict_do_update!(
                         epochs::table,
                         vec![last_epoch],
@@ -1073,14 +1073,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 let epoch_partition_data =
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
-                for (table, (first_partition, last_partition)) in table_partitions {
+                for (table, (_, last_partition)) in table_partitions {
                     let guard = self.metrics.advance_epoch_latency.start_timer();
-                    self.partition_manager.advance_and_prune_epoch_partition(
+                    self.partition_manager.advance_epoch(
                         table.clone(),
-                        first_partition,
                         last_partition,
                         &epoch_partition_data,
-                        self.config.epochs_to_keep,
                     )?;
                     let elapsed = guard.stop_and_record();
                     info!(
