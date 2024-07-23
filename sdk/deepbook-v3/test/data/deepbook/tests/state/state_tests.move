@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module deepbook::state_tests {
     use sui::{
         test_scenario::{next_tx, begin, end},
