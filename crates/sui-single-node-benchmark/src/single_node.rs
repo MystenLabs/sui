@@ -50,7 +50,6 @@ impl SingleValidator {
             .with_starting_objects(genesis_objects)
             // This is needed to properly run checkpoint executor.
             .insert_genesis_checkpoint()
-            .with_jwk_fetch_interval(Duration::from_millis(300))
             .build()
             .await;
         let epoch_store = validator.epoch_store_for_testing().clone();
