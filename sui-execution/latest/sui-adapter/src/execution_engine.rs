@@ -108,7 +108,7 @@ mod checked {
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let contains_deleted_input = input_objects.contains_deleted_objects();
-        let congested_objects = input_objects.get_congested_objects();
+        let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -143,7 +143,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
-            congested_objects,
+            cancelled_objects,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -277,7 +277,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
-        congested_objects: Option<Vec<ObjectID>>,
+        cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -307,13 +307,20 @@ mod checked {
                     ExecutionErrorKind::InputObjectDeleted,
                     None,
                 ))
-            } else if let Some(congested_objects) = congested_objects {
-                Err(ExecutionError::new(
-                    ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
-                        congested_objects: CongestedObjects(congested_objects),
-                    },
-                    None,
-                ))
+            } else if let Some((cancelled_objects, reason)) = cancelled_objects {
+                match reason {
+                    SequenceNumber::CONGESTED => Err(ExecutionError::new(
+                        ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                            congested_objects: CongestedObjects(cancelled_objects),
+                        },
+                        None,
+                    )),
+                    SequenceNumber::RANDOMNESS_UNAVAILABLE => Err(ExecutionError::new(
+                        ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
+                        None,
+                    )),
+                    _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
+                }
             } else {
                 execution_loop::<Mode>(
                     temporary_store,
@@ -673,6 +680,7 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
                             assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                     }

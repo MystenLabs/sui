@@ -626,7 +626,7 @@ impl From<ProtocolConfig> for ProtocolConfigResponse {
                         ProtocolConfigValue::u16(x) => x.to_string(),
                         ProtocolConfigValue::u32(y) => y.to_string(),
                         ProtocolConfigValue::u64(z) => z.to_string(),
-                        ProtocolConfigValue::f64(f) => f.to_string(),
+                        ProtocolConfigValue::bool(b) => b.to_string(),
                     };
                     (k, v)
                 })

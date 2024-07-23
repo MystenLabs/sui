@@ -30,7 +30,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedTypeIndex, CachedDatatype, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};

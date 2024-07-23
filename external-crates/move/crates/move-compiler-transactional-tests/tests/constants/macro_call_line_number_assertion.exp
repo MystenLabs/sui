@@ -1,6 +1,7 @@
 processed 4 tasks
 
-task 2 'run'. lines 25-25:
+task 2, line 25:
+//# run 0x42::m::t_a
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(9223372105574252543),
@@ -9,7 +10,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 3 'run'. lines 27-27:
+task 3, line 27:
+//# run 0x42::m::t_calls_a
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(9223372118459154431),

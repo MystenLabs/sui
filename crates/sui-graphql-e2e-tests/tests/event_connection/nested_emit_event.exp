@@ -3,20 +3,24 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 10-37:
+task 1, lines 10-37:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 39-39:
+task 2, line 39:
+//# run Test::M3::yeet --sender A --args 2
 events: Event { package_id: Test, transaction_module: Identifier("M3"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 41-41:
+task 3, line 41:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 43-60:
+task 4, lines 43-60:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -26,7 +30,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5428e32c5697392b37b5b68636823b75cfd13a8c8ce0e5cfa0222fbf06a0cbfb::M1::EventA"
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -41,7 +45,8 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 62-79:
+task 5, lines 62-79:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -51,7 +56,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5428e32c5697392b37b5b68636823b75cfd13a8c8ce0e5cfa0222fbf06a0cbfb::M1::EventA"
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -66,7 +71,8 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 81-98:
+task 6, lines 81-98:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -75,7 +81,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 100-117:
+task 7, lines 100-117:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -84,7 +91,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 119-136:
+task 8, lines 119-136:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -94,7 +102,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5428e32c5697392b37b5b68636823b75cfd13a8c8ce0e5cfa0222fbf06a0cbfb::M1::EventA"
+            "repr": "0x0d72d40a7520bc67f48a16f325a5f189cb79788025784c7f41bf02598d02d2d0::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"

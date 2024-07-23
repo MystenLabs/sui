@@ -11,7 +11,7 @@ How to install/build the sui binary IF:
   OR
     - build from source. This requires passing the indexer feature when building the sui binary, as well as having libpq/postgresql dependencies installed (just as when using sui-test-validator):
         - cargo build --bin sui --features indexer
-        - cargo run --bin sui -- start --with-faucet --force-regenesis --with-indexer --with-graphql
+        - cargo run --features indexer --bin sui -- start --with-faucet --force-regenesis --with-indexer --with-graphql
 
 Running the local network:
  - (Preferred) In the simplest form, you can replace sui-test-validator with sui start --with-faucet --force-regenesis. This will create a network from a new genesis and start a faucet (127.0.0.1:9123). This will not persist state.

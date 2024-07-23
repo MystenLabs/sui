@@ -27,7 +27,7 @@ use move_compiler::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
     },
-    shared::{ide::AutocompleteMethod, Identifier},
+    shared::{ide::AutocompleteMethod, Identifier, Name},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
@@ -141,23 +141,18 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionIt
         .collect()
 }
 
-/// Returns the token corresponding to the "trigger character" that precedes the user's cursor,
-/// if it is one of `.`, `:`, '{', or `::`. Otherwise, returns `None`.
+/// Returns the token corresponding to the "trigger character" if it is one of `.`, `:`, '{', or
+/// `::`. Otherwise, returns `None` (position points at the potential trigger character itself).
 fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
-    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
-    if position.character == 0 {
-        return None;
-    }
-
     let line = match buffer.lines().nth(position.line as usize) {
         Some(line) => line,
         None => return None, // Our buffer does not contain the line, and so must be out of date.
     };
-    match line.chars().nth(position.character as usize - 1) {
+    match line.chars().nth(position.character as usize) {
         Some('.') => Some(Tok::Period),
         Some(':') => {
-            if position.character > 1
-                && line.chars().nth(position.character as usize - 2) == Some(':')
+            if position.character > 0
+                && line.chars().nth(position.character as usize - 1) == Some(':')
             {
                 Some(Tok::ColonColon)
             } else {
@@ -239,7 +234,7 @@ fn call_completion_item(
     method_name: &Symbol,
     function_name: &Symbol,
     type_args: &[Type],
-    arg_names: &[Symbol],
+    arg_names: &[Name],
     arg_types: &[Type],
     ret_type: &Type,
 ) -> CompletionItem {
@@ -296,17 +291,15 @@ fn call_completion_item(
 fn dot(symbols: &Symbols, use_fpath: &Path, position: &Position) -> Vec<CompletionItem> {
     let mut completions = vec![];
     let Some(fhash) = symbols.file_hash(use_fpath) else {
-        eprintln!("missing file");
+        eprintln!("no dot completions due to missing file");
         return completions;
     };
     let Some(loc) = utils::lsp_position_to_loc(&symbols.files, fhash, position) else {
-        eprintln!("missing loc");
+        eprintln!("no dot completions due to missing loc");
         return completions;
     };
     let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
-        eprintln!("compiler info: {:#?}", symbols.compiler_info);
-        eprintln!("loc: {:#?}", loc);
-        eprintln!("no compiler autocomplete info");
+        eprintln!("no dot completions due to no compiler autocomplete info");
         return completions;
     };
     for AutocompleteMethod {
@@ -492,10 +485,6 @@ fn is_definition(
 /// locations.
 fn preceding_strings(buffer: &str, position: &Position) -> Vec<(String, u32)> {
     let mut strings = vec![];
-    // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
-    if position.character == 0 {
-        return strings;
-    }
     let line = match buffer.lines().nth(position.line as usize) {
         Some(line) => line,
         None => return strings, // Our buffer does not contain the line, and so must be out of date.
@@ -505,7 +494,7 @@ fn preceding_strings(buffer: &str, position: &Position) -> Vec<(String, u32)> {
     let mut cur_col = 0;
     let mut cur_str_start = 0;
     let mut cur_str = "".to_string();
-    while cur_col < position.character {
+    while cur_col <= position.character {
         let Some(c) = chars.next() else {
             return strings;
         };
@@ -552,7 +541,12 @@ pub fn on_completion_request(
         .to_file_path()
         .unwrap();
 
-    let pos = parameters.text_document_position.position;
+    let mut pos = parameters.text_document_position.position;
+    if pos.character != 0 {
+        // adjust column to be at the character that has just been inserted rather than right after
+        // it (unless we are at the very first column)
+        pos = Position::new(pos.line, pos.character - 1);
+    }
     let items = completions_with_context(context, ide_files_root, pkg_dependencies, &path, pos)
         .unwrap_or_default();
 
@@ -691,7 +685,12 @@ fn cursor_completion_items(
             let items = dot(symbols, path, &pos);
             let items_is_empty = items.is_empty();
             eprintln!("found items: {}", !items_is_empty);
-            (items, !items_is_empty)
+            // whether completions have been found for the dot or not
+            // it makes no sense to try offering "dumb" autocompletion
+            // options here as they will not fit (an example would
+            // be dot completion of u64 variable without any methods
+            // with u64 receiver being visible)
+            (items, true)
         }
         // TODO: consider using `cursor.position` for this instead
         Some(Tok::ColonColon) => {
@@ -706,7 +705,11 @@ fn cursor_completion_items(
                             (vec![], false)
                         }
                         P::NameAccessChain_::Path(path) => {
-                            let P::NamePath { root, entries } = path;
+                            let P::NamePath {
+                                root,
+                                entries,
+                                is_incomplete: _,
+                            } = path;
                             if root.name.loc.contains(&cursor.loc) {
                                 // This is technically unreachable because we wouldn't be at a `::`
                                 (vec![], false)

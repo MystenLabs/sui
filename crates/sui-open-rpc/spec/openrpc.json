@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.29.0"
+    "version": "1.30.0"
   },
   "methods": [
     {
@@ -1300,6 +1300,7 @@
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
+                "authority_capabilities_v2": false,
                 "ban_entry_init": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
@@ -1331,6 +1332,7 @@
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
+                "passkey_auth": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,
@@ -1402,6 +1404,7 @@
                 "bls12381_bls12381_min_sig_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "bridge_should_try_to_finalize_committee": null,
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
@@ -1658,7 +1661,8 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
-                "max_accumulated_txn_cost_per_object_in_checkpoint": null,
+                "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
+                "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1861,12 +1865,6 @@
                 "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
-                },
-                "scoring_decision_cutoff_value": {
-                  "f64": "2.5"
-                },
-                "scoring_decision_mad_divisor": {
-                  "f64": "2.3"
                 },
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
@@ -6496,6 +6494,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "PasskeyAuthenticator"
+            ],
+            "properties": {
+              "PasskeyAuthenticator": {
+                "$ref": "#/components/schemas/PasskeyAuthenticator"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -7837,6 +7847,29 @@
           }
         }
       },
+      "PasskeyAuthenticator": {
+        "description": "An passkey authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeyAuthenticator].",
+        "type": "object",
+        "required": [
+          "authenticator_data",
+          "client_data_json"
+        ],
+        "properties": {
+          "authenticator_data": {
+            "description": "`authenticatorData` is a bytearray that encodes [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned by the authenticator attestation response as is.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "client_data_json": {
+            "description": "`clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed to the authenticator by the client during the authentication request (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))",
+            "type": "string"
+          }
+        }
+      },
       "ProtocolConfig": {
         "type": "object",
         "required": [
@@ -7926,6 +7959,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "bool"
+            ],
+            "properties": {
+              "bool": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -7978,6 +8023,18 @@
             "properties": {
               "ZkLogin": {
                 "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Passkey"
+            ],
+            "properties": {
+              "Passkey": {
+                "$ref": "#/components/schemas/Base64"
               }
             },
             "additionalProperties": false

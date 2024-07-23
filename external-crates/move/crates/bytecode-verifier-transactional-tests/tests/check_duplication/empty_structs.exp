@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-6:
+task 0, lines 1-6:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::EmptyStruct'. Got VMError: {
     major_status: ZERO_SIZED_STRUCT,
     sub_status: None,

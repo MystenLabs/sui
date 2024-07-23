@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    MOVE_CONF_NAME, LINT_OPT, TYPE_HINTS_OPT,
+    MOVE_CONF_NAME, LINT_OPT, TYPE_HINTS_OPT, PARAM_HINTS_OPT,
     SUI_PATH_OPT, SERVER_PATH_OPT, Configuration,
 } from './configuration';
 import * as childProcess from 'child_process';
@@ -78,6 +78,8 @@ export class Context {
 
     private inlayHintsType: boolean;
 
+    private inlayHintsParam: boolean;
+
     resolvedServerPath: string;
 
     resolvedServerArgs: string[];
@@ -99,6 +101,7 @@ export class Context {
         log.info(`configuration: ${this.configuration.toString()}`);
         this.lintLevel = this.configuration.lint;
         this.inlayHintsType = this.configuration.inlayHintsForType;
+        this.inlayHintsParam = this.configuration.inlayHintsForParam;
         // Default to configuration.serverPath but may change during server installation
         this.resolvedServerPath = this.configuration.serverPath;
         // Default to no additional args but may change during server installation
@@ -191,6 +194,7 @@ export class Context {
             initializationOptions: {
                 lintLevel: this.lintLevel,
                 inlayHintsType: this.inlayHintsType,
+                inlayHintsParam: this.inlayHintsParam,
             },
         };
 
@@ -239,9 +243,11 @@ export class Context {
             const sui_path_conf = MOVE_CONF_NAME.concat('.').concat(SUI_PATH_OPT);
             const lint_conf = MOVE_CONF_NAME.concat('.').concat(LINT_OPT);
             const type_hints_conf = MOVE_CONF_NAME.concat('.').concat(TYPE_HINTS_OPT);
+            const param_hints_conf = MOVE_CONF_NAME.concat('.').concat(PARAM_HINTS_OPT);
 
             const optionsChanged = event.affectsConfiguration(lint_conf) ||
-                event.affectsConfiguration(type_hints_conf);
+                event.affectsConfiguration(type_hints_conf) ||
+                event.affectsConfiguration(param_hints_conf);
             const pathsChanged = event.affectsConfiguration(server_path_conf) ||
                 event.affectsConfiguration(sui_path_conf);
 
@@ -251,6 +257,7 @@ export class Context {
 
                 this.lintLevel = this.configuration.lint;
                 this.inlayHintsType = this.configuration.inlayHintsForType;
+                this.inlayHintsParam = this.configuration.inlayHintsForParam;
                 try {
                     await this.stopClient();
                         if (pathsChanged) {

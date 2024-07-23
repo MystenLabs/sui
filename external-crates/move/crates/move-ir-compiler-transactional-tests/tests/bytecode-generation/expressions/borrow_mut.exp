@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-12:
+task 0, lines 1-12:
+//# print-bytecode
 // Move bytecode v6
 module 1.m {
 
@@ -23,7 +24,8 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 14-25:
+task 1, lines 14-25:
+//# print-bytecode
 // Move bytecode v6
 module 3d.Foobar {
 struct FooCoin {
@@ -44,7 +46,8 @@ B0:
 }
 }
 
-task 2 'print-bytecode'. lines 27-38:
+task 2, lines 27-38:
+//# print-bytecode
 // Move bytecode v6
 module 4d.Foobar {
 struct FooCoin<Ty0> {

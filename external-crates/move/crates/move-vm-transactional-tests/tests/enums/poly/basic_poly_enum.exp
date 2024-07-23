@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-24:
+task 0, lines 1-24:
+//# print-bytecode
 // Move bytecode v7
 module 1.MonomorphicEnums {
 

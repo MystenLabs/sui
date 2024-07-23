@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-14:
+task 0, lines 1-14:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,

@@ -3,17 +3,20 @@ processed 12 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-34:
+task 1, lines 6-34:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7828000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 36-36:
+task 2, line 36:
+//# run tto::M1::start --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 38-38:
+task 3, line 38:
+//# view-object 2,0
 Owner: Object ID: ( fake(2,2) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
@@ -30,7 +33,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 4 'view-object'. lines 40-40:
+task 4, line 40:
+//# view-object 2,1
 Owner: Account Address ( A )
 Version: 2
 Contents: tto::M1::A {
@@ -42,7 +46,8 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
-task 5 'view-object'. lines 42-42:
+task 5, line 42:
+//# view-object 2,2
 Owner: Account Address ( fake(2,1) )
 Version: 2
 Contents: tto::M1::A {
@@ -54,7 +59,8 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
-task 6 'view-object'. lines 44-44:
+task 6, line 44:
+//# view-object 2,3
 Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: tto::M1::A {
@@ -66,12 +72,14 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
-task 7 'run'. lines 46-46:
+task 7, line 46:
+//# run tto::M1::receive --args object(2,1) receiving(2,2) --sender A
 created: object(7,0)
 mutated: object(0,0), object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
-task 8 'view-object'. lines 48-48:
+task 8, line 48:
+//# view-object 2,0
 Owner: Object ID: ( fake(2,2) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
@@ -88,7 +96,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 9 'view-object'. lines 50-50:
+task 9, line 50:
+//# view-object 2,1
 Owner: Account Address ( A )
 Version: 3
 Contents: tto::M1::A {
@@ -100,7 +109,8 @@ Contents: tto::M1::A {
     value: 0u64,
 }
 
-task 10 'view-object'. lines 52-52:
+task 10, line 52:
+//# view-object 2,2
 Owner: Object ID: ( fake(7,0) )
 Version: 3
 Contents: tto::M1::A {
@@ -112,7 +122,8 @@ Contents: tto::M1::A {
     value: 100u64,
 }
 
-task 11 'view-object'. lines 54-54:
+task 11, line 54:
+//# view-object 2,3
 Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: tto::M1::A {

@@ -43,6 +43,7 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
+use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -144,13 +145,11 @@ impl AuthorityServer {
     ) -> Result<AuthorityServerHandle, io::Error> {
         let mut server = mysten_network::config::Config::new()
             .server_builder()
-            .add_service(ValidatorServer::new(ValidatorService {
-                state: self.state,
-                consensus_adapter: self.consensus_adapter,
-                metrics: self.metrics.clone(),
-                traffic_controller: None,
-                client_id_source: None,
-            }))
+            .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
+                self.state,
+                self.consensus_adapter,
+                self.metrics,
+            )))
             .bind(&address)
             .await
             .unwrap();
@@ -321,6 +320,20 @@ impl ValidatorService {
         }
     }
 
+    pub fn new_for_tests(
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        metrics: Arc<ValidatorServiceMetrics>,
+    ) -> Self {
+        Self {
+            state,
+            consensus_adapter,
+            metrics,
+            traffic_controller: None,
+            client_id_source: None,
+        }
+    }
+
     pub fn validator_state(&self) -> &Arc<AuthorityState> {
         &self.state
     }
@@ -398,7 +411,7 @@ impl ValidatorService {
         let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
-            .handle_transaction(&epoch_store, transaction)
+            .handle_transaction(&epoch_store, transaction.clone())
             .instrument(span)
             .await
             .tap_err(|e| {
@@ -412,6 +425,7 @@ impl ValidatorService {
             // to save more CPU.
             return Err(error.into());
         }
+
         Ok((tonic::Response::new(info), Weight::zero()))
     }
 
@@ -994,24 +1008,44 @@ macro_rules! handle_with_decoration {
                     None
                 }
             }
-            ClientIdSource::XForwardedFor => {
-                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+            ClientIdSource::XForwardedFor(num_hops) => {
+                let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
-                            match header_val.parse::<SocketAddr>() {
-                                Ok(socket_addr) => Some(socket_addr.ip()),
-                                Err(err) => {
+                            let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                            if *num_hops == 0 {
+                                error!(
+                                    "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                                    number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
+                                    to this node. Skipping traffic controller request handling.",
+                                    header_contents,
+                                );
+                                return None;
+                            }
+                            let contents_len = header_contents.len();
+                            let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
+                                error!(
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                    Expected at least {} values. Skipping traffic controller request handling.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    contents_len,
+                                );
+                                return None;
+                            };
+                            client_ip.parse::<IpAddr>().ok().or_else(|| {
+                                client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
                                     $self.metrics.forwarded_header_parse_error.inc();
                                     error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
                                         Please ensure that your proxy is configured to resolve client domains to an \
                                         IP address before writing header",
-                                        header_val,
-                                        err,
+                                        client_ip,
                                     );
                                     None
-                                }
-                            }
+                                })
+                            })
                         }
                         Err(e) => {
                             // TODO: once we have confirmed that no legitimate traffic
@@ -1022,9 +1056,14 @@ macro_rules! handle_with_decoration {
                             None
                         }
                     }
+                };
+                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                    do_header_parse(op)
+                } else if let Some(op) = $request.metadata().get("X-Forwarded-For") {
+                    do_header_parse(op)
                 } else {
                     $self.metrics.forwarded_header_not_included.inc();
-                    error!("x-forwarded-header not present for request despite node configuring XForwardedFor tracking type");
+                    error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
                     None
                 }
             }

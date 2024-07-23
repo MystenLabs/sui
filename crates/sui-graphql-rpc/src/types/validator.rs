@@ -19,6 +19,7 @@ use super::move_object::MoveObject;
 use super::object::Object;
 use super::owner::Owner;
 use super::sui_address::SuiAddress;
+use super::uint53::UInt53;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
 use crate::error::Error;
@@ -233,17 +234,20 @@ impl Validator {
         Ok(Some(Owner {
             address: self.validator_summary.exchange_rates_id.into(),
             checkpoint_viewed_at: self.checkpoint_viewed_at,
+            root_version: None,
         }))
     }
 
     /// Number of exchange rates in the table.
-    async fn exchange_rates_size(&self) -> Option<u64> {
-        Some(self.validator_summary.exchange_rates_size)
+    async fn exchange_rates_size(&self) -> Option<UInt53> {
+        Some(self.validator_summary.exchange_rates_size.into())
     }
 
     /// The epoch at which this pool became active.
-    async fn staking_pool_activation_epoch(&self) -> Option<u64> {
-        self.validator_summary.staking_pool_activation_epoch
+    async fn staking_pool_activation_epoch(&self) -> Option<UInt53> {
+        self.validator_summary
+            .staking_pool_activation_epoch
+            .map(UInt53::from)
     }
 
     /// The total number of SUI tokens in this pool.
@@ -317,8 +321,8 @@ impl Validator {
 
     /// The number of epochs for which this validator has been below the
     /// low stake threshold.
-    async fn at_risk(&self) -> Option<u64> {
-        self.at_risk
+    async fn at_risk(&self) -> Option<UInt53> {
+        self.at_risk.map(UInt53::from)
     }
 
     /// The addresses of other validators this validator has reported.

@@ -3,41 +3,50 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-9:
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'upgrade'. lines 11-14:
+task 2, lines 11-14:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 3 'upgrade'. lines 16-19:
+task 3, lines 16-19:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 4 'upgrade'. lines 21-24:
+task 4, lines 21-24:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 5 'upgrade'. lines 26-29:
+task 5, lines 26-29:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 6 'upgrade'. lines 31-34:
+task 6, lines 31-34:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 created: object(6,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 7 'upgrade'. lines 36-39:
+task 7, lines 36-39:
+//# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 8 'upgrade'. lines 41-44:
+task 8, lines 41-44:
+//# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
 
-task 9 'upgrade'. lines 46-49:
+task 9, lines 46-49:
+//# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 created: object(9,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

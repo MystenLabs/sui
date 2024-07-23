@@ -30,9 +30,7 @@ mod test {
         clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
         register_fail_point_if, register_fail_points, sim_test,
     };
-    use sui_protocol_config::{
-        PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, SupportedProtocolVersions,
-    };
+    use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -41,6 +39,7 @@ mod test {
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::transaction::{
         DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     };
@@ -467,15 +466,21 @@ mod test {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
-                PerObjectCongestionControlMode::TotalGasBudget =>
-                config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    checkpoint_budget_factor
+                PerObjectCongestionControlMode::TotalGasBudget => {
+                    let total_gas_limit = checkpoint_budget_factor
                         * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-                ),
-                PerObjectCongestionControlMode::TotalTxCount => config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    txn_count_limit
-                ),
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                },
+                PerObjectCongestionControlMode::TotalTxCount => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        txn_count_limit
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        txn_count_limit
+                    );
+                },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
@@ -499,6 +504,18 @@ mod test {
         }
 
         test_simulated_load_with_test_config(test_cluster, 50, simulated_load_config).await;
+    }
+
+    // Tests cluster liveness when DKG has failed.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_dkg_failure() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            config
+        });
+
+        let test_cluster = build_test_cluster(4, 30_000).await;
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -794,6 +811,7 @@ mod test {
         batch_payment_weight: u32,
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
+        randomness_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -809,6 +827,7 @@ mod test {
                 batch_payment_weight: 1,
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
+                randomness_weight: 1,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -869,6 +888,7 @@ mod test {
         let delegation_weight = config.delegation_weight;
         let batch_payment_weight = config.batch_payment_weight;
         let shared_object_deletion_weight = config.shared_deletion_weight;
+        let randomness_weight = config.randomness_weight;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -899,6 +919,7 @@ mod test {
             shared_object_deletion_weight,
             adversarial_weight,
             adversarial_cfg,
+            randomness_weight,
             batch_payment_size,
             shared_counter_hotness_factor,
             num_shared_counters,

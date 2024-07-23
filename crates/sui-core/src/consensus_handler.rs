@@ -572,6 +572,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
+        ConsensusTransactionKind::CapabilityNotificationV2(_) => "capability_notification_v2",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
@@ -872,15 +873,16 @@ mod tests {
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{Batch, Certificate, CommittedSubDag, HeaderV1Builder, ReputationScores};
     use prometheus::Registry;
-    use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
+    use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
         base_types::{random_object_ref, AuthorityName, SuiAddress},
         committee::Committee,
         messages_consensus::{
-            AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
+            AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
         },
         object::Object,
         sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+        supported_protocol_versions::SupportedProtocolVersions,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
         },
@@ -912,7 +914,7 @@ mod tests {
                 .build();
 
         let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config)
+            .with_network_config(&network_config, 0)
             .build()
             .await;
 
@@ -1135,7 +1137,7 @@ mod tests {
 
     fn cap_txn(generation: u64) -> VerifiedSequencedConsensusTransaction {
         txn(ConsensusTransactionKind::CapabilityNotification(
-            AuthorityCapabilities {
+            AuthorityCapabilitiesV1 {
                 authority: Default::default(),
                 generation,
                 supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,

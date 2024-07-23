@@ -243,7 +243,7 @@ pub async fn find_all_dirs_with_epoch_prefix(
     let entries = store.list_with_delimiter(prefix).await?;
     for entry in entries.common_prefixes {
         if let Some(filename) = entry.filename() {
-            if !filename.starts_with("epoch_") {
+            if !filename.starts_with("epoch_") || filename.ends_with(".tmp") {
                 continue;
             }
             let epoch = filename

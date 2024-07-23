@@ -7,7 +7,7 @@
 // chkpt3: add df4, 5, 6 parent @ version 5, child @ version 4
 // chkpt4: remove df1, df2, df3 parent @ version 6, child @ version 4
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {

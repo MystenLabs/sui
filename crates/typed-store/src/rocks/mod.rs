@@ -71,7 +71,7 @@ const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
 // Set to 1 to disable blob storage for transactions and effects.
 const ENV_VAR_DISABLE_BLOB_STORAGE: &str = "DISABLE_BLOB_STORAGE";
 
-const ENV_VAR_MAX_BACKGROUND_JOBS: &str = "MAX_BACKGROUND_JOBS";
+const ENV_VAR_DB_PARALLELISM: &str = "DB_PARALLELISM";
 
 // TODO: remove this after Rust rocksdb has the TOTAL_BLOB_FILES_SIZE property built-in.
 // From https://github.com/facebook/rocksdb/blob/bd80433c73691031ba7baa65c16c63a83aef201a/include/rocksdb/db.h#L1169
@@ -1347,7 +1347,7 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let db_name = self.rocksdb.db_name();
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_batch_commit_latency_seconds
@@ -1371,6 +1371,20 @@ impl DBBatch {
             self.db_metrics
                 .write_perf_ctx_metrics
                 .report_metrics(&db_name);
+        }
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, ?db_name, "very slow batch write");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_count
+                .with_label_values(&[&db_name])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_duration_ms
+                .with_label_values(&[&db_name])
+                .inc_by((elapsed * 1000.0) as u64);
         }
         Ok(())
     }
@@ -1863,7 +1877,7 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let _timer = self
+        let timer = self
             .db_metrics
             .op_metrics
             .rocksdb_put_latency_seconds
@@ -1889,6 +1903,22 @@ where
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())
             .map_err(typed_store_err_from_rocks_err)?;
+
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, cf = ?self.cf, "very slow insert");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_count
+                .with_label_values(&[&self.cf])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_puts_duration_ms
+                .with_label_values(&[&self.cf])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
+
         Ok(())
     }
 
@@ -2385,10 +2415,10 @@ impl DBOptions {
         self
     }
 
-    // Optimize tables receiving significant deletions.
-    // TODO: revisit when intra-epoch pruning is enabled.
-    pub fn optimize_for_pruning(mut self) -> DBOptions {
-        self.options.set_min_write_buffer_number_to_merge(2);
+    // Disables write stalling and stopping based on pending compaction bytes.
+    pub fn disable_write_throttling(mut self) -> DBOptions {
+        self.options.set_soft_pending_compaction_bytes_limit(0);
+        self.options.set_hard_pending_compaction_bytes_limit(0);
         self
     }
 }
@@ -2414,13 +2444,6 @@ pub fn default_db_options() -> DBOptions {
     opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opt.set_bottommost_zstd_max_train_bytes(1024 * 1024, true);
 
-    opt.set_max_background_jobs(
-        read_size_from_env(ENV_VAR_MAX_BACKGROUND_JOBS)
-            .unwrap_or(2)
-            .try_into()
-            .unwrap(),
-    );
-
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
     //
@@ -2429,8 +2452,7 @@ pub fn default_db_options() -> DBOptions {
     // the next write) may not work well. So sticking to per-db write buffer size limit for now.
     //
     // The environment variables are only meant to be emergency overrides. They may go away in future.
-    // If you need to modify an option, either update the default value, or override the option in
-    // Sui / Narwhal.
+    // It is preferable to update the default value, or override the option in code.
     opt.set_db_write_buffer_size(
         read_size_from_env(ENV_VAR_DB_WRITE_BUFFER_SIZE).unwrap_or(DEFAULT_DB_WRITE_BUFFER_SIZE)
             * 1024
@@ -2440,7 +2462,9 @@ pub fn default_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
-    opt.increase_parallelism(4);
+    // Num threads for compactions and memtable flushes.
+    opt.increase_parallelism(read_size_from_env(ENV_VAR_DB_PARALLELISM).unwrap_or(8) as i32);
+
     opt.set_enable_pipelined_write(true);
 
     opt.set_block_based_table_factory(&get_block_options(128));

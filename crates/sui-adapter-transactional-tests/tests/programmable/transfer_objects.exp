@@ -3,17 +3,22 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-32:
+task 1, lines 8-32:
+//# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 33-35:
+task 2, lines 33-35:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::new();
+//> TransferObjects([Result(0)], Input(0));
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 37-39:
+task 3, lines 37-39:
+//# view-object 0,0
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -27,12 +32,17 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 4 'programmable'. lines 40-43:
+task 4, lines 40-43:
+//# programmable --sender A --inputs 0u256
+//> 0: sui::address::from_u256(Input(0));
+//> 1: test::m1::new();
+//> TransferObjects([Result(1)], Result(0));
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'view-object'. lines 45-47:
+task 5, lines 45-47:
+//# view-object 4,0
 Owner: Account Address ( _ )
 Version: 3
 Contents: test::m1::Pub {
@@ -44,12 +54,19 @@ Contents: test::m1::Pub {
     value: 112u64,
 }
 
-task 6 'programmable'. lines 48-53:
+task 6, lines 48-53:
+//# programmable --sender A --inputs @B true
+//> 0: sui::address::to_u256(Input(0));
+//> 1: sui::address::from_u256(Result(0));
+//> 2: test::m1::new();
+//> 3: test::m1::addr(Result(1), Input(1));
+//> TransferObjects([Result(2)], Result(3));
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'view-object'. lines 55-57:
+task 7, lines 55-57:
+//# view-object 6,0
 Owner: Account Address ( B )
 Version: 4
 Contents: test::m1::Pub {
@@ -61,12 +78,21 @@ Contents: test::m1::Pub {
     value: 112u64,
 }
 
-task 8 'programmable'. lines 58-65:
+task 8, lines 58-65:
+//# programmable --sender A --inputs @B true
+//> 0: sui::address::to_u256(Input(0));
+//> 1: sui::address::from_u256(Result(0));
+//> 2: test::m1::new();
+//> 3: test::m1::addr(Result(1), Input(1));
+//> 4: test::m1::cup<sui::object::ID>();
+//> 5: test::m1::cup<test::m1::Pub>();
+//> TransferObjects([Result(4), Result(2), Result(5)], Result(3));
 created: object(8,0), object(8,1), object(8,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5388400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9 'view-object'. lines 67-67:
+task 9, line 67:
+//# view-object 8,0
 Owner: Account Address ( B )
 Version: 5
 Contents: test::m1::Cup<sui::object::ID> {
@@ -77,7 +103,8 @@ Contents: test::m1::Cup<sui::object::ID> {
     },
 }
 
-task 10 'view-object'. lines 69-69:
+task 10, line 69:
+//# view-object 8,1
 Owner: Account Address ( B )
 Version: 5
 Contents: test::m1::Cup<test::m1::Pub> {
@@ -88,7 +115,8 @@ Contents: test::m1::Cup<test::m1::Pub> {
     },
 }
 
-task 11 'view-object'. lines 71-71:
+task 11, line 71:
+//# view-object 8,2
 Owner: Account Address ( B )
 Version: 5
 Contents: test::m1::Pub {

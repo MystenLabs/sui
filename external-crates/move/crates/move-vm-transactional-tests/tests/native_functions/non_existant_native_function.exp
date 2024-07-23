@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-5:
+task 0, lines 1-5:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::No'. Got VMError: {
     major_status: MISSING_DEPENDENCY,
     sub_status: None,

@@ -1,9 +1,10 @@
-processed 7 tasks
+processed 8 tasks
 
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-10:
+task 1, lines 6-10:
+//# run-graphql
 Response: {
   "data": null,
   "errors": [
@@ -16,13 +17,14 @@ Response: {
         }
       ],
       "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
+        "code": "BAD_USER_INPUT"
       }
     }
   ]
 }
 
-task 2 'run-graphql'. lines 12-42:
+task 2, lines 12-42:
+//# run-graphql
 Response: {
   "data": null,
   "errors": [
@@ -31,36 +33,60 @@ Response: {
       "locations": [
         {
           "line": 1,
-          "column": 29
+          "column": 28
         }
       ],
       "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
+        "code": "BAD_USER_INPUT"
       }
     }
   ]
 }
 
-task 3 'run-graphql'. lines 44-48:
+task 3, lines 44-50:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
+      "locations": [
+        {
+          "line": 1,
+          "column": 24
+        }
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 52-56:
+//# run-graphql
 Response: {
   "data": {}
 }
 
-task 4 'run-graphql'. lines 50-54:
+task 5, lines 58-62:
+//# run-graphql
 Response: {
   "data": {
-    "chainIdentifier": "8f58ad28"
+    "chainIdentifier": "3989ac57"
   }
 }
 
-task 5 'run-graphql'. lines 56-60:
+task 6, lines 64-68:
+//# run-graphql
 Response: {
   "data": {
-    "chainIdentifier": "8f58ad28"
+    "chainIdentifier": "3989ac57"
   }
 }
 
-task 6 'run-graphql'. lines 62-66:
+task 7, lines 70-74:
+//# run-graphql
 Response: {
   "data": {}
 }

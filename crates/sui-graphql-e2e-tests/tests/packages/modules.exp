@@ -1,14 +1,17 @@
 processed 6 tasks
 
-task 1 'publish'. lines 6-31:
+task 1, lines 6-31:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 33-33:
+task 2, line 33:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 35-65:
+task 3, lines 35-65:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -19,24 +22,24 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x0fbc1d78ec040a294fee0c728b2523c70f60784b82645feadb34ccd2772eb5eb",
-                    "asMovePackage": {
-                      "module": {
-                        "name": "m",
-                        "package": {
-                          "address": "0x0fbc1d78ec040a294fee0c728b2523c70f60784b82645feadb34ccd2772eb5eb"
-                        },
-                        "fileFormatVersion": 6,
-                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZQ+8HXjsBAopT+4McoslI8cPYHhLgmRf6ts0zNJ3LrXrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
-                        "disassembly": "// Move bytecode v6\nmodule fbc1d78ec040a294fee0c728b2523c70f60784b82645feadb34ccd2772eb5eb.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n\n}\n}"
-                      }
-                    }
+                    "address": "0x433fc1353e363ad6a756ce9711eb0b38604f070fd307869d009b884db80af456",
+                    "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xfe65744d7cd54aede5cf29427b7cd86c36aa6eece1e2c1dc021befbcc4daaf7b",
-                    "asMovePackage": null
+                    "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
+                    "asMovePackage": {
+                      "module": {
+                        "name": "m",
+                        "package": {
+                          "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11"
+                        },
+                        "fileFormatVersion": 6,
+                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZZClTPQa4dIpZLcM0LP6ioODQYiaNhDC55fg/13olcwRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                        "disassembly": "// Move bytecode v6\nmodule 90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n\n}\n}"
+                      }
+                    }
                   }
                 }
               ]
@@ -48,7 +51,8 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 67-104:
+task 4, lines 67-104:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -59,7 +63,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x0fbc1d78ec040a294fee0c728b2523c70f60784b82645feadb34ccd2772eb5eb",
+                    "address": "0x433fc1353e363ad6a756ce9711eb0b38604f070fd307869d009b884db80af456",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
                     "asMovePackage": {
                       "all": {
                         "edges": [
@@ -129,12 +139,6 @@ Response: {
                       }
                     }
                   }
-                },
-                {
-                  "outputState": {
-                    "address": "0xfe65744d7cd54aede5cf29427b7cd86c36aa6eece1e2c1dc021befbcc4daaf7b",
-                    "asMovePackage": null
-                  }
                 }
               ]
             }
@@ -145,7 +149,8 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 106-146:
+task 5, lines 106-146:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -156,7 +161,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x0fbc1d78ec040a294fee0c728b2523c70f60784b82645feadb34ccd2772eb5eb",
+                    "address": "0x433fc1353e363ad6a756ce9711eb0b38604f070fd307869d009b884db80af456",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
                     "asMovePackage": {
                       "prefix": {
                         "edges": [
@@ -267,12 +278,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xfe65744d7cd54aede5cf29427b7cd86c36aa6eece1e2c1dc021befbcc4daaf7b",
-                    "asMovePackage": null
                   }
                 }
               ]

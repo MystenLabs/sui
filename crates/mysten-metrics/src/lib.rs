@@ -11,9 +11,12 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use once_cell::sync::OnceCell;
-use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry, TextEncoder};
+use prometheus::{
+    register_histogram_with_registry, register_int_gauge_vec_with_registry, Histogram, IntGaugeVec,
+    Registry, TextEncoder,
+};
 use tap::TapFallible;
-use tracing::warn;
+use tracing::{warn, Span};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -22,10 +25,17 @@ mod guards;
 pub mod histogram;
 pub mod metered_channel;
 pub mod monitored_mpsc;
+pub mod thread_stall_monitor;
 pub use guards::*;
 
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
+
+pub const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6,
+    0.7, 0.8, 0.9, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5.,
+    6., 7., 8., 9., 10., 15., 20., 25., 30., 60., 90.,
+];
 
 #[derive(Debug)]
 pub struct Metrics {
@@ -37,6 +47,7 @@ pub struct Metrics {
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
+    pub thread_stall_duration_sec: Histogram,
 }
 
 impl Metrics {
@@ -98,6 +109,12 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
+            thread_stall_duration_sec: register_histogram_with_registry!(
+                "thread_stall_duration_sec",
+                "Duration of thread stalls in seconds.",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -129,18 +146,18 @@ macro_rules! monitored_future {
         };
 
         async move {
-            let metrics = mysten_metrics::get_metrics();
+            let metrics = $crate::get_metrics();
 
             let _metrics_guard = if let Some(m) = metrics {
                 m.$metric.with_label_values(&[location]).inc();
-                Some(mysten_metrics::scopeguard::guard(m, |metrics| {
+                Some($crate::scopeguard::guard(m, |_| {
                     m.$metric.with_label_values(&[location]).dec();
                 }))
             } else {
                 None
             };
             let _logging_guard = if $logging_enabled {
-                Some(mysten_metrics::scopeguard::guard((), |_| {
+                Some($crate::scopeguard::guard((), |_| {
                     tracing::event!(
                         tracing::Level::$logging_level,
                         "Future {} completed",
@@ -167,28 +184,22 @@ macro_rules! monitored_future {
 #[macro_export]
 macro_rules! spawn_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
-            tasks, $fut, "", INFO, false
-        ))
+        tokio::task::spawn($crate::monitored_future!(tasks, $fut, "", INFO, false))
     };
 }
 
 #[macro_export]
 macro_rules! spawn_logged_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
-            tasks, $fut, "", INFO, true
-        ))
+        tokio::task::spawn($crate::monitored_future!(tasks, $fut, "", INFO, true))
     };
 
     ($fut: expr, $name: expr) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
-            tasks, $fut, $name, INFO, true
-        ))
+        tokio::task::spawn($crate::monitored_future!(tasks, $fut, $name, INFO, true))
     };
 
     ($fut: expr, $name: expr, $logging_level: ident) => {
-        tokio::task::spawn(mysten_metrics::monitored_future!(
+        tokio::task::spawn($crate::monitored_future!(
             tasks,
             $fut,
             $name,
@@ -263,6 +274,70 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.f.as_mut().poll(cx)
+    }
+}
+
+pub struct CancelMonitor<F: Sized> {
+    finished: bool,
+    inner: Pin<Box<F>>,
+}
+
+impl<F> CancelMonitor<F>
+where
+    F: Future,
+{
+    pub fn new(inner: F) -> Self {
+        Self {
+            finished: false,
+            inner: Box::pin(inner),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+}
+
+impl<F> Future for CancelMonitor<F>
+where
+    F: Future,
+{
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.as_mut().poll(cx) {
+            Poll::Ready(output) => {
+                self.finished = true;
+                Poll::Ready(output)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<F: Sized> Drop for CancelMonitor<F> {
+    fn drop(&mut self) {
+        if !self.finished {
+            Span::current().record("cancelled", true);
+        }
+    }
+}
+
+/// MonitorCancellation records a cancelled = true span attribute if the future it
+/// is decorating is dropped before completion. The cancelled attribute must be added
+/// at span creation, as you cannot add new attributes after the span is created.
+pub trait MonitorCancellation {
+    fn monitor_cancellation(self) -> CancelMonitor<Self>
+    where
+        Self: Sized + Future;
+}
+
+impl<T> MonitorCancellation for T
+where
+    T: Future,
+{
+    fn monitor_cancellation(self) -> CancelMonitor<Self> {
+        CancelMonitor::new(self)
     }
 }
 

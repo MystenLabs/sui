@@ -38,7 +38,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_protocol_config::ProtocolVersion;
 use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -70,6 +70,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{
     CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,

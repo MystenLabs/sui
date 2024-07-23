@@ -8,6 +8,7 @@ use sui_types::traffic_control::RemoteFirewallConfig;
 
 use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
+use hyper::header::HeaderValue;
 use hyper::HeaderMap;
 use jsonrpsee::core::server::helpers::BoundedSubscriptions;
 use jsonrpsee::core::server::helpers::MethodResponse;
@@ -129,11 +130,19 @@ pub async fn json_rpc_handler<L: Logger>(
     headers: HeaderMap,
     Json(raw_request): Json<Box<RawValue>>,
 ) -> impl axum::response::IntoResponse {
+    let headers_clone = headers.clone();
     // Get version from header.
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
+    let response = process_raw_request(
+        &service,
+        api_version,
+        raw_request.get(),
+        client_addr,
+        headers_clone,
+    )
+    .await;
 
     ok_response(response.result)
 }
@@ -143,16 +152,60 @@ async fn process_raw_request<L: Logger>(
     api_version: Option<&str>,
     raw_request: &str,
     client_addr: SocketAddr,
+    headers: HeaderMap,
 ) -> MethodResponse {
     let client = match service.client_id_source {
         Some(ClientIdSource::SocketAddr) => Some(client_addr.ip()),
-        Some(ClientIdSource::XForwardedFor) => {
-            // TODO - implement this later. Will need to read header at axum layer.
-            error!(
-                "X-Forwarded-For client ID source not yet supported on json \
-                rpc servers. Skipping traffic controller request handling.",
-            );
-            None
+        Some(ClientIdSource::XForwardedFor(num_hops)) => {
+            let do_header_parse = |header: &HeaderValue| match header.to_str() {
+                Ok(header_val) => {
+                    let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                    if num_hops == 0 {
+                        error!(
+                                "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                                number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
+                                to this node. Skipping traffic controller request handling.",
+                                header_contents,
+                            );
+                        return None;
+                    }
+                    let contents_len = header_contents.len();
+                    let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
+                        error!(
+                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                Expected {} values. Skipping traffic controller request handling.",
+                                header_contents,
+                                contents_len,
+                                num_hops,
+                                num_hops + 1,
+                            );
+                        return None;
+                    };
+                    client_ip.parse::<IpAddr>().ok().or_else(|| {
+                        client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
+                                error!(
+                                    "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
+                                    Please ensure that your proxy is configured to resolve client domains to an \
+                                    IP address before writing header",
+                                    client_ip,
+                                );
+                                None
+                            })
+                        })
+                }
+                Err(e) => {
+                    error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
+                    None
+                }
+            };
+            if let Some(header) = headers.get("x-forwarded-for") {
+                do_header_parse(header)
+            } else if let Some(header) = headers.get("X-Forwarded-For") {
+                do_header_parse(header)
+            } else {
+                error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
+                None
+            }
         }
         None => None,
     };

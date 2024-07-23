@@ -1,4 +1,5 @@
 processed 4 tasks
 
-task 3 'run'. lines 21-21:
+task 3, line 21:
+//# run 42::M::test
 return values: { 42 }

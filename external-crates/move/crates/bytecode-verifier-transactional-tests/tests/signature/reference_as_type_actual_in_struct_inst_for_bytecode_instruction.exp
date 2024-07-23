@@ -1,6 +1,7 @@
 processed 5 tasks
 
-task 0 'publish'. lines 1-13:
+task 0, lines 1-13:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 1 'publish'. lines 15-29:
+task 1, lines 15-29:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 2 'publish'. lines 31-43:
+task 2, lines 31-43:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 3 'publish'. lines 45-54:
+task 3, lines 45-54:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 4 'publish'. lines 56-65:
+task 4, lines 56-65:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,

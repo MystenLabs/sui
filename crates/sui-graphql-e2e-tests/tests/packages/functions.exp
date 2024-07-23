@@ -3,7 +3,8 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-38:
+task 1, lines 6-38:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -72,15 +73,18 @@ Response: {
   }
 }
 
-task 2 'publish'. lines 40-44:
+task 2, lines 40-44:
+//# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 46-46:
+task 3, line 46:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 48-86:
+task 4, lines 48-86:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -91,25 +95,19 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
+                    "address": "0x3719b3c504667a19c9e74ef201f80de7ec442c36168ec906f9c071eaea0c2310",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xf1c9c7ad1ffe43bc039571bb59e92cd999acb84357516f8b0e633478c2c52fa6",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xfb7800a2d857fb6af5839c0517a94948c72d4d7b804a89e5d4173203a819b3d4",
+                    "address": "0x3b0214c71a45ce74c853ec2b17a64ccbe92c09daaf2bc21a7f4a15a972a1e0e2",
                     "asMovePackage": {
                       "module": {
                         "function": {
                           "module": {
                             "package": {
-                              "address": "0xfb7800a2d857fb6af5839c0517a94948c72d4d7b804a89e5d4173203a819b3d4"
+                              "address": "0x3b0214c71a45ce74c853ec2b17a64ccbe92c09daaf2bc21a7f4a15a972a1e0e2"
                             }
                           },
                           "name": "f",
@@ -139,6 +137,12 @@ Response: {
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "address": "0x53eaddee260f724b981b7b53658dcd981214bc2ccffe988cff73f6a04f46a9bb",
+                    "asMovePackage": null
+                  }
                 }
               ]
             }
@@ -149,15 +153,18 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 88-93:
+task 5, lines 88-93:
+//# upgrade --package P0 --upgrade-capability 2,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 5418800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 95-95:
+task 6, line 95:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 97-136:
+task 7, lines 97-136:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -168,19 +175,25 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x53b63659f4910b0563575a85dca3254f1eb41bd6f8235cf2508ee6c18f4293ab",
+                    "address": "0x3719b3c504667a19c9e74ef201f80de7ec442c36168ec906f9c071eaea0c2310",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xf0babf7b922b2aebbccaeb88d0ae8ea3540f440b54cdc2081242d1b5c70c5789",
+                    "address": "0x53eaddee260f724b981b7b53658dcd981214bc2ccffe988cff73f6a04f46a9bb",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x76ebf19f8ea6bfa546ad4517196f912bc1eaf5652752eeceb48d03a35340e49e",
                     "asMovePackage": {
                       "module": {
                         "f": {
                           "module": {
                             "package": {
-                              "address": "0xf0babf7b922b2aebbccaeb88d0ae8ea3540f440b54cdc2081242d1b5c70c5789"
+                              "address": "0x76ebf19f8ea6bfa546ad4517196f912bc1eaf5652752eeceb48d03a35340e49e"
                             }
                           },
                           "name": "f",
@@ -210,7 +223,7 @@ Response: {
                         "g": {
                           "module": {
                             "package": {
-                              "address": "0xf0babf7b922b2aebbccaeb88d0ae8ea3540f440b54cdc2081242d1b5c70c5789"
+                              "address": "0x76ebf19f8ea6bfa546ad4517196f912bc1eaf5652752eeceb48d03a35340e49e"
                             }
                           },
                           "name": "g",
@@ -227,12 +240,6 @@ Response: {
                       }
                     }
                   }
-                },
-                {
-                  "outputState": {
-                    "address": "0xf1c9c7ad1ffe43bc039571bb59e92cd999acb84357516f8b0e633478c2c52fa6",
-                    "asMovePackage": null
-                  }
                 }
               ]
             }
@@ -243,7 +250,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 138-173:
+task 8, lines 138-173:
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 Response: {
   "data": {
     "object": {
@@ -390,7 +398,8 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 175-246:
+task 9, lines 175-246:
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 Response: {
   "data": {
     "object": {

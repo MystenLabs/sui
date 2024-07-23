@@ -10,7 +10,7 @@ edition = "2021"
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
-sui-common.workspace = true
+sui-authority-aggregation.workspace = true
 arc-swap.workspace = true
 num_enum.workspace = true
 move-core-types.workspace = true

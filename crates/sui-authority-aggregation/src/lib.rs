@@ -4,7 +4,6 @@
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
-use tracing::instrument::Instrument;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -50,7 +49,7 @@ pub async fn quorum_map_then_reduce_with_timeout_and_prefs<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Copy + 'a,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>>,
@@ -63,17 +62,7 @@ where
         .map(|name| {
             let client = authority_clients[&name].clone();
             let execute = map_each_authority.clone();
-            let concise_name = name.concise_owned();
-            monitored_future!(async move {
-                (
-                    name,
-                    execute(name, client)
-                        .instrument(
-                            tracing::trace_span!("quorum_map_auth", authority =? concise_name),
-                        )
-                        .await,
-                )
-            })
+            monitored_future!(async move { (name.clone(), execute(name, client).await,) })
         })
         .collect();
 
@@ -153,7 +142,7 @@ pub async fn quorum_map_then_reduce_with_timeout<
     S,
 >
 where
-    K: Ord + ConciseableName<'a> + Copy + 'a,
+    K: Ord + ConciseableName<'a> + Clone + 'a,
     C: CommitteeTrait<K>,
     FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
     FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>> + 'a,

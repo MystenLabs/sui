@@ -684,19 +684,13 @@ fn get_genesis_agg<A: Clone>(
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-
-    AuthorityAggregator::new_with_timeouts(
-        committee,
-        committee_store,
-        clients,
-        &Registry::new(),
-        Arc::new(HashMap::new()),
-        TimeoutConfig {
-            serial_authority_request_interval: Duration::from_millis(50),
-            ..Default::default()
-        },
-    )
+    let timeouts_config = TimeoutConfig {
+        serial_authority_request_interval: Duration::from_millis(50),
+        ..Default::default()
+    };
+    AuthorityAggregatorBuilder::from_committee(committee)
+        .with_timeouts_config(timeouts_config)
+        .build_custom_clients(clients)
 }
 
 fn get_agg_at_epoch<A: Clone>(

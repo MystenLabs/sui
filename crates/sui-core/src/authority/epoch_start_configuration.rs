@@ -41,24 +41,32 @@ pub trait EpochStartConfigTrait {
     }
 }
 
+// IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
+// When cherry-picking changes from one branch to another, the value of variants must never
+// change.
+//
+// Unlikely: If you cherry pick a change from one branch to another, and there is a collision
+// in the value of some variant, the branch which has been released should take precedence.
+// In this case, the picked-from branch is inconsistent with the released branch, and must
+// be fixed.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum EpochFlag {
     // The deprecated flags have all been in production for long enough that
     // we can have deleted the old code paths they were guarding.
     // We retain them here in order not to break deserialization.
-    _InMemoryCheckpointRootsDeprecated,
-    _PerEpochFinalizedTransactionsDeprecated,
-    _ObjectLockSplitTablesDeprecated,
+    _InMemoryCheckpointRootsDeprecated = 0,
+    _PerEpochFinalizedTransactionsDeprecated = 1,
+    _ObjectLockSplitTablesDeprecated = 2,
 
-    WritebackCacheEnabled,
+    WritebackCacheEnabled = 3,
 
     // This flag was "burned" because it was deployed with a broken version of the code. The
     // new flags below are required to enable state accumulator v2
-    _StateAccumulatorV2EnabledDeprecated,
+    _StateAccumulatorV2EnabledDeprecated = 4,
+    StateAccumulatorV2EnabledTestnet = 5,
+    StateAccumulatorV2EnabledMainnet = 6,
 
-    ExecutedInEpochTable,
-    StateAccumulatorV2EnabledTestnet,
-    StateAccumulatorV2EnabledMainnet,
+    ExecutedInEpochTable = 7,
 }
 
 impl EpochFlag {

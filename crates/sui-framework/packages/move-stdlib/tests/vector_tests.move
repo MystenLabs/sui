@@ -650,6 +650,17 @@ module std::vector_tests {
     }
 
     #[test]
+    fun find_index_macro() {
+        let e = vector<u8>[];
+        assert!(e.find_index!(|e| *e == 0).is_none());
+        assert!(e.find_index!(|_| true).is_none());
+
+        let r = vector[0, 10, 100, 1_000];
+        assert!(r.find_index!(|e| *e == 100).destroy_some() == 2);
+        assert!(r.find_index!(|e| *e == 10_000).is_none());
+    }
+
+    #[test]
     fun fold_macro() {
         let e = vector<u8>[];
         assert!(e.fold!(0, |acc, e| acc + e) == 0);

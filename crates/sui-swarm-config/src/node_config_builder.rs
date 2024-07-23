@@ -16,15 +16,15 @@ use sui_config::node::{
     Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
+use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
 };
-use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
@@ -140,7 +140,6 @@ impl ValidatorConfigBuilder {
             max_pending_transactions: None,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            protocol: ConsensusProtocol::Narwhal,
             narwhal_config: narwhal_config::Parameters {
                 network_admin_server: NetworkAdminServerParameters {
                     primary_network_admin_server_port: local_ip_utils::get_available_port(
@@ -239,6 +238,7 @@ impl ValidatorConfigBuilder {
             execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: self.state_accumulator_v2,
             enable_soft_bundle: true,
+            enable_validator_tx_finalizer: true,
         }
     }
 
@@ -520,6 +520,8 @@ impl FullnodeConfigBuilder {
             execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: true,
             enable_soft_bundle: true,
+            // This is a validator specific feature.
+            enable_validator_tx_finalizer: false,
         }
     }
 }

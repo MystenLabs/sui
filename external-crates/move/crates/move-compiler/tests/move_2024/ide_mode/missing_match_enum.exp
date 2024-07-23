@@ -1,24 +1,36 @@
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:9
   │
-9 │         match (e) {
-  │                ^ Pattern '_' not covered
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:1:31
+  │
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:16
    │
-14 │         match (e) {
+10 │         match (e) {
+   │                ^ Pattern '_' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:16
+   │
+15 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:16
    │
-20 │         match (e) {
+21 │         match (e) {
    │                ^ Pattern 'E::Three { x: _ }' not covered
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:16
    │
-27 │         match (e) {
+28 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 

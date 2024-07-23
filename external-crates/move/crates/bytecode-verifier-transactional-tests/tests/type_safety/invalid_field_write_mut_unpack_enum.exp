@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'publish'. lines 1-18:
+task 0, lines 1-18:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: WRITEREF_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(1), 5)],
 }
 
-task 1 'publish'. lines 20-37:
+task 1, lines 20-37:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: WRITEREF_TYPE_MISMATCH_ERROR,
     sub_status: None,

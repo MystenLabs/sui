@@ -50,7 +50,7 @@ impl EmbeddedReconfigObserver {
             Err(err) => Err(err),
             Ok(committee_info) => {
                 let network_config = default_mysten_network_config();
-                let new_epoch = committee_info.committee.epoch;
+                let new_epoch = committee_info.epoch();
                 if new_epoch <= cur_epoch {
                     trace!(
                         cur_epoch,

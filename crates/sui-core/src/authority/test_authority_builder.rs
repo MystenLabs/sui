@@ -29,7 +29,7 @@ use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::ProtocolConfig;
 use sui_storage::IndexStore;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
@@ -39,6 +39,7 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::VerifiedTransaction;
 
 use super::epoch_start_configuration::EpochFlag;
@@ -123,12 +124,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    /// When providing a network config, we will use the first validator's
+    /// When providing a network config, we will use the \node_idx validator's
     /// key as the keypair for the new node.
-    pub fn with_network_config(self, config: &'a NetworkConfig) -> Self {
+    pub fn with_network_config(self, config: &'a NetworkConfig, node_idx: usize) -> Self {
         self.with_genesis_and_keypair(
             &config.genesis,
-            config.validator_configs()[0].protocol_key_pair(),
+            config.validator_configs()[node_idx].protocol_key_pair(),
         )
     }
 
@@ -320,6 +321,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             config.clone(),
             usize::MAX,
             ArchiveReaderBalancer::default(),
+            None,
         )
         .await;
 

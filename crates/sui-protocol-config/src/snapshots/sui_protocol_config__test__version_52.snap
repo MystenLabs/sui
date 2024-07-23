@@ -62,6 +62,7 @@ feature_flags:
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
+  passkey_auth: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -279,8 +280,6 @@ check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
 vdf_verify_vdf_cost: 1500
 vdf_hash_to_input_cost: 100
-scoring_decision_mad_divisor: 2.3
-scoring_decision_cutoff_value: 2.5
 execution_version: 3
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
@@ -292,8 +291,9 @@ random_beacon_min_round_interval_ms: 200
 random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
-max_accumulated_txn_cost_per_object_in_checkpoint: 100
+max_accumulated_txn_cost_per_object_in_narwhal_commit: 100
 max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
+

@@ -3,25 +3,32 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 19-58:
+task 1, lines 19-58:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7600000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 60-62:
+task 2, lines 60-62:
+//# programmable --sender A --inputs @A
+//> 0: Test::M1::child(Input(0));
+//> 1: Test::M1::parent(Input(0));
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 64-64:
+task 3, line 64:
+//# run Test::M1::add_child --sender A --args object(2,1) object(2,0) 42
 created: object(3,0)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 4 'create-checkpoint'. lines 66-66:
+task 4, line 66:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 5 'run-graphql'. lines 68-130:
+task 5, lines 68-130:
+//# run-graphql
 Response: {
   "data": {
     "latest": {
@@ -29,7 +36,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IL1UnJ4tEMbcRfNVxJ2raKarUdPXhW9vuUUOe+8FfSlYAQAAAAAAAAA=",
+            "cursor": "IINo9rtSKYxa8qTnsANAx+SVF2gwG9jIfKKxVO/XfZaIAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -37,7 +44,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
                     "count": "0"
                   }
                 }
@@ -53,7 +60,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
               "count": "0"
             }
           }
@@ -64,7 +71,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IL1UnJ4tEMbcRfNVxJ2raKarUdPXhW9vuUUOe+8FfSlYAQAAAAAAAAA=",
+            "cursor": "IINo9rtSKYxa8qTnsANAx+SVF2gwG9jIfKKxVO/XfZaIAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -72,7 +79,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
                     "count": "0"
                   }
                 }
@@ -88,7 +95,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
               "count": "0"
             }
           }
@@ -100,7 +107,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IL1UnJ4tEMbcRfNVxJ2raKarUdPXhW9vuUUOe+8FfSlYAQAAAAAAAAA=",
+            "cursor": "IINo9rtSKYxa8qTnsANAx+SVF2gwG9jIfKKxVO/XfZaIAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -108,7 +115,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+                    "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
                     "count": "0"
                   }
                 }
@@ -124,7 +131,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
               "count": "0"
             }
           }
@@ -141,15 +148,18 @@ Response: {
   }
 }
 
-task 6 'run'. lines 132-132:
+task 6, line 132:
+//# run Test::M1::reclaim_and_transfer_child --sender A --args object(2,1) 42 @A
 mutated: object(0,0), object(2,0), object(2,1)
 deleted: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-task 7 'create-checkpoint'. lines 134-134:
+task 7, line 134:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 8 'run-graphql'. lines 136-186:
+task 8, lines 136-186:
+//# run-graphql
 Response: {
   "data": {
     "latest": {
@@ -174,7 +184,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x3a30ed78d68480f4647031c12f33823162bb54acf1b9b8abe282c42ed034ed41",
+              "id": "0xdcaee2e464dd4cd63e5863474e921177ebbc3e9309f63eb3825ea98285600b7f",
               "count": "0"
             }
           }

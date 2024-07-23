@@ -59,6 +59,7 @@ NOTE_ORDER = [
     "GraphQL",
     "CLI",
     "Rust SDK",
+    "REST API",
 ]
 
 
@@ -124,7 +125,6 @@ def extract_notes_from_rebase_commit(commit):
     url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "Authorization": f"token {os.environ['GITHUB_TOKEN']}",
     }
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req) as response:

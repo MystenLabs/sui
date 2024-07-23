@@ -824,7 +824,16 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             context.tokens.start_loc(),
             " after an address in a module access chain",
         )?;
-        let name = parse_identifier(context)?;
+        let name = match parse_identifier(context) {
+            Ok(ident) => ident,
+            Err(_) => {
+                // diagnostic for this is reported in path expansion (as a parsing error) when we
+                // detect incomplete chaing (adding "default" diag here would make error reporting
+                // somewhat redundant in this case)
+                path.is_incomplete = true;
+                return Ok(NameAccessChain_::Path(path));
+            }
+        };
         let (mut is_macro, mut tys) =
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {

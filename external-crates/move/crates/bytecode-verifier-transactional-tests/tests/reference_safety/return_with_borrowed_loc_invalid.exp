@@ -1,6 +1,7 @@
 processed 4 tasks
 
-task 0 'publish'. lines 1-15:
+task 0, lines 1-15:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }
 
-task 1 'publish'. lines 17-30:
+task 1, lines 17-30:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }
 
-task 2 'publish'. lines 32-49:
+task 2, lines 32-49:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 13)],
 }
 
-task 3 'publish'. lines 51-68:
+task 3, lines 51-68:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
     major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
     sub_status: None,

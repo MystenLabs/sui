@@ -3,17 +3,22 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-12:
+task 1, lines 8-12:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 14-16:
+task 2, lines 14-16:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::pub();
+//> sui::transfer::public_transfer<test::m1::Pub>(Result(0), Input(0));
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 18-18:
+task 3, line 18:
+//# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
 Contents: test::m1::Pub {
@@ -24,12 +29,16 @@ Contents: test::m1::Pub {
     },
 }
 
-task 4 'programmable'. lines 20-22:
+task 4, lines 20-22:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::public_share_object<test::m1::Pub>(Result(0));
 created: object(4,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'view-object'. lines 24-24:
+task 5, line 24:
+//# view-object 4,0
 Owner: Shared( 3 )
 Version: 3
 Contents: test::m1::Pub {
@@ -40,12 +49,16 @@ Contents: test::m1::Pub {
     },
 }
 
-task 6 'programmable'. lines 26-28:
+task 6, lines 26-28:
+//# programmable
+//> 0: test::m1::pub();
+//> sui::transfer::public_freeze_object<test::m1::Pub>(Result(0));
 created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'view-object'. lines 30-30:
+task 7, line 30:
+//# view-object 6,0
 Owner: Immutable
 Version: 4
 Contents: test::m1::Pub {
