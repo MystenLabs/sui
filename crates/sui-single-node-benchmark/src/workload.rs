@@ -12,13 +12,15 @@ use sui_test_transaction_builder::PublishData;
 pub struct Workload {
     pub tx_count: u64,
     pub workload_kind: WorkloadKind,
+    pub use_zklogin: bool,
 }
 
 impl Workload {
-    pub fn new(tx_count: u64, workload_kind: WorkloadKind) -> Self {
+    pub fn new(tx_count: u64, workload_kind: WorkloadKind, use_zklogin: bool) -> Self {
         Self {
             tx_count,
             workload_kind,
+            use_zklogin,
         }
     }
 
@@ -28,6 +30,10 @@ impl Workload {
 
     pub(crate) fn gas_object_num_per_account(&self) -> u64 {
         self.workload_kind.gas_object_num_per_account()
+    }
+
+    pub(crate) fn use_zklogin(&self) -> bool {
+        self.use_zklogin
     }
 
     pub(crate) async fn create_tx_generator(

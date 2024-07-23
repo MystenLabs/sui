@@ -25,6 +25,7 @@ async fn benchmark_non_move_transactions_smoke_test() {
                         nft_size: 528,
                         use_batch_mint: false,
                     },
+                    false
                 ),
                 component,
                 1000,
@@ -53,6 +54,7 @@ async fn benchmark_move_transactions_smoke_test() {
                         nft_size: 528,
                         use_batch_mint: false,
                     },
+                    false
                 ),
                 component,
                 1000,
@@ -81,6 +83,7 @@ async fn benchmark_batch_mint_smoke_test() {
                         nft_size: 256,
                         use_batch_mint: true,
                     },
+                    false
                 ),
                 component,
                 1000,
@@ -109,6 +112,7 @@ async fn benchmark_publish_from_source() {
                 WorkloadKind::Publish {
                     manifest_file: path.clone(),
                 },
+                false
             ),
             component,
             1000,
@@ -136,6 +140,7 @@ async fn benchmark_publish_from_bytecode() {
                 WorkloadKind::Publish {
                     manifest_file: path.clone(),
                 },
+                false
             ),
             component,
             1000,

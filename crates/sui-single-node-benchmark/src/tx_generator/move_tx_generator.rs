@@ -10,6 +10,8 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
+use crate::utils::build_and_sign;
+
 pub struct MoveTxGenerator {
     move_package: ObjectID,
     num_transfers: u64,
@@ -155,13 +157,13 @@ impl TxGenerator for MoveTxGenerator {
             }
             builder.finish()
         };
-        TestTransactionBuilder::new(
+        let tx = TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
         )
-        .programmable(pt)
-        .build_and_sign(account.keypair.as_ref())
+        .programmable(pt);
+        build_and_sign(tx, account.keypair.as_ref())
     }
 
     fn name(&self) -> &'static str {

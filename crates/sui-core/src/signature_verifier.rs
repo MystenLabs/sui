@@ -35,7 +35,7 @@ use tokio::{
     sync::oneshot,
     time::{timeout, Duration},
 };
-use tracing::debug;
+use tracing::{debug, info};
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
 
@@ -379,6 +379,7 @@ impl SignatureVerifier {
             signed_tx.full_message_digest(),
             || {
                 let jwks = self.jwks.read().clone();
+                info!("Using JWKS: {:#?}", jwks);
                 let verify_params = VerifyParams::new(
                     jwks,
                     self.zk_login_params.supported_providers.clone(),

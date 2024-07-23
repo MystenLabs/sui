@@ -7,6 +7,8 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
+use crate::utils::build_and_sign;
+
 pub struct SharedObjectCreateTxGenerator {
     move_package: ObjectID,
 }
@@ -19,7 +21,7 @@ impl SharedObjectCreateTxGenerator {
 
 impl TxGenerator for SharedObjectCreateTxGenerator {
     fn generate_tx(&self, account: Account) -> Transaction {
-        TestTransactionBuilder::new(
+        let tx = TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
@@ -29,8 +31,9 @@ impl TxGenerator for SharedObjectCreateTxGenerator {
             "benchmark",
             "create_shared_counter",
             vec![],
-        )
-        .build_and_sign(account.keypair.as_ref())
+        );
+
+        build_and_sign(tx, &account.keypair)
     }
 
     fn name(&self) -> &'static str {

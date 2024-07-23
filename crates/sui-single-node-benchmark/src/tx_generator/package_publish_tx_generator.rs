@@ -4,6 +4,7 @@
 use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
+use crate::utils::build_and_sign;
 use move_package::source_package::manifest_parser::parse_move_manifest_from_file;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -91,13 +92,13 @@ impl PackagePublishTxGenerator {
 
 impl TxGenerator for PackagePublishTxGenerator {
     fn generate_tx(&self, account: Account) -> Transaction {
-        TestTransactionBuilder::new(
+        let tx = TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
         )
-        .publish_with_data(PublishData::CompiledPackage(self.compiled_package.clone()))
-        .build_and_sign(account.keypair.as_ref())
+        .publish_with_data(PublishData::CompiledPackage(self.compiled_package.clone()));
+        build_and_sign(tx, account.keypair.as_ref())
     }
 
     fn name(&self) -> &'static str {

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
+use crate::mock_account::MockKeyPair;
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
@@ -33,6 +35,8 @@ use sui_types::transaction::{
 use tokio::sync::broadcast;
 use tracing::info;
 
+use crate::utils::build_and_sign;
+
 #[derive(Clone)]
 pub struct SingleValidator {
     validator_service: Arc<ValidatorService>,
@@ -46,6 +50,7 @@ impl SingleValidator {
             .with_starting_objects(genesis_objects)
             // This is needed to properly run checkpoint executor.
             .insert_genesis_checkpoint()
+            .with_jwk_fetch_interval(Duration::from_millis(300))
             .build()
             .await;
         let epoch_store = validator.epoch_store_for_testing().clone();
@@ -94,12 +99,12 @@ impl SingleValidator {
         &self,
         publish_data: PublishData,
         sender: SuiAddress,
-        keypair: &AccountKeyPair,
+        keypair: &MockKeyPair,
         gas: ObjectRef,
     ) -> (ObjectRef, ObjectRef) {
         let tx_builder = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
             .publish_with_data(publish_data);
-        let transaction = tx_builder.build_and_sign(keypair);
+        let transaction = build_and_sign(tx_builder, keypair);
         let effects = self.execute_raw_transaction(transaction).await;
         let package = effects
             .all_changed_objects()

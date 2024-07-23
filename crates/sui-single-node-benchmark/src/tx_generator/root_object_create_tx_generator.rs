@@ -7,6 +7,8 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{CallArg, Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
+use crate::utils::build_and_sign;
+
 pub struct RootObjectCreateTxGenerator {
     move_package: ObjectID,
     child_per_root: u64,
@@ -23,7 +25,7 @@ impl RootObjectCreateTxGenerator {
 
 impl TxGenerator for RootObjectCreateTxGenerator {
     fn generate_tx(&self, account: Account) -> Transaction {
-        TestTransactionBuilder::new(
+        let tx = TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
@@ -33,8 +35,9 @@ impl TxGenerator for RootObjectCreateTxGenerator {
             "benchmark",
             "generate_dynamic_fields",
             vec![CallArg::Pure(bcs::to_bytes(&self.child_per_root).unwrap())],
-        )
-        .build_and_sign(account.keypair.as_ref())
+        );
+
+        build_and_sign(tx, account.keypair.as_ref())
     }
 
     fn name(&self) -> &'static str {

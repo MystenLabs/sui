@@ -28,6 +28,12 @@ pub struct Command {
     pub checkpoint_size: usize,
     #[arg(
         long,
+        default_value_t = false,
+        help = "Use zkLogin for the sender account"
+    )]
+    pub use_zklogin: bool,
+    #[arg(
+        long,
         help = "Whether to print out a sample transaction and effects that is going to be benchmarked on"
     )]
     pub print_sample_tx: bool,

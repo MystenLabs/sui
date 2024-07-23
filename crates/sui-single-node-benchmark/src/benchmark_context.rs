@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_account::{batch_create_account_and_gas, Account};
+use crate::mock_account::{batch_create_account_and_gas, Account, MockKeyPair};
 use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::SharedObjectCreateTxGenerator;
@@ -20,13 +20,13 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_types::transaction::{
-    CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
+    CertifiedTransaction, SignedTransaction, Transaction,
 };
 use tracing::info;
 
 pub struct BenchmarkContext {
     validator: SingleValidator,
-    user_accounts: BTreeMap<SuiAddress, Account>,
+    user_accounts: Vec<(SuiAddress, Account)>,
     admin_account: Account,
     benchmark_component: Component,
 }
@@ -45,15 +45,17 @@ impl BenchmarkContext {
         }
         let gas_object_num_per_account = workload.gas_object_num_per_account();
         let total = num_accounts * gas_object_num_per_account;
+        let use_zklogin = workload.use_zklogin();
 
         info!(
-            "Creating {} accounts and {} gas objects",
-            num_accounts, total
+            "Creating {} accounts and {} gas objects (use_zklogin={})",
+            num_accounts, total, use_zklogin
         );
         let (mut user_accounts, genesis_gas_objects) =
-            batch_create_account_and_gas(num_accounts, gas_object_num_per_account).await;
+            batch_create_account_and_gas(num_accounts, gas_object_num_per_account, use_zklogin).await;
+        assert_eq!(user_accounts.len(), num_accounts as usize);
         assert_eq!(genesis_gas_objects.len() as u64, total);
-        let (_, admin_account) = user_accounts.pop_last().unwrap();
+        let (_, admin_account) = user_accounts.pop().unwrap();
 
         info!("Initializing validator");
         let validator = SingleValidator::new(&genesis_gas_objects, benchmark_component).await;
@@ -77,7 +79,7 @@ impl BenchmarkContext {
             .publish_package(
                 publish_data,
                 self.admin_account.sender,
-                &self.admin_account.keypair,
+                self.admin_account.keypair.as_ref(),
                 gas_objects[0],
             )
             .await;
@@ -156,9 +158,9 @@ impl BenchmarkContext {
         let generator = SharedObjectCreateTxGenerator::new(move_package);
         let shared_object_create_transactions: Vec<_> = self
             .user_accounts
-            .values()
+            .iter()
             .take(num_shared_objects)
-            .map(|account| generator.generate_tx(account.clone()))
+            .map(|(_, account)| generator.generate_tx(account.clone()))
             .collect();
         let results = self
             .execute_raw_transactions(shared_object_create_transactions)
@@ -208,8 +210,8 @@ impl BenchmarkContext {
         );
         let tasks: FuturesUnordered<_> = self
             .user_accounts
-            .values()
-            .map(|account| {
+            .iter()
+            .map(|(_, account)| {
                 let account = account.clone();
                 let tx_generator = tx_generator.clone();
                 tokio::spawn(async move { tx_generator.generate_tx(account) })
@@ -224,7 +226,7 @@ impl BenchmarkContext {
         transactions: Vec<Transaction>,
         skip_signing: bool,
     ) -> Vec<CertifiedTransaction> {
-        info!("Creating transaction certificates");
+        info!("Creating {} transaction certificates", transactions.len());
         let start_time = std::time::Instant::now();
         let tx_count = transactions.len();
         let tasks: FuturesUnordered<_> = transactions
@@ -500,7 +502,7 @@ impl BenchmarkContext {
 
     fn refresh_gas_objects(&mut self, mut new_gas_objects: HashMap<ObjectID, ObjectRef>) {
         info!("Refreshing gas objects");
-        for account in self.user_accounts.values_mut() {
+        for (_, account) in self.user_accounts.iter_mut() {
             let refreshed_gas_objects: Vec<_> = account
                 .gas_objects
                 .iter()

@@ -27,11 +27,13 @@ prometheus.workspace = true
 once_cell.workspace = true
 serde = { version = "1.0.190", features = ["derive"] }
 serde_json.workspace = true
+shared-crypto.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tracing.workspace = true
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a3d5b18b7ca9370e099a7dbb25aca276af580608", package = "fastcrypto-zkp" }
 
 [dev-dependencies]
 sui-macros.workspace = true

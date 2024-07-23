@@ -782,6 +782,17 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
         );
+        signature_verifier.insert_jwk(
+            &JwkId {
+                iss: "https://id.twitch.tv/oauth2".to_string(),
+                kid: "1".to_string()
+            }, 
+            &JWK {
+                kty: "RSA".to_string(),
+                e: "AQAB".to_string(),
+                alg: "RS256".to_string(),
+                n: "6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw".to_string()
+            });
 
         let authenticator_state_exists = epoch_start_configuration
             .authenticator_obj_initial_shared_version()
