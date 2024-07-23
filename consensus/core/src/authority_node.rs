@@ -44,6 +44,10 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
+/// A counter that keeps track of how many times the authority node has been booted while the binary
+/// or the component that is calling the `ConsensusAuthority` has been running. It's mostly useful to
+/// make decisions on whether amnesia recovery should run or not.
+
 pub type ConsensusAuthorityBootCounter = AtomicU64;
 
 impl ConsensusAuthority {
