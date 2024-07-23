@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::min;
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Error;
 use async_trait::async_trait;
-use tap::TapFallible;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
+use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::metered_channel::Receiver;
+use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
@@ -105,6 +105,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
         F: DataFilter<T> + 'static + Clone,
         M: DataMapper<T, R> + 'static + Clone,
         P: Persistent<R> + 'static,
+        T: Send,
     {
         // Update tasks first
         let tasks = self.storage.tasks()?;
@@ -112,7 +113,6 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
         match tasks.live_task() {
             None => {
                 // Scenario 1: No task in database, start live task and backfill tasks
-                // if resume_from_checkpoint, use it for the latest task, if not set, use bridge_genesis_checkpoint
                 self.storage.register_task(
                     format!("{} - Live", self.name),
                     self.start_from_checkpoint,
@@ -213,8 +213,12 @@ pub trait Persistent<T>: IndexerProgressStore + Sync + Send + Clone {
 
 #[async_trait]
 pub trait IndexerProgressStore: Send {
-    async fn load(&self, task_name: String) -> anyhow::Result<u64>;
-    async fn save(&mut self, task_name: String, checkpoint_number: u64) -> anyhow::Result<()>;
+    async fn load_progress(&self, task_name: String) -> anyhow::Result<u64>;
+    async fn save_progress(
+        &mut self,
+        task_name: String,
+        checkpoint_number: u64,
+    ) -> anyhow::Result<()>;
 
     fn tasks(&self) -> Result<Vec<Task>, anyhow::Error>;
 
@@ -229,18 +233,43 @@ pub trait IndexerProgressStore: Send {
 }
 
 #[async_trait]
-pub trait Datasource<T, P, R> {
+pub trait Datasource<T: Send, P, R> {
     async fn start_ingestion_task<F, M>(
         &self,
         task_name: String,
         target_checkpoint: u64,
-        storage: P,
+        mut storage: P,
         filter: F,
         data_mapper: M,
-    ) -> Result<(), anyhow::Error>
+    ) -> Result<(), Error>
     where
         F: DataFilter<T> + 'static,
-        M: DataMapper<T, R> + 'static;
+        M: DataMapper<T, R> + 'static,
+        P: Persistent<R> + 'static,
+    {
+        let (join_handle, mut data_channel) = self
+            .create_data_channel(task_name.clone(), storage.clone(), target_checkpoint)
+            .await?;
+        while let Some(data) = data_channel.recv().await {
+            let block_number = Self::get_block_number(&data);
+            if filter.filter(&data) {
+                storage.write(data_mapper.map(data)?)?
+            }
+            storage
+                .save_progress(task_name.clone(), block_number)
+                .await?;
+        }
+        join_handle.await?
+    }
+
+    async fn create_data_channel(
+        &self,
+        task_name: String,
+        storage: P,
+        target_checkpoint: u64,
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<T>), Error>;
+
+    fn get_block_number(data: &T) -> u64;
 }
 
 pub struct SuiCheckpointDatasource {
@@ -266,42 +295,53 @@ impl SuiCheckpointDatasource {
 }
 
 #[async_trait]
-impl<P: Persistent<R> + 'static, R: Sync + Send + 'static> Datasource<CheckpointTxnData, P, R>
-    for SuiCheckpointDatasource
+impl<P, R> Datasource<CheckpointTxnData, P, R> for SuiCheckpointDatasource
+where
+    P: Persistent<R> + 'static,
+    R: Sync + Send + 'static,
 {
-    async fn start_ingestion_task<F, M>(
+    async fn create_data_channel(
         &self,
         task_name: String,
-        target_checkpoint: u64,
         storage: P,
-        filter: F,
-        data_mapper: M,
-    ) -> Result<(), anyhow::Error>
-    where
-        F: DataFilter<CheckpointTxnData> + 'static,
-        M: DataMapper<CheckpointTxnData, R> + 'static,
-    {
+        target_checkpoint: u64,
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<CheckpointTxnData>), Error> {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let progress_store = ProgressStoreWrapper {
             store: storage.clone(),
             exit_checkpoint: target_checkpoint,
             exit_sender: Some(exit_sender),
         };
-
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
-        let worker = IndexerWorker::new(storage, filter, data_mapper);
+        let (data_sender, data_receiver) = metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&[&task_name]),
+        );
+        let worker = IndexerWorker::new(data_sender);
         let worker_pool = WorkerPool::new(worker, task_name, self.concurrency);
         executor.register(worker_pool).await?;
-        executor
-            .run(
-                self.checkpoint_path.clone(),
-                Some(self.remote_store_url.clone()),
-                vec![], // optional remote store access options
-                ReaderOptions::default(),
-                exit_receiver,
-            )
-            .await?;
-        Ok(())
+        let checkpoint_path = self.checkpoint_path.clone();
+        let remote_store_url = self.remote_store_url.clone();
+        let join_handle = spawn_monitored_task!(async {
+            executor
+                .run(
+                    checkpoint_path,
+                    Some(remote_store_url),
+                    vec![], // optional remote store access options
+                    ReaderOptions::default(),
+                    exit_receiver,
+                )
+                .await?;
+            Ok(())
+        });
+        Ok((join_handle, data_receiver))
+    }
+
+    fn get_block_number((_, block_number, _): &CheckpointTxnData) -> u64 {
+        *block_number
     }
 }
 
@@ -337,7 +377,7 @@ pub trait DataMapper<T, R>: Sync + Send {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
 }
 
-pub struct ProgressStoreWrapper<P> {
+struct ProgressStoreWrapper<P> {
     pub store: P,
     pub exit_checkpoint: u64,
     pub exit_sender: Option<Sender<()>>,
@@ -346,12 +386,12 @@ pub struct ProgressStoreWrapper<P> {
 #[async_trait]
 impl<P: IndexerProgressStore> ProgressStore for ProgressStoreWrapper<P> {
     async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber, anyhow::Error> {
-        self.store.load(task_name).await
+        self.store.load_progress(task_name).await
     }
 
     async fn save(
         &mut self,
-        task_name: String,
+        _task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         if checkpoint_number >= self.exit_checkpoint {
@@ -359,42 +399,27 @@ impl<P: IndexerProgressStore> ProgressStore for ProgressStoreWrapper<P> {
                 let _ = sender.send(());
             }
         }
-        self.store.save(task_name, checkpoint_number).await
+        Ok(())
     }
 }
 
-pub struct IndexerWorker<F, M, P, T, R> {
-    filter: F,
-    data_mapper: M,
-    persistent: P,
-    phantom_data: PhantomData<T>,
-    phantom_data2: PhantomData<R>,
+pub struct IndexerWorker<T> {
+    data_sender: metered_channel::Sender<T>,
 }
 
-impl<F, M, P, T, R> IndexerWorker<F, M, P, T, R> {
-    pub fn new(persistent: P, filter: F, data_mapper: M) -> Self {
-        Self {
-            filter,
-            persistent,
-            data_mapper,
-            phantom_data: Default::default(),
-            phantom_data2: Default::default(),
-        }
+impl<T> IndexerWorker<T> {
+    pub fn new(data_sender: metered_channel::Sender<T>) -> Self {
+        Self { data_sender }
     }
 }
 
 pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 
 #[async_trait]
-impl<F, M, P, R: Sync + Send> Worker for IndexerWorker<F, M, P, CheckpointTxnData, R>
-where
-    F: DataFilter<CheckpointTxnData>,
-    M: DataMapper<CheckpointTxnData, R>,
-    P: Persistent<R>,
-{
+impl Worker for IndexerWorker<CheckpointTxnData> {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
         info!(
-            "Processing checkpoint [{}] {}: {}",
+            "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
             checkpoint.checkpoint_summary.sequence_number,
             checkpoint.transactions.len(),
@@ -402,24 +427,11 @@ where
         let checkpoint_num = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
-        let bridge_data = checkpoint
-            .transactions
-            .into_iter()
-            .filter(|data| {
-                self.filter
-                    .filter(&(data.clone(), checkpoint_num, timestamp_ms))
-            })
-            .try_fold(vec![], |mut result, txn| {
-                result.append(&mut self.data_mapper.map((txn, checkpoint_num, timestamp_ms))?);
-                Ok::<_, anyhow::Error>(result)
-            })?;
-
-        self.persistent.write(bridge_data).tap_ok(|_| {
-            info!("Processed checkpoint [{}] successfully", checkpoint_num,);
-            // TODO
-            /*            self.metrics
-            .last_committed_sui_checkpoint
-            .set(checkpoint_num as i64);*/
-        })
+        for transaction in checkpoint.transactions {
+            self.data_sender
+                .send((transaction, checkpoint_num, timestamp_ms))
+                .await?
+        }
+        Ok(())
     }
 }

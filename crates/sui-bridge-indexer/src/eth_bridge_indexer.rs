@@ -10,17 +10,18 @@ use async_trait::async_trait;
 use ethers::prelude::Transaction;
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::{Address as EthAddress, Block, H256};
+use tokio::task::JoinHandle;
 use tracing::info;
 
+use mysten_metrics::metered_channel::Receiver;
+use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::{EthEvent, EthLog};
 
-use crate::indexer_builder::{
-    DataFilter, DataMapper, Datasource, IndexerProgressStore, Persistent,
-};
+use crate::indexer_builder::{DataMapper, Datasource, IndexerProgressStore};
 use crate::sui_bridge_indexer::PgBridgePersistent;
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
@@ -51,18 +52,12 @@ impl EthFinalizedDatasource {
 
 #[async_trait]
 impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedDatasource {
-    async fn start_ingestion_task<F, M>(
+    async fn create_data_channel(
         &self,
         task_name: String,
+        storage: PgBridgePersistent,
         target_checkpoint: u64,
-        mut storage: PgBridgePersistent,
-        _filter: F,
-        data_mapper: M,
-    ) -> Result<(), Error>
-    where
-        F: DataFilter<EthData> + 'static,
-        M: DataMapper<EthData, ProcessedTxnData> + 'static,
-    {
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<EthData>), Error> {
         let eth_client = Arc::new(
             EthClient::<Http>::new(
                 &self.eth_rpc_url,
@@ -77,7 +72,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                 .interval(std::time::Duration::from_millis(2000)),
         );
 
-        let newest_finalized_block = storage.load(task_name.clone()).await?;
+        let newest_finalized_block = storage.load_progress(task_name.clone()).await?;
         info!("Starting from finalized block: {}", newest_finalized_block);
 
         let finalized_contract_addresses =
@@ -89,22 +84,35 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                 .await
                 .map_err(|e| anyhow!(format!("{e:?}")))?;
 
-        'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
-            // TODO: This for-loop can be optimzied to group tx / block info
-            // and reduce the queries issued to eth full node
-            for log in logs.iter() {
-                let block_number = log.block_number();
-                let block = provider.get_block(block_number).await?.unwrap();
-                let tx_hash = log.tx_hash();
-                let transaction = provider.get_transaction(tx_hash).await?.unwrap();
-                storage.write(data_mapper.map((log.clone(), block, transaction))?)?;
-                storage.save(task_name.clone(), block_number).await?;
-                if log.block_number >= target_checkpoint {
-                    break 'outer;
+        let (data_sender, data_receiver) = metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&[&task_name]),
+        );
+        let handle = spawn_monitored_task!(async {
+            'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
+                // TODO: This for-loop can be optimzied to group tx / block info
+                // and reduce the queries issued to eth full node
+                for log in logs.iter() {
+                    let block_number = log.block_number();
+                    let block = provider.get_block(block_number).await?.unwrap();
+                    let tx_hash = log.tx_hash();
+                    let transaction = provider.get_transaction(tx_hash).await?.unwrap();
+                    data_sender.send((log.clone(), block, transaction)).await?;
+                    if log.block_number >= target_checkpoint {
+                        break 'outer;
+                    }
                 }
             }
-        }
-        Ok(())
+            Ok::<_, Error>(())
+        });
+        Ok((handle, data_receiver))
+    }
+
+    fn get_block_number((log, _, _): &EthData) -> u64 {
+        log.block_number
     }
 }
 

@@ -76,7 +76,7 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
 
 #[async_trait]
 impl IndexerProgressStore for PgBridgePersistent {
-    async fn load(&self, task_name: String) -> anyhow::Result<u64> {
+    async fn load_progress(&self, task_name: String) -> anyhow::Result<u64> {
         let mut conn = self.pool.get()?;
         let cp: Option<models::ProgressStore> = dsl::progress_store
             .find(&task_name)
@@ -88,7 +88,11 @@ impl IndexerProgressStore for PgBridgePersistent {
             .checkpoint as u64)
     }
 
-    async fn save(&mut self, task_name: String, checkpoint_number: u64) -> anyhow::Result<()> {
+    async fn save_progress(
+        &mut self,
+        task_name: String,
+        checkpoint_number: u64,
+    ) -> anyhow::Result<()> {
         let mut conn = self.pool.get()?;
         diesel::insert_into(schema::progress_store::table)
             .values(&models::ProgressStore {
