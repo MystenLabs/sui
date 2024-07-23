@@ -6,7 +6,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-
+use futures::future::AbortHandle;
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tracing::info;
@@ -25,13 +25,13 @@ async fn main() -> Result<(), IndexerError> {
         .with_env()
         .init();
     let m = MultiProgress::new();
-    let cred_path = env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH").unwrap_or(
-        "/Users/gegao/Desktop/ge-sa.json".to_string()
-    );
+    // let cred_path = env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH").unwrap_or(
+    //     "/Users/gegao/Desktop/ge-sa.json".to_string()
+    // );
     let remote_store_config = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::GCS),
         bucket: Some("mysten-mainnet-formal".to_string()),
-        google_service_account: Some(cred_path),
+        google_service_account: None,
         object_store_connection_limit: 200,
         no_sign_request: false,
         ..Default::default()
@@ -56,8 +56,8 @@ async fn main() -> Result<(), IndexerError> {
         ..Default::default()
     };
 
-    StateSnapshotReaderV1::new(
-        400,
+    let mut reader = StateSnapshotReaderV1::new(
+        421,
         &remote_store_config,
         &local_store_config,
         usize::MAX,
@@ -65,6 +65,11 @@ async fn main() -> Result<(), IndexerError> {
         m.clone(),
     ).await.unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
     info!("Finished reading snapshot");
+
+    let (sha3_digests, num_part_files) = reader.download_parts().await?;
+    let (_abort_handle, abort_registration) = AbortHandle::new_pair();
+    reader.sync_live_objects_to_indexer(abort_registration, sha3_digests)
+            .await?;
 
     // let mut indexer_config = IndexerConfig::parse();
     // // TODO: remove. Temporary safeguard to migrate to `rpc_client_url` usage

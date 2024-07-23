@@ -177,21 +177,25 @@ impl StateSnapshotReaderV1 {
         abort_registration: AbortRegistration,
         sender: Option<tokio::sync::mpsc::Sender<(Accumulator, u64)>>,
     ) -> Result<()> {
-        // This computes and stores the sha3 digest of object references in REFERENCE file for each
-        // bucket partition. When downloading objects, we will match sha3 digest of object references
-        // per *.obj file against this. We do this so during restore we can pre fetch object
-        // references and start building state accumulator and fail early if the state root hash
-        // doesn't match but we still need to ensure that objects match references exactly.
+        let (sha3_digests, num_part_files) = self.download_parts().await?;
+        let accum_handle =
+            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
+        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
+            .await?;
+        if let Some(handle) = accum_handle {
+            handle.await?;
+        }
+        Ok(())
+    }
+
+    pub async fn download_parts(&mut self) -> Result<(Arc<Mutex<BTreeMap<u32, BTreeMap<u32, [u8; 32]>>>>, usize), anyhow::Error> {
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
-
         let num_part_files = self
             .ref_files
             .values()
             .map(|part_files| part_files.len())
             .sum::<usize>();
-
-        // Generate checksums
         info!("Computing checksums");
         let checksum_progress_bar = self.m.add(
             ProgressBar::new(num_part_files as u64).with_style(
@@ -201,7 +205,6 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
-
         for (bucket, part_files) in self.ref_files.clone().iter() {
             for (part, _part_file) in part_files.iter() {
                 let mut sha3_digests = sha3_digests.lock().await;
@@ -229,19 +232,9 @@ impl StateSnapshotReaderV1 {
             }
         }
         checksum_progress_bar.finish_with_message("Checksumming complete");
-
-        let accum_handle =
-            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
-
-        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
-            .await?;
-
-        if let Some(handle) = accum_handle {
-            handle.await?;
-        }
-        Ok(())
+        Ok((sha3_digests, num_part_files))
     }
-
+    
     fn spawn_accumulation_tasks(
         &self,
         sender: tokio::sync::mpsc::Sender<(Accumulator, u64)>,
@@ -435,6 +428,134 @@ impl StateSnapshotReaderV1 {
                                     &sha3_digest,
                                 )
                                 .expect("Failed to insert live objects");
+                            });
+                        downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
+                        obj_progress_bar_clone.inc(1);
+                        obj_progress_bar_clone.set_message(format!(
+                            "Download speed: {} MiB/s",
+                            downloaded_bytes.load(Ordering::Relaxed) as f64
+                                / (1024 * 1024) as f64
+                                / instant.elapsed().as_secs_f64(),
+                        ));
+                        futures::future::ready(result)
+                    })
+                    .await
+            },
+            abort_registration,
+        )
+        .await?;
+        obj_progress_bar.finish_with_message("Objects download complete");
+        ret
+    }
+
+
+    pub async fn sync_live_objects_to_indexer(
+        &self,
+        abort_registration: AbortRegistration,
+        sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
+    ) -> Result<(), anyhow::Error> {
+        let epoch_dir = self.epoch_dir();
+        let concurrency = self.concurrency;
+        let threshold = self.indirect_objects_threshold;
+        let remote_object_store = self.remote_object_store.clone();
+        let input_files: Vec<_> = self
+            .object_files
+            .iter()
+            .flat_map(|(bucket, parts)| {
+                parts
+                    .clone()
+                    .into_iter()
+                    .map(|entry| (bucket, entry))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let obj_progress_bar = self.m.add(
+            ProgressBar::new(input_files.len() as u64).with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} .obj files done ({msg})",
+                )
+                .unwrap(),
+            ),
+        );
+        let obj_progress_bar_clone = obj_progress_bar.clone();
+        let instant = Instant::now();
+        let downloaded_bytes = AtomicUsize::new(0);
+
+        let ret = Abortable::new(
+            async move {
+                futures::stream::iter(input_files.iter())
+                    .map(|(bucket, (part_num, file_metadata))| {
+                        let epoch_dir = epoch_dir.clone();
+                        let file_path = file_metadata.file_path(&epoch_dir);
+                        let remote_object_store = remote_object_store.clone();
+                        let sha3_digests_cloned = sha3_digests.clone();
+                        async move {
+                            // Download object file with retries
+                            let max_timeout = Duration::from_secs(30);
+                            let mut timeout = Duration::from_secs(2);
+                            timeout += timeout / 2;
+                            timeout = std::cmp::min(max_timeout, timeout);
+                            let mut attempts = 0usize;
+                            let bytes = loop {
+                                match remote_object_store.get_bytes(&file_path).await {
+                                    Ok(bytes) => {
+                                        break bytes;
+                                    }
+                                    Err(err) => {
+                                        error!(
+                                            "Obj {} .get failed (attempt {}): {}",
+                                            file_metadata.file_path(&epoch_dir),
+                                            attempts,
+                                            err,
+                                        );
+                                        if timeout > max_timeout {
+                                            panic!(
+                                                "Failed to get obj file after {} attempts",
+                                                attempts
+                                            );
+                                        } else {
+                                            attempts += 1;
+                                            tokio::time::sleep(timeout).await;
+                                            timeout += timeout / 2;
+                                            continue;
+                                        }
+                                    }
+                                }
+                            };
+
+                            let sha3_digest = sha3_digests_cloned.lock().await;
+                            let bucket_map = sha3_digest
+                                .get(bucket)
+                                .expect("Bucket not in digest map")
+                                .clone();
+                            let sha3_digest = *bucket_map
+                                .get(part_num)
+                                .expect("sha3 digest not in bucket map");
+                            Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
+                                bytes,
+                                (*file_metadata).clone(),
+                                sha3_digest,
+                            ))
+                        }
+                    })
+                    .boxed()
+                    .buffer_unordered(concurrency)
+                    .try_for_each(|(bytes, file_metadata, sha3_digest)| {
+                        let bytes_len = bytes.len();
+                        let result: Result<(), anyhow::Error> =
+                            LiveObjectIter::new(&file_metadata, bytes).map(|obj_iter| {
+                                // AuthorityStore::bulk_insert_live_objects(
+                                //     perpetual_db,
+                                //     obj_iter,
+                                //     threshold,
+                                //     &sha3_digest,
+                                // )
+                                // .expect("Failed to insert live objects");
+                                let mut count = 0;
+                                for object in obj_iter {
+                                    count += 1;
+                                }
+                                info!("Inserted {} objects from iter", count);
                             });
                         downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
                         obj_progress_bar_clone.inc(1);
