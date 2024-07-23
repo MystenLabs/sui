@@ -695,7 +695,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
     fn start_fetch_own_last_block_task(&mut self) {
         const FETCH_OWN_BLOCK_RETRY_DELAY: Duration = Duration::from_millis(1_000);
-        const RETRY_DELAY_STEP: Duration = Duration::from_millis(1_000);
+        const MAX_RETRY_DELAY_STEP: Duration = Duration::from_millis(4_000);
 
         let context = self.context.clone();
         let network_client = self.network_client.clone();
@@ -743,6 +743,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let mut total_stake;
                 let mut highest_round;
                 let mut retries = 0;
+                let mut retry_delay_step = Duration::from_millis(500);
                 'main:loop {
                     total_stake = 0;
                     highest_round = 0;
@@ -802,7 +803,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         context.metrics.node_metrics.sync_last_known_own_block_retries.inc();
                         warn!("Not enough stake: {} out of {} total stake returned acceptable results for our own last block with highest round {}. Will now retry {retries}.", total_stake, context.committee.total_stake(), highest_round);
 
-                        sleep(RETRY_DELAY_STEP).await;
+                        sleep(retry_delay_step).await;
+
+                        retry_delay_step = Duration::from_secs_f64(retry_delay_step.as_secs_f64() * 1.5);
+                        retry_delay_step = retry_delay_step.min(MAX_RETRY_DELAY_STEP);
                     }
                 }
 
