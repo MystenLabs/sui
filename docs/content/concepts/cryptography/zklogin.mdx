@@ -59,7 +59,7 @@ In rough sketches, the zkLogin protocol relies on the following:
 
 1. Application frontend: This describes the wallet or frontend application that supports zkLogin. This frontend is responsible for storing the ephemeral private key, directing users to complete the OAuth login flow, creating and signing a zkLogin transaction.
 
-2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [integration guide](#integration-guide) for other strategies to maintain salt.
+2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [zkLogin Integration Guide](../../guides/developer/cryptography/zklogin-integration.mdx) for other strategies to maintain salt.
 
 3. ZK Proving Service: This is a backend service responsible for generating ZK proofs based on JWT, JWT randomness, user salt and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction.
 
