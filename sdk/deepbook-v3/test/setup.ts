@@ -12,6 +12,7 @@ import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 
 import type { CoinMap } from '../src/utils/constants.js';
+import { writeToml } from './helper/toml.js';
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
