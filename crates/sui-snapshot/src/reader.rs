@@ -105,6 +105,7 @@ impl StateSnapshotReaderV1 {
         if manifest.epoch() != epoch {
             return Err(anyhow!("Download manifest is not for epoch: {}", epoch,));
         }
+        info!("before object_files");
         let mut object_files = BTreeMap::new();
         let mut ref_files = BTreeMap::new();
         for file_metadata in manifest.file_metadata() {
@@ -113,12 +114,14 @@ impl StateSnapshotReaderV1 {
                     let entry = object_files
                         .entry(file_metadata.bucket_num)
                         .or_insert_with(BTreeMap::new);
+                    info!("insert one object file");
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
                 FileType::Reference => {
                     let entry = ref_files
                         .entry(file_metadata.bucket_num)
                         .or_insert_with(BTreeMap::new);
+                    info!("insert one ref file");
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
             }
@@ -143,6 +146,7 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
+        info!("before copy_files {:?}", files);
         copy_files(
             &files,
             &files,
@@ -153,6 +157,7 @@ impl StateSnapshotReaderV1 {
         )
         .await?;
         progress_bar.finish_with_message("ref files download complete");
+        info!("before return");
         Ok(StateSnapshotReaderV1 {
             epoch,
             local_staging_dir_root,
