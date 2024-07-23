@@ -160,8 +160,12 @@ where
         boot_counter: Arc<ConsensusAuthorityBootCounter>,
     ) -> Self {
         info!(
-            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}",
-            own_index, committee, parameters, protocol_config.version
+            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}\nBoot counter: {:?}",
+            own_index,
+            committee,
+            parameters,
+            protocol_config.version,
+            boot_counter.load(Ordering::SeqCst)
         );
         assert!(committee.is_valid_index(own_index));
         let context = Arc::new(Context::new(

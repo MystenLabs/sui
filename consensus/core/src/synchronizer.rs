@@ -1038,7 +1038,7 @@ mod tests {
     struct MockNetworkClient {
         fetch_blocks_requests: Mutex<BTreeMap<FetchRequestKey, FetchRequestResponse>>,
         fetch_latest_blocks_requests:
-            Mutex<BTreeMap<FetchLatestBlockKey, FetchLatestBlockResponse>>,
+            Mutex<BTreeMap<FetchLatestBlockKey, Vec<FetchLatestBlockResponse>>>,
     }
 
     impl MockNetworkClient {
@@ -1064,7 +1064,14 @@ mod tests {
             latency: Option<Duration>,
         ) {
             let mut lock = self.fetch_latest_blocks_requests.lock().await;
-            lock.insert((peer, authorities), (blocks, latency));
+            lock.entry((peer, authorities))
+                .or_default()
+                .push((blocks, latency));
+        }
+
+        async fn fetch_latest_blocks_pending_calls(&self) -> usize {
+            let lock = self.fetch_latest_blocks_requests.lock().await;
+            lock.len()
         }
     }
 
@@ -1133,21 +1140,26 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             let mut lock = self.fetch_latest_blocks_requests.lock().await;
-            let response = lock
-                .remove(&(peer, authorities))
+            let mut responses = lock
+                .remove(&(peer, authorities.clone()))
                 .expect("Unexpected fetch blocks request made");
 
+            let response = responses.remove(0);
             let serialised = response
                 .0
                 .into_iter()
                 .map(|block| block.serialized().clone())
                 .collect::<Vec<_>>();
 
-            if let Some(latency) = response.1 {
-                sleep(latency).await;
+            if !responses.is_empty() {
+                lock.insert((peer, authorities), responses);
             }
 
             drop(lock);
+
+            if let Some(latency) = response.1 {
+                sleep(latency).await;
+            }
 
             Ok(serialised)
         }
@@ -1524,9 +1536,18 @@ mod tests {
 
         // Now set different latest blocks for the peers
         // For peer 1 we give the block of round 10 (highest)
+        let block_1 = expected_blocks.pop().unwrap();
         network_client
             .stub_fetch_latest_blocks(
-                vec![expected_blocks.pop().unwrap()],
+                vec![block_1.clone()],
+                AuthorityIndex::new_for_test(1),
+                vec![our_index],
+                None,
+            )
+            .await;
+        network_client
+            .stub_fetch_latest_blocks(
+                vec![block_1],
                 AuthorityIndex::new_for_test(1),
                 vec![our_index],
                 None,
@@ -1534,9 +1555,18 @@ mod tests {
             .await;
 
         // For peer 2 we give the block of round 9
+        let block_2 = expected_blocks.pop().unwrap();
         network_client
             .stub_fetch_latest_blocks(
-                vec![expected_blocks.pop().unwrap()],
+                vec![block_2.clone()],
+                AuthorityIndex::new_for_test(2),
+                vec![our_index],
+                Some(Duration::from_secs(10)),
+            )
+            .await;
+        network_client
+            .stub_fetch_latest_blocks(
+                vec![block_2],
                 AuthorityIndex::new_for_test(2),
                 vec![our_index],
                 None,
@@ -1544,6 +1574,14 @@ mod tests {
             .await;
 
         // For peer 3 we don't give any block - and it should return an empty vector
+        network_client
+            .stub_fetch_latest_blocks(
+                vec![],
+                AuthorityIndex::new_for_test(3),
+                vec![our_index],
+                Some(Duration::from_secs(10)),
+            )
+            .await;
         network_client
             .stub_fetch_latest_blocks(
                 vec![],
@@ -1571,6 +1609,19 @@ mod tests {
         assert_eq!(
             core_dispatcher.get_last_own_proposed_round().await,
             vec![10]
+        );
+
+        // Ensure that all the requests have been called
+        assert_eq!(network_client.fetch_latest_blocks_pending_calls().await, 0);
+
+        // And we got one retry
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .sync_last_known_own_block_retries
+                .get(),
+            1
         );
 
         // Ensure that no panic occurred
