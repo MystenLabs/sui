@@ -69,7 +69,7 @@ export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
 	console.log(tokenSourcesPath);
 	writeToml(tokenSourcesPath, '0x0', 'token');
 	let deepRes = await publishPackage(tokenSourcesPath, toolbox);
-	writeToml(tokenSourcesPath, deepRes.packageId, './data/token');
+	writeToml(tokenSourcesPath, deepRes.packageId, 'token');
 
 	const usdcSourcePath = path.join(__dirname, './data/usdc');
 	const usdcRes = await publishPackage(usdcSourcePath, toolbox);
@@ -101,7 +101,7 @@ export async function publishDeepBook(toolbox?: TestToolbox) {
 		toolbox = await setupSuiClient();
 	}
 
-	const deepbookSourcesPath = path.join(__dirname, 'data/deepbook');
+	const deepbookSourcesPath = path.join(__dirname, './data/deepbook');
 	let deepbookRes = await publishPackage(deepbookSourcesPath, toolbox);
 
 	const deepbookPackageId = deepbookRes.packageId;
