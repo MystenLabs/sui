@@ -261,9 +261,14 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
 //**************************************************************************************************
 
 fn function(context: &mut Context, fdef: &T::Function) {
-    function_signature(context, &fdef.signature);
-    if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
-        sequence(context, seq)
+    match &fdef.body.value {
+        T::FunctionBody_::Defined(seq) => {
+            function_signature(context, &fdef.signature);
+            sequence(context, seq)
+        }
+        T::FunctionBody_::Native => function_signature(context, &fdef.signature),
+        // macros do not add dependencies
+        T::FunctionBody_::Macro => (),
     }
 }
 
