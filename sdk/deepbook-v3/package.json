@@ -39,6 +39,7 @@
 		"@mysten/sui": "workspace:*"
 	},
 	"devDependencies": {
+		"@iarna/toml": "^2.2.5",
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.14.10",
 		"tmp": "^0.2.3",
@@ -47,7 +48,6 @@
 		"typescript": "^5.5.3",
 		"vite": "^5.3.3",
 		"vitest": "^2.0.1",
-		"wait-on": "^7.2.0",
-		"@iarna/toml": "^2.2.5"
+		"wait-on": "^7.2.0"
 	}
 }
