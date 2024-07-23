@@ -7,7 +7,8 @@ use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::Config;
 use anyhow::Result;
-use narwhal_config::Parameters as ConsensusParameters;
+use consensus_config::Parameters as ConsensusParameters;
+use narwhal_config::Parameters as NarwhalParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -428,7 +429,9 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    pub narwhal_config: ConsensusParameters,
+    pub narwhal_config: NarwhalParameters,
+
+    pub parameters: ConsensusParameters,
 }
 
 impl ConsensusConfig {
@@ -449,7 +452,7 @@ impl ConsensusConfig {
             .map(Duration::from_millis)
     }
 
-    pub fn narwhal_config(&self) -> &ConsensusParameters {
+    pub fn narwhal_config(&self) -> &NarwhalParameters {
         &self.narwhal_config
     }
 }

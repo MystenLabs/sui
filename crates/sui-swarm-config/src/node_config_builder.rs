@@ -154,6 +154,7 @@ impl ValidatorConfigBuilder {
                 },
                 ..Default::default()
             },
+            parameters: Default::default(),
         };
 
         let p2p_config = P2pConfig {
