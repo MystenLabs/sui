@@ -30,10 +30,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
-use typed_store::rocks::DBBatch;
 use typed_store::Map;
 
-use crate::authority::authority_per_epoch_store::{AuthorityEpochTables, AuthorityPerEpochStore};
+use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, ConsensusCommitOutput};
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::consensus_adapter::SubmitToConsensus;
 
@@ -61,7 +60,7 @@ impl VersionedProcessedMessage {
         }
     }
 
-    fn unwrap_v1(self) -> dkg_v1::ProcessedMessage<PkG, EncG> {
+    pub fn unwrap_v1(self) -> dkg_v1::ProcessedMessage<PkG, EncG> {
         if let VersionedProcessedMessage::V1(msg) = self {
             msg
         } else {
@@ -440,7 +439,11 @@ impl RandomnessManager {
 
     /// Processes all received messages and advances the randomness DKG state machine when possible,
     /// sending out a dkg::Confirmation and generating final output.
-    pub async fn advance_dkg(&mut self, batch: &mut DBBatch, round: Round) -> SuiResult {
+    pub(crate) async fn advance_dkg(
+        &mut self,
+        consensus_output: &mut ConsensusCommitOutput,
+        round: Round,
+    ) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
         // Once we have enough Messages, send a Confirmation.
@@ -453,10 +456,7 @@ impl RandomnessManager {
                 if let Ok(Some(processed)) = res {
                     self.processed_messages
                         .insert(processed.sender(), processed.clone());
-                    batch.insert_batch(
-                        &epoch_store.tables()?.dkg_processed_messages_v2,
-                        std::iter::once((processed.sender(), processed)),
-                    )?;
+                    consensus_output.insert_dkg_processed_message(processed);
                 }
             }
 
@@ -476,10 +476,7 @@ impl RandomnessManager {
                     if self.used_messages.set(used_msgs.clone()).is_err() {
                         error!("BUG: used_messages should only ever be set once");
                     }
-                    batch.insert_batch(
-                        &epoch_store.tables()?.dkg_used_messages_v2,
-                        std::iter::once((SINGLETON_KEY, used_msgs)),
-                    )?;
+                    consensus_output.insert_dkg_used_messages(used_msgs);
 
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
                         epoch_store.name,
@@ -549,10 +546,7 @@ impl RandomnessManager {
                         self.party.t(),
                         None,
                     );
-                    batch.insert_batch(
-                        &epoch_store.tables()?.dkg_output,
-                        std::iter::once((SINGLETON_KEY, output)),
-                    )?;
+                    consensus_output.set_dkg_output(output);
                 }
                 Err(FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
@@ -628,9 +622,9 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
-    pub fn add_confirmation(
+    pub(crate) fn add_confirmation(
         &mut self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         authority: &AuthorityName,
         conf: VersionedDkgConfirmation,
     ) -> SuiResult {
@@ -659,10 +653,7 @@ impl RandomnessManager {
             return Ok(());
         }
         self.confirmations.insert(conf.sender(), conf.clone());
-        batch.insert_batch(
-            &self.tables()?.dkg_confirmations_v2,
-            std::iter::once((conf.sender(), conf)),
-        )?;
+        output.insert_dkg_confirmation(conf);
         Ok(())
     }
 
@@ -670,10 +661,10 @@ impl RandomnessManager {
     /// elapsed, or returns None if not yet ready (based on ProtocolConfig setting). Once the given
     /// batch is written, `generate_randomness` must be called to start the process. On restart,
     /// any reserved rounds for which the batch was written will automatically be resumed.
-    pub fn reserve_next_randomness(
+    pub(crate) fn reserve_next_randomness(
         &mut self,
         commit_timestamp: TimestampMs,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
     ) -> SuiResult<Option<RandomnessRound>> {
         let epoch_store = self.epoch_store()?;
         let tables = epoch_store.tables()?;
@@ -698,14 +689,7 @@ impl RandomnessManager {
             .checked_add(1)
             .expect("RandomnessRound should not overflow");
 
-        batch.insert_batch(
-            &tables.randomness_next_round,
-            std::iter::once((SINGLETON_KEY, self.next_randomness_round)),
-        )?;
-        batch.insert_batch(
-            &tables.randomness_last_round_timestamp,
-            std::iter::once((SINGLETON_KEY, commit_timestamp)),
-        )?;
+        output.reserve_next_randomness_round(self.next_randomness_round, commit_timestamp);
 
         Ok(Some(randomness_round))
     }
@@ -738,10 +722,6 @@ impl RandomnessManager {
         self.epoch_store
             .upgrade()
             .ok_or(SuiError::EpochEnded(self.epoch))
-    }
-
-    fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
-        self.epoch_store()?.tables()
     }
 
     fn randomness_dkg_info_from_committee(
@@ -916,16 +896,18 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i].db_batch_for_test();
+            let mut output = ConsensusCommitOutput::new();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
                     .unwrap();
             }
             randomness_managers[i]
-                .advance_dkg(&mut batch, 0)
+                .advance_dkg(&mut output, 0)
                 .await
                 .unwrap();
+            let mut batch = epoch_stores[i].db_batch_for_test();
+            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
             batch.write().unwrap();
         }
 
@@ -944,16 +926,18 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i].db_batch_for_test();
+            let mut output = ConsensusCommitOutput::new();
             for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
                 randomness_managers[i]
-                    .add_confirmation(&mut batch, &epoch_stores[j].name, dkg_confirmation)
+                    .add_confirmation(&mut output, &epoch_stores[j].name, dkg_confirmation)
                     .unwrap();
             }
             randomness_managers[i]
-                .advance_dkg(&mut batch, 0)
+                .advance_dkg(&mut output, 0)
                 .await
                 .unwrap();
+            let mut batch = epoch_stores[i].db_batch_for_test();
+            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
             batch.write().unwrap();
         }
 
@@ -1044,16 +1028,18 @@ mod tests {
             }
         }
         for i in 0..randomness_managers.len() {
-            let mut batch = epoch_stores[i].db_batch_for_test();
+            let mut output = ConsensusCommitOutput::new();
             for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
                 randomness_managers[i]
                     .add_message(&epoch_stores[j].name, dkg_message)
                     .unwrap();
             }
             randomness_managers[i]
-                .advance_dkg(&mut batch, u64::MAX)
+                .advance_dkg(&mut output, u64::MAX)
                 .await
                 .unwrap();
+            let mut batch = epoch_stores[i].db_batch_for_test();
+            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
             batch.write().unwrap();
         }
 
