@@ -7,7 +7,6 @@ use core::panic;
 use fastcrypto::traits::ToFromBytes;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
-use std::str::from_utf8;
 use std::time::Duration;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::DevInspectResults;
@@ -231,24 +230,17 @@ where
         // TODO: move this to MoveTypeBridgeCommittee
         for (_, member) in move_type_bridge_committee.members {
             let MoveTypeCommitteeMember {
-                sui_address,
+                sui_address: _,
                 bridge_pubkey_bytes,
                 voting_power,
                 http_rest_url,
                 blocklisted,
             } = member;
             let pubkey = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes)?;
-            let base_url = from_utf8(&http_rest_url).unwrap_or_else(|_e| {
-                warn!(
-                    "Bridge authority address: {}, pubkey: {:?} has invalid http url: {:?}",
-                    sui_address, bridge_pubkey_bytes, http_rest_url
-                );
-                ""
-            });
             authorities.push(BridgeAuthority {
                 pubkey,
                 voting_power,
-                base_url: base_url.into(),
+                base_url: http_rest_url,
                 is_blocklisted: blocklisted,
             });
         }

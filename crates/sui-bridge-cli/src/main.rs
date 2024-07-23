@@ -328,26 +328,18 @@ async fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 let eth_address = BridgeAuthorityPublicKeyBytes::from(&pubkey).to_eth_address();
-                let Ok(url) = from_utf8(&http_rest_url) else {
-                    println!(
-                        "Invalid bridge http url for validator: {}: {:?}",
-                        sui_address, http_rest_url
-                    );
-                    continue;
-                };
-                let url = url.to_string();
 
                 let name = names.get(&sui_address).unwrap();
                 if ping {
                     let client_clone = client.clone();
-                    ping_tasks.push(client_clone.get(url.clone()).send());
+                    ping_tasks.push(client_clone.get(http_rest_url.clone()).send());
                 }
                 authorities.push((
                     name,
                     sui_address,
                     pubkey,
                     eth_address,
-                    url,
+                    http_rest_url,
                     voting_power,
                     blocklisted,
                 ));

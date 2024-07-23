@@ -418,9 +418,7 @@ pub struct MoveTypeCommitteeMember {
     #[serde_as(as = "Base64")]
     pub bridge_pubkey_bytes: Vec<u8>,
     pub voting_power: u64,
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Base64")]
-    pub http_rest_url: Vec<u8>,
+    pub http_rest_url: String,
     pub blocklisted: bool,
 }
 
