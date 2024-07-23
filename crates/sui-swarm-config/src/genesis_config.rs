@@ -49,7 +49,6 @@ pub struct ValidatorGenesisConfig {
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
     pub consensus_address: Multiaddr,
-    pub consensus_internal_worker_address: Option<Multiaddr>,
     #[serde(default = "default_stake")]
     pub stake: u64,
     pub name: Option<String>,
@@ -207,7 +206,6 @@ impl ValidatorGenesisConfigBuilder {
             narwhal_primary_address,
             narwhal_worker_address,
             consensus_address,
-            consensus_internal_worker_address: None,
             stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
             name: None,
         }

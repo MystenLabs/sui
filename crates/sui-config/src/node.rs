@@ -407,12 +407,8 @@ pub enum ConsensusProtocol {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusConfig {
-    pub address: Multiaddr,
+    // Base consensus DB path for all epochs.
     pub db_path: PathBuf,
-
-    /// Optional alternative address preferentially used by a primary to talk to its own worker.
-    /// For example, this could be used to connect to co-located workers over a private LAN address.
-    pub internal_worker_address: Option<Multiaddr>,
 
     /// Maximum number of pending transactions to submit to consensus, including those
     /// in submission wait.
@@ -429,6 +425,8 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
+    // Deprecated: Narwhal specific configs.
+    pub address: Multiaddr,
     pub narwhal_config: NarwhalParameters,
 
     pub parameters: ConsensusParameters,
