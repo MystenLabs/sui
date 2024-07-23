@@ -116,7 +116,10 @@ pub async fn copy_file<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
 ) -> Result<()> {
     let bytes = get(src_store, src).await?;
     if !bytes.is_empty() {
-        put(dest_store, dest, bytes).await
+        tracing::info!("before putting file: {:?}", src);
+        put(dest_store, dest, bytes).await?;
+        tracing::info!("after putting file: {:?}", src);
+        Ok(())
     } else {
         warn!("Not copying empty file: {:?}", src);
         Ok(())
