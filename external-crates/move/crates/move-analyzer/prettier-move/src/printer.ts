@@ -66,7 +66,11 @@ export function print(path: AstPath<Node>, options: ParserOptions & MoveOptions,
 
 	return [
 		printLeadingComment(path),
-		fn(path, options, print),
-		printTrailingComment(path)
+		// if the node has a `skipFormattingNode` property, we just return
+		// the text without formatting it
+		path.node.skipFormattingNode
+			? path.node.text
+			: fn(path, options, print),
+		printTrailingComment(path),
 	];
 }

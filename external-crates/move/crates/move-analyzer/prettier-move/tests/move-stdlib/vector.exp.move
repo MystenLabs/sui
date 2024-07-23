@@ -136,7 +136,7 @@ module std::vector {
         if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
 
         len = len - 1;
-        while (i < len) v.swap(i, { i = i + 1;i });
+        while (i < len) v.swap(i, { i = i + 1; i });
         v.pop_back()
     }
 

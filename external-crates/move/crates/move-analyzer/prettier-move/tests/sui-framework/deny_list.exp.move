@@ -193,6 +193,9 @@ module sui::deny_list {
     public fun new_for_testing(ctx: &mut TxContext): DenyList {
         let mut lists = bag::new(ctx);
         lists.add(COIN_INDEX, per_type_list(ctx));
-        DenyList { id: object::new(ctx), lists }
+        DenyList {
+            id: object::new(ctx),
+            lists,
+        }
     }
 }

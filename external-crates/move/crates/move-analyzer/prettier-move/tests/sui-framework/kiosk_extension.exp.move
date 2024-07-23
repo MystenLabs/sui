@@ -110,7 +110,11 @@ module sui::kiosk_extension {
         df::add(
             self.uid_mut_as_owner(cap),
             ExtensionKey<Ext> {},
-            Extension { storage: bag::new(ctx), permissions, is_enabled: true },
+            Extension {
+                storage: bag::new(ctx),
+                permissions,
+                is_enabled: true,
+            },
         )
     }
 

@@ -32,13 +32,22 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printBinaryOperator;
 		case Common.FieldIdentifier:
 			return printFieldIdentifier;
-		case Common.Annotation:
-			return printAnnotation;
 		case Common.Ability:
 			return printAbility;
 
 		case Common.TupleType:
 			return printTupleType;
+
+		// === Annotations ===
+
+		case Common.Annotation:
+			return printAnnotation;
+		case Common.AnnotationItem:
+			return printAnnotationItem;
+		case Common.AnnotationList:
+			return printAnnotationList;
+		case Common.AnnotationExpression:
+			return printAnnotationExpression;
 
 		// === Bindings ===
 
@@ -89,11 +98,17 @@ export enum Common {
 	FunctionTypeParameters = 'function_type_parameters',
 	BinaryOperator = 'binary_operator',
 	FieldIdentifier = 'field_identifier',
-	Annotation = 'annotation',
 	BlockIdentifier = 'block_identifier',
 
 	Ability = 'ability',
 	TupleType = 'tuple_type',
+
+	// === Annotations ===
+
+	Annotation = 'annotation',
+	AnnotationItem = 'annotation_item',
+	AnnotationList = 'annotation_list',
+	AnnotationExpression = 'annotation_expr',
 
 	// === Bindings ===
 
@@ -190,7 +205,49 @@ export function printFieldIdentifier(
  * Print `annotation` node.
  */
 export function printAnnotation(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return path.node.text;
+	return group([
+		'#',
+		list({ path, print, options, open: '[', close: ']' }),
+	]);
+}
+
+/**
+ * Print `annotation_item` node.
+ */
+export function printAnnotationItem(
+	path: AstPath<Node>,
+	options: ParserOptions,
+	print: printFn,
+): Doc {
+	return path.map(print, 'nonFormattingChildren');
+}
+
+export function printAnnotationList(
+	path: AstPath<Node>,
+	options: ParserOptions,
+	print: printFn,
+): Doc {
+	return [
+		path.call(print, 'nonFormattingChildren', 0),
+		list({ path, print, options, open: '(', close: ')', skipChildren: 1 })
+	];
+}
+
+/**
+ * Print `annotation_expr` node.
+ */
+export function printAnnotationExpression(
+	path: AstPath<Node>,
+	options: ParserOptions,
+	print: printFn,
+): Doc {
+	// allow `::module::Expression` in annotations
+	return join(' = ', path.map((path) => {
+		if (path.node.type === 'module_access' && path.node.previousSibling?.type == "::") {
+			return ['::', path.call(print)];
+		}
+		return path.call(print);
+	}, 'nonFormattingChildren'));
 }
 
 /**
@@ -248,13 +305,12 @@ function printBindFields(path: AstPath<Node>, options: ParserOptions, print: pri
 function printBindField(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	const nonFormatting = path.node.nonFormattingChildren;
 	const isMut = !!path.node.children.find((c) => c.text === 'mut');
-	// const rename = nonFormatting.length == 2;
 
 	if (nonFormatting.length == 1) {
-		return group([isMut ? 'mut ' : '', nonFormatting[0]!.text]);
+		return [isMut ? 'mut ' : '', nonFormatting[0]!.text];
 	}
 
-	return group([nonFormatting[0]!.text, isMut ? ': mut ' : ': ', nonFormatting[1]!.text]);
+	return [nonFormatting[0]!.text, isMut ? ': mut ' : ': ', nonFormatting[1]!.text];
 }
 
 /**
@@ -283,9 +339,12 @@ function printBindList(path: AstPath<Node>, options: ParserOptions, print: print
  * Print `bind_named_fields` node.
  */
 function printBindNamedFields(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return [' ', group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
-		shouldBreak: shouldBreakFirstChild(path),
-	})];
+	return [
+		' ',
+		group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }), {
+			shouldBreak: shouldBreakFirstChild(path),
+		}),
+	];
 }
 
 /**
@@ -348,7 +407,13 @@ function printFieldInitializeList(
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	return [' ', group(list({ path, print, options, open: '{', close: '}', addWhitespace: true }))];
+	return [
+		' ',
+		group(list({
+			path, print, options, open: '{', close: '}', addWhitespace: true }), {
+			shouldBreak: shouldBreakFirstChild(path),
+		}),
+	];
 }
 
 /**

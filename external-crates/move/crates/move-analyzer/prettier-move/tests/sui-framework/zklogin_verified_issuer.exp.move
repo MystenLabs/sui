@@ -53,7 +53,11 @@ module sui::zklogin_verified_issuer {
             EInvalidProof,
         );
         transfer::transfer(
-            VerifiedIssuer { id: object::new(ctx), owner: sender, issuer },
+            VerifiedIssuer {
+                id: object::new(ctx),
+                owner: sender,
+                issuer,
+            },
             sender,
         )
     }

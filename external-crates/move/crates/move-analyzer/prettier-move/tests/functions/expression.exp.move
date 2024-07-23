@@ -330,12 +330,9 @@ module prettier::expression {
     }
 
     fun annotate_expression() {
-        (expr: Type);
-        (
-            really_long_expression: ReallyLongType
-        ).say_something();
-        let a =
-            (call_expression(): Type);
+        annotation_expression;
+        annotation_expression.say_something();
+        let a = annotation_expression;
         let a: Type = call_expression();
     }
 
@@ -398,5 +395,14 @@ module prettier::expression {
             EDoesntQuiteWork,
         );
         say_hello::to_the_world!();
+    }
+
+    fun match_expression() {
+        match (x) {
+            NewEnum::V() => 0,
+            NewEnum::V1(a, b) => {},
+            NewEnum::V2 { x, y } => x,
+            NewEnum::V3 => 0,
+        }
     }
 }

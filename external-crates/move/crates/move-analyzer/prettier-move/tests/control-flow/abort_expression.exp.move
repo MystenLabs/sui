@@ -1,5 +1,5 @@
 // options:
-// printWidth: 20
+// printWidth: 40
 
 module prettier::abort_expression {
     fun abort_expression() {
@@ -9,12 +9,8 @@ module prettier::abort_expression {
         abort {
             10
         };
-        abort
-            100 +
-            300;
-        abort if (
-            condition
-        ) 100
+        abort 100 + 300;
+        abort if (condition) 100
         else 200;
     }
 }

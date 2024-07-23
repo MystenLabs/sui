@@ -25,7 +25,10 @@ module sui::object_table {
     public fun new<K: copy + drop + store, V: key + store>(
         ctx: &mut TxContext,
     ): ObjectTable<K, V> {
-        ObjectTable { id: object::new(ctx), size: 0 }
+        ObjectTable {
+            id: object::new(ctx),
+            size: 0,
+        }
     }
 
     /// Adds a key-value pair to the table `table: &mut ObjectTable<K, V>`

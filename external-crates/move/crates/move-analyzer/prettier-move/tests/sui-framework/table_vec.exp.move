@@ -15,7 +15,9 @@ module sui::table_vec {
 
     /// Create an empty TableVec.
     public fun empty<Element: store>(ctx: &mut TxContext): TableVec<Element> {
-        TableVec { contents: table::new(ctx) }
+        TableVec {
+            contents: table::new(ctx),
+        }
     }
 
     /// Return a TableVec of size one containing element `e`.

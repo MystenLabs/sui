@@ -20,6 +20,8 @@ module test::constants {
 
     const T: vector<u8> =
         b"hello, cruel world. you have been there a long time.";
+    const H: vector<u8> =
+        x"AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899";
 
     const C: u64 = {
         100 + 200 // trailing comment in a block

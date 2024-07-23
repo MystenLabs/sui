@@ -1,5 +1,5 @@
 // options:
-// printWidth: 20
+// printWidth: 40
 
 module prettier::abort_expression {
     fun abort_expression() {

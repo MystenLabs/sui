@@ -70,7 +70,7 @@ module foo::bar {
             return 'a x;
             break 'a x;
             return 'a x.foo!();
-            break 'a { x = x + 1;x };
+            break 'a { x = x + 1; x };
             continue 'a;
         };
         'a: loop {};

@@ -8,6 +8,7 @@ module prettier::expression {
         *&a = 100;
         a = (copy b);
         b = (move c);
+
         *df::borrow_mut<A, B>() = another_call();
         (a, b) = (1, 2);
 
@@ -164,6 +165,7 @@ module prettier::expression {
         say[0];
         double_index[variable][another][third_one];
         who_you_gonna_call[(first_arg, second_arg)];
+        result.push_back(copy data[i]);
     }
 
     fun expression_list() {
@@ -230,5 +232,14 @@ module prettier::expression {
         assert!<WithType, MultiEven>(module::call_something());
         assert!(module::call_something(), EDoesntQuiteWork);
         say_hello::to_the_world!();
+    }
+
+    fun match_expression() {
+        match (x) {
+            NewEnum::V() => 0,
+            NewEnum::V1(a, b) => {},
+            NewEnum::V2 { x, y } => x,
+            NewEnum::V3 => 0,
+        }
     }
 }

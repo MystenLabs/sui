@@ -186,9 +186,15 @@ module sui::display {
     fun create_internal<T: key>(ctx: &mut TxContext): Display<T> {
         let uid = object::new(ctx);
 
-        event::emit(DisplayCreated<T> { id: uid.to_inner() });
+        event::emit(DisplayCreated<T> {
+            id: uid.to_inner(),
+        });
 
-        Display { id: uid, fields: vec_map::empty(), version: 0 }
+        Display {
+            id: uid,
+            fields: vec_map::empty(),
+            version: 0,
+        }
     }
 
     /// Private method for inserting fields without security checks.

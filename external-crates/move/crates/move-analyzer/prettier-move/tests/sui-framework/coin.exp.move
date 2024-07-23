@@ -145,7 +145,10 @@ module sui::coin {
         value: u64,
         ctx: &mut TxContext,
     ): Coin<T> {
-        Coin { id: object::new(ctx), balance: balance.split(value) }
+        Coin {
+            id: object::new(ctx),
+            balance: balance.split(value),
+        }
     }
 
     /// Put a `Coin<T>` to the `Balance<T>`.
@@ -251,17 +254,18 @@ module sui::coin {
         icon_url: Option<Url>,
         ctx: &mut TxContext,
     ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
-        let (treasury_cap, metadata) =
-            create_currency(
-                witness,
-                decimals,
-                symbol,
-                name,
-                description,
-                icon_url,
-                ctx,
-            );
-        let deny_cap = DenyCap { id: object::new(ctx) };
+        let (treasury_cap, metadata) = create_currency(
+            witness,
+            decimals,
+            symbol,
+            name,
+            description,
+            icon_url,
+            ctx,
+        );
+        let deny_cap = DenyCap {
+            id: object::new(ctx),
+        };
         transfer::freeze_object(RegulatedCoinMetadata<T> {
             id: object::new(ctx),
             coin_metadata_object: object::id(&metadata),

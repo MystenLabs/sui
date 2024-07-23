@@ -43,7 +43,11 @@ module sui::dynamic_field {
         let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
         assert!(!has_child_object(object_addr, hash), EFieldAlreadyExists);
-        let field = Field { id: object::new_uid_from_hash(hash), name, value };
+        let field = Field {
+            id: object::new_uid_from_hash(hash),
+            name,
+            value,
+        };
         add_child_object(object_addr, field)
     }
 
@@ -86,8 +90,9 @@ module sui::dynamic_field {
     ): Value {
         let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
-        let Field { id, name: _, value } =
-            remove_child_object<Field<Name, Value>>(object_addr, hash);
+        let Field { id, name: _, value } = remove_child_object<
+            Field<Name, Value>,
+        >(object_addr, hash);
         id.delete();
         value
     }
@@ -132,8 +137,10 @@ module sui::dynamic_field {
     ): (&UID, address) {
         let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
-        let Field { id, name: _, value } =
-            borrow_child_object<Field<Name, ID>>(object, hash);
+        let Field { id, name: _, value } = borrow_child_object<Field<Name, ID>>(
+            object,
+            hash,
+        );
         (id, value.to_address())
     }
 
@@ -143,8 +150,9 @@ module sui::dynamic_field {
     ): (&mut UID, address) {
         let object_addr = object.to_address();
         let hash = hash_type_and_key(object_addr, name);
-        let Field { id, name: _, value } =
-            borrow_child_object_mut<Field<Name, ID>>(object, hash);
+        let Field { id, name: _, value } = borrow_child_object_mut<
+            Field<Name, ID>,
+        >(object, hash);
         (id, value.to_address())
     }
 

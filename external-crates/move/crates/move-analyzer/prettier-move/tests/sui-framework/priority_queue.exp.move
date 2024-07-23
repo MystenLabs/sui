@@ -138,13 +138,12 @@ module sui::priority_queue {
 
     #[test]
     fun test_pq() {
-        let mut h =
-            new(
-                create_entries(
-                    vector[3, 1, 4, 2, 5, 2],
-                    vector[10, 20, 30, 40, 50, 60],
-                ),
-            );
+        let mut h = new(
+            create_entries(
+                vector[3, 1, 4, 2, 5, 2],
+                vector[10, 20, 30, 40, 50, 60],
+            ),
+        );
         check_pop_max(&mut h, 5, 50);
         check_pop_max(&mut h, 4, 30);
         check_pop_max(&mut h, 3, 10);
@@ -156,13 +155,9 @@ module sui::priority_queue {
         check_pop_max(&mut h, 1, 20);
         check_pop_max(&mut h, 0, 80);
 
-        let mut h =
-            new(
-                create_entries(
-                    vector[5, 3, 1, 2, 4],
-                    vector[10, 20, 30, 40, 50],
-                ),
-            );
+        let mut h = new(
+            create_entries(vector[5, 3, 1, 2, 4], vector[10, 20, 30, 40, 50]),
+        );
         check_pop_max(&mut h, 5, 10);
         check_pop_max(&mut h, 4, 50);
         check_pop_max(&mut h, 3, 20);

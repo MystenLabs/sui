@@ -262,8 +262,13 @@ module sui::kiosk {
         cap: KioskOwnerCap,
         ctx: &mut TxContext,
     ): Coin<SUI> {
-        let Kiosk { id, profits, owner: _, item_count, allow_extensions: _ } =
-            self;
+        let Kiosk {
+            id,
+            profits,
+            owner: _,
+            item_count,
+            allow_extensions: _,
+        } = self;
         let KioskOwnerCap { id: cap_id, `for` } = cap;
 
         assert!(id.to_inner() == `for`, ENotOwner);
@@ -409,11 +414,10 @@ module sui::kiosk {
         id: ID,
         payment: Coin<SUI>,
     ): (T, TransferRequest<T>) {
-        let price =
-            df::remove<Listing, u64>(
-                &mut self.id,
-                Listing { id, is_exclusive: false },
-            );
+        let price = df::remove<Listing, u64>(
+            &mut self.id,
+            Listing { id, is_exclusive: false },
+        );
         let inner = dof::remove<Item, T>(&mut self.id, Item { id });
 
         self.item_count = self.item_count - 1;

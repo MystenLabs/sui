@@ -20,7 +20,10 @@ module sui::object_bag {
 
     /// Creates a new, empty bag
     public fun new(ctx: &mut TxContext): ObjectBag {
-        ObjectBag { id: object::new(ctx), size: 0 }
+        ObjectBag {
+            id: object::new(ctx),
+            size: 0,
+        }
     }
 
     /// Adds a key-value pair to the bag `bag: &mut ObjectBag`

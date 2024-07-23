@@ -277,12 +277,18 @@ module sui::token {
         ctx: &mut TxContext,
     ): Token<T> {
         assert!(token.balance.value() >= amount, EBalanceTooLow);
-        Token { id: object::new(ctx), balance: token.balance.split(amount) }
+        Token {
+            id: object::new(ctx),
+            balance: token.balance.split(amount),
+        }
     }
 
     /// Create a zero `Token`.
     public fun zero<T>(ctx: &mut TxContext): Token<T> {
-        Token { id: object::new(ctx), balance: balance::zero() }
+        Token {
+            id: object::new(ctx),
+            balance: balance::zero(),
+        }
     }
 
     /// Destroy an empty `Token`, fails if the balance is non-zero.

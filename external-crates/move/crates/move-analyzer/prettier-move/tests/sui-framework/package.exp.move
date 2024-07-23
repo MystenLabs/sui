@@ -290,7 +290,12 @@ module sui::package {
         let package = cap.package;
         cap.package = id_zero;
 
-        UpgradeTicket { cap: object::id(cap), package, policy, digest }
+        UpgradeTicket {
+            cap: object::id(cap),
+            package,
+            policy,
+            digest,
+        }
     }
 
     /// Consume an `UpgradeReceipt` to update its `UpgradeCap`, finalizing
@@ -342,7 +347,10 @@ module sui::package {
         data.append(package.to_bytes());
         let package = object::id_from_bytes(sui::hash::blake2b256(&data));
 
-        UpgradeReceipt { cap, package }
+        UpgradeReceipt {
+            cap,
+            package,
+        }
     }
 
     fun restrict(cap: &mut UpgradeCap, policy: u8) {

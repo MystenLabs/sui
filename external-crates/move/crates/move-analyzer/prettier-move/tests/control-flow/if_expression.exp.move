@@ -7,6 +7,20 @@ module test::if_expression {
         if (false) {
             call_something_else_call_something_else_call_something_else()
         };
+
+        if (cond) do_this() else {
+            do_that();
+            do_this();
+        };
+
+        if (cond) {
+            do_this();
+            do_that();
+        } else do_this();
+
+        if (true) call_something()
+        else call_something_else();
+
         if (false) {
             call_something_else();
         } else {

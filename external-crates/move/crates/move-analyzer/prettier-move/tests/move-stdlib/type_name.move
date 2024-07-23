@@ -54,7 +54,9 @@ module std::type_name {
     /// u8, u16, u32, u64, u128, u256, bool, address, vector.
     public fun is_primitive(self: &TypeName): bool {
         let bytes = self.name.as_bytes();
-        bytes == &b"bool" ||
+        bytes == &b"bool" || bytes == &b"u8" || 
+
+
         bytes == &b"u8" ||
         bytes == &b"u16" ||
         bytes == &b"u32" ||

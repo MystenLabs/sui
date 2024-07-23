@@ -98,38 +98,50 @@ module sui::object {
     /// This should only be called once from `sui_system`.
     fun sui_system_state(ctx: &TxContext): UID {
         assert!(ctx.sender() == @0x0, ENotSystemAddress);
-        UID { id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID } }
+        UID {
+            id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
+        }
     }
 
     /// Create the `UID` for the singleton `Clock` object.
     /// This should only be called once from `clock`.
     public(package) fun clock(): UID {
-        UID { id: ID { bytes: SUI_CLOCK_OBJECT_ID } }
+        UID {
+            id: ID { bytes: SUI_CLOCK_OBJECT_ID },
+        }
     }
 
     /// Create the `UID` for the singleton `AuthenticatorState` object.
     /// This should only be called once from `authenticator_state`.
     public(package) fun authenticator_state(): UID {
-        UID { id: ID { bytes: SUI_AUTHENTICATOR_STATE_ID } }
+        UID {
+            id: ID { bytes: SUI_AUTHENTICATOR_STATE_ID },
+        }
     }
 
     /// Create the `UID` for the singleton `Random` object.
     /// This should only be called once from `random`.
     public(package) fun randomness_state(): UID {
-        UID { id: ID { bytes: SUI_RANDOM_ID } }
+        UID {
+            id: ID { bytes: SUI_RANDOM_ID },
+        }
     }
 
     /// Create the `UID` for the singleton `DenyList` object.
     /// This should only be called once from `deny_list`.
     public(package) fun sui_deny_list_object_id(): UID {
-        UID { id: ID { bytes: SUI_DENY_LIST_OBJECT_ID } }
+        UID {
+            id: ID { bytes: SUI_DENY_LIST_OBJECT_ID },
+        }
     }
 
     #[allow(unused_function)]
     /// Create the `UID` for the singleton `Bridge` object.
     /// This should only be called once from `bridge`.
     fun bridge(): UID {
-        UID { id: ID { bytes: SUI_BRIDGE_ID } }
+        UID {
+            id: ID { bytes: SUI_BRIDGE_ID },
+        }
     }
 
     /// Get the inner `ID` of `uid`
@@ -157,7 +169,9 @@ module sui::object {
     /// Create a new object. Returns the `UID` that must be stored in a Sui object.
     /// This is the only way to create `UID`s.
     public fun new(ctx: &mut TxContext): UID {
-        UID { id: ID { bytes: ctx.fresh_object_address() } }
+        UID {
+            id: ID { bytes: ctx.fresh_object_address() },
+        }
     }
 
     /// Delete the object and it's `UID`. This is the only way to eliminate a `UID`.

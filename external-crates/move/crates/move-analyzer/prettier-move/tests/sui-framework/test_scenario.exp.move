@@ -395,8 +395,9 @@ module sui::test_scenario {
     public fun most_recent_receiving_ticket<T: key>(
         owner: &ID,
     ): sui::transfer::Receiving<T> {
-        let id_opt =
-            most_recent_id_for_address<T>(object::id_to_address(owner));
+        let id_opt = most_recent_id_for_address<T>(
+            object::id_to_address(owner),
+        );
         assert!(option::is_some(&id_opt), EEmptyInventory);
         let id = option::destroy_some(id_opt);
         receiving_ticket_by_id<T>(id)

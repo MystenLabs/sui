@@ -77,8 +77,7 @@ export function printUseDeclaration(
 	const isPublic = firstChild && firstChild.type === 'public' ? ['public', ' '] : [];
 	return group([
 		...isPublic, // insert `public` keyword if present
-		'use',
-		' ',
+		'use ',
 		path.call(print, 'nonFormattingChildren', 0),
 		';',
 	]);
@@ -129,13 +128,21 @@ export function printUseMember(path: AstPath<Node>, options: ParserOptions, prin
  * Print `use_module_member` node. `module_name::member_name`
  * Single statement of direct import;
  * `use address::module_name::member_name;`
+ *
+ * Wraps the member into a group `{}` if it's too long (if line breaks).
  */
 export function printUseModuleMember(
 	path: AstPath<Node>,
 	options: ParserOptions,
 	print: printFn,
 ): Doc {
-	return path.map(print, 'children');
+	return group([
+		path.call(print, 'nonFormattingChildren', 0), // module_access
+		'::',
+		ifBreak(['{', indent(line)]), // wrap with `{` if the member is too long
+		indent(path.call(print, 'nonFormattingChildren', 1)), // module_access
+		ifBreak([line, '}']), // trailing comma
+	]);
 }
 
 /**
@@ -148,7 +155,7 @@ export function printUseModuleMembers(
 ): Doc {
 	const children = path.map(print, 'nonFormattingChildren');
 
-	return [
+	return group([
 		children[0]!,
 		'::{',
 		indent(softline),
@@ -156,21 +163,18 @@ export function printUseModuleMembers(
 		ifBreak(','), // trailing comma
 		softline,
 		'}',
-	];
+	]);
 }
 
 export function printUseFun(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
-		'fun',
-		' ',
+	return [
+		'fun ',
 		path.call(print, 'nonFormattingChildren', 0), // module_access
-		' ',
-		'as',
-		' ',
+		' as ',
 		path.call(print, 'nonFormattingChildren', 1), // module_access
 		'.',
 		path.call(print, 'nonFormattingChildren', 2), // function_identifier
-	]);
+	];
 }
 
 export function printModuleIdentity(
@@ -187,8 +191,7 @@ export function printFriendDeclaration(
 	print: printFn,
 ): Doc {
 	return group([
-		'friend',
-		' ',
+		'friend ',
 		path.call(print, 'nonFormattingChildren', 0), // module_access
 		';',
 	]);

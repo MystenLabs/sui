@@ -36,7 +36,10 @@ module sui::table {
     public fun new<K: copy + drop + store, V: store>(
         ctx: &mut TxContext,
     ): Table<K, V> {
-        Table { id: object::new(ctx), size: 0 }
+        Table {
+            id: object::new(ctx),
+            size: 0,
+        }
     }
 
     /// Adds a key-value pair to the table `table: &mut Table<K, V>`

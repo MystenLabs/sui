@@ -11,8 +11,9 @@ export class Tree {
 	public text: string;
 	public isNamed: boolean;
 	public children: Tree[];
-	public leadingComment: string[];
+	public leadingComment: Comment[];
 	public trailingComment: Comment | null;
+	public enableLeadingComment: boolean = true;
 	public enableTrailingComment: boolean = true;
 
 	/**
@@ -94,10 +95,32 @@ export class Tree {
 		this.enableTrailingComment = false;
 	}
 
+	/**
+	 * Special case for lists, where we want to print the leading character (eg `dot_expression`).
+	 */
+	disableLeadingComment() {
+		this.enableLeadingComment = false;
+	}
+
+	/**
+	 * A flag to skip formatting for a specific node. A manual instruction from
+	 * the user is `prettier-ignore`. When placed above (leading comment) a node,
+	 * it will skip formatting for that node.
+	 */
+	get skipFormattingNode(): boolean {
+		return !!this.leadingComment.find((comment) => comment.text.includes('prettier-ignore')) || false;
+	}
+
+	/**
+	 * Get the number of named children.
+	 */
 	get namedChildCount(): number {
 		return this.namedChildren.length;
 	}
 
+	/**
+	 * Tells whether a `Node` knows how to break itself.
+	 */
 	get isBreakableExpression(): boolean {
 		return [
 			// TODO: consider revisiting `call_expression` and `macro_call_expression`
@@ -112,10 +135,18 @@ export class Tree {
 		].includes(this.type);
 	}
 
+	/**
+	 * Whether a node is a list node, like `vector_expression`, `expression_list`, or `block`.
+	 * Lists are typical breakable nodes, where each element is separated by a newline.
+	 */
 	get isList(): boolean {
 		return ['vector_expression', 'expression_list', 'block'].includes(this.type);
 	}
 
+	/**
+	 * Whether a node is a control flow node, like `if_expression`, `while_expression`,
+	 * `loop_expression`, `abort_expression`, or `return_expression`.
+	 */
 	get isControlFlow(): boolean {
 		return [
 			'if_expression',
@@ -226,6 +257,24 @@ export class Tree {
 	}
 
 	/**
+	 * Find the parent node of a specific type. Optionally, ignore certain types
+	 * of nodes, if they are not relevant or should be skipped.
+	 */
+	findParent(type: string, ignoreTypes: string[] = []): Tree | null {
+		let parent = this.parent;
+		while (parent) {
+			if (parent.type === type) return parent;
+			if (ignoreTypes.includes(parent.type)) {
+				parent = parent.parent;
+				continue;
+			}
+			break;
+		}
+
+		return null;
+	}
+
+	/**
 	 * Print the Node as a JSON object. Remove the fields that are not necessary
 	 * for printing. May be extended shall one need to debug deeper.
 	 */
@@ -280,13 +329,16 @@ export class Tree {
 		while (prev?.isComment || (prev?.isNewline && !prev?.isUsedComment)) {
 			if (prev.isUsedComment) break;
 			if (prev.isComment) {
-				comments.unshift(prev.text);
+				comments.unshift({
+					type: prev.type as 'line_comment' | 'block_comment',
+					text: prev.text
+				});
 				prev.isUsedComment = true;
 			}
 
 			prev = prev.previousNamedSibling; // move to the next comment
 		}
-    
+
 		this.leadingComment = comments;
 
 		return this;

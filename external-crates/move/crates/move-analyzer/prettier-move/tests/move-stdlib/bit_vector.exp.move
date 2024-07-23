@@ -27,7 +27,10 @@ module std::bit_vector {
             counter = counter + 1;
         };
 
-        BitVector { length, bit_field }
+        BitVector {
+            length,
+            bit_field,
+        }
     }
 
     /// Set the bit at `bit_index` in the `bitvector` regardless of its previous state.

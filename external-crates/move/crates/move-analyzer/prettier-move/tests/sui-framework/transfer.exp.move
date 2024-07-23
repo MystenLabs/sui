@@ -146,7 +146,10 @@ module sui::transfer {
         id: ID,
         version: u64,
     ): Receiving<T> {
-        Receiving { id, version }
+        Receiving {
+            id,
+            version,
+        }
     }
 
     #[test_only]

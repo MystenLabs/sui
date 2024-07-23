@@ -45,7 +45,14 @@ export function shouldBreakFirstChild(path: AstPath<Node>): boolean {
 export function printLeadingComment(path: AstPath<Node>): Doc[] {
 	const comments = path.node.leadingComment;
 	if (!comments || !comments.length) return [];
-	return [join(hardline, comments), hardline];
+	if (!path.node.enableLeadingComment) return [];
+	return [
+		join(
+			hardline,
+			comments.map((c) => (c.type == 'line_comment' ? [c.text, breakParent] : [c.text])),
+		),
+		hardline,
+	];
 }
 
 /**
@@ -106,7 +113,7 @@ export function block({ path, print, options, shouldBreak, skipChildren }: Block
 			options.bracketSpacing ? ifBreak('', ' ') : '',
 			indent(softline),
 			indent(
-				join(softline, path.map(print, 'namedAndEmptyLineChildren').slice(skipChildren)),
+				join(line, path.map(print, 'namedAndEmptyLineChildren').slice(skipChildren)),
 			),
 			softline,
 			options.bracketSpacing ? ifBreak('', ' ') : '',

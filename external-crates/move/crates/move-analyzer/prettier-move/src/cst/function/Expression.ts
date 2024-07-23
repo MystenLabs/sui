@@ -4,8 +4,8 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { block, list, shouldBreakFirstChild } from '../../utilities';
-const { group, join, line, softline, ifBreak, indent } = doc.builders;
+import { block, list, printLeadingComment, shouldBreakFirstChild } from '../../utilities';
+const { group, join, line, softline, ifBreak, hardline, indent } = doc.builders;
 
 // + sign marks nodes that have tests
 /**
@@ -35,6 +35,7 @@ export enum Expression {
 	// Misc
 	ArgList = 'arg_list', // + trasitively via `call_expression`
 	MacroModuleAccess = 'macro_module_access',
+	MatchArm = 'match_arm',
 
 	// Unary
 	UnaryExpression = 'unary_expression', // +
@@ -82,6 +83,8 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printIndexExpression;
 		case Expression.VectorExpression:
 			return printVectorExpression;
+		case Expression.MatchExpression:
+			return printMatchExpression;
 
 		// === Misc ===
 
@@ -91,6 +94,8 @@ export default function (path: AstPath<Node>): treeFn | null {
 			return printMacroModuleAccess;
 		case Expression.IdentifiedExpression:
 			return printIdentifiedExpression;
+		case Expression.MatchArm:
+			return printMatchArm;
 
 		// === Unary ===
 
@@ -373,9 +378,9 @@ function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: 
 
 	if (isChain) {
 		const parts = [
-			children[0]!, // lhs
+			path.call(print, 'nonFormattingChildren', 0), // lhs
 			indent(softline),
-			indent(['.', children[1]!]), // rhs
+			indent(path.call(printWithLeadingComment, 'nonFormattingChildren', 1)), // rhs
 		];
 
 		// start a group if the parent is not a `dot_expression`, this way we either break the
@@ -385,22 +390,28 @@ function printDotExpression(path: AstPath<Node>, options: ParserOptions, print: 
 			: parts;
 	}
 
-	return [children[0]!, '.', children[1]!];
+	return [
+		path.call(print, 'nonFormattingChildren', 0),
+		path.call(printWithLeadingComment, 'nonFormattingChildren', 1),
+	];
+
+	/** Prints leading comment before the dot. And disables it. */
+	function printWithLeadingComment(path: AstPath<Node>) {
+		const comment = printLeadingComment(path);
+		path.node.disableLeadingComment();
+		return [comment, '.', print(path)];
+	}
 }
 
 /**
  * Print `arg_list` node.
  */
 function printArgList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	if (path.node.namedChildCount === 0) {
-		return '()';
-	}
-
 	const nodes = path.node.nonFormattingChildren;
 	const children = path.map(print, 'nonFormattingChildren');
 
 	if (nodes.length === 1 && nodes[0]!.isBreakableExpression) {
-		return group(['(', children[0]!, ')']);
+		return ['(', children[0]!, ')'];
 	}
 
 	return group(list({ path, print, options, open: '(', close: ')' }), {
@@ -497,4 +508,39 @@ function printVectorExpression(path: AstPath<Node>, options: ParserOptions, prin
 		],
 		{ shouldBreak: shouldBreakFirstChild(path) },
 	);
+}
+
+/**
+ * Print `match_expression` node.
+ */
+function printMatchExpression(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+	return [
+		'match (',
+		path.call(print, 'nonFormattingChildren', 0), // expression
+		') ',
+		list({
+			path,
+			print,
+			options,
+			open: '{',
+			close: '}',
+			skipChildren: 1,
+		}), // match arms
+	];
+}
+
+/**
+ * Print `match_arm` node.
+ */
+export function printMatchArm(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+	const children = path.map(print, 'nonFormattingChildren');
+	if (children.length < 2) {
+		throw new Error('`match_arm` node should have at least 2 children');
+	}
+
+	return [
+		children[0]!, // pattern
+		' => ',
+		children[1]!, // expression
+	];
 }

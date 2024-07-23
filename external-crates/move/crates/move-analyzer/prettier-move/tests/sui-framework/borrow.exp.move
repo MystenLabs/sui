@@ -35,7 +35,13 @@ module sui::borrow {
         let value = self.value.extract();
         let id = object::id(&value);
 
-        (value, Borrow { ref: self.id, obj: id })
+        (
+            value,
+            Borrow {
+                ref: self.id,
+                obj: id,
+            },
+        )
     }
 
     /// Put an object and the `Borrow` hot potato back.

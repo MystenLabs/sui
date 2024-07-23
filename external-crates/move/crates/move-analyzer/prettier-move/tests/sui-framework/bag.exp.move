@@ -36,7 +36,10 @@ module sui::bag {
 
     /// Creates a new, empty bag
     public fun new(ctx: &mut TxContext): Bag {
-        Bag { id: object::new(ctx), size: 0 }
+        Bag {
+            id: object::new(ctx),
+            size: 0,
+        }
     }
 
     /// Adds a key-value pair to the bag `bag: &mut Bag`

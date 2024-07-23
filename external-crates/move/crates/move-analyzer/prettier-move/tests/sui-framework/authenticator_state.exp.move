@@ -64,7 +64,10 @@ module sui::authenticator_state {
         epoch: u64,
     ): ActiveJwk {
         ActiveJwk {
-            jwk_id: JwkId { iss: iss, kid: kid },
+            jwk_id: JwkId {
+                iss: iss,
+                kid: kid,
+            },
             jwk: JWK {
                 kty: kty,
                 e: utf8(b"AQAB"),
@@ -147,7 +150,10 @@ module sui::authenticator_state {
 
         let version = CurrentVersion;
 
-        let inner = AuthenticatorStateInner { version, active_jwks: vector[] };
+        let inner = AuthenticatorStateInner {
+            version,
+            active_jwks: vector[],
+        };
 
         let mut self = AuthenticatorState {
             id: object::authenticator_state(),
@@ -166,8 +172,10 @@ module sui::authenticator_state {
         // replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CurrentVersion, EWrongInnerVersion);
 
-        let inner: &mut AuthenticatorStateInner =
-            dynamic_field::borrow_mut(&mut self.id, self.version);
+        let inner: &mut AuthenticatorStateInner = dynamic_field::borrow_mut(
+            &mut self.id,
+            self.version,
+        );
 
         assert!(inner.version == version, EWrongInnerVersion);
         inner
@@ -179,8 +187,10 @@ module sui::authenticator_state {
         // replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CurrentVersion, EWrongInnerVersion);
 
-        let inner: &AuthenticatorStateInner =
-            dynamic_field::borrow(&self.id, self.version);
+        let inner: &AuthenticatorStateInner = dynamic_field::borrow(
+            &self.id,
+            self.version,
+        );
 
         assert!(inner.version == version, EWrongInnerVersion);
         inner

@@ -33,17 +33,16 @@ module sui::sui {
         assert!(ctx.sender() == @0x0, ENotSystemAddress);
         assert!(ctx.epoch() == 0, EAlreadyMinted);
 
-        let (treasury, metadata) =
-            coin::create_currency(
-                SUI {},
-                9,
-                b"SUI",
-                b"Sui",
-                // TODO: add appropriate description and logo url
-                b"",
-                option::none(),
-                ctx,
-            );
+        let (treasury, metadata) = coin::create_currency(
+            SUI {},
+            9,
+            b"SUI",
+            b"Sui",
+            // TODO: add appropriate description and logo url
+            b"",
+            option::none(),
+            ctx,
+        );
         transfer::public_freeze_object(metadata);
         let mut supply = treasury.treasury_into_supply();
         let total_sui = supply.increase_supply(TOTAL_SUPPLY_MIST);
