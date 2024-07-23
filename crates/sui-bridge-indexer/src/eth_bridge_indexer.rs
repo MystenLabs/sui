@@ -57,7 +57,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         task_name: String,
         storage: PgBridgePersistent,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<EthData>), Error> {
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<EthData>>), Error> {
         let eth_client = Arc::new(
             EthClient::<Http>::new(
                 &self.eth_rpc_url,
@@ -95,16 +95,20 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
                 // TODO: This for-loop can be optimzied to group tx / block info
                 // and reduce the queries issued to eth full node
-                for log in logs.iter() {
+                let mut data = vec![];
+                for log in logs {
                     let block_number = log.block_number();
                     let block = provider.get_block(block_number).await?.unwrap();
                     let tx_hash = log.tx_hash();
                     let transaction = provider.get_transaction(tx_hash).await?.unwrap();
-                    data_sender.send((log.clone(), block, transaction)).await?;
-                    if log.block_number >= target_checkpoint {
+                    data.push((log.clone(), block, transaction));
+                    // TODO: Find out if we can assume logs are in order in eth
+                    if log.block_number > target_checkpoint {
+                        data_sender.send(data).await?;
                         break 'outer;
                     }
                 }
+                data_sender.send(data).await?;
             }
             Ok::<_, Error>(())
         });

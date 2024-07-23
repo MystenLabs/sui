@@ -74,7 +74,7 @@ impl<D, F, M> IndexerBuilder<D, F, M> {
 pub struct DefaultFilter;
 
 impl<T> DataFilter<T> for DefaultFilter {
-    fn filter(&self, _: &T) -> bool {
+    fn matches(&self, _: &T) -> bool {
         true
     }
 }
@@ -251,13 +251,25 @@ pub trait Datasource<T: Send, P, R> {
             .create_data_channel(task_name.clone(), storage.clone(), target_checkpoint)
             .await?;
         while let Some(data) = data_channel.recv().await {
-            let block_number = Self::get_block_number(&data);
-            if filter.filter(&data) {
-                storage.write(data_mapper.map(data)?)?
+            if !data.is_empty() {
+                // Ok to unwrap here, checked if the data is empty above.
+                let max_block_number = data
+                    .iter()
+                    .map(|d| Self::get_block_number(d))
+                    .max()
+                    .unwrap();
+                let processed_data = data.into_iter().filter(|d| filter.matches(d)).try_fold(
+                    vec![],
+                    |mut result, d| {
+                        result.append(&mut data_mapper.map(d)?);
+                        Ok::<Vec<_>, Error>(result)
+                    },
+                )?;
+                storage.write(processed_data)?;
+                storage
+                    .save_progress(task_name.clone(), max_block_number)
+                    .await?;
             }
-            storage
-                .save_progress(task_name.clone(), block_number)
-                .await?;
         }
         join_handle.await?
     }
@@ -267,7 +279,7 @@ pub trait Datasource<T: Send, P, R> {
         task_name: String,
         storage: P,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<T>), Error>;
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<T>>), Error>;
 
     fn get_block_number(data: &T) -> u64;
 }
@@ -305,7 +317,13 @@ where
         task_name: String,
         storage: P,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<CheckpointTxnData>), Error> {
+    ) -> Result<
+        (
+            JoinHandle<Result<(), Error>>,
+            Receiver<Vec<CheckpointTxnData>>,
+        ),
+        Error,
+    > {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let progress_store = ProgressStoreWrapper {
             store: storage.clone(),
@@ -352,7 +370,7 @@ pub enum BackfillStrategy {
 }
 
 pub trait DataFilter<T>: Sync + Send {
-    fn filter(&self, data: &T) -> bool;
+    fn matches(&self, data: &T) -> bool;
 }
 
 #[derive(Clone)]
@@ -361,7 +379,7 @@ pub struct SuiInputObjectFilter {
 }
 
 impl DataFilter<CheckpointTxnData> for SuiInputObjectFilter {
-    fn filter(&self, (tx, _, _): &CheckpointTxnData) -> bool {
+    fn matches(&self, (tx, _, _): &CheckpointTxnData) -> bool {
         let txn_data = tx.transaction.transaction_data();
         if let TransactionKind::ProgrammableTransaction(_) = txn_data.kind() {
             return tx
@@ -404,11 +422,11 @@ impl<P: IndexerProgressStore> ProgressStore for ProgressStoreWrapper<P> {
 }
 
 pub struct IndexerWorker<T> {
-    data_sender: metered_channel::Sender<T>,
+    data_sender: metered_channel::Sender<Vec<T>>,
 }
 
 impl<T> IndexerWorker<T> {
-    pub fn new(data_sender: metered_channel::Sender<T>) -> Self {
+    pub fn new(data_sender: metered_channel::Sender<Vec<T>>) -> Self {
         Self { data_sender }
     }
 }
@@ -427,11 +445,11 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
         let checkpoint_num = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
-        for transaction in checkpoint.transactions {
-            self.data_sender
-                .send((transaction, checkpoint_num, timestamp_ms))
-                .await?
-        }
-        Ok(())
+        let transactions = checkpoint
+            .transactions
+            .into_iter()
+            .map(|tx| (tx, checkpoint_num, timestamp_ms))
+            .collect();
+        Ok(self.data_sender.send(transactions).await?)
     }
 }
