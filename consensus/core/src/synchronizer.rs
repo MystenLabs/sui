@@ -27,13 +27,12 @@ use tokio::{
 };
 use tracing::{debug, error, info, trace, warn};
 
-use crate::authority_service::COMMIT_LAG_MULTIPLIER;
+use crate::{authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher};
 use crate::{
     block::{BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
-    core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
@@ -709,11 +708,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let mut results = FuturesUnordered::new();
 
                 let fetch_own_block = |authority_index: AuthorityIndex, fetch_own_block_delay: Duration| {
-                    let network_client = network_client.clone();
+                    let network_client_cloned = network_client.clone();
                     let own_index = context.own_index;
                     async move {
                         sleep(fetch_own_block_delay).await;
-                        let r = network_client.fetch_latest_blocks(authority_index, vec![own_index], FETCH_REQUEST_TIMEOUT).await;
+                        let r = network_client_cloned.fetch_latest_blocks(authority_index, vec![own_index], FETCH_REQUEST_TIMEOUT).await;
                         (r, authority_index)
                     }
                 };
@@ -1000,15 +999,15 @@ mod tests {
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
 
-    use crate::authority_service::COMMIT_LAG_MULTIPLIER;
     use crate::commit::{CommitVote, TrustedCommit};
+    use crate::{authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher};
     use crate::{
         block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
-        core_thread::{CoreError, CoreThreadDispatcher},
+        core_thread::CoreThreadDispatcher,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
         network::{BlockStream, NetworkClient},
@@ -1018,64 +1017,6 @@ mod tests {
         },
         CommitDigest, CommitIndex,
     };
-
-    // TODO: create a complete Mock for thread dispatcher to be used from several tests
-    #[derive(Default)]
-    struct MockCoreThreadDispatcher {
-        add_blocks: Mutex<Vec<VerifiedBlock>>,
-        missing_blocks: Mutex<BTreeSet<BlockRef>>,
-        last_known_proposed_round: parking_lot::Mutex<Vec<Round>>,
-    }
-
-    impl MockCoreThreadDispatcher {
-        async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
-            let mut lock = self.add_blocks.lock().await;
-            lock.drain(0..).collect()
-        }
-
-        async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
-            let mut lock = self.missing_blocks.lock().await;
-            lock.extend(block_refs);
-        }
-
-        async fn get_last_own_proposed_round(&self) -> Vec<Round> {
-            let lock = self.last_known_proposed_round.lock();
-            lock.clone()
-        }
-    }
-
-    #[async_trait]
-    impl CoreThreadDispatcher for MockCoreThreadDispatcher {
-        async fn add_blocks(
-            &self,
-            blocks: Vec<VerifiedBlock>,
-        ) -> Result<BTreeSet<BlockRef>, CoreError> {
-            let mut lock = self.add_blocks.lock().await;
-            lock.extend(blocks);
-            Ok(BTreeSet::new())
-        }
-
-        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            Ok(())
-        }
-
-        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            let mut lock = self.missing_blocks.lock().await;
-            let result = lock.clone();
-            lock.clear();
-            Ok(result)
-        }
-
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
-            let mut lock = self.last_known_proposed_round.lock();
-            lock.push(round);
-            Ok(())
-        }
-    }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
     type FetchRequestResponse = (Vec<VerifiedBlock>, Option<Duration>);

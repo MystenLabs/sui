@@ -475,7 +475,7 @@ mod tests {
         // Stop authority 1.
         let index = committee.to_authority_index(1).unwrap();
         authorities.remove(index.value()).stop().await;
-        sleep(Duration::from_secs(15)).await;
+        sleep(Duration::from_secs(10)).await;
 
         // Restart authority 1 and let it run.
         let (authority, receiver) = make_authority(
@@ -488,7 +488,7 @@ mod tests {
         .await;
         output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
-        sleep(Duration::from_secs(15)).await;
+        sleep(Duration::from_secs(10)).await;
 
         // Stop all authorities and exit.
         for authority in authorities {

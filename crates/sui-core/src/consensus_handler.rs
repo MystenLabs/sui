@@ -508,7 +508,7 @@ impl MysticetiConsensusHandler {
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
-            // TODO: pause when execution is overloaded.
+            // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_output) = receiver.recv().await {
                 let commit_index = consensus_output.commit_ref.index;
                 consensus_handler
