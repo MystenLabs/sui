@@ -22,6 +22,10 @@ pub enum ObjectChangeToCommit {
 pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError>;
 
+    async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError>;
+
+    async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError>;
+
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError>;
@@ -69,6 +73,8 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
 
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError>;
+
+    async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError>;
 
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,

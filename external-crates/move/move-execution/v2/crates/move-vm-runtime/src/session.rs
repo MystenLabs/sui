@@ -22,7 +22,7 @@ use move_core_types::{
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedTypeIndex, CachedDatatype, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };
 use std::{borrow::Borrow, sync::Arc};
 
@@ -179,12 +179,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.
-    pub fn finish_with_extensions(
-        self,
-    ) -> (
-        VMResult<(ChangeSet, NativeContextExtensions<'r>)>,
-        S,
-    ) {
+    pub fn finish_with_extensions(self) -> (VMResult<(ChangeSet, NativeContextExtensions<'r>)>, S) {
         let Session {
             data_cache,
             native_extensions,

@@ -70,7 +70,7 @@ use crate::consensus_manager::ConsensusManager;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
-    VersionedUsedProcessedMessages,
+    VersionedUsedProcessedMessages, SINGLETON_KEY,
 };
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::ObjectCacheRead;
@@ -1120,18 +1120,6 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    fn store_reconfig_state_batch(
-        &self,
-        new_state: &ReconfigState,
-        batch: &mut DBBatch,
-    ) -> SuiResult {
-        batch.insert_batch(
-            &self.tables()?.reconfig_state,
-            [(&RECONFIG_STATE_INDEX, new_state)],
-        )?;
-        Ok(())
-    }
-
     pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
         Ok(self
             .tables()?
@@ -1644,34 +1632,25 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    fn defer_transactions(
-        &self,
-        batch: &mut DBBatch,
-        key: DeferralKey,
-        transactions: Vec<VerifiedSequencedConsensusTransaction>,
-    ) -> SuiResult {
-        batch.insert_batch(
-            &self.tables()?.deferred_transactions,
-            std::iter::once((key, transactions)),
-        )?;
-        Ok(())
-    }
-
     fn load_deferred_transactions_for_randomness(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         let (min, max) = DeferralKey::full_range_for_randomness();
-        self.load_deferred_transactions(batch, min, max)
+        self.load_deferred_transactions(output, min, max)
     }
 
     fn load_and_process_deferred_transactions_for_randomness(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         previously_deferred_tx_digests: &mut HashMap<TransactionDigest, DeferralKey>,
         sequenced_randomness_transactions: &mut Vec<VerifiedSequencedConsensusTransaction>,
     ) -> SuiResult {
-        let deferred_randomness_txs = self.load_deferred_transactions_for_randomness(batch)?;
+        let deferred_randomness_txs = self.load_deferred_transactions_for_randomness(output)?;
+        trace!(
+            "loading deferred randomness transactions: {:?}",
+            deferred_randomness_txs
+        );
         previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().flat_map(
             |(deferral_key, txs)| {
                 txs.iter().map(|tx| match tx.0.transaction.key() {
@@ -1691,17 +1670,17 @@ impl AuthorityPerEpochStore {
 
     fn load_deferred_transactions_for_up_to_consensus_round(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         consensus_round: u64,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         let (min, max) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
-        self.load_deferred_transactions(batch, min, max)
+        self.load_deferred_transactions(output, min, max)
     }
 
     // factoring of the above
     fn load_deferred_transactions(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         min: DeferralKey,
         max: DeferralKey,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
@@ -1737,10 +1716,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // Transactional DBs do not support range deletes, so we have to delete keys one-by-one.
-        // This shouldn't be a problem, there should not usually be more than a small handful of
-        // keys loaded in each round.
-        batch.delete_batch(&self.tables()?.deferred_transactions, keys)?;
+        output.delete_loaded_deferred_transactions(&keys);
 
         Ok(txns)
     }
@@ -1902,22 +1878,6 @@ impl AuthorityPerEpochStore {
             .expect("deferred transactions should not be read past end of epoch")
             .deferred_transactions
             .is_empty()
-    }
-
-    /// Stores a list of pending certificates to be executed.
-    pub fn insert_pending_execution(
-        &self,
-        certs: &[TrustedExecutableTransaction],
-    ) -> SuiResult<()> {
-        let mut batch = self.tables()?.pending_execution.batch();
-        batch.insert_batch(
-            &self.tables()?.pending_execution,
-            certs
-                .iter()
-                .map(|cert| (*cert.inner().digest(), cert.clone())),
-        )?;
-        batch.write()?;
-        Ok(())
     }
 
     /// Check whether certificate was processed by consensus.
@@ -2207,9 +2167,9 @@ impl AuthorityPerEpochStore {
         Ok(result?)
     }
 
-    pub fn record_jwk_vote(
+    fn record_jwk_vote(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         round: u64,
         authority: AuthorityName,
         id: &JwkId,
@@ -2245,10 +2205,7 @@ impl AuthorityPerEpochStore {
             return Ok(());
         }
 
-        batch.insert_batch(
-            &self.tables()?.pending_jwks,
-            std::iter::once(((authority, id.clone(), jwk.clone()), ())),
-        )?;
+        output.insert_pending_jwk(authority, id.clone(), jwk.clone());
 
         let key = (id.clone(), jwk.clone());
         let previously_active = jwk_aggregator.has_quorum_for_key(&key);
@@ -2256,10 +2213,7 @@ impl AuthorityPerEpochStore {
 
         if !previously_active && insert_result.is_quorum_reached() {
             info!(epoch = ?self.epoch(), ?round, jwk = ?key, "jwk became active");
-            batch.insert_batch(
-                &self.tables()?.active_jwks,
-                std::iter::once(((round, key), ())),
-            )?;
+            output.insert_active_jwk(round, key);
         }
 
         Ok(())
@@ -2296,40 +2250,6 @@ impl AuthorityPerEpochStore {
         jwk_aggregator.has_quorum_for_key(&(jwk_id.clone(), jwk.clone()))
     }
 
-    /// Record when finished processing a transaction from consensus.
-    fn record_consensus_message_processed(
-        &self,
-        batch: &mut DBBatch,
-        key: SequencedConsensusTransactionKey,
-    ) -> SuiResult {
-        batch.insert_batch(&self.tables()?.consensus_message_processed, [(key, true)])?;
-        Ok(())
-    }
-
-    /// Record when finished processing a consensus commit.
-    fn record_consensus_commit_stats(
-        &self,
-        batch: &mut DBBatch,
-        consensus_stats: &ExecutionIndicesWithStats,
-    ) -> SuiResult {
-        // TODO: remove writing to last_consensus_index.
-        batch.insert_batch(
-            &self.tables()?.last_consensus_index,
-            [(
-                LAST_CONSENSUS_STATS_ADDR,
-                ExecutionIndicesWithHash {
-                    index: consensus_stats.index,
-                    hash: consensus_stats.hash,
-                },
-            )],
-        )?;
-        batch.insert_batch(
-            &self.tables()?.last_consensus_stats,
-            [(LAST_CONSENSUS_STATS_ADDR, consensus_stats)],
-        )?;
-        Ok(())
-    }
-
     pub fn test_insert_user_signature(
         &self,
         digest: TransactionDigest,
@@ -2350,26 +2270,24 @@ impl AuthorityPerEpochStore {
         self.consensus_notify_read.notify(&key, &());
     }
 
-    pub fn finish_consensus_certificate_process_with_batch(
+    fn finish_consensus_certificate_process_with_batch(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         certificates: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        for certificate in certificates {
-            batch.insert_batch(
-                &self.tables()?.pending_execution,
-                [(*certificate.digest(), certificate.clone().serializable())],
-            )?;
-            // User signatures are written in the same batch as consensus certificate processed flag,
-            // which means we won't attempt to insert this twice for the same tx digest
-            debug_assert!(!self
-                .tables()?
-                .user_signatures_for_checkpoints
-                .contains_key(certificate.digest())?);
-            batch.insert_batch(
-                &self.tables()?.user_signatures_for_checkpoints,
-                [(*certificate.digest(), certificate.tx_signatures().to_vec())],
-            )?;
+        output.insert_pending_execution(certificates);
+        output.insert_user_signatures_for_checkpoints(certificates);
+
+        if cfg!(debug_assertions) {
+            for certificate in certificates {
+                // User signatures are written in the same batch as consensus certificate processed flag,
+                // which means we won't attempt to insert this twice for the same tx digest
+                assert!(!self
+                    .tables()?
+                    .user_signatures_for_checkpoints
+                    .contains_key(certificate.digest())
+                    .unwrap());
+            }
         }
         Ok(())
     }
@@ -2632,14 +2550,13 @@ impl AuthorityPerEpochStore {
                 current_commit_sequenced_consensus_transactions.push(tx);
             }
         }
-        let mut batch = self
-            .db_batch()
-            .expect("Failed to create DBBatch for processing consensus transactions");
+
+        let mut output = ConsensusCommitOutput::new();
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self
             .load_deferred_transactions_for_up_to_consensus_round(
-                &mut batch,
+                &mut output,
                 consensus_commit_info.round,
             )?
             .into_iter()
@@ -2698,7 +2615,7 @@ impl AuthorityPerEpochStore {
                         .should_accept_tx()
                     {
                         randomness_manager
-                            .reserve_next_randomness(consensus_commit_info.timestamp, &mut batch)?
+                            .reserve_next_randomness(consensus_commit_info.timestamp, &mut output)?
                     } else {
                         None
                     }
@@ -2713,7 +2630,7 @@ impl AuthorityPerEpochStore {
         // - if randomness is being generated, so we can process them
         if dkg_failed || randomness_round.is_some() {
             self.load_and_process_deferred_transactions_for_randomness(
-                &mut batch,
+                &mut output,
                 &mut previously_deferred_tx_digests,
                 &mut sequenced_randomness_transactions,
             )?;
@@ -2784,7 +2701,7 @@ impl AuthorityPerEpochStore {
             consensus_commit_prologue_root,
         ) = self
             .process_consensus_transactions(
-                &mut batch,
+                &mut output,
                 &consensus_transactions,
                 &end_of_publish_transactions,
                 checkpoint_service,
@@ -2800,10 +2717,10 @@ impl AuthorityPerEpochStore {
             )
             .await?;
         self.finish_consensus_certificate_process_with_batch(
-            &mut batch,
+            &mut output,
             &transactions_to_schedule,
         )?;
-        self.record_consensus_commit_stats(&mut batch, consensus_stats)?;
+        output.record_consensus_commit_stats(consensus_stats.clone());
 
         // Create pending checkpoints if we are still accepting tx.
         let should_accept_tx = if let Some(lock) = &lock {
@@ -2846,7 +2763,7 @@ impl AuthorityPerEpochStore {
                     checkpoint_height,
                 },
             });
-            self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+            self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
 
             // Generate pending checkpoint for user tx with randomness.
             // - If randomness is not generated for this commit, we will skip the
@@ -2869,10 +2786,12 @@ impl AuthorityPerEpochStore {
                         checkpoint_height: checkpoint_height + 1,
                     },
                 });
-                self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+                self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
             }
         }
 
+        let mut batch = self.db_batch()?;
+        output.write_to_batch(self, &mut batch)?;
         batch.write()?;
 
         // Only after batch is written, notify checkpoint service to start building any new
@@ -2916,7 +2835,7 @@ impl AuthorityPerEpochStore {
     // Returns the root of the consensus commit prologue transaction if it was added to the input.
     fn add_consensus_commit_prologue_transaction(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
@@ -2971,10 +2890,9 @@ impl AuthorityPerEpochStore {
             _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
         };
 
-        self.record_consensus_message_processed(
-            batch,
-            SequencedConsensusTransactionKey::System(*transaction.digest()),
-        )?;
+        output.record_consensus_message_processed(SequencedConsensusTransactionKey::System(
+            *transaction.digest(),
+        ));
         Ok(consensus_commit_prologue_root)
     }
 
@@ -2987,7 +2905,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedExecutableTransaction],
         randomness_round: Option<RandomnessRound>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-        db_batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
     ) -> SuiResult {
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -3000,12 +2918,7 @@ impl AuthorityPerEpochStore {
             cancelled_txns,
         )
         .await?;
-        self.set_assigned_shared_object_versions_with_db_batch(assigned_versions, db_batch)
-            .await?;
-        db_batch.insert_batch(
-            &self.tables()?.next_shared_object_versions,
-            shared_input_next_versions,
-        )?;
+        output.set_assigned_shared_object_versions(assigned_versions, shared_input_next_versions);
         Ok(())
     }
 
@@ -3070,15 +2983,17 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         transactions: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
-        let mut batch = self.db_batch()?;
+        let mut output = ConsensusCommitOutput::new();
         self.process_consensus_transaction_shared_object_versions(
             cache_reader,
             transactions,
             None,
             &BTreeMap::new(),
-            &mut batch,
+            &mut output,
         )
         .await?;
+        let mut batch = self.db_batch()?;
+        output.write_to_batch(self, &mut batch)?;
         batch.write()?;
         Ok(())
     }
@@ -3105,7 +3020,7 @@ impl AuthorityPerEpochStore {
     #[allow(clippy::type_complexity)]
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
@@ -3173,7 +3088,7 @@ impl AuthorityPerEpochStore {
             };
             match self
                 .process_consensus_transaction(
-                    batch,
+                    output,
                     tx,
                     checkpoint_service,
                     consensus_commit_info.round,
@@ -3224,7 +3139,7 @@ impl AuthorityPerEpochStore {
                 }
             }
             if !ignored {
-                self.record_consensus_message_processed(batch, key.clone())?;
+                output.record_consensus_message_processed(key.clone());
             }
             if filter_roots {
                 if let Some(txn_key) =
@@ -3242,7 +3157,7 @@ impl AuthorityPerEpochStore {
         let mut total_deferred_txns = 0;
         for (key, txns) in deferred_txns.into_iter() {
             total_deferred_txns += txns.len();
-            self.defer_transactions(batch, key, txns)?;
+            output.defer_transactions(key, txns);
         }
         authority_metrics
             .consensus_handler_deferred_transactions
@@ -3262,14 +3177,14 @@ impl AuthorityPerEpochStore {
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {
                 randomness_manager
-                    .advance_dkg(batch, consensus_commit_info.round)
+                    .advance_dkg(output, consensus_commit_info.round)
                     .await?;
             }
         }
 
         // Add the consensus commit prologue transaction to the beginning of `verified_certificates`.
         let consensus_commit_prologue_root = self.add_consensus_commit_prologue_transaction(
-            batch,
+            output,
             &mut verified_certificates,
             consensus_commit_info,
             &cancelled_txns,
@@ -3282,12 +3197,12 @@ impl AuthorityPerEpochStore {
             &verified_certificates,
             randomness_round,
             &cancelled_txns,
-            batch,
+            output,
         )
         .await?;
 
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
-            batch,
+            output,
             end_of_publish_transactions,
             commit_has_deferred_txns,
         )?;
@@ -3303,7 +3218,7 @@ impl AuthorityPerEpochStore {
 
     fn process_end_of_publish_transactions_and_reconfig(
         &self,
-        write_batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         transactions: &[VerifiedSequencedConsensusTransaction],
         commit_has_deferred_txns: bool,
     ) -> SuiResult<(
@@ -3336,7 +3251,7 @@ impl AuthorityPerEpochStore {
                         .get_reconfig_state_read_lock_guard()
                         .should_accept_consensus_certs()
                 {
-                    write_batch.insert_batch(&self.tables()?.end_of_publish, [(authority, ())])?;
+                    output.insert_end_of_publish(*authority);
                     self.end_of_publish.try_lock()
                         .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
                         .insert_generic(*authority, ()).is_quorum_reached()
@@ -3356,7 +3271,7 @@ impl AuthorityPerEpochStore {
                     );
                     let mut l = self.get_reconfig_state_write_lock_guard();
                     l.close_all_certs();
-                    self.store_reconfig_state_batch(&l, write_batch)?;
+                    output.store_reconfig_state(l.clone());
                     // Holding this lock until end of process_consensus_transactions_and_commit_boundary() where we write batch to DB
                     lock = Some(l);
                 };
@@ -3364,7 +3279,7 @@ impl AuthorityPerEpochStore {
                 // operation returns error. If some day we won't panic in ConsensusHandler on error
                 // we need to figure out here how to revert in-memory state of .end_of_publish
                 // and .reconfig_state when write fails.
-                self.record_consensus_message_processed(write_batch, transaction.key())?;
+                output.record_consensus_message_processed(transaction.key());
             } else {
                 panic!(
                     "process_end_of_publish_transactions_and_reconfig called with non-end-of-publish transaction"
@@ -3397,14 +3312,14 @@ impl AuthorityPerEpochStore {
         // Acquire lock to advance state if we don't already have it.
         let mut lock = lock.unwrap_or_else(|| self.get_reconfig_state_write_lock_guard());
         lock.close_all_tx();
-        self.store_reconfig_state_batch(&lock, write_batch)?;
+        output.store_reconfig_state(lock.clone());
         Ok((Some(lock), true))
     }
 
     #[instrument(level = "trace", skip_all)]
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         commit_round: Round,
@@ -3610,7 +3525,7 @@ impl AuthorityPerEpochStore {
                     .should_accept_consensus_certs()
                 {
                     self.record_jwk_vote(
-                        batch,
+                        output,
                         consensus_index.last_committed_round,
                         *authority,
                         jwk_id,
@@ -3676,7 +3591,7 @@ impl AuthorityPerEpochStore {
                         );
                         match bcs::from_bytes(bytes) {
                             Ok(message) => {
-                                randomness_manager.add_confirmation(batch, authority, message)?
+                                randomness_manager.add_confirmation(output, authority, message)?
                             }
                             Err(e) => {
                                 warn!(
@@ -3724,19 +3639,15 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn write_pending_checkpoint(
         &self,
-        batch: &mut DBBatch,
+        output: &mut ConsensusCommitOutput,
         checkpoint: &PendingCheckpointV2,
     ) -> SuiResult {
-        if let Some(pending) = self.get_pending_checkpoint(&checkpoint.height())? {
-            if pending.roots() != checkpoint.roots() {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old roots: {:?}, new roots: {:?}", checkpoint.height(), pending.roots(), checkpoint.roots());
-            }
-            debug!(
-                checkpoint_commit_height = checkpoint.height(),
-                "Ignoring duplicate checkpoint notification",
-            );
-            return Ok(());
-        }
+        assert!(
+            self.get_pending_checkpoint(&checkpoint.height())?.is_none(),
+            "Duplicate pending checkpoint notification at height {:?}",
+            checkpoint.height()
+        );
+
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Pending checkpoint has {} roots",
@@ -3748,17 +3659,7 @@ impl AuthorityPerEpochStore {
             checkpoint.roots()
         );
 
-        if self.randomness_state_enabled() {
-            batch.insert_batch(
-                &self.tables()?.pending_checkpoints_v2,
-                std::iter::once((checkpoint.height(), checkpoint)),
-            )?;
-        } else {
-            batch.insert_batch(
-                &self.tables()?.pending_checkpoints,
-                std::iter::once((checkpoint.height(), checkpoint.clone().expect_v1())),
-            )?;
-        }
+        output.insert_pending_checkpoint(checkpoint.clone());
 
         Ok(())
     }
@@ -4043,6 +3944,264 @@ impl AuthorityPerEpochStore {
                 ),
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct ConsensusCommitOutput {
+    // Consensus and reconfig state
+    consensus_messages_processed: BTreeSet<SequencedConsensusTransactionKey>,
+    end_of_publish: BTreeSet<AuthorityName>,
+    reconfig_state: Option<ReconfigState>,
+    consensus_commit_stats: Option<ExecutionIndicesWithStats>,
+    pending_execution: Vec<VerifiedExecutableTransaction>,
+
+    // transaction scheduling state
+    shared_object_versions: Option<(AssignedTxAndVersions, HashMap<ObjectID, SequenceNumber>)>,
+
+    deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
+    // deferred txns that have been loaded and can be removed
+    deleted_deferred_txns: BTreeSet<DeferralKey>,
+
+    // checkpoint state
+    user_signatures_for_checkpoints: Vec<(TransactionDigest, Vec<GenericSignature>)>,
+    pending_checkpoints: Vec<PendingCheckpointV2>,
+
+    // random beacon state
+    next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
+
+    dkg_confirmations: BTreeMap<PartyId, VersionedDkgConfirmation>,
+    dkg_processed_messages: BTreeMap<PartyId, VersionedProcessedMessage>,
+    dkg_used_message: Option<VersionedUsedProcessedMessages>,
+    dkg_output: Option<dkg::Output<PkG, EncG>>,
+
+    // jwk state
+    pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
+    active_jwks: BTreeSet<(u64, (JwkId, JWK))>,
+}
+
+impl ConsensusCommitOutput {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    fn insert_end_of_publish(&mut self, authority: AuthorityName) {
+        self.end_of_publish.insert(authority);
+    }
+
+    fn insert_pending_execution(&mut self, transactions: &[VerifiedExecutableTransaction]) {
+        self.pending_execution.reserve(transactions.len());
+        self.pending_execution.extend_from_slice(transactions);
+    }
+
+    fn insert_user_signatures_for_checkpoints(
+        &mut self,
+        transactions: &[VerifiedExecutableTransaction],
+    ) {
+        self.user_signatures_for_checkpoints.extend(
+            transactions
+                .iter()
+                .map(|tx| (*tx.digest(), tx.tx_signatures().to_vec())),
+        );
+    }
+
+    fn record_consensus_commit_stats(&mut self, stats: ExecutionIndicesWithStats) {
+        self.consensus_commit_stats = Some(stats);
+    }
+
+    fn store_reconfig_state(&mut self, state: ReconfigState) {
+        self.reconfig_state = Some(state);
+    }
+
+    fn record_consensus_message_processed(&mut self, key: SequencedConsensusTransactionKey) {
+        self.consensus_messages_processed.insert(key);
+    }
+
+    fn set_assigned_shared_object_versions(
+        &mut self,
+        versions: AssignedTxAndVersions,
+        next_versions: HashMap<ObjectID, SequenceNumber>,
+    ) {
+        assert!(self.shared_object_versions.is_none());
+        self.shared_object_versions = Some((versions, next_versions));
+    }
+
+    fn defer_transactions(
+        &mut self,
+        key: DeferralKey,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+    ) {
+        self.deferred_txns.push((key, transactions));
+    }
+
+    fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
+        self.deleted_deferred_txns
+            .extend(deferral_keys.iter().cloned());
+    }
+
+    fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpointV2) {
+        self.pending_checkpoints.push(checkpoint);
+    }
+
+    pub fn reserve_next_randomness_round(
+        &mut self,
+        next_randomness_round: RandomnessRound,
+        commit_timestamp: TimestampMs,
+    ) {
+        assert!(self.next_randomness_round.is_none());
+        self.next_randomness_round = Some((next_randomness_round, commit_timestamp));
+    }
+
+    pub fn insert_dkg_confirmation(&mut self, conf: VersionedDkgConfirmation) {
+        self.dkg_confirmations.insert(conf.sender(), conf);
+    }
+
+    pub fn insert_dkg_processed_message(&mut self, message: VersionedProcessedMessage) {
+        self.dkg_processed_messages
+            .insert(message.sender(), message);
+    }
+
+    pub fn insert_dkg_used_messages(&mut self, used_messages: VersionedUsedProcessedMessages) {
+        self.dkg_used_message = Some(used_messages);
+    }
+
+    pub fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
+        self.dkg_output = Some(output);
+    }
+
+    fn insert_pending_jwk(&mut self, authority: AuthorityName, id: JwkId, jwk: JWK) {
+        self.pending_jwks.insert((authority, id, jwk));
+    }
+
+    fn insert_active_jwk(&mut self, round: u64, key: (JwkId, JWK)) {
+        self.active_jwks.insert((round, key));
+    }
+
+    pub fn write_to_batch(
+        self,
+        epoch_store: &AuthorityPerEpochStore,
+        batch: &mut DBBatch,
+    ) -> SuiResult {
+        let tables = epoch_store.tables()?;
+        batch.insert_batch(
+            &tables.consensus_message_processed,
+            self.consensus_messages_processed
+                .iter()
+                .map(|key| (key, true)),
+        )?;
+
+        batch.insert_batch(
+            &tables.end_of_publish,
+            self.end_of_publish.iter().map(|authority| (authority, ())),
+        )?;
+
+        if let Some(reconfig_state) = &self.reconfig_state {
+            batch.insert_batch(
+                &tables.reconfig_state,
+                [(RECONFIG_STATE_INDEX, reconfig_state)],
+            )?;
+        }
+
+        if let Some(consensus_commit_stats) = &self.consensus_commit_stats {
+            batch.insert_batch(
+                &tables.last_consensus_index,
+                [(
+                    LAST_CONSENSUS_STATS_ADDR,
+                    ExecutionIndicesWithHash {
+                        index: consensus_commit_stats.index,
+                        hash: consensus_commit_stats.hash,
+                    },
+                )],
+            )?;
+            batch.insert_batch(
+                &tables.last_consensus_stats,
+                [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
+            )?;
+        }
+
+        batch.insert_batch(
+            &tables.pending_execution,
+            self.pending_execution
+                .into_iter()
+                .map(|tx| (*tx.inner().digest(), tx.serializable())),
+        )?;
+
+        if let Some((assigned_versions, next_versions)) = self.shared_object_versions {
+            if epoch_store.randomness_state_enabled() {
+                batch.insert_batch(
+                    &tables.assigned_shared_object_versions_v2,
+                    assigned_versions,
+                )?;
+            } else {
+                batch.insert_batch(
+                    &tables.assigned_shared_object_versions,
+                    assigned_versions
+                        .into_iter()
+                        .map(|(key, versions)| (*key.unwrap_digest(), versions)),
+                )?;
+            }
+
+            batch.insert_batch(&tables.next_shared_object_versions, next_versions)?;
+        }
+
+        batch.delete_batch(&tables.deferred_transactions, self.deleted_deferred_txns)?;
+        batch.insert_batch(&tables.deferred_transactions, self.deferred_txns)?;
+
+        batch.insert_batch(
+            &tables.user_signatures_for_checkpoints,
+            self.user_signatures_for_checkpoints,
+        )?;
+
+        if epoch_store.randomness_state_enabled() {
+            batch.insert_batch(
+                &tables.pending_checkpoints_v2,
+                self.pending_checkpoints
+                    .into_iter()
+                    .map(|cp| (cp.height(), cp)),
+            )?;
+        } else {
+            batch.insert_batch(
+                &tables.pending_checkpoints,
+                self.pending_checkpoints
+                    .into_iter()
+                    .map(|cp| (cp.height(), cp.expect_v1())),
+            )?;
+        }
+
+        if let Some((round, commit_timestamp)) = self.next_randomness_round {
+            batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
+            batch.insert_batch(
+                &tables.randomness_last_round_timestamp,
+                [(SINGLETON_KEY, commit_timestamp)],
+            )?;
+        }
+
+        batch.insert_batch(&tables.dkg_confirmations_v2, self.dkg_confirmations)?;
+        batch.insert_batch(
+            &tables.dkg_processed_messages_v2,
+            self.dkg_processed_messages,
+        )?;
+        batch.insert_batch(
+            &tables.dkg_used_messages_v2,
+            // using Option as iter
+            self.dkg_used_message
+                .into_iter()
+                .map(|used_msgs| (SINGLETON_KEY, used_msgs)),
+        )?;
+        if let Some(output) = self.dkg_output {
+            batch.insert_batch(&tables.dkg_output, [(SINGLETON_KEY, output)])?;
+        }
+
+        batch.insert_batch(
+            &tables.pending_jwks,
+            self.pending_jwks.into_iter().map(|j| (j, ())),
+        )?;
+        batch.insert_batch(
+            &tables.active_jwks,
+            self.active_jwks.into_iter().map(|j| (j, ())),
+        )?;
+
+        Ok(())
     }
 }
 

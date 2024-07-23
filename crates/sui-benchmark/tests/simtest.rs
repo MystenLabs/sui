@@ -811,6 +811,7 @@ mod test {
         batch_payment_weight: u32,
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
+        randomness_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -826,6 +827,7 @@ mod test {
                 batch_payment_weight: 1,
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
+                randomness_weight: 1,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -886,6 +888,7 @@ mod test {
         let delegation_weight = config.delegation_weight;
         let batch_payment_weight = config.batch_payment_weight;
         let shared_object_deletion_weight = config.shared_deletion_weight;
+        let randomness_weight = config.randomness_weight;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -916,6 +919,7 @@ mod test {
             shared_object_deletion_weight,
             adversarial_weight,
             adversarial_cfg,
+            randomness_weight,
             batch_payment_size,
             shared_counter_hotness_factor,
             num_shared_counters,

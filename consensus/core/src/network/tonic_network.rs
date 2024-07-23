@@ -69,6 +69,10 @@ const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 #[cfg(not(msim))]
 const MAX_CONNECTIONS_BACKLOG: u32 = 1024;
 
+// The time we are willing to wait for a connection to get gracefully shutdown before we attempt to
+// forcefully shutdown its task.
+const CONNECTION_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
+
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
     context: Arc<Context>,
@@ -797,10 +801,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     },
                     _ = shutdown_notif.wait() => {
                         info!("Received shutdown. Stopping consensus service.");
-                        if timeout(Duration::from_secs(5), async {
+                        if timeout(CONNECTION_SHUTDOWN_GRACE_PERIOD, async {
                             while connection_handlers.join_next().await.is_some() {}
                         }).await.is_err() {
-                            warn!("Failed to stop all connection handlers in 5s. Forcing shutdown.");
+                            warn!("Failed to stop all connection handlers in {CONNECTION_SHUTDOWN_GRACE_PERIOD:?}. Forcing shutdown.");
                             connection_handlers.shutdown().await;
                         }
                         return;

@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 6-14:
+task 1, lines 6-14:
+//# run --type-args 0x1::M::Ex
 Error: Function execution failed with VMError: {
     major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
     sub_status: None,

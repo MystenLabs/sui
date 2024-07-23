@@ -9,7 +9,7 @@ use crate::{
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    model::{FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, DatatypeId},
+    model::{DatatypeId, FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv},
     symbol::{Symbol, SymbolPool},
     ty::{Type, TypeDisplayContext},
 };

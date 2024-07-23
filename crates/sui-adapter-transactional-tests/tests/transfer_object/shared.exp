@@ -3,22 +3,26 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-25:
+task 1, lines 8-25:
+//# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5525200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 27-27:
+task 2, line 27:
+//# run test::m::mint_s
 created: object(2,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 29-29:
+task 3, line 29:
+//# run test::m::mint_s2
 created: object(3,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 31-31:
+task 4, line 31:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 3
 Contents: test::m::S {
@@ -29,7 +33,8 @@ Contents: test::m::S {
     },
 }
 
-task 5 'view-object'. lines 33-33:
+task 5, line 33:
+//# view-object 3,0
 Owner: Shared( 4 )
 Version: 4
 Contents: test::m::S2 {
@@ -40,15 +45,18 @@ Contents: test::m::S2 {
     },
 }
 
-task 6 'transfer-object'. lines 35-35:
+task 6, line 35:
+//# transfer-object 2,0 --sender A --recipient B
 Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
 Debug of error: InvalidTransferObject at command Some(0)
 
-task 7 'transfer-object'. lines 37-37:
+task 7, line 37:
+//# transfer-object 3,0 --sender A --recipient B
 Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None
 
-task 8 'view-object'. lines 39-39:
+task 8, line 39:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 4
 Contents: test::m::S {
@@ -59,7 +67,8 @@ Contents: test::m::S {
     },
 }
 
-task 9 'view-object'. lines 41-41:
+task 9, line 41:
+//# view-object 3,0
 Owner: Shared( 4 )
 Version: 5
 Contents: test::m::S2 {

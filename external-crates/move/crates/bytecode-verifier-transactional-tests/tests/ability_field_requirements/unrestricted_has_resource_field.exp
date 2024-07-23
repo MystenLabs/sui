@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-10:
+task 0, lines 1-10:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: FIELD_MISSING_TYPE_ABILITY,
     sub_status: None,

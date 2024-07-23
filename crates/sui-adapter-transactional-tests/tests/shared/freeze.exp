@@ -1,16 +1,19 @@
 processed 5 tasks
 
-task 1 'publish'. lines 8-25:
+task 1, lines 8-25:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5396000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 27-27:
+task 2, line 27:
+//# run t2::o2::create
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'view-object'. lines 29-29:
+task 3, line 29:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
@@ -21,6 +24,7 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 4 'run'. lines 31-31:
+task 4, line 31:
+//# run t2::o2::freeze_o2 --args object(2,0)
 Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None

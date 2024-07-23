@@ -7,6 +7,8 @@ import { Sui, Unstaked } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { useCoinMetadataOverrides } from '../../hooks/useCoinMetadataOverride';
+
 const imageStyle = cva(['rounded-full flex'], {
 	variants: {
 		size: {
@@ -38,11 +40,13 @@ type NonSuiCoinProps = {
 
 function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 	const { data: coinMeta } = useCoinMetadata(coinType);
+	const coinMetadataOverrides = useCoinMetadataOverrides();
+
 	return (
 		<div className="flex h-full w-full items-center justify-center text-white bg-steel rounded-full">
 			{coinMeta?.iconUrl ? (
 				<ImageIcon
-					src={coinMeta.iconUrl}
+					src={coinMetadataOverrides[coinType]?.iconUrl ?? coinMeta.iconUrl}
 					label={coinMeta.name || coinType}
 					fallback={coinMeta.name || coinType}
 					rounded="full"

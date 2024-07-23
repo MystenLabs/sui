@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 26-36:
+task 1, lines 26-36:
+//# run
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,

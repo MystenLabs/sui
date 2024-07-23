@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'print-bytecode'. lines 1-9:
+task 0, lines 1-9:
+//# print-bytecode
 // Move bytecode v6
 module 1.m {
 
@@ -15,5 +16,6 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 11-20:
+task 1, lines 11-20:
+//# print-bytecode
 Error: variable redefinition x

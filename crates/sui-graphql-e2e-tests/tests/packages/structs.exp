@@ -3,7 +3,8 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1 'run-graphql'. lines 6-50:
+task 1, lines 6-50:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -131,15 +132,18 @@ Response: {
   }
 }
 
-task 2 'publish'. lines 52-56:
+task 2, lines 52-56:
+//# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'create-checkpoint'. lines 58-58:
+task 3, line 58:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 60-102:
+task 4, lines 60-102:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -198,15 +202,18 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 104-110:
+task 5, lines 104-110:
+//# upgrade --package P0 --upgrade-capability 2,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 112-112:
+task 6, line 112:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 114-171:
+task 7, lines 114-171:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -339,7 +346,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 173-208:
+task 8, lines 173-208:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -387,7 +395,8 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 211-251:
+task 9, lines 211-251:
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
 Response: {
   "data": {
     "object": {
@@ -603,7 +612,8 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 253-300:
+task 10, lines 253-300:
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
 Response: {
   "data": {
     "object": {
