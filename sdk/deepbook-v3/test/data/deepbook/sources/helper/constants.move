@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module deepbook::constants {
     const CURRENT_VERSION: u64 = 1;
     const POOL_CREATION_FEE: u64 = 10000 * 1_000_000; // 10000 DEEP
