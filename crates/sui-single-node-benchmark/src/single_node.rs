@@ -6,7 +6,7 @@ use crate::mock_account::MockKeyPair;
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
@@ -21,7 +21,7 @@ use sui_core::state_accumulator::StateAccumulator;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
+use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};

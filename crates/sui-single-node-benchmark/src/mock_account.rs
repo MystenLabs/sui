@@ -4,7 +4,7 @@
 use futures::stream::FuturesUnordered;
 use sui_types::committee::EpochId;
 use sui_types::utils::load_test_vectors;
-use std::collections::BTreeMap;
+
 use std::sync::Arc;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair as get_random_ed25519_key_pair, AccountKeyPair as Ed25519KeyPair, SuiKeyPair};

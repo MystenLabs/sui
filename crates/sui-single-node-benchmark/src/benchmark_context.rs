@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_account::{batch_create_account_and_gas, Account, MockKeyPair};
+use crate::mock_account::{batch_create_account_and_gas, Account};
 use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::SharedObjectCreateTxGenerator;
