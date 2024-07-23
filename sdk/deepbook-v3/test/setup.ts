@@ -11,8 +11,8 @@ import { Transaction } from '@mysten/sui/transactions';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 
-import type { CoinMap } from '../src/utils/constants.js';
-import { writeToml } from './helper/toml.js';
+import type { CoinMap } from '../src/utils/constants';
+import { writeToml } from './helper/toml';
 
 const DEFAULT_FAUCET_URL = process.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = process.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -65,15 +65,16 @@ export async function publishCoins(toolbox?: TestToolbox): Promise<CoinMap> {
 	if (!toolbox) {
 		toolbox = await setupSuiClient();
 	}
-	const tokenSourcesPath = path.join(__dirname, 'data/token');
+	const tokenSourcesPath = path.join(__dirname, './data/token');
+	console.log(tokenSourcesPath);
 	writeToml(tokenSourcesPath, '0x0', 'token');
 	let deepRes = await publishPackage(tokenSourcesPath, toolbox);
-	writeToml(tokenSourcesPath, deepRes.packageId, 'token');
+	writeToml(tokenSourcesPath, deepRes.packageId, './data/token');
 
-	const usdcSourcePath = path.join(__dirname, 'data/usdc');
+	const usdcSourcePath = path.join(__dirname, './data/usdc');
 	const usdcRes = await publishPackage(usdcSourcePath, toolbox);
 
-	const spamSourcePath = path.join(__dirname, 'data/spam');
+	const spamSourcePath = path.join(__dirname, './data/spam');
 	const spamRes = await publishPackage(spamSourcePath, toolbox);
 
 	return {
