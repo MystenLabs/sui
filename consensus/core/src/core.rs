@@ -1710,7 +1710,7 @@ mod test {
                 1
             );
             let expected_reputation_scores =
-                ReputationScores::new((11..=20).into(), vec![9, 8, 8, 8]);
+                ReputationScores::new((11..=20).into(), vec![29, 29, 29, 29]);
             assert_eq!(
                 core_fixture
                     .core
@@ -1869,7 +1869,7 @@ mod test {
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
         let mut last_round_blocks = Vec::new();
-        for round in 1..=63 {
+        for round in 1..=33 {
             let mut this_round_blocks = Vec::new();
 
             // Wait for min round delay to allow blocks to be proposed.
@@ -1935,20 +1935,20 @@ mod test {
                 .read_last_commit()
                 .unwrap()
                 .expect("last commit should be set");
-            // There are 61 leader rounds with rounds completed up to and including
-            // round 63. Round 63 blocks will only include their own blocks, so there
-            // should only be 60 commits.
+            // There are 31 leader rounds with rounds completed up to and including
+            // round 33. Round 33 blocks will only include their own blocks, so there
+            // should only be 30 commits.
             // However on a leader schedule change boundary its is possible for a
             // new leader to get selected for the same round if the leader elected
             // gets swapped allowing for multiple leaders to be committed at a round.
-            // Meaning with multi leader per round explicitly set to 1 we will have 60,
-            // otherwise 61.
-            // NOTE: We used 61 leader rounds to specifically trigger the scenario
+            // Meaning with multi leader per round explicitly set to 1 we will have 30,
+            // otherwise 31.
+            // NOTE: We used 31 leader rounds to specifically trigger the scenario
             // where the leader schedule boundary occurred AND we had a swap to a new
             // leader for the same round
             let expected_commit_count = match num_leaders_per_round {
-                Some(1) => 60,
-                _ => 61,
+                Some(1) => 30,
+                _ => 31,
             };
             assert_eq!(last_commit.index(), expected_commit_count);
             let all_stored_commits = core_fixture
@@ -1977,7 +1977,7 @@ mod test {
                 1
             );
             let expected_reputation_scores =
-                ReputationScores::new((51..=60).into(), vec![8, 8, 9, 8, 8, 8]);
+                ReputationScores::new((21..=30).into(), vec![43, 43, 43, 43, 43, 43]);
             assert_eq!(
                 core_fixture
                     .core

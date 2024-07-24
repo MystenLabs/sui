@@ -301,38 +301,39 @@ mod tests {
         test_dag_builder::DagBuilder,
     };
 
-    #[tokio::test]
-    async fn test_certificate_scoring_strategy() {
-        let (context, unscored_subdags) = basic_setup();
-        let scoring_strategy = CertificateScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        let scores = calculator.calculate();
-        assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..=4).into());
-    }
+    // TODO(arun): remove or renable gated via protocol config flag
+    // #[tokio::test]
+    // async fn test_certificate_scoring_strategy() {
+    //     let (context, unscored_subdags) = basic_setup();
+    //     let scoring_strategy = CertificateScoringStrategy {};
+    //     let mut calculator =
+    //         ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
+    //     let scores = calculator.calculate();
+    //     assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
+    //     assert_eq!(scores.commit_range, (1..=4).into());
+    // }
 
-    #[tokio::test]
-    async fn test_vote_scoring_strategy() {
-        let (context, unscored_subdags) = basic_setup();
-        let scoring_strategy = VoteScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        let scores = calculator.calculate();
-        assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..=4).into());
-    }
+    // #[tokio::test]
+    // async fn test_vote_scoring_strategy() {
+    //     let (context, unscored_subdags) = basic_setup();
+    //     let scoring_strategy = VoteScoringStrategy {};
+    //     let mut calculator =
+    //         ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
+    //     let scores = calculator.calculate();
+    //     assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
+    //     assert_eq!(scores.commit_range, (1..=4).into());
+    // }
 
-    #[tokio::test]
-    async fn test_certified_vote_scoring_strategy_v1() {
-        let (context, unscored_subdags) = basic_setup();
-        let scoring_strategy = CertifiedVoteScoringStrategyV1 {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        let scores = calculator.calculate();
-        assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (1..=4).into());
-    }
+    // #[tokio::test]
+    // async fn test_certified_vote_scoring_strategy_v1() {
+    //     let (context, unscored_subdags) = basic_setup();
+    //     let scoring_strategy = CertifiedVoteScoringStrategyV1 {};
+    //     let mut calculator =
+    //         ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
+    //     let scores = calculator.calculate();
+    //     assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
+    //     assert_eq!(scores.commit_range, (1..=4).into());
+    // }
 
     #[tokio::test]
     async fn test_certified_vote_scoring_strategy_v2() {

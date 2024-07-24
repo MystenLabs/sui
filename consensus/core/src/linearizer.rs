@@ -284,10 +284,10 @@ mod tests {
         let commits = linearizer.handle_commit(leaders.clone());
         assert_eq!(commits.len(), 10);
         let scores = vec![
-            (AuthorityIndex::new_for_test(2), 9),
-            (AuthorityIndex::new_for_test(1), 8),
-            (AuthorityIndex::new_for_test(0), 8),
-            (AuthorityIndex::new_for_test(3), 8),
+            (AuthorityIndex::new_for_test(1), 29),
+            (AuthorityIndex::new_for_test(0), 29),
+            (AuthorityIndex::new_for_test(3), 29),
+            (AuthorityIndex::new_for_test(2), 29),
         ];
         assert_eq!(commits[0].reputation_scores_desc, scores);
 
