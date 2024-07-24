@@ -1,0 +1,13 @@
+warning[Lint W01020]: 
+  ┌─ tests/linter/incorrect_collapsible_nested_if.move:3:9
+  │  
+3 │ ╭         if (x) {
+4 │ │             if (y) {
+5 │ │                 // Different action for y
+6 │ │                 return true
+7 │ │             }
+8 │ │         };
+  │ ╰─────────^ This `if` statement can be collapsed
+  │  
+  = This warning can be suppressed with '#[allow(lint(collapsible_nested_if))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
