@@ -55,6 +55,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 
 [dev-dependencies]
+axum.workspace = true
 anyhow.workspace = true
 criterion.workspace = true
 tempfile.workspace = true

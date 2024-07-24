@@ -578,5 +578,7 @@ mod test {
         for fullnode in swarm.fullnodes() {
             fullnode.health_check(false).await.unwrap();
         }
+
+        println!("hello");
     }
 }

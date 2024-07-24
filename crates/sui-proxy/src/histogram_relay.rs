@@ -45,7 +45,7 @@ static RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
 // Creates a new http server that has as a sole purpose to expose
 // and endpoint that prometheus agent can use to poll for the metrics.
 // A RegistryService is returned that can be used to get access in prometheus Registries.
-pub fn start_prometheus_server(addr: TcpListener) -> HistogramRelay {
+pub fn start_prometheus_server(listener: TcpListener) -> HistogramRelay {
     let relay = HistogramRelay::new();
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
@@ -61,11 +61,9 @@ pub fn start_prometheus_server(addr: TcpListener) -> HistogramRelay {
         );
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(addr)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
     relay
 }

@@ -16,7 +16,7 @@ name = "sui-source-validation-service"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap.workspace = true
-hyper = "0.14"
+hyper.workspace = true
 jsonrpsee.workspace = true
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -169,10 +169,8 @@ impl RestService {
             app = Router::new().nest(&base, app);
         }
 
-        axum::Server::bind(&socket_address)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     }
 }
 
@@ -285,9 +283,9 @@ mod test {
 
         let router = openapi::OpenApiDocument::new(openapi).into_router();
 
-        axum::Server::bind(&"127.0.0.1:8000".parse().unwrap())
-            .serve(router.into_make_service())
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:8000")
             .await
             .unwrap();
+        axum::serve(listener, router).await.unwrap();
     }
 }
