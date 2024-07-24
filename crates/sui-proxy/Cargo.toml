@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 axum.workspace = true
+axum-extra.workspace = true
 axum-server.workspace = true
 anyhow.workspace = true
 bytes.workspace = true
@@ -37,7 +38,6 @@ rustls.workspace = true
 rustls-pemfile.workspace = true
 prost.workspace = true
 once_cell.workspace = true
-http-body.workspace = true
 hex.workspace = true
 ipnetwork.workspace = true
 

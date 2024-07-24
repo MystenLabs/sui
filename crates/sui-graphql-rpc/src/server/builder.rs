@@ -36,10 +36,9 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::body::Body;
 use axum::extract::FromRef;
-use axum::extract::{
-    connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, Query as AxumQuery, State,
-};
+use axum::extract::{ConnectInfo, Query as AxumQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
@@ -48,9 +47,6 @@ use axum::Extension;
 use axum::Router;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
-use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
-use hyper::Body;
-use hyper::Server as HyperServer;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
@@ -73,7 +69,9 @@ use uuid::Uuid;
 const DEFAULT_MAX_CHECKPOINT_LAG: Duration = Duration::from_secs(300);
 
 pub(crate) struct Server {
-    pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    // pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    router: Router,
+    address: String,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
     trigger_exchange_rates_task: TriggerExchangeRatesTask,
@@ -120,13 +118,18 @@ impl Server {
             info!("Starting graphql service");
             let cancellation_token = self.state.cancellation_token.clone();
             spawn_monitored_task!(async move {
-                self.server
-                    .with_graceful_shutdown(async {
-                        cancellation_token.cancelled().await;
-                        info!("Shutdown signal received, terminating graphql service");
-                    })
-                    .await
-                    .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
+                let listener = tokio::net::TcpListener::bind(&self.address).await.unwrap();
+                axum::serve(
+                    listener,
+                    self.router
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .with_graceful_shutdown(async move {
+                    cancellation_token.cancelled().await;
+                    info!("Shutdown signal received, terminating graphql service");
+                })
+                .await
+                .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
             })
         };
 
@@ -339,7 +342,7 @@ impl ServerBuilder {
             state.cancellation_token.clone(),
         );
 
-        let app = router
+        let router = router
             .route_layer(middleware::from_fn_with_state(
                 state.version,
                 set_version_middleware,
@@ -353,12 +356,8 @@ impl ServerBuilder {
             .layer(Self::cors()?);
 
         Ok(Server {
-            server: axum::Server::bind(
-                &address
-                    .parse()
-                    .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
-            )
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+            router,
+            address,
             watermark_task,
             system_package_task,
             trigger_exchange_rates_task,

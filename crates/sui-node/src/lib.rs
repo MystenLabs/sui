@@ -2044,11 +2044,19 @@ pub async fn build_http_server(
             .nest("/v2", rest_router);
     }
 
-    let server = axum::Server::bind(&config.json_rpc_address)
-        .serve(router.into_make_service_with_connect_info::<SocketAddr>());
+    let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)
+        .await
+        .unwrap();
+    let addr = listener.local_addr().unwrap();
 
-    let addr = server.local_addr();
-    let handle = tokio::spawn(async move { server.await.unwrap() });
+    let handle = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap()
+    });
 
     info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
 

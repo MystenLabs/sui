@@ -115,10 +115,8 @@ Headers: {
     "content-type": "application/json",
     "content-length": "157",
     "x-sui-rpc-version": "2024.7.0-testing-no-sha",
+    "vary": "origin, access-control-request-method, access-control-request-headers",
     "access-control-allow-origin": "*",
-    "vary": "origin",
-    "vary": "access-control-request-method",
-    "vary": "access-control-request-headers",
 }
 Service version: 2024.7.0-testing-no-sha
 Response: {

@@ -72,6 +72,7 @@ impl Node {
     pub fn stop(&self) {
         info!(name =% self.name().concise(), "stopping in-memory node");
         *self.container.lock().unwrap() = None;
+        info!(name =% self.name().concise(), "node stopped");
     }
 
     /// If this Node is currently running
