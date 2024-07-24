@@ -5,7 +5,6 @@
 /// A variable-sized container that can hold any type. Indexing is 0-based, and
 /// vectors are growable. This module has many native functions.
 module std::vector {
-
     /// Allows calling `.to_string()` on a vector of `u8` to get a utf8 `String`.
     public use fun std::string::utf8 as vector.to_string;
 
@@ -25,42 +24,42 @@ module std::vector {
 
     #[bytecode_instruction]
     /// Create an empty vector.
-    native public fun empty<Element>(): vector<Element>;
+    public native fun empty<Element>(): vector<Element>;
 
     #[bytecode_instruction]
     /// Return the length of the vector.
-    native public fun length<Element>(v: &vector<Element>): u64;
+    public native fun length<Element>(v: &vector<Element>): u64;
 
     #[syntax(index)]
     #[bytecode_instruction]
     /// Acquire an immutable reference to the `i`th element of the vector `v`.
     /// Aborts if `i` is out of bounds.
-    native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    public native fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
 
     #[bytecode_instruction]
     /// Add element `e` to the end of the vector `v`.
-    native public fun push_back<Element>(v: &mut vector<Element>, e: Element);
+    public native fun push_back<Element>(v: &mut vector<Element>, e: Element);
 
     #[syntax(index)]
     #[bytecode_instruction]
     /// Return a mutable reference to the `i`th element in the vector `v`.
     /// Aborts if `i` is out of bounds.
-    native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+    public native fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
 
     #[bytecode_instruction]
     /// Pop an element from the end of vector `v`.
     /// Aborts if `v` is empty.
-    native public fun pop_back<Element>(v: &mut vector<Element>): Element;
+    public native fun pop_back<Element>(v: &mut vector<Element>): Element;
 
     #[bytecode_instruction]
     /// Destroy the vector `v`.
     /// Aborts if `v` is not empty.
-    native public fun destroy_empty<Element>(v: vector<Element>);
+    public native fun destroy_empty<Element>(v: vector<Element>);
 
     #[bytecode_instruction]
     /// Swaps the elements at the `i`th and `j`th indices in the vector `v`.
     /// Aborts if `i` or `j` is out of bounds.
-    native public fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
+    public native fun swap<Element>(v: &mut vector<Element>, i: u64, j: u64);
 
     /// Return an vector of size one containing element `e`.
     public fun singleton<Element>(e: Element): vector<Element> {
@@ -75,7 +74,7 @@ module std::vector {
         if (len == 0) return ();
 
         let mut front_index = 0;
-        let mut back_index = len -1;
+        let mut back_index = len - 1;
         while (front_index < back_index) {
             v.swap(front_index, back_index);
             front_index = front_index + 1;
@@ -161,6 +160,14 @@ module std::vector {
 
     // === Macros ===
 
+    /// Create a vector of length `n` by calling the function `f` on each index.
+    public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
+        let mut v = vector[];
+        let n = $n;
+        n.do!(|i| v.push_back($f(i)));
+        v
+    }
+
     /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
     /// Does not preserve the order of elements in the vector (starts from the end of the vector).
     public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
@@ -239,6 +246,14 @@ module std::vector {
         }
     }
 
+    /// Count how many elements in the vector `v` satisfy the predicate `f`.
+    public macro fun count<$T>($v: &vector<$T>, $f: |&$T| -> bool): u64 {
+        let v = $v;
+        let mut count = 0;
+        v.do_ref!(|e| if ($f(e)) count = count + 1);
+        count
+    }
+
     /// Reduce the vector `v` to a single value by applying the function `f` to each element.
     /// Similar to `fold_left` in Rust and `reduce` in Python and JavaScript.
     public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $Acc): $Acc {
@@ -266,5 +281,84 @@ module std::vector {
             v.do_ref!(|e| if (!$f(e)) return 'all false);
             true
         }
+    }
+
+    /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_do<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+        let v1 = $v1;
+        let mut v2 = $v2;
+        v2.reverse();
+        let len = v1.length();
+        assert!(len == v2.length());
+        v1.do!(|el1| $f(el1, v2.pop_back()));
+    }
+
+    /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
+    /// Aborts if the vectors are not of the same length.
+    /// Starts from the end of the vectors.
+    public macro fun zip_do_reverse<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+        let v1 = $v1;
+        let mut v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        v1.destroy!(|el1| $f(el1, v2.pop_back()));
+    }
+
+    /// Iterate through `v1` and `v2` and apply the function `f` to references of each pair of
+    /// elements. The vectors are not modified.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: |&$T1, &$T2|) {
+        let v1 = $v1;
+        let v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        len.do!(|i| $f(&v1[i], &v2[i]));
+    }
+
+    /// Iterate through `v1` and `v2` and apply the function `f` to mutable references of each pair
+    /// of elements. The vectors may be modified.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_do_mut<$T1, $T2>(
+        $v1: &mut vector<$T1>,
+        $v2: &mut vector<$T2>,
+        $f: |&mut $T1, &mut $T2|,
+    ) {
+        let v1 = $v1;
+        let v2 = $v2;
+        let len = v1.length();
+        assert!(len == v2.length());
+        len.do!(|i| $f(&mut v1[i], &mut v2[i]));
+    }
+
+    /// Destroys two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
+    /// The returned values are collected into a new vector.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_map<$T1, $T2, $U>(
+        $v1: vector<$T1>,
+        $v2: vector<$T2>,
+        $f: |$T1, $T2| -> $U,
+    ): vector<$U> {
+        let mut r = vector[];
+        zip_do!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
+        r
+    }
+
+    /// Iterate through `v1` and `v2` and apply the function `f` to references of each pair of
+    /// elements. The returned values are collected into a new vector.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
+    public macro fun zip_map_ref<$T1, $T2, $U>(
+        $v1: &vector<$T1>,
+        $v2: &vector<$T2>,
+        $f: |&$T1, &$T2| -> $U,
+    ): vector<$U> {
+        let mut r = vector[];
+        zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
+        r
     }
 }
