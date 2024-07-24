@@ -4,8 +4,8 @@
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
-use diesel::ExpressionMethods;
 use diesel::{Connection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, TextExpressionMethods};
 use tracing::info;
 
 use sui_bridge::events::{
@@ -111,10 +111,11 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    fn tasks(&self) -> Result<Vec<Task>, anyhow::Error> {
+    fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
+            .filter(columns::task_name.like(format!("{prefix}%")))
             .order_by(columns::checkpoint.desc())
             .load(&mut conn)?;
         Ok(cp.into_iter().map(|d| d.into()).collect())

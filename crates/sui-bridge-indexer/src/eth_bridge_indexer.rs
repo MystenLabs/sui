@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::{EthEvent, EthLog};
 
-use crate::indexer_builder::{DataMapper, Datasource, IndexerProgressStore};
+use crate::indexer_builder::{DataMapper, Datasource};
 use crate::sui_bridge_indexer::PgBridgePersistent;
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
@@ -55,7 +55,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
     async fn create_data_channel(
         &self,
         task_name: String,
-        storage: PgBridgePersistent,
+        starting_checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<EthData>>), Error> {
         let eth_client = Arc::new(
@@ -72,13 +72,12 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                 .interval(std::time::Duration::from_millis(2000)),
         );
 
-        let newest_finalized_block = storage.load_progress(task_name.clone()).await?;
-        info!("Starting from finalized block: {}", newest_finalized_block);
+        info!("Starting from finalized block: {}", starting_checkpoint);
 
         let finalized_contract_addresses =
-            HashMap::from_iter(vec![(self.bridge_address, newest_finalized_block)]);
+            HashMap::from_iter(vec![(self.bridge_address, starting_checkpoint)]);
 
-        let (_task_handles, mut eth_events_rx, _) =
+        let (task_handles, mut eth_events_rx, _) =
             EthSyncer::new(eth_client, finalized_contract_addresses)
                 .run(self.bridge_metrics.clone())
                 .await
@@ -93,23 +92,32 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         );
         let handle = spawn_monitored_task!(async {
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
-                // TODO: This for-loop can be optimzied to group tx / block info
-                // and reduce the queries issued to eth full node
-                let mut data = vec![];
-                for log in logs {
-                    let block_number = log.block_number();
-                    let block = provider.get_block(block_number).await?.unwrap();
-                    let tx_hash = log.tx_hash();
-                    let transaction = provider.get_transaction(tx_hash).await?.unwrap();
-                    data.push((log.clone(), block, transaction));
-                    // TODO: Find out if we can assume logs are in order in eth
-                    if log.block_number > target_checkpoint {
-                        data_sender.send(data).await?;
+                // group logs by block
+                let blocks = logs.into_iter().fold(BTreeMap::new(), |mut result, log| {
+                    let block_number = log.block_number;
+                    result.entry(block_number).or_insert(vec![]).push(log);
+                    result
+                });
+                for (block_number, logs) in blocks {
+                    if block_number > target_checkpoint {
                         break 'outer;
                     }
+                    let mut data = vec![];
+                    let block = provider.get_block(block_number).await?.unwrap();
+
+                    for log in logs {
+                        let tx_hash = log.tx_hash();
+                        let transaction = provider.get_transaction(tx_hash).await?.unwrap();
+                        data.push((log.clone(), block.clone(), transaction.clone()));
+                        info!(
+                            "Processing eth log {} for block {}",
+                            log.tx_hash, log.block_number
+                        )
+                    }
+                    data_sender.send(data).await?;
                 }
-                data_sender.send(data).await?;
             }
+            task_handles.iter().for_each(|h| h.abort());
             Ok::<_, Error>(())
         });
         Ok((handle, data_receiver))

@@ -108,7 +108,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
         T: Send,
     {
         // Update tasks first
-        let tasks = self.storage.tasks()?;
+        let tasks = self.storage.tasks(&self.name)?;
         // create checkpoint workers base on backfill config and existing tasks in the db
         match tasks.live_task() {
             None => {
@@ -139,7 +139,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
         }
 
         // get updated tasks from storage and start workers
-        let updated_tasks = self.storage.tasks()?;
+        let updated_tasks = self.storage.tasks(&self.name)?;
         // Start latest checkpoint worker
         // Tasks are ordered in checkpoint descending order, realtime update task always come first
         // tasks won't be empty here, ok to unwrap.
@@ -147,6 +147,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
 
         let live_task_future = self.datasource.start_ingestion_task(
             live_task.task_name.clone(),
+            live_task.checkpoint,
             live_task.target_checkpoint,
             self.storage.clone(),
             self.filter.clone(),
@@ -165,6 +166,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
                 datasource_clone
                     .start_ingestion_task(
                         backfill_task.task_name.clone(),
+                        backfill_task.checkpoint,
                         backfill_task.target_checkpoint,
                         storage_clone.clone(),
                         filter_clone.clone(),
@@ -220,7 +222,7 @@ pub trait IndexerProgressStore: Send {
         checkpoint_number: u64,
     ) -> anyhow::Result<()>;
 
-    fn tasks(&self) -> Result<Vec<Task>, anyhow::Error>;
+    fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, anyhow::Error>;
 
     fn register_task(
         &mut self,
@@ -237,6 +239,7 @@ pub trait Datasource<T: Send, P, R> {
     async fn start_ingestion_task<F, M>(
         &self,
         task_name: String,
+        starting_checkpoint: u64,
         target_checkpoint: u64,
         mut storage: P,
         filter: F,
@@ -248,16 +251,12 @@ pub trait Datasource<T: Send, P, R> {
         P: Persistent<R> + 'static,
     {
         let (join_handle, mut data_channel) = self
-            .create_data_channel(task_name.clone(), storage.clone(), target_checkpoint)
+            .create_data_channel(task_name.clone(), starting_checkpoint, target_checkpoint)
             .await?;
         while let Some(data) = data_channel.recv().await {
             if !data.is_empty() {
                 // Ok to unwrap here, checked if the data is empty above.
-                let max_block_number = data
-                    .iter()
-                    .map(|d| Self::get_block_number(d))
-                    .max()
-                    .unwrap();
+                let block_number = Self::get_block_number(data.first().unwrap());
                 let processed_data = data.into_iter().filter(|d| filter.matches(d)).try_fold(
                     vec![],
                     |mut result, d| {
@@ -267,17 +266,18 @@ pub trait Datasource<T: Send, P, R> {
                 )?;
                 storage.write(processed_data)?;
                 storage
-                    .save_progress(task_name.clone(), max_block_number)
+                    .save_progress(task_name.clone(), block_number)
                     .await?;
             }
         }
+        join_handle.abort();
         join_handle.await?
     }
 
     async fn create_data_channel(
         &self,
         task_name: String,
-        storage: P,
+        starting_checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<T>>), Error>;
 
@@ -315,7 +315,7 @@ where
     async fn create_data_channel(
         &self,
         task_name: String,
-        storage: P,
+        starting_checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<
         (
@@ -325,8 +325,8 @@ where
         Error,
     > {
         let (exit_sender, exit_receiver) = oneshot::channel();
-        let progress_store = ProgressStoreWrapper {
-            store: storage.clone(),
+        let progress_store = SimpleProgressStore {
+            current_checkpoint: starting_checkpoint,
             exit_checkpoint: target_checkpoint,
             exit_sender: Some(exit_sender),
         };
@@ -395,16 +395,19 @@ pub trait DataMapper<T, R>: Sync + Send {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
 }
 
-struct ProgressStoreWrapper<P> {
-    pub store: P,
+struct SimpleProgressStore {
+    pub current_checkpoint: u64,
     pub exit_checkpoint: u64,
     pub exit_sender: Option<Sender<()>>,
 }
 
 #[async_trait]
-impl<P: IndexerProgressStore> ProgressStore for ProgressStoreWrapper<P> {
-    async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber, anyhow::Error> {
-        self.store.load_progress(task_name).await
+impl ProgressStore for SimpleProgressStore {
+    async fn load(
+        &mut self,
+        _task_name: String,
+    ) -> Result<CheckpointSequenceNumber, anyhow::Error> {
+        Ok(self.current_checkpoint)
     }
 
     async fn save(
@@ -417,6 +420,7 @@ impl<P: IndexerProgressStore> ProgressStore for ProgressStoreWrapper<P> {
                 let _ = sender.send(());
             }
         }
+        self.current_checkpoint = checkpoint_number;
         Ok(())
     }
 }
