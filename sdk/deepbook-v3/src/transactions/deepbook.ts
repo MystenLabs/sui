@@ -115,7 +115,7 @@ export class DeepBookContract {
 	 * @description Modify an existing order
 	 * @param {string} poolKey The key to identify the pool
 	 * @param {string} balanceManagerKey The key to identify the BalanceManager
-	 * @param {number} orderId Order ID to modify
+	 * @param {string} orderId Order ID to modify
 	 * @param {number} newQuantity New quantity for the order
 	 * @returns A function that takes a Transaction object
 	 */
@@ -146,7 +146,7 @@ export class DeepBookContract {
 	 * @description Cancel an existing order
 	 * @param {string} poolKey The key to identify the pool
 	 * @param {string} balanceManagerKey The key to identify the BalanceManager
-	 * @param {number} orderId Order ID to cancel
+	 * @param {string} orderId Order ID to cancel
 	 * @returns A function that takes a Transaction object
 	 */
 	cancelOrder =
@@ -267,10 +267,9 @@ export class DeepBookContract {
 	};
 
 	/**
-	 * @description Cancel an existing order
+	 * @description Gets an order
 	 * @param {string} poolKey The key to identify the pool
-	 * @param {string} balanceManagerKey The key to identify the BalanceManager
-	 * @param {number} orderId Order ID to cancel
+	 * @param {string} orderId Order ID to get
 	 * @returns A function that takes a Transaction object
 	 */
 	getOrder = (poolKey: string, orderId: string) => (tx: Transaction) => {
