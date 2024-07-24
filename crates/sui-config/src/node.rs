@@ -429,7 +429,7 @@ pub struct ConsensusConfig {
     pub address: Multiaddr,
     pub narwhal_config: NarwhalParameters,
 
-    pub parameters: ConsensusParameters,
+    pub parameters: Option<ConsensusParameters>,
 }
 
 impl ConsensusConfig {
