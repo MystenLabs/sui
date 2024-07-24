@@ -63,6 +63,9 @@ ignore = [
     "RUSTSEC-2023-0052",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
+    # Sui does not use object_store with authentication.
+    # Upgrade to object_store >= 10.2 to fix.
+    "RUSTSEC-2024-0358",
     # A few dependencies use unpatched rustls.
     "RUSTSEC-2024-0336",
 ]

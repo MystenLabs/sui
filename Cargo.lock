@@ -12381,6 +12381,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "consensus-config",
  "csv",
  "dirs 4.0.0",
  "fastcrypto",
