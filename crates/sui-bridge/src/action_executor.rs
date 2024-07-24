@@ -71,7 +71,7 @@ pub trait BridgeActionExecutorTrait {
 
 pub struct BridgeActionExecutor<C> {
     sui_client: Arc<SuiClient<C>>,
-    bridge_auth_agg: Arc<BridgeAuthorityAggregator>,
+    bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
     key: SuiKeyPair,
     sui_address: SuiAddress,
     gas_object_id: ObjectID,
@@ -102,7 +102,7 @@ where
 {
     pub async fn new(
         sui_client: Arc<SuiClient<C>>,
-        bridge_auth_agg: Arc<BridgeAuthorityAggregator>,
+        bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         store: Arc<BridgeOrchestratorTables>,
         key: SuiKeyPair,
         sui_address: SuiAddress,
@@ -189,7 +189,7 @@ where
 
     async fn run_signature_aggregation_loop(
         sui_client: Arc<SuiClient<C>>,
-        auth_agg: Arc<BridgeAuthorityAggregator>,
+        auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         store: Arc<BridgeOrchestratorTables>,
         signing_queue_sender: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut signing_queue_receiver: mysten_metrics::metered_channel::Receiver<
@@ -230,7 +230,7 @@ where
     #[instrument(level = "error", skip_all, fields(action_key=?action.0.key(), attempt_times=?action.1))]
     async fn handle_signing_task(
         semaphore: &Arc<Semaphore>,
-        auth_agg: &Arc<BridgeAuthorityAggregator>,
+        auth_agg: &Arc<ArcSwap<BridgeAuthorityAggregator>>,
         signing_queue_sender: &mysten_metrics::metered_channel::Sender<
             BridgeActionExecutionWrapper,
         >,
@@ -320,7 +320,7 @@ where
     async fn request_signatures(
         semaphore: Arc<Semaphore>,
         sui_client: Arc<SuiClient<C>>,
-        auth_agg: Arc<BridgeAuthorityAggregator>,
+        auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         action: BridgeActionExecutionWrapper,
         store: Arc<BridgeOrchestratorTables>,
         signing_queue_sender: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
@@ -353,7 +353,11 @@ where
         {
             return;
         }
-        match auth_agg.request_committee_signatures(action.clone()).await {
+        match auth_agg
+            .load()
+            .request_committee_signatures(action.clone())
+            .await
+        {
             Ok(certificate) => {
                 info!("Sending certificate to execution");
                 execution_queue_sender
@@ -946,7 +950,7 @@ mod tests {
             action.clone()
         );
 
-        // Let authorities to sign the action too. Now we are above the threshold
+        // Let authorities sign the action too. Now we are above the threshold
         let sig_from_2 = mock_bridge_authority_sigs(
             vec![&mock2],
             &action,
@@ -1298,7 +1302,9 @@ mod tests {
 
         let committee = BridgeCommittee::new(authorities).unwrap();
 
-        let agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(committee)));
+        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
+            Arc::new(committee),
+        ))));
         let metrics = Arc::new(BridgeMetrics::new(&registry));
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
         let (token_type_tags_tx, token_type_tags_rx) =
