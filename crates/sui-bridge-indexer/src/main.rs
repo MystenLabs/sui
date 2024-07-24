@@ -83,12 +83,16 @@ async fn main() -> Result<()> {
         config.eth_sui_bridge_contract_address.clone(),
         config.eth_rpc_url.clone(),
         bridge_metrics.clone(),
+        indexer_meterics.clone(),
     )?;
     let eth_finalised_indexer = IndexerBuilder::new(
         "FinalizedEthBridgeIndexer",
         eth_checkpoint_datasource,
         DefaultFilter,
-        EthDataMapper { finalized: true },
+        EthDataMapper {
+            finalized: true,
+            metrics: indexer_meterics.clone(),
+        },
     )
     .build(config.start_block, config.start_block, datastore.clone());
     let finalised_indexer_fut = spawn_logged_monitored_task!(eth_finalised_indexer.start());
@@ -103,7 +107,10 @@ async fn main() -> Result<()> {
         "UnFinalizedEthBridgeIndexer",
         eth_unfinalized_datasource,
         DefaultFilter,
-        EthDataMapper { finalized: false },
+        EthDataMapper {
+            finalized: false,
+            metrics: indexer_meterics.clone(),
+        },
     )
     .build(config.start_block, config.start_block, datastore.clone());
     let unfinalised_indexer_fut = spawn_logged_monitored_task!(eth_unfinalised_indexer.start());
@@ -130,7 +137,9 @@ async fn main() -> Result<()> {
             SuiInputObjectFilter {
                 object_id: SUI_BRIDGE_OBJECT_ID,
             },
-            SuiBridgeDataMapper,
+            SuiBridgeDataMapper {
+                metrics: indexer_meterics.clone(),
+            },
         )
         .build(
             config

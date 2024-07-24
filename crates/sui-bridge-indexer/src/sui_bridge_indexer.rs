@@ -18,6 +18,7 @@ use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::BRIDGE_ADDRESS;
 
 use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
+use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
@@ -155,13 +156,16 @@ impl IndexerProgressStore for PgBridgePersistent {
 
 /// Data mapper impl
 #[derive(Clone)]
-pub struct SuiBridgeDataMapper;
+pub struct SuiBridgeDataMapper {
+    pub metrics: BridgeIndexerMetrics,
+}
 
 impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiBridgeDataMapper {
     fn map(
         &self,
         (data, checkpoint_num, timestamp_ms): CheckpointTxnData,
-    ) -> Result<Vec<ProcessedTxnData>, anyhow::Error> {
+    ) -> Result<Vec<ProcessedTxnData>, Error> {
+        self.metrics.total_sui_bridge_transactions.inc();
         match &data.events {
             Some(events) => {
                 let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {

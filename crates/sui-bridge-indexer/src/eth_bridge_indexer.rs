@@ -36,6 +36,7 @@ pub struct EthFinalizedDatasource {
     bridge_address: EthAddress,
     eth_rpc_url: String,
     bridge_metrics: Arc<BridgeMetrics>,
+    indexer_metrics: BridgeIndexerMetrics,
 }
 
 impl EthFinalizedDatasource {
@@ -43,12 +44,14 @@ impl EthFinalizedDatasource {
         eth_sui_bridge_contract_address: String,
         eth_rpc_url: String,
         bridge_metrics: Arc<BridgeMetrics>,
+        indexer_metrics: BridgeIndexerMetrics,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
         Ok(Self {
             bridge_address,
             eth_rpc_url,
             bridge_metrics,
+            indexer_metrics,
         })
     }
 }
@@ -93,6 +96,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                 .channel_inflight
                 .with_label_values(&[&task_name]),
         );
+        let indexer_metrics = self.indexer_metrics.clone();
         let handle = spawn_monitored_task!(async {
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
                 // group logs by block
@@ -120,6 +124,9 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                             log.tx_hash, log.block_number
                         )
                     }
+                    indexer_metrics
+                        .last_committed_eth_block
+                        .set(block_number as i64);
                     data_sender.send(data).await?;
                 }
             }
@@ -138,7 +145,7 @@ pub struct EthUnFinalizedDatasource {
     bridge_address: EthAddress,
     eth_rpc_url: String,
     bridge_metrics: Arc<BridgeMetrics>,
-    bridge_indexer_metrics: BridgeIndexerMetrics,
+    indexer_metrics: BridgeIndexerMetrics,
 }
 
 impl EthUnFinalizedDatasource {
@@ -146,14 +153,14 @@ impl EthUnFinalizedDatasource {
         eth_sui_bridge_contract_address: String,
         eth_rpc_url: String,
         bridge_metrics: Arc<BridgeMetrics>,
-        bridge_indexer_metrics: BridgeIndexerMetrics,
+        indexer_metrics: BridgeIndexerMetrics,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
         Ok(Self {
             bridge_address,
             eth_rpc_url,
             bridge_metrics,
-            bridge_indexer_metrics,
+            indexer_metrics,
         })
     }
 }
@@ -190,7 +197,7 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinal
             provider.clone(),
             unfinalized_contract_addresses.clone(),
         )
-        .run(self.bridge_indexer_metrics.clone())
+        .run(self.indexer_metrics.clone())
         .await
         .map_err(|e| anyhow!(format!("{e:?}")))?;
 
@@ -201,6 +208,7 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinal
                 .channel_inflight
                 .with_label_values(&[&task_name]),
         );
+        let indexer_metrics = self.indexer_metrics.clone();
         let handle = spawn_monitored_task!(async {
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
                 // group logs by block
@@ -228,6 +236,9 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinal
                             log.tx_hash, log.block_number
                         )
                     }
+                    indexer_metrics
+                        .last_committed_unfinalized_eth_block
+                        .set(block_number as i64);
                     data_sender.send(data).await?;
                 }
             }
@@ -245,6 +256,7 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinal
 #[derive(Clone)]
 pub struct EthDataMapper {
     pub finalized: bool,
+    pub metrics: BridgeIndexerMetrics,
 }
 
 impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> for EthDataMapper {
@@ -256,7 +268,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
         if eth_bridge_event.is_none() {
             return Ok(vec![]);
         }
-        // todo: metrics.total_eth_bridge_transactions.inc();
+        self.metrics.total_eth_bridge_transactions.inc();
         let bridge_event = eth_bridge_event.unwrap();
         let timestamp_ms = block.timestamp.as_u64() * 1000;
         let gas = transaction.gas;
@@ -274,7 +286,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                         log.block_number()
                     );
                     if self.finalized {
-                        // todo: metrics.total_eth_token_deposited.inc();
+                        self.metrics.total_eth_token_deposited.inc();
                     }
                     ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
@@ -305,7 +317,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                         return Ok(vec![]);
                     }
                     info!("Observed Unfinalized Eth Claim");
-                    // todo: metrics.total_eth_token_transfer_claimed.inc();
+                    self.metrics.total_eth_token_transfer_claimed.inc();
                     ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
@@ -323,7 +335,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                 | EthSuiBridgeEvents::UnpausedFilter(_)
                 | EthSuiBridgeEvents::UpgradedFilter(_)
                 | EthSuiBridgeEvents::InitializedFilter(_) => {
-                    // todo: metrics.total_eth_bridge_txn_other.inc();
+                    self.metrics.total_eth_bridge_txn_other.inc();
                     return Ok(vec![]);
                 }
             },
@@ -331,7 +343,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
             | EthBridgeEvent::EthBridgeLimiterEvents(_)
             | EthBridgeEvent::EthBridgeConfigEvents(_)
             | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
-                // todo: metrics.total_eth_bridge_txn_other.inc();
+                self.metrics.total_eth_bridge_txn_other.inc();
                 return Ok(vec![]);
             }
         };
