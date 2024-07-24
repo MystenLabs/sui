@@ -240,6 +240,45 @@ export class DeepBookClient {
 	}
 
 	/**
+	 * @description Get open orders for a balance manager in a pool
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey Key of the balance manager
+	 * @returns {Promise<Array>} An array of open order IDs
+	 */
+	async getOrder(poolKey: string, orderId: string) {
+		const tx = new Transaction();
+
+		tx.add(this.deepBook.getOrder(poolKey, orderId));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+		const OrderDeepPrice = bcs.struct('OrderDeepPrice', {
+			asset_is_base: bcs.bool(),
+			deep_per_asset: bcs.u64(),
+		});
+		const Order = bcs.struct('Order', {
+			balance_manager_id: ID,
+			order_id: bcs.u128(),
+			client_order_id: bcs.u64(),
+			quantity: bcs.u64(),
+			filled_quantity: bcs.u64(),
+			fee_is_deep: bcs.bool(),
+			order_deep_price: OrderDeepPrice,
+			epoch: bcs.u64(),
+			status: bcs.u8(),
+			expire_timestamp: bcs.u64(),
+		});
+
+		const orderInformation = res.results![0].returnValues![0][0];
+		return Order.parse(new Uint8Array(orderInformation));
+	}
+
+	/**
 	 * @description Get level 2 order book specifying range of price
 	 * @param {string} poolKey Key of the pool
 	 * @param {number} priceLow Lower bound of the price range
