@@ -186,7 +186,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
     where
         P: Persistent<R> + 'static,
     {
-        return match self.backfill_strategy {
+        match self.backfill_strategy {
             BackfillStrategy::Simple => self.storage.register_task(
                 format!("{} - backfill - {}", self.name, TransactionDigest::random()),
                 current_cp,
@@ -205,7 +205,7 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
                 Ok(())
             }
             BackfillStrategy::Disabled => Ok(()),
-        };
+        }
     }
 }
 
@@ -300,7 +300,7 @@ impl SuiCheckpointDatasource {
         SuiCheckpointDatasource {
             remote_store_url,
             concurrency,
-            checkpoint_path: checkpoint_path.into(),
+            checkpoint_path,
             metrics,
         }
     }

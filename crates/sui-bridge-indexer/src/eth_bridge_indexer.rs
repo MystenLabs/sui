@@ -93,11 +93,14 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         let handle = spawn_monitored_task!(async {
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
                 // group logs by block
-                let blocks = logs.into_iter().fold(BTreeMap::new(), |mut result, log| {
-                    let block_number = log.block_number;
-                    result.entry(block_number).or_insert(vec![]).push(log);
-                    result
-                });
+                let blocks = logs.into_iter().fold(
+                    BTreeMap::new(),
+                    |mut result: BTreeMap<_, Vec<_>>, log| {
+                        let block_number = log.block_number;
+                        result.entry(block_number).or_default().push(log);
+                        result
+                    },
+                );
                 for (block_number, logs) in blocks {
                     if block_number > target_checkpoint {
                         break 'outer;
