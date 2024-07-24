@@ -163,6 +163,14 @@ where
                     continue;
                 }
 
+                // Handle BlocklistValidatorEvent
+                if let SuiBridgeEvent::BlocklistValidatorEvent(e) = &bridge_event {
+                    monitor_tx
+                        .send(SuiBridgeEvent::BlocklistValidatorEvent(e.clone()))
+                        .expect("Sending blocklist validator event should not fail");
+                    continue;
+                }
+
                 // Handle NewTokenEvent
                 // TODO: broadcast this event and let the downstream services handle it
                 if let SuiBridgeEvent::NewTokenEvent(e) = &bridge_event {

@@ -25,8 +25,9 @@ use sui_types::{
 };
 
 use crate::events::{
-    CommitteeMemberUrlUpdateEvent, SuiBridgeEvent, TokenTransferAlreadyApproved,
-    TokenTransferAlreadyClaimed, TokenTransferApproved, TokenTransferClaimed,
+    BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent, SuiBridgeEvent,
+    TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
+    TokenTransferClaimed,
 };
 use crate::metrics::BridgeMetrics;
 use crate::{
@@ -51,7 +52,7 @@ pub const SIGNING_CONCURRENCY: usize = 10;
 pub const MAX_SIGNING_ATTEMPTS: u64 = 16;
 pub const MAX_EXECUTION_ATTEMPTS: u64 = 16;
 
-const UPDATE_COMMITTEE_RETRY_TIMES: u64 = 3;
+const REFRESH_COMMITTEE_RETRY_TIMES: u64 = 3;
 
 async fn delay(attempt_times: u64) {
     let delay_ms = 100 * (2 ^ attempt_times);
@@ -222,8 +223,14 @@ where
                             error!("Unexpected error on monitoring broadcast channel: {:?}", other);
                         }
                         Ok(SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event)) => {
-                            info!("Received committee member url update event");
-                            let bridge_committee = get_updated_bridge_committee(sui_client.clone(), event, Duration::from_secs(10)).await;
+                            info!("Received committee member url update event: {:?}", event);
+                            let bridge_committee = get_latest_bridge_committee_with_url_update_event(sui_client.clone(), event, Duration::from_secs(10)).await;
+                            // TODO: is this the only place to update the bridge committee in bridge node? Should we use ArcSwap?
+                            auth_agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(bridge_committee)));
+                        }
+                        Ok(SuiBridgeEvent::BlocklistValidatorEvent(event)) => {
+                            info!("Received committee member blocklist event: {:?}", event);
+                            let bridge_committee = get_latest_bridge_committee_with_blocklist_event(sui_client.clone(), event, Duration::from_secs(10)).await;
                             // TODO: is this the only place to update the bridge committee in bridge node? Should we use ArcSwap?
                             auth_agg = Arc::new(BridgeAuthorityAggregator::new(Arc::new(bridge_committee)));
                         }
@@ -682,12 +689,12 @@ pub async fn submit_to_executor(
         .map_err(|e| BridgeError::Generic(e.to_string()))
 }
 
-async fn get_updated_bridge_committee<C: SuiClientInner>(
+async fn get_latest_bridge_committee_with_url_update_event<C: SuiClientInner>(
     sui_client: Arc<SuiClient<C>>,
     event: CommitteeMemberUrlUpdateEvent,
     staleness_retry_interval: Duration,
 ) -> BridgeCommittee {
-    let mut remaining_retry_times = UPDATE_COMMITTEE_RETRY_TIMES;
+    let mut remaining_retry_times = REFRESH_COMMITTEE_RETRY_TIMES;
     loop {
         let Ok(Ok(committee)) = retry_with_max_elapsed_time!(
             sui_client.get_bridge_committee(),
@@ -719,6 +726,55 @@ async fn get_updated_bridge_committee<C: SuiClientInner>(
             warn!(
                 "Committee member url {:?} does not match onchain record {:?} after retry",
                 event.member, member
+            );
+            return committee;
+        }
+    }
+}
+
+async fn get_latest_bridge_committee_with_blocklist_event<C: SuiClientInner>(
+    sui_client: Arc<SuiClient<C>>,
+    event: BlocklistValidatorEvent,
+    staleness_retry_interval: Duration,
+) -> BridgeCommittee {
+    let mut remaining_retry_times = REFRESH_COMMITTEE_RETRY_TIMES;
+    loop {
+        let Ok(Ok(committee)) = retry_with_max_elapsed_time!(
+            sui_client.get_bridge_committee(),
+            Duration::from_secs(600)
+        ) else {
+            error!("Failed to get bridge committee after retry");
+            continue;
+        };
+        let mut any_mismatch = false;
+        for pk in &event.public_keys {
+            let member = committee.member(&BridgeAuthorityPublicKeyBytes::from(pk));
+            if member.is_none() {
+                // This is possible when a node is processing an older event while the member quitted at a later point,
+                // Or fullnode returns a stale committee that the member hasn't joined. In either case, It's fine to ignore
+                // them
+                warn!("Committee member not found in the committee: {:?}", pk);
+                any_mismatch = true;
+                break;
+            } else if member.unwrap().is_blocklisted != event.blocklisted {
+                warn!("Committee member not found in the committee: {:?}", pk);
+                any_mismatch = true;
+                break;
+            }
+        }
+        if !any_mismatch {
+            return committee;
+        }
+        // If there is any match, it could be:
+        // 1. the query is sent to a stale fullnode that does not have the latest data yet
+        // 2. the node is processing an older message, and the latest blocklist status has changed again
+        // In either case, we retry a few times. If it still fails to match, we assume it's the latter case.
+        tokio::time::sleep(staleness_retry_interval).await;
+        remaining_retry_times -= 1;
+        if remaining_retry_times == 0 {
+            warn!(
+                "Committee member blocklist status {:?} does not match onchain record after retry",
+                event
             );
             return committee;
         }
@@ -1223,7 +1279,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_updated_bridge_committe() {
+    async fn test_get_latest_bridge_committee_with_url_update_event() {
         telemetry_subscribers::init_for_testing();
         let mut sui_client_mock = SuiMockClient::default();
         let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
@@ -1253,9 +1309,12 @@ mod tests {
         // Test the regular case, the onchain url matches
         sui_client_mock.set_bridge_committee(summary.clone());
         let timer = std::time::Instant::now();
-        let committee =
-            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(2))
-                .await;
+        let committee = get_latest_bridge_committee_with_url_update_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(2),
+        )
+        .await;
         assert_eq!(
             committee.member(&pk_as_bytes).unwrap().base_url,
             "http://new.url"
@@ -1286,9 +1345,12 @@ mod tests {
             tokio::time::sleep(Duration::from_secs(1)).await;
             sui_client_mock_clone.set_bridge_committee(summary.clone());
         });
-        let committee =
-            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(2))
-                .await;
+        let committee = get_latest_bridge_committee_with_url_update_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(2),
+        )
+        .await;
         assert_eq!(
             committee.member(&pk_as_bytes).unwrap().base_url,
             "http://new.url"
@@ -1297,7 +1359,7 @@ mod tests {
         assert!(elapsed > 1000 && elapsed < 3000);
 
         // Test the case where the onchain url is newer. It should retry up to
-        // UPDATE_COMMITTEE_RETRY_TIMES time then return the onchain record.
+        // REFRESH_COMMITTEE_RETRY_TIMES time then return the onchain record.
         let newer_summary = BridgeCommitteeSummary {
             members: vec![(
                 pk_bytes.clone(),
@@ -1314,7 +1376,7 @@ mod tests {
         };
         sui_client_mock.set_bridge_committee(newer_summary.clone());
         let timer = std::time::Instant::now();
-        let committee = get_updated_bridge_committee(
+        let committee = get_latest_bridge_committee_with_url_update_event(
             sui_client.clone(),
             event.clone(),
             Duration::from_millis(500),
@@ -1325,9 +1387,9 @@ mod tests {
             "http://newer.url"
         );
         let elapsed = timer.elapsed().as_millis();
-        assert!(elapsed > 500 * UPDATE_COMMITTEE_RETRY_TIMES as u128);
+        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
 
-        // Test the case where the member ionchain url is newers not found in the committee
+        // Test the case where the member is not found in the committee
         // It should return the onchain record.
         let (_, kp2): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
         let pk2 = kp2.public().clone();
@@ -1349,9 +1411,12 @@ mod tests {
         };
         sui_client_mock.set_bridge_committee(newer_summary.clone());
         let timer = std::time::Instant::now();
-        let committee =
-            get_updated_bridge_committee(sui_client.clone(), event.clone(), Duration::from_secs(1))
-                .await;
+        let committee = get_latest_bridge_committee_with_url_update_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(1),
+        )
+        .await;
         assert_eq!(
             committee.member(&pk_as_bytes2).unwrap().base_url,
             "http://newer.url"
@@ -1359,6 +1424,219 @@ mod tests {
         assert!(committee.member(&pk_as_bytes).is_none());
         let elapsed = timer.elapsed().as_millis();
         assert!(elapsed < 1000);
+    }
+
+    #[tokio::test]
+    async fn test_get_latest_bridge_committee_with_blocklist_event() {
+        telemetry_subscribers::init_for_testing();
+        let mut sui_client_mock = SuiMockClient::default();
+        let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
+        let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pk = kp.public().clone();
+        let pk_as_bytes = BridgeAuthorityPublicKeyBytes::from(&pk);
+        let pk_bytes = pk_as_bytes.as_bytes().to_vec();
+
+        // Test the case where the onchain status is the same as the event (blocklisted)
+        let event = BlocklistValidatorEvent {
+            blocklisted: true,
+            public_keys: vec![pk.clone()],
+        };
+        let summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://new.url".to_string().as_bytes().to_vec(),
+                    blocklisted: true,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(2),
+        )
+        .await;
+        assert!(committee.member(&pk_as_bytes).unwrap().is_blocklisted);
+        assert!(timer.elapsed().as_millis() < 500);
+
+        // Test the case where the onchain status is the same as the event (unblocklisted)
+        let event = BlocklistValidatorEvent {
+            blocklisted: false,
+            public_keys: vec![pk.clone()],
+        };
+        let summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://new.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(2),
+        )
+        .await;
+        assert!(!committee.member(&pk_as_bytes).unwrap().is_blocklisted);
+        assert!(timer.elapsed().as_millis() < 500);
+
+        // Test the case where the onchain status is older. Then update onchain status in 1 second.
+        // Since the retry interval is 2 seconds, it should return the next retry.
+        let old_summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://new.url".to_string().as_bytes().to_vec(),
+                    blocklisted: true,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(old_summary.clone());
+        let timer = std::time::Instant::now();
+        // update unblocklisted in 1 second
+        let mut sui_client_mock_clone = sui_client_mock.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            sui_client_mock_clone.set_bridge_committee(summary.clone());
+        });
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(2),
+        )
+        .await;
+        assert!(!committee.member(&pk_as_bytes).unwrap().is_blocklisted);
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 1000 && elapsed < 3000);
+
+        // Test the case where the onchain url is newer. It should retry up to
+        // REFRESH_COMMITTEE_RETRY_TIMES time then return the onchain record.
+        let newer_summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://new.url".to_string().as_bytes().to_vec(),
+                    blocklisted: true,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(newer_summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_millis(500),
+        )
+        .await;
+        assert!(committee.member(&pk_as_bytes).unwrap().is_blocklisted);
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+
+        // Test the case where the member onchain url is not found in the committee
+        // It should return the onchain record after retrying a few times.
+        let (_, kp2): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pk2 = kp2.public().clone();
+        let pk_as_bytes2 = BridgeAuthorityPublicKeyBytes::from(&pk2);
+        let pk_bytes2 = pk_as_bytes2.as_bytes().to_vec();
+        let summary = BridgeCommitteeSummary {
+            members: vec![(
+                pk_bytes2.clone(),
+                MoveTypeCommitteeMember {
+                    sui_address: SuiAddress::random_for_testing_only(),
+                    bridge_pubkey_bytes: pk_bytes2.clone(),
+                    voting_power: 10000,
+                    http_rest_url: "http://newer.url".to_string().as_bytes().to_vec(),
+                    blocklisted: false,
+                },
+            )],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_secs(1),
+        )
+        .await;
+        assert_eq!(
+            committee.member(&pk_as_bytes2).unwrap().base_url,
+            "http://newer.url"
+        );
+        assert!(committee.member(&pk_as_bytes).is_none());
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+
+        // Test any mismtach in the blocklist status should retry a few times
+        let event = BlocklistValidatorEvent {
+            blocklisted: true,
+            public_keys: vec![pk, pk2],
+        };
+        let summary = BridgeCommitteeSummary {
+            members: vec![
+                (
+                    pk_bytes.clone(),
+                    MoveTypeCommitteeMember {
+                        sui_address: SuiAddress::random_for_testing_only(),
+                        bridge_pubkey_bytes: pk_bytes.clone(),
+                        voting_power: 5000,
+                        http_rest_url: "http://pk.url".to_string().as_bytes().to_vec(),
+                        blocklisted: true,
+                    },
+                ),
+                (
+                    pk_bytes2.clone(),
+                    MoveTypeCommitteeMember {
+                        sui_address: SuiAddress::random_for_testing_only(),
+                        bridge_pubkey_bytes: pk_bytes2.clone(),
+                        voting_power: 5000,
+                        http_rest_url: "http://pk2.url".to_string().as_bytes().to_vec(),
+                        blocklisted: false,
+                    },
+                ),
+            ],
+            member_registration: vec![],
+            last_committee_update_epoch: 0,
+        };
+        sui_client_mock.set_bridge_committee(summary.clone());
+        let timer = std::time::Instant::now();
+        let committee = get_latest_bridge_committee_with_blocklist_event(
+            sui_client.clone(),
+            event.clone(),
+            Duration::from_millis(500),
+        )
+        .await;
+        assert!(committee.member(&pk_as_bytes).unwrap().is_blocklisted);
+        assert!(!committee.member(&pk_as_bytes2).unwrap().is_blocklisted);
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
     }
 
     fn mock_bridge_authority_sigs(
