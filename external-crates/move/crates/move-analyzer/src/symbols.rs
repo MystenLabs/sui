@@ -520,8 +520,6 @@ pub struct Symbols {
     pub cursor_context: Option<CursorContext>,
     /// Typed Program
     pub typed_ast: Option<T::Program>,
-    /// Typed Program from pre-compiled binaries
-    pub precompiled_typed_ast: Option<T::Program>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -1812,7 +1810,7 @@ pub fn get_symbols(
         &mut mod_use_defs,
     );
 
-    if let Some(libs) = compiled_libs.clone() {
+    if let Some(libs) = compiled_libs {
         process_typed_modules(
             &mut libs.typing.modules.clone(),
             &source_files,
@@ -1829,30 +1827,15 @@ pub fn get_symbols(
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
 
-    let symbols = if let Some(libs) = compiled_libs {
-        Symbols {
-            references,
-            file_use_defs,
-            file_mods,
-            def_info,
-            files: mapped_files,
-            compiler_info,
-            cursor_context,
-            typed_ast,
-            precompiled_typed_ast: Some(libs.typing.clone()),
-        }
-    } else {
-        Symbols {
-            references,
-            file_use_defs,
-            file_mods,
-            def_info,
-            files: mapped_files,
-            compiler_info,
-            cursor_context,
-            typed_ast,
-            precompiled_typed_ast: None,
-        }
+    let symbols = Symbols {
+        references,
+        file_use_defs,
+        file_mods,
+        def_info,
+        files: mapped_files,
+        compiler_info,
+        cursor_context,
+        typed_ast,
     };
 
     eprintln!("get_symbols load complete");
@@ -2052,7 +2035,6 @@ pub fn empty_symbols() -> Symbols {
         compiler_info: CompilerInfo::new(),
         cursor_context: None,
         typed_ast: None,
-        precompiled_typed_ast: None,
     }
 }
 

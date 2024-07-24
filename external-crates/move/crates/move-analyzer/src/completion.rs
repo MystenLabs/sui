@@ -31,7 +31,6 @@ use move_compiler::{
         ide::{AliasAutocompleteInfo, AutocompleteMethod},
         Identifier, Name, NumericalAddress,
     },
-    typing::ast::ModuleDefinition,
 };
 use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
@@ -383,23 +382,12 @@ fn all_n_position_member_completions(
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
 
-    fn mod_def<'a>(symbols: &'a Symbols, mod_ident: &ModuleIdent) -> Option<&'a ModuleDefinition> {
-        if let Some(ast) = &symbols.typed_ast {
-            let mod_def = ast.modules.get(mod_ident);
-            if mod_def.is_some() {
-                return mod_def;
-            }
-        }
-        if let Some(ast) = &symbols.precompiled_typed_ast {
-            let mod_def = ast.modules.get(mod_ident);
-            if mod_def.is_some() {
-                return mod_def;
-            }
-        }
-        None
-    }
-
-    let Some(mod_def) = mod_def(symbols, mod_ident) else {
+    let Some(mod_defs) = symbols
+        .file_mods
+        .values()
+        .flatten()
+        .find(|mdef| mdef.ident == mod_ident.value)
+    else {
         return completions;
     };
 
@@ -415,50 +403,50 @@ fn all_n_position_member_completions(
         }
     }
 
-    for (_, fname, fdef) in &mod_def.functions {
-        if matches!(fdef.visibility, Visibility::Internal) && !same_module {
+    for (fname, fdef) in &mod_defs.functions {
+        let Some(DefInfo::Function(
+            _,
+            visibility,
+            fun_type,
+            _,
+            type_args,
+            arg_names,
+            arg_types,
+            ret_type,
+            _,
+        )) = symbols.def_info(&fdef.name_loc)
+        else {
+            continue;
+        };
+
+        if matches!(visibility, Visibility::Internal) && !same_module {
             continue;
         }
-        if matches!(fdef.visibility, Visibility::Package(_)) && !same_package {
+        if matches!(visibility, Visibility::Package(_)) && !same_package {
             continue;
         }
 
         completions.push(call_completion_item(
             &mod_ident.value,
-            fdef.macro_.is_some(),
+            matches!(fun_type, FunType::Macro),
             None,
-            fname,
-            &fdef
-                .signature
-                .type_parameters
-                .iter()
-                .map(|tparam| sp(Loc::invalid(), Type_::Param(tparam.clone())))
-                .collect::<Vec<_>>(),
-            &fdef
-                .signature
-                .parameters
-                .iter()
-                .map(|(_, sp!(loc, v), _)| sp(*loc, v.name))
-                .collect::<Vec<_>>(),
-            &fdef
-                .signature
-                .parameters
-                .iter()
-                .map(|(_, _, ty)| ty.clone())
-                .collect::<Vec<_>>(),
-            &fdef.signature.return_type,
+            &fname,
+            type_args,
+            arg_names,
+            arg_types,
+            ret_type,
         ));
     }
 
-    for (_, sname, _) in &mod_def.structs {
+    for (sname, _) in &mod_defs.structs {
         completions.push(completion_item(sname, CompletionItemKind::STRUCT));
     }
 
-    for (_, ename, _) in &mod_def.enums {
+    for (ename, _) in &mod_defs.enums {
         completions.push(completion_item(ename, CompletionItemKind::ENUM));
     }
 
-    for (_, cname, _) in &mod_def.constants {
+    for (cname, _) in &mod_defs.constants {
         if !same_module {
             continue;
         }
@@ -586,26 +574,6 @@ fn is_pkg_mod_ident(mod_ident: &ModuleIdent_, leading_name: &LeadingNameAccess) 
     false
 }
 
-/// Gets module identifiers from both package's typed AST and precompiled libraries's typed AST
-fn all_mod_identifiers(symbols: &Symbols) -> Vec<ModuleIdent> {
-    let mut all_identifiers = vec![];
-    if let Some(ast) = &symbols.typed_ast {
-        all_identifiers.extend(
-            ast.modules
-                .iter()
-                .map(|(loc, mod_ident, _)| sp(loc, mod_ident.clone())),
-        );
-    };
-    if let Some(ast) = &symbols.precompiled_typed_ast {
-        all_identifiers.extend(
-            ast.modules
-                .iter()
-                .map(|(loc, mod_ident, _)| sp(loc, mod_ident.clone())),
-        );
-    };
-    all_identifiers
-}
-
 /// Gets module identifiers for a given package identified by `leading_name`
 fn pkg_mod_identifiers(
     symbols: &Symbols,
@@ -620,7 +588,12 @@ fn pkg_mod_identifiers(
         }
     }
 
-    let all_identifiers = all_mod_identifiers(symbols);
+    let all_identifiers = symbols
+        .file_mods
+        .values()
+        .flatten()
+        .map(|mdef| sp(mdef.name_loc, mdef.ident))
+        .collect::<BTreeSet<_>>();
     for mod_ident in all_identifiers.into_iter() {
         if is_pkg_mod_ident(&mod_ident.value, leading_name) {
             mod_identifiers.insert(mod_ident);
@@ -710,8 +683,13 @@ fn is_package_address(
         return true;
     }
 
-    let all_identifiers = all_mod_identifiers(symbols);
-    for sp!(_, mod_ident) in all_identifiers.into_iter() {
+    let all_identifiers = symbols
+        .file_mods
+        .values()
+        .flatten()
+        .map(|mdef| mdef.ident)
+        .collect::<BTreeSet<_>>();
+    for mod_ident in all_identifiers.into_iter() {
         if let Address::Numerical {
             name: _,
             value,
@@ -735,8 +713,13 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
         addresses.insert(a.to_string());
     }
 
-    let all_identifiers = all_mod_identifiers(symbols);
-    for sp!(_, mod_ident) in all_identifiers.into_iter() {
+    let all_identifiers = symbols
+        .file_mods
+        .values()
+        .flatten()
+        .map(|mdef| mdef.ident)
+        .collect::<BTreeSet<_>>();
+    for mod_ident in all_identifiers.into_iter() {
         match mod_ident.address {
             Address::Numerical {
                 name,
