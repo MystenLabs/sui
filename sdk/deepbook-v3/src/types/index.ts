@@ -39,7 +39,7 @@ export enum SelfMatchingOptions {
 export interface PlaceLimitOrderParams {
 	poolKey: string;
 	balanceManagerKey: string;
-	clientOrderId: number;
+	clientOrderId: string;
 	price: number;
 	quantity: number;
 	isBid: boolean;
@@ -52,7 +52,7 @@ export interface PlaceLimitOrderParams {
 export interface PlaceMarketOrderParams {
 	poolKey: string;
 	balanceManagerKey: string;
-	clientOrderId: number;
+	clientOrderId: string;
 	quantity: number;
 	isBid: boolean;
 	selfMatchingOption?: SelfMatchingOptions;
