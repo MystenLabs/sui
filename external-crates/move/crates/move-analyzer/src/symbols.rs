@@ -153,9 +153,9 @@ pub enum FunType {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantInfo {
-    name: Symbol,
-    empty: bool,
-    positional: bool,
+    pub name: Name,
+    pub empty: bool,
+    pub positional: bool,
 }
 /// Information about a definition of some identifier
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -2191,7 +2191,7 @@ fn get_mod_outer_defs(
             };
             let field_names = field_defs.iter().map(|f| sp(f.loc, f.name)).collect();
             def_info_variants.push(VariantInfo {
-                name: *vname,
+                name: sp(vname_loc, *vname),
                 empty: field_defs.is_empty(),
                 positional,
             });

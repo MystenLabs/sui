@@ -5,23 +5,28 @@ module Completion::colon_colon {
     public enum SomeEnum has drop{
         SomeVariant,
         SomeOtherVariant,
+        NamedVariant { name1: u64, name2: u64},
+        PositionalVariant(u64, u64),
     }
 
     public struct CompletionStruct has drop {}
 
-    public fun foo() {}
+    public fun foo(param1: u64, param2: u64) {}
 
     public fun complete_chains() {
         use Completion::colon_colon as CC;
         use Completion::colon_colon::SomeEnum as SE;
-        let _local1 = Completion::colon_colon::SomeEnum::SomeVariant;
-        let _local2 = ::Completion::colon_colon::SomeEnum::SomeVariant;
+        let _local = Completion::colon_colon::SomeEnum::SomeVariant;
+        ::Completion::colon_colon::SomeEnum::SomeVariant;
         Completion::dot::shadowed();
-        let _local3 = 0xCAFE::colon_colon::SomeEnum::SomeVariant;
-        let _local4 = option::none<u64>();
-        let _local5 = std::hash::sha2_256(vector::empty());
-        let _local6 = CC::SomeEnum::SomeVariant;
-        let _local7 = SE::SomeVariant;
+        0xCAFE::colon_colon::SomeEnum::SomeVariant;
+        option::none<u64>();
+        std::hash::sha2_256(vector::empty());
+        CC::SomeEnum::SomeVariant;
+        CC::foo(7, 42);
+        SE::SomeVariant;
+        SE::PositionalVariant(7, 42);
+        SE::NamedVariant{name1: 7, name2: 42};
     }
 
     public fun single_ident() {
@@ -36,5 +41,4 @@ module Completion::colon_colon {
     public fun member_single_ident() {
         Some
     }
-
 }
