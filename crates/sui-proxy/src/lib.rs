@@ -61,11 +61,9 @@ mod tests {
         let app = Router::new().route("/v1/push", post(handler));
 
         // run it
-        axum::Server::from_tcp(listener)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        axum::serve(listener, app).await.unwrap();
     }
 
     /// axum_acceptor is a basic e2e test that creates a mock remote_write post endpoint and has a simple

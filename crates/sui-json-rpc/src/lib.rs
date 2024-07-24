@@ -5,9 +5,9 @@ use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
+use axum::body::Body;
 use hyper::header::HeaderName;
 use hyper::header::HeaderValue;
-use hyper::Body;
 use hyper::Method;
 use hyper::Request;
 use jsonrpsee::RpcModule;
@@ -127,7 +127,7 @@ impl JsonRpcServerBuilder {
 
     fn trace_layer() -> TraceLayer<
         tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
-        impl tower_http::trace::MakeSpan<hyper::Body> + Clone,
+        impl tower_http::trace::MakeSpan<Body> + Clone,
         (),
         (),
         (),
@@ -259,13 +259,18 @@ impl JsonRpcServerBuilder {
     ) -> Result<ServerHandle, Error> {
         let app = self.to_router(server_type).await?;
 
-        let server = axum::Server::bind(&listen_address)
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>());
-
-        let addr = server.local_addr();
+        let listener = tokio::net::TcpListener::bind(&listen_address)
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
 
         let handle = tokio::spawn(async move {
-            server.await.unwrap();
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
             if let Some(cancel) = cancel {
                 // Signal that the server is shutting down, so other tasks can clean-up.
                 cancel.cancel();

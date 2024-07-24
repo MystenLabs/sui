@@ -10,7 +10,6 @@ use axum::response::IntoResponse;
 use axum::{extract::Query, routing::get, Router};
 use chrono;
 use dirs;
-use reqwest;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
@@ -155,8 +154,8 @@ fn spawn_local_server(
         );
         let addr = SocketAddr::from(([127, 0, 0, 1], 17846));
 
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, app)
             .await
             .expect("couldn't start local auth server on port 17846");
     })

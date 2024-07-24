@@ -7,6 +7,7 @@ use std::{net::SocketAddr, sync::Arc};
 use sui_types::traffic_control::RemoteFirewallConfig;
 
 use axum::extract::{ConnectInfo, Json, State};
+use axum::response::Response;
 use futures::StreamExt;
 use hyper::header::HeaderValue;
 use hyper::HeaderMap;
@@ -101,12 +102,12 @@ impl<L: Logger> JsonRpcService<L> {
 }
 
 /// Create a response body.
-fn from_template<S: Into<hyper::Body>>(
+fn from_template<S: Into<axum::body::Body>>(
     status: hyper::StatusCode,
     body: S,
     content_type: &'static str,
-) -> hyper::Response<hyper::Body> {
-    hyper::Response::builder()
+) -> Response {
+    Response::builder()
         .status(status)
         .header(
             "content-type",
@@ -119,7 +120,7 @@ fn from_template<S: Into<hyper::Body>>(
 }
 
 /// Create a valid JSON response.
-pub(crate) fn ok_response(body: String) -> hyper::Response<hyper::Body> {
+pub(crate) fn ok_response(body: String) -> Response {
     const JSON: &str = "application/json; charset=utf-8";
     from_template(hyper::StatusCode::OK, body, JSON)
 }

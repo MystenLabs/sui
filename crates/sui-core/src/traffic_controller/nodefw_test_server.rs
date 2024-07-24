@@ -44,18 +44,11 @@ impl NodeFwTestServer {
             .route("/block_addresses", post(Self::block_addresses))
             .with_state(app_state.clone());
 
-        let shutdown_signal = self.shutdown_signal.clone();
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        let server = axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .with_graceful_shutdown(async move {
-                shutdown_signal.notified().await;
-            });
 
         let handle = tokio::spawn(async move {
-            if let Err(e) = server.await {
-                panic!("Server error: {}", e);
-            }
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            axum::serve(listener, app).await.unwrap();
         });
 
         tokio::spawn(Self::periodically_remove_expired_addresses(

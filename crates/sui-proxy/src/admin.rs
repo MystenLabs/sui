@@ -166,28 +166,26 @@ pub fn generate_self_cert(hostname: String) -> CertKeyPair {
 }
 
 /// Load a certificate for use by the listening service
-fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
+fn load_certs(filename: &str) -> Vec<rustls::pki_types::CertificateDer<'static>> {
     let certfile = fs::File::open(filename)
         .unwrap_or_else(|e| panic!("cannot open certificate file: {}; {}", filename, e));
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
         .unwrap()
-        .iter()
-        .map(|v| rustls::Certificate(v.clone()))
-        .collect()
 }
 
 /// Load a private key
-fn load_private_key(filename: &str) -> rustls::PrivateKey {
+fn load_private_key(filename: &str) -> rustls::pki_types::PrivateKeyDer<'static> {
     let keyfile = fs::File::open(filename)
         .unwrap_or_else(|e| panic!("cannot open private key file {}; {}", filename, e));
     let mut reader = BufReader::new(keyfile);
 
     loop {
         match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
-            Some(rustls_pemfile::Item::RSAKey(key)) => return rustls::PrivateKey(key),
-            Some(rustls_pemfile::Item::PKCS8Key(key)) => return rustls::PrivateKey(key),
-            Some(rustls_pemfile::Item::ECKey(key)) => return rustls::PrivateKey(key),
+            Some(rustls_pemfile::Item::Pkcs1Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Pkcs8Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Sec1Key(key)) => return key.into(),
             None => break,
             _ => {}
         }

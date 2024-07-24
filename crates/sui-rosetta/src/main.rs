@@ -129,7 +129,7 @@ impl RosettaServerCommand {
             RosettaServerCommand::StartOfflineServer { env, addr } => {
                 info!("Starting Rosetta Offline Server.");
                 let server = RosettaOfflineServer::new(env);
-                server.serve(addr).await??;
+                server.serve(addr).await;
             }
             RosettaServerCommand::StartOnlineRemoteServer {
                 env,
@@ -144,7 +144,7 @@ impl RosettaServerCommand {
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
 
             RosettaServerCommand::StartOnlineServer {
@@ -177,7 +177,7 @@ impl RosettaServerCommand {
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
         };
         Ok(())

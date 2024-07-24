@@ -14,7 +14,8 @@ use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
-use hyper::server::conn::Http;
+use hyper_util::rt::tokio::TokioIo;
+use hyper_util::service::TowerToHyperService;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::monitored_future;
 use mysten_network::{
@@ -144,15 +145,18 @@ impl NetworkClient for TonicClient {
         let response = client.subscribe_blocks(request).await.map_err(|e| {
             ConsensusError::NetworkRequest(format!("subscribe_blocks failed: {e:?}"))
         })?;
-        let stream = response.into_inner().filter_map(move |b| async move {
-            match b {
-                Ok(response) => Some(response.block),
-                Err(e) => {
-                    debug!("Network error received from {}: {e:?}", peer);
-                    None
+        let stream = response
+            .into_inner()
+            .take_while(|b| futures::future::ready(b.is_ok()))
+            .filter_map(move |b| async move {
+                match b {
+                    Ok(response) => Some(response.block),
+                    Err(e) => {
+                        debug!("Network error received from {}: {e:?}", peer);
+                        None
+                    }
                 }
-            }
-        });
+            });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
                 .boxed();
@@ -692,13 +696,14 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     .max_encoding_message_size(config.message_size_limit)
                     .max_decoding_message_size(config.message_size_limit),
             )
-            .into_service();
+            .into_router();
 
         let inbound_metrics = self.context.metrics.network_metrics.inbound.clone();
         let excessive_message_size = self.context.parameters.tonic.excessive_message_size;
 
-        let mut http = Http::new();
-        http.http2_only(true);
+        let http =
+            hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                .http2_only();
         let http = Arc::new(http);
 
         let tls_server_config =
@@ -875,7 +880,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         .service(consensus_service.clone());
 
                     pin! {
-                        let connection = http.serve_connection(tls_stream, svc);
+                        let connection = http.serve_connection(TokioIo::new(tls_stream), TowerToHyperService::new(svc));
                     }
                     trace!("Connection ready. Starting to serve requests for {peer_addr:?}");
 
