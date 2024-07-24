@@ -13,6 +13,7 @@ use crate::{
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
+use arc_swap::ArcSwap;
 use ethers::types::Address as EthAddress;
 use std::{
     collections::HashMap,
@@ -104,13 +105,15 @@ async fn start_client_components(
             .await
             .expect("Failed to get committee"),
     );
-    let bridge_auth_agg = BridgeAuthorityAggregator::new(committee);
+    let bridge_auth_agg = Arc::new(ArcSwap::from(Arc::new(BridgeAuthorityAggregator::new(
+        committee,
+    ))));
     let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
     let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
-        Arc::new(bridge_auth_agg),
+        bridge_auth_agg,
         store.clone(),
         client_config.key,
         client_config.sui_address,
