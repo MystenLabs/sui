@@ -182,14 +182,7 @@ where
             ))
         };
 
-        let store_path = context
-            .parameters
-            .db_path
-            .as_ref()
-            .expect("DB path is not set")
-            .as_path()
-            .to_str()
-            .unwrap();
+        let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
@@ -375,7 +368,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let parameters = Parameters {
-            db_path: Some(temp_dir.into_path()),
+            db_path: temp_dir.into_path(),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};
@@ -672,7 +665,7 @@ mod tests {
 
         // Cache less blocks to exercise commit sync.
         let parameters = Parameters {
-            db_path: Some(db_dir.path().to_path_buf()),
+            db_path: db_dir.path().to_path_buf(),
             dag_state_cached_rounds: 5,
             commit_sync_parallel_fetches: 3,
             commit_sync_batch_size: 3,
