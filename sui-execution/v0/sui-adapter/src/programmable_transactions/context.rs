@@ -13,8 +13,14 @@ mod checked {
 
     use crate::adapter::{missing_unwrapped_msg, new_native_extensions};
     use crate::error::convert_vm_error;
+    use crate::execution_mode::ExecutionMode;
+    use crate::execution_value::{
+        CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents, ObjectValue,
+        RawValueType, ResultValue, TryFromValue, UsageKind, Value,
+    };
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
+    use crate::type_resolver::TypeTagResolver;
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -30,6 +36,7 @@ mod checked {
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution_status::CommandArgumentError;
     use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
@@ -37,11 +44,7 @@ mod checked {
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         event::Event,
-        execution::{
-            CommandKind, ExecutionResults, ExecutionResultsV1, ExecutionState, InputObjectMetadata,
-            InputValue, ObjectContents, ObjectValue, RawValueType, ResultValue, TryFromValue,
-            UsageKind, Value,
-        },
+        execution::{ExecutionResults, ExecutionResultsV1},
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
@@ -50,9 +53,7 @@ mod checked {
             ObjectChange, WriteKind,
         },
         transaction::{Argument, CallArg, ObjectArg},
-        type_resolver::TypeTagResolver,
     };
-    use sui_types::{execution_mode::ExecutionMode, execution_status::CommandArgumentError};
 
     /// Maintains all runtime state specific to programmable transactions
     pub struct ExecutionContext<'vm, 'state, 'a> {
