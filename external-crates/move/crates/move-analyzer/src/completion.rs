@@ -757,7 +757,11 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
     addresses
 }
 
-/// Handle path auto-completion at a given position.
+/// Handle path auto-completion at a given position. The gist of this approach is to first identify
+/// what the first component of the access chain represents (as it may be a package, module or a
+/// member) and if the chain has other components, recursively process them in turn to either
+/// - finish auto-completion if cursor is on a given component's identifier
+/// - identify what the subsequent component represents and keep going
 fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<CompletionItem>, bool) {
     eprintln!("looking for colon(s)");
     let mut completions = vec![];
