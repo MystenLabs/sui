@@ -9,10 +9,9 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use futures::future::join_all;
 use mysten_metrics::monitored_scope;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use tokio::task;
 
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Slot, VerifiedBlock},
@@ -70,30 +69,24 @@ impl<'a> ReputationScoreCalculator<'a> {
         let _scope = mysten_metrics::monitored_scope("ReputationScoreCalculator::calculate");
         let leaders = self.unscored_subdag.committed_leaders.clone();
 
-        let mut handles = vec![];
         let unscored_subdag = Arc::new(self.unscored_subdag.clone());
 
-        for leader in leaders {
-            let leader_slot = Slot::from(leader);
-            tracing::trace!("Calculating score for leader {leader_slot}");
+        let results: Vec<_> = leaders
+            .into_par_iter()
+            .map(|leader| {
+                let leader_slot = Slot::from(leader);
+                tracing::trace!("Calculating score for leader {leader_slot}");
 
-            let unscored_subdag = Arc::clone(&unscored_subdag);
-
-            handles.push(task::spawn_blocking(move || {
                 ReputationScoreCalculator::calculate_scores_for_leader(
                     &unscored_subdag,
                     leader_slot,
                 )
-            }));
-        }
-
-        let results = futures::executor::block_on(join_all(handles));
+            })
+            .collect();
 
         // Merge the resulting scores from each leader
         for result in results {
-            if let Ok(scores) = result {
-                self.add_scores(scores);
-            }
+            self.add_scores(result);
         }
 
         ReputationScores::new(self.commit_range.clone(), self.scores_per_authority.clone())
