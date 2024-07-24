@@ -126,7 +126,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             .expect("consensus_config should exist");
         let parameters = Parameters {
             db_path: Some(self.get_store_path(epoch)),
-            ..consensus_config.parameters.clone()
+            ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
         let own_protocol_key = self.protocol_keypair.public();
