@@ -240,10 +240,10 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description Get open orders for a balance manager in a pool
+	 * @description Get the order information for a specific order in a pool
 	 * @param {string} poolKey Key of the pool
-	 * @param {string} managerKey Key of the balance manager
-	 * @returns {Promise<Array>} An array of open order IDs
+	 * @param {string} orderId Order ID
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the order information
 	 */
 	async getOrder(poolKey: string, orderId: string) {
 		const tx = new Transaction();
