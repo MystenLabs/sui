@@ -804,6 +804,11 @@ impl WritebackCache {
         let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
 
+        self.metrics.record_cache_write("transaction_block");
+        self.dirty
+            .pending_transaction_writes
+            .insert(tx_digest, tx_outputs.clone());
+
         // insert transaction effects before executed_effects_digests so that there
         // are never dangling entries in executed_effects_digests
         self.metrics.record_cache_write("transaction_effects");
@@ -830,11 +835,6 @@ impl WritebackCache {
         self.dirty
             .executed_effects_digests
             .insert(tx_digest, effects_digest);
-
-        self.metrics.record_cache_write("transaction_block");
-        self.dirty
-            .pending_transaction_writes
-            .insert(tx_digest, tx_outputs);
 
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
