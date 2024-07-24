@@ -17,7 +17,9 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::eth_bridge_indexer::{EthDataMapper, EthFinalizedDatasource};
+use sui_bridge_indexer::eth_bridge_indexer::{
+    EthDataMapper, EthFinalizedDatasource, EthUnFinalizedDatasource,
+};
 use sui_bridge_indexer::indexer_builder::{
     DefaultFilter, IndexerBuilder, SuiCheckpointDatasource, SuiInputObjectFilter,
 };
@@ -74,11 +76,9 @@ async fn main() -> Result<()> {
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
-    // unwrap safe: db_url must be set in `load_config` above
     let db_url = config.db_url.clone();
 
     let datastore = PgBridgePersistent::new(get_connection_pool(db_url.clone()));
-
     let eth_checkpoint_datasource = EthFinalizedDatasource::new(
         config.eth_sui_bridge_contract_address.clone(),
         config.eth_rpc_url.clone(),
@@ -93,32 +93,20 @@ async fn main() -> Result<()> {
     .build(config.start_block, config.start_block, datastore.clone());
     let finalised_indexer_fut = spawn_logged_monitored_task!(eth_finalised_indexer.start());
 
-    // TODO: same for unfinalised eth
-
-    /*// TODO: retry_with_max_elapsed_time
-    let eth_worker = EthBridgeWorker::new(
-        get_connection_pool(db_url.clone()),
+    let eth_unfinalized_datasource = EthUnFinalizedDatasource::new(
+        config.eth_sui_bridge_contract_address.clone(),
+        config.eth_rpc_url.clone(),
         bridge_metrics.clone(),
         indexer_meterics.clone(),
-        config.clone(),
     )?;
-
-    let eth_client = Arc::new(
-        EthClient::<MeteredEthHttpProvier>::new(
-            &config.eth_rpc_url,
-            HashSet::from_iter(vec![eth_worker.bridge_address()]),
-            bridge_metrics.clone(),
-        )
-        .await?,
-    );
-
-    let unfinalized_handle = eth_worker
-        .start_indexing_unfinalized_events(eth_client.clone())
-        .await?;
-    let finalized_handle = eth_worker
-        .start_indexing_finalized_events(eth_client.clone())
-        .await?;
-    let handles = vec![unfinalized_handle, finalized_handle];*/
+    let eth_unfinalised_indexer = IndexerBuilder::new(
+        "UnFinalizedEthBridgeIndexer",
+        eth_unfinalized_datasource,
+        DefaultFilter,
+        EthDataMapper { finalized: false },
+    )
+    .build(config.start_block, config.start_block, datastore.clone());
+    let unfinalised_indexer_fut = spawn_logged_monitored_task!(eth_unfinalised_indexer.start());
 
     if let Some(sui_rpc_url) = config.sui_rpc_url.clone() {
         // Todo: impl datasource for sui RPC datasource
@@ -154,7 +142,7 @@ async fn main() -> Result<()> {
         indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(vec![finalised_indexer_fut]).await;
+    futures::future::join_all(vec![finalised_indexer_fut, unfinalised_indexer_fut]).await;
 
     Ok(())
 }

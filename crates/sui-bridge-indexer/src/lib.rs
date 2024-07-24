@@ -9,7 +9,6 @@ use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 
 pub mod config;
-pub mod eth_worker;
 pub mod latest_eth_syncer;
 pub mod metrics;
 pub mod models;
@@ -18,7 +17,6 @@ pub mod schema;
 pub mod sui_checkpoint_ingestion;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
-pub mod sui_worker;
 pub mod types;
 
 pub mod indexer_builder;

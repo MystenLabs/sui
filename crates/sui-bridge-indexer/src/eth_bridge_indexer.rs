@@ -19,15 +19,18 @@ use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metrics::BridgeMetrics;
-use sui_bridge::types::{EthEvent, EthLog};
+use sui_bridge::types::{EthEvent, EthLog, RawEthLog};
 
 use crate::indexer_builder::{DataMapper, Datasource};
+use crate::latest_eth_syncer::LatestEthSyncer;
+use crate::metrics::BridgeIndexerMetrics;
 use crate::sui_bridge_indexer::PgBridgePersistent;
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
 };
 
 type EthData = (EthLog, Block<H256>, Transaction);
+type RawEthData = (RawEthLog, Block<H256>, Transaction);
 
 pub struct EthFinalizedDatasource {
     bridge_address: EthAddress,
@@ -131,13 +134,124 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
     }
 }
 
+pub struct EthUnFinalizedDatasource {
+    bridge_address: EthAddress,
+    eth_rpc_url: String,
+    bridge_metrics: Arc<BridgeMetrics>,
+    bridge_indexer_metrics: BridgeIndexerMetrics,
+}
+
+impl EthUnFinalizedDatasource {
+    pub fn new(
+        eth_sui_bridge_contract_address: String,
+        eth_rpc_url: String,
+        bridge_metrics: Arc<BridgeMetrics>,
+        bridge_indexer_metrics: BridgeIndexerMetrics,
+    ) -> Result<Self, anyhow::Error> {
+        let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
+        Ok(Self {
+            bridge_address,
+            eth_rpc_url,
+            bridge_metrics,
+            bridge_indexer_metrics,
+        })
+    }
+}
+
+#[async_trait]
+impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinalizedDatasource {
+    async fn create_data_channel(
+        &self,
+        task_name: String,
+        starting_checkpoint: u64,
+        target_checkpoint: u64,
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<RawEthData>>), Error> {
+        let eth_client = Arc::new(
+            EthClient::<Http>::new(
+                &self.eth_rpc_url,
+                HashSet::from_iter(vec![self.bridge_address]),
+                self.bridge_metrics.clone(),
+            )
+            .await?,
+        );
+
+        let provider = Arc::new(
+            Provider::<Http>::try_from(&self.eth_rpc_url)?
+                .interval(std::time::Duration::from_millis(2000)),
+        );
+
+        info!("Starting from unfinalized block: {}", starting_checkpoint);
+
+        let unfinalized_contract_addresses =
+            HashMap::from_iter(vec![(self.bridge_address, starting_checkpoint)]);
+
+        let (task_handles, mut eth_events_rx) = LatestEthSyncer::new(
+            eth_client,
+            provider.clone(),
+            unfinalized_contract_addresses.clone(),
+        )
+        .run(self.bridge_indexer_metrics.clone())
+        .await
+        .map_err(|e| anyhow!(format!("{e:?}")))?;
+
+        let (data_sender, data_receiver) = metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&[&task_name]),
+        );
+        let handle = spawn_monitored_task!(async {
+            'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
+                // group logs by block
+                let blocks = logs.into_iter().fold(
+                    BTreeMap::new(),
+                    |mut result: BTreeMap<_, Vec<_>>, log| {
+                        let block_number = log.block_number;
+                        result.entry(block_number).or_default().push(log);
+                        result
+                    },
+                );
+                for (block_number, logs) in blocks {
+                    if block_number > target_checkpoint {
+                        break 'outer;
+                    }
+                    let mut data = vec![];
+                    let block = provider.get_block(block_number).await?.unwrap();
+
+                    for log in logs {
+                        let tx_hash = log.tx_hash();
+                        let transaction = provider.get_transaction(tx_hash).await?.unwrap();
+                        data.push((log.clone(), block.clone(), transaction.clone()));
+                        info!(
+                            "Processing eth log {} for block {}",
+                            log.tx_hash, log.block_number
+                        )
+                    }
+                    data_sender.send(data).await?;
+                }
+            }
+            task_handles.iter().for_each(|h| h.abort());
+            Ok::<_, Error>(())
+        });
+        Ok((handle, data_receiver))
+    }
+
+    fn get_block_number((log, _, _): &RawEthData) -> u64 {
+        log.block_number
+    }
+}
+
 #[derive(Clone)]
 pub struct EthDataMapper {
     pub finalized: bool,
 }
 
-impl DataMapper<EthData, ProcessedTxnData> for EthDataMapper {
-    fn map(&self, (log, block, transaction): EthData) -> Result<Vec<ProcessedTxnData>, Error> {
+impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> for EthDataMapper {
+    fn map(
+        &self,
+        (log, block, transaction): (E, Block<H256>, Transaction),
+    ) -> Result<Vec<ProcessedTxnData>, Error> {
         let eth_bridge_event = EthBridgeEvent::try_from_log(log.log());
         if eth_bridge_event.is_none() {
             return Ok(vec![]);
@@ -157,7 +271,7 @@ impl DataMapper<EthData, ProcessedTxnData> for EthDataMapper {
                         } else {
                             "Unfinalized"
                         },
-                        log.block_number
+                        log.block_number()
                     );
                     if self.finalized {
                         // todo: metrics.total_eth_token_deposited.inc();
@@ -165,7 +279,7 @@ impl DataMapper<EthData, ProcessedTxnData> for EthDataMapper {
                     ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
-                        block_height: log.block_number,
+                        block_height: log.block_number(),
                         timestamp_ms,
                         txn_hash: transaction.hash.as_bytes().to_vec(),
                         txn_sender: bridge_event.sender_address.as_bytes().to_vec(),
@@ -195,7 +309,7 @@ impl DataMapper<EthData, ProcessedTxnData> for EthDataMapper {
                     ProcessedTxnData::TokenTransfer(TokenTransfer {
                         chain_id: bridge_event.source_chain_id,
                         nonce: bridge_event.nonce,
-                        block_height: log.block_number,
+                        block_height: log.block_number(),
                         timestamp_ms,
                         txn_hash: transaction.hash.as_bytes().to_vec(),
                         txn_sender: bridge_event.sender_address.to_vec(),
