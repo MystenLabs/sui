@@ -168,14 +168,6 @@ module std::vector {
         v
     }
 
-    /// Count how many elements in the vector `v` satisfy the predicate `f`.
-    public macro fun count<$T>($v: &vector<$T>, $f: |&$T| -> bool): u64 {
-        let v = $v;
-        let mut count = 0;
-        v.do_ref!(|e| if ($f(e)) count = count + 1);
-        count
-    }
-
     /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
     /// Does not preserve the order of elements in the vector (starts from the end of the vector).
     public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
@@ -254,6 +246,14 @@ module std::vector {
         }
     }
 
+    /// Count how many elements in the vector `v` satisfy the predicate `f`.
+    public macro fun count<$T>($v: &vector<$T>, $f: |&$T| -> bool): u64 {
+        let v = $v;
+        let mut count = 0;
+        v.do_ref!(|e| if ($f(e)) count = count + 1);
+        count
+    }
+
     /// Reduce the vector `v` to a single value by applying the function `f` to each element.
     /// Similar to `fold_left` in Rust and `reduce` in Python and JavaScript.
     public macro fun fold<$T, $Acc>($v: vector<$T>, $init: $Acc, $f: |$Acc, $T| -> $Acc): $Acc {
@@ -283,8 +283,8 @@ module std::vector {
         }
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
-    /// Consumes both vectors.
+    /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
+    /// Aborts if the vectors are not of the same length.
     /// The order of elements in the vectors is preserved.
     public macro fun zip_do<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
         let v1 = $v1;
@@ -295,7 +295,8 @@ module std::vector {
         v1.do!(|el1| $f(el1, v2.pop_back()));
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
+    /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
+    /// Aborts if the vectors are not of the same length.
     /// Starts from the end of the vectors.
     public macro fun zip_do_reverse<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
         let v1 = $v1;
@@ -305,8 +306,9 @@ module std::vector {
         v1.destroy!(|el1| $f(el1, v2.pop_back()));
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of references to
-    /// elements.
+    /// Iterate through `v1` and `v2` and apply the function `f` to references of each pair of
+    /// elements. The vectors are not modified.
+    /// Aborts if the vectors are not of the same length.
     /// The order of elements in the vectors is preserved.
     public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: |&$T1, &$T2|) {
         let v1 = $v1;
@@ -316,8 +318,10 @@ module std::vector {
         len.do!(|i| $f(&v1[i], &v2[i]));
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of mutable
-    /// references to elements.
+    /// Iterate through `v1` and `v2` and apply the function `f` to mutable references of each pair
+    /// of elements. The vectors may be modified.
+    /// Aborts if the vectors are not of the same length.
+    /// The order of elements in the vectors is preserved.
     public macro fun zip_do_mut<$T1, $T2>(
         $v1: &mut vector<$T1>,
         $v2: &mut vector<$T2>,
@@ -330,8 +334,9 @@ module std::vector {
         len.do!(|i| $f(&mut v1[i], &mut v2[i]));
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of elements. The
-    /// returned values are collected into a new vector.
+    /// Destroys two vectors `v1` and `v2` by applying the function `f` to each pair of elements.
+    /// The returned values are collected into a new vector.
+    /// Aborts if the vectors are not of the same length.
     /// The order of elements in the vectors is preserved.
     public macro fun zip_map<$T1, $T2, $U>(
         $v1: vector<$T1>,
@@ -343,8 +348,9 @@ module std::vector {
         r
     }
 
-    /// Zip two vectors `v1` and `v2` by applying the function `f` to each pair of references to
-    /// elements. Unlike `zip_map` this function does not consume the vectors.
+    /// Iterate through `v1` and `v2` and apply the function `f` to references of each pair of
+    /// elements. The returned values are collected into a new vector.
+    /// Aborts if the vectors are not of the same length.
     /// The order of elements in the vectors is preserved.
     public macro fun zip_map_ref<$T1, $T2, $U>(
         $v1: &vector<$T1>,
