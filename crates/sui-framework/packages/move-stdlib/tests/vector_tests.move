@@ -784,6 +784,6 @@ module std::vector_tests {
     fun zip_map_ref_macro() {
         let v1 = vector[1u64, 2, 3];
         let v2 = vector[4u64, 5, 6];
-        assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[9, 7, 5]);
+        assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
     }
 }
