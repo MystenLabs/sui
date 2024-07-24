@@ -269,9 +269,7 @@ export class DeepBookClient {
 			prices: parsed_prices.map(
 				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
 			),
-			quantities: parsed_quantities.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
-			),
+			quantities: parsed_quantities.map((price) => Number(price) / baseCoin.scalar),
 		};
 	}
 
@@ -308,11 +306,11 @@ export class DeepBookClient {
 			bid_prices: bid_parsed_prices.map(
 				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
 			),
-			bid_quantities: bid_parsed_quantities.map((quantity) => Number(quantity) / FLOAT_SCALAR),
+			bid_quantities: bid_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
 			ask_prices: ask_parsed_prices.map(
 				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
 			),
-			ask_quantities: ask_parsed_quantities.map((quantity) => Number(quantity) / FLOAT_SCALAR),
+			ask_quantities: ask_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
 		};
 	}
 
