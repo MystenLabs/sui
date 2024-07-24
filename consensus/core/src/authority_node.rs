@@ -121,6 +121,14 @@ impl ConsensusAuthority {
             Self::WithTonic(authority) => &authority.context,
         }
     }
+
+    #[allow(unused)]
+    fn sync_last_known_own_block_enabled(&self) -> bool {
+        match self {
+            Self::WithAnemo(authority) => authority.sync_last_known_own_block,
+            Self::WithTonic(authority) => authority.sync_last_known_own_block,
+        }
+    }
 }
 
 pub(crate) struct AuthorityNode<N>
@@ -139,6 +147,7 @@ where
     broadcaster: Option<Broadcaster>,
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
+    sync_last_known_own_block: bool,
 }
 
 impl<N> AuthorityNode<N>
@@ -331,6 +340,7 @@ where
             broadcaster,
             subscriber,
             network_manager,
+            sync_last_known_own_block,
         }
     }
 
@@ -454,6 +464,9 @@ mod tests {
 
         let mut output_receivers = Vec::with_capacity(committee.size());
         let mut authorities = Vec::with_capacity(committee.size());
+        let boot_counters = (0..4)
+            .map(|_| Arc::new(ConsensusAuthorityBootCounter::default()))
+            .collect::<Vec<_>>();
 
         for (index, _authority_info) in committee.authorities() {
             let (authority, receiver) = make_authority(
@@ -462,6 +475,7 @@ mod tests {
                 committee.clone(),
                 keypairs.clone(),
                 network_type,
+                Some(boot_counters[index].clone()),
             )
             .await;
             output_receivers.push(receiver);
@@ -516,6 +530,7 @@ mod tests {
             committee.clone(),
             keypairs.clone(),
             network_type,
+            Some(boot_counters[index].clone()),
         )
         .await;
         output_receivers[index] = receiver;
@@ -542,6 +557,9 @@ mod tests {
         let mut output_receivers = vec![];
         let mut authorities = BTreeMap::new();
         let mut temp_dirs = BTreeMap::new();
+        let mut boot_counters = (0..4)
+            .map(|_| Arc::new(ConsensusAuthorityBootCounter::default()))
+            .collect::<Vec<_>>();
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
@@ -551,8 +569,10 @@ mod tests {
                 committee.clone(),
                 keypairs.clone(),
                 network_type,
+                Some(boot_counters[index].clone()),
             )
             .await;
+            assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
             output_receivers.push(receiver);
             authorities.insert(index, authority);
             temp_dirs.insert(index, dir);
@@ -588,14 +608,21 @@ mod tests {
         // to consensus but now will attempt to synchronize the last own block and recover from there. It won't be able
         // to do that successfully as authority 2 is still down.
         let dir = TempDir::new().unwrap();
+        // We do provide a new boot counter for this one to simulate a "binary" restart
+        boot_counters[index_1] = Arc::new(ConsensusAuthorityBootCounter::default());
         let (authority, mut receiver) = make_authority(
             index_1,
             &dir,
             committee.clone(),
             keypairs.clone(),
             network_type,
+            Some(boot_counters[index_1].clone()),
         )
         .await;
+        assert!(
+            authority.sync_last_known_own_block_enabled(),
+            "Authority should have the sync of last own block enabled"
+        );
         authorities.insert(index_1, authority);
         temp_dirs.insert(index_1, dir);
         sleep(Duration::from_secs(5)).await;
@@ -608,8 +635,13 @@ mod tests {
             committee.clone(),
             keypairs,
             network_type,
+            Some(boot_counters[index_2].clone()),
         )
         .await;
+        assert!(
+            !authority.sync_last_known_own_block_enabled(),
+            "Authority should not have attempted to sync the last own block"
+        );
         authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
 
@@ -635,7 +667,10 @@ mod tests {
         committee: Committee,
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
         network_type: ConsensusNetwork,
+        boot_counter: Option<Arc<ConsensusAuthorityBootCounter>>,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
+        let boot_counter =
+            boot_counter.unwrap_or(Arc::new(ConsensusAuthorityBootCounter::default()));
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.
@@ -666,9 +701,15 @@ mod tests {
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
-            Arc::new(ConsensusAuthorityBootCounter::default()),
+            boot_counter.clone(),
         )
         .await;
+
+        assert!(
+            boot_counter.load(Ordering::SeqCst) >= 1,
+            "Boot counter should have been incremented now at least >= 1"
+        );
+
         (authority, receiver)
     }
 }

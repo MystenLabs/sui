@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::atomic::Ordering;
 use std::{sync::Arc, time::Duration};
 
 use fastcrypto::traits::KeyPair;
@@ -29,32 +30,32 @@ async fn test_mysticeti_manager() {
         .committee_size(1.try_into().unwrap())
         .build();
 
-    for _i in 0..3 {
-        let config = &configs.validator_configs()[0];
+    let config = &configs.validator_configs()[0];
 
-        let consensus_config = config.consensus_config().unwrap();
-        let registry_service = RegistryService::new(Registry::new());
-        let secret = Arc::pin(config.protocol_key_pair().copy());
-        let genesis = config.genesis().unwrap();
+    let consensus_config = config.consensus_config().unwrap();
+    let registry_service = RegistryService::new(Registry::new());
+    let secret = Arc::pin(config.protocol_key_pair().copy());
+    let genesis = config.genesis().unwrap();
 
-        let state = TestAuthorityBuilder::new()
-            .with_genesis_and_keypair(genesis, &secret)
-            .build()
-            .await;
+    let state = TestAuthorityBuilder::new()
+        .with_genesis_and_keypair(genesis, &secret)
+        .build()
+        .await;
 
-        let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
-        let epoch_store = state.epoch_store_for_testing();
-        let client = Arc::new(LazyMysticetiClient::default());
+    let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
+    let epoch_store = state.epoch_store_for_testing();
+    let client = Arc::new(LazyMysticetiClient::default());
 
-        let manager = MysticetiManager::new(
-            config.worker_key_pair().copy(),
-            config.network_key_pair().copy(),
-            consensus_config.db_path().to_path_buf(),
-            registry_service,
-            metrics,
-            client,
-        );
+    let manager = MysticetiManager::new(
+        config.worker_key_pair().copy(),
+        config.network_key_pair().copy(),
+        consensus_config.db_path().to_path_buf(),
+        registry_service,
+        metrics,
+        client,
+    );
 
+    for i in 1..=3 {
         let consensus_handler_initializer = ConsensusHandlerInitializer::new_for_testing(
             state.clone(),
             checkpoint_service_for_testing(state.clone()),
@@ -86,5 +87,6 @@ async fn test_mysticeti_manager() {
 
         // THEN
         assert!(!manager.is_running().await);
+        assert_eq!(manager.boot_counter.load(Ordering::SeqCst), i);
     }
 }
