@@ -114,7 +114,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 			this.deepBook.placeLimitOrder({
 				poolKey: 'SUI_DBUSDC',
 				balanceManagerKey: 'MANAGER_1',
-				clientOrderId: 888,
+				clientOrderId: '123456789',
 				price: 1,
 				quantity: 10,
 				isBid: false,
