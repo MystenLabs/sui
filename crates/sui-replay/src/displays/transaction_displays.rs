@@ -8,7 +8,7 @@ use move_core_types::language_storage::TypeTag;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
-use sui_types::execution_mode::ExecutionResult;
+use sui_types::execution::ExecutionResult;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
