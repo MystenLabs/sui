@@ -2,7 +2,6 @@
 source: consensus/config/tests/parameters_test.rs
 expression: parameters
 ---
-db_path: ~
 leader_timeout:
   secs: 0
   nanos: 250000000
@@ -29,4 +28,3 @@ tonic:
 sync_last_proposed_block_timeout:
   secs: 0
   nanos: 0
-
