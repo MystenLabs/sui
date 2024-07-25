@@ -44,6 +44,7 @@ fn run_deepbook_tests() {
     buf.extend(["..", "sui-framework", "packages", "deepbook"]);
     check_move_unit_tests(&buf);
 }
+
 #[test]
 #[cfg_attr(msim, ignore)]
 fn run_bridge_tests() {
@@ -52,30 +53,46 @@ fn run_bridge_tests() {
     check_move_unit_tests(&buf);
 }
 
-fn check_packages_recursively(path: &Path) -> io::Result<()> {
-    for entry in fs::read_dir(path).unwrap() {
-        let entry = entry?;
-        if entry.path().join("Move.toml").exists() {
-            check_package_builds(&entry.path());
-            check_move_unit_tests(&entry.path());
-        } else if entry.file_type()?.is_dir() {
-            check_packages_recursively(&entry.path())?;
+/// Look for Move packages (directories containing Move.toml) and checks that:
+///
+/// - It builds, in dev mode, with all warnings and lints enabled as errors.
+/// - The tests all pass.
+async fn check_packages_recursively(path: &Path) -> io::Result<()> {
+    let mut frontier = vec![path.to_owned()];
+    let mut move_packages = vec![];
+
+    while let Some(dir) = frontier.pop() {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry?;
+            if entry.path().join("Move.toml").exists() {
+                move_packages.push(entry.path());
+            } else if entry.file_type()?.is_dir() {
+                frontier.push(entry.path());
+            }
         }
     }
+
+    futures::future::join_all(move_packages.into_iter().map(|p| {
+        tokio::task::spawn(async move {
+            check_package_builds(&p);
+            check_move_unit_tests(&p);
+        })
+    }))
+    .await;
+
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 #[cfg_attr(msim, ignore)]
-fn run_examples_move_unit_tests() -> io::Result<()> {
+async fn run_examples_move_unit_tests() -> io::Result<()> {
     let examples = {
         let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         buf.extend(["..", "..", "examples"]);
         buf
     };
 
-    check_packages_recursively(&examples)?;
-
+    check_packages_recursively(&examples).await?;
     Ok(())
 }
 

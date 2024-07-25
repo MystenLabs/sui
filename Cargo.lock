@@ -12790,6 +12790,7 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-cli",
@@ -12803,6 +12804,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "tokio",
 ]
 
 [[package]]

@@ -8,7 +8,9 @@ license = "Apache-2.0"
 publish = false
 
 [dev-dependencies]
+futures.workspace = true
 prometheus.workspace = true
+tokio.workspace = true
 
 sui-framework.workspace = true
 sui-move = { workspace = true, features = ["unit_test"] }
