@@ -24,7 +24,7 @@ Previously a `published-at` entry was **mandatory** in the `Move.toml` file, whi
                         --latest-id 'LATEST-ADDRESS' \
                         --version-number 'VERSION-NUMBER'
       ```
-      - `ORIGINAL-ADDRESS` should be the address your package was first published at. If you never upgraded your package, this the same address as your `published-at` address in the `Move.toml`
+      - `ORIGINAL-ADDRESS` should be the address your package was first published at. If you never upgraded your package, this is the same address as your `published-at` address in the `Move.toml`
       - `LATEST-ADDRESS` should be the latest package address. If you never upgraded your package, it is the same as `ORIGINAL-ADDRESS`. If you upgraded your package, this is the same address as your current `published-at` address in the `Move.toml`.
       - `VERSION-NUMBER` is `1` if you never upgraded your package. Otherwise, it is a number greater than `1` depending on how many times you upgraded your package. In this case, look up the package at `LATEST-ADDRESS` to determine the version number.
 1. Delete the `published-at` line in your `Move.toml`.
