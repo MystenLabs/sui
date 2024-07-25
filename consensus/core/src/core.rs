@@ -87,9 +87,6 @@ pub(crate) struct Core {
     /// This is currently being used to avoid equivocations during a node recovering from amnesia. When value is None it means that
     /// the last block sync mechanism is enabled, but it hasn't been initialised yet.
     last_known_proposed_round: Option<Round>,
-    /// When true it will block the block proposal until it has successfully completed the process
-    /// of fetching the last proposed blocked of this node by the other peers.
-    sync_last_known_own_block: bool,
 }
 
 impl Core {
@@ -160,7 +157,6 @@ impl Core {
             block_signer,
             dag_state,
             last_known_proposed_round: min_propose_round,
-            sync_last_known_own_block,
         }
         .recover()
     }
@@ -310,14 +306,9 @@ impl Core {
     /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
     pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
-        assert!(
-            self.sync_last_known_own_block,
-            "Should not attempt to set the last known proposed round if that has been already set"
-        );
-        assert!(
-            self.last_known_proposed_round.is_none(),
-            "Attempted to set the last known proposed round more than once"
-        );
+        if self.last_known_proposed_round.is_some() {
+            panic!("Should not attempt to set the last known proposed round if that has been already set");
+        }
         self.last_known_proposed_round = Some(round);
         info!("Set last known proposed round to {round}");
     }

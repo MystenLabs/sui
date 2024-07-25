@@ -337,7 +337,7 @@ impl NodeMetrics {
             ).unwrap(),
             sync_last_known_own_block_retries: register_int_counter_with_registry!(
                 "sync_last_known_own_block_retries",
-                "Number of times that it tried in order to successfully sync the last known own block",
+                "Number of times this node tried to fetch the last own block from peers",
                 registry,
             ).unwrap(),
             // TODO: add a short status label.

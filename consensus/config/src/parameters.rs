@@ -138,6 +138,8 @@ impl Parameters {
         if cfg!(msim) {
             Duration::from_millis(200)
         } else {
+            // Here we prioritise liveness over the complete de-risking of block equivocation. 5 seconds
+            // in the majority of cases should be good enough for this given a healthy network.
             Duration::from_secs(5)
         }
     }
