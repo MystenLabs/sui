@@ -172,7 +172,7 @@ impl Name {
         bcs::to_bytes(&self).unwrap()
     }
 
-    pub fn _to_base64_string(&self) -> String {
+    pub fn to_base64_string(&self) -> String {
         Base64::from(self.to_bytes()).to_value().to_string()
     }
 

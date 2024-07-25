@@ -98,6 +98,19 @@ mod tests {
         )
         .await;
 
+        let external_client = init_dot_move_gql(
+            8001,
+            9185,
+            ServiceConfig::dot_move_test_defaults(
+                true, // external resolution
+                Some(internal_client.url()),
+                Some(pkg_id.into()),
+                Some(registry_id.0),
+                None,
+            ),
+        )
+        .await;
+
         // Wait for the transactions to be committed and indexed
         sleep(Duration::from_secs(5)).await;
 
@@ -121,7 +134,13 @@ mod tests {
             .await
             .unwrap();
 
+        let external_resolution = external_client
+            .execute(query.clone(), vec![])
+            .await
+            .unwrap();
+
         test_results(internal_resolution, &v1, &v2, &v3);
+        test_results(external_resolution, &v1, &v2, &v3);
 
         println!("Tests have finished successfully now!");
     }

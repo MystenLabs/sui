@@ -7,10 +7,18 @@ use async_graphql::Context;
 
 use crate::{
     error::Error,
-    types::{move_object::MoveObject, move_package::MovePackage, object::Object},
+    types::{
+        chain_identifier::ChainIdentifier, move_object::MoveObject, move_package::MovePackage,
+        object::Object,
+    },
 };
 
-use super::config::{AppInfo, AppRecord, DotMoveConfig, VersionedName};
+use super::{
+    config::{
+        AppInfo, AppRecord, DotMoveConfig, DotMoveServiceError, ResolutionType, VersionedName,
+    },
+    data_loader::DotMoveDataLoader,
+};
 
 pub(crate) struct NamedMovePackage;
 
@@ -23,7 +31,12 @@ impl NamedMovePackage {
         let config: &DotMoveConfig = ctx.data_unchecked();
         let versioned = VersionedName::from_str(name)?;
 
-        Self::query_internal(ctx, config, versioned, checkpoint_viewed_at).await
+        // Non-base chain id handling for name resolution (uses external api to resolve names).
+        if config.resolution_type == ResolutionType::Internal {
+            Self::query_internal(ctx, config, versioned, checkpoint_viewed_at).await
+        } else {
+            Self::query_external(ctx, config, versioned, checkpoint_viewed_at).await
+        }
     }
 
     async fn query_internal(
@@ -49,6 +62,41 @@ impl NamedMovePackage {
         };
 
         Self::package_from_app_info(ctx, app_info, versioned.version, checkpoint_viewed_at).await
+    }
+
+    async fn query_external(
+        ctx: &Context<'_>,
+        config: &DotMoveConfig,
+        versioned: VersionedName,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<MovePackage>, Error> {
+        if config.mainnet_api_url.is_none() {
+            return Err(DotMoveServiceError::MainnetApiUrlUnavailable.into());
+        }
+
+        let identifier: ChainIdentifier = *ctx.data_unchecked();
+
+        let Some(chain_id) = identifier.0 else {
+            return Err(DotMoveServiceError::ChainIdentifierUnavailable.into());
+        };
+
+        let DotMoveDataLoader(loader) = &ctx.data_unchecked();
+
+        let Some(result) = loader.load_one(versioned.name).await? else {
+            return Ok(None);
+        };
+
+        let Some(app_info) = result.networks.get(&chain_id.to_string()) else {
+            return Ok(None);
+        };
+
+        Self::package_from_app_info(
+            ctx,
+            app_info.clone(),
+            versioned.version,
+            checkpoint_viewed_at,
+        )
+        .await
     }
 
     async fn package_from_app_info(

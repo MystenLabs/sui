@@ -112,6 +112,10 @@ impl SimpleClient {
             .await?;
         Ok(())
     }
+
+    pub fn url(&self) -> String {
+        self.url.clone()
+    }
 }
 
 #[allow(clippy::type_complexity)]
