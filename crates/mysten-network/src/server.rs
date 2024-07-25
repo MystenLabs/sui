@@ -193,19 +193,6 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
                     );
                     (local_addr, server)
                 }
-                // Protocol::Memory(_) => todo!(),
-                #[cfg(unix)]
-                Protocol::Unix(_) => {
-                    let (path, _http_or_https) = crate::multiaddr::parse_unix(addr)?;
-                    let uds = tokio::net::UnixListener::bind(path.as_ref())?;
-                    let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
-                    let local_addr = addr.to_owned();
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(uds_stream, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
                 unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
             };
 
@@ -455,17 +442,6 @@ mod test {
     async fn ip6() {
         let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
         test_multiaddr(address).await;
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn unix() {
-        // Note that this only works when constructing a multiaddr by hand and not via the
-        // human-readable format
-        let path = "unix-domain-socket";
-        let address = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
-        test_multiaddr(address).await;
-        std::fs::remove_file(path).unwrap();
     }
 }
 
