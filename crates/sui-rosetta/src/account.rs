@@ -80,7 +80,7 @@ async fn get_balances(
         get_sub_account_balances(account_type, &ctx.client, address).await
     } else if !currencies.is_empty() {
         let balance_futures = currencies.iter().map(|currency| {
-            let coin_type = currency.coin_type.clone();
+            let coin_type = currency.metadata.clone().unwrap().coin_type.clone();
             async move {
                 (
                     currency.clone(),
@@ -93,7 +93,7 @@ async fn get_balances(
         for (currency, balance_result) in balances {
             match balance_result {
                 Ok(value) => amounts.push(Amount::new(value, Some(currency))),
-                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.coin_type))),
+                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.metadata.unwrap().coin_type))),
             }
         }
         Ok(amounts)
