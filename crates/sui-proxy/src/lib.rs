@@ -40,7 +40,7 @@ mod tests {
     use crate::prom_to_mimir::tests::*;
 
     use crate::{admin::CertKeyPair, config::RemoteWriteConfig, peers::SuiNodeProvider};
-    use axum::http::{header, StatusCode};
+    use axum::http::StatusCode;
     use axum::routing::post;
     use axum::Router;
     use multiaddr::Multiaddr;
@@ -170,7 +170,7 @@ mod tests {
 
         let res = client
             .post(&server_url)
-            .header(header::CONTENT_TYPE, PROTOBUF_FORMAT)
+            .header(reqwest::header::CONTENT_TYPE, PROTOBUF_FORMAT)
             .body(buf)
             .send()
             .await
@@ -178,6 +178,6 @@ mod tests {
         let status = res.status();
         let body = res.text().await.unwrap();
         assert_eq!("created", body);
-        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(status, reqwest::StatusCode::CREATED);
     }
 }
