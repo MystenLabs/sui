@@ -330,8 +330,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
         fetch_state: Arc<Mutex<FetchState>>,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        const FETCH_COMMITS_TIMEOUT: Duration = Duration::from_secs(10);
-        const FETCH_BLOCKS_TIMEOUT: Duration = Duration::from_secs(60);
+        const FETCH_COMMITS_TIMEOUT: Duration = Duration::from_secs(30);
+        const FETCH_BLOCKS_TIMEOUT: Duration = Duration::from_secs(120);
         const FETCH_RETRY_BASE_INTERVAL: Duration = Duration::from_secs(1);
         const FETCH_RETRY_INTERVAL_LIMIT: u32 = 30;
         const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
