@@ -6,7 +6,10 @@ mod rosetta_client;
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
 
-use sui_rosetta::types::{AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata, NetworkIdentifier, SuiEnv};
+use sui_rosetta::types::{
+    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
+    NetworkIdentifier, SuiEnv,
+};
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
@@ -76,7 +79,23 @@ async fn test_custom_coin_balance() {
     );
     assert_eq!(response.balances.len(), 2);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
-    assert_eq!(response.balances[0].currency.clone().metadata.unwrap().coin_type, "0x2::sui::SUI");
+    assert_eq!(
+        response.balances[0]
+            .currency
+            .clone()
+            .metadata
+            .unwrap()
+            .coin_type,
+        "0x2::sui::SUI"
+    );
     assert_eq!(response.balances[1].value, COIN1_BALANCE as i128);
-    assert_eq!(response.balances[1].currency.clone().metadata.unwrap().coin_type, coin_type);
+    assert_eq!(
+        response.balances[1]
+            .currency
+            .clone()
+            .metadata
+            .unwrap()
+            .coin_type,
+        coin_type
+    );
 }
