@@ -212,7 +212,10 @@ where
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let sync_last_known_own_block = boot_counter.load(Ordering::SeqCst) == 0
             && dag_state.read().highest_accepted_round() == 0
-            && context.parameters.sync_last_known_own_block_enabled();
+            && !context
+                .parameters
+                .sync_last_known_own_block_timeout
+                .is_zero();
         info!("Sync last known own block: {sync_last_known_own_block}");
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(

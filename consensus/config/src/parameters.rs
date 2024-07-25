@@ -143,10 +143,6 @@ impl Parameters {
             Duration::from_secs(5)
         }
     }
-
-    pub fn sync_last_known_own_block_enabled(&self) -> bool {
-        !self.sync_last_known_own_block_timeout.is_zero()
-    }
 }
 
 impl Default for Parameters {
