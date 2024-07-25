@@ -377,8 +377,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "291cebe772727338f474a020e094b4ecb7ba1fe9", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "291cebe772727338f474a020e094b4ecb7ba1fe9", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -409,7 +409,7 @@ prost = "0.12.3"
 prost-build = "0.12.3"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
-quinn-proto = "^0.10.5"
+quinn-proto = "0.11"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
@@ -577,10 +577,10 @@ coset = "0.3"
 p256 = { version = "0.13.2", features = ["ecdsa"] }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2d25660525ab5d36d65ff0cb8051949" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2d25660525ab5d36d65ff0cb8051949" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2d25660525ab5d36d65ff0cb8051949" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2d25660525ab5d36d65ff0cb8051949" }
 
 # core-types with json format for REST api
 sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "9a125ed5764fb5bcc1acb6074064bc8f9ea85b38", features = ["hash", "serde", "schemars"] }
@@ -703,3 +703,6 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
+
+[patch.crates-io]
+quinn-proto = { git = "https://github.com/quinn-rs/quinn.git", rev = "f0fa66f871b80b9d2d7075d76967c649aecc0b77" }
