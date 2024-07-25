@@ -1,3 +1,4 @@
+#[allow(ide_path_autocomplete)]
 module a::m {
 
     public struct A(u64) has copy, drop;

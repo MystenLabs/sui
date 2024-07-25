@@ -1,0 +1,114 @@
+{
+  "Cursor": {
+    "project": "tests/move-2024",
+    "file_tests": {
+      "dot_call.move": [
+        {
+          "line": 6,
+          "character": 23,
+          "description": "at a struct definition name"
+        },
+        {
+          "line": 7,
+          "character": 13,
+          "description": "at a struct field name"
+        },
+        {
+          "line": 7,
+          "character": 19,
+          "description": "in a struct definition at nowhere in particular"
+        },
+        {
+          "line": 7,
+          "character": 20,
+          "description": "at a struct field type"
+        },
+        {
+          "line": 7,
+          "character": 21,
+          "description": "at a struct field type"
+        },
+        {
+          "line": 7,
+          "character": 22,
+          "description": "at a struct field type"
+        },
+        {
+          "line": 7,
+          "character": 23,
+          "description": "in a struct definition at nowhere in particular"
+        },
+        {
+          "line": 18,
+          "character": 45,
+          "description": "at a function return type"
+        },
+        {
+          "line": 29,
+          "character": 14,
+          "description": "at a function definition at nowhere in particular"
+        },
+        {
+          "line": 29,
+          "character": 14,
+          "description": "at a function definition name"
+        },
+        {
+          "line": 29,
+          "character": 15,
+          "description": "at a function definition name"
+        },
+        {
+          "line": 29,
+          "character": 16,
+          "description": "at a function definition name"
+        },
+        {
+          "line": 29,
+          "character": 17,
+          "description": "at a function definition name"
+        },
+        {
+          "line": 29,
+          "character": 18,
+          "description": "at a function definition at nowhere in particular"
+        },
+        {
+          "line": 29,
+          "character": 19,
+          "description": "at a function definition at nowhere in particular"
+        },
+        {
+          "line": 32,
+          "character": 5,
+          "description": "inside a function body -- unknown"
+        },
+        {
+          "line": 32,
+          "character": 9,
+          "description": "let binding"
+        },
+        {
+          "line": 32,
+          "character": 19,
+          "description": "binding in the lhs of a let-binding"
+        },
+        {
+          "line": 32,
+          "character": 50,
+          "description": "name in module access"
+        },
+        {
+          "line": 35,
+          "character": 29,
+          "description": "name in a dot call"
+        },
+        {
+          "line": 35,
+          "character": 38,
+          "description": "equal sign in a binop"
+        }
+      ]
+    }
+  }
+}

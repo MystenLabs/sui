@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::functional_group::FunctionalGroup;
-use crate::types::big_int::BigInt;
 use async_graphql::*;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
@@ -67,23 +66,23 @@ pub struct Limits {
     /// Maximum number of nodes in the requests.
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
-    pub max_output_nodes: u64,
+    pub max_output_nodes: u32,
     /// Maximum size (in bytes) of a GraphQL request.
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
-    pub max_db_query_cost: u64,
+    pub max_db_query_cost: u32,
     /// Paginated queries will return this many elements if a page size is not provided.
-    pub default_page_size: u64,
+    pub default_page_size: u32,
     /// Paginated queries can return at most this many elements.
-    pub max_page_size: u64,
+    pub max_page_size: u32,
     /// Time (in milliseconds) to wait for a transaction to be executed and the results returned
     /// from GraphQL. If the transaction takes longer than this time to execute, the request will
     /// return a timeout error, but the transaction may continue executing.
-    pub mutation_timeout_ms: u64,
+    pub mutation_timeout_ms: u32,
     /// Time (in milliseconds) to wait for a read request from the GraphQL service. Requests that
     /// take longer than this time to return a result will return a timeout error.
-    pub request_timeout_ms: u64,
+    pub request_timeout_ms: u32,
     /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is
     /// itself generic and has arguments).
     pub max_type_argument_depth: u32,
@@ -160,6 +159,7 @@ pub struct Experiments {
 #[GraphQLConfig]
 pub struct InternalFeatureConfig {
     pub(crate) query_limits_checker: bool,
+    pub(crate) directive_checker: bool,
     pub(crate) feature_gate: bool,
     pub(crate) logger: bool,
     pub(crate) query_timeout: bool,
@@ -223,23 +223,23 @@ impl ServiceConfig {
     /// with a connection of first: 10 and has a field to a connection with last: 20, the count
     /// at the second level would be 200 nodes. This is then summed to the count of 10 nodes
     /// at the first level, for a total of 210 nodes.
-    pub async fn max_output_nodes(&self) -> u64 {
+    pub async fn max_output_nodes(&self) -> u32 {
         self.limits.max_output_nodes
     }
 
     /// Maximum estimated cost of a database query used to serve a GraphQL request.  This is
     /// measured in the same units that the database uses in EXPLAIN queries.
-    async fn max_db_query_cost(&self) -> BigInt {
-        BigInt::from(self.limits.max_db_query_cost)
+    async fn max_db_query_cost(&self) -> u32 {
+        self.limits.max_db_query_cost
     }
 
     /// Default number of elements allowed on a single page of a connection.
-    async fn default_page_size(&self) -> u64 {
+    async fn default_page_size(&self) -> u32 {
         self.limits.default_page_size
     }
 
     /// Maximum number of elements allowed on a single page of a connection.
-    async fn max_page_size(&self) -> u64 {
+    async fn max_page_size(&self) -> u32 {
         self.limits.max_page_size
     }
 
@@ -247,12 +247,12 @@ impl ServiceConfig {
     /// a transaction to execute. Note that the transaction may still succeed even in the case of a
     /// timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
     /// until the network returns a definite response (success or failure, not timeout).
-    async fn mutation_timeout_ms(&self) -> u64 {
+    async fn mutation_timeout_ms(&self) -> u32 {
         self.limits.mutation_timeout_ms
     }
 
     /// Maximum time in milliseconds that will be spent to serve one query request.
-    async fn request_timeout_ms(&self) -> u64 {
+    async fn request_timeout_ms(&self) -> u32 {
         self.limits.request_timeout_ms
     }
 
@@ -460,6 +460,7 @@ impl Default for InternalFeatureConfig {
     fn default() -> Self {
         Self {
             query_limits_checker: true,
+            directive_checker: true,
             feature_gate: true,
             logger: true,
             query_timeout: true,

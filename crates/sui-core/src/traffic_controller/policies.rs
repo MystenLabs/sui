@@ -7,13 +7,16 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 use count_min_sketch::CountMinSketch32;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
 use tracing::info;
+
+const HIGHEST_RATES_CAPACITY: usize = 20;
 
 /// The type of request client.
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -24,6 +27,12 @@ enum ClientType {
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 struct SketchKey(IpAddr, ClientType);
+
+struct HighestRates {
+    direct: BinaryHeap<Reverse<(u64, IpAddr)>>,
+    proxied: BinaryHeap<Reverse<(u64, IpAddr)>>,
+    capacity: usize,
+}
 
 pub struct TrafficSketch {
     /// Circular buffer Count Min Sketches representing a sliding window
@@ -40,6 +49,15 @@ pub struct TrafficSketch {
     update_interval: Duration,
     last_reset_time: Instant,
     current_sketch_index: usize,
+    /// Used for metrics collection and logging purposes,
+    /// as CountMinSketch does not provide this directly.
+    /// Note that this is an imperfect metric, since we preserve
+    /// the highest N rates (by unique IP) that we have seen,
+    /// but update rates (down or up) as they change so that
+    /// the metric is not monotonic and reflects recent traffic.
+    /// However, this should only lead to inaccuracy edge cases
+    /// with very low traffic.
+    highest_rates: HighestRates,
 }
 
 impl TrafficSketch {
@@ -49,6 +67,7 @@ impl TrafficSketch {
         sketch_capacity: usize,
         sketch_probability: f64,
         sketch_tolerance: f64,
+        highest_rates_capacity: usize,
     ) -> Self {
         // intentionally round down via integer division. We can't have a partial sketch
         let num_sketches = window_size.as_secs() / update_interval.as_secs();
@@ -101,6 +120,11 @@ impl TrafficSketch {
             update_interval,
             last_reset_time: Instant::now(),
             current_sketch_index: 0,
+            highest_rates: HighestRates {
+                direct: BinaryHeap::with_capacity(highest_rates_capacity),
+                proxied: BinaryHeap::with_capacity(highest_rates_capacity),
+                capacity: highest_rates_capacity,
+            },
         }
     }
 
@@ -116,13 +140,75 @@ impl TrafficSketch {
         self.sketches[self.current_sketch_index].increment(key);
     }
 
-    fn get_request_rate(&self, key: &SketchKey) -> f64 {
+    fn get_request_rate(&mut self, key: &SketchKey) -> f64 {
         let count: u32 = self
             .sketches
             .iter()
             .map(|sketch| sketch.estimate(key))
             .sum();
-        count as f64 / self.window_size.as_secs() as f64
+        let rate = count as f64 / self.window_size.as_secs() as f64;
+        self.update_highest_rates(key, rate);
+        rate
+    }
+
+    fn update_highest_rates(&mut self, key: &SketchKey, rate: f64) {
+        match key.1 {
+            ClientType::Direct => {
+                Self::update_highest_rate(
+                    &mut self.highest_rates.direct,
+                    key.0,
+                    rate,
+                    self.highest_rates.capacity,
+                );
+            }
+            ClientType::ThroughFullnode => {
+                Self::update_highest_rate(
+                    &mut self.highest_rates.proxied,
+                    key.0,
+                    rate,
+                    self.highest_rates.capacity,
+                );
+            }
+        }
+    }
+
+    fn update_highest_rate(
+        rate_heap: &mut BinaryHeap<Reverse<(u64, IpAddr)>>,
+        ip_addr: IpAddr,
+        rate: f64,
+        capacity: usize,
+    ) {
+        // Remove previous instance of this IPAddr so that we
+        // can update with new rate
+        rate_heap.retain(|&Reverse((_, key))| key != ip_addr);
+
+        let rate = rate as u64;
+        if rate_heap.len() < capacity {
+            rate_heap.push(Reverse((rate, ip_addr)));
+        } else if let Some(&Reverse((smallest_score, _))) = rate_heap.peek() {
+            if rate > smallest_score {
+                rate_heap.pop();
+                rate_heap.push(Reverse((rate, ip_addr)));
+            }
+        }
+    }
+
+    pub fn highest_direct_rate(&self) -> Option<(u64, IpAddr)> {
+        self.highest_rates
+            .direct
+            .iter()
+            .map(|Reverse(v)| v)
+            .max_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
+            .copied()
+    }
+
+    pub fn highest_proxied_rate(&self) -> Option<(u64, IpAddr)> {
+        self.highest_rates
+            .proxied
+            .iter()
+            .map(|Reverse(v)| v)
+            .max_by(|a, b| a.0.partial_cmp(&b.0).expect("Failed to compare rates"))
+            .copied()
     }
 
     fn rotate_window(&mut self) {
@@ -252,6 +338,7 @@ impl FreqThresholdPolicy {
             sketch_capacity,
             sketch_probability,
             sketch_tolerance,
+            HIGHEST_RATES_CAPACITY,
         );
         Self {
             config,
@@ -261,7 +348,15 @@ impl FreqThresholdPolicy {
         }
     }
 
-    fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
+    pub fn highest_direct_rate(&self) -> Option<(u64, IpAddr)> {
+        self.sketch.highest_direct_rate()
+    }
+
+    pub fn highest_proxied_rate(&self) -> Option<(u64, IpAddr)> {
+        self.sketch.highest_proxied_rate()
+    }
+
+    pub fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
         let block_client = if let Some(source) = tally.direct {
             let key = SketchKey(source, ClientType::Direct);
             self.sketch.increment_count(&key);
@@ -404,7 +499,7 @@ mod tests {
         // Create freq policy that will block on average frequency 2 requests per second
         // for proxied connections and 4 requests per second for direct connections
         // as observed over a 5 second window.
-        let mut policy = TrafficControlPolicy::FreqThreshold(FreqThresholdPolicy::new(
+        let mut policy = FreqThresholdPolicy::new(
             PolicyConfig::default(),
             FreqThresholdConfig {
                 client_threshold: 5,
@@ -413,7 +508,7 @@ mod tests {
                 update_interval_secs: 1,
                 ..Default::default()
             },
-        ));
+        );
         // alice and bob connection from different IPs through the
         // same fullnode, thus have the same connection IP on
         // validator, but different proxy IPs
@@ -446,6 +541,13 @@ mod tests {
             assert_eq!(response.block_client, None);
         }
 
+        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
+        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        assert_eq!(direct_ip_addr, alice.direct.unwrap());
+        assert!(direct_rate < 1);
+        assert_eq!(proxied_ip_addr, alice.through_fullnode.unwrap());
+        assert!(proxied_rate < 1);
+
         // meanwhile bob spams 10 requests at once and is blocked
         for _ in 0..9 {
             let response = policy.handle_tally(bob.clone());
@@ -455,6 +557,14 @@ mod tests {
         let response = policy.handle_tally(bob.clone());
         assert_eq!(response.block_client, None);
         assert_eq!(response.block_proxied_client, bob.through_fullnode);
+
+        // highest rates should now show bob
+        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
+        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        assert_eq!(direct_ip_addr, bob.direct.unwrap());
+        assert_eq!(direct_rate, 2);
+        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(proxied_rate, 2);
 
         // 2 more tallies, so far we are above 2 tallies
         // per second, but over the average window of 5 seconds
@@ -472,6 +582,16 @@ mod tests {
         assert_eq!(response.block_client, None);
         assert_eq!(response.block_proxied_client, bob.through_fullnode);
 
+        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
+        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        // direct rate increased due to alice going through same fullnode
+        assert_eq!(direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(direct_rate, 3);
+        // highest rate should now have been updated given that Bob's rate
+        // recently decreased
+        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(proxied_rate, 2);
+
         // close to threshold for alice, but still below
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         for i in 0..5 {
@@ -485,6 +605,13 @@ mod tests {
         let response = policy.handle_tally(alice.clone());
         assert_eq!(response.block_client, None);
         assert_eq!(response.block_proxied_client, alice.through_fullnode);
+
+        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
+        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        assert_eq!(direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(direct_rate, 4);
+        assert_eq!(proxied_ip_addr, bob.through_fullnode.unwrap());
+        assert_eq!(proxied_rate, 2);
 
         // spam through charlie to block connection
         for i in 0..2 {
@@ -506,6 +633,19 @@ mod tests {
             assert_eq!(response.block_client, None, "Blocked at i = {}", i);
             assert_eq!(response.block_proxied_client, None);
         }
+
+        // check that we revert back to previous highest rates when rates decrease
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        // alice and bob rates are now decreased after 5 seconds of break, but charlie's
+        // has not since they have not yet sent a new request
+        let _ = policy.handle_tally(alice.clone());
+        let _ = policy.handle_tally(bob.clone());
+        let (direct_rate, direct_ip_addr) = policy.highest_direct_rate().unwrap();
+        let (proxied_rate, proxied_ip_addr) = policy.highest_proxied_rate().unwrap();
+        assert_eq!(direct_ip_addr, alice.direct.unwrap());
+        assert_eq!(direct_rate, 0);
+        assert_eq!(proxied_ip_addr, charlie.through_fullnode.unwrap());
+        assert_eq!(proxied_rate, 1);
     }
 
     #[sim_test]

@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 0 'publish'. lines 1-11:
+task 0, lines 1-11:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::A'. Got VMError: {
     major_status: WRITEREF_WITHOUT_DROP_ABILITY,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 1 'publish'. lines 13-22:
+task 1, lines 13-22:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::A'. Got VMError: {
     major_status: WRITEREF_WITHOUT_DROP_ABILITY,
     sub_status: None,

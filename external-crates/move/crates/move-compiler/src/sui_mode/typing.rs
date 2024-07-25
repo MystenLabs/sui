@@ -180,6 +180,7 @@ fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinit
     let N::StructDefinition {
         warning_filter: _,
         index: _,
+        loc: _,
         attributes: _,
         abilities,
         type_parameters: _,
@@ -250,6 +251,7 @@ fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition)
     let N::EnumDefinition {
         warning_filter: _,
         index: _,
+        loc: _loc,
         attributes: _,
         abilities,
         type_parameters: _,

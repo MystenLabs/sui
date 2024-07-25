@@ -153,14 +153,14 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
     }
 
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata {
-        let (voting_rights, network_metadata) = self
+        let validators = self
             .active_validators
             .iter()
             .map(|validator| {
                 (
-                    (validator.authority_name(), validator.voting_power),
+                    validator.authority_name(),
                     (
-                        validator.authority_name(),
+                        validator.voting_power,
                         NetworkMetadata {
                             network_address: validator.sui_net_address.clone(),
                             narwhal_primary_address: validator.narwhal_primary_address.clone(),
@@ -168,12 +168,9 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                     ),
                 )
             })
-            .unzip();
+            .collect();
 
-        CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights),
-            network_metadata,
-        }
+        CommitteeWithNetworkMetadata::new(self.epoch, validators)
     }
 
     fn get_sui_committee(&self) -> Committee {

@@ -1,16 +1,19 @@
 processed 12 tasks
 
-task 1 'publish'. lines 8-29:
+task 1, lines 8-29:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5882400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 31-31:
+task 2, line 31:
+//# run t2::o2::create
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'view-object'. lines 33-33:
+task 3, line 33:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
@@ -21,11 +24,13 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 4 'run'. lines 35-35:
+task 4, line 35:
+//# run t2::o2::mut_o2 --args object(2,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
 
-task 5 'view-object'. lines 37-37:
+task 5, line 37:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 4
 Contents: t2::o2::Obj2 {
@@ -36,11 +41,13 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 6 'run'. lines 39-39:
+task 6, line 39:
+//# run t2::o2::re_share_o2 --args object(2,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
 
-task 7 'view-object'. lines 41-41:
+task 7, line 41:
+//# view-object 2,0
 Owner: Shared( 0 )
 Version: 5
 Contents: t2::o2::Obj2 {
@@ -51,11 +58,13 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 8 'run'. lines 43-43:
+task 8, line 43:
+//# run t2::o2::re_share_non_public_o2 --args object(2,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
 
-task 9 'view-object'. lines 45-45:
+task 9, line 45:
+//# view-object 2,0
 Owner: Shared( 0 )
 Version: 6
 Contents: t2::o2::Obj2 {
@@ -66,11 +75,13 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 10 'run'. lines 47-47:
+task 10, line 47:
+//# run t2::o2::mut_o2 --args object(2,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
 
-task 11 'view-object'. lines 49-49:
+task 11, line 49:
+//# view-object 2,0
 Owner: Shared( 0 )
 Version: 7
 Contents: t2::o2::Obj2 {

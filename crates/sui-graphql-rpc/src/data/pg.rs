@@ -25,7 +25,7 @@ pub(crate) struct PgExecutor {
 }
 
 pub(crate) struct PgConnection<'c> {
-    max_cost: u64,
+    max_cost: u32,
     conn: &'c mut diesel::PgConnection,
 }
 
@@ -147,7 +147,7 @@ mod query_cost {
     }
 
     /// Run `EXPLAIN` on the `query`, and log the estimated cost.
-    pub(crate) fn log<Q>(conn: &mut PgConnection, max_db_query_cost: u64, query: Q)
+    pub(crate) fn log<Q>(conn: &mut PgConnection, max_db_query_cost: u32, query: Q)
     where
         Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<PgConnection>,
     {

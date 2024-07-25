@@ -298,7 +298,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
 
     let resolution_graph = build_config
         .config
-        .resolution_graph_for_package(&path, &mut std::io::sink())
+        .resolution_graph_for_package(&path, None, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
     let SuiError::ModulePublishFailure { error } = check_unpublished_dependencies(
@@ -310,7 +310,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
     };
 
     let expected = expect![[r#"
-        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
+        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).
         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
     expected.assert_eq(&error)
 }

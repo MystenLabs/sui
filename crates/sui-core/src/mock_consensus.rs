@@ -8,7 +8,7 @@ use crate::consensus_adapter::SubmitToConsensus;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::VerifiedCertificate;
 use tokio::sync::mpsc;
@@ -95,7 +95,9 @@ impl SubmitToConsensus for MockConsensusClient {
         // TODO: maybe support multi-transactions and remove this check
         assert!(transactions.len() == 1);
         let transaction = &transactions[0];
-        self.tx_sender.send(transaction.clone()).await.unwrap();
-        Ok(())
+        self.tx_sender
+            .send(transaction.clone())
+            .await
+            .map_err(|e| SuiError::Unknown(e.to_string()))
     }
 }

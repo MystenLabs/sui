@@ -1,4 +1,4 @@
-
+#[allow(ide_path_autocomplete)]
 module a::m {
 
     public struct A<T>(T) has drop;

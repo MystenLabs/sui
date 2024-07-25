@@ -4,6 +4,7 @@
 export const ToS_LINK = 'https://mystenlabs.com/legal#suiwallettermsofservice';
 export const PRIVACY_POLICY_LINK = 'https://mystenlabs.com/legal#privacypolicy';
 export const FAQ_LINK = 'https://docs.mystenlabs.com/faq';
+export const DISCORD_LINK = 'https://discord.com/channels/1102609826707673098/1102651685601550427';
 
 // number of epochs before earning
 // Staking Rewards Redeemable

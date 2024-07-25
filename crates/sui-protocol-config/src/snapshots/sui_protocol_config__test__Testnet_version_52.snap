@@ -52,9 +52,12 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  record_consensus_determined_version_assignments_in_prologue: true
   fresh_vm_on_framework_upgrade: true
+  prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
+  enable_coin_deny_list_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -69,7 +72,7 @@ max_type_arguments: 16
 max_type_argument_depth: 16
 max_pure_argument_size: 16384
 max_programmable_tx_commands: 1024
-move_binary_format_version: 6
+move_binary_format_version: 7
 min_move_binary_format_version: 6
 binary_module_handles: 100
 binary_struct_handles: 300
@@ -268,8 +271,6 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
-scoring_decision_mad_divisor: 2.3
-scoring_decision_cutoff_value: 2.5
 execution_version: 3
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
@@ -285,3 +286,4 @@ max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
+

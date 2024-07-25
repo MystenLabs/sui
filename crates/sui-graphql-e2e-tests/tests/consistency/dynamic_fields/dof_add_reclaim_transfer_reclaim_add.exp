@@ -3,45 +3,57 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 18-57:
+task 1, lines 18-57:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7600000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 59-62:
+task 2, lines 59-62:
+//# programmable --sender A --inputs @A
+//> 0: Test::M1::child(Input(0));
+//> 1: Test::M1::parent(Input(0));
+//> 2: Test::M1::parent(Input(0));
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4924800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 64-64:
+task 3, line 64:
+//# run Test::M1::add_child --sender A --args object(2,1) object(2,0) 42
 created: object(3,0)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 4 'run'. lines 66-66:
+task 4, line 66:
+//# run Test::M1::reclaim_and_transfer_child --sender A --args object(2,1) 42 @A
 mutated: object(0,0), object(2,0), object(2,1)
 deleted: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-task 5 'run'. lines 68-68:
+task 5, line 68:
+//# run Test::M1::add_child --sender A --args object(2,2) object(2,0) 42
 created: object(5,0)
 mutated: object(0,0), object(2,0), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 6 'run'. lines 70-70:
+task 6, line 70:
+//# run Test::M1::reclaim_and_transfer_child --sender A --args object(2,2) 42 @A
 mutated: object(0,0), object(2,0), object(2,2)
 deleted: object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-task 7 'run'. lines 72-72:
+task 7, line 72:
+//# run Test::M1::add_child --sender A --args object(2,1) object(2,0) 42
 created: object(3,0)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 8 'create-checkpoint'. lines 74-74:
+task 8, line 74:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 76-156:
+task 9, lines 76-156:
+//# run-graphql
 Response: {
   "data": {
     "latest": {
@@ -49,7 +61,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IOADSwXfcUdh/UGPZalwSFUb+34fSTR19MLMvbkykY7/AQAAAAAAAAA=",
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -57,7 +69,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
                     "count": "0"
                   }
                 }
@@ -73,7 +85,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
               "count": "0"
             }
           }
@@ -84,7 +96,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IOADSwXfcUdh/UGPZalwSFUb+34fSTR19MLMvbkykY7/AQAAAAAAAAA=",
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -92,7 +104,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
                     "count": "0"
                   }
                 }
@@ -108,7 +120,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
               "count": "0"
             }
           }
@@ -127,7 +139,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IOADSwXfcUdh/UGPZalwSFUb+34fSTR19MLMvbkykY7/AQAAAAAAAAA=",
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -135,7 +147,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
                     "count": "0"
                   }
                 }
@@ -151,7 +163,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
               "count": "0"
             }
           }
@@ -170,7 +182,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "IOADSwXfcUdh/UGPZalwSFUb+34fSTR19MLMvbkykY7/AQAAAAAAAAA=",
+            "cursor": "ICfYK9hpoZz2TvVoLEtiMG3hhlC9hZZKkiU4pl4iMT4YAQAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "KgAAAAAAAAA="
@@ -178,7 +190,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+                    "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
                     "count": "0"
                   }
                 }
@@ -194,7 +206,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x842728c7e396d2f1efe644062d1af1b24c47172c18d901e14c36f6bbfebb169f",
+              "id": "0x082e460818873777f5d3bd1f9b4fefb932d010d508d4d17316b94b4efdd78151",
               "count": "0"
             }
           }

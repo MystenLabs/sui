@@ -70,7 +70,7 @@ pub enum Error {
     #[error("'first' and 'last' must not be used together")]
     CursorNoFirstLast,
     #[error("Connection's page size of {0} exceeds max of {1}")]
-    PageTooLarge(u64, u64),
+    PageTooLarge(u64, u32),
     // Catch-all for client-fault errors
     #[error("{0}")]
     Client(String),

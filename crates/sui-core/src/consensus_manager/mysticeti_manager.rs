@@ -16,6 +16,7 @@ use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
@@ -71,7 +72,6 @@ impl MysticetiManager {
         }
     }
 
-    #[allow(unused)]
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
@@ -83,7 +83,12 @@ impl MysticetiManager {
             match type_str.to_lowercase().as_str() {
                 "anemo" => return ConsensusNetwork::Anemo,
                 "tonic" => return ConsensusNetwork::Tonic,
-                _ => {}
+                _ => {
+                    info!(
+                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
+                        type_str
+                    );
+                }
             }
         }
         epoch_store.protocol_config().consensus_network()
@@ -94,7 +99,7 @@ impl MysticetiManager {
 impl ConsensusManagerTrait for MysticetiManager {
     async fn start(
         &self,
-        _config: &NodeConfig,
+        config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
@@ -116,10 +121,12 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
-        // TODO(mysticeti): Fill in the other fields
+        let consensus_config = config
+            .consensus_config()
+            .expect("consensus_config should exist");
         let parameters = Parameters {
-            db_path: Some(self.get_store_path(epoch)),
-            ..Default::default()
+            db_path: self.get_store_path(epoch),
+            ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
         let own_protocol_key = self.protocol_keypair.public();

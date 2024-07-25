@@ -7,11 +7,14 @@ use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
+use crate::supported_protocol_versions::{
+    Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
+};
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{dkg, dkg_v0, dkg_v1};
+use fastcrypto_tbls::{dkg, dkg_v1};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,7 +23,6 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_protocol_config::SupportedProtocolVersions;
 
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
@@ -87,7 +89,7 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
@@ -137,7 +139,7 @@ impl Debug for ConsensusTransactionKey {
 /// Used to advertise capabilities of each authority via narwhal. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
-pub struct AuthorityCapabilities {
+pub struct AuthorityCapabilitiesV1 {
     /// Originating authority - must match narwhal transaction source.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
@@ -155,7 +157,7 @@ pub struct AuthorityCapabilities {
     pub available_system_packages: Vec<ObjectRef>,
 }
 
-impl Debug for AuthorityCapabilities {
+impl Debug for AuthorityCapabilitiesV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AuthorityCapabilities")
             .field("authority", &self.authority.concise())
@@ -169,7 +171,7 @@ impl Debug for AuthorityCapabilities {
     }
 }
 
-impl AuthorityCapabilities {
+impl AuthorityCapabilitiesV1 {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
@@ -190,12 +192,75 @@ impl AuthorityCapabilities {
     }
 }
 
+/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// negotiate the creation of the ChangeEpoch transaction.
+#[derive(Serialize, Deserialize, Clone, Hash)]
+pub struct AuthorityCapabilitiesV2 {
+    /// Originating authority - must match narwhal transaction source.
+    pub authority: AuthorityName,
+    /// Generation number set by sending authority. Used to determine which of multiple
+    /// AuthorityCapabilities messages from the same authority is the most recent.
+    ///
+    /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
+    /// should not be interpreted as a timestamp.)
+    pub generation: u64,
+
+    /// ProtocolVersions that the authority supports.
+    pub supported_protocol_versions: SupportedProtocolVersionsWithHashes,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
+}
+
+impl Debug for AuthorityCapabilitiesV2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorityCapabilities")
+            .field("authority", &self.authority.concise())
+            .field("generation", &self.generation)
+            .field(
+                "supported_protocol_versions",
+                &self.supported_protocol_versions,
+            )
+            .field("available_system_packages", &self.available_system_packages)
+            .finish()
+    }
+}
+
+impl AuthorityCapabilitiesV2 {
+    pub fn new(
+        authority: AuthorityName,
+        chain: Chain,
+        supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
+    ) -> Self {
+        let generation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Sui did not exist prior to 1970")
+            .as_millis()
+            .try_into()
+            .expect("This build of sui is not supported in the year 500,000,000");
+        Self {
+            authority,
+            generation,
+            supported_protocol_versions:
+                SupportedProtocolVersionsWithHashes::from_supported_versions(
+                    supported_protocol_versions,
+                    chain,
+                ),
+            available_system_packages,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
-    CapabilityNotification(AuthorityCapabilities),
+
+    CapabilityNotification(AuthorityCapabilitiesV1),
+
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
@@ -206,6 +271,8 @@ pub enum ConsensusTransactionKind {
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+
+    CapabilityNotificationV2(AuthorityCapabilitiesV2),
 }
 
 impl ConsensusTransactionKind {
@@ -221,26 +288,20 @@ impl ConsensusTransactionKind {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum VersionedDkgMessage {
-    V0(dkg_v0::Message<bls12381::G2Element, bls12381::G2Element>),
+    V0(), // deprecated
     V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VersionedDkgConfimation {
-    V0(dkg::Confirmation<bls12381::G2Element>),
+pub enum VersionedDkgConfirmation {
+    V0(), // deprecated
     V1(dkg::Confirmation<bls12381::G2Element>),
 }
 
 impl Debug for VersionedDkgMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionedDkgMessage::V0(msg) => write!(
-                f,
-                "DKG V0 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
-                msg.sender,
-                msg.vss_pk.degree(),
-                msg.encrypted_shares.len(),
-            ),
+            VersionedDkgMessage::V0() => write!(f, "Deprecated VersionedDkgMessage version 0"),
             VersionedDkgMessage::V1(msg) => write!(
                 f,
                 "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
@@ -255,7 +316,7 @@ impl Debug for VersionedDkgMessage {
 impl VersionedDkgMessage {
     pub fn sender(&self) -> u16 {
         match self {
-            VersionedDkgMessage::V0(msg) => msg.sender,
+            VersionedDkgMessage::V0() => panic!("BUG: invalid VersionedDkgMessage version"),
             VersionedDkgMessage::V1(msg) => msg.sender,
         }
     }
@@ -264,24 +325,9 @@ impl VersionedDkgMessage {
         dkg_version: u64,
         party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
     ) -> FastCryptoResult<VersionedDkgMessage> {
-        match dkg_version {
-            0 => {
-                let msg = party.create_message(&mut rand::thread_rng())?;
-                Ok(VersionedDkgMessage::V0(msg))
-            }
-            1 => {
-                let msg = party.create_message_v1(&mut rand::thread_rng())?;
-                Ok(VersionedDkgMessage::V1(msg))
-            }
-            _ => panic!("BUG: invalid DKG version"),
-        }
-    }
-
-    pub fn unwrap_v0(self) -> dkg_v0::Message<bls12381::G2Element, bls12381::G2Element> {
-        match self {
-            VersionedDkgMessage::V0(msg) => msg,
-            _ => panic!("BUG: expected V0 message"),
-        }
+        assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
+        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        Ok(VersionedDkgMessage::V1(msg))
     }
 
     pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {
@@ -290,42 +336,40 @@ impl VersionedDkgMessage {
             _ => panic!("BUG: expected V1 message"),
         }
     }
+
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgMessage::V1(_), 1))
+    }
 }
 
-impl VersionedDkgConfimation {
+impl VersionedDkgConfirmation {
     pub fn sender(&self) -> u16 {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.sender,
-            VersionedDkgConfimation::V1(msg) => msg.sender,
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.sender,
         }
     }
 
     pub fn num_of_complaints(&self) -> usize {
         match self {
-            VersionedDkgConfimation::V0(msg) => msg.complaints.len(),
-            VersionedDkgConfimation::V1(msg) => msg.complaints.len(),
-        }
-    }
-
-    pub fn unwrap_v0(&self) -> &dkg::Confirmation<bls12381::G2Element> {
-        match self {
-            VersionedDkgConfimation::V0(msg) => msg,
-            _ => panic!("BUG: expected V0 confirmation"),
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.complaints.len(),
         }
     }
 
     pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
         match self {
-            VersionedDkgConfimation::V1(msg) => msg,
+            VersionedDkgConfirmation::V1(msg) => msg,
             _ => panic!("BUG: expected V1 confirmation"),
         }
     }
 
-    pub fn expect_v1(self) -> Self {
-        match self {
-            VersionedDkgConfimation::V1(_) => self,
-            _ => panic!("BUG: expected V1 confirmation"),
-        }
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgConfirmation::V1(_), 1))
     }
 }
 
@@ -365,13 +409,23 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_capability_notification(capabilities: AuthorityCapabilities) -> Self {
+    pub fn new_capability_notification(capabilities: AuthorityCapabilitiesV1) -> Self {
         let mut hasher = DefaultHasher::new();
         capabilities.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+        }
+    }
+
+    pub fn new_capability_notification_v2(capabilities: AuthorityCapabilitiesV2) -> Self {
+        let mut hasher = DefaultHasher::new();
+        capabilities.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
         }
     }
 
@@ -406,13 +460,8 @@ impl ConsensusTransaction {
         authority: AuthorityName,
         versioned_message: &VersionedDkgMessage,
     ) -> Self {
-        let message = match versioned_message {
-            VersionedDkgMessage::V0(msg) => {
-                // Old version does not use the enum, so we need to serialize it separately.
-                bcs::to_bytes(msg).expect("message serialization should not fail")
-            }
-            _ => bcs::to_bytes(versioned_message).expect("message serialization should not fail"),
-        };
+        let message =
+            bcs::to_bytes(versioned_message).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         message.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -423,17 +472,10 @@ impl ConsensusTransaction {
     }
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        versioned_confirmation: &VersionedDkgConfimation,
+        versioned_confirmation: &VersionedDkgConfirmation,
     ) -> Self {
-        let confirmation = match versioned_confirmation {
-            VersionedDkgConfimation::V0(msg) => {
-                // Old version does not use the enum, so we need to serialize it separately.
-                bcs::to_bytes(msg).expect("message serialization should not fail")
-            }
-            _ => bcs::to_bytes(versioned_confirmation)
-                .expect("message serialization should not fail"),
-        };
-
+        let confirmation =
+            bcs::to_bytes(versioned_confirmation).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         confirmation.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -464,6 +506,9 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::EndOfPublish(*authority)
             }
             ConsensusTransactionKind::CapabilityNotification(cap) => {
+                ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
+            }
+            ConsensusTransactionKind::CapabilityNotificationV2(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
             ConsensusTransactionKind::NewJWKFetched(authority, id, key) => {

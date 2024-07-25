@@ -8,9 +8,20 @@ export function CreateCounter({
 }: {
   onCreated: (id: string) => void;
 }) {
-  const client = useSuiClient();
   const counterPackageId = useNetworkVariable("counterPackageId");
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
+    execute: async ({ bytes, signature }) =>
+      await suiClient.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature,
+        options: {
+          // Raw effects are required so the effects can be reported back to the wallet
+          showRawEffects: true,
+          showEffects: true,
+        },
+      }),
+  });
 
   return (
     <Container>
@@ -38,21 +49,11 @@ export function CreateCounter({
         transaction: tx,
       },
       {
-        onSuccess: ({ digest }) => {
-          client
-            .waitForTransaction({
-              digest: digest,
-              options: {
-                showEffects: true,
-              },
-            })
-            .then((tx) => {
-              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-
-              if (objectId) {
-                onCreated(objectId);
-              }
-            });
+        onSuccess: (result) => {
+          const objectId = result.effects?.created?.[0]?.reference?.objectId;
+          if (objectId) {
+            onCreated(objectId);
+          }
         },
       },
     );

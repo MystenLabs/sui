@@ -164,10 +164,10 @@ export const Command = bcs.enum('Command', {
 				val === null
 					? {
 							None: true,
-					  }
+						}
 					: {
 							Some: val,
-					  },
+						},
 			output: (val) => val.Some ?? null,
 		}),
 		elements: bcs.vector(Argument),

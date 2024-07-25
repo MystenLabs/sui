@@ -139,7 +139,7 @@ export function useSignAndExecuteTransaction<
 							: await transaction.toJSON({
 									supportedIntents,
 									client,
-							  });
+								});
 					},
 				},
 				account: signerAccount,

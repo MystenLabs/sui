@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zklogin",
-	"version": "0.7.9",
+	"version": "0.7.11",
 	"description": "Utilities for interacting with zkLogin in Sui",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -42,15 +42,15 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"@types/node": "^20.4.2",
-		"typescript": "^5.3.3",
-		"vitest": "^1.6.0"
+		"@types/node": "^20.14.10",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
 	},
 	"dependencies": {
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui": "workspace:*",
-		"@noble/hashes": "^1.3.1",
-		"jose": "^5.2.3",
+		"@noble/hashes": "^1.4.0",
+		"jose": "^5.6.3",
 		"poseidon-lite": "^0.2.0"
 	}
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { EnumInputShape } from '@mysten/bcs';
-import type { BaseSchema, Input, Output } from 'valibot';
+import type { GenericSchema, InferInput, InferOutput } from 'valibot';
 import {
 	array,
 	boolean,
@@ -13,6 +13,7 @@ import {
 	number,
 	object,
 	optional,
+	pipe,
 	record,
 	string,
 	tuple,
@@ -24,13 +25,13 @@ import { BCSBytes, JsonU64, ObjectID, ObjectRef, SuiAddress } from './internal.j
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 
-function enumUnion<T extends Record<string, BaseSchema<any>>>(options: T) {
+function enumUnion<T extends Record<string, GenericSchema<any>>>(options: T) {
 	return union(
 		Object.entries(options).map(([key, value]) => object({ [key]: value })),
-	) as BaseSchema<
+	) as GenericSchema<
 		EnumInputShape<
 			Merge<{
-				[K in keyof T]: Input<T[K]>;
+				[K in keyof T]: InferInput<T[K]>;
 			}>
 		>
 	>;
@@ -39,9 +40,9 @@ function enumUnion<T extends Record<string, BaseSchema<any>>>(options: T) {
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
 const Argument = enumUnion({
 	GasCoin: literal(true),
-	Input: number([integer()]),
-	Result: number([integer()]),
-	NestedResult: tuple([number([integer()]), number([integer()])]),
+	Input: pipe(number(), integer()),
+	Result: pipe(number(), integer()),
+	NestedResult: tuple([pipe(number(), integer()), pipe(number(), integer())]),
 });
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L1387-L1392
@@ -143,4 +144,4 @@ export const SerializedTransactionDataV2 = object({
 	commands: array(Command),
 });
 
-export type SerializedTransactionDataV2 = Output<typeof SerializedTransactionDataV2>;
+export type SerializedTransactionDataV2 = InferOutput<typeof SerializedTransactionDataV2>;

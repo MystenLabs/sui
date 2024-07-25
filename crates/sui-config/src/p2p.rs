@@ -380,6 +380,12 @@ pub struct RandomnessConfig {
     /// If unspecified, this will default to 20.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub send_partial_signatures_inflight_limit: Option<usize>,
+
+    /// Maximum proportion of total peer weight to ignore in case of byzantine behavior.
+    ///
+    /// If unspecified, this will default to 0.2.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_ignored_peer_weight_factor: Option<f64>,
 }
 
 impl RandomnessConfig {
@@ -416,5 +422,12 @@ impl RandomnessConfig {
 
         self.send_partial_signatures_inflight_limit
             .unwrap_or(SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT)
+    }
+
+    pub fn max_ignored_peer_weight_factor(&self) -> f64 {
+        const MAX_IGNORED_PEER_WEIGHT_FACTOR: f64 = 0.2;
+
+        self.max_ignored_peer_weight_factor
+            .unwrap_or(MAX_IGNORED_PEER_WEIGHT_FACTOR)
     }
 }

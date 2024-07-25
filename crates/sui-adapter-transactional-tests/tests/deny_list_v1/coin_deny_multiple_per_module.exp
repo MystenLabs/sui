@@ -3,15 +3,19 @@ processed 16 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 9-54:
+task 1, lines 9-56:
+//# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8), object(1,9), object(1,10)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 33082800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'view-object'. lines 56-56:
+task 2, line 58:
+//# view-object 1,0
 1,0::{first_coin, second_coin}
 
-task 3 'view-object'. lines 58-58:
+task 3, line 60:
+//# view-object 1,1
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::Coin<test::first_coin::FIRST_COIN> {
@@ -25,7 +29,8 @@ Contents: sui::coin::Coin<test::first_coin::FIRST_COIN> {
     },
 }
 
-task 4 'view-object'. lines 60-60:
+task 4, line 62:
+//# view-object 1,2
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::Coin<test::second_coin::SECOND_COIN> {
@@ -39,7 +44,8 @@ Contents: sui::coin::Coin<test::second_coin::SECOND_COIN> {
     },
 }
 
-task 5 'view-object'. lines 62-62:
+task 5, line 64:
+//# view-object 1,3
 Owner: Immutable
 Version: 2
 Contents: sui::coin::CoinMetadata<test::first_coin::FIRST_COIN> {
@@ -102,7 +108,8 @@ Contents: sui::coin::CoinMetadata<test::first_coin::FIRST_COIN> {
     },
 }
 
-task 6 'view-object'. lines 64-64:
+task 6, line 66:
+//# view-object 1,4
 Owner: Immutable
 Version: 2
 Contents: sui::coin::CoinMetadata<test::second_coin::SECOND_COIN> {
@@ -165,7 +172,8 @@ Contents: sui::coin::CoinMetadata<test::second_coin::SECOND_COIN> {
     },
 }
 
-task 7 'view-object'. lines 66-66:
+task 7, line 68:
+//# view-object 1,5
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::DenyCap<test::first_coin::FIRST_COIN> {
@@ -176,7 +184,8 @@ Contents: sui::coin::DenyCap<test::first_coin::FIRST_COIN> {
     },
 }
 
-task 8 'view-object'. lines 68-68:
+task 8, line 70:
+//# view-object 1,6
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::DenyCap<test::second_coin::SECOND_COIN> {
@@ -187,7 +196,8 @@ Contents: sui::coin::DenyCap<test::second_coin::SECOND_COIN> {
     },
 }
 
-task 9 'view-object'. lines 70-70:
+task 9, line 72:
+//# view-object 1,7
 Owner: Immutable
 Version: 2
 Contents: sui::coin::RegulatedCoinMetadata<test::first_coin::FIRST_COIN> {
@@ -204,7 +214,8 @@ Contents: sui::coin::RegulatedCoinMetadata<test::first_coin::FIRST_COIN> {
     },
 }
 
-task 10 'view-object'. lines 72-72:
+task 10, line 74:
+//# view-object 1,8
 Owner: Immutable
 Version: 2
 Contents: sui::coin::RegulatedCoinMetadata<test::second_coin::SECOND_COIN> {
@@ -221,7 +232,8 @@ Contents: sui::coin::RegulatedCoinMetadata<test::second_coin::SECOND_COIN> {
     },
 }
 
-task 11 'view-object'. lines 74-74:
+task 11, line 76:
+//# view-object 1,9
 Owner: Immutable
 Version: 2
 Contents: sui::coin::TreasuryCap<test::first_coin::FIRST_COIN> {
@@ -235,7 +247,8 @@ Contents: sui::coin::TreasuryCap<test::first_coin::FIRST_COIN> {
     },
 }
 
-task 12 'view-object'. lines 76-78:
+task 12, lines 78-80:
+//# view-object 1,10
 Owner: Immutable
 Version: 2
 Contents: sui::coin::TreasuryCap<test::second_coin::SECOND_COIN> {
@@ -249,14 +262,18 @@ Contents: sui::coin::TreasuryCap<test::second_coin::SECOND_COIN> {
     },
 }
 
-task 13 'run'. lines 79-81:
+task 13, lines 81-83:
+//# run sui::coin::deny_list_add --args object(0x403) object(1,5) @A --type-args test::first_coin::FIRST_COIN --sender A
 created: object(13,0), object(13,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,5)
 gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
-task 14 'transfer-object'. lines 82-84:
+task 14, lines 84-86:
+//# transfer-object 1,1 --sender A --recipient A
 Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,0)::first_coin::FIRST_COIN" }
 
-task 15 'transfer-object'. lines 85-85:
+task 15, line 87:
+//# transfer-object 1,2 --sender A --recipient A
 mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168

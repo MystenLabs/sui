@@ -112,7 +112,7 @@ echo "All tests completed, checking for failures..."
 echo "============================================="
 date
 
-grep -qHn FAIL "$LOG_DIR"/*
+grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/*
 
 # if grep found no failures exit now
 [ $? -eq 1 ] && echo "No test failures detected" && exit 0
@@ -121,7 +121,7 @@ echo "Failures detected, printing logs..."
 
 # read all filenames in $LOG_DIR that contain the string "FAIL" into a bash array
 # and print the line number and filename for each
-readarray -t FAILED_LOG_FILES < <(grep -l FAIL "$LOG_DIR"/*)
+readarray -t FAILED_LOG_FILES < <(grep -El 'TIMEOUT|FAIL' "$LOG_DIR"/*)
 
 # iterate over the array and print the contents of each file
 for LOG_FILE in "${FAILED_LOG_FILES[@]}"; do

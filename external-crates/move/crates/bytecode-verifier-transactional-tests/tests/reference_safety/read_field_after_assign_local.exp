@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'publish'. lines 1-21:
+task 0, lines 1-21:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Tester'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,
     sub_status: None,

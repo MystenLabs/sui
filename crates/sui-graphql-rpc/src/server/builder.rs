@@ -11,6 +11,7 @@ use crate::config::{
 };
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
+use crate::extensions::directive_checker::DirectiveChecker;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::datatype::IMoveDatatype;
@@ -44,7 +45,7 @@ use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{get, post, MethodRouter, Route};
 use axum::Extension;
-use axum::{headers::Header, Router};
+use axum::Router;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
@@ -57,7 +58,7 @@ use std::net::TcpStream;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
-use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -257,6 +258,8 @@ impl ServerBuilder {
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
                 .route("/health", get(health_check))
+                .route("/graphql/health", get(health_check))
+                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -307,11 +310,7 @@ impl ServerBuilder {
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([
-                hyper::header::CONTENT_TYPE,
-                VERSION_HEADER.clone(),
-                LIMITS_HEADER.clone(),
-            ]);
+            .allow_headers([hyper::header::CONTENT_TYPE, LIMITS_HEADER.clone()]);
         Ok(cors)
     }
 
@@ -418,7 +417,7 @@ impl ServerBuilder {
             // Bound each statement in a request with the overall request timeout, to bound DB
             // utilisation (in the worst case we will use 2x the request timeout time in DB wall
             // time).
-            config.service.limits.request_timeout_ms,
+            config.service.limits.request_timeout_ms.into(),
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
@@ -470,18 +469,27 @@ impl ServerBuilder {
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
         }
+
         if config.internal_features.logger {
             builder = builder.extension(Logger::default());
         }
+
         if config.internal_features.query_limits_checker {
-            builder = builder.extension(QueryLimitsChecker::default());
+            builder = builder.extension(QueryLimitsChecker);
         }
+
+        if config.internal_features.directive_checker {
+            builder = builder.extension(DirectiveChecker);
+        }
+
         if config.internal_features.query_timeout {
             builder = builder.extension(Timeout);
         }
+
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
         }
+
         if config.internal_features.apollo_tracing {
             builder = builder.extension(ApolloTracing);
         }
@@ -686,7 +694,7 @@ pub mod tests {
         let reader = PgManager::reader_with_config(
             connection_config.db_url.clone(),
             connection_config.db_pool_size,
-            service_config.limits.request_timeout_ms,
+            service_config.limits.request_timeout_ms.into(),
         )
         .expect("Failed to create pg connection pool");
 
@@ -769,8 +777,8 @@ pub mod tests {
             sui_client: &SuiClient,
         ) -> Response {
             let mut cfg = ServiceConfig::default();
-            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
-            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u32;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(None, Some(cfg))
                 .context_data(Some(sui_client.clone()))
@@ -862,7 +870,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -889,10 +897,7 @@ pub mod tests {
             .map(|e| e.message)
             .collect();
 
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 0".to_string()]);
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
@@ -903,10 +908,7 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 2".to_string()]);
     }
 
     pub async fn test_query_node_limit_impl() {
@@ -920,7 +922,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -946,10 +948,7 @@ pub mod tests {
             .into_iter()
             .map(|e| e.message)
             .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 0 nodes".to_string()]);
 
         let err: Vec<_> = exec_query_node_limit(
             4,
@@ -961,10 +960,7 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 4 nodes".to_string()]);
     }
 
     pub async fn test_query_default_page_limit_impl(connection_config: ConnectionConfig) {
@@ -1040,7 +1036,7 @@ pub mod tests {
         let server_builder = prep_schema(None, None);
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
-            .extension(QueryLimitsChecker::default()) // QueryLimitsChecker is where we actually set the metrics
+            .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
             .build_schema();
 
         schema

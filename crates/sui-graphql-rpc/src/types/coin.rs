@@ -23,6 +23,7 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
+use super::uint53::UInt53;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -150,7 +151,7 @@ impl Coin {
             .await
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_.super_).version().await
     }
 

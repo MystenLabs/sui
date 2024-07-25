@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityState;
-use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
+use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
-use crate::safe_client::SafeClientMetricsBase;
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
 use mysten_common::sync::notify_read::NotifyRead;
@@ -25,6 +25,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
 use std::net::SocketAddr;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,13 +40,12 @@ use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction::VerifiedTransaction;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
-
-use sui_types::transaction::VerifiedTransaction;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -63,35 +63,27 @@ pub struct TransactiondOrchestrator<A: Clone> {
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
-    pub fn new_with_network_clients(
+    pub fn new_with_auth_aggregator(
+        validators: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
         validator_state: Arc<AuthorityState>,
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
-    ) -> anyhow::Result<Self> {
-        let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
-        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let validators = AuthorityAggregator::new_from_local_system_state(
-            validator_state.get_object_cache_reader(),
-            validator_state.committee_store(),
-            safe_client_metrics_base.clone(),
-            auth_agg_metrics.clone(),
-        )?;
-
+    ) -> Self {
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
             validator_state.get_object_cache_reader().clone(),
             validator_state.clone_committee_store(),
-            safe_client_metrics_base,
-            auth_agg_metrics,
+            validators.safe_client_metrics_base.clone(),
+            validators.metrics.deref().clone(),
         );
-        Ok(TransactiondOrchestrator::new(
-            Arc::new(validators),
+        TransactiondOrchestrator::new(
+            validators,
             validator_state,
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
     }
 }
 
@@ -236,6 +228,7 @@ where
                 good_response_metrics.inc();
                 let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
+                    debug!(?tx_digest, ?wait_for_local_execution, "success");
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events.unwrap_or_default(),
@@ -257,11 +250,15 @@ where
                 )
                 .await
                 {
-                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events.unwrap_or_default(),
-                        true,
-                    )))),
+                    Ok(_) => {
+                        debug!(?tx_digest, ?wait_for_local_execution, "success");
+
+                        Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events.unwrap_or_default(),
+                            true,
+                        ))))
+                    }
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events.unwrap_or_default(),
@@ -273,6 +270,8 @@ where
     }
 
     // Utilize the handle_certificate_v3 validator api to request input/output objects
+    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "trace", skip_all,
+                 fields(tx_digest = ?request.transaction.digest()))]
     pub async fn execute_transaction_v3(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -359,6 +358,7 @@ where
 
     /// Submits the transaction to Quorum Driver for execution.
     /// Returns an awaitable Future.
+    #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
     async fn submit(
         &self,
         transaction: VerifiedTransaction,

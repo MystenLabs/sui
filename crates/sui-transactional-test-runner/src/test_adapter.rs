@@ -31,6 +31,7 @@ use move_core_types::{
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
+use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
@@ -165,6 +166,7 @@ struct TxnSummary {
     deleted: Vec<ObjectID>,
     unwrapped_then_deleted: Vec<ObjectID>,
     wrapped: Vec<ObjectID>,
+    unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
 }
@@ -176,6 +178,34 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
+
+    fn render_command_input(
+        &self,
+        task: &TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >,
+    ) -> Option<String> {
+        match &task.command {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+                let data_str = std::fs::read_to_string(task.data.as_ref()?)
+                    .ok()?
+                    .trim()
+                    .to_string();
+                Some(format!("{}\n{}", task.task_text, data_str))
+            }
+            TaskCommand::Init(_, _)
+            | TaskCommand::PrintBytecode(_)
+            | TaskCommand::Publish(_, _)
+            | TaskCommand::Run(_, _)
+            | TaskCommand::Subcommand(..) => None,
+        }
+    }
 
     fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
@@ -512,15 +542,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             command_lines_stop,
             stop_line,
             data,
+            task_text,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident, $version:expr) => {{
                 let id = match self.fake_to_real_object_id($fake_id) {
                     None => bail!(
-                        "task {}, lines {}-{}. Unbound fake id {}",
+                        "task {}, lines {}-{}\n{}\n. Unbound fake id {}",
                         number,
                         start_line,
                         command_lines_stop,
+                        task_text,
                         $fake_id
                     ),
                     Some(res) => res,
@@ -1448,6 +1480,12 @@ impl<'a> SuiTestAdapter {
             self.enumerate_fake(id);
         }
 
+        let mut unchanged_shared_ids = effects
+            .unchanged_shared_objects()
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).
 
@@ -1458,6 +1496,7 @@ impl<'a> SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => {
@@ -1474,6 +1513,7 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    unchanged_shared: unchanged_shared_ids,
                 })
             }
             ExecutionStatus::Failure { error, command } => {
@@ -1554,6 +1594,8 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    // TODO: Properly propagate unchanged shared objects in dev_inspect.
+                    unchanged_shared: vec![],
                 })
             }
             SuiExecutionStatus::Failure { error } => Err(anyhow::anyhow!(self.stabilize_str(
@@ -1619,6 +1661,7 @@ impl<'a> SuiTestAdapter {
             deleted,
             unwrapped_then_deleted,
             wrapped,
+            unchanged_shared,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -1666,6 +1709,17 @@ impl<'a> SuiTestAdapter {
                 out.push('\n')
             }
             write!(out, "wrapped: {}", self.list_objs(wrapped, summarize)).unwrap();
+        }
+        if !unchanged_shared.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "unchanged_shared: {}",
+                self.list_objs(unchanged_shared, summarize)
+            )
+            .unwrap();
         }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();

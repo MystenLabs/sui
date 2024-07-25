@@ -1,6 +1,7 @@
 processed 6 tasks
 
-task 1 'publish'. lines 10-14:
+task 1, lines 10-14:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M0'. Got VMError: {
     major_status: RECURSIVE_DATATYPE_DEFINITION,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 2 'publish'. lines 16-28:
+task 2, lines 16-28:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
     major_status: RECURSIVE_DATATYPE_DEFINITION,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 3 'publish'. lines 30-36:
+task 3, lines 30-36:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: RECURSIVE_DATATYPE_DEFINITION,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 4 'publish'. lines 38-45:
+task 4, lines 38-45:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: RECURSIVE_DATATYPE_DEFINITION,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 5 'publish'. lines 47-56:
+task 5, lines 47-56:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: RECURSIVE_DATATYPE_DEFINITION,
     sub_status: None,

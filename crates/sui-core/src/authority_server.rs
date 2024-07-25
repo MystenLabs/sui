@@ -43,6 +43,7 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
+use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -57,6 +58,7 @@ use crate::{
     traffic_controller::metrics::TrafficControllerMetrics,
 };
 use nonempty::{nonempty, NonEmpty};
+use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -102,10 +104,10 @@ pub struct AuthorityServer {
 
 impl AuthorityServer {
     pub fn new_for_test_with_consensus_adapter(
-        address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
     ) -> Self {
+        let address = new_local_tcp_address_for_testing();
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
         Self {
@@ -116,11 +118,8 @@ impl AuthorityServer {
         }
     }
 
-    pub fn new_for_test(
-        address: Multiaddr,
-        state: Arc<AuthorityState>,
-        consensus_address: Multiaddr,
-    ) -> Self {
+    pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
+        let consensus_address = new_local_tcp_address_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyNarwhalClient::new(consensus_address)),
             state.name,
@@ -132,7 +131,7 @@ impl AuthorityServer {
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
         ));
-        Self::new_for_test_with_consensus_adapter(address, state, consensus_adapter)
+        Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -146,13 +145,11 @@ impl AuthorityServer {
     ) -> Result<AuthorityServerHandle, io::Error> {
         let mut server = mysten_network::config::Config::new()
             .server_builder()
-            .add_service(ValidatorServer::new(ValidatorService {
-                state: self.state,
-                consensus_adapter: self.consensus_adapter,
-                metrics: self.metrics.clone(),
-                traffic_controller: None,
-                client_id_source: None,
-            }))
+            .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
+                self.state,
+                self.consensus_adapter,
+                self.metrics,
+            )))
             .bind(&address)
             .await
             .unwrap();
@@ -323,6 +320,20 @@ impl ValidatorService {
         }
     }
 
+    pub fn new_for_tests(
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        metrics: Arc<ValidatorServiceMetrics>,
+    ) -> Self {
+        Self {
+            state,
+            consensus_adapter,
+            metrics,
+            traffic_controller: None,
+            client_id_source: None,
+        }
+    }
+
     pub fn validator_state(&self) -> &Arc<AuthorityState> {
         &self.state
     }
@@ -357,7 +368,7 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        Self::transaction_validity_check(&epoch_store, &transaction)?;
+        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -400,7 +411,7 @@ impl ValidatorService {
         let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
-            .handle_transaction(&epoch_store, transaction)
+            .handle_transaction(&epoch_store, transaction.clone())
             .instrument(span)
             .await
             .tap_err(|e| {
@@ -414,6 +425,7 @@ impl ValidatorService {
             // to save more CPU.
             return Err(error.into());
         }
+
         Ok((tonic::Response::new(info), Weight::zero()))
     }
 
@@ -633,7 +645,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<SubmitCertificateResponse> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, certificate.data())?;
+        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -663,7 +675,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV2> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, certificate.data())?;
+        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -697,7 +709,9 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
-        Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
+        request
+            .certificate
+            .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
         self.handle_certificates(
@@ -818,11 +832,8 @@ impl ValidatorService {
         let certificates = NonEmpty::from_vec(request.certificates)
             .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
         for certificate in &certificates {
-            // CRITICAL: DO NOT USE `certificates` BEFORE THIS CHECK.
-            // This must be the first thing to check before anything else, because the transaction
-            // may not even be valid to access for any other checks.
             // We need to check this first because we haven't verified the cert signature.
-            Self::transaction_validity_check(&epoch_store, certificate.data())?;
+            certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
         }
 
         // Now that individual certificates are valid, we check if the bundle is valid.
@@ -849,28 +860,6 @@ impl ValidatorService {
                 spam_weight,
             )
         })
-    }
-
-    fn transaction_validity_check(
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: &SenderSignedData,
-    ) -> SuiResult<()> {
-        let config = epoch_store.protocol_config();
-        transaction.validity_check(config, epoch_store.epoch())?;
-        // TODO: The following check should be moved into
-        // TransactionData::check_version_and_features_supported.
-        // However that's blocked by some tests that uses randomness features
-        // even when the protocol feature is not enabled.
-        if !epoch_store.randomness_state_enabled()
-            && transaction.transaction_data().uses_randomness()
-        {
-            return Err(SuiError::UserInputError {
-                error: UserInputError::Unsupported(
-                    "randomness is not enabled on this network".to_string(),
-                ),
-            });
-        }
-        Ok(())
     }
 
     async fn object_info_impl(
@@ -1019,24 +1008,44 @@ macro_rules! handle_with_decoration {
                     None
                 }
             }
-            ClientIdSource::XForwardedFor => {
-                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+            ClientIdSource::XForwardedFor(num_hops) => {
+                let do_header_parse = |op: &MetadataValue<Ascii>| {
                     match op.to_str() {
                         Ok(header_val) => {
-                            match header_val.parse::<SocketAddr>() {
-                                Ok(socket_addr) => Some(socket_addr.ip()),
-                                Err(err) => {
+                            let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
+                            if *num_hops == 0 {
+                                error!(
+                                    "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                                    number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
+                                    to this node. Skipping traffic controller request handling.",
+                                    header_contents,
+                                );
+                                return None;
+                            }
+                            let contents_len = header_contents.len();
+                            let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
+                                error!(
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                    Expected at least {} values. Skipping traffic controller request handling.",
+                                    header_contents,
+                                    contents_len,
+                                    num_hops,
+                                    contents_len,
+                                );
+                                return None;
+                            };
+                            client_ip.parse::<IpAddr>().ok().or_else(|| {
+                                client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
                                     $self.metrics.forwarded_header_parse_error.inc();
                                     error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address: {:?}. \
+                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
                                         Please ensure that your proxy is configured to resolve client domains to an \
                                         IP address before writing header",
-                                        header_val,
-                                        err,
+                                        client_ip,
                                     );
                                     None
-                                }
-                            }
+                                })
+                            })
                         }
                         Err(e) => {
                             // TODO: once we have confirmed that no legitimate traffic
@@ -1047,9 +1056,14 @@ macro_rules! handle_with_decoration {
                             None
                         }
                     }
+                };
+                if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                    do_header_parse(op)
+                } else if let Some(op) = $request.metadata().get("X-Forwarded-For") {
+                    do_header_parse(op)
                 } else {
                     $self.metrics.forwarded_header_not_included.inc();
-                    error!("x-forwarded-header not present for request despite node configuring XForwardedFor tracking type");
+                    error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
                     None
                 }
             }

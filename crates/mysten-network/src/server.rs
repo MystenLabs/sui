@@ -467,13 +467,6 @@ mod test {
         test_multiaddr(address).await;
         std::fs::remove_file(path).unwrap();
     }
-
-    #[should_panic]
-    #[tokio::test]
-    async fn missing_http_protocol() {
-        let address: Multiaddr = "/dns/localhost/tcp/0".parse().unwrap();
-        test_multiaddr(address).await;
-    }
 }
 
 #[derive(Clone)]

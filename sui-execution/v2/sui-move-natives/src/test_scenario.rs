@@ -100,14 +100,14 @@ pub fn end_transaction(
     {
         for addr_inventory in inventories.address_inventories.values_mut() {
             for s in addr_inventory.values_mut() {
-                s.remove(id);
+                s.shift_remove(id);
             }
         }
         for s in &mut inventories.shared_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         for s in &mut inventories.immutable_inventory.values_mut() {
-            s.remove(id);
+            s.shift_remove(id);
         }
         inventories.taken.remove(id);
     }

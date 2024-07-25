@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Output } from 'valibot';
-import { literal, object, optional, string, url, uuid, variant } from 'valibot';
+import type { InferOutput } from 'valibot';
+import { literal, object, optional, pipe, string, url, uuid, variant } from 'valibot';
 
 export const StashedRequestData = variant('type', [
 	object({
@@ -19,16 +19,16 @@ export const StashedRequestData = variant('type', [
 		address: string('`address` is required'),
 	}),
 ]);
-export type StashedRequestData = Output<typeof StashedRequestData>;
+export type StashedRequestData = InferOutput<typeof StashedRequestData>;
 
 export const StashedRequest = object({
-	id: string('`id` is required', [uuid()]),
-	origin: string([url('`origin` must be a valid URL')]),
+	id: pipe(string('`id` is required'), uuid()),
+	origin: pipe(string(), url('`origin` must be a valid URL')),
 	name: optional(string()),
 	payload: StashedRequestData,
 });
 
-export type StashedRequest = Output<typeof StashedRequest>;
+export type StashedRequest = InferOutput<typeof StashedRequest>;
 
 export const StashedResponseData = variant('type', [
 	object({
@@ -46,7 +46,7 @@ export const StashedResponseData = variant('type', [
 		signature: string(),
 	}),
 ]);
-export type StashedResponseData = Output<typeof StashedResponseData>;
+export type StashedResponseData = InferOutput<typeof StashedResponseData>;
 
 export const StashedResponsePayload = variant('type', [
 	object({
@@ -57,14 +57,14 @@ export const StashedResponsePayload = variant('type', [
 		data: StashedResponseData,
 	}),
 ]);
-export type StashedResponsePayload = Output<typeof StashedResponsePayload>;
+export type StashedResponsePayload = InferOutput<typeof StashedResponsePayload>;
 
 export const StashedResponse = object({
-	id: string([uuid()]),
+	id: pipe(string(), uuid()),
 	source: literal('zksend-channel'),
 	payload: StashedResponsePayload,
 });
-export type StashedResponse = Output<typeof StashedResponse>;
+export type StashedResponse = InferOutput<typeof StashedResponse>;
 
 export type StashedRequestTypes = Record<string, any> & {
 	[P in StashedRequestData as P['type']]: P;

@@ -6,12 +6,10 @@ use crate::authority_client::{
     make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
     AuthorityAPI, NetworkAuthorityClient,
 };
-use crate::execution_cache::ObjectCacheRead;
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
-use fastcrypto::traits::ToFromBytes;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
-use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
+use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use std::net::SocketAddr;
@@ -28,16 +26,19 @@ use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
-    committee::{Committee, ProtocolVersion},
+    committee::Committee,
     error::{SuiError, SuiResult},
     transaction::*,
 };
 use thiserror::Error;
-use tracing::{debug, error, info, trace, warn, Instrument};
+use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrument};
 
+use crate::epoch::committee_store::CommitteeStore;
+use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
@@ -56,10 +57,8 @@ use sui_types::messages_grpc::{
     ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use tokio::time::{sleep, timeout};
-
-use crate::epoch::committee_store::CommitteeStore;
-use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -509,50 +508,10 @@ impl<A: Clone> AuthorityAggregator<A> {
         committee: Committee,
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        registry: &Registry,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
-    ) -> Self {
-        Self::new_with_timeouts(
-            committee,
-            committee_store,
-            authority_clients,
-            registry,
-            validator_display_names,
-            Default::default(),
-        )
-    }
-
-    pub fn new_with_timeouts(
-        committee: Committee,
-        committee_store: Arc<CommitteeStore>,
-        authority_clients: BTreeMap<AuthorityName, A>,
-        registry: &Registry,
-        validator_display_names: Arc<HashMap<AuthorityName, String>>,
-        timeouts: TimeoutConfig,
-    ) -> Self {
-        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
-        Self {
-            committee: Arc::new(committee),
-            validator_display_names,
-            authority_clients: create_safe_clients(
-                authority_clients,
-                &committee_store,
-                &safe_client_metrics_base,
-            ),
-            metrics: Arc::new(AuthAggMetrics::new(registry)),
-            safe_client_metrics_base,
-            timeouts,
-            committee_store,
-        }
-    }
-
-    pub fn new_with_metrics(
-        committee: Committee,
-        committee_store: Arc<CommitteeStore>,
-        authority_clients: BTreeMap<AuthorityName, A>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
         validator_display_names: Arc<HashMap<AuthorityName, String>>,
+        timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: Arc::new(committee),
@@ -563,7 +522,7 @@ impl<A: Clone> AuthorityAggregator<A> {
             ),
             metrics: auth_agg_metrics,
             safe_client_metrics_base,
-            timeouts: Default::default(),
+            timeouts,
             committee_store,
             validator_display_names,
         }
@@ -582,13 +541,7 @@ impl<A: Clone> AuthorityAggregator<A> {
         disallow_missing_intermediate_committees: bool,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
         let network_clients =
-            make_network_authority_clients_with_network_config(&committee, network_config)
-                .map_err(|err| SuiError::GenericAuthorityError {
-                    error: format!(
-                        "Failed to make authority clients from committee {committee}, err: {:?}",
-                        err
-                    ),
-                })?;
+            make_network_authority_clients_with_network_config(&committee, network_config);
 
         let safe_clients = network_clients
             .into_iter()
@@ -607,7 +560,7 @@ impl<A: Clone> AuthorityAggregator<A> {
 
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
-        let new_committee = committee.committee;
+        let new_committee = committee.committee().clone();
         if disallow_missing_intermediate_committees {
             fp_ensure!(
                 self.committee.epoch + 1 == new_committee.epoch,
@@ -688,41 +641,37 @@ fn create_safe_clients<A: Clone>(
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
-    /// Create a new network authority aggregator by reading the committee and
-    /// network address information from the system state object on-chain.
-    /// This function needs metrics parameters because registry will panic
-    /// if we attempt to register already-registered metrics again.
-    pub fn new_from_local_system_state(
-        store: &Arc<dyn ObjectCacheRead>,
+    /// Create a new network authority aggregator by reading the committee and network addresses
+    /// information from the given epoch start system state.
+    pub fn new_from_epoch_start_state(
+        epoch_start_state: &EpochStartSystemState,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
-    ) -> anyhow::Result<Self> {
-        // TODO: We should get the committee from the epoch store instead to ensure consistency.
-        // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
-        // besides when we are reading fields for the current epoch
-        let sui_system_state = store.get_sui_system_state_object_unsafe()?;
-        let committee = sui_system_state.get_current_epoch_committee();
-        let validator_display_names = sui_system_state
-            .into_sui_system_state_summary()
-            .active_validators
-            .into_iter()
-            .filter_map(|s| {
-                let authority_name =
-                    AuthorityPublicKeyBytes::from_bytes(s.protocol_pubkey_bytes.as_slice());
-                if authority_name.is_err() {
-                    return None;
-                }
-                let human_readable_name = s.name;
-                Some((authority_name.unwrap(), human_readable_name))
-            })
-            .collect();
+        auth_agg_metrics: Arc<AuthAggMetrics>,
+    ) -> Self {
+        let committee = epoch_start_state.get_sui_committee_with_network_metadata();
+        let validator_display_names = epoch_start_state.get_authority_names_to_hostnames();
         Self::new_from_committee(
             committee,
             committee_store,
             safe_client_metrics_base,
-            Arc::new(auth_agg_metrics),
+            auth_agg_metrics,
             Arc::new(validator_display_names),
+        )
+    }
+
+    /// Create a new AuthorityAggregator using information from the given epoch start system state.
+    /// This is typically used during reconfiguration to create a new AuthorityAggregator with the
+    /// new committee and network addresses.
+    pub fn recreate_with_new_epoch_start_state(
+        &self,
+        epoch_start_state: &EpochStartSystemState,
+    ) -> Self {
+        Self::new_from_epoch_start_state(
+            epoch_start_state,
+            &self.committee_store,
+            self.safe_client_metrics_base.clone(),
+            self.metrics.clone(),
         )
     }
 
@@ -732,18 +681,19 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: Arc<AuthAggMetrics>,
         validator_display_names: Arc<HashMap<AuthorityName, String>>,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let net_config = default_mysten_network_config();
         let authority_clients =
-            make_network_authority_clients_with_network_config(&committee, &net_config)?;
-        Ok(Self::new_with_metrics(
-            committee.committee,
+            make_network_authority_clients_with_network_config(&committee, &net_config);
+        Self::new(
+            committee.committee().clone(),
             committee_store.clone(),
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
             validator_display_names,
-        ))
+            Default::default(),
+        )
     }
 }
 
@@ -1062,6 +1012,7 @@ where
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
+    #[instrument(level = "trace", skip_all)]
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
@@ -1101,11 +1052,15 @@ where
                 committee.clone(),
                 self.authority_clients.clone(),
                 state,
-                |_name, client| {
+                |name, client| {
                     Box::pin(
                         async move {
                             let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
-                            client.handle_transaction(transaction_ref.clone(), client_addr).await
+                            let concise_name = name.concise_owned();
+                            client.handle_transaction(transaction_ref.clone(), client_addr)
+                                .monitor_cancellation()
+                                .instrument(trace_span!("handle_transaction", cancelled = false, authority =? concise_name))
+                                .await
                         },
                     )
                 },
@@ -1525,6 +1480,7 @@ where
             - state.tx_signatures.total_votes()
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn process_certificate(
         &self,
         request: HandleCertificateRequestV3,
@@ -1582,6 +1538,7 @@ where
             move |name, client| {
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
+                    let concise_name = name.concise_owned();
                     if request_ref.include_input_objects || request_ref.include_output_objects {
 
                         // adjust the request to validators we aren't planning on sampling
@@ -1599,16 +1556,12 @@ where
 
                         client
                             .handle_certificate_v3(req, client_addr)
-                            .instrument(
-                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                            )
+                            .instrument(trace_span!("handle_certificate_v3", authority =? concise_name))
                             .await
                     } else {
                         client
                             .handle_certificate_v2(request_ref.certificate, client_addr)
-                            .instrument(
-                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                            )
+                            .instrument(trace_span!("handle_certificate_v2", authority =? concise_name))
                             .await
                             .map(|response| HandleCertificateResponseV3 {
                                 effects: response.signed_effects,
@@ -1821,6 +1774,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
     pub async fn execute_transaction_block(
         &self,
         transaction: &Transaction,
@@ -1829,7 +1783,6 @@ where
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
             .process_transaction(transaction.clone(), client_addr)
-            .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
             ProcessTransactionResult::Certified { certificate, .. } => certificate,
@@ -1852,7 +1805,6 @@ where
                 },
                 client_addr,
             )
-            .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
         Ok(response.effects_cert)
@@ -1860,6 +1812,7 @@ where
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
     /// an given list of validators who are supposed to know about it.
+    #[instrument(level = "trace", skip_all, fields(?tx_digest))]
     pub async fn handle_transaction_info_request_from_some_validators(
         &self,
         tx_digest: &TransactionDigest,
@@ -1886,38 +1839,37 @@ where
         .await
     }
 }
+
+#[derive(Default)]
 pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,
+    committee: Option<Committee>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
-    protocol_version: ProtocolVersion,
+    timeouts_config: Option<TimeoutConfig>,
 }
 
 impl<'a> AuthorityAggregatorBuilder<'a> {
     pub fn from_network_config(config: &'a NetworkConfig) -> Self {
         Self {
             network_config: Some(config),
-            genesis: None,
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
+            ..Default::default()
         }
     }
 
     pub fn from_genesis(genesis: &'a Genesis) -> Self {
         Self {
-            network_config: None,
             genesis: Some(genesis),
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
+            ..Default::default()
         }
     }
 
-    pub fn with_protocol_version(mut self, new_version: ProtocolVersion) -> Self {
-        self.protocol_version = new_version;
-        self
+    pub fn from_committee(committee: Committee) -> Self {
+        Self {
+            committee: Some(committee),
+            ..Default::default()
+        }
     }
 
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
@@ -1930,44 +1882,68 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         self
     }
 
-    pub fn build(
-        self,
-    ) -> anyhow::Result<(
-        AuthorityAggregator<NetworkAuthorityClient>,
-        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
-    )> {
+    pub fn with_timeouts_config(mut self, timeouts_config: TimeoutConfig) -> Self {
+        self.timeouts_config = Some(timeouts_config);
+        self
+    }
+
+    fn get_network_committee(&self) -> CommitteeWithNetworkMetadata {
         let genesis = if let Some(network_config) = self.network_config {
             &network_config.genesis
         } else if let Some(genesis) = self.genesis {
             genesis
         } else {
-            anyhow::bail!("need either NetworkConfig or Genesis.");
+            panic!("need either NetworkConfig or Genesis.");
         };
-        let committee = genesis.committee_with_network();
-        let mut registry = &prometheus::Registry::new();
-        if self.registry.is_some() {
-            registry = self.registry.unwrap();
-        }
+        genesis.committee_with_network()
+    }
 
+    fn get_committee(&self) -> Committee {
+        self.committee
+            .clone()
+            .unwrap_or_else(|| self.get_network_committee().committee().clone())
+    }
+
+    pub fn build_network_clients(
+        self,
+    ) -> (
+        AuthorityAggregator<NetworkAuthorityClient>,
+        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
+    ) {
+        let network_committee = self.get_network_committee();
         let auth_clients = make_authority_clients_with_timeout_config(
-            &committee,
+            &network_committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
-        )?;
-        let committee_store = if let Some(committee_store) = self.committee_store {
-            committee_store
-        } else {
-            Arc::new(CommitteeStore::new_for_testing(&committee.committee))
-        };
-        Ok((
-            AuthorityAggregator::new(
-                committee.committee,
-                committee_store,
-                auth_clients.clone(),
-                registry,
-                Arc::new(HashMap::new()),
-            ),
-            auth_clients,
-        ))
+        );
+        let auth_agg = self.build_custom_clients(auth_clients.clone());
+        (auth_agg, auth_clients)
+    }
+
+    pub fn build_custom_clients<C: Clone>(
+        self,
+        authority_clients: BTreeMap<AuthorityName, C>,
+    ) -> AuthorityAggregator<C> {
+        let committee = self.get_committee();
+        let registry = Registry::new();
+        let registry = self.registry.unwrap_or(&registry);
+        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
+        let auth_agg_metrics = Arc::new(AuthAggMetrics::new(registry));
+
+        let committee_store = self
+            .committee_store
+            .unwrap_or_else(|| Arc::new(CommitteeStore::new_for_testing(&committee)));
+
+        let timeouts_config = self.timeouts_config.unwrap_or_default();
+
+        AuthorityAggregator::new(
+            committee,
+            committee_store,
+            authority_clients,
+            safe_client_metrics_base,
+            auth_agg_metrics,
+            Arc::new(HashMap::new()),
+            timeouts_config,
+        )
     }
 }

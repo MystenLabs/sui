@@ -10,6 +10,8 @@ use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
+use std::fs::File;
+use std::str::FromStr;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -18,6 +20,7 @@ use std::{
 };
 use treeline::Tree;
 
+use crate::lock_file::schema::ManagedPackage;
 use crate::package_hooks::{custom_resolve_pkg_id, PackageIdentifier};
 use crate::source_package::parsed_manifest as PM;
 use crate::{
@@ -79,6 +82,7 @@ impl ResolvedGraph {
         graph: DG::DependencyGraph,
         build_options: BuildConfig,
         dependency_cache: &mut DependencyCache,
+        chain_id: Option<String>,
         progress_output: &mut Progress,
     ) -> Result<ResolvedGraph> {
         let mut package_table = PackageTable::new();
@@ -139,7 +143,7 @@ impl ResolvedGraph {
             let pkg_name = resolved_pkg.source_package.package.name;
 
             resolved_pkg
-                .define_addresses_in_package(&mut resolving_table)
+                .define_addresses_in_package(&mut resolving_table, &chain_id)
                 .with_context(|| format!("Resolving addresses for '{pkg_name}'"))?;
 
             for (dep_id, dep, _pkg) in graph.immediate_dependencies(pkg_id, dep_mode) {
@@ -345,7 +349,18 @@ impl Package {
         })
     }
 
-    fn define_addresses_in_package(&self, resolving_table: &mut ResolvingTable) -> Result<()> {
+    /// Associates addresses with named packages in the `resolving_table`.
+    /// Addresses may be pulled in from two sources:
+    /// - The [addresses] section `Move.toml`.
+    /// - Adresses (package IDs) in the `Move.lock` associated with published packages for `chain_id`.
+    ///
+    /// Addresses are pulled from the `Move.lock` only when a package is published or upgraded on-chain.
+    /// Local builds only consult the `Move.toml` manifest.
+    fn define_addresses_in_package(
+        &self,
+        resolving_table: &mut ResolvingTable,
+        chain_id: &Option<String>,
+    ) -> Result<()> {
         let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
             format!(
                 "Resolving package name for '{}'",
@@ -353,9 +368,31 @@ impl Package {
             )
         })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
+            if *addr == Some(AccountAddress::ZERO) {
+                // The address in the manifest is set to 0x0, meaning `name` is associated with 'this'
+                // package. Published dependent package IDs are resolved by `chain_id` from the
+                // `Move.lock` when a package is to be published or upgraded.
+                if let Some(original_id) = self.resolve_original_id_from_lock(chain_id) {
+                    let addr = AccountAddress::from_str(&original_id)?;
+                    resolving_table.define((pkg_id, *name), Some(addr))?;
+                    continue;
+                }
+            }
             resolving_table.define((pkg_id, *name), *addr)?;
         }
         Ok(())
+    }
+
+    fn resolve_original_id_from_lock(&self, chain_id: &Option<String>) -> Option<String> {
+        let lock_file = self.package_path.join(SourcePackageLayout::Lock.path());
+        let mut lock_file = File::open(lock_file).ok()?;
+        let managed_packages = ManagedPackage::read(&mut lock_file).ok();
+        managed_packages
+            .and_then(|m| {
+                let chain_id = chain_id.as_ref()?;
+                m.into_iter().find(|(_, v)| v.chain_id == *chain_id)
+            })
+            .map(|(_, v)| v.original_published_id)
     }
 
     fn process_dependency(

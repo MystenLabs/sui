@@ -6,57 +6,57 @@ warning[W09009]: unused struct field
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:16:21
    │
 16 │         let _ = &in.0.0;
-   │                     ^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │                     ^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:16:23
    │
 16 │         let _ = &in.0.0;
-   │                       ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                       ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:20:21
    │
 20 │         let _ = &in.0.0.0 ;
-   │                     ^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │                     ^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:20:23
    │
 20 │         let _ = &in.0.0.0 ;
-   │                       ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                       ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:20:25
    │
 20 │         let _ = &in.0.0.0 ;
-   │                         ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                         ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:24:21
    │
 24 │         let _ = &in.0.0.0.d ;
-   │                     ^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │                     ^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:24:23
    │
 24 │         let _ = &in.0.0.0.d ;
-   │                       ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                       ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:24:25
    │
 24 │         let _ = &in.0.0.0.d ;
-   │                         ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                         ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:24:27
    │
 24 │         let _ = &in.0.0.0.d ;
-   │                           ^ Autocompletes to: 'a::m::for_c_0', 'a::m::for_c_1', 'c', or 'd'
+   │                           ^ Possible dot names: 'a::m::for_c_0', 'a::m::for_c_1', 'c', or 'd'
 

@@ -19,15 +19,15 @@ export function useGetTransferAmount(txnData: SuiTransactionBlockResponse) {
 							owner === 'Immutable'
 								? 'Immutable'
 								: 'AddressOwner' in owner
-								? owner.AddressOwner
-								: 'ObjectOwner' in owner
-								? owner.ObjectOwner
-								: '',
+									? owner.AddressOwner
+									: 'ObjectOwner' in owner
+										? owner.ObjectOwner
+										: '',
 						amount:
 							coinType === SUI_TYPE_ARG && BigInt(amount) < 0n
 								? BigInt(amount) + BigInt(gas ?? 0n)
 								: BigInt(amount),
-				  }))
+					}))
 				: [],
 		[balanceChanges, gas],
 	);

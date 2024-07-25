@@ -12,6 +12,10 @@ mod checked {
         sync::Arc,
     };
 
+    use crate::execution_mode::ExecutionMode;
+    use crate::execution_value::{
+        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+    };
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
@@ -35,6 +39,7 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
@@ -43,9 +48,6 @@ mod checked {
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        execution::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-        },
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
         move_package::{
@@ -54,10 +56,6 @@ mod checked {
         },
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         Identifier, SUI_FRAMEWORK_ADDRESS,
-    };
-    use sui_types::{
-        execution_mode::ExecutionMode,
-        execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},

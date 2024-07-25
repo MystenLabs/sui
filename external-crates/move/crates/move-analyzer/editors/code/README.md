@@ -92,7 +92,9 @@ Move source file (a file with a `.move` file extension) and:
   - go to references
   - type on hover
   - outline view showing symbol tree for Move source files
-  - inlay type hints (local declarations and lambda parameters)
+  - inlay hints:
+    - types: local declarations, lambda parameters, variant and struct pattern matching
+    - parameter names at function calls
 - If the opened Move source file is located within a buildable project you can build and (locally)
   test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
   VSCode's command palette

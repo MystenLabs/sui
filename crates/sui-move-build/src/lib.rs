@@ -162,7 +162,7 @@ impl BuildConfig {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let chain_id = self.chain_id.clone();
-        let resolution_graph = self.resolution_graph(path)?;
+        let resolution_graph = self.resolution_graph(path, chain_id.clone())?;
         build_from_resolution_graph(
             resolution_graph,
             run_bytecode_verifier,
@@ -171,17 +171,21 @@ impl BuildConfig {
         )
     }
 
-    pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
+    pub fn resolution_graph(
+        mut self,
+        path: &Path,
+        chain_id: Option<String>,
+    ) -> SuiResult<ResolvedGraph> {
         if let Some(err_msg) = set_sui_flavor(&mut self.config) {
             return Err(SuiError::ModuleBuildFailure { error: err_msg });
         }
 
         if self.print_diags_to_stderr {
             self.config
-                .resolution_graph_for_package(path, &mut std::io::stderr())
+                .resolution_graph_for_package(path, chain_id, &mut std::io::stderr())
         } else {
             self.config
-                .resolution_graph_for_package(path, &mut std::io::sink())
+                .resolution_graph_for_package(path, chain_id, &mut std::io::sink())
         }
         .map_err(|err| SuiError::ModuleBuildFailure {
             error: format!("{:?}", err),
@@ -722,7 +726,7 @@ pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<
         .map(|name| {
             format!(
                 "Package dependency \"{name}\" does not specify a published address \
-		 (the Move.toml manifest for \"{name}\" does not contain a published-at field).",
+		 (the Move.toml manifest for \"{name}\" does not contain a 'published-at' field, nor is there a 'published-id' in the Move.lock).",
             )
         })
         .collect::<Vec<_>>();
@@ -749,7 +753,8 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
         .map(|(name, value)| {
             format!(
                 "Package dependency \"{name}\" does not specify a valid published \
-		 address: could not parse value \"{value}\" for published-at field."
+		 address: could not parse value \"{value}\" for 'published-at' field in Move.toml \
+                 or 'published-id' in Move.lock file."
             )
         })
         .collect::<Vec<_>>();

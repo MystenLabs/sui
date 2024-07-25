@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
 
 //# run-graphql
 
@@ -11,7 +11,7 @@
 
 //# run-graphql
 
-fragment Modules on Object  @deprecated {
+fragment Modules on Object @deprecated {
     address
     asMovePackage {
         module(name: "m") {
@@ -39,6 +39,14 @@ fragment Modules on Object  @deprecated {
             }
         }
     }
+}
+
+//# run-graphql
+
+query($id: SuiAddress! @deprecated) {
+  object(id: $id) {
+    address
+  }
 }
 
 //# run-graphql

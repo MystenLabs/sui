@@ -3,16 +3,20 @@ processed 16 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'create-checkpoint'. lines 13-13:
+task 1, line 13:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 2 'create-checkpoint'. lines 15-15:
+task 2, line 15:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 3 'advance-epoch'. lines 17-17:
+task 3, line 17:
+//# advance-epoch
 Epoch advanced: 0
 
-task 4 'run-graphql'. lines 19-34:
+task 4, lines 19-34:
+//# run-graphql
 Response: {
   "data": {
     "checkpoint": {
@@ -40,25 +44,32 @@ Response: {
   }
 }
 
-task 5 'create-checkpoint'. lines 36-36:
+task 5, line 36:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 6 'create-checkpoint'. lines 38-38:
+task 6, line 38:
+//# create-checkpoint
 Checkpoint created: 5
 
-task 7 'create-checkpoint'. lines 40-40:
+task 7, line 40:
+//# create-checkpoint
 Checkpoint created: 6
 
-task 8 'advance-epoch'. lines 42-42:
+task 8, line 42:
+//# advance-epoch
 Epoch advanced: 1
 
-task 9 'create-checkpoint'. lines 44-44:
+task 9, line 44:
+//# create-checkpoint
 Checkpoint created: 8
 
-task 10 'create-checkpoint'. lines 46-46:
+task 10, line 46:
+//# create-checkpoint
 Checkpoint created: 9
 
-task 11 'run-graphql'. lines 48-87:
+task 11, lines 48-87:
+//# run-graphql
 Response: {
   "data": {
     "checkpoint": {
@@ -148,10 +159,12 @@ Response: {
   }
 }
 
-task 12 'create-checkpoint'. lines 89-89:
+task 12, line 89:
+//# create-checkpoint
 Checkpoint created: 10
 
-task 13 'run-graphql'. lines 91-122:
+task 13, lines 91-122:
+//# run-graphql --cursors {"s":3,"c":4} {"s":7,"c":8} {"s":9,"c":10}
 Response: {
   "data": {
     "checkpoint": {
@@ -202,7 +215,8 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 124-155:
+task 14, lines 124-155:
+//# run-graphql --cursors {"s":0,"c":3} {"s":4,"c":7} {"s":8,"c":9}
 Response: {
   "data": {
     "checkpoint": {
@@ -253,7 +267,8 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 157-188:
+task 15, lines 157-188:
+//# run-graphql --cursors {"s":1,"c":2} {"s":5,"c":6} {"s":9,"c":9}
 Response: {
   "data": {
     "checkpoint": {

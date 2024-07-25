@@ -1,5 +1,27 @@
 # @mysten/kiosk
 
+## 0.9.11
+
+### Patch Changes
+
+- 0f27a97: Update dependencies
+- Updated dependencies [7fc464a]
+- Updated dependencies [086b2bc]
+- Updated dependencies [0fb0628]
+- Updated dependencies [cdedf69]
+- Updated dependencies [0f27a97]
+- Updated dependencies [beed646]
+  - @mysten/sui@1.3.0
+
+## 0.9.10
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+
 ## 0.9.9
 
 ### Patch Changes
@@ -67,8 +89,10 @@
 
 ### Minor Changes
 
-- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
-  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
 
 ### Patch Changes
 
@@ -139,7 +163,9 @@
 
 ### Patch Changes
 
-- a3971c3524: Fixes `lock` function arguments. `itemId` is replaced by `item`, which accepts an ObjectArgument instead of a string. `itemId` is still supported but deprecated, and will be removed in future versions.
+- a3971c3524: Fixes `lock` function arguments. `itemId` is replaced by `item`, which accepts an
+  ObjectArgument instead of a string. `itemId` is still supported but deprecated, and will be
+  removed in future versions.
 - Updated dependencies [a34f1cb67d]
 - Updated dependencies [c08e3569ef]
 - Updated dependencies [9a14e61db4]
@@ -203,7 +229,8 @@
 
 ### Patch Changes
 
-- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as well, so that it can be used flexibly in SDKs.
+- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as
+  well, so that it can be used flexibly in SDKs.
 - 3718a230b: Adds `txb.pure.id()` to pass ID pure values more intuitively
 - Updated dependencies [28c2c3330]
 - Updated dependencies [43444c58f]
@@ -231,7 +258,8 @@
 ### Patch Changes
 
 - b48289346: Mark packages as being side-effect free.
-- 3699dd364: Adds support for extensions (on `getKiosk()`), and exports a `getKioskExtension()` function on kioskClient to get extension's content
+- 3699dd364: Adds support for extensions (on `getKiosk()`), and exports a `getKioskExtension()`
+  function on kioskClient to get extension's content
 - Updated dependencies [b48289346]
 - Updated dependencies [11cf4e68b]
   - @mysten/sui.js@0.44.0
@@ -279,7 +307,8 @@
 
 ### Minor Changes
 
-- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation: https://sdk.mystenlabs.com/kiosk/from-v1
+- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation:
+  https://sdk.mystenlabs.com/kiosk/from-v1
 
 ## 0.6.0
 
@@ -339,7 +368,8 @@
 - cc6441f46: Updated types and imports to use new modular exports from the `@mysten/sui.js` refactor
 - 6d41059c7: Update to use modular imports from @mysten/sui.js
 
-  Some methods now accept a `SuiClient` imported from `@mysten/sui.js/client` rather than a `JsonRpcProvider`
+  Some methods now accept a `SuiClient` imported from `@mysten/sui.js/client` rather than a
+  `JsonRpcProvider`
 
 ### Patch Changes
 
@@ -380,9 +410,12 @@
 
 ### Patch Changes
 
-- 6a2a42d779: Add `getOwnedKiosks` query to easily get owned kiosks and their ownerCaps for an address
-- abf6ad381e: Refactor the fetchKiosk function to return all content instead of paginating, to prevent missing data
-- d72fdb5a5c: Fix on createTransferPolicy method. Updated type arguments for public_share_object command.
+- 6a2a42d779: Add `getOwnedKiosks` query to easily get owned kiosks and their ownerCaps for an
+  address
+- abf6ad381e: Refactor the fetchKiosk function to return all content instead of paginating, to
+  prevent missing data
+- d72fdb5a5c: Fix on createTransferPolicy method. Updated type arguments for public_share_object
+  command.
 - Updated dependencies [3ea9adb71a]
 - Updated dependencies [1cfb1c9da3]
 - Updated dependencies [1cfb1c9da3]
@@ -393,7 +426,8 @@
 
 ### Minor Changes
 
-- 968304368d: Support kiosk_lock_rule and environment support for rules package. Breaks `purchaseAndResolvePolicies` as it changes signature and return format.
+- 968304368d: Support kiosk_lock_rule and environment support for rules package. Breaks
+  `purchaseAndResolvePolicies` as it changes signature and return format.
 
 ### Patch Changes
 

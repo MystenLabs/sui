@@ -1,28 +1,28 @@
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:18:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:19:23
    │
-18 │         let _tmp1 = _a.;
-   │                       ^ Autocompletes to: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
+19 │         let _tmp1 = _a.;
+   │                       ^ Possible dot names: 'a::m::t0', 'a::m::t1', or 'a::m::t2'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:18:24
+   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:19:24
    │
-18 │         let _tmp1 = _a.;
+19 │         let _tmp1 = _a.;
    │                        ^
    │                        │
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15001]: IDE autocomplete
-   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:19:23
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:20:23
    │
-19 │         let _tmp2 = _b.;
-   │                       ^ Autocompletes to: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
+20 │         let _tmp2 = _b.;
+   │                       ^ Possible dot names: 'a::m::t3', 'a::m::t4', or 'a::m::t5'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:19:24
+   ┌─ tests/move_2024/ide_mode/struct_method_autocomplete.move:20:24
    │
-19 │         let _tmp2 = _b.;
+20 │         let _tmp2 = _b.;
    │                        ^
    │                        │
    │                        Unexpected ';'

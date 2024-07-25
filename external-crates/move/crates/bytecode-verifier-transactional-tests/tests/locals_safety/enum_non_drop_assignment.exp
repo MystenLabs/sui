@@ -1,0 +1,21 @@
+processed 2 tasks
+
+task 0, lines 1-22:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Enums'. Got VMError: {
+    major_status: WRITEREF_WITHOUT_DROP_ABILITY,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 1, lines 24-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Enums'. Got VMError: {
+    major_status: WRITEREF_WITHOUT_DROP_ABILITY,
+    sub_status: None,
+    location: 0x1::Enums,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

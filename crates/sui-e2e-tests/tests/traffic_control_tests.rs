@@ -226,8 +226,7 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
     let local_clients = make_network_authority_clients_with_network_config(
         &committee,
         &default_mysten_network_config(),
-    )
-    .unwrap();
+    );
     let (_, auth_client) = local_clients.first_key_value().unwrap();
 
     // transaction signed using user wallet from a different chain/genesis,
@@ -350,8 +349,7 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
     let local_clients = make_network_authority_clients_with_network_config(
         &committee,
         &default_mysten_network_config(),
-    )
-    .unwrap();
+    );
     let (_, auth_client) = local_clients.first_key_value().unwrap();
 
     // transaction signed using user wallet from a different chain/genesis,
@@ -494,7 +492,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     let _tc = TrafficController::spawn_for_test(policy_config, Some(firewall_config));
     assert!(
         !drain_path.exists(),
-        "Expected drain file to not exist after statup unless previously set",
+        "Expected drain file to not exist after startup unless previously set",
     );
 
     // after n seconds with no traffic, the dead mans switch should be engaged
@@ -512,7 +510,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     for _ in 0..3 {
         assert!(
             drain_path.exists(),
-            "Expected drain file to be disabled at statup unless previously enabled",
+            "Expected drain file to be disabled at startup unless previously enabled",
         );
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
     }
@@ -603,8 +601,8 @@ async fn test_traffic_sketch_with_slow_blocks() {
     assert!(metrics.num_requests < expected_requests + 200);
     // due to averaging, we will take 4 seconds to start blocking, then
     // will be in blocklist for 1 second (roughly)
-    assert!(metrics.num_blocked > (expected_requests / 4) - 1_000);
-    // 10 clients, blocked at least every 5 sceonds, over 20 seconds
+    assert!(metrics.num_blocked as f64 > (expected_requests as f64 / 4.0) * 0.90);
+    // 10 clients, blocked at least every 5 seconds, over 20 seconds
     assert!(metrics.num_blocklist_adds >= 40);
     assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
     assert!(metrics.total_time_blocked > Duration::from_millis(3500));

@@ -179,7 +179,7 @@ export class ZkSendLinkBuilder {
 						options: {
 							showType: true,
 						},
-				  })
+					})
 				: []
 			).map((res, i) => {
 				if (!res.data || res.error) {
@@ -231,7 +231,7 @@ export class ZkSendLinkBuilder {
 					balances: this.balances,
 					objects: [...this.objectIds],
 					gasEstimateFromDryRun,
-			  })
+				})
 			: gasEstimateFromDryRun * 2n;
 
 		// Ensure that rounded gas is not less than the calculated gas

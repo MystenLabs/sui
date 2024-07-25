@@ -1,3 +1,15 @@
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:9:9
+  │
+9 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/index_autocomplete.move:9:31
+  │
+9 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_dot_autocomplete'
+
 warning[W09002]: unused variable
    ┌─ tests/move_2024/ide_mode/index_autocomplete.move:16:22
    │

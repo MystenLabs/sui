@@ -10,9 +10,9 @@ use std::{sync::Arc, time::Duration};
 
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use broadcast::{Receiver, Sender};
-use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, EndOfEpochData, VerifiedCheckpoint};
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use tokio::{sync::broadcast, time::timeout};
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -385,7 +385,7 @@ async fn init_executor_test(
     let network_config =
         sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
     let state = TestAuthorityBuilder::new()
-        .with_network_config(&network_config)
+        .with_network_config(&network_config, 0)
         .build()
         .await;
 

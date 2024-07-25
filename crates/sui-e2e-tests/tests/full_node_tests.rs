@@ -22,7 +22,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_test_transaction_builder::{
-    batch_make_transfer_transactions, create_devnet_nft, delete_devnet_nft, increment_counter,
+    batch_make_transfer_transactions, create_nft, delete_nft, increment_counter,
     publish_basics_package, publish_basics_package_and_make_counter, publish_nfts_package,
     TestTransactionBuilder,
 };
@@ -672,7 +672,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
+    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -702,7 +702,7 @@ async fn test_full_node_event_query_by_module_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await;
+    let (_sender, _object_id, digest2) = create_nft(context, package_id).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
     sleep(Duration::from_secs(5)).await;
@@ -710,7 +710,7 @@ async fn test_full_node_event_query_by_module_ok() {
     // query by move event module
     let params = rpc_params![EventFilter::MoveEventModule {
         package: package_id,
-        module: ident_str!("devnet_nft").into()
+        module: ident_str!("testnet_nft").into()
     }];
     let page: EventPage = jsonrpc_client
         .request("suix_queryEvents", params)
@@ -980,7 +980,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let package_id = publish_nfts_package(&test_cluster.wallet).await.0;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(&test_cluster.wallet, package_id).await;
+    let (sender, object_id, _) = create_nft(&test_cluster.wallet, package_id).await;
 
     let recipient = test_cluster.get_address_1();
     assert_ne!(sender, recipient);
@@ -1011,8 +1011,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response =
-        delete_devnet_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
+    let response = delete_nft(&test_cluster.wallet, recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success

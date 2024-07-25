@@ -3,20 +3,27 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-26:
+task 1, lines 6-26:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 28-31:
+task 2, lines 28-31:
+//# programmable --inputs @A
+//> 0: P0::m::foo();
+//> 1: P0::m::bar();
+//> TransferObjects([Result(0)], Input(0))
 created: object(2,0), object(2,1)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'create-checkpoint'. lines 33-33:
+task 3, line 33:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 35-53:
+task 4, lines 35-53:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -25,6 +32,18 @@ Response: {
           "effects": {
             "objectChanges": {
               "nodes": [
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xc896d0db7835d08180ada6f21f1a74d90c4bf4722a6915fa3f03675e255fdf92::m::Bar"
+                        }
+                      },
+                      "hasPublicTransfer": false
+                    }
+                  }
+                },
                 {
                   "outputState": {
                     "asMoveObject": {
@@ -42,22 +61,10 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0xbe62f7a823957b03180ce3bbc7499d12103309feca3a2e1d15c7acce28cdd0fa::m::Foo"
+                          "repr": "0xc896d0db7835d08180ada6f21f1a74d90c4bf4722a6915fa3f03675e255fdf92::m::Foo"
                         }
                       },
                       "hasPublicTransfer": true
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0xbe62f7a823957b03180ce3bbc7499d12103309feca3a2e1d15c7acce28cdd0fa::m::Bar"
-                        }
-                      },
-                      "hasPublicTransfer": false
                     }
                   }
                 }

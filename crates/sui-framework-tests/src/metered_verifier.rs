@@ -191,14 +191,12 @@ fn test_metered_move_bytecode_verifier() {
     // Check shared meter logic works across all publish in PT
     let mut packages = vec![];
     let with_unpublished_deps = false;
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics");
     let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../sui_programmability/examples/fungible_tokens");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/coin");
     let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
@@ -288,8 +286,7 @@ fn test_build_and_verify_programmability_examples() {
     let meter_config = protocol_config.meter_config();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
-    let examples =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples");
+    let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples");
 
     for example in std::fs::read_dir(examples).unwrap() {
         let Ok(example) = example else { continue };

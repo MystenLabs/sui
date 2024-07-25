@@ -448,6 +448,8 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             .with_label_values(&["anemo"])
             .set(1);
 
+        debug!("Starting anemo service");
+
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.

@@ -1,6 +1,7 @@
 processed 9 tasks
 
-task 0 'publish'. lines 1-11:
+task 0, lines 1-11:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 1 'publish'. lines 13-23:
+task 1, lines 13-23:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 2 'publish'. lines 25-28:
+task 2, lines 25-28:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 3 'publish'. lines 30-40:
+task 3, lines 30-40:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 4 'publish'. lines 42-52:
+task 4, lines 42-52:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -45,7 +50,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 5 'publish'. lines 54-60:
+task 5, lines 54-60:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -54,7 +60,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 6 'publish'. lines 62-72:
+task 6, lines 62-72:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -63,7 +70,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 7 'publish'. lines 74-84:
+task 7, lines 74-84:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
@@ -72,7 +80,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 8 'publish'. lines 86-89:
+task 8, lines 86-89:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,

@@ -1,4 +1,5 @@
 processed 2 tasks
 
-task 1 'run'. lines 22-35:
+task 1, lines 22-35:
+//# run
 Error: Unbound module alias Diem

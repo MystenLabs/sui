@@ -34,6 +34,7 @@ impl TestService {
         }
     }
 
+    #[cfg_attr(msim, allow(dead_code))]
     pub(crate) fn add_own_blocks(&mut self, blocks: Vec<Bytes>) {
         self.own_blocks.extend(blocks);
     }

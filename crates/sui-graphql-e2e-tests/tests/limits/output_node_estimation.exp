@@ -1,6 +1,7 @@
-processed 14 tasks
+processed 16 tasks
 
-task 1 'run-graphql'. lines 6-14:
+task 1, lines 6-14:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
@@ -16,19 +17,20 @@ Response: {
       "depth": 3,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 132
+      "queryPayload": 254
     }
   }
 }
 
-task 2 'run-graphql'. lines 16-26:
+task 2, lines 16-26:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "node": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
           }
         }
       ]
@@ -37,16 +39,17 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 4,
-      "outputNodes": 80,
+      "outputNodes": 42,
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 163
+      "queryPayload": 359
     }
   }
 }
 
-task 3 'run-graphql'. lines 28-42:
+task 3, lines 28-42:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -56,7 +59,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
                 }
               }
             ]
@@ -68,16 +71,17 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 6,
-      "outputNodes": 1640,
+      "outputNodes": 842,
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 206
+      "queryPayload": 484
     }
   }
 }
 
-task 4 'run-graphql'. lines 44-65:
+task 4, lines 44-65:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -87,7 +91,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
                 }
               }
             ]
@@ -96,7 +100,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
                 }
               }
             ]
@@ -108,16 +112,17 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 10,
-      "outputNodes": 1720,
+      "outputNodes": 922,
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 306
+      "queryPayload": 735
     }
   }
 }
 
-task 5 'run-graphql'. lines 67-88:
+task 5, lines 67-88:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "checkpoints": {
@@ -127,7 +132,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+                  "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
                 }
               }
             ]
@@ -142,23 +147,24 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 10,
-      "outputNodes": 1640,
+      "outputNodes": 882,
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 308
+      "queryPayload": 733
     }
   }
 }
 
-task 6 'run-graphql'. lines 90-100:
+task 6, lines 90-100:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "txns": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
           }
         }
       ]
@@ -171,19 +177,20 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 145
+      "queryPayload": 323
     }
   }
 }
 
-task 7 'run-graphql'. lines 102-112:
+task 7, lines 102-112:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "txns": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3"
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
           }
         }
       ]
@@ -196,19 +203,20 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 143
+      "queryPayload": 322
     }
   }
 }
 
-task 8 'run-graphql'. lines 114-142:
+task 8, lines 114-142:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "txns": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3",
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
             "first": null,
             "last": null
           }
@@ -219,22 +227,23 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 14,
-      "outputNodes": 3320,
+      "outputNodes": 1762,
       "depth": 8,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 501
+      "queryPayload": 1077
     }
   }
 }
 
-task 9 'run-graphql'. lines 144-170:
+task 9, lines 144-171:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
-          "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3",
+          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
           "first": null,
           "last": null
         }
@@ -244,23 +253,24 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 13,
-      "outputNodes": 3300,
+      "outputNodes": 1742,
       "depth": 7,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 533
+      "queryPayload": 1030
     }
   }
 }
 
-task 10 'run-graphql'. lines 172-221:
+task 10, lines 173-222:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "txns": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3",
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
             "a": null,
             "b": null
           }
@@ -274,23 +284,24 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 24,
-      "outputNodes": 86340,
+      "outputNodes": 46424,
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 1395
+      "queryPayload": 2093
     }
   }
 }
 
-task 11 'run-graphql'. lines 223-248:
+task 11, lines 224-249:
+//# run-graphql --show-usage
 Response: {
   "data": {
     "transactionBlocks": {
       "edges": [
         {
           "node": {
-            "digest": "AhErVYcPUpKCUJsiQ2GAtiBZuuo2n3nVYLngQpTiuuQ3",
+            "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
             "a": null
           }
         }
@@ -300,26 +311,58 @@ Response: {
   "extensions": {
     "usage": {
       "inputNodes": 12,
-      "outputNodes": 33300,
+      "outputNodes": 17302,
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 704
+      "queryPayload": 1029
     }
   }
 }
 
-task 12 'run-graphql'. lines 250-260:
+task 12, lines 251-272:
+//# run-graphql --show-usage
+Response: {
+  "data": {
+    "fragmentSpread": {
+      "nodes": [
+        {
+          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
+        }
+      ]
+    },
+    "inlineFragment": {
+      "nodes": [
+        {
+          "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH"
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 8,
+      "outputNodes": 44,
+      "depth": 4,
+      "variables": 0,
+      "fragments": 1,
+      "queryPayload": 562
+    }
+  }
+}
+
+task 13, lines 274-286:
+//# run-graphql --show-usage
 Response: {
   "data": null,
   "extensions": {
     "usage": {
       "inputNodes": 4,
-      "outputNodes": 80,
+      "outputNodes": 62,
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 154
+      "queryPayload": 394
     }
   },
   "errors": [
@@ -327,7 +370,7 @@ Response: {
       "message": "'first' and 'last' must not be used together",
       "locations": [
         {
-          "line": 3,
+          "line": 4,
           "column": 3
         }
       ],
@@ -341,17 +384,18 @@ Response: {
   ]
 }
 
-task 13 'run-graphql'. lines 262-272:
+task 14, lines 288-298:
+//# run-graphql --show-usage
 Response: {
   "data": null,
   "extensions": {
     "usage": {
       "inputNodes": 4,
-      "outputNodes": 80,
+      "outputNodes": 42,
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 147
+      "queryPayload": 141
     }
   },
   "errors": [
@@ -363,6 +407,20 @@ Response: {
           "column": 21
         }
       ]
+    }
+  ]
+}
+
+task 15, lines 300-310:
+//# run-graphql --show-usage
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Estimated output nodes exceeds 100000",
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
     }
   ]
 }

@@ -172,7 +172,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 															open
 																? changes.changesWithDisplay.map((change) => (
 																		<ObjectChangeDisplay change={change} />
-																  ))
+																	))
 																: []
 														}
 													/>
@@ -186,7 +186,7 @@ export function ObjectChangeEntry({ changes, type }: ObjectChangeEntryProps) {
 														open
 															? changes.changes.map((change) => (
 																	<ObjectDetail ownerKey={owner} change={change} />
-															  ))
+																))
 															: []
 													}
 												/>

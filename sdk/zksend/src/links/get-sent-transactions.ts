@@ -59,8 +59,8 @@ export async function getSentTransactionsWithLinks({
 					.filter((tx) =>
 						'MoveCall' in tx
 							? tx.MoveCall.package === packageId &&
-							  tx.MoveCall.module === 'zk_bag' &&
-							  tx.MoveCall.function === 'new'
+								tx.MoveCall.module === 'zk_bag' &&
+								tx.MoveCall.function === 'new'
 							: false,
 					)
 					.map(async (tx) => {
@@ -104,8 +104,8 @@ export async function getSentTransactionsWithLinks({
 					.filter((tx) =>
 						'MoveCall' in tx
 							? tx.MoveCall.package === packageId &&
-							  tx.MoveCall.module === 'zk_bag' &&
-							  tx.MoveCall.function === 'update_receiver'
+								tx.MoveCall.module === 'zk_bag' &&
+								tx.MoveCall.function === 'update_receiver'
 							: false,
 					)
 					.map(async (tx) => {

@@ -16,7 +16,10 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{error::SuiError, transaction::*};
+use sui_types::{
+    error::{SuiError, SuiResult},
+    transaction::*,
+};
 
 use crate::authority_client::tonic::IntoRequest;
 use sui_network::tonic::metadata::KeyAndValueRef;
@@ -90,7 +93,7 @@ pub trait AuthorityAPI {
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    client: ValidatorClient<Channel>,
+    client: SuiResult<ValidatorClient<Channel>>,
 }
 
 impl NetworkAuthorityClient {
@@ -101,19 +104,26 @@ impl NetworkAuthorityClient {
         Ok(Self::new(channel))
     }
 
-    pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect_lazy(address)
-            .map_err(|err| anyhow!(err.to_string()))?;
-        Ok(Self::new(channel))
+    pub fn connect_lazy(address: &Multiaddr) -> Self {
+        let client: SuiResult<_> = mysten_network::client::connect_lazy(address)
+            .map(ValidatorClient::new)
+            .map_err(|err| err.to_string().into());
+        Self { client }
     }
 
     pub fn new(channel: Channel) -> Self {
         Self {
-            client: ValidatorClient::new(channel),
+            client: Ok(ValidatorClient::new(channel)),
         }
     }
 
-    fn client(&self) -> ValidatorClient<Channel> {
+    fn new_lazy(client: SuiResult<Channel>) -> Self {
+        Self {
+            client: client.map(ValidatorClient::new),
+        }
+    }
+
+    fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
         self.client.clone()
     }
 }
@@ -129,7 +139,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let mut request = transaction.into_request();
         insert_metadata(&mut request, client_addr);
 
-        self.client()
+        self.client()?
             .transaction(request)
             .await
             .map(tonic::Response::into_inner)
@@ -146,7 +156,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         insert_metadata(&mut request, client_addr);
 
         let response = self
-            .client()
+            .client()?
             .handle_certificate_v2(request)
             .await
             .map(tonic::Response::into_inner);
@@ -163,7 +173,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         insert_metadata(&mut request, client_addr);
 
         let response = self
-            .client()
+            .client()?
             .handle_certificate_v3(request)
             .await
             .map(tonic::Response::into_inner);
@@ -180,7 +190,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         insert_metadata(&mut request, client_addr);
 
         let response = self
-            .client()
+            .client()?
             .handle_soft_bundle_certificates_v3(request)
             .await
             .map(tonic::Response::into_inner);
@@ -192,7 +202,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        self.client()
+        self.client()?
             .object_info(request)
             .await
             .map(tonic::Response::into_inner)
@@ -204,7 +214,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        self.client()?
             .transaction_info(request)
             .await
             .map(tonic::Response::into_inner)
@@ -216,7 +226,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        self.client()
+        self.client()?
             .checkpoint(request)
             .await
             .map(tonic::Response::into_inner)
@@ -228,7 +238,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequestV2,
     ) -> Result<CheckpointResponseV2, SuiError> {
-        self.client()
+        self.client()?
             .checkpoint_v2(request)
             .await
             .map(tonic::Response::into_inner)
@@ -239,7 +249,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
-        self.client()
+        self.client()?
             .get_system_state_object(request)
             .await
             .map(tonic::Response::into_inner)
@@ -250,30 +260,30 @@ impl AuthorityAPI for NetworkAuthorityClient {
 pub fn make_network_authority_clients_with_network_config(
     committee: &CommitteeWithNetworkMetadata,
     network_config: &Config,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
+) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
-    for (name, _stakes) in &committee.committee.voting_rights {
-        let address = &committee
-            .network_metadata
-            .get(name)
-            .ok_or_else(|| {
-                SuiError::from("Missing network metadata in CommitteeWithNetworkMetadata")
-            })?
-            .network_address;
-        let channel = network_config
-            .connect_lazy(address)
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
+    for (name, (_state, network_metadata)) in committee.validators() {
+        let address = network_metadata.network_address.clone();
+        let address = address.rewrite_udp_to_tcp();
+        let maybe_channel = network_config.connect_lazy(&address).map_err(|e| {
+            tracing::error!(
+                address = %address,
+                name = %name,
+                "unable to create authority client: {e}"
+            );
+            e.to_string().into()
+        });
+        let client = NetworkAuthorityClient::new_lazy(maybe_channel);
         authority_clients.insert(*name, client);
     }
-    Ok(authority_clients)
+    authority_clients
 }
 
 pub fn make_authority_clients_with_timeout_config(
     committee: &CommitteeWithNetworkMetadata,
     connect_timeout: Duration,
     request_timeout: Duration,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
+) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut network_config = mysten_network::config::Config::new();
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);

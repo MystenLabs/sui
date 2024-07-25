@@ -9,13 +9,14 @@ title: Module `0x2::config`
 -  [Struct `SettingData`](#0x2_config_SettingData)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_config_new)
--  [Function `create`](#0x2_config_create)
--  [Function `add_for_current_epoch`](#0x2_config_add_for_current_epoch)
--  [Function `remove_for_current_epoch`](#0x2_config_remove_for_current_epoch)
+-  [Function `share`](#0x2_config_share)
+-  [Function `transfer`](#0x2_config_transfer)
+-  [Function `add_for_next_epoch`](#0x2_config_add_for_next_epoch)
+-  [Function `remove_for_next_epoch`](#0x2_config_remove_for_next_epoch)
 -  [Function `exists_with_type`](#0x2_config_exists_with_type)
--  [Function `exists_with_type_for_current_epoch`](#0x2_config_exists_with_type_for_current_epoch)
--  [Function `borrow_for_current_epoch_mut`](#0x2_config_borrow_for_current_epoch_mut)
--  [Function `borrow_most_recent`](#0x2_config_borrow_most_recent)
+-  [Function `exists_with_type_for_next_epoch`](#0x2_config_exists_with_type_for_next_epoch)
+-  [Function `borrow_for_next_epoch_mut`](#0x2_config_borrow_for_next_epoch_mut)
+-  [Function `read_setting_for_next_epoch`](#0x2_config_read_setting_for_next_epoch)
 -  [Function `read_setting`](#0x2_config_read_setting)
 -  [Function `read_setting_impl`](#0x2_config_read_setting_impl)
 
@@ -178,13 +179,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_create"></a>
+<a name="0x2_config_share"></a>
 
-## Function `create`
+## Function `share`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_create">create</a>&lt;WriteCap&gt;(cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;)
 </code></pre>
 
 
@@ -193,8 +194,8 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_create">create</a>&lt;WriteCap&gt;(cap: &<b>mut</b> WriteCap, ctx: &<b>mut</b> TxContext) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="../sui-framework/config.md#0x2_config_new">new</a>&lt;WriteCap&gt;(cap, ctx))
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_share">share</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;) {
+    <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="../sui-framework/config.md#0x2_config">config</a>)
 }
 </code></pre>
 
@@ -202,13 +203,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_add_for_current_epoch"></a>
+<a name="0x2_config_transfer"></a>
 
-## Function `add_for_current_epoch`
+## Function `transfer`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_current_epoch">add_for_current_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, owner: <b>address</b>)
 </code></pre>
 
 
@@ -217,7 +218,31 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_current_epoch">add_for_current_epoch</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a>&lt;WriteCap&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: <a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;, owner: <b>address</b>) {
+    <a href="../sui-framework/transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="../sui-framework/config.md#0x2_config">config</a>, owner)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_config_add_for_next_epoch"></a>
+
+## Function `add_for_next_epoch`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_next_epoch">add_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, value: Value, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_add_for_next_epoch">add_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
@@ -271,13 +296,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_remove_for_current_epoch"></a>
+<a name="0x2_config_remove_for_next_epoch"></a>
 
-## Function `remove_for_current_epoch`
+## Function `remove_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_remove_for_current_epoch">remove_for_current_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -286,7 +311,7 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_remove_for_current_epoch">remove_for_current_epoch</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_remove_for_next_epoch">remove_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
@@ -361,13 +386,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_exists_with_type_for_current_epoch"></a>
+<a name="0x2_config_exists_with_type_for_next_epoch"></a>
 
-## Function `exists_with_type_for_current_epoch`
+## Function `exists_with_type_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_exists_with_type_for_current_epoch">exists_with_type_for_current_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -376,7 +401,7 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_exists_with_type_for_current_epoch">exists_with_type_for_current_epoch</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
@@ -398,13 +423,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_borrow_for_current_epoch_mut"></a>
+<a name="0x2_config_borrow_for_next_epoch_mut"></a>
 
-## Function `borrow_for_current_epoch_mut`
+## Function `borrow_for_next_epoch_mut`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_for_current_epoch_mut">borrow_for_current_epoch_mut</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<b>mut</b> Value
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, _cap: &<b>mut</b> WriteCap, name: Name, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<b>mut</b> Value
 </code></pre>
 
 
@@ -413,7 +438,7 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_for_current_epoch_mut">borrow_for_current_epoch_mut</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
@@ -436,13 +461,13 @@ title: Module `0x2::config`
 
 </details>
 
-<a name="0x2_config_borrow_most_recent"></a>
+<a name="0x2_config_read_setting_for_next_epoch"></a>
 
-## Function `borrow_most_recent`
+## Function `read_setting_for_next_epoch`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_most_recent">borrow_most_recent</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): &Value
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;WriteCap, Name: <b>copy</b>, drop, store, Value: <b>copy</b>, drop, store&gt;(<a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;WriteCap&gt;, name: Name): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Value&gt;
 </code></pre>
 
 
@@ -451,18 +476,18 @@ title: Module `0x2::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_borrow_most_recent">borrow_most_recent</a>&lt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/config.md#0x2_config_read_setting_for_next_epoch">read_setting_for_next_epoch</a>&lt;
     WriteCap,
     Name: <b>copy</b> + drop + store,
     Value: <b>copy</b> + drop + store,
 &gt;(
     <a href="../sui-framework/config.md#0x2_config">config</a>: &<a href="../sui-framework/config.md#0x2_config_Config">Config</a>&lt;WriteCap&gt;,
     name: Name,
-): &Value {
+): Option&lt;Value&gt; {
+    <b>if</b> (!field::exists_with_type&lt;_, <a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>let</b> sobj: &<a href="../sui-framework/config.md#0x2_config_Setting">Setting</a>&lt;Value&gt; = field::borrow(&<a href="../sui-framework/config.md#0x2_config">config</a>.id, name);
     <b>let</b> data = sobj.data.borrow();
-    <b>assert</b>!(data.newer_value.is_some(), <a href="../sui-framework/config.md#0x2_config_ENotSetForEpoch">ENotSetForEpoch</a>);
-    data.newer_value.borrow()
+    data.newer_value
 }
 </code></pre>
 

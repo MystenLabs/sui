@@ -60,11 +60,11 @@ ARG PROFILE
 ARG GIT_REVISION
 
 ENV RUST_BACKTRACE=1
-ENV RUSTFLAGS='-C target-feature=-crt-static -C codegen-units=1'
+ENV RUSTFLAGS='-C target-feature=+crt-static -C codegen-units=1'
 ENV GIT_REVISION=${GIT_REVISION}
 ENV PROFILE=${PROFILE}
 
-RUN --network=none cargo build --frozen --profile ${PROFILE} --bin sui-node
+RUN --network=none cargo build --target x86_64-unknown-linux-musl --frozen --profile ${PROFILE} --bin sui-node
 
 FROM scratch AS install
 
@@ -78,7 +78,7 @@ COPY --from=musl . /rootfs
 # support current + legacy paths
 RUN mkdir -p /rootfs/opt/sui/bin
 RUN mkdir -p /rootfs/usr/local/bin
-COPY --from=build sui/target/release/sui-node /rootfs/opt/sui/bin/sui-node
+COPY --from=build sui/target/x86_64-unknown-linux-musl/release/sui-node /rootfs/opt/sui/bin/sui-node
 
 
 RUN --network=none find /rootfs -exec touch -hcd "@0" "{}" +

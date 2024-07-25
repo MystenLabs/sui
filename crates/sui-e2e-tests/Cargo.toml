@@ -61,3 +61,10 @@ sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-rest-api.workspace = true
 shared-crypto.workspace = true
+
+passkey-types.workspace = true
+passkey-client.workspace = true
+passkey-authenticator.workspace = true
+coset.workspace = true
+url.workspace = true
+p256.workspace = true

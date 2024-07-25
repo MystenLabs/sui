@@ -2,7 +2,7 @@
 	"name": "@mysten/suins-toolkit",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "SuiNS TypeScript SDK",
-	"version": "0.5.9",
+	"version": "0.5.11",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
@@ -35,11 +35,11 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"devDependencies": {
-		"@faker-js/faker": "^8.0.2",
+		"@faker-js/faker": "^8.4.1",
 		"@mysten/build-scripts": "workspace:*",
-		"ts-node": "^10.9.1",
-		"typescript": "^5.3.3",
-		"vitest": "^1.6.0"
+		"ts-node": "^10.9.2",
+		"typescript": "^5.5.3",
+		"vitest": "^2.0.1"
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*"

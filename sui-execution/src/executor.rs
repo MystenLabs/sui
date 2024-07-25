@@ -10,13 +10,12 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::ExecutionError,
-    execution::TypeLayoutStore,
-    execution_mode::ExecutionResult,
+    execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
+    layout_resolver::LayoutResolver,
     metrics::LimitsMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
-    type_resolver::LayoutResolver,
 };
 
 /// Abstracts over access to the VM across versions of the execution layer.

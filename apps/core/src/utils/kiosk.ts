@@ -30,7 +30,7 @@ export function getKioskIdFromOwnerCap(object: SuiObjectResponse | SuiObjectData
 					for?: string;
 					kiosk?: string;
 					cap?: { fields: { for: string } };
-			  })
+				})
 			: null;
 	return fields?.for ?? fields?.kiosk ?? fields?.cap?.fields.for!;
 }

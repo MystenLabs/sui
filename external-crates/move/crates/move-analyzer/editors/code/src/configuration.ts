@@ -9,6 +9,7 @@ import * as path from 'path';
 export const MOVE_CONF_NAME = 'move';
 export const LINT_OPT = 'lint';
 export const TYPE_HINTS_OPT = 'inlay-hints.type';
+export const PARAM_HINTS_OPT = 'inlay-hints.param';
 export const SUI_PATH_OPT = 'sui.path';
 export const SERVER_PATH_OPT = 'server.path';
 
@@ -76,5 +77,10 @@ export class Configuration {
     get inlayHintsForType(): boolean {
         return this.configuration.get(TYPE_HINTS_OPT) ?? false;
     }
+
+    get inlayHintsForParam(): boolean {
+        return this.configuration.get(PARAM_HINTS_OPT) ?? false;
+    }
+
 
 } // Configuration

@@ -1,5 +1,27 @@
 # @mysten/wallet-standard
 
+## 0.12.12
+
+### Patch Changes
+
+- 0f27a97: Update dependencies
+- Updated dependencies [7fc464a]
+- Updated dependencies [086b2bc]
+- Updated dependencies [0fb0628]
+- Updated dependencies [cdedf69]
+- Updated dependencies [0f27a97]
+- Updated dependencies [beed646]
+  - @mysten/sui@1.3.0
+
+## 0.12.11
+
+### Patch Changes
+
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+
 ## 0.12.10
 
 ### Patch Changes
@@ -11,7 +33,8 @@
 
 ### Patch Changes
 
-- 805ff4d4c2: Fix bug where transaction was passed as both transaction and transactionBlock to sui:signTransactionBlock
+- 805ff4d4c2: Fix bug where transaction was passed as both transaction and transactionBlock to
+  sui:signTransactionBlock
 
 ## 0.12.8
 
@@ -73,8 +96,10 @@
 
 ### Minor Changes
 
-- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features and breaking changes.
-  See the [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on how to upgrade.
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
 
 ### Patch Changes
 
@@ -179,7 +204,8 @@
 
 ### Minor Changes
 
-- 165ad6b21d: Introduce new optional `id` property, which wallets can specify as a unique identifier, separate from the wallet name.
+- 165ad6b21d: Introduce new optional `id` property, which wallets can specify as a unique
+  identifier, separate from the wallet name.
 
 ### Patch Changes
 
@@ -478,24 +504,39 @@
 
 ### Minor Changes
 
-- 956ec28eb: Change `signMessage` to return message bytes. Add support for sui:signMessage in the wallet standard
-- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 956ec28eb: Change `signMessage` to return message bytes. Add support for sui:signMessage in the
+  wallet standard
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator`
+  (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to
+  `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the
+  `ValidatorSet` type and replaced them with a `total_stake` field.
 - 5c3b00cde: Add object id to staking pool and pool id to staked sui.
-- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the
+  validator set object.
 - da72e73a9: Change the address of Move package for staking and validator related Move modules.
-- 0672b5990: The Wallet Standard now only supports the `Transaction` type, instead of the previous `SignableTransaction` type.
-- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
-- c718deef4: wallet-standard: changes sui:signAndExecuteTransaction and sui:signTransaction features to support account and chain options
-  wallet-adapter-wallet-standard: change signAndExecuteTransaction and signTransaction signatures to support account and chain options
-  wallet-adapter-wallet-standard: ensure version compatibility for of the wallet signAndExecuteTransaction and signTransaction features before using them (same major version)
+- 0672b5990: The Wallet Standard now only supports the `Transaction` type, instead of the previous
+  `SignableTransaction` type.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various
+  capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument
+  names, RPC endpoints, Move functions, and object fields have been updated with this new naming
+  convention.
+- c718deef4: wallet-standard: changes sui:signAndExecuteTransaction and sui:signTransaction features
+  to support account and chain options wallet-adapter-wallet-standard: change
+  signAndExecuteTransaction and signTransaction signatures to support account and chain options
+  wallet-adapter-wallet-standard: ensure version compatibility for of the wallet
+  signAndExecuteTransaction and signTransaction features before using them (same major version)
   wallet-kit-core/wallet-kit: expose accounts as ReadonlyWalletAccount instead of only the address
-  wallet-kit-core: signTransaction and signAndExecuteTransaction methods mirror the ones in standard adapter
+  wallet-kit-core: signTransaction and signAndExecuteTransaction methods mirror the ones in standard
+  adapter
 - 68e60b02c: Changed where the options and requestType for signAndExecuteTransaction are.
-- dbe73d5a4: Add an optional `contentOptions` field to `SuiSignAndExecuteTransactionOptions` to specify which fields to include in `SuiTransactionBlockResponse` (e.g., transaction, effects, events, etc). By default, only the transaction digest will be included.
+- dbe73d5a4: Add an optional `contentOptions` field to `SuiSignAndExecuteTransactionOptions` to
+  specify which fields to include in `SuiTransactionBlockResponse` (e.g., transaction, effects,
+  events, etc). By default, only the transaction digest will be included.
 
 ### Patch Changes
 
-- bf545c7d0: Add `features` prop to wallet kit that allows dapps to define which features they require to function properly.
+- bf545c7d0: Add `features` prop to wallet kit that allows dapps to define which features they
+  require to function properly.
 - Updated dependencies [956ec28eb]
 - Updated dependencies [4adfbff73]
 - Updated dependencies [4c4573ebe]
@@ -592,7 +633,8 @@
 
 ### Minor Changes
 
-- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch
+  information in CheckpointSummary.
 
 ### Patch Changes
 
@@ -616,7 +658,8 @@
 
 ### Minor Changes
 
-- 96e883fc1: Update wallet adapter and wallet standard to support passing through the desired request type.
+- 96e883fc1: Update wallet adapter and wallet standard to support passing through the desired
+  request type.
 
 ### Patch Changes
 
@@ -783,8 +826,10 @@
 
 ### Minor Changes
 
-- 5ac98bc9a: Introduce new wallet adapter based on the Wallet Standard. This wallet adapter automatically detects wallets that adhere to the standard interface.
-- 5ac98bc9a: Introduce new "wallet-standard" package which can be used to build wallets that are compatible with the Wallet Standard.
+- 5ac98bc9a: Introduce new wallet adapter based on the Wallet Standard. This wallet adapter
+  automatically detects wallets that adhere to the standard interface.
+- 5ac98bc9a: Introduce new "wallet-standard" package which can be used to build wallets that are
+  compatible with the Wallet Standard.
 
 ### Patch Changes
 

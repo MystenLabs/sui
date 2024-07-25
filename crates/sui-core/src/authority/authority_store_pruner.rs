@@ -57,6 +57,8 @@ pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
 }
 
+static MIN_PRUNING_TICK_DURATION_MS: u64 = 10 * 1000;
+
 pub struct AuthorityStorePruningMetrics {
     pub last_pruned_checkpoint: IntGauge,
     pub num_pruned_objects: IntCounter,
@@ -583,7 +585,7 @@ impl AuthorityStorePruner {
     }
 
     fn pruning_tick_duration_ms(epoch_duration_ms: u64) -> u64 {
-        min(epoch_duration_ms / 2, 60 * 1000)
+        min(epoch_duration_ms / 2, MIN_PRUNING_TICK_DURATION_MS)
     }
 
     fn smoothed_max_eligible_checkpoint_number(
@@ -798,6 +800,7 @@ mod tests {
             // open the db to bypass default db options which ignores range tombstones
             // so we can read the accurate number of retained versions
             &ReadWriteOptions::default(),
+            false,
         )?;
         let iter = objects.unbounded_iter();
         for (k, _v) in iter {

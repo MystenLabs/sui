@@ -37,7 +37,7 @@ pub(crate) struct ActiveChildObject<'a> {
     pub(crate) owner: &'a ObjectID,
     pub(crate) ty: &'a Type,
     pub(crate) move_type: &'a MoveObjectType,
-    pub(crate) copied_value: Value,
+    pub(crate) copied_value: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -679,20 +679,27 @@ impl<'a> ChildObjectStore<'a> {
 
     /// Used by test scenario to insert a config setting into the cache, which replicates the
     /// behavior of a config already being in the object store.
-    pub(super) fn config_setting_cache_insert(
+    pub(super) fn config_setting_cache_update(
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
         setting_value_object_type: MoveObjectType,
-        value: Value,
+        value: Option<Value>,
     ) {
         let child_move_type = setting_value_object_type;
-        let setting = ConfigSetting {
-            config: config_id,
-            ty: child_move_type,
-            value,
-        };
-        self.config_setting_cache.insert(name_df_id, setting);
+        match value {
+            Some(value) => {
+                let setting = ConfigSetting {
+                    config: config_id,
+                    ty: child_move_type,
+                    value,
+                };
+                self.config_setting_cache.insert(name_df_id, setting);
+            }
+            None => {
+                self.config_setting_cache.remove(&name_df_id);
+            }
+        }
     }
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
@@ -722,26 +729,27 @@ impl<'a> ChildObjectStore<'a> {
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
-        self.store.iter().filter_map(|(id, child_object)| {
-            let child_exists = child_object.value.exists().unwrap();
-            if !child_exists {
-                None
+        self.store.iter().map(|(id, child_object)| {
+            let copied_child_value = if child_object.value.exists().unwrap() {
+                Some(
+                    child_object
+                        .value
+                        .borrow_global()
+                        .unwrap()
+                        .value_as::<StructRef>()
+                        .unwrap()
+                        .read_ref()
+                        .unwrap(),
+                )
             } else {
-                let copied_child_value = child_object
-                    .value
-                    .borrow_global()
-                    .unwrap()
-                    .value_as::<StructRef>()
-                    .unwrap()
-                    .read_ref()
-                    .unwrap();
-                Some(ActiveChildObject {
-                    id,
-                    owner: &child_object.owner,
-                    ty: &child_object.ty,
-                    move_type: &child_object.move_type,
-                    copied_value: copied_child_value,
-                })
+                None
+            };
+            ActiveChildObject {
+                id,
+                owner: &child_object.owner,
+                ty: &child_object.ty,
+                move_type: &child_object.move_type,
+                copied_value: copied_child_value,
             }
         })
     }

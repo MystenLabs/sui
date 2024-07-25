@@ -10,9 +10,8 @@ import type { BcsType } from './bcs-type.js';
 export type Encoding = 'base58' | 'base64' | 'hex';
 
 export type InferBcsType<T extends BcsType<any>> = T extends BcsType<infer U, any> ? U : never;
-export type InferBcsInput<T extends BcsType<any, any>> = T extends BcsType<any, infer U>
-	? U
-	: never;
+export type InferBcsInput<T extends BcsType<any, any>> =
+	T extends BcsType<any, infer U> ? U : never;
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 export type EnumOutputShape<
@@ -22,12 +21,12 @@ export type EnumOutputShape<
 > = 0 extends Values
 	? EnumOutputShapeWithKeys<T, never>
 	: 0n extends Values
-	? EnumOutputShapeWithKeys<T, never>
-	: '' extends Values
-	? EnumOutputShapeWithKeys<T, never>
-	: false extends Values
-	? EnumOutputShapeWithKeys<T, never>
-	: EnumOutputShapeWithKeys<T, Keys>;
+		? EnumOutputShapeWithKeys<T, never>
+		: '' extends Values
+			? EnumOutputShapeWithKeys<T, never>
+			: false extends Values
+				? EnumOutputShapeWithKeys<T, never>
+				: EnumOutputShapeWithKeys<T, Keys>;
 
 export type EnumOutputShapeWithKeys<T extends Record<string, unknown>, Keys extends string> = {
 	[K in keyof T]: Exclude<Keys, K> extends infer Empty extends string
@@ -35,7 +34,7 @@ export type EnumOutputShapeWithKeys<T extends Record<string, unknown>, Keys exte
 				{ [K2 in K]: T[K] } & { [K in Empty]?: never } & {
 					$kind: K;
 				}
-		  >
+			>
 		: never;
 }[keyof T];
 

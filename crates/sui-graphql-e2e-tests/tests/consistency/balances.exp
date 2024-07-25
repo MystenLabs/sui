@@ -3,45 +3,63 @@ processed 34 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 19-46:
+task 1, lines 19-46:
+//# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 48-48:
+task 2, line 48:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'programmable'. lines 50-52:
+task 3, lines 50-52:
+//# programmable --sender A --inputs object(1,5) 100 object(1,1)
+//> 0: sui::coin::mint<P0::fake::FAKE>(Input(0), Input(1));
+//> MergeCoins(Input(2), [Result(0)]);
 mutated: object(0,0), object(1,1), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
 
-task 4 'create-checkpoint'. lines 54-54:
+task 4, line 54:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 5 'transfer-object'. lines 56-56:
+task 5, line 56:
+//# transfer-object 1,2 --sender A --recipient B
 mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 6 'create-checkpoint'. lines 58-58:
+task 6, line 58:
+//# create-checkpoint
 Checkpoint created: 3
 
-task 7 'transfer-object'. lines 60-60:
+task 7, line 60:
+//# transfer-object 1,3 --sender A --recipient B
 mutated: object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 9 'create-checkpoint'. lines 64-64:
+task 9, line 64:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 11 'create-checkpoint'. lines 68-68:
+task 11, line 68:
+//# create-checkpoint
 Checkpoint created: 5
 
-task 13 'create-checkpoint'. lines 72-72:
+task 13, line 72:
+//# create-checkpoint
 Checkpoint created: 6
 
-task 15 'create-checkpoint'. lines 76-76:
+task 15, line 76:
+//# create-checkpoint
 Checkpoint created: 7
 
-task 16 'run-graphql'. lines 78-99:
+task 16, lines 78-99:
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -62,7 +80,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
@@ -76,7 +94,44 @@ Response: {
   }
 }
 
-task 17 'run-graphql'. lines 101-122:
+task 17, lines 101-122:
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18, lines 124-145:
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -93,13 +148,13 @@ Response: {
                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
+                  "totalBalance": "299999980250064"
                 },
                 {
                   "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
                   },
-                  "coinObjectCount": 2,
+                  "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
@@ -111,48 +166,16 @@ Response: {
   }
 }
 
-task 18 'run-graphql'. lines 124-145:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "300"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "300"
-                }
-              ]
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 19 'force-object-snapshot-catchup'. lines 147-147:
+task 19, line 147:
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 Objects snapshot updated to [0 to 3)
 
-task 20 'create-checkpoint'. lines 149-149:
+task 20, line 149:
+//# create-checkpoint
 Checkpoint created: 8
 
-task 21 'run-graphql'. lines 151-172:
+task 21, lines 151-172:
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -173,7 +196,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
@@ -187,7 +210,44 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 174-195:
+task 22, lines 174-195:
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 23, lines 197-218:
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -204,13 +264,13 @@ Response: {
                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
+                  "totalBalance": "299999980250064"
                 },
                 {
                   "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
                   },
-                  "coinObjectCount": 2,
+                  "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
@@ -222,48 +282,16 @@ Response: {
   }
 }
 
-task 23 'run-graphql'. lines 197-218:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "300"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "300"
-                }
-              ]
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 24 'force-object-snapshot-catchup'. lines 220-220:
+task 24, line 220:
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 Objects snapshot updated to [0 to 4)
 
-task 25 'create-checkpoint'. lines 222-222:
+task 25, line 222:
+//# create-checkpoint
 Checkpoint created: 9
 
-task 26 'run-graphql'. lines 224-245:
+task 26, lines 224-245:
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -297,7 +325,44 @@ Response: {
   ]
 }
 
-task 27 'run-graphql'. lines 247-268:
+task 27, lines 247-268:
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 28, lines 270-291:
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -314,13 +379,13 @@ Response: {
                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
+                  "totalBalance": "299999980250064"
                 },
                 {
                   "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
+                    "repr": "0x4cb538cc5d434cbcb404ea346e0fcd175e5db3edccbada62a489de17da4e81f1::fake::FAKE"
                   },
-                  "coinObjectCount": 2,
+                  "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
@@ -332,48 +397,16 @@ Response: {
   }
 }
 
-task 28 'run-graphql'. lines 270-291:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "300"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0xce2986cf8820ccde29cd46cd15617ff996d913af68d647a2d114fa8cc878a5cd::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "300"
-                }
-              ]
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 29 'force-object-snapshot-catchup'. lines 294-294:
+task 29, line 294:
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 6
 Objects snapshot updated to [0 to 6)
 
-task 30 'create-checkpoint'. lines 296-296:
+task 30, line 296:
+//# create-checkpoint
 Checkpoint created: 10
 
-task 31 'run-graphql'. lines 298-319:
+task 31, lines 298-319:
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -407,7 +440,8 @@ Response: {
   ]
 }
 
-task 32 'run-graphql'. lines 321-342:
+task 32, lines 321-342:
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -441,7 +475,8 @@ Response: {
   ]
 }
 
-task 33 'run-graphql'. lines 344-365:
+task 33, lines 344-365:
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 Response: {
   "data": {
     "transactionBlocks": {

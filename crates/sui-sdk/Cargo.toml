@@ -49,11 +49,6 @@ futures.workspace = true
 rand.workspace = true
 
 [[example]]
-name = "tic_tac_toe"
-path = "examples/tic_tac_toe.rs"
-test = false
-
-[[example]]
 name = "coin_read_api"
 path = "examples/coin_read_api.rs"
 

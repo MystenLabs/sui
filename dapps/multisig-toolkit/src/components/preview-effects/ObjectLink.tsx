@@ -72,7 +72,7 @@ export function ObjectLink({
 	const link = objectId
 		? `https://suiexplorer.com/${ownerDisplay ? 'address' : 'object'}/${objectId}?network=${
 				network.split(':')[1]
-		  }`
+			}`
 		: undefined;
 
 	const copy = () => {

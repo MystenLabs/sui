@@ -95,7 +95,7 @@ export function useSignTransaction({
 							: await transaction.toJSON({
 									supportedIntents: [],
 									client,
-							  });
+								});
 					},
 				},
 				account: signerAccount,

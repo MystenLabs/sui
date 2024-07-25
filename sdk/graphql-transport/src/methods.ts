@@ -92,7 +92,7 @@ export const RPC_METHODS: {
 		? (
 				transport: SuiClientGraphQLTransport,
 				inputs: any[],
-		  ) => K extends keyof ResponseTypes ? Promise<ResponseTypes[K]> : R
+			) => K extends keyof ResponseTypes ? Promise<ResponseTypes[K]> : R
 		: never;
 } = {
 	async getRpcApiVersion(transport) {
@@ -267,8 +267,8 @@ export const RPC_METHODS: {
 					parameter.signature.ref === '&'
 						? 'ByImmutableReference'
 						: parameter.signature.ref === '&mut'
-						? 'ByMutableReference'
-						: 'ByValue',
+							? 'ByMutableReference'
+							: 'ByValue',
 			};
 		});
 	},
@@ -447,15 +447,15 @@ export const RPC_METHODS: {
 					'ObjectIds' in inputFilter
 						? inputFilter.ObjectIds
 						: 'ObjectId' in inputFilter
-						? [inputFilter.ObjectId]
-						: undefined,
+							? [inputFilter.ObjectId]
+							: undefined,
 				type: typeFilter,
 				owner:
 					'ObjectOwner' in inputFilter
 						? inputFilter.ObjectOwner
 						: 'AddressOwner' in inputFilter
-						? inputFilter.AddressOwner
-						: undefined,
+							? inputFilter.AddressOwner
+							: undefined,
 			};
 			const unsupportedFilters = ['MatchAll', 'MatchAny', 'MatchNone', 'Version'];
 
@@ -545,11 +545,11 @@ export const RPC_METHODS: {
 							latest_version: String(data.current.version),
 							object_id: data.current.address,
 						},
-				  }
+					}
 				: {
 						status: 'VersionNotFound',
 						details: [data.current.address, String(version)],
-				  };
+					};
 		}
 
 		return {
@@ -584,11 +584,11 @@ export const RPC_METHODS: {
 			? {
 					last: limit,
 					before: cursor,
-			  }
+				}
 			: {
 					first: limit,
 					after: cursor,
-			  };
+				};
 
 		const unsupportedFilters = ['FromOrToAddress', 'FromAndToAddress', 'TransactionKindIn'];
 
@@ -629,7 +629,7 @@ export const RPC_METHODS: {
 											? TransactionBlockKindInput.ProgrammableTx
 											: TransactionBlockKindInput.SystemTx
 										: undefined,
-						  }
+							}
 						: {},
 				},
 			},
@@ -937,16 +937,16 @@ export const RPC_METHODS: {
 						ref.input.__typename === 'GasCoin'
 							? 'GasCoin'
 							: ref.input.__typename === 'Input'
-							? {
-									Input: ref.input.inputIndex,
-							  }
-							: typeof ref.input.resultIndex === 'number'
-							? {
-									NestedResult: [ref.input.cmd, ref.input.resultIndex!] as [number, number],
-							  }
-							: {
-									Result: ref.input.cmd,
-							  },
+								? {
+										Input: ref.input.inputIndex,
+									}
+								: typeof ref.input.resultIndex === 'number'
+									? {
+											NestedResult: [ref.input.cmd, ref.input.resultIndex!] as [number, number],
+										}
+									: {
+											Result: ref.input.cmd,
+										},
 						Array.from(fromB64(ref.bcs)),
 						toShortTypeString(ref.type.repr),
 					],
@@ -1050,7 +1050,7 @@ export const RPC_METHODS: {
 					parent.owner?.__typename === 'Parent'
 						? {
 								ObjectOwner: parent.owner.parent?.address,
-						  }
+							}
 						: undefined,
 			},
 		};
@@ -1147,10 +1147,10 @@ export const RPC_METHODS: {
 						typeof id === 'number' || isNumericString(id)
 							? {
 									sequenceNumber: Number.parseInt(id.toString(), 10),
-							  }
+								}
 							: {
 									digest: id,
-							  },
+								},
 				},
 			},
 			(data) => data.checkpoint,
@@ -1330,7 +1330,7 @@ export const RPC_METHODS: {
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
 		const configTypeMap: Record<string, string> = {
-			max_accumulated_txn_cost_per_object_in_checkpoint: 'u64',
+			max_accumulated_txn_cost_per_object_in_narwhal_commit: 'u64',
 			max_arguments: 'u32',
 			max_gas_payment_objects: 'u32',
 			max_modules_in_publish: 'u32',
@@ -1361,6 +1361,7 @@ export const RPC_METHODS: {
 			binary_field_instantiations: 'u16',
 			binary_friend_decls: 'u16',
 			max_package_dependencies: 'u32',
+			bridge_should_try_to_finalize_committee: 'bool',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
@@ -1369,7 +1370,7 @@ export const RPC_METHODS: {
 					? null
 					: ({
 							[configTypeMap[key] ?? 'u64']: value,
-					  } as ProtocolConfigValue);
+						} as ProtocolConfigValue);
 		}
 
 		for (const { key, value } of protocolConfig.featureFlags) {

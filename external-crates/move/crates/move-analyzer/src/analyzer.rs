@@ -153,6 +153,7 @@ pub fn run() {
                 ide_files_root.clone(),
                 p.as_path(),
                 lint,
+                None,
             ) {
                 let mut old_symbols_map = symbols_map.lock().unwrap();
                 old_symbols_map.insert(p, new_symbols);
@@ -169,9 +170,16 @@ pub fn run() {
             .and_then(|init_options| init_options.get("inlayHintsType"))
             .and_then(serde_json::Value::as_bool)
             .unwrap_or_default(),
+        inlay_param_hints: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("inlayHintsParam"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
     };
 
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
+    eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
     context
         .connection

@@ -93,7 +93,7 @@ pub fn run(args: Args) -> crate::Result<()> {
         &PublishedPackagesDontDependOnUnpublishedPackages,
         &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
-        // TODO: re-enable after moving Narwhal crates to crates/, or back to Narwhal repo.
+        // There are crates under consensus/, external-crates/.
         // &CratesOnlyInCratesDirectory,
     ];
 

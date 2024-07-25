@@ -9,16 +9,52 @@ use sui_sdk2::types::{
 use sui_types::storage::ReadStore;
 use tap::Pipe;
 
+use crate::openapi::{ApiEndpoint, OperationBuilder, ResponseBuilder, RouteHandler};
 use crate::reader::StateReader;
-use crate::Direction;
 use crate::Page;
 use crate::{accept::AcceptFormat, response::ResponseContent, Result};
+use crate::{Direction, RestService};
 
-pub const LIST_CHECKPOINT_PATH: &str = "/checkpoints";
-pub const GET_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint";
-pub const GET_FULL_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint/full";
+pub struct GetCheckpointFull;
 
-pub async fn get_full_checkpoint(
+impl ApiEndpoint<RestService> for GetCheckpointFull {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/checkpoints/{checkpoint}/full"
+    }
+
+    fn hidden(&self) -> bool {
+        true
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("GetCheckpointFull")
+            .path_parameter::<CheckpointSequenceNumber>("checkpoint", generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<CheckpointData>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .response(404, ResponseBuilder::new().build())
+            .build()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_checkpoint_full)
+    }
+}
+
+async fn get_checkpoint_full(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
@@ -46,7 +82,42 @@ pub async fn get_full_checkpoint(
     .pipe(Ok)
 }
 
-pub async fn get_checkpoint(
+pub struct GetCheckpoint;
+
+impl ApiEndpoint<RestService> for GetCheckpoint {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/checkpoints/{checkpoint}"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("GetCheckpoint")
+            .path_parameter::<CheckpointSequenceNumber>("checkpoint", generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<SignedCheckpointSummary>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .response(404, ResponseBuilder::new().build())
+            .build()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), get_checkpoint)
+    }
+}
+
+async fn get_checkpoint(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
@@ -127,7 +198,43 @@ impl From<CheckpointNotFoundError> for crate::RestError {
     }
 }
 
-pub async fn list_checkpoints(
+pub struct ListCheckpoints;
+
+impl ApiEndpoint<RestService> for ListCheckpoints {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::GET
+    }
+
+    fn path(&self) -> &'static str {
+        "/checkpoints"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        OperationBuilder::new()
+            .tag("Checkpoint")
+            .operation_id("ListCheckpoints")
+            .query_parameters::<ListCheckpointsQueryParameters>(generator)
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<Vec<SignedCheckpointSummary>>(generator)
+                    .bcs_content()
+                    .header::<String>(crate::types::X_SUI_CURSOR, generator)
+                    .build(),
+            )
+            .response(410, ResponseBuilder::new().build())
+            .build()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), list_checkpoints)
+    }
+}
+
+async fn list_checkpoints(
     Query(parameters): Query<ListCheckpointsQueryParameters>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
@@ -166,7 +273,7 @@ pub async fn list_checkpoints(
     .pipe(Ok)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct ListCheckpointsQueryParameters {
     pub limit: Option<u32>,
     /// The checkpoint to start listing from.

@@ -51,6 +51,9 @@ const addCodeInject = function (source) {
             case "tsx":
               language = "ts";
               break;
+            case "rs":
+              language = "rust";
+              break;
             default:
               language = fileExt;
           }

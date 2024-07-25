@@ -188,9 +188,8 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
     let gas = objects.data.first().unwrap().object().unwrap();
 
-    let compiled_package = BuildConfig::new_for_testing().build(Path::new(
-        "../../sui_programmability/examples/fungible_tokens",
-    ))?;
+    let compiled_package =
+        BuildConfig::new_for_testing().build(Path::new("../../examples/move/basics"))?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();

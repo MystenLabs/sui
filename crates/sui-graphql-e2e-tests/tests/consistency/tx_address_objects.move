@@ -12,7 +12,7 @@
 // 2  | (3, 3, 3)
 // 3  | (4, 4, 4, 4)
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
 module Test::M1 {

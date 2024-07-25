@@ -57,8 +57,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     use sui_simulator::move_package::package_hooks::register_package_hooks;
 
                     register_package_hooks(Box::new(SuiPackageHooks {}));
-                    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    path.extend(["..", "..", "sui_programmability", "examples", "basics"]);
+                    let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
                     let mut build_config = BuildConfig::default();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());

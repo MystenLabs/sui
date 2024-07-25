@@ -3,7 +3,7 @@
 
 // Test the change of APY with heavy transactions
 
-//# init --protocol-version 48 --simulator --accounts A --addresses P0=0x0
+//# init --protocol-version 51 --simulator --accounts A --addresses P0=0x0
 
 //# advance-epoch
 

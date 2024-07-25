@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/enoki",
-	"version": "0.3.9",
+	"version": "0.3.11",
 	"description": "TODO: Description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -45,21 +45,21 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"@types/node": "^20.4.2",
-		"@types/react": "^18.2.15",
-		"@types/react-dom": "^18.2.7",
-		"@vitejs/plugin-react-swc": "^3.3.2",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
-		"typescript": "^5.3.3",
-		"vite": "^4.4.4"
+		"@types/node": "^20.14.10",
+		"@types/react": "^18.3.3",
+		"@types/react-dom": "^18.3.0",
+		"@vitejs/plugin-react-swc": "^3.7.0",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1",
+		"typescript": "^5.5.3",
+		"vite": "^5.3.3"
 	},
 	"dependencies": {
 		"@mysten/sui": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
-		"@nanostores/react": "^0.7.1",
-		"jose": "^5.2.3",
-		"nanostores": "^0.9.3"
+		"@nanostores/react": "^0.7.2",
+		"jose": "^5.6.3",
+		"nanostores": "^0.10.3"
 	},
 	"peerDependencies": {
 		"@types/react": ">=17.0.0",

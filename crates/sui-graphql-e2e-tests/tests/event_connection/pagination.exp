@@ -3,25 +3,30 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-22:
+task 1, lines 6-22:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 24-24:
+task 2, line 24:
+//# run Test::M1::emit_1 --sender A --args 0
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 26-26:
+task 3, line 26:
+//# run Test::M1::emit_2 --sender A --args 1
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'create-checkpoint'. lines 28-28:
+task 4, line 28:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 5 'run-graphql'. lines 30-54:
+task 5, lines 30-54:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -37,7 +42,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -55,7 +60,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -73,7 +78,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -89,7 +94,8 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 56-80:
+task 6, lines 56-80:
+//# run-graphql --cursors {"tx":2,"e":0,"c":1}
 Response: {
   "data": {
     "events": {
@@ -105,7 +111,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -123,7 +129,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -139,7 +145,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 82-106:
+task 7, lines 82-106:
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
 Response: {
   "data": {
     "events": {
@@ -155,7 +162,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -173,7 +180,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -189,7 +196,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 108-132:
+task 8, lines 108-132:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -205,7 +213,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -223,7 +231,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x51eaabd782d304a773932638852262fb65567766132d13c72d749af8ef531e5a::M1::EventA"
+              "repr": "0x5ba7fdbca31dfa8d9642b26cd297043adba83d87276b248ef9feecd2fe80f9ec::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"

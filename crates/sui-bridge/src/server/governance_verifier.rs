@@ -30,6 +30,10 @@ impl GovernanceVerifier {
 
 #[async_trait::async_trait]
 impl ActionVerifier<BridgeAction> for GovernanceVerifier {
+    fn name(&self) -> &'static str {
+        "GovernanceVerifier"
+    }
+
     async fn verify(&self, key: BridgeAction) -> BridgeResult<BridgeAction> {
         // TODO: an optimization would be to check the current nonce on chain and err for older ones
         if !key.is_governace_action() {

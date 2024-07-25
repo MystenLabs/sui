@@ -38,14 +38,14 @@ describe('Transfer to Object', () => {
 			arguments: [],
 		});
 		const x = await validateTransaction(toolbox.client, toolbox.keypair, tx);
-		const y = (x.effects?.created)!.map((o) => getOwnerAddress(o))!;
-		receiveObjectId = (x.effects?.created)!.filter(
+		const y = x.effects?.created!.map((o) => getOwnerAddress(o))!;
+		receiveObjectId = x.effects?.created!.filter(
 			(o) => !y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		parentObjectId = (x.effects?.created)!.filter(
+		)[0]!;
+		parentObjectId = x.effects?.created!.filter(
 			(o) => y.includes(o.reference.objectId) && getOwnerAddress(o) !== undefined,
-		)[0];
-		const sharedObject = (x.effects?.created)!.filter((o) => getOwnerAddress(o) === undefined)[0];
+		)[0]!;
+		const sharedObject = x.effects?.created!.filter((o) => getOwnerAddress(o) === undefined)[0]!;
 		sharedObjectId = sharedObject.reference.objectId;
 	});
 

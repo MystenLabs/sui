@@ -14,45 +14,45 @@ warning[W09009]: unused struct field
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:16:12
    │
 16 │         in.for_b_0()
-   │            ^^^^^^^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │            ^^^^^^^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:20:12
    │
 20 │         in.0.for_a_0();
-   │            ^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │            ^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:20:14
    │
 20 │         in.0.for_a_0();
-   │              ^^^^^^^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │              ^^^^^^^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:24:12
    │
 24 │         in.0.0.0.for_c_0();
-   │            ^ Autocompletes to: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
+   │            ^ Possible dot names: 'a::m::for_b_0', 'a::m::for_b_1', 'a::m::test0', 'a::m::test1', 'a::m::test2', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:24:14
    │
 24 │         in.0.0.0.for_c_0();
-   │              ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │              ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:24:16
    │
 24 │         in.0.0.0.for_c_0();
-   │                ^ Autocompletes to: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
+   │                ^ Possible dot names: 'a::m::for_a_0', 'a::m::for_a_1', or '0'
 
-note[I15001]: IDE autocomplete
+note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/method_autocomplete.move:24:18
    │
 24 │         in.0.0.0.for_c_0();
-   │                  ^^^^^^^ Autocompletes to: 'a::m::for_c_0', 'a::m::for_c_1', 'c', or 'd'
+   │                  ^^^^^^^ Possible dot names: 'a::m::for_c_0', 'a::m::for_c_1', 'c', or 'd'
 

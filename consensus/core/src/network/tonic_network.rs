@@ -16,6 +16,7 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
 use hyper::server::conn::Http;
 use mysten_common::sync::notify_once::NotifyOnce;
+use mysten_metrics::monitored_future;
 use mysten_network::{
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
@@ -67,6 +68,10 @@ const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 // Maximum number of connections in backlog.
 #[cfg(not(msim))]
 const MAX_CONNECTIONS_BACKLOG: u32 = 1024;
+
+// The time we are willing to wait for a connection to get gracefully shutdown before we attempt to
+// forcefully shutdown its task.
+const CONNECTION_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
 
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
@@ -654,6 +659,8 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .with_label_values(&["tonic"])
             .set(1);
 
+        debug!("Starting tonic service");
+
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.
         // Bind to the unspecified address to allow the actual address to be assigned,
@@ -699,7 +706,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
         // Create listener to incoming connections.
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(20);
         let listener = loop {
             if Instant::now() > deadline {
                 panic!("Failed to start server: timeout");
@@ -764,7 +771,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
         let shutdown_notif = self.shutdown_notif.clone();
 
-        self.server.spawn(async move {
+        self.server.spawn(monitored_future!(async move {
             let mut connection_handlers = JoinSet::new();
 
             loop {
@@ -794,10 +801,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     },
                     _ = shutdown_notif.wait() => {
                         info!("Received shutdown. Stopping consensus service.");
-                        if timeout(Duration::from_secs(5), async {
+                        if timeout(CONNECTION_SHUTDOWN_GRACE_PERIOD, async {
                             while connection_handlers.join_next().await.is_some() {}
                         }).await.is_err() {
-                            warn!("Failed to stop all connection handlers in 5s. Forcing shutdown.");
+                            warn!("Failed to stop all connection handlers in {CONNECTION_SHUTDOWN_GRACE_PERIOD:?}. Forcing shutdown.");
                             connection_handlers.shutdown().await;
                         }
                         return;
@@ -895,7 +902,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     Ok(())
                 });
             }
-        });
+        }));
 
         info!("Server started at: {own_address}");
     }

@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-24:
+task 0, lines 1-24:
+//# print-bytecode
 // Move bytecode v7
 module 1.MonomorphicEnums {
 
@@ -36,7 +37,8 @@ Jump tables:
 }
 }
 
-task 2 'run'. lines 51-61:
+task 2, lines 51-61:
+//# run
 Error: Function execution failed with VMError: {
     major_status: VARIANT_TAG_MISMATCH,
     sub_status: None,

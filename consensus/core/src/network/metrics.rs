@@ -14,6 +14,7 @@ pub(crate) struct NetworkMetrics {
     pub(crate) network_type: IntGaugeVec,
     pub(crate) inbound: Arc<NetworkRouteMetrics>,
     pub(crate) outbound: Arc<NetworkRouteMetrics>,
+    #[cfg_attr(msim, allow(dead_code))]
     pub(crate) tcp_connection_metrics: Arc<TcpConnectionMetrics>,
     pub(crate) quinn_connection_metrics: Arc<QuinnConnectionMetrics>,
 }
@@ -36,6 +37,7 @@ impl NetworkMetrics {
     }
 }
 
+#[cfg_attr(msim, allow(dead_code))]
 pub(crate) struct TcpConnectionMetrics {
     /// Send buffer size of consensus TCP socket.
     pub(crate) socket_send_buffer_size: IntGauge,

@@ -764,6 +764,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::ZkLoginAuthenticator(zklogin) => {
                 SuiAddress::try_from_unpadded(&zklogin.inputs)
             }
+            GenericSignature::PasskeyAuthenticator(s) => Ok(SuiAddress::from(&s.get_pk()?)),
         }
     }
 }
@@ -1032,6 +1033,8 @@ impl SequenceNumber {
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
     pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
+    pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
+        SequenceNumber(SequenceNumber::MAX.value() + 3);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1081,7 +1084,9 @@ impl SequenceNumber {
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self == &SequenceNumber::CANCELLED_READ || self == &SequenceNumber::CONGESTED
+        self == &SequenceNumber::CANCELLED_READ
+            || self == &SequenceNumber::CONGESTED
+            || self == &SequenceNumber::RANDOMNESS_UNAVAILABLE
     }
 
     pub fn is_valid(&self) -> bool {

@@ -10,6 +10,7 @@ use crate::{
         move_type::MoveType,
         object_read::ObjectRead,
         sui_address::SuiAddress,
+        uint53::UInt53,
     },
 };
 use async_graphql::{
@@ -53,7 +54,7 @@ struct OwnedOrImmutable {
 struct SharedInput {
     address: SuiAddress,
     /// The version that this this object was shared at.
-    initial_shared_version: u64,
+    initial_shared_version: UInt53,
     /// Controls whether the transaction block can reference the shared object as a mutable
     /// reference or by value. This has implications for scheduling: Transactions that just read
     /// shared objects at a certain version (mutable = false) can be executed concurrently, while
@@ -336,7 +337,7 @@ impl TransactionInput {
                 mutable,
             }) => I::SharedInput(SharedInput {
                 address: id.into(),
-                initial_shared_version: initial_shared_version.value(),
+                initial_shared_version: initial_shared_version.value().into(),
                 mutable,
             }),
 

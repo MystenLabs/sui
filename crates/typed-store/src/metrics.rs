@@ -255,6 +255,10 @@ pub struct OperationMetrics {
     pub rocksdb_batch_commit_latency_seconds: HistogramVec,
     pub rocksdb_batch_commit_bytes: HistogramVec,
     pub rocksdb_num_active_db_handles: IntGaugeVec,
+    pub rocksdb_very_slow_batch_writes_count: IntCounterVec,
+    pub rocksdb_very_slow_batch_writes_duration_ms: IntCounterVec,
+    pub rocksdb_very_slow_puts_count: IntCounterVec,
+    pub rocksdb_very_slow_puts_duration_ms: IntCounterVec,
 }
 
 impl OperationMetrics {
@@ -376,6 +380,34 @@ impl OperationMetrics {
                 "rocksdb_num_active_db_handles",
                 "Number of active db handles",
                 &["db_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_very_slow_batch_writes_count: register_int_counter_vec_with_registry!(
+                "rocksdb_num_very_slow_batch_writes",
+                "Number of batch writes that took more than 1 second",
+                &["db_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_very_slow_batch_writes_duration_ms: register_int_counter_vec_with_registry!(
+                "rocksdb_very_slow_batch_writes_duration",
+                "Total duration of batch writes that took more than 1 second",
+                &["db_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_very_slow_puts_count: register_int_counter_vec_with_registry!(
+                "rocksdb_num_very_slow_puts",
+                "Number of puts that took more than 1 second",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_very_slow_puts_duration_ms: register_int_counter_vec_with_registry!(
+                "rocksdb_very_slow_puts_duration",
+                "Total duration of puts that took more than 1 second",
+                &["cf_name"],
                 registry,
             )
             .unwrap(),

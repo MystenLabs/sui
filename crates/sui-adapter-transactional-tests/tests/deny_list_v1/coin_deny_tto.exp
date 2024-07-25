@@ -3,12 +3,15 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-46:
+task 1, lines 8-47:
+//# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 21766400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'view-object'. lines 48-48:
+task 2, line 49:
+//# view-object 1,0
 Owner: Account Address ( A )
 Version: 2
 Contents: test::regulated_coin::Wallet {
@@ -19,10 +22,12 @@ Contents: test::regulated_coin::Wallet {
     },
 }
 
-task 3 'view-object'. lines 50-50:
+task 3, line 51:
+//# view-object 1,1
 1,1::regulated_coin
 
-task 4 'view-object'. lines 52-52:
+task 4, line 53:
+//# view-object 1,2
 Owner: Account Address ( fake(1,0) )
 Version: 2
 Contents: sui::coin::Coin<test::regulated_coin::REGULATED_COIN> {
@@ -36,7 +41,8 @@ Contents: sui::coin::Coin<test::regulated_coin::REGULATED_COIN> {
     },
 }
 
-task 5 'view-object'. lines 54-54:
+task 5, line 55:
+//# view-object 1,3
 Owner: Immutable
 Version: 2
 Contents: sui::coin::CoinMetadata<test::regulated_coin::REGULATED_COIN> {
@@ -99,7 +105,8 @@ Contents: sui::coin::CoinMetadata<test::regulated_coin::REGULATED_COIN> {
     },
 }
 
-task 6 'view-object'. lines 56-56:
+task 6, line 57:
+//# view-object 1,4
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::DenyCap<test::regulated_coin::REGULATED_COIN> {
@@ -110,7 +117,8 @@ Contents: sui::coin::DenyCap<test::regulated_coin::REGULATED_COIN> {
     },
 }
 
-task 7 'view-object'. lines 58-58:
+task 7, line 59:
+//# view-object 1,5
 Owner: Immutable
 Version: 2
 Contents: sui::coin::RegulatedCoinMetadata<test::regulated_coin::REGULATED_COIN> {
@@ -127,7 +135,8 @@ Contents: sui::coin::RegulatedCoinMetadata<test::regulated_coin::REGULATED_COIN>
     },
 }
 
-task 8 'view-object'. lines 60-62:
+task 8, lines 61-63:
+//# view-object 1,6
 Owner: Immutable
 Version: 2
 Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
@@ -141,19 +150,24 @@ Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
     },
 }
 
-task 9 'run'. lines 63-65:
+task 9, lines 64-66:
+//# run sui::coin::deny_list_add --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(9,0), object(9,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,4)
 gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate: 2723688, non_refundable_storage_fee: 27512
 
-task 10 'run'. lines 66-68:
+task 10, lines 67-69:
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
 Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,1)::regulated_coin::REGULATED_COIN" }
 
-task 11 'run'. lines 69-71:
+task 11, lines 70-72:
+//# run sui::coin::deny_list_remove --args object(0x403) object(1,4) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,4), object(9,1)
 deleted: object(9,0)
 gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 11301048, non_refundable_storage_fee: 114152
 
-task 12 'run'. lines 72-72:
+task 12, line 73:
+//# run test::regulated_coin::receive_coin --args object(1,0) receiving(1,2) --sender A
 mutated: object(0,0), object(1,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3769524, non_refundable_storage_fee: 38076

@@ -30,6 +30,9 @@ pub enum IncidentsAction {
         /// the days to go back
         #[arg(short, long, default_value = "7")]
         days: usize,
+        /// limit to incidents with any priority set
+        #[arg(long, short = 'p', default_value = "false")]
+        with_priority: bool,
     },
     /// generate Jira tasks for incident follow ups
     #[command(name = "generate follow up tasks", aliases=["g", "gen", "generate"])]
@@ -42,9 +45,12 @@ pub enum IncidentsAction {
 
 pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
     match &args.action {
-        IncidentsAction::GetRecentIncidents { long, limit, days } => {
-            print_recent_incidents(*long, *limit, *days).await?
-        }
+        IncidentsAction::GetRecentIncidents {
+            long,
+            limit,
+            days,
+            with_priority,
+        } => print_recent_incidents(*long, *limit, *days, *with_priority).await?,
         IncidentsAction::GenerateFollowUpTasks { input_filename } => {
             generate_follow_up_tasks(input_filename).await?
         }

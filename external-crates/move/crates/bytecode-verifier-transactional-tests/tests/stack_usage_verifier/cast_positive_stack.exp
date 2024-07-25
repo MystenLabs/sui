@@ -1,6 +1,7 @@
 processed 6 tasks
 
-task 0 'run'. lines 1-11:
+task 0, lines 1-11:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 1 'run'. lines 12-22:
+task 1, lines 12-22:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 2 'run'. lines 23-33:
+task 2, lines 23-33:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 3 'run'. lines 34-44:
+task 3, lines 34-44:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 4 'run'. lines 45-55:
+task 4, lines 45-55:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
@@ -45,7 +50,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 5 'run'. lines 56-66:
+task 5, lines 56-66:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,

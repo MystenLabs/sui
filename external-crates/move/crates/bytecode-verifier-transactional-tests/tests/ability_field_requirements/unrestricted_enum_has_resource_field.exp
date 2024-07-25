@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'publish'. lines 1-13:
+task 0, lines 1-13:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: FIELD_MISSING_TYPE_ABILITY,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 1 'publish'. lines 15-27:
+task 1, lines 15-27:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: FIELD_MISSING_TYPE_ABILITY,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 2 'publish'. lines 29-39:
+task 2, lines 29-39:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::Test'. Got VMError: {
     major_status: FIELD_MISSING_TYPE_ABILITY,
     sub_status: None,

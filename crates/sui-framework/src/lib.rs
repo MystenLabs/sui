@@ -92,7 +92,7 @@ macro_rules! define_system_packages {
             vec![
                 $(SystemPackage::new(
                     $id,
-                    include_bytes!(concat!(env!("OUT_DIR"), "/", $path)),
+                    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/packages_compiled", "/", $path)),
                     &$deps,
                 )),*
             ]

@@ -100,6 +100,10 @@ export class ParallelTransactionExecutor {
 		return this.#updateCache(() => this.#cache.reset());
 	}
 
+	async waitForLastTransaction() {
+		await this.#updateCache(() => this.#waitForLastDigest());
+	}
+
 	async executeTransaction(transaction: Transaction) {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;
@@ -404,7 +408,7 @@ export class ParallelTransactionExecutor {
 		}
 		txb.transferObjects(coinResults, address);
 
-		await this.#updateCache(() => this.#waitForLastDigest());
+		await this.waitForLastTransaction();
 
 		const result = await this.#client.signAndExecuteTransaction({
 			transaction: txb,

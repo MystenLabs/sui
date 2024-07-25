@@ -120,8 +120,8 @@ export function StakeCard({
 	const delegationState = inactiveValidator
 		? StakeState.IN_ACTIVE
 		: isEarnedRewards
-		? StakeState.EARNING
-		: StakeState.WARM_UP;
+			? StakeState.EARNING
+			: StakeState.WARM_UP;
 
 	const rewards = isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
 

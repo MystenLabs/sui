@@ -101,6 +101,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
     pub(crate) block_ancestors: Histogram,
+    pub(crate) block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
@@ -119,6 +120,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_read_count: IntCounterVec,
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
+    pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
@@ -130,6 +132,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
     pub(crate) last_commit_index: IntGauge,
+    pub(crate) last_known_own_block_round: IntGauge,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
@@ -191,6 +194,13 @@ impl NodeMetrics {
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            block_ancestors_depth: register_histogram_vec_with_registry!(
+                "block_ancestors_depth",
+                "The depth in rounds of ancestors included in newly proposed blocks",
+                &["authority"],
+                exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
             ).unwrap(),
             highest_verified_authority_round: register_int_gauge_vec_with_registry!(
@@ -294,6 +304,12 @@ impl NodeMetrics {
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
                 registry,
             ).unwrap(),
+            fetch_blocks_scheduler_skipped: register_int_counter_vec_with_registry!(
+                "fetch_blocks_scheduler_skipped",
+                "Number of times the scheduler skipped fetching blocks",
+                &["reason"],
+                registry
+            ).unwrap(),
             synchronizer_fetched_blocks_by_peer: register_int_counter_vec_with_registry!(
                 "synchronizer_fetched_blocks_by_peer",
                 "Number of fetched blocks per peer authority via the synchronizer and also by block authority",
@@ -304,6 +320,11 @@ impl NodeMetrics {
                 "synchronizer_fetched_blocks_by_authority",
                 "Number of fetched blocks per block author via the synchronizer",
                 &["authority", "type"],
+                registry,
+            ).unwrap(),
+            last_known_own_block_round: register_int_gauge_with_registry!(
+                "last_known_own_block_round",
+                "The highest round of our own block as this has been synced from peers during an amnesia recovery",
                 registry,
             ).unwrap(),
             // TODO: add a short status label.

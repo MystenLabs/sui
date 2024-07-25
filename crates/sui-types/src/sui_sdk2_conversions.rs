@@ -95,9 +95,7 @@ impl From<crate::object::Owner> for Owner {
             crate::object::Owner::ObjectOwner(object_id) => Self::Object(object_id.into()),
             crate::object::Owner::Shared {
                 initial_shared_version,
-            } => Self::Shared {
-                initial_shared_version: initial_shared_version.value(),
-            },
+            } => Self::Shared(initial_shared_version.value()),
             crate::object::Owner::Immutable => Self::Immutable,
         }
     }
@@ -108,9 +106,7 @@ impl From<Owner> for crate::object::Owner {
         match value {
             Owner::Address(address) => crate::object::Owner::AddressOwner(address.into()),
             Owner::Object(object_id) => crate::object::Owner::ObjectOwner(object_id.into()),
-            Owner::Shared {
-                initial_shared_version,
-            } => crate::object::Owner::Shared {
+            Owner::Shared(initial_shared_version) => crate::object::Owner::Shared {
                 initial_shared_version: initial_shared_version.into(),
             },
             Owner::Immutable => crate::object::Owner::Immutable,
@@ -298,6 +294,18 @@ impl From<TransactionDigest> for crate::digests::TransactionDigest {
     }
 }
 
+impl From<crate::digests::ObjectDigest> for ObjectDigest {
+    fn from(value: crate::digests::ObjectDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<ObjectDigest> for crate::digests::ObjectDigest {
+    fn from(value: ObjectDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
 impl From<crate::committee::Committee> for ValidatorCommittee {
     fn from(value: crate::committee::Committee) -> Self {
         Self {
@@ -337,5 +345,42 @@ impl From<crate::crypto::AuthorityPublicKeyBytes> for Bls12381PublicKey {
 impl From<Bls12381PublicKey> for crate::crypto::AuthorityPublicKeyBytes {
     fn from(value: Bls12381PublicKey) -> Self {
         Self::new(value.into_inner())
+    }
+}
+
+impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
+    fn from(value: UnchangedSharedKind) -> Self {
+        match value {
+            UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
+                Self::ReadOnlyRoot((version.into(), digest.into()))
+            }
+            UnchangedSharedKind::MutateDeleted { version } => Self::MutateDeleted(version.into()),
+            UnchangedSharedKind::ReadDeleted { version } => Self::ReadDeleted(version.into()),
+            UnchangedSharedKind::Cancelled { version } => Self::Cancelled(version.into()),
+            UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+        }
+    }
+}
+
+impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
+    fn from(value: crate::effects::UnchangedSharedKind) -> Self {
+        match value {
+            crate::effects::UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+                Self::ReadOnlyRoot {
+                    version: version.into(),
+                    digest: digest.into(),
+                }
+            }
+            crate::effects::UnchangedSharedKind::MutateDeleted(version) => Self::MutateDeleted {
+                version: version.into(),
+            },
+            crate::effects::UnchangedSharedKind::ReadDeleted(version) => Self::ReadDeleted {
+                version: version.into(),
+            },
+            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Cancelled {
+                version: version.into(),
+            },
+            crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+        }
     }
 }

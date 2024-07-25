@@ -33,7 +33,7 @@ export type SuiRpcPaginatedMethods = {
 				result: Result;
 				params: Params;
 				cursor: Cursor;
-		  }
+			}
 		: never;
 };
 

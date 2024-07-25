@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-9:
+task 0, lines 1-9:
+//# print-bytecode
 // Move bytecode v6
 module 2d20.M {
 struct T {
@@ -18,8 +19,10 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 11-20:
+task 1, lines 11-20:
+//# print-bytecode
 Error: Unbound field x
 
-task 2 'print-bytecode'. lines 22-31:
+task 2, lines 22-31:
+//# print-bytecode
 Error: Field y defined out of order for struct T

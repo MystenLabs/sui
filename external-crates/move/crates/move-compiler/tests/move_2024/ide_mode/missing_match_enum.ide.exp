@@ -1,61 +1,61 @@
 error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:16
-  │
-9 │         match (e) {
-  │                ^ Pattern '_' not covered
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:16
+   │
+10 │         match (e) {
+   │                ^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:9:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:19
    │  
- 9 │           match (e) {
+10 │           match (e) {
    │ ╭───────────────────^
-10 │ │         }
+11 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One', '0x42::m::E::Two(_)', and '0x42::m::E::Three { x }'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:16
    │
-14 │         match (e) {
+15 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:14:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:19
    │  
-14 │           match (e) {
+15 │           match (e) {
    │ ╭───────────────────^
-15 │ │             E::Two(n) => *n
-16 │ │         }
+16 │ │             E::Two(n) => *n
+17 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One' and '0x42::m::E::Three { x }'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:16
    │
-20 │         match (e) {
+21 │         match (e) {
    │                ^ Pattern 'E::Three { x: _ }' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:20:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:19
    │  
-20 │           match (e) {
+21 │           match (e) {
    │ ╭───────────────────^
-21 │ │             E::One => 0,
-22 │ │             E::Two(n) => *n
-23 │ │         }
+22 │ │             E::One => 0,
+23 │ │             E::Two(n) => *n
+24 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::Three { x }'
 
 error[E04036]: non-exhaustive pattern
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:16
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:16
    │
-27 │         match (e) {
+28 │         match (e) {
    │                ^ Pattern 'E::One' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:27:19
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:19
    │  
-27 │           match (e) {
+28 │           match (e) {
    │ ╭───────────────────^
-28 │ │             E::Three { x } => *x,
-29 │ │             E::Two(n) => *n
-30 │ │         }
+29 │ │             E::Three { x } => *x,
+30 │ │             E::Two(n) => *n
+31 │ │         }
    │ ╰─────────^ Missing arms: '0x42::m::E::One'
 

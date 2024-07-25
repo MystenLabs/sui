@@ -18,4 +18,6 @@ pub struct Context {
     pub symbols: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
     /// Are inlay type hints enabled?
     pub inlay_type_hints: bool,
+    /// Are param type hints enabled?
+    pub inlay_param_hints: bool,
 }

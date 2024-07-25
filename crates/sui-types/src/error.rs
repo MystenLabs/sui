@@ -753,6 +753,12 @@ impl From<&str> for SuiError {
     }
 }
 
+impl From<String> for SuiError {
+    fn from(error: String) -> Self {
+        SuiError::GenericAuthorityError { error }
+    }
+}
+
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
 

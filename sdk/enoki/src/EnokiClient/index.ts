@@ -110,7 +110,7 @@ export class EnokiClient {
 			headers: input.jwt
 				? {
 						[ZKLOGIN_HEADER]: input.jwt,
-				  }
+					}
 				: {},
 			body: JSON.stringify({
 				sender: input.sender,

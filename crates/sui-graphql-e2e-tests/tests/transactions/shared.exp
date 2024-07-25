@@ -1,26 +1,37 @@
 processed 7 tasks
 
-task 1 'publish'. lines 6-22:
+task 1, lines 6-22:
+//# publish
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 24-25:
+task 2, lines 24-25:
+//# programmable --inputs immshared(1,0)
+//> 0: P0::m::get(Input(0))
 mutated: object(0,0)
+unchanged_shared: object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'programmable'. lines 27-28:
+task 3, lines 27-28:
+//# programmable --inputs object(1,0)
+//> 0: P0::m::inc(Input(0))
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
-task 4 'programmable'. lines 30-32:
+task 4, lines 30-32:
+//# programmable --inputs object(1,0)
+//> 0: P0::m::get(Input(0));
+//> P0::m::inc(Input(0))
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
-task 5 'create-checkpoint'. lines 34-34:
+task 5, line 34:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 36-84:
+task 6, lines 36-84:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -31,7 +42,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "get"
                 }
@@ -44,17 +55,17 @@ Response: {
               "nodes": [
                 {
                   "__typename": "SharedObjectRead",
-                  "address": "0x2472a863b869f946b47f849d192b43c6e986713f22e98d9eca1c61dcbaf126d6",
+                  "address": "0x563d2842f82166a5603cfc2374792b4eef15b571ab3cc3066a869cd991ebf144",
                   "version": 2,
-                  "digest": "9BKFVpwXjU9HWxqWpLjcE4vdPu7ksxKunBkKEHiyzVbK",
+                  "digest": "Gp5Rr2Nuy61twdaS5SLnyThvnFpQRAE8ZpaNYzaFD7Yo",
                   "object": {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0::m::Foo"
+                          "repr": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928::m::Foo"
                         },
                         "json": {
-                          "id": "0x2472a863b869f946b47f849d192b43c6e986713f22e98d9eca1c61dcbaf126d6",
+                          "id": "0x563d2842f82166a5603cfc2374792b4eef15b571ab3cc3066a869cd991ebf144",
                           "x": "0"
                         }
                       }
@@ -71,7 +82,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "inc"
                 }
@@ -91,12 +102,12 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "get"
                 },
                 {
-                  "package": "0x7278306be47498a54e3c13e217967fb85179603767c1cf5dd2c0bc82934821a0",
+                  "package": "0x3e10a8ac7dbcff9240d654e0c753ddbf16218e4a20f7f7600a734e1d6f784928",
                   "module": "m",
                   "functionName": "inc"
                 }

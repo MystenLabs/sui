@@ -56,10 +56,13 @@ impl TestSetup {
         );
 
         // Set shared object congestion control such that it only allows 1 transaction to go through.
-        let max_accumulated_txn_cost_per_object_in_checkpoint =
+        let max_accumulated_txn_cost_per_object_in_commit =
             TEST_ONLY_GAS_PRICE * TEST_ONLY_GAS_UNIT;
-        protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+        protocol_config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+            max_accumulated_txn_cost_per_object_in_commit,
+        );
+        protocol_config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+            max_accumulated_txn_cost_per_object_in_commit,
         );
 
         // Set max deferral rounds to 0 to testr cancellation. All deferred transactions will be cancelled.

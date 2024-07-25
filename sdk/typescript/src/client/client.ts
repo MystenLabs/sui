@@ -118,13 +118,11 @@ type NetworkOrTransport =
 			url?: never;
 	  };
 
-const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
+const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient') as never;
 
 export function isSuiClient(client: unknown): client is SuiClient {
 	return (
-		typeof client === 'object' &&
-		client !== null &&
-		(client as { [SUI_CLIENT_BRAND]: unknown })[SUI_CLIENT_BRAND] === true
+		typeof client === 'object' && client !== null && (client as any)[SUI_CLIENT_BRAND] === true
 	);
 }
 
@@ -525,6 +523,8 @@ export class SuiClient {
 
 	/**
 	 * Subscribe to get notifications whenever an event matching the filter occurs
+	 *
+	 * @deprecated
 	 */
 	async subscribeEvent(
 		input: SubscribeEventParams & {
@@ -540,6 +540,9 @@ export class SuiClient {
 		});
 	}
 
+	/**
+	 * @deprecated
+	 */
 	async subscribeTransaction(
 		input: SubscribeTransactionParams & {
 			/** function to run when we receive a notification of a new event matching the filter */

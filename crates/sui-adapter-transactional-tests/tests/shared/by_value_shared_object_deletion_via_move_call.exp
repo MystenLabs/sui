@@ -1,21 +1,25 @@
 processed 11 tasks
 
-task 1 'publish'. lines 6-35:
+task 1, lines 6-35:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 37-37:
+task 2, line 37:
+//# run t2::o2::create
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 39-39:
+task 3, line 39:
+//# run t2::o2::create
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 41-41:
+task 4, line 41:
+//# view-object 2,0
 Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
@@ -26,7 +30,8 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 5 'view-object'. lines 43-45:
+task 5, lines 43-45:
+//# view-object 3,0
 Owner: Shared( 4 )
 Version: 4
 Contents: t2::o2::Obj2 {
@@ -37,17 +42,22 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 6 'programmable'. lines 46-48:
+task 6, lines 46-48:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
+//> 1: t2::o2::deleter(Result(0));
 mutated: object(0,0), object(2,0)
 deleted: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
-task 7 'run'. lines 50-50:
+task 7, line 50:
+//# run t2::o2::mint_shared_coin
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'view-object'. lines 52-54:
+task 8, lines 52-54:
+//# view-object 7,0
 Owner: Shared( 6 )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
@@ -61,12 +71,23 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 9 'programmable'. lines 55-61:
+task 9, lines 55-61:
+//# programmable --inputs 0 object(7,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: t2::o2::share_coin(Result(0));
+// Try to call public_share_object directly -- this should work because the coin has `store`.
 created: object(9,0)
 mutated: object(0,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 10 'programmable'. lines 62-66:
+task 10, lines 62-66:
+//# programmable --inputs 0 object(7,0) @0x0
+//> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(2));
+//> 3: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
 created: object(10,0)
 mutated: object(0,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760

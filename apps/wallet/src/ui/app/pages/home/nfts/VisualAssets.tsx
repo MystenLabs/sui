@@ -27,10 +27,10 @@ export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 						isKioskOwnerToken(kioskClient.network, object)
 							? `/kiosk?${new URLSearchParams({
 									kioskId: getKioskIdFromOwnerCap(object),
-							  })}`
+								})}`
 							: `/nft-details?${new URLSearchParams({
 									objectId: object.objectId,
-							  }).toString()}`
+								}).toString()}`
 					}
 					onClick={() => {
 						ampli.clickedCollectibleCard({

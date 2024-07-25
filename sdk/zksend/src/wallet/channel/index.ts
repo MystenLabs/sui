@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Output } from 'valibot';
+import type { InferOutput } from 'valibot';
 import { parse, safeParse } from 'valibot';
 
 import { withResolvers } from '../../utils/withResolvers.js';
@@ -103,9 +103,9 @@ export class StashedPopup {
 }
 
 export class StashedHost {
-	#request: Output<typeof StashedRequest>;
+	#request: InferOutput<typeof StashedRequest>;
 
-	constructor(request: Output<typeof StashedRequest>) {
+	constructor(request: InferOutput<typeof StashedRequest>) {
 		if (typeof window === 'undefined' || !window.opener) {
 			throw new Error(
 				'StashedHost can only be used in a window opened through `window.open`. `window.opener` is not available.',
@@ -124,7 +124,7 @@ export class StashedHost {
 						key,
 						value.replace(/ /g, '+'),
 					]),
-			  )
+				)
 			: {};
 
 		const request = parse(StashedRequest, {

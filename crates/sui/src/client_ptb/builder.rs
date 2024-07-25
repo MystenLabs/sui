@@ -27,6 +27,7 @@ use move_package::BuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_sdk::apis::ReadApi;
 use sui_types::{
     base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
@@ -926,15 +927,42 @@ impl<'a> PTBBuilder<'a> {
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
-                let (dependencies, compiled_modules, _, _) = compile_package(
+                let chain_id = self.reader.get_chain_identifier().await.ok();
+                let build_config = BuildConfig::default();
+                let package_path = Path::new(&package_path);
+                let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
+                    .map_err(|e| err!(pkg_loc, "{e}"))?;
+                let previous_id = if let Some(ref chain_id) = chain_id {
+                    sui_package_management::set_package_id(
+                        package_path,
+                        build_config.install_dir.clone(),
+                        chain_id,
+                        AccountAddress::ZERO,
+                    )
+                    .map_err(|e| err!(pkg_loc, "{e}"))?
+                } else {
+                    None
+                };
+                let compile_result = compile_package(
                     self.reader,
-                    BuildConfig::default(),
-                    Path::new(&package_path),
+                    build_config.clone(),
+                    package_path,
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )
-                .await
-                .map_err(|e| err!(pkg_loc, "{e}"))?;
+                .await;
+                // Restore original ID, then check result.
+                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                    let _ = sui_package_management::set_package_id(
+                        package_path,
+                        build_config.install_dir.clone(),
+                        &chain_id,
+                        previous_id,
+                    )
+                    .map_err(|e| err!(pkg_loc, "{e}"))?;
+                }
+                let (dependencies, compiled_modules, _, _) =
+                    compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
@@ -966,18 +994,44 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .await?;
 
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
-                    upgrade_package(
-                        self.reader,
-                        BuildConfig::default(),
-                        Path::new(&package_path),
-                        ObjectID::from_address(upgrade_cap_id.into_inner()),
-                        false, /* with_unpublished_dependencies */
-                        false, /* skip_dependency_verification */
-                        None,
-                    )
-                    .await
+                let chain_id = self.reader.get_chain_identifier().await.ok();
+                let build_config = BuildConfig::default();
+                let package_path = Path::new(&package_path);
+                let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(path_loc, "{e}"))?;
+                let previous_id = if let Some(ref chain_id) = chain_id {
+                    sui_package_management::set_package_id(
+                        package_path,
+                        build_config.install_dir.clone(),
+                        chain_id,
+                        AccountAddress::ZERO,
+                    )
+                    .map_err(|e| err!(path_loc, "{e}"))?
+                } else {
+                    None
+                };
+                let upgrade_result = upgrade_package(
+                    self.reader,
+                    build_config.clone(),
+                    package_path,
+                    ObjectID::from_address(upgrade_cap_id.into_inner()),
+                    false, /* with_unpublished_dependencies */
+                    false, /* skip_dependency_verification */
+                    None,
+                )
+                .await;
+                // Restore original ID, then check result.
+                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                    let _ = sui_package_management::set_package_id(
+                        package_path,
+                        build_config.install_dir.clone(),
+                        &chain_id,
+                        previous_id,
+                    )
+                    .map_err(|e| err!(path_loc, "{e}"))?;
+                }
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                    upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb

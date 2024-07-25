@@ -1,3 +1,4 @@
+#[allow(ide_path_autocomplete)]
 module 0x42::m1 {
     public struct S {} has drop;
 

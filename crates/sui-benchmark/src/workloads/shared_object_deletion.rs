@@ -50,7 +50,10 @@ impl Payload for SharedCounterDeletionTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() && !self.is_counter_deleted {
             effects.print_gas_summary();
-            warn!("Shared counter deletion tx failed: {}", effects.status());
+            warn!(
+                "Shared counter deletion tx failed...  Status: {:?}",
+                effects.status()
+            );
         }
 
         self.gas.0 = effects.gas_object().0;

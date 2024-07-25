@@ -9,7 +9,7 @@
 // 5       | mutated df1
 // 6       | mutated parent again
 
-//# init --protocol-version 48 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {

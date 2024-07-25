@@ -12,6 +12,8 @@ use crate::{
     types::chain_identifier::ChainIdentifier,
 };
 
+use super::uint53::UInt53;
+
 /// A single protocol configuration value.
 #[derive(Clone, Debug, SimpleObject)]
 pub(crate) struct ProtocolConfigAttr {
@@ -38,8 +40,8 @@ pub(crate) struct ProtocolConfigs {
 impl ProtocolConfigs {
     /// The protocol is not required to change on every epoch boundary, so the protocol version
     /// tracks which change to the protocol these configs are from.
-    async fn protocol_version(&self) -> u64 {
-        self.native.version.as_u64()
+    async fn protocol_version(&self) -> UInt53 {
+        self.native.version.as_u64().into()
     }
 
     /// List all available feature flags and their values.  Feature flags are a form of boolean

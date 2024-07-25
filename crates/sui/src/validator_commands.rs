@@ -1166,6 +1166,10 @@ async fn update_metadata(
             call_0x5(context, "update_validator_project_url", args, gas_budget).await
         }
         MetadataUpdate::NetworkAddress { network_address } => {
+            // Check the network address to be in TCP.
+            if !network_address.is_loosely_valid_tcp_addr() {
+                bail!("Network address must be a TCP address");
+            }
             let _status = check_status(context, HashSet::from([Pending, Active])).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&network_address).unwrap())];
             call_0x5(
@@ -1177,6 +1181,9 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::PrimaryAddress { primary_address } => {
+            primary_address.to_anemo_address().map_err(|_| {
+                anyhow!("Invalid primary address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
+            })?;
             let _status = check_status(context, HashSet::from([Pending, Active])).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&primary_address).unwrap())];
             call_0x5(
@@ -1188,6 +1195,9 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::WorkerAddress { worker_address } => {
+            worker_address.to_anemo_address().map_err(|_| {
+                anyhow!("Invalid worker address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
+            })?;
             // Only an active validator can leave committee.
             let _status = check_status(context, HashSet::from([Pending, Active])).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&worker_address).unwrap())];
@@ -1200,6 +1210,9 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::P2pAddress { p2p_address } => {
+            p2p_address.to_anemo_address().map_err(|_| {
+                anyhow!("Invalid p2p address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
+            })?;
             let _status = check_status(context, HashSet::from([Pending, Active])).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&p2p_address).unwrap())];
             call_0x5(

@@ -6,6 +6,7 @@
 use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthoritySignInfo};
 use crate::error::{BridgeError, BridgeResult};
 use crate::eth_client::EthClient;
+use crate::metrics::BridgeMetrics;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeAction, SignedBridgeAction};
 use async_trait::async_trait;
@@ -51,6 +52,8 @@ pub trait BridgeRequestHandlerTrait {
 
 #[async_trait::async_trait]
 pub trait ActionVerifier<K>: Send + Sync {
+    // Name of the verifier, used for metrics
+    fn name(&self) -> &'static str;
     async fn verify(&self, key: K) -> BridgeResult<BridgeAction>;
 }
 
@@ -67,6 +70,10 @@ impl<C> ActionVerifier<(TransactionDigest, u16)> for SuiActionVerifier<C>
 where
     C: SuiClientInner + Send + Sync + 'static,
 {
+    fn name(&self) -> &'static str {
+        "SuiActionVerifier"
+    }
+
     async fn verify(&self, key: (TransactionDigest, u16)) -> BridgeResult<BridgeAction> {
         let (tx_digest, event_idx) = key;
         self.sui_client
@@ -81,6 +88,10 @@ impl<C> ActionVerifier<(TxHash, u16)> for EthActionVerifier<C>
 where
     C: JsonRpcClient + Send + Sync + 'static,
 {
+    fn name(&self) -> &'static str {
+        "EthActionVerifier"
+    }
+
     async fn verify(&self, key: (TxHash, u16)) -> BridgeResult<BridgeAction> {
         let (tx_hash, event_idx) = key;
         self.eth_client
@@ -95,6 +106,7 @@ struct SignerWithCache<K> {
     verifier: Arc<dyn ActionVerifier<K>>,
     mutex: Arc<Mutex<()>>,
     cache: LruCache<K, Arc<Mutex<Option<BridgeResult<SignedBridgeAction>>>>>,
+    metrics: Arc<BridgeMetrics>,
 }
 
 impl<K> SignerWithCache<K>
@@ -104,12 +116,14 @@ where
     fn new(
         signer: Arc<BridgeAuthorityKeyPair>,
         verifier: impl ActionVerifier<K> + 'static,
+        metrics: Arc<BridgeMetrics>,
     ) -> Self {
         Self {
             signer,
             verifier: Arc::new(verifier),
             mutex: Arc::new(Mutex::new(())),
             cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
+            metrics,
         }
     }
 
@@ -148,11 +162,20 @@ where
     async fn sign(&mut self, key: K) -> BridgeResult<SignedBridgeAction> {
         let signer = self.signer.clone();
         let verifier = self.verifier.clone();
+        let verifier_name = verifier.name();
         let entry = self.get_cache_entry(key.clone()).await;
         let mut guard = entry.lock().await;
         if let Some(result) = &*guard {
+            self.metrics
+                .signer_with_cache_hit
+                .with_label_values(&[verifier_name])
+                .inc();
             return result.clone();
         }
+        self.metrics
+            .signer_with_cache_miss
+            .with_label_values(&[verifier_name])
+            .inc();
         match verifier.verify(key.clone()).await {
             Ok(bridge_action) => {
                 let sig = BridgeAuthoritySignInfo::new(&bridge_action, &signer);
@@ -213,6 +236,7 @@ impl BridgeRequestHandler {
         sui_client: Arc<SuiClient<SC>>,
         eth_client: Arc<EthClient<EP>>,
         approved_governance_actions: Vec<BridgeAction>,
+        metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let (sui_signer_tx, sui_rx) = mysten_metrics::metered_channel::channel(
             1000,
@@ -237,11 +261,22 @@ impl BridgeRequestHandler {
         );
         let signer = Arc::new(signer);
 
-        SignerWithCache::new(signer.clone(), SuiActionVerifier { sui_client }).spawn(sui_rx);
-        SignerWithCache::new(signer.clone(), EthActionVerifier { eth_client }).spawn(eth_rx);
+        SignerWithCache::new(
+            signer.clone(),
+            SuiActionVerifier { sui_client },
+            metrics.clone(),
+        )
+        .spawn(sui_rx);
+        SignerWithCache::new(
+            signer.clone(),
+            EthActionVerifier { eth_client },
+            metrics.clone(),
+        )
+        .spawn(eth_rx);
         SignerWithCache::new(
             signer.clone(),
             GovernanceVerifier::new(approved_governance_actions).unwrap(),
+            metrics.clone(),
         )
         .spawn(governance_rx);
 
@@ -337,7 +372,8 @@ mod tests {
         let sui_verifier = SuiActionVerifier {
             sui_client: Arc::new(SuiClient::new_for_testing(sui_client_mock.clone())),
         };
-        let mut sui_signer_with_cache = SignerWithCache::new(signer.clone(), sui_verifier);
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let mut sui_signer_with_cache = SignerWithCache::new(signer.clone(), sui_verifier, metrics);
 
         // Test `get_cache_entry` creates a new entry if not exist
         let sui_tx_digest = TransactionDigest::random();
@@ -474,7 +510,9 @@ mod tests {
         let eth_verifier = EthActionVerifier {
             eth_client: Arc::new(eth_client),
         };
-        let mut eth_signer_with_cache = SignerWithCache::new(signer.clone(), eth_verifier);
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let mut eth_signer_with_cache =
+            SignerWithCache::new(signer.clone(), eth_verifier, metrics.clone());
 
         // Test `get_cache_entry` creates a new entry if not exist
         let eth_tx_hash = TxHash::random();
@@ -557,7 +595,8 @@ mod tests {
 
         let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
         let signer = Arc::new(kp);
-        let mut signer_with_cache = SignerWithCache::new(signer.clone(), verifier);
+        let metrics = Arc::new(BridgeMetrics::new_for_testing());
+        let mut signer_with_cache = SignerWithCache::new(signer.clone(), verifier, metrics.clone());
 
         // action_1 is signable
         signer_with_cache.sign(action_1.clone()).await.unwrap();

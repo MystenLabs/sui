@@ -3,7 +3,7 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
-import type { Input } from 'valibot';
+import type { InferInput } from 'valibot';
 import { is, parse } from 'valibot';
 
 import type { SuiClient } from '../client/index.js';
@@ -27,8 +27,8 @@ import { TransactionDataBuilder } from './TransactionData.js';
 import { getIdFromCallArg } from './utils.js';
 
 export type TransactionObjectArgument =
-	| Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>
-	| ((tx: Transaction) => Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>);
+	| Exclude<InferInput<typeof Argument>, { Input: unknown; type?: 'pure' }>
+	| ((tx: Transaction) => Exclude<InferInput<typeof Argument>, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
@@ -86,7 +86,7 @@ function createTransactionResult(index: number) {
 	}) as TransactionResult;
 }
 
-const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
+const TRANSACTION_BRAND = Symbol.for('@mysten/transaction') as never;
 
 interface SignOptions extends BuildTransactionOptions {
 	signer: Signer;
@@ -170,7 +170,7 @@ export class Transaction {
 			this.#data.sender = sender;
 		}
 	}
-	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
+	setExpiration(expiration?: InferInput<typeof TransactionExpiration> | null) {
 		this.#data.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
 	}
 	setGasPrice(price: number | bigint) {
@@ -205,10 +205,10 @@ export class Transaction {
 	}
 
 	// Temporary workaround for the wallet interface accidentally serializing transactions via postMessage
-	get pure(): ReturnType<typeof createPure> {
+	get pure(): ReturnType<typeof createPure<Argument>> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value): Argument => {
+			value: createPure<Argument>((value): Argument => {
 				if (isSerializedBcs(value)) {
 					return this.#data.addInput('pure', {
 						$kind: 'Pure',
@@ -224,8 +224,8 @@ export class Transaction {
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
-						? Inputs.Pure(value)
-						: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
+							? Inputs.Pure(value)
+							: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
 				);
 			}),
 		});
@@ -272,9 +272,9 @@ export class Transaction {
 						? {
 								$kind: 'UnresolvedObject',
 								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
-						  }
+							}
 						: value,
-			  );
+				);
 	}
 
 	/**

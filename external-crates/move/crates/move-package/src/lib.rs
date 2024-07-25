@@ -182,7 +182,7 @@ impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn compile_package<W: Write>(self, path: &Path, writer: &mut W) -> Result<CompiledPackage> {
-        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         BuildPlan::create(resolved_graph)?.compile(writer)
     }
@@ -195,7 +195,7 @@ impl BuildConfig {
         writer: &mut W,
         _reader: &mut R, // Reader here for enabling migration mode
     ) -> Result<CompiledPackage> {
-        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
@@ -217,7 +217,7 @@ impl BuildConfig {
         path: &Path,
         writer: &mut W,
     ) -> Result<CompiledPackage> {
-        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
     }
@@ -233,7 +233,7 @@ impl BuildConfig {
         // we set test and dev mode to migrate all the code
         self.test_mode = true;
         self.dev_mode = true;
-        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
         migration::migrate(build_plan, writer, reader)?;
@@ -252,7 +252,7 @@ impl BuildConfig {
     ) -> Result<GlobalEnv> {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
-        let resolved_graph = self.resolution_graph_for_package(path, &mut Vec::new())?;
+        let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
         ModelBuilder::create(resolved_graph, model_config).build_model()
     }
@@ -271,6 +271,7 @@ impl BuildConfig {
     pub fn resolution_graph_for_package<W: Write>(
         mut self,
         path: &Path,
+        chain_id: Option<String>,
         writer: &mut W,
     ) -> Result<ResolvedGraph> {
         if self.test_mode {
@@ -317,6 +318,7 @@ impl BuildConfig {
             dependency_graph,
             self,
             &mut dependency_cache,
+            chain_id,
             progress_output,
         )
     }

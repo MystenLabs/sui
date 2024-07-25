@@ -11,10 +11,10 @@
 	"dependencies": {
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui": "workspace:*",
-		"p-limit": "^4.0.0"
+		"p-limit": "^6.1.0"
 	},
 	"devDependencies": {
-		"ts-node": "^10.9.1",
-		"typescript": "^5.3.3"
+		"ts-node": "^10.9.2",
+		"typescript": "^5.5.3"
 	}
 }

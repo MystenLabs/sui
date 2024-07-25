@@ -7,5 +7,5 @@ error[E04007]: incompatible types
 12 │ public fun foo (y: Y, i: &u64) {
    │                           --- Given: 'u64'
 13 │     y.x[i].i;
-   │     ^^^^^^^^ Invalid call of '0x42::t::f'. Invalid argument for parameter 'z'
+   │     ^^^^^^ Invalid call of '0x42::t::f'. Invalid argument for parameter 'z'
 

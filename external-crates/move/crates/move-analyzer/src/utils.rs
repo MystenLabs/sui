@@ -56,17 +56,6 @@ pub fn lsp_position_to_loc(
     files.line_char_offset_to_loc_opt(file_hash, line_offset, char_offset)
 }
 
-/// Converts a position (line/column) to byte index in the file.
-pub fn lsp_position_to_byte_index(
-    files: &MappedFiles,
-    file_hash: FileHash,
-    pos: &Position,
-) -> Option<ByteIndex> {
-    files
-        .line_char_offset_to_loc_opt(file_hash, pos.line, pos.character)
-        .map(|loc| loc.start())
-}
-
 /// Some functions defined in a module need to be ignored.
 pub fn ignored_function(name: Symbol) -> bool {
     // In test mode (that's how IDE compiles Move source files),

@@ -572,7 +572,7 @@ async fn test_inactive_validator_pool_read() {
         assert_eq!(
             system_state
                 .get_current_epoch_committee()
-                .committee
+                .committee()
                 .num_members(),
             4
         );
@@ -713,8 +713,6 @@ async fn do_test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_epoch_flag_upgrade() {
-    use std::any;
-
     use std::sync::Mutex;
     use sui_core::authority::epoch_start_configuration::EpochFlag;
     use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;

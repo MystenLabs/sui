@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
+use schemars::JsonSchema;
 use sui_sdk2::types::framework::Coin;
 use sui_sdk2::types::{
     Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
@@ -12,11 +13,12 @@ use sui_sdk2::types::{
 };
 use tap::Pipe;
 
+use crate::openapi::{
+    ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
+};
 use crate::response::Bcs;
-use crate::Result;
 use crate::{accept::AcceptFormat, response::ResponseContent};
-
-pub const POST_EXECUTE_TRANSACTION_PATH: &str = "/transactions";
+use crate::{RestService, Result};
 
 /// Trait to define the interface for how the REST service interacts with a a QuorumDriver or a
 /// simulated transaction executor.
@@ -34,6 +36,43 @@ pub trait TransactionExecutor: Send + Sync {
     //TODO include Simulate functionality
 }
 
+pub struct ExecuteTransaction;
+
+impl ApiEndpoint<RestService> for ExecuteTransaction {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::POST
+    }
+
+    fn path(&self) -> &'static str {
+        "/transactions"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        generator.subschema_for::<SignedTransaction>();
+
+        OperationBuilder::new()
+            .tag("Transactions")
+            .operation_id("ExecuteTransaction")
+            .query_parameters::<ExecuteTransactionQueryParameters>(generator)
+            .request_body(RequestBodyBuilder::new().bcs_content().build())
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<TransactionExecutionResponse>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .build()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), execute_transaction)
+    }
+}
+
 /// Execute Transaction REST endpoint.
 ///
 /// Handles client transaction submission request by passing off the provided signed transaction to
@@ -41,13 +80,14 @@ pub trait TransactionExecutor: Send + Sync {
 /// set.
 ///
 /// A client can signal, using the `Accept` header, the response format as either JSON or BCS.
-pub async fn execute_transaction(
-    State(state): State<Arc<dyn TransactionExecutor>>,
+async fn execute_transaction(
+    State(state): State<Option<Arc<dyn TransactionExecutor>>>,
     Query(parameters): Query<ExecuteTransactionQueryParameters>,
     client_address: Option<axum::extract::ConnectInfo<SocketAddr>>,
     accept: AcceptFormat,
     Bcs(transaction): Bcs<SignedTransaction>,
 ) -> Result<ResponseContent<TransactionExecutionResponse>> {
+    let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
     let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
         transaction: transaction.into(),
         include_events: parameters.events,
@@ -62,7 +102,7 @@ pub async fn execute_transaction(
         input_objects,
         output_objects,
         auxiliary_data: _,
-    } = state
+    } = executor
         .execute_transaction(request, client_address.map(|a| a.0))
         .await?;
 
@@ -135,7 +175,7 @@ pub async fn execute_transaction(
 }
 
 /// Query parameters for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct ExecuteTransactionQueryParameters {
     // TODO once transaction finality support is more fully implemented up and down the stack, add
     // back in this parameter, which will be mutally-exclusive with the other parameters. When
@@ -156,7 +196,7 @@ pub struct ExecuteTransactionQueryParameters {
 }
 
 /// Response type for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct TransactionExecutionResponse {
     effects: TransactionEffects,
 
@@ -234,9 +274,19 @@ impl<'de> serde::Deserialize<'de> for EffectsFinality {
     }
 }
 
+impl JsonSchema for EffectsFinality {
+    fn schema_name() -> String {
+        ReadableEffectsFinality::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        ReadableEffectsFinality::json_schema(gen)
+    }
+}
+
 #[serde_with::serde_as]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(tag = "untagged")]
+#[derive(serde::Serialize, serde::Deserialize, JsonSchema)]
+#[serde(rename = "EffectsFinality", untagged)]
 enum ReadableEffectsFinality {
     Certified {
         /// Validator aggregated signature
@@ -244,6 +294,7 @@ enum ReadableEffectsFinality {
     },
     Checkpointed {
         #[serde_as(as = "sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>")]
+        #[schemars(with = "crate::_schemars::U64")]
         checkpoint: CheckpointSequenceNumber,
     },
 }

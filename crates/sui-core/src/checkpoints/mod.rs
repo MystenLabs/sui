@@ -1432,7 +1432,10 @@ impl CheckpointBuilder {
                     )
                     .await?;
 
-                let committee = system_state_obj.get_current_epoch_committee().committee;
+                let committee = system_state_obj
+                    .get_current_epoch_committee()
+                    .committee()
+                    .clone();
 
                 // This must happen after the call to augment_epoch_last_checkpoint,
                 // otherwise we will not capture the change_epoch tx.
@@ -2055,8 +2058,7 @@ async fn diagnose_split_brain(
         .get_sui_committee_with_network_metadata();
     let network_config = default_mysten_network_config();
     let network_clients =
-        make_network_authority_clients_with_network_config(&committee, &network_config)
-            .expect("Failed to make authority clients from committee {committee}");
+        make_network_authority_clients_with_network_config(&committee, &network_config);
 
     // Query all disagreeing validators
     let response_futures = digest_to_validator
@@ -2286,8 +2288,12 @@ impl CheckpointService {
         epoch_store: &AuthorityPerEpochStore,
         checkpoint: PendingCheckpointV2,
     ) -> SuiResult {
+        use crate::authority::authority_per_epoch_store::ConsensusCommitOutput;
+
+        let mut output = ConsensusCommitOutput::new();
+        epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
         let mut batch = epoch_store.db_batch_for_test();
-        epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
+        output.write_to_batch(epoch_store, &mut batch)?;
         batch.write()?;
         self.notify_checkpoint()?;
         Ok(())
@@ -2533,10 +2539,6 @@ mod tests {
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
             .unwrap();
-        // Verify that sending same digests at same height is noop
-        checkpoint_service
-            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 1000))
-            .unwrap();
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(1, vec![1, 3], 2000))
             .unwrap();
@@ -2769,6 +2771,7 @@ mod tests {
             .insert_tx_key_and_effects_signature(
                 &TransactionKey::Digest(digest),
                 &digest,
+                &effects.digest(),
                 Some(&AuthoritySignInfo::new(
                     epoch_store.epoch(),
                     &effects,

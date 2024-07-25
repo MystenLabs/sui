@@ -1,4 +1,4 @@
-//# init --edition 2024.alpha
+//# init
 
 //# publish
 module 0x42::m {

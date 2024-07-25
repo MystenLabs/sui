@@ -26,7 +26,7 @@ use codespan_reporting::{
     },
 };
 use csr::files::Files;
-use move_command_line_common::env::read_env_var;
+use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -121,7 +121,7 @@ enum MigrationChange {
 // All of the migration changes
 pub struct Migration {
     mapped_files: MappedFiles,
-    changes: BTreeMap<FileId, Vec<(ByteSpan, MigrationChange)>>,
+    changes: BTreeMap<FileHash, Vec<(ByteSpan, MigrationChange)>>,
 }
 
 //**************************************************************************************************
@@ -245,13 +245,11 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: &MappedFiles, diags:
     }
 }
 
-fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
+fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> Option<(FileId, Range<usize>)> {
     let fname = loc.file_hash();
-    let id = mapped_files
-        .file_hash_to_file_id(&fname)
-        .unwrap_or_else(|| panic!("ICE Couldn't find filename hash {:?} in mapping", fname));
+    let id = mapped_files.file_hash_to_file_id(&fname)?;
     let range = loc.usize_range();
-    (id, range)
+    Some((id, range))
 }
 
 fn emit_diagnostics_text(
@@ -275,27 +273,38 @@ fn render_diagnostic_text(
     diag: Diagnostic,
 ) -> csr::diagnostic::Diagnostic<FileId> {
     use csr::diagnostic::{Label, LabelStyle};
-    let mk_lbl = |style: LabelStyle, msg: (Loc, String)| -> Label<FileId> {
-        let (id, range) = convert_loc(mapped_files, msg.0);
-        csr::diagnostic::Label::new(style, id, range).with_message(msg.1)
+    let mk_lbl = |style: LabelStyle,
+                  (loc, msg): (Loc, String),
+                  notes: &mut Vec<String>|
+     -> Option<Label<FileId>> {
+        let Some((id, range)) = convert_loc(mapped_files, loc) else {
+            notes.push(format!(
+                "Compiler Error -- no location information for error:\n  {msg}"
+            ));
+            return None;
+        };
+        Some(csr::diagnostic::Label::new(style, id, range).with_message(msg))
     };
     let Diagnostic {
         info,
         primary_label,
         secondary_labels,
-        notes,
+        mut notes,
     } = diag;
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
     let (code, message) = info.render();
     diag = diag.with_code(code);
     diag = diag.with_message(message.to_string());
-    diag = diag.with_labels(vec![mk_lbl(LabelStyle::Primary, primary_label)]);
-    diag = diag.with_labels(
-        secondary_labels
-            .into_iter()
-            .map(|msg| mk_lbl(LabelStyle::Secondary, msg))
-            .collect(),
-    );
+    let labels = vec![mk_lbl(LabelStyle::Primary, primary_label, &mut notes)]
+        .into_iter()
+        .chain(
+            secondary_labels
+                .into_iter()
+                .map(|msg| mk_lbl(LabelStyle::Secondary, msg, &mut notes)),
+        )
+        .flatten()
+        .collect::<Vec<_>>();
+    diag = diag.with_labels(labels);
     diag = diag.with_notes(notes);
     diag
 }
@@ -873,9 +882,9 @@ impl UnprefixedWarningFilters {
 
     fn is_filtered_by_info(&self, info: &DiagnosticInfo) -> bool {
         match self {
-            Self::All => info.severity() == Severity::Warning,
+            Self::All => info.severity() <= Severity::Warning,
             Self::Specified { categories, codes } => {
-                info.severity() == Severity::Warning
+                info.severity() <= Severity::Warning
                     && (categories.contains_key(&info.category())
                         || codes.contains_key(&(info.category(), info.code())))
             }
@@ -991,7 +1000,10 @@ impl Migration {
         const ADDRESS_REMOVE: u8 = codes::Migration::AddressRemove as u8;
         const ADDRESS_ADD: u8 = codes::Migration::AddressAdd as u8;
 
-        let FileByteSpan { file_id, byte_span } = self.find_file_location(&diag);
+        let FileByteSpan {
+            file_hash: file_id,
+            byte_span,
+        } = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
         let change = match (diag.info().category(), diag.info().code()) {
             (CAT, NEEDS_MUT) => MigrationChange::AddMut,
@@ -1091,12 +1103,14 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
+            .cloned()
+            .map(|hash| (hash, self.mapped_files.file_hash_to_file_id(&hash).unwrap()))
+            .map(|(hash, id)| (hash, id, *self.mapped_files.files().get(id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, name)| *name);
-        for (file_id, name) in names {
+        names.sort_by_key(|(_, _, name)| *name);
+        for (file_hash, file_id, name) in names {
             let original = self.get_file_contents(file_id);
-            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            let file_changes = self.changes.get_mut(&file_hash).unwrap();
             Self::ensure_unique_changes(file_changes);
             let migrated = Self::render_changes(original.clone(), file_changes);
             let diff = similar::TextDiff::from_lines(&original, &migrated);
@@ -1123,12 +1137,14 @@ impl Migration {
         let mut names = self
             .changes
             .keys()
-            .map(|id| (*id, *self.mapped_files.files().get(*id).unwrap().name()))
+            .cloned()
+            .map(|hash| (hash, self.mapped_files.file_hash_to_file_id(&hash).unwrap()))
+            .map(|(hash, id)| (hash, id, *self.mapped_files.files().get(id).unwrap().name()))
             .collect::<Vec<_>>();
-        names.sort_by_key(|(_, name)| *name);
-        for (file_id, name) in names {
+        names.sort_by_key(|(_, _, name)| *name);
+        for (file_hash, file_id, name) in names {
             let original = self.get_file_contents(file_id);
-            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            let file_changes = self.changes.get_mut(&file_hash).unwrap();
             Self::ensure_unique_changes(file_changes);
             let migrated = Self::render_changes(original.clone(), file_changes);
             let path = PathBuf::from(name.to_string());
