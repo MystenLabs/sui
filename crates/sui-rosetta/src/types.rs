@@ -95,8 +95,14 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
+fn default_currency_metadata() -> Option<CurrencyMetadata> {
+    Some(CurrencyMetadata {
+        coin_type: default_currency_coin_type()
+    })
+}
+
 fn default_currency_coin_type() -> String {
-    SUI.clone().coin_type
+    SUI.clone().metadata.unwrap().coin_type
 }
 
 fn default_currency() -> Currency {
@@ -110,7 +116,8 @@ where
     let opt: Option<Vec<Currency>> = Option::deserialize(deserializer)?;
     match opt {
         Some(vec) if vec.is_empty() => Ok(vec![default_currency()]),
-        Some(vec) if vec[0].coin_type.is_empty() => Ok(vec![default_currency()]),
+        Some(vec) if vec[0].metadata.is_none() => Ok(vec![default_currency()]),
+        Some(vec) if vec[0].metadata.clone().unwrap().coin_type.is_empty() => Ok(vec![default_currency()]),
         Some(vec) => Ok(vec),
         None => Ok(vec![default_currency()]),
     }
@@ -118,11 +125,18 @@ where
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct Currency {
-    #[serde(default = "default_currency_coin_type")]
-    pub coin_type: String,
     pub symbol: String,
     pub decimals: u64,
+    #[serde(default = "default_currency_metadata")]
+    pub metadata: Option<CurrencyMetadata>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CurrencyMetadata {
+    #[serde(default = "default_currency_coin_type")]
+    pub coin_type: String,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
