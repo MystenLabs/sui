@@ -3,10 +3,9 @@
 
 use axum::{
     extract::State,
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use reqwest::StatusCode;
 
 use crate::{
     content_type::ContentType,

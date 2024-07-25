@@ -18,7 +18,6 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
-use axum::http::StatusCode;
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -26,6 +25,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use reqwest::StatusCode;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
