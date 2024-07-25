@@ -1076,10 +1076,10 @@ pub mod tests {
         server_builder.build_schema();
 
         let resp = reqwest::get(&url).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
 
         let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
         let resp = reqwest::get(&url_with_param).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
+        assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
     }
 }

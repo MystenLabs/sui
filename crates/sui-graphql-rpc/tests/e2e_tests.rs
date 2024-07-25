@@ -160,7 +160,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.http_status().as_u16(), 200);
-        assert_eq!(res.http_version(), hyper::Version::HTTP_11);
+        assert_eq!(res.http_version(), reqwest::Version::HTTP_11);
         assert!(res.graphql_version().unwrap().len() >= 5);
         assert!(res.errors().is_empty());
 
