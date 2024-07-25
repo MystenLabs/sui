@@ -67,7 +67,11 @@ where
         let accept = Accept::from_request_parts(parts, s).await?;
 
         for mime in accept.0 {
-            if mime.as_ref() == APPLICATION_BCS {
+            let essence = mime.essence_str();
+
+            if essence == mime::APPLICATION_JSON.essence_str() {
+                return Ok(Self::Json);
+            } else if essence == APPLICATION_BCS {
                 return Ok(Self::Bcs);
             }
         }

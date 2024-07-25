@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_value::{RawValueType, Value};
+use crate::type_resolver::TypeTagResolver;
 use move_core_types::language_storage::TypeTag;
-
-use crate::{
-    error::ExecutionError,
-    execution::{RawValueType, Value},
-    transaction::Argument,
-    transfer::Receiving,
-    type_resolver::TypeTagResolver,
+use sui_types::{
+    error::ExecutionError, execution::ExecutionResult, transaction::Argument, transfer::Receiving,
 };
 
 pub type TransactionIndex = usize;
@@ -200,11 +197,6 @@ impl ExecutionMode for System {
 /// includes the various rules for function arguments, meaning any object can be created just from
 /// BCS bytes!
 pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
-
-pub type ExecutionResult = (
-    /*  mutable_reference_outputs */ Vec<(Argument, Vec<u8>, TypeTag)>,
-    /*  return_values */ Vec<(Vec<u8>, TypeTag)>,
-);
 
 impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;

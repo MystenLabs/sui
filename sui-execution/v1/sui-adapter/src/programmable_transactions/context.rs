@@ -13,8 +13,15 @@ mod checked {
 
     use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
+    use crate::execution_mode::ExecutionMode;
+    use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
+    use crate::execution_value::{
+        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
+        UsageKind,
+    };
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::LinkageView;
+    use crate::type_resolver::TypeTagResolver;
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -46,23 +53,14 @@ mod checked {
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
-        execution::{
-            ExecutionResultsV2, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
-            RawValueType, ResultValue, UsageKind,
-        },
+        execution::ExecutionResultsV2,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
         transaction::{Argument, CallArg, ObjectArg},
-        type_resolver::TypeTagResolver,
     };
-    use sui_types::{
-        error::command_argument_error,
-        execution::{CommandKind, ObjectContents, TryFromValue, Value},
-        execution_mode::ExecutionMode,
-        execution_status::CommandArgumentError,
-    };
+    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions

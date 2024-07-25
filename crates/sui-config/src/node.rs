@@ -7,7 +7,8 @@ use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::Config;
 use anyhow::Result;
-use narwhal_config::Parameters as ConsensusParameters;
+use consensus_config::Parameters as ConsensusParameters;
+use narwhal_config::Parameters as NarwhalParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -185,6 +186,8 @@ pub struct NodeConfig {
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
 
+    // step 1 in removing the old state accumulator
+    #[serde(skip)]
     #[serde(default = "bool_true")]
     pub state_accumulator_v2: bool,
 
@@ -406,12 +409,8 @@ pub enum ConsensusProtocol {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusConfig {
-    pub address: Multiaddr,
+    // Base consensus DB path for all epochs.
     pub db_path: PathBuf,
-
-    /// Optional alternative address preferentially used by a primary to talk to its own worker.
-    /// For example, this could be used to connect to co-located workers over a private LAN address.
-    pub internal_worker_address: Option<Multiaddr>,
 
     /// Maximum number of pending transactions to submit to consensus, including those
     /// in submission wait.
@@ -428,7 +427,11 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    pub narwhal_config: ConsensusParameters,
+    // Deprecated: Narwhal specific configs.
+    pub address: Multiaddr,
+    pub narwhal_config: NarwhalParameters,
+
+    pub parameters: Option<ConsensusParameters>,
 }
 
 impl ConsensusConfig {
@@ -449,7 +452,7 @@ impl ConsensusConfig {
             .map(Duration::from_millis)
     }
 
-    pub fn narwhal_config(&self) -> &ConsensusParameters {
+    pub fn narwhal_config(&self) -> &NarwhalParameters {
         &self.narwhal_config
     }
 }

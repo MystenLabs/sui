@@ -183,6 +183,23 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_emit_random(
+        self,
+        package_id: ObjectID,
+        randomness_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "random",
+            "new",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                initial_shared_version: randomness_initial_shared_version,
+                mutable: false,
+            })],
+        )
+    }
+
     pub fn call_request_add_validator(self) -> Self {
         self.move_call(
             SUI_SYSTEM_PACKAGE_ID,

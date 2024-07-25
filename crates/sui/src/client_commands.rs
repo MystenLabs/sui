@@ -684,6 +684,7 @@ impl SuiClientCommands {
                     executor_version: None,
                     protocol_version: None,
                     profile_output,
+                    config_objects: None,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
@@ -704,6 +705,7 @@ impl SuiClientCommands {
                     show_effects: true,
                     executor_version,
                     protocol_version,
+                    config_objects: None,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();

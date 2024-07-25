@@ -22,6 +22,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -29,7 +30,6 @@ use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
-use sui_types::type_resolver::LayoutResolver;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
@@ -670,7 +670,7 @@ fn try_create_dynamic_field_info(
     }
 
     let (name_value, dynamic_field_type, object_id) = {
-        let layout = sui_types::type_resolver::into_struct_layout(
+        let layout = sui_types::layout_resolver::into_struct_layout(
             resolver
                 .get_annotated_layout(&move_object.type_().clone().into())
                 .map_err(StorageError::custom)?,

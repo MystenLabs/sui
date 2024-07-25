@@ -20,14 +20,13 @@ use crate::{
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
-use move_ir_types::location::Loc;
 
 const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::MissingKey as u8,
-    "The struct's first field is 'id' of type 'UID' but is missing the 'key' ability.",
+    "The struct's first field is 'id' of type 'sui::object::UID' but is missing the 'key' ability.",
 );
 
 pub struct MissingKeyVisitor;
@@ -60,9 +59,9 @@ impl TypingVisitorContext for Context<'_> {
         _struct_name: DatatypeName,
         sdef: &mut StructDefinition,
     ) -> bool {
-        if has_id_field_of_type_uid(sdef) && lacks_key_ability(sdef) {
+        if first_field_has_id_field_of_type_uid(sdef) && lacks_key_ability(sdef) {
             let uid_msg =
-                "Struct has an 'id' field of type 'UID' but is missing the 'key' ability.";
+                "Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.";
             let diagnostic = diag!(MISSING_KEY_ABILITY_DIAG, (sdef.loc, uid_msg));
             self.env.add_diag(diagnostic);
         }
@@ -70,10 +69,9 @@ impl TypingVisitorContext for Context<'_> {
     }
 }
 
-fn has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
-    eprintln!("Checking if struct has an 'id' field of type 'UID'...");
+fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
     matches!(&sdef.fields, StructFields::Defined(_, fields) if fields.iter().any(|(_, symbol, ftype)| {
-        symbol == &symbol!("id") && ftype.1.value.is("sui", "object", "UID")
+        ftype.0 == 0 && symbol == &symbol!("id") && ftype.1.value.is("sui", "object", "UID")
     }))
 }
 

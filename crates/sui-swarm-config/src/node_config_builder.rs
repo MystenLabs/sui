@@ -131,12 +131,10 @@ impl ValidatorConfigBuilder {
         let network_address = validator.network_address;
         let consensus_address = validator.consensus_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
-        let internal_worker_address = validator.consensus_internal_worker_address;
         let localhost = local_ip_utils::localhost_for_testing();
         let consensus_config = ConsensusConfig {
             address: consensus_address,
             db_path: consensus_db_path,
-            internal_worker_address,
             max_pending_transactions: None,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
@@ -154,6 +152,7 @@ impl ValidatorConfigBuilder {
                 },
                 ..Default::default()
             },
+            parameters: Default::default(),
         };
 
         let p2p_config = P2pConfig {

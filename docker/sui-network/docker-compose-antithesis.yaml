@@ -9,6 +9,7 @@ services:
     container_name: validator1
     hostname: validator1
     environment:
+      - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
@@ -36,6 +37,7 @@ services:
     container_name: validator2
     hostname: validator2
     environment:
+      - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,sui_network=debug,sui_node=debug,consensus=debug,jsonrpsee=error
       - RPC_WORKER_THREAD=12
@@ -117,6 +119,7 @@ services:
     hostname: fullnode1
     container_name: fullnode1
     environment:
+      - ENABLE_WRITEBACK_CACHE=1
       - RUST_BACKTRACE=1
       - RUST_LOG=info,jsonrpsee=error
       - RPC_WORKER_THREAD=12

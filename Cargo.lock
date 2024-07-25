@@ -12381,6 +12381,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "consensus-config",
  "csv",
  "dirs 4.0.0",
  "fastcrypto",
@@ -13689,6 +13690,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",
+ "regex",
  "serde",
  "serde_json",
  "serde_with 3.8.1",
@@ -13820,10 +13822,11 @@ dependencies = [
 [[package]]
 name = "sui-sdk"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=be6a30039723bf8fabd64a8869b7e89596141551#be6a30039723bf8fabd64a8869b7e89596141551"
+source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=9a125ed5764fb5bcc1acb6074064bc8f9ea85b38#9a125ed5764fb5bcc1acb6074064bc8f9ea85b38"
 dependencies = [
  "base64ct",
  "bcs",
+ "blake2",
  "bnum",
  "bs58 0.5.0",
  "hex",

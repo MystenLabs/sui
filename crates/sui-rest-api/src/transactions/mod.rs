@@ -9,9 +9,8 @@ pub use execution::TransactionExecutor;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use sui_sdk2::types::CheckpointSequenceNumber;
-use sui_sdk2::types::{
-    SignedTransaction, TransactionDigest, TransactionEffects, TransactionEvents,
-};
+use sui_sdk2::types::Transaction;
+use sui_sdk2::types::{TransactionDigest, TransactionEffects, TransactionEvents, UserSignature};
 use tap::Pipe;
 
 use crate::openapi::ApiEndpoint;
@@ -52,6 +51,7 @@ impl ApiEndpoint<RestService> for GetTransaction {
                     .bcs_content()
                     .build(),
             )
+            .response(404, ResponseBuilder::new().build())
             .build()
     }
 
@@ -74,13 +74,23 @@ async fn get_transaction(
     .pipe(Ok)
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct TransactionResponse {
-    pub transaction: SignedTransaction,
+    pub digest: TransactionDigest,
+    pub transaction: Transaction,
+    pub signatures: Vec<UserSignature>,
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    //TODO fix format of u64s
+    #[serde_as(
+        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
+    )]
+    #[schemars(with = "Option<crate::_schemars::U64>")]
     pub checkpoint: Option<u64>,
+    #[serde_as(
+        as = "Option<sui_types::sui_serde::Readable<sui_types::sui_serde::BigInt<u64>, _>>"
+    )]
+    #[schemars(with = "Option<crate::_schemars::U64>")]
     pub timestamp_ms: Option<u64>,
 }
 
@@ -165,7 +175,9 @@ async fn list_transactions(
             state
                 .get_transaction(digest.into())
                 .map(|(transaction, effects, events)| TransactionResponse {
-                    transaction,
+                    digest: transaction.transaction.digest(),
+                    transaction: transaction.transaction,
+                    signatures: transaction.signatures,
                     effects,
                     events,
                     checkpoint: Some(cursor_info.checkpoint),
