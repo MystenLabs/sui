@@ -17,28 +17,24 @@ use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
-use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::TransactionKind;
 
 use crate::sui_checkpoint_ingestion::{Task, Tasks};
 
-pub struct IndexerBuilder<D, F, M> {
+pub struct IndexerBuilder<D, M> {
     name: String,
     datasource: D,
-    filter: F,
     data_mapper: M,
     backfill_strategy: BackfillStrategy,
 }
 
-impl<D, F, M> IndexerBuilder<D, F, M> {
-    pub fn new(name: &str, datasource: D, filter: F, data_mapper: M) -> IndexerBuilder<D, F, M> {
+impl<D, M> IndexerBuilder<D, M> {
+    pub fn new(name: &str, datasource: D, data_mapper: M) -> IndexerBuilder<D, M> {
         IndexerBuilder {
             name: name.into(),
             datasource,
-            filter,
             data_mapper,
             backfill_strategy: BackfillStrategy::Simple,
         }
@@ -48,7 +44,7 @@ impl<D, F, M> IndexerBuilder<D, F, M> {
         start_from_checkpoint: u64,
         genesis_checkpoint: u64,
         persistent: P,
-    ) -> Indexer<P, D, F, M>
+    ) -> Indexer<P, D, M>
     where
         P: Persistent<R>,
     {
@@ -58,7 +54,6 @@ impl<D, F, M> IndexerBuilder<D, F, M> {
             datasource: self.datasource.into(),
             backfill_strategy: self.backfill_strategy,
             start_from_checkpoint,
-            filter: self.filter,
             data_mapper: self.data_mapper,
             genesis_checkpoint,
         }
@@ -70,39 +65,20 @@ impl<D, F, M> IndexerBuilder<D, F, M> {
     }
 }
 
-#[derive(Clone)]
-pub struct DefaultFilter;
-
-impl<T> DataFilter<T> for DefaultFilter {
-    fn matches(&self, _: &T) -> bool {
-        true
-    }
-}
-
-pub struct DefaultMapper;
-
-impl<T> DataMapper<T, T> for DefaultMapper {
-    fn map(&self, data: T) -> Result<Vec<T>, Error> {
-        Ok(vec![data])
-    }
-}
-
-pub struct Indexer<P, D, F, M> {
+pub struct Indexer<P, D, M> {
     name: String,
     storage: P,
     datasource: Arc<D>,
-    filter: F,
     data_mapper: M,
     backfill_strategy: BackfillStrategy,
     start_from_checkpoint: u64,
     genesis_checkpoint: u64,
 }
 
-impl<P, D, F, M> Indexer<P, D, F, M> {
+impl<P, D, M> Indexer<P, D, M> {
     pub async fn start<T, R>(mut self) -> Result<(), Error>
     where
         D: Datasource<T, P, R> + 'static + Send + Sync,
-        F: DataFilter<T> + 'static + Clone,
         M: DataMapper<T, R> + 'static + Clone,
         P: Persistent<R> + 'static,
         T: Send,
@@ -150,13 +126,11 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
             live_task.checkpoint,
             live_task.target_checkpoint,
             self.storage.clone(),
-            self.filter.clone(),
             self.data_mapper.clone(),
         );
 
         let backfill_tasks = backfill_tasks.to_vec();
         let storage_clone = self.storage.clone();
-        let filter_clone = self.filter.clone();
         let data_mapper_clone = self.data_mapper.clone();
         let datasource_clone = self.datasource.clone();
 
@@ -169,7 +143,6 @@ impl<P, D, F, M> Indexer<P, D, F, M> {
                         backfill_task.checkpoint,
                         backfill_task.target_checkpoint,
                         storage_clone.clone(),
-                        filter_clone.clone(),
                         data_mapper_clone.clone(),
                     )
                     .await
@@ -236,17 +209,15 @@ pub trait IndexerProgressStore: Send {
 
 #[async_trait]
 pub trait Datasource<T: Send, P, R> {
-    async fn start_ingestion_task<F, M>(
+    async fn start_ingestion_task<M>(
         &self,
         task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
         mut storage: P,
-        filter: F,
         data_mapper: M,
     ) -> Result<(), Error>
     where
-        F: DataFilter<T> + 'static,
         M: DataMapper<T, R> + 'static,
         P: Persistent<R> + 'static,
     {
@@ -257,13 +228,10 @@ pub trait Datasource<T: Send, P, R> {
             if !data.is_empty() {
                 // Ok to unwrap here, checked if the data is empty above.
                 let block_number = Self::get_block_number(data.first().unwrap());
-                let processed_data = data.into_iter().filter(|d| filter.matches(d)).try_fold(
-                    vec![],
-                    |mut result, d| {
-                        result.append(&mut data_mapper.map(d)?);
-                        Ok::<Vec<_>, Error>(result)
-                    },
-                )?;
+                let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
+                    result.append(&mut data_mapper.map(d)?);
+                    Ok::<Vec<_>, Error>(result)
+                })?;
                 storage.write(processed_data)?;
                 storage
                     .save_progress(task_name.clone(), block_number)
@@ -367,28 +335,6 @@ pub enum BackfillStrategy {
     Simple,
     Partitioned { task_size: u64 },
     Disabled,
-}
-
-pub trait DataFilter<T>: Sync + Send {
-    fn matches(&self, data: &T) -> bool;
-}
-
-#[derive(Clone)]
-pub struct SuiInputObjectFilter {
-    pub object_id: ObjectID,
-}
-
-impl DataFilter<CheckpointTxnData> for SuiInputObjectFilter {
-    fn matches(&self, (tx, _, _): &CheckpointTxnData) -> bool {
-        let txn_data = tx.transaction.transaction_data();
-        if let TransactionKind::ProgrammableTransaction(_) = txn_data.kind() {
-            return tx
-                .input_objects
-                .iter()
-                .any(|obj| obj.id() == self.object_id);
-        };
-        false
-    }
 }
 
 pub trait DataMapper<T, R>: Sync + Send {

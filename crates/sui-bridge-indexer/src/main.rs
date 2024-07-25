@@ -20,9 +20,7 @@ use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::{
     EthDataMapper, EthFinalizedDatasource, EthUnFinalizedDatasource,
 };
-use sui_bridge_indexer::indexer_builder::{
-    DefaultFilter, IndexerBuilder, SuiCheckpointDatasource, SuiInputObjectFilter,
-};
+use sui_bridge_indexer::indexer_builder::{IndexerBuilder, SuiCheckpointDatasource};
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
 use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
@@ -31,7 +29,6 @@ use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
@@ -88,7 +85,6 @@ async fn main() -> Result<()> {
     let eth_finalised_indexer = IndexerBuilder::new(
         "FinalizedEthBridgeIndexer",
         eth_checkpoint_datasource,
-        DefaultFilter,
         EthDataMapper {
             finalized: true,
             metrics: indexer_meterics.clone(),
@@ -106,7 +102,6 @@ async fn main() -> Result<()> {
     let eth_unfinalised_indexer = IndexerBuilder::new(
         "UnFinalizedEthBridgeIndexer",
         eth_unfinalized_datasource,
-        DefaultFilter,
         EthDataMapper {
             finalized: false,
             metrics: indexer_meterics.clone(),
@@ -134,9 +129,6 @@ async fn main() -> Result<()> {
         let indexer = IndexerBuilder::new(
             "SuiBridgeIndexer",
             sui_checkpoint_datasource,
-            SuiInputObjectFilter {
-                object_id: SUI_BRIDGE_OBJECT_ID,
-            },
             SuiBridgeDataMapper {
                 metrics: indexer_meterics.clone(),
             },

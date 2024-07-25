@@ -15,7 +15,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
-use sui_types::BRIDGE_ADDRESS;
+use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID};
 
 use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
 use crate::metrics::BridgeIndexerMetrics;
@@ -166,6 +166,14 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiBridgeDataMapper {
         (data, checkpoint_num, timestamp_ms): CheckpointTxnData,
     ) -> Result<Vec<ProcessedTxnData>, Error> {
         self.metrics.total_sui_bridge_transactions.inc();
+        if !data
+            .input_objects
+            .iter()
+            .any(|obj| obj.id() == SUI_BRIDGE_OBJECT_ID)
+        {
+            return Ok(vec![]);
+        }
+
         match &data.events {
             Some(events) => {
                 let token_transfers = events.data.iter().try_fold(vec![], |mut result, ev| {
