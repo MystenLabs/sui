@@ -24,7 +24,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionStatus};
+use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -43,6 +43,7 @@ pub struct SuiMockClient {
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
     onchain_status: Arc<Mutex<HashMap<(u8, u64), BridgeActionStatus>>>,
     bridge_committee_summary: Arc<Mutex<Option<BridgeCommitteeSummary>>>,
+    is_paused: Arc<Mutex<Option<IsBridgePaused>>>,
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
 
@@ -59,6 +60,7 @@ impl SuiMockClient {
             get_object_info: Default::default(),
             onchain_status: Default::default(),
             bridge_committee_summary: Default::default(),
+            is_paused: Default::default(),
             requested_transactions_tx: tokio::sync::broadcast::channel(10000).0,
         }
     }
@@ -113,6 +115,10 @@ impl SuiMockClient {
             .lock()
             .unwrap()
             .replace(committee);
+    }
+
+    pub fn set_is_bridge_paused(&self, value: IsBridgePaused) {
+        self.is_paused.lock().unwrap().replace(value);
     }
 
     pub fn set_wildcard_transaction_response(
@@ -208,7 +214,7 @@ impl SuiClientInner for SuiMockClient {
             chain_id: 0,
             sequence_nums: vec![],
             bridge_records_id: ObjectID::random(),
-            is_frozen: false,
+            is_frozen: self.is_paused.lock().unwrap().unwrap_or_default(),
             limiter: Default::default(),
             committee: self
                 .bridge_committee_summary
