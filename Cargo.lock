@@ -160,7 +160,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7#26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -169,17 +169,17 @@ dependencies = [
  "ed25519 1.5.3",
  "futures",
  "hex",
- "http 0.2.9",
+ "http 1.1.0",
  "matchit 0.5.0",
  "pin-project-lite",
  "pkcs8 0.9.0",
- "quinn 0.10.1",
- "quinn-proto 0.10.5",
+ "quinn",
+ "quinn-proto",
  "rand 0.8.5",
- "rcgen",
- "ring 0.16.20",
- "rustls 0.21.12",
- "rustls-webpki 0.101.7",
+ "rcgen 0.13.1",
+ "ring 0.17.3",
+ "rustls 0.23.12",
+ "rustls-webpki 0.102.6",
  "serde",
  "serde_json",
  "socket2 0.5.6",
@@ -208,18 +208,18 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7#26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
 dependencies = [
- "prettyplease 0.1.25",
+ "prettyplease 0.2.17",
  "proc-macro2 1.0.78",
  "quote 1.0.35",
- "syn 1.0.107",
+ "syn 2.0.48",
 ]
 
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7#26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -235,7 +235,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7#26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
 dependencies = [
  "anemo",
  "bytes",
@@ -1855,7 +1855,7 @@ dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "regex",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.48",
 ]
@@ -2668,7 +2668,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus",
  "prost 0.12.3",
- "quinn-proto 0.10.5",
+ "quinn-proto",
  "rand 0.8.5",
  "rstest",
  "rustls 0.21.12",
@@ -6114,7 +6114,7 @@ dependencies = [
  "jsonrpsee-types",
  "parking_lot 0.12.1",
  "rand 0.8.5",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "serde_json",
  "soketto",
@@ -6133,7 +6133,7 @@ dependencies = [
  "hyper-rustls 0.23.2",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -6205,7 +6205,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6971da4d9c3aa03c3d8f3ff0f4155b534aad021292003895a469716b2a230378"
 dependencies = [
  "base64 0.21.2",
- "pem",
+ "pem 1.1.0",
  "ring 0.16.20",
  "serde",
  "serde_json",
@@ -7543,7 +7543,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=291cebe772727338f474a020e094b4ecb7ba1fe9#291cebe772727338f474a020e094b4ecb7ba1fe9"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=220f52a15804a768610ac0ae3b8da7de4a5c4d2b#220f52a15804a768610ac0ae3b8da7de4a5c4d2b"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -7572,7 +7572,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=291cebe772727338f474a020e094b4ecb7ba1fe9#291cebe772727338f474a020e094b4ecb7ba1fe9"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=220f52a15804a768610ac0ae3b8da7de4a5c4d2b#220f52a15804a768610ac0ae3b8da7de4a5c4d2b"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2 1.0.78",
@@ -7873,7 +7873,7 @@ dependencies = [
  "narwhal-types",
  "parking_lot 0.12.1",
  "prometheus",
- "quinn-proto 0.10.5",
+ "quinn-proto",
  "rand 0.8.5",
  "sui-macros",
  "tokio",
@@ -9169,6 +9169,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e459365e590736a54c3fa561947c84837534b8e9af6fc5bf781307e82658fae"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9898,84 +9908,36 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21252f1c0fc131f1b69182db8f34837e8a69737b8251dff75636a9be0518c324"
-dependencies = [
- "bytes",
- "futures-io",
- "pin-project-lite",
- "quinn-proto 0.10.5",
- "quinn-udp 0.4.0",
- "rustc-hash",
- "rustls 0.21.12",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "quinn"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4ceeeeabace7857413798eb1ffa1e9c905a9946a57d81fb69b4b71c4d8eb3ad"
 dependencies = [
  "bytes",
+ "futures-io",
  "pin-project-lite",
- "quinn-proto 0.11.3",
- "quinn-udp 0.5.4",
- "rustc-hash",
+ "quinn-proto",
+ "quinn-udp",
+ "rustc-hash 1.1.0",
  "rustls 0.23.12",
  "thiserror",
  "tokio",
- "tracing",
-]
-
-[[package]]
-name = "quinn-proto"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c78e758510582acc40acb90458401172d41f1016f8c9dde89e49677afb7eec1"
-dependencies = [
- "bytes",
- "rand 0.8.5",
- "ring 0.16.20",
- "rustc-hash",
- "rustls 0.21.12",
- "slab",
- "thiserror",
- "tinyvec",
  "tracing",
 ]
 
 [[package]]
 name = "quinn-proto"
 version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddf517c03a109db8100448a4be38d498df8a210a99fe0e1b9eaf39e78c640efe"
+source = "git+https://github.com/quinn-rs/quinn.git?rev=f0fa66f871b80b9d2d7075d76967c649aecc0b77#f0fa66f871b80b9d2d7075d76967c649aecc0b77"
 dependencies = [
  "bytes",
  "rand 0.8.5",
  "ring 0.17.3",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "rustls 0.23.12",
  "slab",
  "thiserror",
  "tinyvec",
  "tracing",
-]
-
-[[package]]
-name = "quinn-udp"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6df19e284d93757a9fb91d63672f7741b129246a669db09d1c0063071debc0c0"
-dependencies = [
- "bytes",
- "libc",
- "socket2 0.5.6",
- "tracing",
- "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -10167,8 +10129,21 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
 dependencies = [
- "pem",
+ "pem 1.1.0",
  "ring 0.16.20",
+ "time",
+ "yasna",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54077e1872c46788540de1ea3d7f4ccb1983d12f9aa909b234468676c1a36779"
+dependencies = [
+ "pem 3.0.4",
+ "ring 0.17.3",
+ "rustls-pki-types",
  "time",
  "yasna",
 ]
@@ -10363,7 +10338,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "quinn 0.11.2",
+ "quinn",
  "rustls 0.23.12",
  "rustls-native-certs 0.7.1",
  "rustls-pemfile 2.1.2",
@@ -10798,6 +10773,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustc-hex"
@@ -14499,7 +14480,7 @@ dependencies = [
  "fastcrypto",
  "pkcs8 0.9.0",
  "rand 0.8.5",
- "rcgen",
+ "rcgen 0.9.3",
  "reqwest 0.12.5",
  "rustls 0.21.12",
  "rustls-webpki 0.101.7",
@@ -15328,7 +15309,7 @@ dependencies = [
  "once_cell",
  "pbkdf2 0.11.0",
  "rand 0.8.5",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "sha2 0.10.6",
  "thiserror",
  "unicode-normalization",
@@ -16015,7 +15996,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -16990,9 +16971,9 @@ checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yasna"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
+checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 dependencies = [
  "bit-vec",
  "num-bigint 0.4.4",
