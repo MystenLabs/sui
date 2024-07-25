@@ -50,9 +50,8 @@ pub enum Access {
     Module, // Just used for errors
 }
 
-// This trait describes the commands available to handle alias scopes and expanding name access
-// chains. This is used to model both legacy and modern path expansion.
-
+/// This trait describes the commands available to handle alias scopes and expanding name access
+/// chains. This is used to model both legacy and modern path expansion.
 pub trait PathExpander {
     // Push a new innermost alias scope
     fn push_alias_scope(
