@@ -93,7 +93,12 @@ async fn get_balances(
         for (currency, balance_result) in balances {
             match balance_result {
                 Ok(value) => amounts.push(Amount::new(value, Some(currency))),
-                Err(_e) => return Err(Error::InvalidInput(format!("{:?}", currency.metadata.unwrap().coin_type))),
+                Err(_e) => {
+                    return Err(Error::InvalidInput(format!(
+                        "{:?}",
+                        currency.metadata.unwrap().coin_type
+                    )))
+                }
             }
         }
         Ok(amounts)

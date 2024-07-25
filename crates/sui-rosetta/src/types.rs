@@ -97,7 +97,7 @@ impl From<SuiAddress> for AccountIdentifier {
 
 fn default_currency_metadata() -> Option<CurrencyMetadata> {
     Some(CurrencyMetadata {
-        coin_type: default_currency_coin_type()
+        coin_type: default_currency_coin_type(),
     })
 }
 
@@ -117,7 +117,9 @@ where
     match opt {
         Some(vec) if vec.is_empty() => Ok(vec![default_currency()]),
         Some(vec) if vec[0].metadata.is_none() => Ok(vec![default_currency()]),
-        Some(vec) if vec[0].metadata.clone().unwrap().coin_type.is_empty() => Ok(vec![default_currency()]),
+        Some(vec) if vec[0].metadata.clone().unwrap().coin_type.is_empty() => {
+            Ok(vec![default_currency()])
+        }
         Some(vec) => Ok(vec),
         None => Ok(vec![default_currency()]),
     }
