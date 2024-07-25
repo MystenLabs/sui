@@ -224,7 +224,9 @@ where
             struct SemaphoreExtension(OwnedSemaphorePermit);
             inner.call(req).await.map(move |mut response| {
                 // Insert permit as extension so it's not dropped until the response is sent.
-                response.extensions_mut().insert(SemaphoreExtension(permit));
+                response
+                    .extensions_mut()
+                    .insert(Arc::new(SemaphoreExtension(permit)));
                 response
             })
         };
