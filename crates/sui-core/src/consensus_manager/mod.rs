@@ -25,7 +25,7 @@ use sui_types::error::SuiResult;
 use sui_types::messages_consensus::ConsensusTransaction;
 use tokio::sync::{Mutex, MutexGuard};
 use tokio::time::{sleep, timeout};
-use tracing::info;
+use tracing::{debug, info};
 
 pub mod mysticeti_manager;
 pub mod narwhal_manager;
@@ -170,7 +170,7 @@ impl ConsensusManager {
                         return protocol;
                     }
                     _ => {
-                        info!("Invalid consensus choice {} in env var. Continue to pick consensus with protocol config", consensus_choice);
+                        debug!("Invalid consensus choice {} in env var. Continue to pick consensus with protocol config", consensus_choice);
                     }
                 };
             }
