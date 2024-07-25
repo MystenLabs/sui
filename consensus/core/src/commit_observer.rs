@@ -121,7 +121,7 @@ impl CommitObserver {
             .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
-        info!("Recovering commit observer after index {last_processed_commit_index} with last commit {:?} and {} unsent commits", last_commit, unsent_commits.len());
+        info!("Recovering commit observer after index {last_processed_commit_index} with last commit {} and {} unsent commits", last_commit.map(|c|c.index()).unwrap_or_default(), unsent_commits.len());
 
         // Resend all the committed subdags to the consensus output channel
         // for all the commits above the last processed index.
@@ -144,7 +144,7 @@ impl CommitObserver {
                 vec![]
             };
 
-            info!("Sending commit {:?} during recovery", commit.index());
+            info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
             self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
