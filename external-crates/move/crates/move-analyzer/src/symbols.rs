@@ -394,6 +394,13 @@ pub struct CursorContext {
     pub loc: Loc,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub enum ChainCompletionTarget {
+    Type,
+    Function,
+    All,
+}
+
 impl CursorContext {
     fn new(loc: Loc) -> Self {
         CursorContext {
@@ -404,35 +411,38 @@ impl CursorContext {
         }
     }
 
-    pub fn find_access_chain(&self) -> Option<P::NameAccessChain> {
+    /// Returns access chain at cursor position (if any) along with the information of what the chain's
+    /// auto-completed target kind should be
+    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionTarget)> {
         // TODO: handle access chains in uses, attributes and friend declarations
+        use ChainCompletionTarget as CT;
         use CursorPosition as CP;
-        let chain = match &self.position {
+        let chain_info = match &self.position {
             CP::Exp(sp!(_, exp)) => match exp {
-                P::Exp_::Name(chain) | P::Exp_::Call(chain, _) | P::Exp_::Pack(chain, _) => {
-                    Some(chain.clone())
-                }
+                P::Exp_::Name(chain) => Some((chain.clone(), CT::All)),
+                P::Exp_::Call(chain, _) => Some((chain.clone(), CT::Function)),
+                P::Exp_::Pack(chain, _) => Some((chain.clone(), CT::Type)),
                 _ => None,
             },
             CP::Binding(sp!(_, bind)) => {
                 if let P::Bind_::Unpack(chain, _) = bind {
-                    Some(*(chain.clone()))
+                    Some((*(chain.clone()), CT::Type))
                 } else {
                     None
                 }
             }
             CP::Type(sp!(_, ty)) => {
                 if let P::Type_::Apply(chain) = ty {
-                    Some(*(chain.clone()))
+                    Some((*(chain.clone()), CT::Type))
                 } else {
                     None
                 }
             }
             _ => None,
         };
-        if let Some(c) = &chain {
+        if let Some((c, _)) = &chain_info {
             if c.loc.contains(&self.loc) {
-                return chain;
+                return chain_info;
             }
         }
         None

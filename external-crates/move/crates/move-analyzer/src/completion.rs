@@ -6,8 +6,8 @@ use crate::{
     context::Context,
     symbols::{
         self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, CursorContext, CursorDefinition, DefInfo,
-        FunType, PrecompiledPkgDeps, SymbolicatorRunner, Symbols,
+        type_list_to_ide_string, type_to_ide_string, ChainCompletionTarget, CursorContext,
+        CursorDefinition, DefInfo, FunType, PrecompiledPkgDeps, SymbolicatorRunner, Symbols,
     },
     utils,
 };
@@ -379,7 +379,10 @@ fn all_n_position_member_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
     mod_ident: &ModuleIdent,
+    chain_target: ChainCompletionTarget,
 ) -> Vec<CompletionItem> {
+    use ChainCompletionTarget as CT;
+
     let mut completions = vec![];
 
     let Some(mod_defs) = symbols
@@ -403,54 +406,62 @@ fn all_n_position_member_completions(
         }
     }
 
-    for (fname, fdef) in &mod_defs.functions {
-        let Some(DefInfo::Function(
-            _,
-            visibility,
-            fun_type,
-            _,
-            type_args,
-            arg_names,
-            arg_types,
-            ret_type,
-            _,
-        )) = symbols.def_info(&fdef.name_loc)
-        else {
-            continue;
-        };
+    if matches!(chain_target, CT::Function) || matches!(chain_target, CT::All) {
+        for (fname, fdef) in &mod_defs.functions {
+            let Some(DefInfo::Function(
+                _,
+                visibility,
+                fun_type,
+                _,
+                type_args,
+                arg_names,
+                arg_types,
+                ret_type,
+                _,
+            )) = symbols.def_info(&fdef.name_loc)
+            else {
+                continue;
+            };
 
-        if matches!(visibility, Visibility::Internal) && !same_module {
-            continue;
-        }
-        if matches!(visibility, Visibility::Package(_)) && !same_package {
-            continue;
-        }
+            if matches!(visibility, Visibility::Internal) && !same_module {
+                continue;
+            }
+            if matches!(visibility, Visibility::Package(_)) && !same_package {
+                continue;
+            }
 
-        completions.push(call_completion_item(
-            &mod_ident.value,
-            matches!(fun_type, FunType::Macro),
-            None,
-            &fname,
-            type_args,
-            arg_names,
-            arg_types,
-            ret_type,
-        ));
+            completions.push(call_completion_item(
+                &mod_ident.value,
+                matches!(fun_type, FunType::Macro),
+                None,
+                &fname,
+                type_args,
+                arg_names,
+                arg_types,
+                ret_type,
+            ));
+        }
     }
 
-    for (sname, _) in &mod_defs.structs {
-        completions.push(completion_item(sname, CompletionItemKind::STRUCT));
-    }
-
-    for (ename, _) in &mod_defs.enums {
-        completions.push(completion_item(ename, CompletionItemKind::ENUM));
-    }
-
-    for (cname, _) in &mod_defs.constants {
-        if !same_module {
-            continue;
+    if matches!(chain_target, CT::Type) || matches!(chain_target, CT::All) {
+        for (sname, _) in &mod_defs.structs {
+            completions.push(completion_item(sname, CompletionItemKind::STRUCT));
         }
-        completions.push(completion_item(cname, CompletionItemKind::CONSTANT));
+    }
+
+    if matches!(chain_target, CT::Type) || matches!(chain_target, CT::All) {
+        for (ename, _) in &mod_defs.enums {
+            completions.push(completion_item(ename, CompletionItemKind::ENUM));
+        }
+    }
+
+    if matches!(chain_target, CT::All) {
+        for (cname, _) in &mod_defs.constants {
+            if !same_module {
+                continue;
+            }
+            completions.push(completion_item(cname, CompletionItemKind::CONSTANT));
+        }
     }
 
     completions
@@ -463,7 +474,10 @@ fn first_position_member_completion(
     mod_ident: &ModuleIdent_,
     member_alias: &Symbol,
     member_name: &Symbol,
+    chain_target: ChainCompletionTarget,
 ) -> Option<CompletionItem> {
+    use ChainCompletionTarget as CT;
+
     let Some(mod_defs) = symbols
         .file_mods
         .values()
@@ -475,6 +489,9 @@ fn first_position_member_completion(
 
     // is it a function?
     if let Some(fdef) = mod_defs.functions.get(&member_name) {
+        if !(matches!(chain_target, CT::Function) || matches!(chain_target, CT::All)) {
+            return None;
+        }
         let Some(DefInfo::Function(.., fun_type, _, type_args, arg_names, arg_types, ret_type, _)) =
             symbols.def_info(&fdef.name_loc)
         else {
@@ -494,6 +511,9 @@ fn first_position_member_completion(
 
     // is it a struct?
     if mod_defs.structs.get(&member_name).is_some() {
+        if !(matches!(chain_target, CT::Type) || matches!(chain_target, CT::All)) {
+            return None;
+        }
         return Some(completion_item(
             &member_alias.as_str(),
             CompletionItemKind::STRUCT,
@@ -502,6 +522,9 @@ fn first_position_member_completion(
 
     // is it an enum?
     if mod_defs.enums.get(&member_name).is_some() {
+        if !(matches!(chain_target, CT::Type) || matches!(chain_target, CT::All)) {
+            return None;
+        }
         return Some(completion_item(
             &member_alias.as_str(),
             CompletionItemKind::ENUM,
@@ -510,6 +533,9 @@ fn first_position_member_completion(
 
     // is it a const?
     if mod_defs.constants.get(&member_name).is_some() {
+        if !matches!(chain_target, CT::All) {
+            return None;
+        }
         return Some(completion_item(
             &member_alias.as_str(),
             CompletionItemKind::CONSTANT,
@@ -524,6 +550,7 @@ fn first_position_member_completion(
 fn all_first_position_member_completions(
     symbols: &Symbols,
     members_info: &BTreeMap<ModuleIdent, BTreeMap<Symbol, Name>>,
+    chain_target: ChainCompletionTarget,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
     for (sp!(_, mod_ident), members) in members_info {
@@ -533,6 +560,7 @@ fn all_first_position_member_completions(
                 &mod_ident,
                 member_alias,
                 &member_name.value,
+                chain_target,
             )
             .unwrap_or(completion_item(
                 &member_alias.as_str(),
@@ -671,6 +699,7 @@ fn entries_completions(
     cursor: &CursorContext,
     info: &AliasAutocompleteInfo,
     prev_kind: ChainComponentKind,
+    chain_target: ChainCompletionTarget,
     path_entries: &[Name],
     path_index: usize,
     completions: &mut Vec<CompletionItem>,
@@ -692,7 +721,10 @@ fn entries_completions(
             }
             ChainComponentKind::Module(mod_ident) => {
                 completions.extend(all_n_position_member_completions(
-                    symbols, cursor, &mod_ident,
+                    symbols,
+                    cursor,
+                    &mod_ident,
+                    chain_target,
                 ));
             }
             ChainComponentKind::Member(mod_ident, member_name) => {
@@ -724,6 +756,7 @@ fn entries_completions(
                 cursor,
                 info,
                 next_kind,
+                chain_target,
                 path_entries,
                 path_index + 1,
                 completions,
@@ -832,7 +865,7 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
     eprintln!("looking for colon(s)");
     let mut completions = vec![];
     let mut only_custom_items = false;
-    let Some(sp!(_, chain)) = cursor.find_access_chain() else {
+    let Some((sp!(_, chain), chain_target)) = cursor.find_access_chain() else {
         eprintln!("no access chain");
         return (completions, only_custom_items);
     };
@@ -883,6 +916,7 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
             completions.extend(all_first_position_member_completions(
                 symbols,
                 &info.members,
+                chain_target,
             ));
         }
     } else {
@@ -930,6 +964,7 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
                 cursor,
                 &info,
                 next_kind,
+                chain_target,
                 &path_entries,
                 /* path_index */ 0,
                 &mut completions,
