@@ -8,6 +8,7 @@ module prettier::expression {
         *&a = 100;
         a = (copy b);
         b = (move c);
+
         *df::borrow_mut<A, B>() =
             another_call();
         (a, b) = (1, 2);
@@ -267,6 +268,7 @@ module prettier::expression {
         who_you_gonna_call[
             (first_arg, second_arg)
         ];
+        result.push_back(copy data[i]);
     }
 
     fun expression_list() {

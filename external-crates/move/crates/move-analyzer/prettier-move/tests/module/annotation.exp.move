@@ -16,7 +16,7 @@ module prettier::members {
     #[
         test,
         expected_failure(
-            abort_code = other_module::ENotFound,
+            abort_code = ::other_module::ENotFound,
         ),
     ]
     #[

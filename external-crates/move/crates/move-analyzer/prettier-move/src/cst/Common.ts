@@ -303,6 +303,11 @@ function printBindFields(path: AstPath<Node>, options: ParserOptions, print: pri
  * Print `bind_field` node.
  */
 function printBindField(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
+	// special case for `..` operator
+	if (path.node.child(0)?.type == '..') {
+		return '..';
+	}
+
 	const nonFormatting = path.node.nonFormattingChildren;
 	const isMut = !!path.node.children.find((c) => c.text === 'mut');
 

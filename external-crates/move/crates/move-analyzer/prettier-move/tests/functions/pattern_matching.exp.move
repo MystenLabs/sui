@@ -5,7 +5,7 @@ module prettier::pattern_matching {
             MyEnum::Variant(_, _) => 1,
             MyEnum::OtherVariant(_, ERROR) => 2,
             // Now exhaustive since this will match all values of MyEnum::OtherVariant
-            MyEnum::OtherVariant(ERROR) => 2,
+            MyEnum::OtherVariant(..) => 2,
         }
     }
 
