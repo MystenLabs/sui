@@ -1,5 +1,7 @@
 module Completion::colon_colon {
 
+    const SOME_CONST: u64 = 42;
+
     public struct SomeStruct has drop {}
 
     public enum SomeEnum has drop{
@@ -10,7 +12,7 @@ module Completion::colon_colon {
 
     public struct CompletionStruct has drop {}
 
-    public fun sbar(_param1: u64, _param2: SomeStruct) {}
+    public fun sbar(_param1: u64, _param2: Completion::colon_colon::SomeStruct) {}
     public fun sbaz() {}
 
     public fun complete_chains(s: SomeStruct) {
@@ -28,21 +30,12 @@ module Completion::colon_colon {
         SE::SomePositionalVariant(7, 42);
         SE::SomeNamedVariant{name1: 7, name2: 42};
 
-        let _struct_vec: vector<SomeStruct> = vector::empty();
+        let _struct_vec: vector<CC::SomeStruct> = vector::empty();
         let _prim_vec: vector<u64> = vector::empty();
     }
 
     public fun single_ident() {
         C
-    }
-
-    public fun mod_single_ident() {
-        use Completion::colon_colon as CC;
-        C
-    }
-
-    public fun member_single_ident() {
-        S
     }
 
 }
