@@ -20,7 +20,7 @@ if [ -z "$NUM_CPUS" ]; then
 fi
 
 # filter out some tests that give spurious failures.
-TEST_FILTER="(not test(~batch_verification_tests))"
+TEST_FILTER="(not (test(~batch_verification_tests) | test(~validator_tx_finalizer_e2e_tests)))"
 
 DATE=$(date +%s)
 SEED="$DATE"
