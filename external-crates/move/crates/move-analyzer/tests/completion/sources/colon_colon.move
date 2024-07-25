@@ -41,4 +41,13 @@ module Completion::colon_colon {
     public fun member_single_ident() {
         Some
     }
+
+    public fun type_param() {
+        let v: vector<S
+    }
+
+    public fun param(p: S
+    }
+
+
 }

@@ -640,9 +640,9 @@ fn variant_completions(
             .enumerate()
             .map(|(snippet_idx, fname)| {
                 if *is_positional {
-                    format!("${{{}}}", snippet_idx)
+                    format!("${{{}}}", snippet_idx + 1)
                 } else {
-                    format!("${{{}:{}}}", snippet_idx, fname)
+                    format!("${{{}:{}}}", snippet_idx + 1, fname)
                 }
             })
             .collect::<Vec<_>>()
