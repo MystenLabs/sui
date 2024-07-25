@@ -248,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
                 .call()
                 .await?;
 
-            let print = PrintEthBridge {
+            let print = OutputEthBridge {
                 chain_id: chain_id.as_u64(),
                 bridge_proxy: bridge.address(),
                 committee_proxy: committee.address(),
@@ -301,7 +301,7 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect::<HashMap<_, _>>();
             let mut authorities = vec![];
-            let mut print_wrapper = Print::<PrintSuiBridgeRegistration>::default();
+            let mut output_wrapper = Output::<OutputSuiBridgeRegistration>::default();
             for (_, member) in move_type_bridge_committee.member_registration {
                 let MoveTypeCommitteeMemberRegistration {
                     sui_address,
@@ -309,7 +309,7 @@ async fn main() -> anyhow::Result<()> {
                     http_rest_url,
                 } = member;
                 let Ok(pubkey) = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes) else {
-                    print_wrapper.add_error(format!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge pubkey for validator {}: {:?}",
                         sui_address, bridge_pubkey_bytes
                     ));
@@ -317,7 +317,7 @@ async fn main() -> anyhow::Result<()> {
                 };
                 let eth_address = BridgeAuthorityPublicKeyBytes::from(&pubkey).to_eth_address();
                 let Ok(url) = from_utf8(&http_rest_url) else {
-                    print_wrapper.add_error(format!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge http url for validator: {}: {:?}",
                         sui_address, http_rest_url
                     ));
@@ -333,12 +333,12 @@ async fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|(_, _, _, _, _, stake)| **stake)
                 .sum::<u64>();
-            let mut print = PrintSuiBridgeRegistration {
+            let mut output = OutputSuiBridgeRegistration {
                 total_registered_stake: total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0,
                 ..Default::default()
             };
             for (name, sui_address, pubkey, eth_address, url, stake) in authorities {
-                print.committee.push(PrintMember {
+                output.committee.push(OutputMember {
                     name: name.clone(),
                     sui_address,
                     eth_address,
@@ -349,8 +349,8 @@ async fn main() -> anyhow::Result<()> {
                     status: None,
                 });
             }
-            print_wrapper.result = print;
-            println!("{}", serde_json::to_string_pretty(&print_wrapper).unwrap());
+            output_wrapper.inner = output;
+            println!("{}", serde_json::to_string_pretty(&output_wrapper).unwrap());
         }
 
         BridgeCommand::ViewSuiBridge {
@@ -380,7 +380,7 @@ async fn main() -> anyhow::Result<()> {
                 .timeout(Duration::from_secs(10))
                 .build()
                 .unwrap();
-            let mut print_wrapper = Print::<PrintSuiBridge>::default();
+            let mut output_wrapper = Output::<OutputSuiBridge>::default();
             for (_, member) in move_type_bridge_committee.members {
                 let MoveTypeCommitteeMember {
                     sui_address,
@@ -390,7 +390,7 @@ async fn main() -> anyhow::Result<()> {
                     blocklisted,
                 } = member;
                 let Ok(pubkey) = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes) else {
-                    print_wrapper.add_error(format!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge pubkey for validator {}: {:?}",
                         sui_address, bridge_pubkey_bytes
                     ));
@@ -398,7 +398,7 @@ async fn main() -> anyhow::Result<()> {
                 };
                 let eth_address = BridgeAuthorityPublicKeyBytes::from(&pubkey).to_eth_address();
                 let Ok(url) = from_utf8(&http_rest_url) else {
-                    print_wrapper.add_error(format!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge http url for validator: {}: {:?}",
                         sui_address, http_rest_url
                     ));
@@ -425,7 +425,7 @@ async fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|(_, _, _, _, _, stake, _)| *stake)
                 .sum::<u64>();
-            let mut print = PrintSuiBridge {
+            let mut output = OutputSuiBridge {
                 total_stake: total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0,
                 ..Default::default()
             };
@@ -457,7 +457,7 @@ async fn main() -> anyhow::Result<()> {
                         if resp {
                             total_online_stake += stake;
                         }
-                        print.committee.push(PrintMember {
+                        output.committee.push(OutputMember {
                             name: name.clone(),
                             sui_address,
                             eth_address,
@@ -473,7 +473,7 @@ async fn main() -> anyhow::Result<()> {
                         });
                     }
                     None => {
-                        print.committee.push(PrintMember {
+                        output.committee.push(OutputMember {
                             name: name.clone(),
                             sui_address,
                             eth_address,
@@ -487,19 +487,19 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             if ping {
-                print.total_online_stake =
+                output.total_online_stake =
                     Some(total_online_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0);
             }
 
             // sequence nonces
             for (type_, nonce) in bridge_summary.sequence_nums {
-                print
+                output
                     .nonces
                     .insert(BridgeActionType::try_from(type_).unwrap(), nonce);
             }
 
-            print_wrapper.result = print;
-            println!("{}", serde_json::to_string_pretty(&print_wrapper).unwrap());
+            output_wrapper.inner = output;
+            println!("{}", serde_json::to_string_pretty(&output_wrapper).unwrap());
         }
         BridgeCommand::Client { config_path, cmd } => {
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
@@ -514,7 +514,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[derive(serde::Serialize, Default)]
-struct PrintEthBridge {
+struct OutputEthBridge {
     chain_id: u64,
     bridge_proxy: EthAddress,
     committee_proxy: EthAddress,
@@ -539,13 +539,13 @@ struct Nonces {
 }
 
 #[derive(serde::Serialize, Default)]
-struct Print<P: Default> {
+struct Output<P: Default> {
     #[serde(skip_serializing_if = "Option::is_none")]
     errors: Option<Vec<String>>,
-    result: P,
+    inner: P,
 }
 
-impl<P: Default> Print<P> {
+impl<P: Default> Output<P> {
     fn add_error(&mut self, error: String) {
         if self.errors.is_none() {
             self.errors = Some(vec![]);
@@ -555,16 +555,16 @@ impl<P: Default> Print<P> {
 }
 
 #[derive(serde::Serialize, Default)]
-struct PrintSuiBridge {
+struct OutputSuiBridge {
     total_stake: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     total_online_stake: Option<f32>,
-    committee: Vec<PrintMember>,
+    committee: Vec<OutputMember>,
     nonces: HashMap<BridgeActionType, u64>,
 }
 
 #[derive(serde::Serialize)]
-struct PrintMember {
+struct OutputMember {
     name: String,
     sui_address: SuiAddress,
     eth_address: EthAddress,
@@ -578,7 +578,7 @@ struct PrintMember {
 }
 
 #[derive(serde::Serialize, Default)]
-struct PrintSuiBridgeRegistration {
+struct OutputSuiBridgeRegistration {
     total_registered_stake: f32,
-    committee: Vec<PrintMember>,
+    committee: Vec<OutputMember>,
 }
