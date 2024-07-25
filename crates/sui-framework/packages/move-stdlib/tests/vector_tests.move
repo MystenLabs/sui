@@ -786,4 +786,89 @@ module std::vector_tests {
         let v2 = vector[4u64, 5, 6];
         assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
     }
+
+    #[test]
+    fun find_indices_macro() {
+        let v = vector[1u64, 2, 3, 2, 1];
+        assert!(v.find_indices!(|e| *e == 2) == vector[1, 3]);
+        assert!(v.find_indices!(|e| *e == 4) == vector[]);
+        assert!(v.find_indices!(|e| *e == 1) == vector[0, 4]);
+    }
+
+    #[test, expected_failure]
+    fun take_macro_fail() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        v.take!(6);
+    }
+
+    #[test]
+    fun take_macro() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        assert!(v.take!(0) == vector[]);
+        assert!(v.take!(3) == vector[1, 2, 3]); // vec length is now 2
+        assert!(v == vector[4, 5]);
+        assert!(v.take!(1) == vector[4]);
+        assert!(v == vector[5]);
+        assert!(v.take!(1) == vector[5]);
+        assert!(v.length() == 0);
+    }
+
+    #[test]
+    fun take_while_macro() {
+        let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+        assert!(v.take_while!(|e| *e == 1) == vector[1, 1, 1]);
+        assert!(v == vector[2, 2, 2, 3, 3, 3]);
+        assert!(v.take_while!(|e| *e == 2) == vector[2, 2, 2]);
+        assert!(v == vector[3, 3, 3]);
+        assert!(v.take_while!(|e| *e == 3) == vector[3, 3, 3]);
+        assert!(v.length() == 0);
+    }
+
+    #[test]
+    fun take_and_drop() {
+        assert!(vector[1, 2, 3, 4, 5].take_and_drop!(2) == vector[1, 2]);
+        assert!(vector[1, 2, 3, 4, 5].take_and_drop!(0) == vector[]);
+    }
+
+    #[test]
+    fun take_while_and_drop() {
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while_and_drop!(|e| *e == 1) == vector[1, 1, 1]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while_and_drop!(|e| *e == 2) == vector[2, 2, 2]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while_and_drop!(|e| *e == 3) == vector[3, 3, 3]);
+    }
+
+    #[test]
+    fun skip_macro() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        assert!(v.skip!(4) == vector[5]);
+        assert!(v == vector[1, 2, 3, 4]);
+        assert!(v.skip!(2) == vector[3, 4]);
+        assert!(v == vector[1, 2]);
+        assert!(v.skip!(2) == vector[]);
+        assert!(v == vector[1, 2]);
+        assert!(v.skip!(0) == vector[1, 2]);
+
+    }
+
+    #[test]
+    fun skip_while_macro() {
+        let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+        assert!(v.skip_while!(|e| *e == 1) == vector[2, 2, 2, 3, 3, 3]);
+        assert!(v.skip_while!(|e| *e == 2) == vector[3, 3, 3]);
+        assert!(v.skip_while!(|e| *e == 3) == vector[]);
+    }
+
+    #[test]
+    fun skip_and_drop() {
+        assert!(vector[1, 2, 3, 4, 5].skip_and_drop!(2) == vector[3, 4, 5]);
+        assert!(vector[1, 2, 3, 4, 5].skip_and_drop!(0) == vector[1, 2, 3, 4, 5]);
+        assert!(vector[1, 2, 3, 4, 5].skip_and_drop!(5) == vector[]);
+    }
+
+    #[test]
+    fun skip_while_and_drop() {
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while_and_drop!(|e| *e == 1) == vector[2, 2, 2, 3, 3, 3]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while_and_drop!(|e| *e == 2) == vector[3, 3, 3]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while_and_drop!(|e| *e == 3) == vector[]);
+    }
 }
