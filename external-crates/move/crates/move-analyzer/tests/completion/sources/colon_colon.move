@@ -10,10 +10,10 @@ module Completion::colon_colon {
 
     public struct CompletionStruct has drop {}
 
-    public fun sbar(_param1: u64, _param2: u64) {}
+    public fun sbar(_param1: u64, _param2: SomeStruct) {}
     public fun sbaz() {}
 
-    public fun complete_chains() {
+    public fun complete_chains(s: SomeStruct) {
         use Completion::colon_colon as CC;
         use Completion::colon_colon::SomeEnum as SE;
         let _local = Completion::colon_colon::SomeEnum::SomeVariant;
@@ -23,14 +23,17 @@ module Completion::colon_colon {
         option::none<u64>();
         std::hash::sha2_256(vector::empty());
         CC::SomeEnum::SomeVariant;
-        CC::sbar(7, 42);
+        CC::sbar(42, s);
         SE::SomeVariant;
         SE::SomePositionalVariant(7, 42);
         SE::SomeNamedVariant{name1: 7, name2: 42};
+
+        let _struct_vec: vector<SomeStruct> = vector::empty();
+        let _prim_vec: vector<u64> = vector::empty();
     }
 
     public fun single_ident() {
-        std::string::
+        C
     }
 
     public fun mod_single_ident() {
@@ -39,15 +42,7 @@ module Completion::colon_colon {
     }
 
     public fun member_single_ident() {
-        Some
+        S
     }
-
-    public fun type_param() {
-        let v: vector<u
-    }
-
-    public fun param(p: S
-    }
-
 
 }

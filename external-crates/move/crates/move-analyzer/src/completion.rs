@@ -918,6 +918,9 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
                 &info.members,
                 chain_target,
             ));
+            if matches!(chain_target, ChainCompletionTarget::Type) {
+                completions.extend(primitive_types());
+            }
         }
     } else {
         let component_kind = match leading_name.value {
