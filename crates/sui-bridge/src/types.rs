@@ -169,7 +169,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,
