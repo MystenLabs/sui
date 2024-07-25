@@ -3,11 +3,13 @@
 
 use clap::*;
 use ethers::providers::Middleware;
+use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::{Encoding, Hex};
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use std::collections::HashMap;
 use std::str::from_utf8;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
@@ -15,18 +17,20 @@ use sui_bridge::crypto::{BridgeAuthorityPublicKey, BridgeAuthorityPublicKeyBytes
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::sui_client::SuiClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
-use sui_bridge::utils::get_eth_contract_addresses;
+use sui_bridge::types::BridgeActionType;
 use sui_bridge::utils::{
     examine_key, generate_bridge_authority_key_and_write_to_file,
     generate_bridge_client_key_and_write_to_file, generate_bridge_node_config_and_write_to_file,
 };
+use sui_bridge::utils::{get_eth_contracts, EthBridgeContracts};
 use sui_bridge_cli::{
     make_action, select_contract_address, Args, BridgeCliConfig, BridgeCommand,
-    LoadedBridgeCliConfig,
+    LoadedBridgeCliConfig, Network, SEPOLIA_BRIDGE_PROXY_ADDR,
 };
 use sui_config::Config;
 use sui_sdk::SuiClient as SuiSdkClient;
 use sui_sdk::SuiClientBuilder;
+use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::{MoveTypeCommitteeMember, MoveTypeCommitteeMemberRegistration};
 use sui_types::committee::TOTAL_VOTING_POWER;
@@ -187,27 +191,88 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        BridgeCommand::PrintEthBridgeAddresses {
+        BridgeCommand::ViewEthBridge {
+            network,
             bridge_proxy,
             eth_rpc_url,
         } => {
+            let bridge_proxy = match network {
+                Some(Network::Testnet) => {
+                    Ok(EthAddress::from_str(SEPOLIA_BRIDGE_PROXY_ADDR).unwrap())
+                }
+                None => bridge_proxy.ok_or(anyhow::anyhow!(
+                    "Network or bridge proxy address must be provided"
+                )),
+            }?;
             let provider = Arc::new(
                 ethers::prelude::Provider::<ethers::providers::Http>::try_from(eth_rpc_url)
                     .unwrap()
                     .interval(std::time::Duration::from_millis(2000)),
             );
             let chain_id = provider.get_chainid().await?;
-            let (committee_address, limiter_address, vault_address, config_address) =
-                get_eth_contract_addresses(bridge_proxy, &provider).await?;
-            println!("Chain ID: {:?}", chain_id);
-            println!("Committee Proxy Address: {:?}", committee_address);
-            println!("Limiter Proxy Address: {:?}", limiter_address);
-            println!("Config Proxy Address: {:?}", config_address);
-            println!("Vault Address: {:?}", vault_address);
+            let EthBridgeContracts {
+                bridge,
+                committee,
+                limiter,
+                vault,
+                config,
+            } = get_eth_contracts(bridge_proxy, &provider).await?;
+            let message_type = BridgeActionType::EvmContractUpgrade as u8;
+            let bridge_upgrade_next_nonce: u64 = bridge.nonces(message_type).call().await?;
+            let committee_upgrade_next_nonce: u64 = committee.nonces(message_type).call().await?;
+            let limiter_upgrade_next_nonce: u64 = limiter.nonces(message_type).call().await?;
+            let config_upgrade_next_nonce: u64 = config.nonces(message_type).call().await?;
+
+            let token_transfer_next_nonce: u64 = bridge
+                .nonces(BridgeActionType::TokenTransfer as u8)
+                .call()
+                .await?;
+            let blocklist_update_nonce: u64 = committee
+                .nonces(BridgeActionType::UpdateCommitteeBlocklist as u8)
+                .call()
+                .await?;
+            let emergency_button_nonce: u64 = bridge
+                .nonces(BridgeActionType::EmergencyButton as u8)
+                .call()
+                .await?;
+            let limit_update_nonce: u64 = limiter
+                .nonces(BridgeActionType::LimitUpdate as u8)
+                .call()
+                .await?;
+            let asset_price_update_nonce: u64 = config
+                .nonces(BridgeActionType::AssetPriceUpdate as u8)
+                .call()
+                .await?;
+            let add_tokens_nonce: u64 = config
+                .nonces(BridgeActionType::AddTokensOnEvm as u8)
+                .call()
+                .await?;
+
+            let print = OutputEthBridge {
+                chain_id: chain_id.as_u64(),
+                bridge_proxy: bridge.address(),
+                committee_proxy: committee.address(),
+                limiter_proxy: limiter.address(),
+                config_proxy: config.address(),
+                vault: vault.address(),
+                nonces: Nonces {
+                    token_transfer: token_transfer_next_nonce,
+                    blocklist_update: blocklist_update_nonce,
+                    emergency_button: emergency_button_nonce,
+                    limit_update: limit_update_nonce,
+                    asset_price_update: asset_price_update_nonce,
+                    add_evm_tokens: add_tokens_nonce,
+                    contract_upgrade_bridge: bridge_upgrade_next_nonce,
+                    contract_upgrade_committee: committee_upgrade_next_nonce,
+                    contract_upgrade_limiter: limiter_upgrade_next_nonce,
+                    contract_upgrade_config: config_upgrade_next_nonce,
+                },
+            };
+            println!("{}", serde_json::to_string_pretty(&print).unwrap());
             return Ok(());
         }
 
-        BridgeCommand::PrintBridgeRegistrationInfo { sui_rpc_url } => {
+        BridgeCommand::ViewBridgeRegistration { sui_rpc_url } => {
             let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&sui_rpc_url).await?;
             let bridge_summary = sui_bridge_client
                 .get_bridge_summary()
@@ -236,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect::<HashMap<_, _>>();
             let mut authorities = vec![];
+            let mut output_wrapper = Output::<OutputSuiBridgeRegistration>::default();
             for (_, member) in move_type_bridge_committee.member_registration {
                 let MoveTypeCommitteeMemberRegistration {
                     sui_address,
@@ -243,18 +309,18 @@ async fn main() -> anyhow::Result<()> {
                     http_rest_url,
                 } = member;
                 let Ok(pubkey) = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes) else {
-                    println!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge pubkey for validator {}: {:?}",
                         sui_address, bridge_pubkey_bytes
-                    );
+                    ));
                     continue;
                 };
                 let eth_address = BridgeAuthorityPublicKeyBytes::from(&pubkey).to_eth_address();
                 let Ok(url) = from_utf8(&http_rest_url) else {
-                    println!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge http url for validator: {}: {:?}",
                         sui_address, http_rest_url
-                    );
+                    ));
                     continue;
                 };
                 let url = url.to_string();
@@ -267,25 +333,27 @@ async fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|(_, _, _, _, _, stake)| **stake)
                 .sum::<u64>();
-            println!(
-                "Total registered stake: {}%",
-                total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0
-            );
-            println!("Name, SuiAddress, EthAddress, Pubkey, URL, Stake");
+            let mut output = OutputSuiBridgeRegistration {
+                total_registered_stake: total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0,
+                ..Default::default()
+            };
             for (name, sui_address, pubkey, eth_address, url, stake) in authorities {
-                println!(
-                    "{}, {}, {}, {}, {}, {}",
-                    name,
+                output.committee.push(OutputMember {
+                    name: name.clone(),
                     sui_address,
                     eth_address,
-                    Hex::encode(pubkey.as_bytes()),
+                    pubkey: Hex::encode(pubkey.as_bytes()),
                     url,
-                    stake
-                );
+                    stake: *stake,
+                    blocklisted: None,
+                    status: None,
+                });
             }
+            output_wrapper.inner = output;
+            println!("{}", serde_json::to_string_pretty(&output_wrapper).unwrap());
         }
 
-        BridgeCommand::PrintBridgeCommitteeInfo {
+        BridgeCommand::ViewSuiBridge {
             sui_rpc_url,
             hex,
             ping,
@@ -312,6 +380,7 @@ async fn main() -> anyhow::Result<()> {
                 .timeout(Duration::from_secs(10))
                 .build()
                 .unwrap();
+            let mut output_wrapper = Output::<OutputSuiBridge>::default();
             for (_, member) in move_type_bridge_committee.members {
                 let MoveTypeCommitteeMember {
                     sui_address,
@@ -321,18 +390,18 @@ async fn main() -> anyhow::Result<()> {
                     blocklisted,
                 } = member;
                 let Ok(pubkey) = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes) else {
-                    println!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge pubkey for validator {}: {:?}",
                         sui_address, bridge_pubkey_bytes
-                    );
+                    ));
                     continue;
                 };
                 let eth_address = BridgeAuthorityPublicKeyBytes::from(&pubkey).to_eth_address();
                 let Ok(url) = from_utf8(&http_rest_url) else {
-                    println!(
+                    output_wrapper.add_error(format!(
                         "Invalid bridge http url for validator: {}: {:?}",
                         sui_address, http_rest_url
-                    );
+                    ));
                     continue;
                 };
                 let url = url.to_string();
@@ -356,10 +425,10 @@ async fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|(_, _, _, _, _, stake, _)| *stake)
                 .sum::<u64>();
-            println!(
-                "Total stake (static): {}%",
-                total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0
-            );
+            let mut output = OutputSuiBridge {
+                total_stake: total_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0,
+                ..Default::default()
+            };
             let ping_tasks_resp = if !ping_tasks.is_empty() {
                 futures::future::join_all(ping_tasks)
                     .await
@@ -374,13 +443,6 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 vec![None; authorities.len()]
             };
-            if ping {
-                println!(
-                    "Name, SuiAddress, EthAddress, Pubkey, URL, Stake, Blocklisted, PingStatus"
-                );
-            } else {
-                println!("Name, SuiAddress, EthAddress, Pubkey, URL, Stake, Blocklisted");
-            }
             let mut total_online_stake = 0;
             for ((name, sui_address, pubkey, eth_address, url, stake, blocklisted), ping_resp) in
                 authorities.into_iter().zip(ping_tasks_resp)
@@ -395,30 +457,49 @@ async fn main() -> anyhow::Result<()> {
                         if resp {
                             total_online_stake += stake;
                         }
-                        println!(
-                            "{}, {}, 0x{:x}, {}, {}, {}, {}, {}",
-                            name,
+                        output.committee.push(OutputMember {
+                            name: name.clone(),
                             sui_address,
                             eth_address,
                             pubkey,
                             url,
                             stake,
-                            blocklisted,
-                            if resp { "online" } else { "offline" }
-                        );
+                            blocklisted: Some(blocklisted),
+                            status: Some(if resp {
+                                "online".to_string()
+                            } else {
+                                "offline".to_string()
+                            }),
+                        });
                     }
-                    None => println!(
-                        "{}, {}, 0x{:x}, {}, {}, {}, {}",
-                        name, sui_address, eth_address, pubkey, url, stake, blocklisted
-                    ),
+                    None => {
+                        output.committee.push(OutputMember {
+                            name: name.clone(),
+                            sui_address,
+                            eth_address,
+                            pubkey,
+                            url,
+                            stake,
+                            blocklisted: Some(blocklisted),
+                            status: None,
+                        });
+                    }
                 }
             }
             if ping {
-                println!(
-                    "Total online stake (static): {}%",
-                    total_online_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0
-                );
+                output.total_online_stake =
+                    Some(total_online_stake as f32 / TOTAL_VOTING_POWER as f32 * 100.0);
             }
+
+            // sequence nonces
+            for (type_, nonce) in bridge_summary.sequence_nums {
+                output
+                    .nonces
+                    .insert(BridgeActionType::try_from(type_).unwrap(), nonce);
+            }
+
+            output_wrapper.inner = output;
+            println!("{}", serde_json::to_string_pretty(&output_wrapper).unwrap());
         }
         BridgeCommand::Client { config_path, cmd } => {
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
@@ -430,4 +511,74 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(serde::Serialize, Default)]
+struct OutputEthBridge {
+    chain_id: u64,
+    bridge_proxy: EthAddress,
+    committee_proxy: EthAddress,
+    limiter_proxy: EthAddress,
+    config_proxy: EthAddress,
+    vault: EthAddress,
+    nonces: Nonces,
+}
+
+#[derive(serde::Serialize, Default)]
+struct Nonces {
+    token_transfer: u64,
+    blocklist_update: u64,
+    emergency_button: u64,
+    limit_update: u64,
+    asset_price_update: u64,
+    add_evm_tokens: u64,
+    contract_upgrade_bridge: u64,
+    contract_upgrade_committee: u64,
+    contract_upgrade_limiter: u64,
+    contract_upgrade_config: u64,
+}
+
+#[derive(serde::Serialize, Default)]
+struct Output<P: Default> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    errors: Option<Vec<String>>,
+    inner: P,
+}
+
+impl<P: Default> Output<P> {
+    fn add_error(&mut self, error: String) {
+        if self.errors.is_none() {
+            self.errors = Some(vec![]);
+        }
+        self.errors.as_mut().unwrap().push(error);
+    }
+}
+
+#[derive(serde::Serialize, Default)]
+struct OutputSuiBridge {
+    total_stake: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_online_stake: Option<f32>,
+    committee: Vec<OutputMember>,
+    nonces: HashMap<BridgeActionType, u64>,
+}
+
+#[derive(serde::Serialize)]
+struct OutputMember {
+    name: String,
+    sui_address: SuiAddress,
+    eth_address: EthAddress,
+    pubkey: String,
+    url: String,
+    stake: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    blocklisted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+}
+
+#[derive(serde::Serialize, Default)]
+struct OutputSuiBridgeRegistration {
+    total_registered_stake: f32,
+    committee: Vec<OutputMember>,
 }
