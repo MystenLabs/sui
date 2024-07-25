@@ -26,7 +26,7 @@ const MAX_LABEL_LENGTH: usize = 63;
 ///
 /// The unbound regex can be used to search matches in a type tag.
 /// Use `VERSIONED_NAME_REGEX` for parsing a single name from a str.
-const _VERSIONED_NAME_UNBOUND_REGEX: &str = concat!(
+const VERSIONED_NAME_UNBOUND_REGEX: &str = concat!(
     "([a-z0-9]+(?:-[a-z0-9]+)*)",
     "@",
     "([a-z0-9]+(?:-[a-z0-9]+)*)",
@@ -60,8 +60,8 @@ const DOT_MOVE_REGISTRY: &str =
 const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// A regular expression that detects all possible dot move names in a type tag.
-pub(crate) static _VERSIONED_NAME_UNBOUND_REG: Lazy<Regex> =
-    Lazy::new(|| Regex::new(_VERSIONED_NAME_UNBOUND_REGEX).unwrap());
+pub(crate) static VERSIONED_NAME_UNBOUND_REG: Lazy<Regex> =
+    Lazy::new(|| Regex::new(VERSIONED_NAME_UNBOUND_REGEX).unwrap());
 
 /// A regular expression that detects a single name in the format `app@org/v1`.
 pub(crate) static VERSIONED_NAME_REG: Lazy<Regex> =

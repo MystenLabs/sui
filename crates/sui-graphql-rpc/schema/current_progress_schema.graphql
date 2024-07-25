@@ -2968,6 +2968,10 @@ type Query {
 	"""
 	packageByName(name: String!): MovePackage
 	"""
+	Fetch a type that includes dot move service names in it.
+	"""
+	typeByName(name: String!): MoveType!
+	"""
 	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
