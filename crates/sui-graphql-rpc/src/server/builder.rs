@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::system_package_task::SystemPackageTask;
-use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
+use super::watermark_task::{ChainIdentifierLock, Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
@@ -11,6 +11,7 @@ use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::chain_identifier::ChainIdentifier;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -315,6 +316,7 @@ impl ServerBuilder {
             ))
             .layer(axum::extract::Extension(schema))
             .layer(axum::extract::Extension(watermark_task.lock()))
+            .layer(axum::extract::Extension(watermark_task.chain_id_lock()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -469,6 +471,7 @@ async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
+    axum::Extension(chain_identifier_lock): axum::Extension<ChainIdentifierLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -482,6 +485,7 @@ async fn graphql_handler(
     req.data.insert(addr);
 
     req.data.insert(Watermark::new(watermark_lock).await);
+    req.data.insert(chain_identifier_lock.read().await);
 
     let result = schema.execute(req).await;
 
@@ -586,6 +590,7 @@ pub mod tests {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_types::digests::get_mainnet_chain_identifier;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
@@ -603,6 +608,7 @@ pub mod tests {
         let version = Version::for_testing();
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
@@ -618,11 +624,13 @@ pub mod tests {
         );
         ServerBuilder::new(state)
             .context_data(db)
+            .context_data(loader)
             .context_data(pg_conn_pool)
             .context_data(service_config)
             .context_data(query_id())
             .context_data(ip_address())
             .context_data(watermark)
+            .context_data(ChainIdentifier::from(get_mainnet_chain_identifier()))
             .context_data(metrics)
     }
 
@@ -678,7 +686,9 @@ pub mod tests {
                 })
                 .build_schema();
 
-            schema.execute("{ chainIdentifier }").await
+            schema
+                .execute(r#"{ checkpoint(id: {sequenceNumber: 0 }) { digest }}"#)
+                .await
         }
 
         let timeout = Duration::from_millis(1000);
