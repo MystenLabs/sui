@@ -22,7 +22,6 @@ use anemo_tower::{
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use bytes::Bytes;
-use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
@@ -452,16 +451,13 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
 
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
-        // Bind to localhost in unit tests since only local networking is needed.
-        // Bind to the unspecified address to allow the actual address to be assigned,
-        // in simtest and production.
-        cfg_if!(
-            if #[cfg(test)] {
-                let own_address = authority.address.with_localhost_ip();
-            } else {
-                let own_address = authority.address.with_zero_ip();
-            }
-        );
+        // By default, bind to the unspecified address to allow the actual address to be assigned.
+        // But bind to localhost if it is requested.
+        let own_address = if authority.address.is_localhost_ip() {
+            authority.address.clone()
+        } else {
+            authority.address.with_zero_ip()
+        };
         let epoch_string: String = self.context.committee.epoch().to_string();
         let inbound_network_metrics = self.context.metrics.network_metrics.inbound.clone();
         let outbound_network_metrics = self.context.metrics.network_metrics.outbound.clone();
