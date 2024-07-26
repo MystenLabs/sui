@@ -16,8 +16,8 @@ export class Utils {
 		const params: GetCoinsParams = {
 			owner: pubkey,
 		};
-		let res = await this.provider.getCoins(params);
-		let obId = res['data'][0]['coinObjectId'];
+		const res = await this.provider.getCoins(params);
+		const obId = res['data'][0]['coinObjectId'];
 		return obId;
 	}
 
