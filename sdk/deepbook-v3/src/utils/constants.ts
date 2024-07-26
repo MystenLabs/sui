@@ -12,7 +12,7 @@ export interface DeepbookPackageIds {
 }
 
 export const testnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '0xf8d6f54a3e5468911b55180d5f2ff6d8844dd7535519a80c19deffff78cb58a8',
+	DEEPBOOK_PACKAGE_ID: '0xbf8c499152c205dc5af0a89e95911e2c7d6d1c8b6a4d3a96058aee5fef3ae03a',
 	REGISTRY_ID: '0x1e9619bb7e1ffb94f2ba9d1bd55d922921931e138dd0b7a1a3c5ede8d1cf9424',
 	DEEP_TREASURY_ID: '0x69fffdae0075f8f71f4fa793549c11079266910e8905169845af1f5d00e09dcb',
 } satisfies DeepbookPackageIds;
