@@ -161,15 +161,19 @@ async fn get_latest_bridge_committee_with_blocklist_event<C: SuiClientInner>(
         let mut any_mismatch = false;
         for pk in &event.public_keys {
             let member = committee.member(&BridgeAuthorityPublicKeyBytes::from(pk));
-            if member.is_none() {
-                // This is possible when a node is processing an older event while the member quitted at a later point,
-                // Or fullnode returns a stale committee that the member hasn't joined. In either case, It's fine to ignore
-                // them
+            let Some(member) = member else {
+                // This is possible when a node is processing an older event while the member
+                // quitted at a later point. Or fullnode returns a stale committee that
+                // the member hasn't joined.
                 warn!("Committee member not found in the committee: {:?}", pk);
                 any_mismatch = true;
                 break;
-            } else if member.unwrap().is_blocklisted != event.blocklisted {
-                warn!("Committee member not found in the committee: {:?}", pk);
+            };
+            if member.is_blocklisted != event.blocklisted {
+                warn!(
+                    "Committee member blocklist status does not match onchain record: {:?}",
+                    member
+                );
                 any_mismatch = true;
                 break;
             }
