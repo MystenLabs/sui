@@ -18,7 +18,7 @@ use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::{
-    EthDataMapper, EthFinalizedDatasource, EthUnFinalizedDatasource,
+    EthDataMapper, EthFinalizedDatasource, EthUnfinalizedDatasource,
 };
 use sui_bridge_indexer::indexer_builder::{IndexerBuilder, SuiCheckpointDatasource};
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
         bridge_metrics.clone(),
         indexer_meterics.clone(),
     )?;
-    let eth_finalised_indexer = IndexerBuilder::new(
+    let eth_finalized_indexer = IndexerBuilder::new(
         "FinalizedEthBridgeIndexer",
         eth_checkpoint_datasource,
         EthDataMapper {
@@ -91,15 +91,15 @@ async fn main() -> Result<()> {
         },
     )
     .build(config.start_block, config.start_block, datastore.clone());
-    let finalised_indexer_fut = spawn_logged_monitored_task!(eth_finalised_indexer.start());
+    let finalized_indexer_fut = spawn_logged_monitored_task!(eth_finalized_indexer.start());
 
-    let eth_unfinalized_datasource = EthUnFinalizedDatasource::new(
+    let eth_unfinalized_datasource = EthUnfinalizedDatasource::new(
         config.eth_sui_bridge_contract_address.clone(),
         config.eth_rpc_url.clone(),
         bridge_metrics.clone(),
         indexer_meterics.clone(),
     )?;
-    let eth_unfinalised_indexer = IndexerBuilder::new(
+    let eth_unfinalized_indexer = IndexerBuilder::new(
         "UnFinalizedEthBridgeIndexer",
         eth_unfinalized_datasource,
         EthDataMapper {
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         },
     )
     .build(config.start_block, config.start_block, datastore.clone());
-    let unfinalised_indexer_fut = spawn_logged_monitored_task!(eth_unfinalised_indexer.start());
+    let unfinalized_indexer_fut = spawn_logged_monitored_task!(eth_unfinalized_indexer.start());
 
     if let Some(sui_rpc_url) = config.sui_rpc_url.clone() {
         // Todo: impl datasource for sui RPC datasource
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
         indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(vec![finalised_indexer_fut, unfinalised_indexer_fut]).await;
+    futures::future::join_all(vec![finalized_indexer_fut, unfinalized_indexer_fut]).await;
 
     Ok(())
 }

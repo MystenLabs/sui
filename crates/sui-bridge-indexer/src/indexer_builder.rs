@@ -17,7 +17,6 @@ use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
-use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -154,6 +153,7 @@ impl<P, D, M> Indexer<P, D, M> {
 
         Ok(())
     }
+
     // Create backfill tasks according to backfill strategy
     fn create_backfill_tasks<R>(&mut self, mut current_cp: u64) -> Result<(), Error>
     where
@@ -161,16 +161,16 @@ impl<P, D, M> Indexer<P, D, M> {
     {
         match self.backfill_strategy {
             BackfillStrategy::Simple => self.storage.register_task(
-                format!("{} - backfill - {}", self.name, TransactionDigest::random()),
-                current_cp,
+                format!("{} - backfill - {}", self.name, self.start_from_checkpoint),
+                current_cp + 1,
                 self.start_from_checkpoint as i64,
             ),
             BackfillStrategy::Partitioned { task_size } => {
                 while current_cp < self.start_from_checkpoint {
                     let target_cp = min(current_cp + task_size, self.start_from_checkpoint);
                     self.storage.register_task(
-                        format!("{} - backfill - {}", self.name, TransactionDigest::random()),
-                        current_cp,
+                        format!("{} - backfill - {target_cp}", self.name),
+                        current_cp + 1,
                         target_cp as i64,
                     )?;
                     current_cp = target_cp;
@@ -195,7 +195,7 @@ pub trait IndexerProgressStore: Send {
         checkpoint_number: u64,
     ) -> anyhow::Result<()>;
 
-    fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, anyhow::Error>;
+    fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
 
     fn register_task(
         &mut self,
@@ -204,7 +204,7 @@ pub trait IndexerProgressStore: Send {
         target_checkpoint: i64,
     ) -> Result<(), anyhow::Error>;
 
-    fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error>;
+    fn update_task(&mut self, task: Task) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -222,27 +222,29 @@ pub trait Datasource<T: Send, P, R> {
         P: Persistent<R> + 'static,
     {
         let (join_handle, mut data_channel) = self
-            .create_data_channel(task_name.clone(), starting_checkpoint, target_checkpoint)
+            .start_data_retrieval(task_name.clone(), starting_checkpoint, target_checkpoint)
             .await?;
         while let Some(data) = data_channel.recv().await {
-            if !data.is_empty() {
-                // Ok to unwrap here, checked if the data is empty above.
-                let block_number = Self::get_block_number(data.first().unwrap());
-                let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
-                    result.append(&mut data_mapper.map(d)?);
-                    Ok::<Vec<_>, Error>(result)
-                })?;
-                storage.write(processed_data)?;
-                storage
-                    .save_progress(task_name.clone(), block_number)
-                    .await?;
+            if data.is_empty() {
+                continue;
             }
+            // Ok to unwrap here, checked if the data is empty above.
+            let block_number = Self::get_block_number(data.first().unwrap());
+            let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
+                result.append(&mut data_mapper.map(d)?);
+                Ok::<Vec<_>, Error>(result)
+            })?;
+            // TODO: we might be able to write data and progress in a single transaction.
+            storage.write(processed_data)?;
+            storage
+                .save_progress(task_name.clone(), block_number)
+                .await?;
         }
         join_handle.abort();
         join_handle.await?
     }
 
-    async fn create_data_channel(
+    async fn start_data_retrieval(
         &self,
         task_name: String,
         starting_checkpoint: u64,
@@ -280,7 +282,7 @@ where
     P: Persistent<R> + 'static,
     R: Sync + Send + 'static,
 {
-    async fn create_data_channel(
+    async fn start_data_retrieval(
         &self,
         task_name: String,
         starting_checkpoint: u64,

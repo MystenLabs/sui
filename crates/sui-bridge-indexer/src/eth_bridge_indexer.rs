@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
@@ -19,6 +20,7 @@ use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metrics::BridgeMetrics;
+use sui_bridge::retry_with_max_elapsed_time;
 use sui_bridge::types::{EthEvent, EthLog, RawEthLog};
 
 use crate::indexer_builder::{DataMapper, Datasource};
@@ -58,7 +60,7 @@ impl EthFinalizedDatasource {
 
 #[async_trait]
 impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedDatasource {
-    async fn create_data_channel(
+    async fn start_data_retrieval(
         &self,
         task_name: String,
         starting_checkpoint: u64,
@@ -99,7 +101,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         let indexer_metrics = self.indexer_metrics.clone();
         let handle = spawn_monitored_task!(async {
             'outer: while let Some((_, _, logs)) = eth_events_rx.recv().await {
-                // group logs by block
+                // group logs by block, BTreeMap is used here to keep blocks in ascending order.
                 let blocks = logs.into_iter().fold(
                     BTreeMap::new(),
                     |mut result: BTreeMap<_, Vec<_>>, log| {
@@ -113,16 +115,28 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                         break 'outer;
                     }
                     let mut data = vec![];
-                    let block = provider.get_block(block_number).await?.unwrap();
+                    let Ok(Ok(Some(block))) = retry_with_max_elapsed_time!(
+                        provider.get_block(block_number),
+                        Duration::from_secs(30)
+                    ) else {
+                        panic!("Failed to query block {block_number} from Ethereum after retry");
+                    };
 
                     for log in logs {
                         let tx_hash = log.tx_hash();
-                        let transaction = provider.get_transaction(tx_hash).await?.unwrap();
-                        data.push((log.clone(), block.clone(), transaction.clone()));
+                        let Ok(Ok(Some(transaction))) = retry_with_max_elapsed_time!(
+                            provider.get_transaction(tx_hash),
+                            Duration::from_secs(30)
+                        ) else {
+                            panic!(
+                                "Failed to query transaction {tx_hash} from Ethereum after retry"
+                            );
+                        };
                         info!(
-                            "Processing eth log {} for block {}",
+                            "Retrieved eth log {} for block {}",
                             log.tx_hash, log.block_number
-                        )
+                        );
+                        data.push((log, block.clone(), transaction));
                     }
                     indexer_metrics
                         .last_committed_eth_block
@@ -141,14 +155,14 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
     }
 }
 
-pub struct EthUnFinalizedDatasource {
+pub struct EthUnfinalizedDatasource {
     bridge_address: EthAddress,
     eth_rpc_url: String,
     bridge_metrics: Arc<BridgeMetrics>,
     indexer_metrics: BridgeIndexerMetrics,
 }
 
-impl EthUnFinalizedDatasource {
+impl EthUnfinalizedDatasource {
     pub fn new(
         eth_sui_bridge_contract_address: String,
         eth_rpc_url: String,
@@ -166,8 +180,8 @@ impl EthUnFinalizedDatasource {
 }
 
 #[async_trait]
-impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnFinalizedDatasource {
-    async fn create_data_channel(
+impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinalizedDatasource {
+    async fn start_data_retrieval(
         &self,
         task_name: String,
         starting_checkpoint: u64,
@@ -335,6 +349,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                 | EthSuiBridgeEvents::UnpausedFilter(_)
                 | EthSuiBridgeEvents::UpgradedFilter(_)
                 | EthSuiBridgeEvents::InitializedFilter(_) => {
+                    // TODO: handle these events
                     self.metrics.total_eth_bridge_txn_other.inc();
                     return Ok(vec![]);
                 }
@@ -343,6 +358,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
             | EthBridgeEvent::EthBridgeLimiterEvents(_)
             | EthBridgeEvent::EthBridgeConfigEvents(_)
             | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => {
+                // TODO: handle these events
                 self.metrics.total_eth_bridge_txn_other.inc();
                 return Ok(vec![]);
             }

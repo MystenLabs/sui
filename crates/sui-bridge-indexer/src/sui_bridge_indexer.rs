@@ -99,6 +99,7 @@ impl IndexerProgressStore for PgBridgePersistent {
             .values(&models::ProgressStore {
                 task_name,
                 checkpoint: checkpoint_number as i64,
+                // Target checkpoint will only be written for new entries,
                 target_checkpoint: i64::MAX,
                 timestamp: None,
             })
@@ -116,7 +117,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
-            .filter(columns::task_name.like(format!("{prefix}%")))
+            .filter(columns::task_name.like(format!("{prefix} - %")))
             .filter(columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::checkpoint.desc())
             .load(&mut conn)?;
