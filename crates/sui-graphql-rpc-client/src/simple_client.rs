@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ClientError;
-use axum::http::HeaderValue;
-use hyper::header;
+use reqwest::header;
+use reqwest::header::HeaderValue;
 use reqwest::Response;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -52,7 +52,10 @@ impl SimpleClient {
         mut headers: Vec<(header::HeaderName, header::HeaderValue)>,
     ) -> Result<GraphqlResponse, ClientError> {
         if get_usage {
-            headers.push((LIMITS_HEADER.clone(), HeaderValue::from_static("true")));
+            headers.push((
+                LIMITS_HEADER.clone().as_str().try_into().unwrap(),
+                HeaderValue::from_static("true"),
+            ));
         }
         GraphqlResponse::from_resp(self.execute_impl(query, variables, headers, false).await?).await
     }

@@ -204,7 +204,7 @@ impl Core {
                 .unwrap();
         }
 
-        debug!(
+        info!(
             "Core recovery completed with last proposed block {:?}",
             self.last_proposed_block
         );

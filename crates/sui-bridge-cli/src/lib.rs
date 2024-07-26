@@ -42,11 +42,18 @@ use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
 use tracing::info;
 
+pub const SEPOLIA_BRIDGE_PROXY_ADDR: &str = "0xAE68F87938439afEEDd6552B0E83D2CbC2473623";
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub struct Args {
     #[clap(subcommand)]
     pub command: BridgeCommand,
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
+pub enum Network {
+    Testnet,
 }
 
 #[derive(Parser)]
@@ -88,23 +95,25 @@ pub enum BridgeCommand {
         #[clap(long = "dry-run")]
         dry_run: bool,
     },
-    /// Given proxy address of SuiBridge contract, print other contract addresses
-    #[clap(name = "print-eth-bridge-addresses")]
-    PrintEthBridgeAddresses {
+    /// View current status of Eth bridge
+    #[clap(name = "view-eth-bridge")]
+    ViewEthBridge {
+        #[clap(long = "network")]
+        network: Option<Network>,
         #[clap(long = "bridge-proxy")]
-        bridge_proxy: EthAddress,
+        bridge_proxy: Option<EthAddress>,
         #[clap(long = "eth-rpc-url")]
         eth_rpc_url: String,
     },
-    /// Print current registration info
-    #[clap(name = "print-bridge-registration-info")]
-    PrintBridgeRegistrationInfo {
+    /// View current list of registered validators
+    #[clap(name = "view-bridge-registration")]
+    ViewBridgeRegistration {
         #[clap(long = "sui-rpc-url")]
         sui_rpc_url: String,
     },
-    /// Print current committee info
-    #[clap(name = "print-bridge-committee-info")]
-    PrintBridgeCommitteeInfo {
+    /// View current status of Sui bridge
+    #[clap(name = "view-sui-bridge")]
+    ViewSuiBridge {
         #[clap(long = "sui-rpc-url")]
         sui_rpc_url: String,
         #[clap(long, default_value = "false")]

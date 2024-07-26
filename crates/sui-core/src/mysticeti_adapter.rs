@@ -42,7 +42,7 @@ impl LazyMysticetiClient {
 
         // We expect this to get called during the SUI process start. After that at least one
         // object will have initialised and won't need to call again.
-        const MYSTICETI_START_TIMEOUT: Duration = Duration::from_secs(30);
+        const MYSTICETI_START_TIMEOUT: Duration = Duration::from_secs(60);
         const LOAD_RETRY_TIMEOUT: Duration = Duration::from_millis(100);
         if let Ok(client) = timeout(MYSTICETI_START_TIMEOUT, async {
             loop {

@@ -659,7 +659,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .with_label_values(&["tonic"])
             .set(1);
 
-        debug!("Starting tonic service");
+        info!("Starting tonic service");
 
         let authority = self.context.committee.authority(self.context.own_index);
         // Bind to localhost in unit tests since only local networking is needed.
@@ -742,10 +742,14 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         };
                     }
 
+                    info!("Binding tonic server to address {:?}", own_address);
+
                     // Create TcpListener via TCP socket.
                     let socket = create_socket(&own_address);
                     match socket.bind(own_address) {
-                        Ok(_) => {}
+                        Ok(_) => {
+                            info!("Successfully bound tonic server to address {:?}", own_address)
+                        }
                         Err(e) => {
                             warn!("Error binding to {own_address}: {e:?}");
                             tokio::time::sleep(Duration::from_secs(1)).await;
