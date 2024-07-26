@@ -88,6 +88,39 @@
         {
           "use_line": 38,
           "use_col": 9
+        },
+        // cursor after `::`
+        {
+          "use_line": 21,
+          "use_col": 33
+        },
+        {
+          "use_line": 21,
+          "use_col": 46
+        },
+        {
+          "use_line": 21,
+          "use_col": 56
+        },
+        {
+          "use_line": 25,
+          "use_col": 16
+        },
+        {
+          "use_line": 26,
+          "use_col": 19
+        },
+        {
+          "use_line": 27,
+          "use_col": 23
+        },
+        {
+          "use_line": 41,
+          "use_col": 20
+        },
+        {
+          "use_line": 44,
+          "use_col": 43
         }
       ]
     }

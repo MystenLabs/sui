@@ -49,6 +49,18 @@ enum ChainComponentKind {
     Member(ModuleIdent, Symbol),
 }
 
+/// Information about access chain component - its location and kind
+struct ChainComponentInfo {
+    loc: Loc,
+    kind: ChainComponentKind,
+}
+
+impl ChainComponentInfo {
+    fn new(loc: Loc, kind: ChainComponentKind) -> Self {
+        Self { loc, kind }
+    }
+}
+
 /// Constructs an `lsp_types::CompletionItem` with the given `label` and `kind`.
 fn completion_item(label: &str, kind: CompletionItemKind) -> CompletionItem {
     CompletionItem {
@@ -698,18 +710,42 @@ fn entries_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
     info: &AliasAutocompleteInfo,
-    prev_kind: ChainComponentKind,
+    prev_info: ChainComponentInfo,
     chain_target: ChainCompletionTarget,
     path_entries: &[Name],
     path_index: usize,
+    colon_colon_triggered: bool,
     completions: &mut Vec<CompletionItem>,
 ) {
+    let ChainComponentInfo {
+        loc: prev_loc,
+        kind: prev_kind,
+    } = prev_info;
+
+    let mut at_colon_colon = false;
     if path_index == path_entries.len() {
-        return;
+        // the only reason we would not return here is if we were at `::` which is past the location
+        // of the last path component
+        if colon_colon_triggered && cursor.loc.start() > prev_loc.end() {
+            at_colon_colon = true;
+        } else {
+            return;
+        }
     }
-    let component_name = path_entries[path_index];
-    // it's the last component of the chain or we completion was requested on an intermediate component
-    if path_index == path_entries.len() - 1 || component_name.loc.contains(&cursor.loc) {
+
+    if !at_colon_colon {
+        // we are not at the last `::` but we may be at an intermediate one
+        if colon_colon_triggered
+            && path_index < path_entries.len()
+            && cursor.loc.start() > prev_loc.end()
+            && cursor.loc.end() <= path_entries[path_index].loc.start()
+        {
+            at_colon_colon = true;
+        }
+    }
+
+    // we are at `::`, or at some component's identifier
+    if at_colon_colon || path_entries[path_index].loc.contains(&cursor.loc) {
         match prev_kind {
             ChainComponentKind::Package(leading_name) => {
                 for mod_ident in pkg_mod_identifiers(symbols, &info.modules, &leading_name) {
@@ -732,6 +768,7 @@ fn entries_completions(
             }
         }
     } else {
+        let component_name = path_entries[path_index];
         let next_component_kind = match prev_kind {
             ChainComponentKind::Package(leading_name) => {
                 if let Some(mod_ident) = pkg_mod_identifiers(symbols, &info.modules, &leading_name)
@@ -755,10 +792,11 @@ fn entries_completions(
                 symbols,
                 cursor,
                 info,
-                next_kind,
+                ChainComponentInfo::new(component_name.loc, next_kind),
                 chain_target,
                 path_entries,
                 path_index + 1,
+                colon_colon_triggered,
                 completions,
             );
         }
@@ -861,7 +899,11 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
 /// member) and if the chain has other components, recursively process them in turn to either
 /// - finish auto-completion if cursor is on a given component's identifier
 /// - identify what the subsequent component represents and keep going
-fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<CompletionItem>, bool) {
+fn path_completions(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    colon_colon_triggered: bool,
+) -> (Vec<CompletionItem>, bool) {
     eprintln!("looking for colon(s)");
     let mut completions = vec![];
     let mut only_custom_items = false;
@@ -896,7 +938,7 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
     // if we are auto-completing for an access chain, there is no need to include default completions
     only_custom_items = true;
 
-    if path_entries.is_empty() || leading_name.loc.contains(&cursor.loc) {
+    if leading_name.loc.contains(&cursor.loc) {
         // at first position of the chain suggest all packages that are available regardless of what
         // the leading name represents, as a package always fits at that position, for example:
         // OxCAFE::...
@@ -966,10 +1008,11 @@ fn path_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<Completio
                 symbols,
                 cursor,
                 &info,
-                next_kind,
+                ChainComponentInfo::new(leading_name.loc, next_kind),
                 chain_target,
                 &path_entries,
                 /* path_index */ 0,
+                colon_colon_triggered,
                 &mut completions,
             );
         }
@@ -1313,40 +1356,8 @@ fn cursor_completion_items(
             // with u64 receiver being visible)
             (items, true)
         }
-        // TODO: consider using `cursor.position` for this instead
         Some(Tok::ColonColon) => {
-            // TODO: consider the cursor and see if we can handle a path there
-            match &cursor.position {
-                symbols::CursorPosition::Exp(sp!(_, P::Exp_::Name(name))) => {
-                    match &name.value {
-                        P::NameAccessChain_::Single(_name) => {
-                            // This is technically unreachable because we wouldn't be at a `::`
-                            (vec![], false)
-                        }
-                        P::NameAccessChain_::Path(path) => {
-                            let P::NamePath {
-                                root,
-                                entries,
-                                is_incomplete: _,
-                            } = path;
-                            if root.name.loc.contains(&cursor.loc) {
-                                // This is technically unreachable because we wouldn't be at a `::`
-                                (vec![], false)
-                            } else {
-                                for entry in entries {
-                                    if entry.name.loc.contains(&cursor.loc) {
-                                        // TODO: figure out what the name parts refers to, look it
-                                        // up in typing, and go from there.
-                                        return (vec![], false);
-                                    }
-                                }
-                                (vec![], false)
-                            }
-                        }
-                    }
-                }
-                _ => (vec![], false),
-            }
+            path_completions(symbols, &cursor, /* colon_colon_triggered */ true)
         }
         // Carve out to suggest UID for struct with key ability
         Some(Tok::LBrace) => (
@@ -1357,11 +1368,8 @@ fn cursor_completion_items(
             eprintln!("no relevant cursor leader");
             let mut items = vec![];
             let mut only_custom_items = false;
-            if let symbols::CursorPosition::Exp(sp!(_, P::Exp_::Name(_name))) = &cursor.position {
-                // TODO: match on the name and use provided compiler info to resolve this
-                // (see PR 18108 for more details on that information)
-            }
-            let (path_items, path_custom) = path_completions(symbols, cursor);
+            let (path_items, path_custom) =
+                path_completions(symbols, cursor, /* colon_colon_triggered */ false);
             items.extend(path_items);
             only_custom_items |= path_custom;
             if !only_custom_items {

@@ -37,5 +37,11 @@ module Completion::colon_colon {
     public fun single_ident() {
         C
     }
+    public fun one_colon_colon() {
+        Completion::
+    }
+    public fun multi_colon_colon() {
+        Completion::colon_colon::SomeEnum::
+    }
 
 }
