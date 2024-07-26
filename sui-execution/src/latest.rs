@@ -50,7 +50,7 @@ impl Executor {
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
-            all_natives(silent),
+            all_natives(silent, protocol_config),
             protocol_config,
             enable_profiler,
         )?)))

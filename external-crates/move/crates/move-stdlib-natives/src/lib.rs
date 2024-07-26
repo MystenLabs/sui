@@ -110,6 +110,37 @@ impl GasParameters {
             },
         }
     }
+
+    pub fn new(
+        bcs: bcs::GasParameters,
+        debug: debug::GasParameters,
+        hash: hash::GasParameters,
+        string: string::GasParameters,
+        type_name: type_name::GasParameters,
+        vector: vector::GasParameters,
+    ) -> Self {
+        Self {
+            bcs,
+            debug,
+            hash,
+            string,
+            type_name,
+            vector,
+            signer: signer::GasParameters {
+                borrow_address: signer::BorrowAddressGasParameters { base: 0.into() },
+            },
+            #[cfg(feature = "testing")]
+            unit_test: unit_test::GasParameters {
+                create_signers_for_testing: unit_test::CreateSignersForTestingGasParameters {
+                    base_cost: 0.into(),
+                    unit_cost: 0.into(),
+                },
+                poison: unit_test::PoisonGasParameters {
+                    base_cost: 0.into(),
+                },
+            },
+        }
+    }
 }
 
 pub fn all_natives(
