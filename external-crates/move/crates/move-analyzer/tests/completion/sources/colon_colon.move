@@ -49,7 +49,7 @@ module Completion::colon_colon {
     }
 
     public fun targ_chain() {
-        Completion::colon_colon::TargEnum::Variant::{field}
+        Completion::colon_colon::TargEnum::Variant{field: 42};
     }
 
 }

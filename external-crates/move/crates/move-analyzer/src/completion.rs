@@ -688,9 +688,9 @@ fn variant_completions(
             .collect::<Vec<_>>()
             .join(", ");
         let insert_text = if *is_positional {
-            format!("{vname}::({field_snippet})")
+            format!("{vname}({field_snippet})")
         } else {
-            format!("{vname}::{{{field_snippet}}}")
+            format!("{vname}{{{field_snippet}}}")
         };
 
         completions.push(CompletionItem {

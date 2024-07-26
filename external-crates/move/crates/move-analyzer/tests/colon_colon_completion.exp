@@ -102,11 +102,11 @@ Constant 'SOME_CONST'
 -- test 4 -------------------
 use line: 21, use_col: 57
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 5 -------------------
 use line: 22, use_col: 11
@@ -119,11 +119,11 @@ Unit 'std'
 -- test 6 -------------------
 use line: 22, use_col: 46
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 7 -------------------
 use line: 23, use_col: 25
@@ -155,11 +155,11 @@ Unit 'std'
 -- test 9 -------------------
 use line: 24, use_col: 40
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 10 -------------------
 use line: 25, use_col: 9
@@ -340,11 +340,11 @@ Method 'targ_chain()'
 -- test 14 -------------------
 use line: 27, use_col: 23
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 15 -------------------
 use line: 28, use_col: 13
@@ -575,11 +575,11 @@ Constant 'SOME_CONST'
 -- test 23 -------------------
 use line: 21, use_col: 56
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 24 -------------------
 use line: 25, use_col: 16
@@ -666,11 +666,11 @@ Method 'sha3_256()'
 -- test 26 -------------------
 use line: 27, use_col: 23
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
 -- test 27 -------------------
 use line: 41, use_col: 20
@@ -685,9 +685,9 @@ Module 'other_mod_dot'
 -- test 28 -------------------
 use line: 44, use_col: 43
 EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant::{${1:name1}, ${2:name2}}'
+    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
 EnumMember 'SomePositionalVariant()'
-    INSERT TEXT: 'SomePositionalVariant::(${1}, ${2})'
+    INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant::{}'
+    INSERT TEXT: 'SomeVariant{}'
 
