@@ -666,16 +666,13 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         info!("Starting tonic service");
 
         let authority = self.context.committee.authority(self.context.own_index);
-        // Bind to localhost in unit tests since only local networking is needed.
-        // Bind to the unspecified address to allow the actual address to be assigned,
-        // in simtest and production.
-        cfg_if!(
-            if #[cfg(test)] {
-                let own_address = authority.address.with_localhost_ip();
-            } else {
-                let own_address = authority.address.with_zero_ip();
-            }
-        );
+        // By default, bind to the unspecified address to allow the actual address to be assigned.
+        // But bind to localhost if it is requested.
+        let own_address = if authority.address.is_localhost_ip() {
+            authority.address.clone()
+        } else {
+            authority.address.with_zero_ip()
+        };
         let own_address = to_socket_addr(&own_address).unwrap();
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
