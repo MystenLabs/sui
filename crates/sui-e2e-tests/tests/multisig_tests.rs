@@ -42,6 +42,47 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .map(|_| ())
 }
 
+async fn construct_simple_zklogin_multisig_tx(
+    test_cluster: &TestCluster,
+) -> (Transaction, Transaction) {
+    // construct a multisig address with 1 zklogin pk with threshold = 1.
+    let (eph_kp, _eph_pk, zklogin_inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let zklogin_pk = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(zklogin_inputs.get_iss(), zklogin_inputs.get_address_seed())
+            .unwrap(),
+    );
+    let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
+    let multisig_pk_legacy =
+        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    let multisig_addr = SuiAddress::from(&multisig_pk);
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
+    let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+    let sig_4: GenericSignature = ZkLoginAuthenticator::new(
+        zklogin_inputs.clone(),
+        2,
+        Signature::new_secure(&intent_msg, eph_kp),
+    )
+    .into();
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
+    );
+    let multisig_legacy = GenericSignature::MultiSigLegacy(
+        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
+    );
+    (
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
+    )
+}
+
 #[sim_test]
 async fn test_upgraded_multisig_feature_deny() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
@@ -827,43 +868,14 @@ async fn test_zklogin_inside_multisig_feature_deny() {
     assert!(res.is_err());
 }
 
-async fn construct_simple_zklogin_multisig_tx(
-    test_cluster: &TestCluster,
-) -> (Transaction, Transaction) {
-    // construct a multisig address with 1 zklogin pk with threshold = 1.
-    let (eph_kp, _eph_pk, zklogin_inputs) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
-    let zklogin_pk = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(zklogin_inputs.get_iss(), zklogin_inputs.get_address_seed())
-            .unwrap(),
-    );
-    let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
-    let multisig_pk_legacy =
-        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
-    let rgp = test_cluster.get_reference_gas_price().await;
+#[sim_test]
+async fn test_multisig_passkey_feature_deny() {}
 
-    let multisig_addr = SuiAddress::from(&multisig_pk);
-    let gas = test_cluster
-        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
-        .await;
-    let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
-        .transfer_sui(None, SuiAddress::ZERO)
-        .build();
-    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-    let sig_4: GenericSignature = ZkLoginAuthenticator::new(
-        zklogin_inputs.clone(),
-        2,
-        Signature::new_secure(&intent_msg, eph_kp),
-    )
-    .into();
-    let multisig = GenericSignature::MultiSig(
-        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
-    );
-    let multisig_legacy = GenericSignature::MultiSigLegacy(
-        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
-    );
-    (
-        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
-        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
-    )
-}
+#[sim_test]
+async fn test_multisig_passkey_with_zklogin_accept() {}
+
+#[sim_test]
+async fn test_multisig_passkey_wrong_challenge_fails() {}
+
+#[sim_test]
+async fn test_multisig_passkey_sender_wrong_fails() {}
