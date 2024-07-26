@@ -968,12 +968,7 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
-        ))
-        .chain(move_stdlib_natives::nursery_natives(
             silent,
-            MOVE_STDLIB_ADDRESS,
-            // TODO: tune gas params
-            NurseryGasParameters::zeros(),
         ))
         .collect()
 }
