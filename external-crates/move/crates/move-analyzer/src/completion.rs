@@ -1341,10 +1341,6 @@ fn cursor_completion_items(
 ) -> (Vec<CompletionItem>, bool) {
     let cursor_leader = get_cursor_token(file_source, &pos);
     match cursor_leader {
-        Some(Tok::Colon) => {
-            // TODO: sweep current scope and find types there.
-            (primitive_types(), false)
-        }
         // TODO: consider using `cursor.position` for this instead
         Some(Tok::Period) => {
             eprintln!("found period");
@@ -1366,6 +1362,9 @@ fn cursor_completion_items(
             context_specific_lbrace(symbols, cursor).unwrap_or_default(),
             true,
         ),
+        // TODO: should we handle auto-completion on `:`? If we model our support after
+        // rust-analyzer then it does not do this - it starts auto-completing types after the first
+        // character beyond `:` is typed
         _ => {
             eprintln!("no relevant cursor leader");
             let mut items = vec![];
