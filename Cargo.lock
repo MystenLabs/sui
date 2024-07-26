@@ -75,9 +75,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.7.6"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+checksum = "891477e0c6a8957309ee5c45a6368af3ae14bb510732d2684ffa19af310920f9"
 dependencies = [
  "getrandom 0.2.9",
  "once_cell",
@@ -86,15 +86,16 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.2"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
+checksum = "e89da841a80418a9b391ebaea17f5c112ffaaa96f621d2c285b5174da76b9011"
 dependencies = [
  "cfg-if",
  "const-random",
  "getrandom 0.2.9",
  "once_cell",
  "version_check",
+ "zerocopy",
 ]
 
 [[package]]
@@ -596,7 +597,7 @@ version = "52.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81c16ec702d3898c2f5cfdc148443c6cd7dbe5bac28399859eb0a3d38f072827"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
  "arrow-buffer",
  "arrow-data",
  "arrow-schema",
@@ -723,7 +724,7 @@ version = "52.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca5e3a6b7fda8d9fe03f3b18a2d946354ea7f3c8e4076dbdb502ad50d9d44824"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -744,7 +745,7 @@ version = "52.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e80159088ffe8c48965cb9b1a7c968b2729f29f37363df7eca177fc3281fe7c3"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -2799,9 +2800,9 @@ checksum = "520fbf3c07483f94e3e3ca9d0cfd913d7718ef2483d2cfd91c0d9e91474ab913"
 
 [[package]]
 name = "const-random"
-version = "0.1.16"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11df32a13d7892ec42d51d3d175faba5211ffe13ed25d4fb348ac9e9ce835593"
+checksum = "87e00182fe74b066627d63b85fd550ac2998d4b0bd86bfed477a0ae4c7c71359"
 dependencies = [
  "const-random-macro",
 ]
@@ -3869,7 +3870,7 @@ checksum = "a48e5d537b8a30c0b023116d981b16334be1485af7ca68db3a2b7024cbc957fd"
 dependencies = [
  "der 0.7.5",
  "digest 0.10.7",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "rfc6979 0.4.0",
  "signature 2.0.0",
 ]
@@ -3951,9 +3952,9 @@ dependencies = [
 
 [[package]]
 name = "elliptic-curve"
-version = "0.13.4"
+version = "0.13.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c71eaa367f2e5d556414a8eea812bc62985c879748d6403edabd9cb03f16e7"
+checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
 dependencies = [
  "base16ct 0.2.0",
  "base64ct",
@@ -4305,7 +4306,7 @@ dependencies = [
  "cargo_metadata 0.15.4",
  "chrono",
  "convert_case 0.6.0",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "ethabi",
  "generic-array",
  "getrandom 0.2.9",
@@ -4415,7 +4416,7 @@ dependencies = [
  "async-trait",
  "coins-bip32",
  "coins-bip39",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "eth-keystore",
  "ethers-core",
  "hex",
@@ -4502,7 +4503,7 @@ dependencies = [
  "digest 0.10.7",
  "ecdsa 0.16.6",
  "ed25519-consensus",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "fastcrypto-derive",
  "generic-array",
  "hex",
@@ -5293,7 +5294,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.7.8",
 ]
 
 [[package]]
@@ -5302,7 +5303,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
 ]
 
 [[package]]
@@ -5311,7 +5312,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dfda62a12f55daeae5015f81b0baea145391cb4520f86c248fc615d72640d12"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
  "allocator-api2",
 ]
 
@@ -5587,7 +5588,7 @@ dependencies = [
  "http 0.2.9",
  "hyper 0.14.26",
  "log",
- "rustls 0.20.7",
+ "rustls 0.20.9",
  "rustls-native-certs 0.6.2",
  "tokio",
  "tokio-rustls 0.23.4",
@@ -6293,7 +6294,7 @@ checksum = "cadb76004ed8e97623117f3df85b17aaa6626ab0b0831e6573f104df16cd1bcc"
 dependencies = [
  "cfg-if",
  "ecdsa 0.16.6",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "once_cell",
  "sha2 0.10.6",
  "signature 2.0.0",
@@ -7605,7 +7606,7 @@ name = "msim"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=220f52a15804a768610ac0ae3b8da7de4a5c4d2b#220f52a15804a768610ac0ae3b8da7de4a5c4d2b"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.7.8",
  "async-task",
  "bincode",
  "bytes",
@@ -8904,7 +8905,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
 dependencies = [
  "ecdsa 0.16.6",
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
  "primeorder",
  "sha2 0.10.6",
 ]
@@ -9041,7 +9042,7 @@ version = "52.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f22ba0d95db56dde8685e3fadcb915cdaadda31ab8abbe3ff7f0ad1ef333267"
 dependencies = [
- "ahash 0.8.2",
+ "ahash 0.8.11",
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
@@ -9611,7 +9612,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7613fdcc0831c10060fa69833ea8fa2caa94b6456f51e25356a885b530a2e3d0"
 dependencies = [
- "elliptic-curve 0.13.4",
+ "elliptic-curve 0.13.8",
 ]
 
 [[package]]
@@ -10898,9 +10899,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.7"
+version = "0.20.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "539a2bfe908f471bfa933876bd1eb6a19cf2176d375f82ef7f99530a40e48c2c"
+checksum = "1b80e3dec595989ea8510028f30c408a4630db12c9cbb8de34203b89d6577e99"
 dependencies = [
  "log",
  "ring 0.16.20",
@@ -15484,7 +15485,7 @@ version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
- "rustls 0.20.7",
+ "rustls 0.20.9",
  "tokio",
  "webpki",
 ]
@@ -16050,7 +16051,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -16241,9 +16242,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.8"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1865806a559042e51ab5414598446a5871b561d21b6764f2eabb0dd481d880a6"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "unsigned-varint"
@@ -16571,12 +16572,12 @@ dependencies = [
 
 [[package]]
 name = "webpki"
-version = "0.22.0"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
+checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
- "ring 0.16.20",
- "untrusted 0.7.1",
+ "ring 0.17.3",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -17039,6 +17040,26 @@ dependencies = [
  "tokio",
  "tower-service",
  "url",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+dependencies = [
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "syn 2.0.48",
 ]
 
 [[package]]
