@@ -6,6 +6,7 @@ mod rosetta_client;
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
 
+use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
     NetworkIdentifier, SuiEnv,
@@ -50,9 +51,9 @@ async fn test_custom_coin_balance() {
     let test_coin_currency = Currency {
         symbol: "TEST_COIN".to_string(),
         decimals: 6,
-        metadata: Some(CurrencyMetadata {
+        metadata: CurrencyMetadata {
             coin_type: coin_type.clone(),
-        }),
+        },
     };
 
     // Verify initial balance and stake
@@ -63,7 +64,7 @@ async fn test_custom_coin_balance() {
             sub_account: None,
         },
         block_identifier: Default::default(),
-        currencies: vec![sui_currency, test_coin_currency],
+        currencies: Currencies(vec![sui_currency, test_coin_currency]),
     };
 
     println!(
@@ -80,22 +81,12 @@ async fn test_custom_coin_balance() {
     assert_eq!(response.balances.len(), 2);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
     assert_eq!(
-        response.balances[0]
-            .currency
-            .clone()
-            .metadata
-            .unwrap()
-            .coin_type,
+        response.balances[0].currency.clone().metadata.coin_type,
         "0x2::sui::SUI"
     );
     assert_eq!(response.balances[1].value, COIN1_BALANCE as i128);
     assert_eq!(
-        response.balances[1]
-            .currency
-            .clone()
-            .metadata
-            .unwrap()
-            .coin_type,
+        response.balances[1].currency.clone().metadata.coin_type,
         coin_type
     );
 }

@@ -29,6 +29,10 @@ use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
 use crate::SUI;
 
+#[cfg(test)]
+#[path = "unit_tests/types_tests.rs"]
+mod types_tests;
+
 pub type BlockHeight = u64;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -95,59 +99,63 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
-fn default_currency_metadata() -> Option<CurrencyMetadata> {
-    Some(CurrencyMetadata {
-        coin_type: default_currency_coin_type(),
-    })
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct Currency {
+    pub symbol: String,
+    pub decimals: u64,
+    #[serde(default)]
+    pub metadata: CurrencyMetadata,
 }
 
-fn default_currency_coin_type() -> String {
-    SUI.clone().metadata.unwrap().coin_type
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CurrencyMetadata {
+    pub coin_type: String,
 }
 
-fn default_currency() -> Currency {
-    SUI.clone()
+impl Default for CurrencyMetadata {
+    fn default() -> Self {
+        SUI.metadata.clone()
+    }
 }
 
-fn deserialize_or_default_currencies<'de, D>(deserializer: D) -> Result<Vec<Currency>, D::Error>
+impl Default for Currency {
+    fn default() -> Self {
+        SUI.clone()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct Currencies(pub Vec<Currency>);
+
+impl Default for Currencies {
+    fn default() -> Self {
+        Currencies(vec![Currency::default()])
+    }
+}
+
+fn deserialize_or_default_currencies<'de, D>(deserializer: D) -> Result<Currencies, D::Error>
 where
     D: Deserializer<'de>,
 {
     let opt: Option<Vec<Currency>> = Option::deserialize(deserializer)?;
     match opt {
-        Some(vec) if vec.is_empty() => Ok(vec![default_currency()]),
-        Some(vec) if vec[0].metadata.is_none() => Ok(vec![default_currency()]),
-        Some(vec) if vec[0].metadata.clone().unwrap().coin_type.is_empty() => {
-            Ok(vec![default_currency()])
-        }
-        Some(vec) => Ok(vec),
-        None => Ok(vec![default_currency()]),
+        Some(vec) if vec.is_empty() => Ok(Currencies::default()),
+        Some(vec) => Ok(Currencies(vec)),
+        None => Ok(Currencies::default()),
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct Currency {
-    pub symbol: String,
-    pub decimals: u64,
-    #[serde(default = "default_currency_metadata")]
-    pub metadata: Option<CurrencyMetadata>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CurrencyMetadata {
-    #[serde(default = "default_currency_coin_type")]
-    pub coin_type: String,
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
     #[serde(default)]
     pub block_identifier: PartialBlockIdentifier,
     #[serde(default, deserialize_with = "deserialize_or_default_currencies")]
-    pub currencies: Vec<Currency>,
+    pub currencies: Currencies,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceResponse {
     pub block_identifier: BlockIdentifier,
@@ -172,7 +180,7 @@ pub type BlockHash = CheckpointDigest;
 pub struct Amount {
     #[serde(with = "str_format")]
     pub value: i128,
-    #[serde(default = "default_currency")]
+    #[serde(default)]
     pub currency: Currency,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<AmountMetadata>,
@@ -195,7 +203,7 @@ impl Amount {
     pub fn new(value: i128, currency: Option<Currency>) -> Self {
         Self {
             value,
-            currency: currency.unwrap_or(default_currency()),
+            currency: currency.unwrap_or_default(),
             metadata: None,
         }
     }
@@ -204,7 +212,7 @@ impl Amount {
 
         Self {
             value,
-            currency: default_currency(),
+            currency: Currency::default(),
             metadata: Some(AmountMetadata { sub_balances }),
         }
     }

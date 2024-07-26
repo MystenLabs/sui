@@ -9,8 +9,9 @@ use rosetta_client::start_rosetta_test_server;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
+use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
-    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, NetworkIdentifier,
+    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SubAccount, SubAccountType, SuiEnv,
 };
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
@@ -46,7 +47,7 @@ async fn test_get_staked_sui() {
             sub_account: None,
         },
         block_identifier: Default::default(),
-        currencies: vec![],
+        currencies: Currencies(vec![Currency::default()]),
     };
 
     let response: AccountBalanceResponse = rosetta_client
@@ -67,7 +68,7 @@ async fn test_get_staked_sui() {
             }),
         },
         block_identifier: Default::default(),
-        currencies: vec![],
+        currencies: Currencies(vec![Currency::default()]),
     };
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)

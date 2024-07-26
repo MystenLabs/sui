@@ -14,7 +14,7 @@ use tracing::info;
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, Currency, SubAccountType, SubBalance,
+    Amount, Coin, Currencies, Currency, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
@@ -33,14 +33,14 @@ pub async fn balance(
     let currencies = &request.currencies;
     let mut retry_attempts = 5;
     while retry_attempts > 0 {
-        let balances_first = get_balances(&ctx, &request, address, currencies).await?;
+        let balances_first = get_balances(&ctx, &request, address, currencies.clone()).await?;
         let checkpoint1 = get_checkpoint(&ctx).await;
         let mut checkpoint2 = get_checkpoint(&ctx).await;
         while checkpoint2 <= checkpoint1 {
             checkpoint2 = get_checkpoint(&ctx).await;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        let balances_second = get_balances(&ctx, &request, address, currencies).await?;
+        let balances_second = get_balances(&ctx, &request, address, currencies.clone()).await?;
         if balances_first.eq(&balances_second) {
             info!(
                 "same balance for account {} at checkpoint {}",
@@ -73,14 +73,14 @@ async fn get_balances(
     ctx: &OnlineServerContext,
     request: &AccountBalanceRequest,
     address: SuiAddress,
-    currencies: &Vec<Currency>,
+    currencies: Currencies,
 ) -> Result<Vec<Amount>, Error> {
     if let Some(sub_account) = &request.account_identifier.sub_account {
         let account_type = sub_account.account_type.clone();
         get_sub_account_balances(account_type, &ctx.client, address).await
-    } else if !currencies.is_empty() {
-        let balance_futures = currencies.iter().map(|currency| {
-            let coin_type = currency.metadata.clone().unwrap().coin_type.clone();
+    } else if !currencies.0.is_empty() {
+        let balance_futures = currencies.0.iter().map(|currency| {
+            let coin_type = currency.metadata.clone().coin_type.clone();
             async move {
                 (
                     currency.clone(),
@@ -96,7 +96,7 @@ async fn get_balances(
                 Err(_e) => {
                     return Err(Error::InvalidInput(format!(
                         "{:?}",
-                        currency.metadata.unwrap().coin_type
+                        currency.metadata.coin_type
                     )))
                 }
             }
