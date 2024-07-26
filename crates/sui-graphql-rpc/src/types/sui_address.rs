@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use async_graphql::*;
 use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 use thiserror::Error;
 
