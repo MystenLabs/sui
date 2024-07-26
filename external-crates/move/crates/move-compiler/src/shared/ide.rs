@@ -86,7 +86,7 @@ pub struct AliasAutocompleteInfo {
     /// Modules that are valid autocompletes
     pub modules: BTreeMap<Symbol, E::ModuleIdent>,
     /// Members that are valid autocompletes
-    pub members: BTreeMap<E::ModuleIdent, BTreeMap<Symbol, Name>>,
+    pub members: BTreeSet<(Symbol, E::ModuleIdent, Name)>,
     /// Type parameters that are valid autocompletes
     pub type_params: BTreeSet<Symbol>,
 }
@@ -215,7 +215,7 @@ impl
     ) -> Self {
         let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
         let mut modules: BTreeMap<Symbol, E::ModuleIdent> = BTreeMap::new();
-        let mut members: BTreeMap<E::ModuleIdent, BTreeMap<Symbol, Name>> = BTreeMap::new();
+        let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
         for (symbol, entry) in leading_names
@@ -230,7 +230,7 @@ impl
                     modules.insert(*symbol, *mident);
                 }
                 LeadingAccessEntry::Member(mident, name) => {
-                    members.entry(*mident).or_default().insert(*symbol, *name);
+                    members.insert((*symbol, *mident, *name));
                 }
                 LeadingAccessEntry::TypeParam => {
                     type_params.insert(*symbol);
@@ -245,7 +245,7 @@ impl
         {
             match entry {
                 MemberEntry::Member(mident, name) => {
-                    members.entry(*mident).or_default().insert(*symbol, *name);
+                    members.insert((*symbol, *mident, *name));
                 }
                 MemberEntry::TypeParam => {
                     type_params.insert(*symbol);
@@ -300,13 +300,9 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 } = *info;
 
                 let members = members
-                    .iter()
-                    .flat_map(|(m, mems)| {
-                        mems.iter()
-                            .map(|(name, f)| format!("{name} -> {}::{}", m.value, f))
-                    })
-                    .collect::<Vec<_>>();
-                let member_names = format_oxford_list!(ITER, "or", "'{}'", members.iter());
+                    .into_iter()
+                    .map(|(name, m, f)| format!("{name} -> {m}::{f}"));
+                let member_names = format_oxford_list!(ITER, "or", "'{}'", members);
                 let modules = modules
                     .into_iter()
                     .map(|(name, m)| format!("{name} -> {m}"));

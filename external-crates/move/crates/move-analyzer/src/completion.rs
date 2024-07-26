@@ -565,25 +565,23 @@ fn first_position_member_completion(
 /// position where
 fn all_first_position_member_completions(
     symbols: &Symbols,
-    members_info: &BTreeMap<ModuleIdent, BTreeMap<Symbol, Name>>,
+    members_info: &BTreeSet<(Symbol, ModuleIdent, Name)>,
     chain_target: ChainCompletionTarget,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
-    for (sp!(_, mod_ident), members) in members_info {
-        for (member_alias, member_name) in members {
-            let member_completion = first_position_member_completion(
-                symbols,
-                &mod_ident,
-                member_alias,
-                &member_name.value,
-                chain_target,
-            )
-            .unwrap_or(completion_item(
-                &member_alias.as_str(),
-                CompletionItemKind::TEXT,
-            ));
-            completions.push(member_completion);
-        }
+    for (member_alias, sp!(_, mod_ident), member_name) in members_info {
+        let member_completion = first_position_member_completion(
+            symbols,
+            &mod_ident,
+            member_alias,
+            &member_name.value,
+            chain_target,
+        )
+        .unwrap_or(completion_item(
+            &member_alias.as_str(),
+            CompletionItemKind::TEXT,
+        ));
+        completions.push(member_completion);
     }
     completions
 }
@@ -982,13 +980,15 @@ fn path_completions(
                 } else if let Some(mod_ident) = info.modules.get(&n.value) {
                     Some(ChainComponentKind::Module(mod_ident.clone()))
                 } else if let Some((mod_ident, member_name)) =
-                    info.members.iter().find_map(|(mod_ident, names)| {
-                        if let Some(name) = names.get(&n.value) {
-                            Some((mod_ident.clone(), name.clone()))
-                        } else {
-                            None
-                        }
-                    })
+                    info.members
+                        .iter()
+                        .find_map(|(alias_name, mod_ident, member_name)| {
+                            if alias_name == &n.value {
+                                Some((mod_ident.clone(), member_name))
+                            } else {
+                                None
+                            }
+                        })
                 {
                     Some(ChainComponentKind::Member(mod_ident, member_name.value))
                 } else {
