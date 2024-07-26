@@ -53,7 +53,6 @@ export class DeepBookMarketMaker extends DeepBookClient {
 	};
 
 	signAndExecute = async (tx: Transaction) => {
-		// remove arguments
 		return this.suiClient.signAndExecuteTransaction({
 			transaction: tx,
 			signer: this.keypair,
@@ -117,7 +116,7 @@ export class DeepBookMarketMaker extends DeepBookClient {
 				clientOrderId: '123456789',
 				price: 1,
 				quantity: 10,
-				isBid: false,
+				isBid: true,
 				// orderType default: no restriction
 				// selfMatchingOption default: allow self matching
 				// payWithDeep default: true
