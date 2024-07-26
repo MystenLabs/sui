@@ -450,7 +450,7 @@ fn all_n_position_member_completions(
                 &mod_ident.value,
                 matches!(fun_type, FunType::Macro),
                 None,
-                &fname,
+                fname,
                 type_args,
                 arg_names,
                 arg_types,
@@ -460,19 +460,19 @@ fn all_n_position_member_completions(
     }
 
     if matches!(chain_target, CT::Type) || matches!(chain_target, CT::All) {
-        for (sname, _) in &mod_defs.structs {
+        for sname in mod_defs.structs.keys() {
             completions.push(completion_item(sname, CompletionItemKind::STRUCT));
         }
     }
 
     if matches!(chain_target, CT::Type) || matches!(chain_target, CT::All) {
-        for (ename, _) in &mod_defs.enums {
+        for ename in mod_defs.enums.keys() {
             completions.push(completion_item(ename, CompletionItemKind::ENUM));
         }
     }
 
     if matches!(chain_target, CT::All) {
-        for (cname, _) in &mod_defs.constants {
+        for cname in mod_defs.constants.keys() {
             if !same_module {
                 continue;
             }
@@ -504,7 +504,7 @@ fn first_position_member_completion(
     };
 
     // is it a function?
-    if let Some(fdef) = mod_defs.functions.get(&member_name) {
+    if let Some(fdef) = mod_defs.functions.get(member_name) {
         if !(matches!(chain_target, CT::Function) || matches!(chain_target, CT::All)) {
             return None;
         }
@@ -514,10 +514,10 @@ fn first_position_member_completion(
             return None;
         };
         return Some(call_completion_item(
-            &mod_ident,
+            mod_ident,
             matches!(fun_type, FunType::Macro),
             None,
-            &member_alias,
+            member_alias,
             type_args,
             arg_names,
             arg_types,
@@ -526,34 +526,34 @@ fn first_position_member_completion(
     };
 
     // is it a struct?
-    if mod_defs.structs.get(&member_name).is_some() {
+    if mod_defs.structs.get(member_name).is_some() {
         if !(matches!(chain_target, CT::Type) || matches!(chain_target, CT::All)) {
             return None;
         }
         return Some(completion_item(
-            &member_alias.as_str(),
+            member_alias.as_str(),
             CompletionItemKind::STRUCT,
         ));
     }
 
     // is it an enum?
-    if mod_defs.enums.get(&member_name).is_some() {
+    if mod_defs.enums.get(member_name).is_some() {
         if !(matches!(chain_target, CT::Type) || matches!(chain_target, CT::All)) {
             return None;
         }
         return Some(completion_item(
-            &member_alias.as_str(),
+            member_alias.as_str(),
             CompletionItemKind::ENUM,
         ));
     }
 
     // is it a const?
-    if mod_defs.constants.get(&member_name).is_some() {
+    if mod_defs.constants.get(member_name).is_some() {
         if !matches!(chain_target, CT::All) {
             return None;
         }
         return Some(completion_item(
-            &member_alias.as_str(),
+            member_alias.as_str(),
             CompletionItemKind::CONSTANT,
         ));
     }
@@ -572,13 +572,13 @@ fn all_first_position_member_completions(
     for (member_alias, sp!(_, mod_ident), member_name) in members_info {
         let member_completion = first_position_member_completion(
             symbols,
-            &mod_ident,
+            mod_ident,
             member_alias,
             &member_name.value,
             chain_target,
         )
         .unwrap_or(completion_item(
-            &member_alias.as_str(),
+            member_alias.as_str(),
             CompletionItemKind::TEXT,
         ));
         completions.push(member_completion);
@@ -590,10 +590,8 @@ fn all_first_position_member_completions(
 /// `leading_name`
 fn is_pkg_mod_ident(mod_ident: &ModuleIdent_, leading_name: &LeadingNameAccess) -> bool {
     match mod_ident.address {
-        Address::NamedUnassigned(name) => match leading_name.value {
-            LeadingNameAccess_::Name(n) | LeadingNameAccess_::GlobalAddress(n) if name == n => true,
-            _ => false,
-        },
+        Address::NamedUnassigned(name) => matches!(leading_name.value,
+            LeadingNameAccess_::Name(n) | LeadingNameAccess_::GlobalAddress(n) if name == n),
         Address::Numerical {
             name,
             value,
@@ -618,9 +616,9 @@ fn pkg_mod_identifiers(
 ) -> BTreeSet<ModuleIdent> {
     let mut mod_identifiers = BTreeSet::new();
 
-    for mod_ident in modules.values().into_iter() {
+    for mod_ident in modules.values() {
         if is_pkg_mod_ident(&mod_ident.value, leading_name) {
-            mod_identifiers.insert(mod_ident.clone());
+            mod_identifiers.insert(*mod_ident);
         }
     }
 
@@ -773,20 +771,14 @@ fn entries_completions(
         let component_name = path_entries[path_index];
         let next_component_kind = match prev_kind {
             ChainComponentKind::Package(leading_name) => {
-                if let Some(mod_ident) = pkg_mod_identifiers(symbols, &info.modules, &leading_name)
+                pkg_mod_identifiers(symbols, &info.modules, &leading_name)
                     .iter()
                     .find(|mod_ident| mod_ident.value.module.value() == component_name.value)
-                {
-                    // complete "after" module (choose member)
-                    Some(ChainComponentKind::Module(mod_ident.clone()))
-                } else {
-                    None
-                }
+                    .map(|mod_ident| ChainComponentKind::Module(*mod_ident))
             }
-            ChainComponentKind::Module(mod_ident) => Some(ChainComponentKind::Member(
-                mod_ident.clone(),
-                component_name.value,
-            )),
+            ChainComponentKind::Module(mod_ident) => {
+                Some(ChainComponentKind::Member(mod_ident, component_name.value))
+            }
             ChainComponentKind::Member(_, _) => None, // no more "after" completions to be processed
         };
         if let Some(next_kind) = next_component_kind {
@@ -978,13 +970,13 @@ fn path_completions(
                 if is_package_name(symbols, &info, n) {
                     Some(ChainComponentKind::Package(leading_name))
                 } else if let Some(mod_ident) = info.modules.get(&n.value) {
-                    Some(ChainComponentKind::Module(mod_ident.clone()))
+                    Some(ChainComponentKind::Module(*mod_ident))
                 } else if let Some((mod_ident, member_name)) =
                     info.members
                         .iter()
                         .find_map(|(alias_name, mod_ident, member_name)| {
                             if alias_name == &n.value {
-                                Some((mod_ident.clone(), member_name))
+                                Some((*mod_ident, member_name))
                             } else {
                                 None
                             }
@@ -1367,7 +1359,7 @@ fn cursor_completion_items(
             (items, true)
         }
         Some(Tok::ColonColon) => {
-            path_completions(symbols, &cursor, /* colon_colon_triggered */ true)
+            path_completions(symbols, cursor, /* colon_colon_triggered */ true)
         }
         // Carve out to suggest UID for struct with key ability
         Some(Tok::LBrace) => (
