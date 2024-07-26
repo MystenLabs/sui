@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 1.3.1
+
+### Patch Changes
+
+- a45f461: Shared objects passed to MakeMoveVec, MergeCoins, and SplitCoin are now marked as mutable
+
 ## 1.3.0
 
 ### Minor Changes
