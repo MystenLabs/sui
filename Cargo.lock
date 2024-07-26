@@ -13090,6 +13090,7 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
+ "datatest-stable",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-cli",

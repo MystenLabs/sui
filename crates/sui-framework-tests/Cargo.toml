@@ -7,7 +7,12 @@ description = "Runs Move tests for sui-framework"
 license = "Apache-2.0"
 publish = false
 
+[[test]]
+name = "move_tests"
+harness = false
+
 [dev-dependencies]
+datatest-stable.workspace = true
 prometheus.workspace = true
 
 sui-framework.workspace = true
