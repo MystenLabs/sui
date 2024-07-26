@@ -8,6 +8,7 @@ use crate::{
     eth_syncer::EthSyncer,
     events::init_all_struct_tags,
     metrics::BridgeMetrics,
+    monitor::BridgeMonitor,
     orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
     storage::BridgeOrchestratorTables,
@@ -15,6 +16,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use ethers::types::Address as EthAddress;
+use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -111,9 +113,17 @@ async fn start_client_components(
     let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
     let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
 
+    let (monitor_tx, monitor_rx) = mysten_metrics::metered_channel::channel(
+        10000,
+        &mysten_metrics::get_metrics()
+            .unwrap()
+            .channel_inflight
+            .with_label_values(&["monitor_queue"]),
+    );
+
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
-        bridge_auth_agg,
+        bridge_auth_agg.clone(),
         store.clone(),
         client_config.key,
         client_config.sui_address,
@@ -123,12 +133,16 @@ async fn start_client_components(
     )
     .await;
 
+    let monitor = BridgeMonitor::new(sui_client.clone(), monitor_rx, bridge_auth_agg.clone());
+    all_handles.push(spawn_logged_monitored_task!(monitor.run()));
+
     let orchestrator = BridgeOrchestrator::new(
         sui_client,
         sui_events_rx,
         eth_events_rx,
         store.clone(),
         token_type_tags_tx,
+        monitor_tx,
         metrics,
     );
 

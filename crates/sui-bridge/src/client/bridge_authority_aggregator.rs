@@ -31,7 +31,7 @@ pub struct BridgeAuthorityAggregator {
 
 impl BridgeAuthorityAggregator {
     pub fn new(committee: Arc<BridgeCommittee>) -> Self {
-        let clients = committee
+        let clients: BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>> = committee
             .members()
             .iter()
             .filter_map(|(name, authority)| {
