@@ -287,6 +287,10 @@ pub enum SuiCommand {
         /// Path to a package which the command should be run with respect to.
         #[clap(long = "path", short = 'p', global = true)]
         package_path: Option<PathBuf>,
+        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        /// Only used when the `--dump-bytecode-as-base64` is set.
+        #[clap(long = "client.config")]
+        config: Option<PathBuf>,
         /// Package build options
         #[clap(flatten)]
         build_config: BuildConfig,
@@ -448,8 +452,27 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
-                cmd,
-            } => execute_move_command(package_path.as_deref(), build_config, cmd),
+                mut cmd,
+                config: client_config,
+            } => {
+                match &mut cmd {
+                    sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
+                        // `sui move build` does not ordinarily require a network connection.
+                        // The exception is when --dump-bytecode-as-base64 is specified: In this
+                        // case, we should resolve the correct addresses for the respective chain
+                        // (e.g., testnet, mainnet) from the Move.lock under automated address management.
+                        let config =
+                            client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                        prompt_if_no_config(&config, false).await?;
+                        let context = WalletContext::new(&config, None, None)?;
+                        let client = context.get_client().await?;
+                        let chain_id = client.read_api().get_chain_identifier().await.ok();
+                        build.chain_id = chain_id.clone();
+                    }
+                    _ => (),
+                };
+                execute_move_command(package_path.as_deref(), build_config, cmd)
+            }
             SuiCommand::BridgeInitialize {
                 network_config,
                 client_config,

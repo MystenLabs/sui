@@ -29,6 +29,11 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
+    /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
+    /// for automated address management, where package addresses are resolved for the
+    /// respective chain in the Move.lock file.
+    #[clap(skip)]
+    pub chain_id: Option<String>,
 }
 
 impl Build {
@@ -45,6 +50,7 @@ impl Build {
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
+            self.chain_id.clone(),
         )
     }
 
@@ -54,12 +60,13 @@ impl Build {
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
+        chain_id: Option<String>,
     ) -> anyhow::Result<()> {
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
-            chain_id: None,
+            chain_id,
         }
         .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
