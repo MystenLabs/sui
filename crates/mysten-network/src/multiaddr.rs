@@ -168,6 +168,18 @@ impl Multiaddr {
         Self(new_address)
     }
 
+    pub fn is_localhost_ip(&self) -> bool {
+        let Some(protocol) = self.0.iter().next() else {
+            error!("Multiaddr is empty");
+            return false;
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(addr) => addr == Ipv4Addr::LOCALHOST,
+            multiaddr::Protocol::Ip6(addr) => addr == Ipv6Addr::LOCALHOST,
+            _ => false,
+        }
+    }
+
     pub fn hostname(&self) -> Option<String> {
         for component in self.iter() {
             match component {
