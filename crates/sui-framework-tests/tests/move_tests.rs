@@ -67,7 +67,7 @@ mod test {
     }
 }
 
-#[cfg(not(sim))]
+#[cfg(not(msim))]
 datatest_stable::harness!(
     test::build,
     test::EXAMPLES,
