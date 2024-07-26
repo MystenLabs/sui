@@ -77,7 +77,7 @@ fn completion_item(label: &str, kind: CompletionItemKind) -> CompletionItem {
 /// all specification language keywords, but in the future it should be modified to only do so
 /// within a spec block.
 fn keywords() -> Vec<CompletionItem> {
-    KEYWORDS
+    let mut keywords = KEYWORDS
         .iter()
         .chain(CONTEXTUAL_KEYWORDS.iter())
         .chain(PRIMITIVE_TYPES.iter())
@@ -89,15 +89,19 @@ fn keywords() -> Vec<CompletionItem> {
             };
             completion_item(label, kind)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    keywords.extend(primitive_types());
+    keywords
 }
 
 /// Return a list of completion items of Move's primitive types
 fn primitive_types() -> Vec<CompletionItem> {
-    PRIMITIVE_TYPES
+    let mut primitive_types = PRIMITIVE_TYPES
         .iter()
         .map(|label| completion_item(label, CompletionItemKind::KEYWORD))
-        .collect()
+        .collect::<Vec<_>>();
+    primitive_types.push(completion_item("address", CompletionItemKind::KEYWORD));
+    primitive_types
 }
 
 /// Return a list of completion items corresponding to each one of Move's builtin functions.

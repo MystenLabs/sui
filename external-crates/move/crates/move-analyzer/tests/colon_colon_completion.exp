@@ -482,6 +482,7 @@ Keyword 'u128'
 Keyword 'u256'
 Keyword 'bool'
 Keyword 'vector'
+Keyword 'address'
 
 -- test 18 -------------------
 use line: 33, use_col: 37
@@ -505,6 +506,7 @@ Keyword 'u128'
 Keyword 'u256'
 Keyword 'bool'
 Keyword 'vector'
+Keyword 'address'
 
 -- test 20 -------------------
 use line: 38, use_col: 9
@@ -599,6 +601,7 @@ Keyword 'u128'
 Keyword 'u256'
 Keyword 'bool'
 Keyword 'vector'
+Keyword 'address'
 TypeParameter 'SOME_TYPE'
 
 -- test 24 -------------------
