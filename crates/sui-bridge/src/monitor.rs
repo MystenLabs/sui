@@ -9,19 +9,20 @@ use tokio::time::Duration;
 
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::events::SuiBridgeEvent;
 use crate::events::{BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent};
+use crate::events::{EmergencyOpEvent, SuiBridgeEvent};
 use crate::retry_with_max_elapsed_time;
 use crate::sui_client::{SuiClient, SuiClientInner};
-use crate::types::BridgeCommittee;
+use crate::types::{BridgeCommittee, IsBridgePaused};
 use tracing::{error, info, warn};
 
-const REFRESH_COMMITTEE_RETRY_TIMES: u64 = 3;
+const REFRESH_BRIDGE_RETRY_TIMES: u64 = 3;
 
 pub struct BridgeMonitor<C> {
     sui_client: Arc<SuiClient<C>>,
     monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
     bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
+    bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
 }
 
 impl<C> BridgeMonitor<C>
@@ -32,11 +33,13 @@ where
         sui_client: Arc<SuiClient<C>>,
         monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
         bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
+        bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
     ) -> Self {
         Self {
             sui_client,
             monitor_rx,
             bridge_auth_agg,
+            bridge_paused_watch_tx,
         }
     }
 
@@ -46,6 +49,7 @@ where
             sui_client,
             mut monitor_rx,
             bridge_auth_agg,
+            bridge_paused_watch_tx,
         } = self;
 
         while let Some(events) = monitor_rx.recv().await {
@@ -58,8 +62,17 @@ where
                 SuiBridgeEvent::TokenTransferLimitExceed(_) => {
                     // TODO
                 }
-                SuiBridgeEvent::EmergencyOpEvent(_) => {
-                    // TODO
+                SuiBridgeEvent::EmergencyOpEvent(event) => {
+                    info!("Received EmergencyOpEvent: {:?}", event);
+                    let is_paused = get_latest_bridge_pause_status_with_emergency_event(
+                        sui_client.clone(),
+                        event,
+                        Duration::from_secs(10),
+                    )
+                    .await;
+                    bridge_paused_watch_tx
+                        .send(is_paused)
+                        .expect("Bridge pause status watch channel should not be closed");
                 }
                 SuiBridgeEvent::CommitteeMemberRegistration(_) => (),
                 SuiBridgeEvent::CommitteeUpdateEvent(_) => (),
@@ -106,7 +119,7 @@ async fn get_latest_bridge_committee_with_url_update_event<C: SuiClientInner>(
     event: CommitteeMemberUrlUpdateEvent,
     staleness_retry_interval: Duration,
 ) -> BridgeCommittee {
-    let mut remaining_retry_times = REFRESH_COMMITTEE_RETRY_TIMES;
+    let mut remaining_retry_times = REFRESH_BRIDGE_RETRY_TIMES;
     loop {
         let Ok(Ok(committee)) = retry_with_max_elapsed_time!(
             sui_client.get_bridge_committee(),
@@ -149,7 +162,7 @@ async fn get_latest_bridge_committee_with_blocklist_event<C: SuiClientInner>(
     event: BlocklistValidatorEvent,
     staleness_retry_interval: Duration,
 ) -> BridgeCommittee {
-    let mut remaining_retry_times = REFRESH_COMMITTEE_RETRY_TIMES;
+    let mut remaining_retry_times = REFRESH_BRIDGE_RETRY_TIMES;
     loop {
         let Ok(Ok(committee)) = retry_with_max_elapsed_time!(
             sui_client.get_bridge_committee(),
@@ -197,6 +210,38 @@ async fn get_latest_bridge_committee_with_blocklist_event<C: SuiClientInner>(
     }
 }
 
+async fn get_latest_bridge_pause_status_with_emergency_event<C: SuiClientInner>(
+    sui_client: Arc<SuiClient<C>>,
+    event: EmergencyOpEvent,
+    staleness_retry_interval: Duration,
+) -> IsBridgePaused {
+    let mut remaining_retry_times = REFRESH_BRIDGE_RETRY_TIMES;
+    loop {
+        let Ok(Ok(summary)) =
+            retry_with_max_elapsed_time!(sui_client.get_bridge_summary(), Duration::from_secs(600))
+        else {
+            error!("Failed to get bridge summary after retry");
+            continue;
+        };
+        if summary.is_frozen == event.frozen {
+            return summary.is_frozen;
+        }
+        // If the onchain status does not match, it could be:
+        // 1. the query is sent to a stale fullnode that does not have the latest data yet
+        // 2. the node is processing an older message, and the latest status has changed again
+        // In either case, we retry a few times. If it still fails to match, we assume it's the latter case.
+        tokio::time::sleep(staleness_retry_interval).await;
+        remaining_retry_times -= 1;
+        if remaining_retry_times == 0 {
+            warn!(
+                "Bridge pause status {:?} does not match onchain record {:?} after retry",
+                event, summary.is_frozen
+            );
+            return summary.is_frozen;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +249,7 @@ mod tests {
     use crate::test_utils::{
         bridge_committee_to_bridge_committee_summary, get_test_authority_and_key,
     };
+    use crate::types::{BridgeAuthority, BRIDGE_PAUSED, BRIDGE_UNPAUSED};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use sui_types::base_types::SuiAddress;
@@ -295,7 +341,7 @@ mod tests {
         assert!(elapsed > 1000 && elapsed < 3000);
 
         // Test the case where the onchain url is newer. It should retry up to
-        // REFRESH_COMMITTEE_RETRY_TIMES time then return the onchain record.
+        // REFRESH_BRIDGE_RETRY_TIMES time then return the onchain record.
         let newer_summary = BridgeCommitteeSummary {
             members: vec![(
                 pk_bytes.clone(),
@@ -323,7 +369,7 @@ mod tests {
             "http://newer.url"
         );
         let elapsed = timer.elapsed().as_millis();
-        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+        assert!(elapsed > 500 * REFRESH_BRIDGE_RETRY_TIMES as u128);
 
         // Test the case where the member is not found in the committee
         // It should return the onchain record.
@@ -467,7 +513,7 @@ mod tests {
         assert!(elapsed > 1000 && elapsed < 3000);
 
         // Test the case where the onchain url is newer. It should retry up to
-        // REFRESH_COMMITTEE_RETRY_TIMES time then return the onchain record.
+        // REFRESH_BRIDGE_RETRY_TIMES time then return the onchain record.
         let newer_summary = BridgeCommitteeSummary {
             members: vec![(
                 pk_bytes.clone(),
@@ -492,7 +538,7 @@ mod tests {
         .await;
         assert!(committee.member(&pk_as_bytes).unwrap().is_blocklisted);
         let elapsed = timer.elapsed().as_millis();
-        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+        assert!(elapsed > 500 * REFRESH_BRIDGE_RETRY_TIMES as u128);
 
         // Test the case where the member onchain url is not found in the committee
         // It should return the onchain record after retrying a few times.
@@ -528,7 +574,7 @@ mod tests {
         );
         assert!(committee.member(&pk_as_bytes).is_none());
         let elapsed = timer.elapsed().as_millis();
-        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+        assert!(elapsed > 500 * REFRESH_BRIDGE_RETRY_TIMES as u128);
 
         // Test any mismtach in the blocklist status should retry a few times
         let event = BlocklistValidatorEvent {
@@ -572,24 +618,96 @@ mod tests {
         assert!(committee.member(&pk_as_bytes).unwrap().is_blocklisted);
         assert!(!committee.member(&pk_as_bytes2).unwrap().is_blocklisted);
         let elapsed = timer.elapsed().as_millis();
-        assert!(elapsed > 500 * REFRESH_COMMITTEE_RETRY_TIMES as u128);
+        assert!(elapsed > 500 * REFRESH_BRIDGE_RETRY_TIMES as u128);
+    }
+
+    #[tokio::test]
+    async fn test_get_bridge_pause_status_with_emergency_event() {
+        telemetry_subscribers::init_for_testing();
+        let sui_client_mock = SuiMockClient::default();
+        let sui_client = Arc::new(SuiClient::new_for_testing(sui_client_mock.clone()));
+
+        // Test event and onchain status match
+        let event = EmergencyOpEvent { frozen: true };
+        sui_client_mock.set_is_bridge_paused(BRIDGE_PAUSED);
+        let timer = std::time::Instant::now();
+        assert!(
+            get_latest_bridge_pause_status_with_emergency_event(
+                sui_client.clone(),
+                event.clone(),
+                Duration::from_secs(2),
+            )
+            .await
+        );
+        assert!(timer.elapsed().as_millis() < 500);
+
+        let event = EmergencyOpEvent { frozen: false };
+        sui_client_mock.set_is_bridge_paused(BRIDGE_UNPAUSED);
+        let timer = std::time::Instant::now();
+        assert!(
+            !get_latest_bridge_pause_status_with_emergency_event(
+                sui_client.clone(),
+                event.clone(),
+                Duration::from_secs(2),
+            )
+            .await
+        );
+        assert!(timer.elapsed().as_millis() < 500);
+
+        // Test the case where the onchain status (paused) is older. Then update onchain status in 1 second.
+        // Since the retry interval is 2 seconds, it should return the next retry.
+        sui_client_mock.set_is_bridge_paused(BRIDGE_PAUSED);
+        let timer = std::time::Instant::now();
+        // update the bridge to unpaused in 1 second
+        let sui_client_mock_clone = sui_client_mock.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            sui_client_mock_clone.set_is_bridge_paused(BRIDGE_UNPAUSED);
+        });
+        assert!(
+            !get_latest_bridge_pause_status_with_emergency_event(
+                sui_client.clone(),
+                event.clone(),
+                Duration::from_secs(2),
+            )
+            .await
+        );
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 1000 && elapsed < 3000, "{}", elapsed);
+
+        // Test the case where the onchain status (paused) is newer. It should retry up to
+        // REFRESH_BRIDGE_RETRY_TIMES time then return the onchain record.
+        sui_client_mock.set_is_bridge_paused(BRIDGE_PAUSED);
+        let timer = std::time::Instant::now();
+        assert!(
+            get_latest_bridge_pause_status_with_emergency_event(
+                sui_client.clone(),
+                event.clone(),
+                Duration::from_secs(2),
+            )
+            .await
+        );
+        let elapsed = timer.elapsed().as_millis();
+        assert!(elapsed > 500 * REFRESH_BRIDGE_RETRY_TIMES as u128);
     }
 
     #[tokio::test]
     async fn test_update_bridge_authority_aggregation_with_url_change_event() {
-        let (monitor_tx, monitor_rx, sui_client_mock, sui_client) = setup();
-        let mut authorities = vec![
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-        ];
+        let (
+            monitor_tx,
+            monitor_rx,
+            sui_client_mock,
+            sui_client,
+            bridge_pause_tx,
+            _bridge_pause_rx,
+            mut authorities,
+        ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
             Arc::new(old_committee),
         ))));
         let _handle = tokio::task::spawn(
-            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone()).run(),
+            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
         );
         let new_url = "http://new.url".to_string();
         authorities[0].base_url = new_url.clone();
@@ -621,19 +739,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_bridge_authority_aggregation_with_blocklist_event() {
-        let (monitor_tx, monitor_rx, sui_client_mock, sui_client) = setup();
-        let mut authorities = vec![
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
-        ];
+        let (
+            monitor_tx,
+            monitor_rx,
+            sui_client_mock,
+            sui_client,
+            bridge_pause_tx,
+            _bridge_pause_rx,
+            mut authorities,
+        ) = setup();
         let old_committee = BridgeCommittee::new(authorities.clone()).unwrap();
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
             Arc::new(old_committee),
         ))));
         let _handle = tokio::task::spawn(
-            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone()).run(),
+            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
         );
         authorities[0].is_blocklisted = true;
         let to_blocklist = &authorities[0];
@@ -652,7 +772,6 @@ mod tests {
             .unwrap();
         // Wait for the monitor to process the event
         tokio::time::sleep(Duration::from_secs(1)).await;
-        // Now expect the committee to be updated
         assert!(
             agg.load()
                 .committee
@@ -662,11 +781,48 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_update_bridge_pause_status_with_emergency_event() {
+        let (
+            monitor_tx,
+            monitor_rx,
+            sui_client_mock,
+            sui_client,
+            bridge_pause_tx,
+            bridge_pause_rx,
+            authorities,
+        ) = setup();
+        let event = EmergencyOpEvent {
+            frozen: !*bridge_pause_tx.borrow(), // toggle the bridge pause status
+        };
+        let committee = BridgeCommittee::new(authorities.clone()).unwrap();
+        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
+            Arc::new(committee),
+        ))));
+        let _handle = tokio::task::spawn(
+            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
+        );
+
+        sui_client_mock.set_is_bridge_paused(event.frozen);
+        monitor_tx
+            .send(SuiBridgeEvent::EmergencyOpEvent(event.clone()))
+            .await
+            .unwrap();
+        // Wait for the monitor to process the event
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        // Now expect the committee to be updated
+        assert!(*bridge_pause_rx.borrow() == event.frozen);
+    }
+
+    #[allow(clippy::type_complexity)]
     fn setup() -> (
         mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
         mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
         SuiMockClient,
         Arc<SuiClient<SuiMockClient>>,
+        tokio::sync::watch::Sender<IsBridgePaused>,
+        tokio::sync::watch::Receiver<IsBridgePaused>,
+        Vec<BridgeAuthority>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
@@ -682,6 +838,21 @@ mod tests {
                 .channel_inflight
                 .with_label_values(&["monitor_queue"]),
         );
-        (monitor_tx, monitor_rx, sui_client_mock, sui_client)
+        let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(false);
+        let authorities = vec![
+            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
+            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
+            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
+            get_test_authority_and_key(2500, 0 /* port, dummy value */).0,
+        ];
+        (
+            monitor_tx,
+            monitor_rx,
+            sui_client_mock,
+            sui_client,
+            bridge_pause_tx,
+            bridge_pause_rx,
+            authorities,
+        )
     }
 }

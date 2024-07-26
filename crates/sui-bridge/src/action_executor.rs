@@ -5,6 +5,7 @@
 //! collects bridge authority signatures and submit signatures on chain.
 
 use crate::retry_with_max_elapsed_time;
+use crate::types::IsBridgePaused;
 use arc_swap::ArcSwap;
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -78,6 +79,7 @@ pub struct BridgeActionExecutor<C> {
     store: Arc<BridgeOrchestratorTables>,
     bridge_object_arg: ObjectArg,
     token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+    bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
     metrics: Arc<BridgeMetrics>,
 }
 
@@ -108,6 +110,7 @@ where
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
         token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let bridge_object_arg = sui_client
@@ -122,6 +125,7 @@ where
             sui_address,
             bridge_object_arg,
             token_config_rx,
+            bridge_pause_rx,
             metrics,
         }
     }
@@ -181,6 +185,7 @@ where
                 execution_rx,
                 self.bridge_object_arg,
                 self.token_config_rx,
+                self.bridge_pause_rx,
                 metrics,
             )
         ));
@@ -403,6 +408,8 @@ where
         >,
         bridge_object_arg: ObjectArg,
         mut token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
+        // TODO: wire this up
+        _bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_onchain_execution_loop");
@@ -701,6 +708,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _bridge_pause_tx,
         ) = setup().await;
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -892,6 +900,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _bridge_pause_tx,
         ) = setup().await;
         let id_token_map = token_tx.borrow();
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
@@ -1012,6 +1021,7 @@ mod tests {
             _gas_object_ref,
             _sui_address,
             _token_tx,
+            _bridge_pause_tx,
         ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
@@ -1079,6 +1089,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_tx,
+            _bridge_pause_tx,
         ) = setup().await;
         let id_token_map = token_tx.borrow();
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
@@ -1270,6 +1281,7 @@ mod tests {
         ObjectRef,
         SuiAddress,
         tokio::sync::watch::Sender<HashMap<u8, TypeTag>>,
+        tokio::sync::watch::Sender<IsBridgePaused>,
     ) {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
@@ -1309,6 +1321,7 @@ mod tests {
         let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
         let (token_type_tags_tx, token_type_tags_rx) =
             tokio::sync::watch::channel(sui_token_type_tags);
+        let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(false);
         let executor = BridgeActionExecutor::new(
             sui_client.clone(),
             agg.clone(),
@@ -1317,6 +1330,7 @@ mod tests {
             sui_address,
             gas_object_ref.0,
             token_type_tags_rx,
+            bridge_pause_rx,
             metrics,
         )
         .await;
@@ -1340,6 +1354,7 @@ mod tests {
             gas_object_ref,
             sui_address,
             token_type_tags_tx,
+            bridge_pause_tx,
         )
     }
 }
