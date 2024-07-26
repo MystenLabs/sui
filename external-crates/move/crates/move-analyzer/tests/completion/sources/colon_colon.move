@@ -4,7 +4,7 @@ module Completion::colon_colon {
 
     public struct SomeStruct has drop {}
 
-    public enum SomeEnum has drop{
+    public enum SomeEnum has drop {
         SomeVariant,
         SomeNamedVariant { name1: u64, name2: u64},
         SomePositionalVariant(u64, u64),
@@ -42,6 +42,14 @@ module Completion::colon_colon {
     }
     public fun multi_colon_colon() {
         Completion::colon_colon::SomeEnum::
+    }
+
+    public enum TargEnum<T: drop> has drop {
+        Variant{field: T}
+    }
+
+    public fun targ_chain() {
+        Completion::colon_colon::TargEnum::Variant::{field}
     }
 
 }
