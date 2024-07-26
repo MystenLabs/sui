@@ -570,17 +570,15 @@ fn all_first_position_member_completions(
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
     for (member_alias, sp!(_, mod_ident), member_name) in members_info {
-        let member_completion = first_position_member_completion(
+        let Some(member_completion) = first_position_member_completion(
             symbols,
             mod_ident,
             member_alias,
             &member_name.value,
             chain_target,
-        )
-        .unwrap_or(completion_item(
-            member_alias.as_str(),
-            CompletionItemKind::TEXT,
-        ));
+        ) else {
+            continue;
+        };
         completions.push(member_completion);
     }
     completions
