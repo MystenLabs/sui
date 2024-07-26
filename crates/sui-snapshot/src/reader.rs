@@ -389,8 +389,9 @@ impl StateSnapshotReaderV1 {
                                         );
                                         if timeout > max_timeout {
                                             panic!(
-                                                "Failed to get obj file after {} attempts",
-                                                attempts
+                                                "Failed to get obj file {} after {} attempts",
+                                                file_metadata.file_path(&epoch_dir),
+                                                attempts,
                                             );
                                         } else {
                                             attempts += 1;
