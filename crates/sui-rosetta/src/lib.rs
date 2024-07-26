@@ -29,9 +29,9 @@ pub mod types;
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
-    metadata: Some(CurrencyMetadata {
+    metadata: CurrencyMetadata {
         coin_type: SUI_COIN_TYPE.to_string(),
-    }),
+    },
 });
 
 pub struct RosettaOnlineServer {
