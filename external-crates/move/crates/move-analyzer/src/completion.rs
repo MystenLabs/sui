@@ -962,6 +962,12 @@ fn path_completions(
             ));
             if matches!(chain_target, ChainCompletionTarget::Type) {
                 completions.extend(primitive_types());
+                info.type_params.iter().for_each(|t| {
+                    completions.push(completion_item(
+                        t.as_str(),
+                        CompletionItemKind::TYPE_PARAMETER,
+                    ))
+                });
             }
         }
     } else {

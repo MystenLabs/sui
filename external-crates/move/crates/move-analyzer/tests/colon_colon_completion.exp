@@ -52,6 +52,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 2 -------------------
 use line: 21, use_col: 34
@@ -93,6 +97,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
 Struct 'SomeStruct'
 Enum 'SomeEnum'
@@ -207,6 +215,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 11 -------------------
 use line: 25, use_col: 17
@@ -336,6 +348,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 14 -------------------
 use line: 27, use_col: 23
@@ -376,6 +392,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 16 -------------------
 use line: 29, use_col: 9
@@ -423,6 +443,10 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 17 -------------------
 use line: 33, use_col: 33
@@ -449,6 +473,7 @@ Text 'sbar'
 Text 'sbaz'
 Text 'single_ident'
 Text 'targ_chain'
+Text 'targ_type'
 Keyword 'u8'
 Keyword 'u16'
 Keyword 'u32'
@@ -525,8 +550,58 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 -- test 21 -------------------
+use line: 55, use_col: 26
+Struct 'CompletionStruct'
+Struct 'SomeStruct'
+Enum 'SomeEnum'
+Enum 'TargEnum'
+
+-- test 22 -------------------
+use line: 55, use_col: 39
+EnumMember 'Variant{}'
+    INSERT TEXT: 'Variant{${1:field}}'
+
+-- test 23 -------------------
+use line: 59, use_col: 21
+Unit '0x1'
+Unit '0xA'
+Unit '0xCAFE'
+Unit 'Completion'
+Unit 'std'
+Module 'Self'
+Module 'option'
+Module 'vector'
+Struct 'Option'
+Struct 'CompletionStruct'
+Text 'SOME_CONST'
+Enum 'SomeEnum'
+Struct 'SomeStruct'
+Enum 'TargEnum'
+Text 'complete_chains'
+Text 'multi_colon_colon'
+Text 'one_colon_colon'
+Text 'sbar'
+Text 'sbaz'
+Text 'single_ident'
+Text 'targ_chain'
+Text 'targ_type'
+Keyword 'u8'
+Keyword 'u16'
+Keyword 'u32'
+Keyword 'u64'
+Keyword 'u128'
+Keyword 'u256'
+Keyword 'bool'
+Keyword 'vector'
+TypeParameter 'SOME_TYPE'
+
+-- test 24 -------------------
 use line: 21, use_col: 33
 Module 'colon_colon'
 Module 'dot'
@@ -536,7 +611,7 @@ Module 'macro_dot'
 Module 'object'
 Module 'other_mod_dot'
 
--- test 22 -------------------
+-- test 25 -------------------
 use line: 21, use_col: 46
 Method 'complete_chains()'
     INSERT TEXT: 'complete_chains(${1:s})'
@@ -566,13 +641,17 @@ Method 'targ_chain()'
     INSERT TEXT: 'targ_chain()'
     TARGET     : '(Completion::colon_colon::targ_chain)'
     TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
 Struct 'SomeStruct'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 Constant 'SOME_CONST'
 
--- test 23 -------------------
+-- test 26 -------------------
 use line: 21, use_col: 56
 EnumMember 'SomeNamedVariant{}'
     INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
@@ -581,7 +660,7 @@ EnumMember 'SomePositionalVariant()'
 EnumMember 'SomeVariant'
     INSERT TEXT: 'SomeVariant{}'
 
--- test 24 -------------------
+-- test 27 -------------------
 use line: 25, use_col: 16
 Method 'borrow()'
     INSERT TEXT: 'borrow(${1:t})'
@@ -652,7 +731,7 @@ Method 'to_vec()'
     TARGET     : '(std::option::to_vec)'
     TYPE       : 'fun <Element>(Option): vector<Element>'
 
--- test 25 -------------------
+-- test 28 -------------------
 use line: 26, use_col: 19
 Method 'sha2_256()'
     INSERT TEXT: 'sha2_256(${1:data})'
@@ -663,7 +742,7 @@ Method 'sha3_256()'
     TARGET     : '(std::hash::sha3_256)'
     TYPE       : 'fun (vector<u8>): vector<u8>'
 
--- test 26 -------------------
+-- test 29 -------------------
 use line: 27, use_col: 23
 EnumMember 'SomeNamedVariant{}'
     INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
@@ -672,7 +751,7 @@ EnumMember 'SomePositionalVariant()'
 EnumMember 'SomeVariant'
     INSERT TEXT: 'SomeVariant{}'
 
--- test 27 -------------------
+-- test 30 -------------------
 use line: 41, use_col: 20
 Module 'colon_colon'
 Module 'dot'
@@ -682,7 +761,7 @@ Module 'macro_dot'
 Module 'object'
 Module 'other_mod_dot'
 
--- test 28 -------------------
+-- test 31 -------------------
 use line: 44, use_col: 43
 EnumMember 'SomeNamedVariant{}'
     INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
@@ -690,4 +769,9 @@ EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
     INSERT TEXT: 'SomeVariant{}'
+
+-- test 32 -------------------
+use line: 55, use_col: 38
+EnumMember 'Variant{}'
+    INSERT TEXT: 'Variant{${1:field}}'
 

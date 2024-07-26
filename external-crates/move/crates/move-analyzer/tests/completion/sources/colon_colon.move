@@ -49,7 +49,14 @@ module Completion::colon_colon {
     }
 
     public fun targ_chain() {
-        Completion::colon_colon::TargEnum::Variant{field: 42};
+        use Completion::colon_colon as CC;
+        // to test that variant for enums with explict type arguments auto-complete correctly
+        // and that type argument auto-completes correctly
+        CC::TargEnum<CC::SomeStruct>::Variant{field: CC::SomeStruct{}};
+    }
+
+    public fun targ_type<SOME_TYPE>(p: SOME_TYPE) {
+        let _local: SOME_TYPE = p;
     }
 
 }

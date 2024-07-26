@@ -414,7 +414,7 @@ impl CursorContext {
     /// Returns access chain at cursor position (if any) along with the information of what the chain's
     /// auto-completed target kind should be
     pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionTarget)> {
-        // TODO: handle access chains in uses, attributes and friend declarations
+        // TODO: handle access chains in uses and attributes
         use ChainCompletionTarget as CT;
         use CursorPosition as CP;
         let chain_info = match &self.position {
