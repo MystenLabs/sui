@@ -282,7 +282,7 @@ check_zklogin_issuer_cost_base: 200
 vdf_verify_vdf_cost: 1500
 vdf_hash_to_input_cost: 100
 bcs_per_byte_serialized_cost: 2
-bcs_legacy_min_output_size_cost: 52
+bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
 hash_sha2_256_base_cost: 52
 hash_sha2_256_per_byte_cost: 2
