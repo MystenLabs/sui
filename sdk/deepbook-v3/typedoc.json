@@ -1,0 +1,6 @@
+{
+	"entryPoints": ["src"],
+	"excludeInternal": true,
+	"excludePrivate": true,
+	"intentionallyNotExported": []
+}
