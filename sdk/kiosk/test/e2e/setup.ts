@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
+import { mkdtemp } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
 import type {
 	DevInspectResults,
 	SuiObjectChangePublished,
@@ -28,10 +31,12 @@ const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	configPath: string;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(keypair: Ed25519Keypair, client: SuiClient, configPath: string) {
 		this.keypair = keypair;
 		this.client = client;
+		this.configPath = configPath;
 	}
 
 	address() {
@@ -62,7 +67,12 @@ export async function setupSuiClient() {
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
-	return new TestToolbox(keypair, client);
+
+	const tmpDirPath = path.join(tmpdir(), 'config-');
+	const tmpDir = await mkdtemp(tmpDirPath);
+	const configPath = path.join(tmpDir, 'client.yaml');
+	execSync(`${SUI_BIN} client --yes --client.config ${configPath}`, { encoding: 'utf-8' });
+	return new TestToolbox(keypair, client, configPath);
 }
 
 // TODO: expose these testing utils from @mysten/sui
@@ -79,7 +89,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 
 	const { modules, dependencies } = JSON.parse(
 		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+			`${SUI_BIN} move --client.config ${toolbox.configPath} build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
 			{ encoding: 'utf-8' },
 		),
 	);
