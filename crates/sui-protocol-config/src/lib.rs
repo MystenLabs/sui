@@ -2604,7 +2604,7 @@ impl ProtocolConfig {
 
                     // Adjust stdlib gas costs
                     cfg.bcs_per_byte_serialized_cost = Some(2);
-                    cfg.bcs_legacy_min_output_size_cost = Some(52);
+                    cfg.bcs_legacy_min_output_size_cost = Some(1);
                     cfg.bcs_failure_cost = Some(52);
                     cfg.debug_print_base_cost = Some(52);
                     cfg.debug_print_stack_trace_base_cost = Some(52);
