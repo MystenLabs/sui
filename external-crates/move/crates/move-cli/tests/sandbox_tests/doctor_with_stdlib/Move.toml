@@ -5,4 +5,4 @@ name = "doctor_with_stdlib"
 std = "0x1"
 
 [dependencies]
-MoveNursery = { local = "../../../../move-stdlib/nursery" }
+MoveStdlib = { local = "../../../../move-stdlib" }

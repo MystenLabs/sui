@@ -7,14 +7,3 @@ error[E10004]: invalid usage of known attribute
 4 │ #[defines_primitive(signer)]
   │   ^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate definer annotated for primitive type 'signer'
 
-error[E10004]: invalid usage of known attribute
-  ┌─ tests/move_2024/typing/duplicate_defines_primitive.move:7:3
-  │
-7 │ #[defines_primitive(u64)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^ Duplicate definer annotated for primitive type 'u64'
-  │
-  ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/u64.move:5:13
-  │
-5 │ module std::u64 {
-  │             --- Previously declared here
-

@@ -1,7 +1,7 @@
 module 0x1::Example {
-  use std::signer;
+    use std::address;
 
-  public fun f(account: &signer): address {
-    signer::address_of(account)
-  }
+    public fun f(): u64 {
+        address::length()
+    }
 }

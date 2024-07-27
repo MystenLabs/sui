@@ -11,9 +11,9 @@ Failures in 0x1::M:
 
 ┌── no_timeout_fail ──────
 │ error[E11001]: test failure
-│    ┌─ timeout.move:18:29
+│    ┌─ timeout.move:17:29
 │    │
-│ 18 │     fun no_timeout_fail() { abort 0 }
+│ 17 │     fun no_timeout_fail() { abort 0 }
 │    │         ---------------     ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x1::M rooted here
 │    │         │                    
 │    │         In this function in 0x1::M
