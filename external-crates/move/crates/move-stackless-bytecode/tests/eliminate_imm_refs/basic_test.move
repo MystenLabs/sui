@@ -5,7 +5,7 @@ module 0x42::TestEliminateImmRefs {
     }
 
     fun test1() : R {
-        let r = R {x: 3};
+        let mut r = R {x: 3};
         let r_ref = &mut r;
         let x_ref = &mut r_ref.x;
         *x_ref = 0;
