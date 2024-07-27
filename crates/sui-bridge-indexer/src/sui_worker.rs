@@ -15,6 +15,7 @@ use sui_bridge::events::{
 use sui_data_ingestion_core::Worker;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     base_types::ObjectID,
     effects::TransactionEffectsAPI,
@@ -208,5 +209,16 @@ impl Worker for SuiBridgeWorker {
                 .last_committed_sui_checkpoint
                 .set(checkpoint_num as i64);
         })
+    }
+
+    async fn save_progress(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<CheckpointSequenceNumber> {
+        if sequence_number % 100 == 0 {
+            Some(sequence_number)
+        } else {
+            None
+        }
     }
 }
