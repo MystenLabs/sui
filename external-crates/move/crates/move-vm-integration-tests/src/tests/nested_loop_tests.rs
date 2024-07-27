@@ -17,9 +17,9 @@ fn test_publish_module_with_nested_loops() {
     let code = r#"
         module {{ADDR}}::M {
             fun foo() {
-                let i = 0;
+                let mut i = 0;
                 while (i < 10) {
-                    let j = 0;
+                    let mut j = 0;
                     while (j < 10) {
                         j = j + 1;
                     };
