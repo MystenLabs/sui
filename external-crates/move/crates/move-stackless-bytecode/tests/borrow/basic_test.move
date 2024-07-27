@@ -1,5 +1,5 @@
 module 0x42::TestBorrow {
-    struct R has copy, drop {
+    public struct R has copy, drop {
         x: u64
     }
 

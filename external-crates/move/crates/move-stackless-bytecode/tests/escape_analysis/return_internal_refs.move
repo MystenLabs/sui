@@ -1,6 +1,6 @@
 module 0x1::LeakInternalRefs {
 
-    struct S { f: u64, g: u64 }
+    public struct S { f: u64, g: u64 }
 
     fun leak_mut_ref(s: &mut S): &mut u64 {
         &mut s.f
