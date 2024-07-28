@@ -1,7 +1,7 @@
-module 0x42::m {
+module 0x42::m;
 
-struct Zs {}
-struct As {}
+public struct Zs {}
+public struct As {}
 
 const Zc: u64 = 1;
 const Ac: u32 = 0;
@@ -12,4 +12,3 @@ public fun zf(): u64 { Zc }
 public fun af(): u32 { Ac }
 public fun sf(): vector<u8> { AString }
 public fun nf(): vector<u16> { NotAString }
-}
