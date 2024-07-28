@@ -7,7 +7,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { fromB64 } from '@mysten/sui/utils';
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
@@ -49,11 +49,11 @@ export const getClient = (network: Network) => {
 };
 
 /** A helper to sign & execute a transaction. */
-export const signAndExecute = async (txb: TransactionBlock, network: Network) => {
+export const signAndExecute = async (txb: Transaction, network: Network) => {
 	const client = getClient(network);
 	const signer = getSigner();
 
-	return client.signAndExecuteTransactionBlock({
+	return client.signAndExecuteTransaction({
 		transactionBlock: txb,
 		signer,
 		options: {
@@ -73,7 +73,7 @@ export const publishPackage = async ({
 	network: Network;
 	exportFileName: string;
 }) => {
-	const txb = new TransactionBlock();
+	const txb = new Transaction();
 
 	const { modules, dependencies } = JSON.parse(
 		execSync(`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
