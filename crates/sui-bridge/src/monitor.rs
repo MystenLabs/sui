@@ -3,10 +3,6 @@
 
 //! `BridgeMonitor` receives all `SuiBridgeEvent` and handles them accordingly.
 
-use arc_swap::ArcSwap;
-use std::sync::Arc;
-use tokio::time::Duration;
-
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::{BlocklistValidatorEvent, CommitteeMemberUrlUpdateEvent};
@@ -14,6 +10,11 @@ use crate::events::{EmergencyOpEvent, SuiBridgeEvent};
 use crate::retry_with_max_elapsed_time;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeCommittee, IsBridgePaused};
+use arc_swap::ArcSwap;
+use std::collections::HashMap;
+use std::sync::Arc;
+use sui_types::TypeTag;
+use tokio::time::Duration;
 use tracing::{error, info, warn};
 
 const REFRESH_BRIDGE_RETRY_TIMES: u64 = 3;
@@ -23,6 +24,7 @@ pub struct BridgeMonitor<C> {
     monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
     bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
     bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
+    sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
 }
 
 impl<C> BridgeMonitor<C>
@@ -34,12 +36,14 @@ where
         monitor_rx: mysten_metrics::metered_channel::Receiver<SuiBridgeEvent>,
         bridge_auth_agg: Arc<ArcSwap<BridgeAuthorityAggregator>>,
         bridge_paused_watch_tx: tokio::sync::watch::Sender<IsBridgePaused>,
+        sui_token_type_tags: Arc<ArcSwap<HashMap<u8, TypeTag>>>,
     ) -> Self {
         Self {
             sui_client,
             monitor_rx,
             bridge_auth_agg,
             bridge_paused_watch_tx,
+            sui_token_type_tags,
         }
     }
 
@@ -50,7 +54,9 @@ where
             mut monitor_rx,
             bridge_auth_agg,
             bridge_paused_watch_tx,
+            sui_token_type_tags,
         } = self;
+        let mut latest_token_config = (*sui_token_type_tags.load().clone()).clone();
 
         while let Some(events) = monitor_rx.recv().await {
             match events {
@@ -62,6 +68,7 @@ where
                 SuiBridgeEvent::TokenTransferLimitExceed(_) => {
                     // TODO
                 }
+
                 SuiBridgeEvent::EmergencyOpEvent(event) => {
                     info!("Received EmergencyOpEvent: {:?}", event);
                     let is_paused = get_latest_bridge_pause_status_with_emergency_event(
@@ -74,8 +81,10 @@ where
                         .send(is_paused)
                         .expect("Bridge pause status watch channel should not be closed");
                 }
+
                 SuiBridgeEvent::CommitteeMemberRegistration(_) => (),
                 SuiBridgeEvent::CommitteeUpdateEvent(_) => (),
+
                 SuiBridgeEvent::CommitteeMemberUrlUpdateEvent(event) => {
                     info!("Received CommitteeMemberUrlUpdateEvent: {:?}", event);
                     let new_committee = get_latest_bridge_committee_with_url_update_event(
@@ -89,6 +98,7 @@ where
                     ))));
                     info!("Committee updated with CommitteeMemberUrlUpdateEvent");
                 }
+
                 SuiBridgeEvent::BlocklistValidatorEvent(event) => {
                     info!("Received BlocklistValidatorEvent: {:?}", event);
                     let new_committee = get_latest_bridge_committee_with_blocklist_event(
@@ -102,10 +112,22 @@ where
                     ))));
                     info!("Committee updated with BlocklistValidatorEvent");
                 }
+
                 SuiBridgeEvent::TokenRegistrationEvent(_) => (),
-                SuiBridgeEvent::NewTokenEvent(_) => {
-                    // TODO
+
+                SuiBridgeEvent::NewTokenEvent(event) => {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        // We only add new tokens but not remove so it's ok to just insert
+                        latest_token_config.entry(event.token_id)
+                    {
+                        entry.insert(event.type_name.clone());
+                        sui_token_type_tags.store(Arc::new(latest_token_config.clone()));
+                    } else {
+                        // invariant
+                        assert_eq!(event.type_name, latest_token_config[&event.token_id]);
+                    }
                 }
+
                 SuiBridgeEvent::UpdateTokenPriceEvent(_) => (),
             }
         }
@@ -244,8 +266,10 @@ async fn get_latest_bridge_pause_status_with_emergency_event<C: SuiClientInner>(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
-    use crate::events::init_all_struct_tags;
+    use crate::events::{init_all_struct_tags, NewTokenEvent};
     use crate::test_utils::{
         bridge_committee_to_bridge_committee_summary, get_test_authority_and_key,
     };
@@ -706,8 +730,16 @@ mod tests {
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
             Arc::new(old_committee),
         ))));
+        let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
-            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
+            BridgeMonitor::new(
+                sui_client.clone(),
+                monitor_rx,
+                agg.clone(),
+                bridge_pause_tx,
+                sui_token_type_tags,
+            )
+            .run(),
         );
         let new_url = "http://new.url".to_string();
         authorities[0].base_url = new_url.clone();
@@ -752,8 +784,16 @@ mod tests {
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
             Arc::new(old_committee),
         ))));
+        let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
-            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
+            BridgeMonitor::new(
+                sui_client.clone(),
+                monitor_rx,
+                agg.clone(),
+                bridge_pause_tx,
+                sui_token_type_tags,
+            )
+            .run(),
         );
         authorities[0].is_blocklisted = true;
         let to_blocklist = &authorities[0];
@@ -799,8 +839,16 @@ mod tests {
         let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
             Arc::new(committee),
         ))));
+        let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
         let _handle = tokio::task::spawn(
-            BridgeMonitor::new(sui_client.clone(), monitor_rx, agg.clone(), bridge_pause_tx).run(),
+            BridgeMonitor::new(
+                sui_client.clone(),
+                monitor_rx,
+                agg.clone(),
+                bridge_pause_tx,
+                sui_token_type_tags,
+            )
+            .run(),
         );
 
         sui_client_mock.set_is_bridge_paused(event.frozen);
@@ -812,6 +860,55 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
         // Now expect the committee to be updated
         assert!(*bridge_pause_rx.borrow() == event.frozen);
+    }
+
+    #[tokio::test]
+    async fn test_update_sui_token_type_tags() {
+        let (
+            monitor_tx,
+            monitor_rx,
+            _sui_client_mock,
+            sui_client,
+            bridge_pause_tx,
+            _bridge_pause_rx,
+            authorities,
+        ) = setup();
+        let event = NewTokenEvent {
+            token_id: 255,
+            type_name: TypeTag::from_str("0xbeef::beef::BEEF").unwrap(),
+            native_token: false,
+            decimal_multiplier: 1000000,
+            notional_value: 100000000,
+        };
+        let committee = BridgeCommittee::new(authorities.clone()).unwrap();
+        let agg = Arc::new(ArcSwap::new(Arc::new(BridgeAuthorityAggregator::new(
+            Arc::new(committee),
+        ))));
+        let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(HashMap::new())));
+        let sui_token_type_tags_clone = sui_token_type_tags.clone();
+        let _handle = tokio::task::spawn(
+            BridgeMonitor::new(
+                sui_client.clone(),
+                monitor_rx,
+                agg.clone(),
+                bridge_pause_tx,
+                sui_token_type_tags_clone,
+            )
+            .run(),
+        );
+
+        monitor_tx
+            .send(SuiBridgeEvent::NewTokenEvent(event.clone()))
+            .await
+            .unwrap();
+        // Wait for the monitor to process the event
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        // Now expect new token type tags to appear in sui_token_type_tags
+        sui_token_type_tags
+            .load()
+            .clone()
+            .get(&event.token_id)
+            .unwrap();
     }
 
     #[allow(clippy::type_complexity)]
