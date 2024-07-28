@@ -1,5 +1,3 @@
-address 0x42 {
-module M2 {
+module 0x42::M2 {
     public entry fun test() {}
-}
 }

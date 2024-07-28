@@ -1,11 +1,11 @@
 module 0x42::TestEliminateImmRefs {
 
-    struct R has copy, drop {
+    public struct R has copy, drop {
         x: u64
     }
 
     fun test1() : R {
-        let r = R {x: 3};
+        let mut r = R {x: 3};
         let r_ref = &mut r;
         let x_ref = &mut r_ref.x;
         *x_ref = 0;

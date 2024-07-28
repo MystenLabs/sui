@@ -1,5 +1,4 @@
-address 0x1 {
-module M {
+module 0x1::M {
     #[test_only]
     public fun this_aborts() {
         abort 0
@@ -9,7 +8,7 @@ module M {
     fun dummy_test() { }
 }
 
-module B {
+module 0x1::B {
 
     #[test_only]
     use 0x1::M;
@@ -18,5 +17,4 @@ module B {
     fun failing_test() {
         M::this_aborts()
     }
-}
 }

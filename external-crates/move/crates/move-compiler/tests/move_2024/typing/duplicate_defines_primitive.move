@@ -1,5 +1,5 @@
-#[defines_primitive(u64)]
+#[defines_primitive(signer)]
 module a::m {}
 
-#[defines_primitive(u64)]
+#[defines_primitive(signer)]
 module a::n {}

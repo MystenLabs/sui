@@ -164,6 +164,7 @@ const MAX_PROTOCOL_VERSION: u64 = 53;
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 //             Enable consensus commit prologue V3 on testnet.
 //             Turn on shared object congestion control in testnet.
+//             Update stdlib natives costs
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1101,6 +1102,40 @@ pub struct ProtocolConfig {
     vdf_verify_vdf_cost: Option<u64>,
     vdf_hash_to_input_cost: Option<u64>,
 
+    // Stdlib costs
+    bcs_per_byte_serialized_cost: Option<u64>,
+    bcs_legacy_min_output_size_cost: Option<u64>,
+    bcs_failure_cost: Option<u64>,
+
+    hash_sha2_256_base_cost: Option<u64>,
+    hash_sha2_256_per_byte_cost: Option<u64>,
+    hash_sha2_256_legacy_min_input_len_cost: Option<u64>,
+    hash_sha3_256_base_cost: Option<u64>,
+    hash_sha3_256_per_byte_cost: Option<u64>,
+    hash_sha3_256_legacy_min_input_len_cost: Option<u64>,
+    type_name_get_base_cost: Option<u64>,
+    type_name_get_per_byte_cost: Option<u64>,
+
+    string_check_utf8_base_cost: Option<u64>,
+    string_check_utf8_per_byte_cost: Option<u64>,
+    string_is_char_boundary_base_cost: Option<u64>,
+    string_sub_string_base_cost: Option<u64>,
+    string_sub_string_per_byte_cost: Option<u64>,
+    string_index_of_base_cost: Option<u64>,
+    string_index_of_per_byte_pattern_cost: Option<u64>,
+    string_index_of_per_byte_searched_cost: Option<u64>,
+
+    vector_empty_base_cost: Option<u64>,
+    vector_length_base_cost: Option<u64>,
+    vector_push_back_base_cost: Option<u64>,
+    vector_push_back_legacy_per_abstract_memory_unit_cost: Option<u64>,
+    vector_borrow_base_cost: Option<u64>,
+    vector_pop_back_base_cost: Option<u64>,
+    vector_destroy_empty_base_cost: Option<u64>,
+    vector_swap_base_cost: Option<u64>,
+    debug_print_base_cost: Option<u64>,
+    debug_print_stack_trace_base_cost: Option<u64>,
+
     // ==== Ephemeral (consensus only) params deleted ====
     //
     // Const params for consensus scoring decision
@@ -1909,6 +1944,36 @@ impl ProtocolConfig {
             vdf_verify_vdf_cost: None,
             vdf_hash_to_input_cost: None,
 
+            bcs_per_byte_serialized_cost: None,
+            bcs_legacy_min_output_size_cost: None,
+            bcs_failure_cost: None,
+            hash_sha2_256_base_cost: None,
+            hash_sha2_256_per_byte_cost: None,
+            hash_sha2_256_legacy_min_input_len_cost: None,
+            hash_sha3_256_base_cost: None,
+            hash_sha3_256_per_byte_cost: None,
+            hash_sha3_256_legacy_min_input_len_cost: None,
+            type_name_get_base_cost: None,
+            type_name_get_per_byte_cost: None,
+            string_check_utf8_base_cost: None,
+            string_check_utf8_per_byte_cost: None,
+            string_is_char_boundary_base_cost: None,
+            string_sub_string_base_cost: None,
+            string_sub_string_per_byte_cost: None,
+            string_index_of_base_cost: None,
+            string_index_of_per_byte_pattern_cost: None,
+            string_index_of_per_byte_searched_cost: None,
+            vector_empty_base_cost: None,
+            vector_length_base_cost: None,
+            vector_push_back_base_cost: None,
+            vector_push_back_legacy_per_abstract_memory_unit_cost: None,
+            vector_borrow_base_cost: None,
+            vector_pop_back_base_cost: None,
+            vector_destroy_empty_base_cost: None,
+            vector_swap_base_cost: None,
+            debug_print_base_cost: None,
+            debug_print_stack_trace_base_cost: None,
+
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
@@ -2536,6 +2601,37 @@ impl ProtocolConfig {
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
                     }
+
+                    // Adjust stdlib gas costs
+                    cfg.bcs_per_byte_serialized_cost = Some(2);
+                    cfg.bcs_legacy_min_output_size_cost = Some(1);
+                    cfg.bcs_failure_cost = Some(52);
+                    cfg.debug_print_base_cost = Some(52);
+                    cfg.debug_print_stack_trace_base_cost = Some(52);
+                    cfg.hash_sha2_256_base_cost = Some(52);
+                    cfg.hash_sha2_256_per_byte_cost = Some(2);
+                    cfg.hash_sha2_256_legacy_min_input_len_cost = Some(1);
+                    cfg.hash_sha3_256_base_cost = Some(52);
+                    cfg.hash_sha3_256_per_byte_cost = Some(2);
+                    cfg.hash_sha3_256_legacy_min_input_len_cost = Some(1);
+                    cfg.type_name_get_base_cost = Some(52);
+                    cfg.type_name_get_per_byte_cost = Some(2);
+                    cfg.string_check_utf8_base_cost = Some(52);
+                    cfg.string_check_utf8_per_byte_cost = Some(2);
+                    cfg.string_is_char_boundary_base_cost = Some(52);
+                    cfg.string_sub_string_base_cost = Some(52);
+                    cfg.string_sub_string_per_byte_cost = Some(2);
+                    cfg.string_index_of_base_cost = Some(52);
+                    cfg.string_index_of_per_byte_pattern_cost = Some(2);
+                    cfg.string_index_of_per_byte_searched_cost = Some(2);
+                    cfg.vector_empty_base_cost = Some(52);
+                    cfg.vector_length_base_cost = Some(52);
+                    cfg.vector_push_back_base_cost = Some(52);
+                    cfg.vector_push_back_legacy_per_abstract_memory_unit_cost = Some(2);
+                    cfg.vector_borrow_base_cost = Some(52);
+                    cfg.vector_pop_back_base_cost = Some(52);
+                    cfg.vector_destroy_empty_base_cost = Some(52);
+                    cfg.vector_swap_base_cost = Some(52);
                 }
                 // Use this template when making changes:
                 //

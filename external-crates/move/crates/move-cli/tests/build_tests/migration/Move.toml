@@ -3,6 +3,7 @@
 
 [package]
 name = "A"
+edition = "2024.beta"
 
 # this is a comment
 [addresses]

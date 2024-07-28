@@ -1,8 +1,9 @@
 [package]
 name = "print_stack_trace"
+edition = "2024.beta"
 
 [addresses]
 std = "0x1"
 
 [dependencies]
-MoveNursery = { local = "../../../../move-stdlib/nursery" }
+MoveStdlib = { local = "../../../../move-stdlib" }
