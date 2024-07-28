@@ -1,6 +1,5 @@
 [package]
 name = "Enums"
-version = "0.0.1"
 edition = "2024.alpha"
 
 [dependencies]

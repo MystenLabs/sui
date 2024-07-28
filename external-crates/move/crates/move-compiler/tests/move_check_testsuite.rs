@@ -64,7 +64,7 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     } else if path_contains(DEV_DIR) {
         Edition::DEVELOPMENT
     } else {
-        Edition::default()
+        Edition::LEGACY
     };
     let config = PackageConfig {
         flavor,

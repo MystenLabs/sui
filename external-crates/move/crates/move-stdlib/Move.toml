@@ -1,5 +1,6 @@
 [package]
 name = "MoveStdlib"
+edition = "2024.beta"
 
 [addresses]
 std = "_"

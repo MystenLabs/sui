@@ -1,14 +1,8 @@
 //# run --signers 0x1
 module 0x42.m {
-import 0x1.signer;
 
-entry foo(account: signer) {
-    let sender: address;
-    let addr: address;
+entry foo(account: signer): signer {
 label b0:
-    sender = signer.address_of(&account);
-    addr = 0x1;
-    assert(copy(sender) == copy(addr), 42);
-    return;
+    return move(account);
 }
 }

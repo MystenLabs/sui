@@ -2,8 +2,8 @@
 -- test 0 -------------------
 use line: 4, use_ndx: 1
 Use: 'Option', start: 13, end: 19
-Def: 'Option', line: 6, def char: 11
-TypeDef: 'Option', line: 6, char: 11
+Def: 'Option', line: 7, def char: 18
+TypeDef: 'Option', line: 7, char: 18
 On Hover:
 public struct std::option::Option<Element> has copy, drop, store {
 	vec: vector<Element>
@@ -16,7 +16,7 @@ zero or one because Move bytecode does not have ADTs.
 -- test 1 -------------------
 use line: 8, use_ndx: 2
 Use: 'option', start: 26, end: 32
-Def: 'option', line: 1, def char: 12
+Def: 'option', line: 4, def char: 12
 TypeDef: no info
 On Hover:
 module std::option

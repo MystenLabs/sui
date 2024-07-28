@@ -917,7 +917,7 @@ mod checked {
 
         if protocol_config.fresh_vm_on_framework_upgrade() {
             let new_vm = new_move_vm(
-                all_natives(/* silent */ true),
+                all_natives(/* silent */ true, protocol_config),
                 protocol_config,
                 /* enable_profiler */ None,
             )

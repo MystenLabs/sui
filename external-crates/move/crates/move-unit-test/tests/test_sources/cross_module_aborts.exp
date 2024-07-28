@@ -8,16 +8,16 @@ Failures in 0x1::B:
 
 ┌── failing_test ──────
 │ error[E11001]: test failure
-│   ┌─ cross_module_aborts.move:5:9
+│   ┌─ cross_module_aborts.move:4:9
 │   │
-│ 4 │     public fun this_aborts() {
+│ 3 │     public fun this_aborts() {
 │   │                ----------- In this function in 0x1::M
-│ 5 │         abort 0
+│ 4 │         abort 0
 │   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x1::M rooted here
 │ 
 │ 
 │ stack trace
-│ 	B::failing_test(tests/test_sources/cross_module_aborts.move:19)
+│ 	B::failing_test(tests/test_sources/cross_module_aborts.move:18)
 │ 
 └──────────────────
 
