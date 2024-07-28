@@ -14,6 +14,7 @@ pub mod annotations;
 pub mod borrow_analysis;
 pub mod clean_and_optimize;
 pub mod compositional_analysis;
+pub mod data_invariant_instrumentation;
 pub mod dataflow_analysis;
 pub mod dataflow_domains;
 pub mod debug_instrumentation;
@@ -22,6 +23,8 @@ pub mod escape_analysis;
 pub mod function_data_builder;
 pub mod function_target;
 pub mod function_target_pipeline;
+pub mod global_invariant_analysis;
+pub mod global_invariant_instrumentation;
 pub mod graph;
 pub mod inconsistency_check;
 pub mod livevar_analysis;
@@ -36,9 +39,13 @@ pub mod options;
 pub mod packed_types_analysis;
 pub mod pipeline_factory;
 pub mod reaching_def_analysis;
+pub mod spec_instrumentation;
 pub mod stackless_bytecode;
 pub mod stackless_bytecode_generator;
 pub mod stackless_control_flow_graph;
+pub mod usage_analysis;
+pub mod verification_analysis;
+pub mod well_formed_instrumentation;
 
 /// Print function targets for testing and debugging.
 pub fn print_targets_for_test(

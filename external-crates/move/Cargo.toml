@@ -159,6 +159,7 @@ move-model = { path = "crates/move-model" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
+move-prover-boogie-backend = { path = "crates/move-prover-boogie-backend" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

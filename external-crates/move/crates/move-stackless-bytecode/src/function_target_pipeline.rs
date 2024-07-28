@@ -481,7 +481,6 @@ impl FunctionTargetPipeline {
         H2: Fn(usize, &dyn FunctionTargetProcessor, &FunctionTargetsHolder),
     {
         let topological_order = Self::sort_targets_in_topological_order(env, targets);
-        info!("transforming bytecode");
         hook_before_pipeline(targets);
         for (step_count, processor) in self.processors.iter().enumerate() {
             if processor.is_single_run() {

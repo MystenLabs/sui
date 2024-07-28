@@ -9,6 +9,7 @@
 use std::{
     collections::BTreeMap,
     io::IsTerminal,
+    str::FromStr,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -24,7 +25,10 @@ use simplelog::{
 
 use codespan_reporting::diagnostic::Severity;
 use move_docgen::DocgenOptions;
-use move_model::options::ModelBuilderOptions;
+use move_model::{
+    model::VerificationScope, options::ModelBuilderOptions, simplifier::SimplificationPass,
+};
+use move_prover_boogie_backend::options::{BoogieOptions, VectorTheory};
 use move_stackless_bytecode::options::{AutoTraceLevel, ProverOptions};
 
 /// Atomic used to prevent re-initialization of logging.
@@ -48,6 +52,8 @@ pub struct Options {
     pub verbosity_level: LevelFilter,
     /// Whether to run the documentation generator instead of the prover.
     pub run_docgen: bool,
+    /// Whether to run the read write set analysis instead of the prover
+    pub run_read_write_set: bool,
     /// Whether to run the internal reference escape analysis instead of the prover
     pub run_escape: bool,
     /// The paths to the Move sources.
@@ -67,6 +73,8 @@ pub struct Options {
     pub docgen: DocgenOptions,
     /// Options for the prover.
     pub prover: ProverOptions,
+    /// Options for the prover backend.
+    pub backend: BoogieOptions,
 }
 
 impl Default for Options {
@@ -74,6 +82,7 @@ impl Default for Options {
         Self {
             output_path: "output.bpl".to_string(),
             run_docgen: false,
+            run_read_write_set: false,
             run_escape: false,
             verbosity_level: LevelFilter::Info,
             move_sources: vec![],
@@ -81,6 +90,7 @@ impl Default for Options {
             move_named_address_values: vec![],
             model_builder: ModelBuilderOptions::default(),
             prover: ProverOptions::default(),
+            backend: BoogieOptions::default(),
             docgen: DocgenOptions::default(),
             experimental_pipeline: false,
         }
@@ -283,6 +293,13 @@ impl Options {
                     .action(clap::ArgAction::SetTrue)
                     .help("runs the ABI generator instead of the prover. \
                     Generated ABIs will be written into the directory `./abi` unless configured otherwise via toml"),
+            )
+            .arg(
+                Arg::new("errmapgen")
+                    .long("errmapgen")
+                    .action(clap::ArgAction::SetTrue)
+                    .help("runs the error map generator instead of the prover. \
+                    The generated error map will be written to `errmap` unless configured otherwise"),
             )
             .arg(
                 Arg::new("packedtypesgen")
@@ -518,13 +535,6 @@ impl Options {
                     at FUNCTION_NAME.z3log.")
             )
             .arg(
-                Arg::new("script-reach")
-                    .long("script-reach")
-                    .action(clap::ArgAction::SetTrue)
-                    .help("For each script function which is verification target, \
-                    print out the names of all called functions, directly or indirectly.")
-            )
-            .arg(
                 Arg::new("ban-int-2-bv")
                     .long("ban-int-2-bv")
                     .action(clap::ArgAction::SetTrue)
@@ -572,6 +582,17 @@ impl Options {
                 "debug" => LevelFilter::Debug,
                 _ => unreachable!("should not happen"),
             }
+        }
+        if matches.contains_id("vector-theory") {
+            options.backend.vector_theory =
+                match matches.get_one::<String>("vector-theory").unwrap().as_str() {
+                    "BoogieArray" => VectorTheory::BoogieArray,
+                    "BoogieArrayIntern" => VectorTheory::BoogieArrayIntern,
+                    "SmtArray" => VectorTheory::SmtArray,
+                    "SmtArrayExt" => VectorTheory::SmtArrayExt,
+                    "SmtSeq" => VectorTheory::SmtSeq,
+                    _ => unreachable!("should not happen"),
+                }
         }
 
         if matches.contains_id("severity") {
@@ -624,6 +645,34 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
+        if matches.contains_id("verify") {
+            options.prover.verify_scope =
+                match matches.get_one::<String>("verify").unwrap().as_str() {
+                    "public" => VerificationScope::Public,
+                    "all" => VerificationScope::All,
+                    "none" => VerificationScope::None,
+                    _ => unreachable!("should not happen"),
+                }
+        }
+        if matches.contains_id("bench-repeat") {
+            options.backend.bench_repeat = matches
+                .get_one::<String>("bench-repeat")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.get_flag("ignore-pragma-opaque-when-possible") {
+            options.model_builder.ignore_pragma_opaque_when_possible = true;
+        }
+        if matches.get_flag("ignore-pragma-opaque-internal-only") {
+            options.model_builder.ignore_pragma_opaque_internal_only = true;
+        }
+        if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
+            for name in m {
+                let pass = SimplificationPass::from_str(name)
+                    .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
+                options.model_builder.simplification_pipeline.push(pass);
+            }
+        }
         if matches.get_flag("docgen") {
             options.run_docgen = true;
         }
@@ -633,6 +682,9 @@ impl Options {
                 .get_one::<String>("docgen-template")
                 .map(|s| s.to_string())
                 .unwrap()]
+        }
+        if matches.get_flag("read-write-set") {
+            options.run_read_write_set = true;
         }
         if matches.get_flag("escape") {
             options.run_escape = true;
@@ -646,6 +698,68 @@ impl Options {
         if matches.get_flag("dump-cfg") {
             options.prover.dump_cfg = true;
         }
+        if matches.contains_id("num-instances") {
+            let num_instances = matches
+                .get_one::<String>("num-instances")
+                .unwrap()
+                .parse::<usize>()?;
+            options.backend.num_instances = std::cmp::max(num_instances, 1); // at least one instance
+        }
+        if matches.get_flag("sequential") {
+            options.prover.sequential_task = true;
+        }
+        if matches.get_flag("stable-test-output") {
+            //options.prover.stable_test_output = true;
+            options.backend.stable_test_output = true;
+        }
+        if matches.get_flag("keep") {
+            options.backend.keep_artifacts = true;
+        }
+        if matches.get_flag("boogie-poly") {
+            options.prover.boogie_poly = true;
+        }
+        if matches.contains_id("seed") {
+            options.backend.random_seed = matches
+                .get_one::<String>("seed")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.get_flag("experimental-pipeline") {
+            options.experimental_pipeline = true;
+        }
+        if matches.contains_id("timeout") {
+            options.backend.vc_timeout = matches
+                .get_one::<String>("timeout")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.contains_id("cores") {
+            options.backend.proc_cores = matches
+                .get_one::<String>("cores")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.contains_id("eager-threshold") {
+            options.backend.eager_threshold = matches
+                .get_one::<String>("eager-threshold")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.contains_id("lazy-threshold") {
+            options.backend.lazy_threshold = matches
+                .get_one::<String>("lazy-threshold")
+                .unwrap()
+                .parse::<usize>()?;
+        }
+        if matches.get_flag("use-cvc5") {
+            options.backend.use_cvc5 = true;
+        }
+        if matches.get_flag("use-exp-boogie") {
+            options.backend.use_exp_boogie = true;
+        }
+        if matches.get_flag("generate-smt") {
+            options.backend.generate_smt = true;
+        }
 
         if matches.get_flag("check-inconsistency") {
             options.prover.check_inconsistency = true;
@@ -654,9 +768,29 @@ impl Options {
             options.prover.unconditional_abort_as_inconsistency = true;
         }
 
+        if matches.contains_id("verify-only") {
+            options.prover.verify_scope = VerificationScope::Only(
+                matches
+                    .get_one::<String>("verify-only")
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+
+        if matches.contains_id("z3-trace") {
+            let mut fun_name = matches.get_one::<String>("z3-trace").unwrap().as_str();
+            options.prover.verify_scope = VerificationScope::Only(fun_name.to_string());
+            if let Some(i) = fun_name.find("::") {
+                fun_name = &fun_name[i + 2..];
+            }
+            options.backend.z3_trace_file = Some(format!("{}.z3log", fun_name));
+        }
+
         if matches.get_flag("ban-int-2-bv") {
             options.prover.ban_int_2_bv = true;
         }
+
+        options.backend.derive_options();
 
         if matches.get_flag("print-config") {
             println!("{}", toml::to_string(&options).unwrap());

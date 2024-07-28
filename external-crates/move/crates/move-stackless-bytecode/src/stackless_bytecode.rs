@@ -8,8 +8,12 @@ use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_core_types::u256;
 use move_model::{
-    ast::TempIndex,
-    model::{DatatypeId, FunId, GlobalEnv, ModuleId, QualifiedInstId, RefType, VariantId},
+    ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
+    exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
+    model::{
+        DatatypeId, FunId, GlobalEnv, ModuleId, NodeId, QualifiedInstId, RefType, SpecVarId,
+        VariantId,
+    },
     ty::{Type, TypeDisplayContext},
 };
 use num::BigUint;
@@ -191,6 +195,12 @@ pub enum Operation {
     TraceLocal(TempIndex),
     TraceReturn(usize),
     TraceAbort,
+    TraceExp(TraceKind, NodeId),
+    TraceGlobalMem(QualifiedInstId<DatatypeId>),
+
+    // Event
+    EmitEvent,
+    EventStoreDiverge,
 }
 
 impl Operation {
@@ -251,6 +261,10 @@ impl Operation {
             Operation::TraceLocal(..) => false,
             Operation::TraceAbort => false,
             Operation::TraceReturn(..) => false,
+            Operation::TraceExp(..) => false,
+            Operation::EmitEvent => false,
+            Operation::EventStoreDiverge => false,
+            Operation::TraceGlobalMem(..) => false,
             Operation::PackVariant(_, _, _, _) => false,
             Operation::UnpackVariant(_, _, _, _, _) => false,
         }
@@ -329,6 +343,13 @@ impl BorrowEdge {
         }
     }
 }
+/// A specification property kind.
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+pub enum PropKind {
+    Assert,
+    Assume,
+    Modifies,
+}
 
 /// Information about the action to take on abort. The label represents the
 /// destination to jump to, and the temporary where to store the abort code before
@@ -358,6 +379,10 @@ pub enum Bytecode {
     Label(AttrId, Label),
     Abort(AttrId, TempIndex),
     Nop(AttrId),
+
+    SaveMem(AttrId, MemoryLabel, QualifiedInstId<DatatypeId>),
+    SaveSpecVar(AttrId, MemoryLabel, QualifiedInstId<SpecVarId>),
+    Prop(AttrId, PropKind, Exp),
 }
 
 impl Bytecode {
@@ -373,7 +398,10 @@ impl Bytecode {
             | Jump(id, ..)
             | Label(id, ..)
             | Abort(id, ..)
-            | Nop(id) => *id,
+            | Nop(id)
+            | SaveMem(id, ..)
+            | SaveSpecVar(id, ..)
+            | Prop(id, ..) => *id,
         }
     }
 
@@ -455,7 +483,9 @@ impl Bytecode {
             }
         }
         // always give successors in ascending order
-        v.sort();
+        if v.len() > 1 && v[0] > v[1] {
+            v.swap(0, 1);
+        }
         v
     }
 
@@ -490,7 +520,7 @@ impl Bytecode {
         })
     }
 
-    fn remap_vars_internal<F>(self, _func_target: &FunctionTarget<'_>, f: &mut F) -> Self
+    fn remap_vars_internal<F>(self, func_target: &FunctionTarget<'_>, f: &mut F) -> Self
     where
         F: FnMut(bool, TempIndex) -> TempIndex,
     {
@@ -537,11 +567,29 @@ impl Bytecode {
                 Branch(attr, if_label, else_label, f(true, cond))
             }
             Abort(attr, cond) => Abort(attr, f(true, cond)),
+            Prop(attr, kind, exp) => {
+                let new_exp = Bytecode::remap_exp(func_target, &mut |idx| f(true, idx), exp);
+                Prop(attr, kind, new_exp)
+            }
             _ => self,
         }
     }
 
-    pub fn instantiate(&self, _env: &GlobalEnv, params: &[Type]) -> Self {
+    fn remap_exp<F>(func_target: &FunctionTarget<'_>, f: &mut F, exp: Exp) -> Exp
+    where
+        F: FnMut(TempIndex) -> TempIndex,
+    {
+        let mut replacer = |node_id: NodeId, target: RewriteTarget| {
+            if let RewriteTarget::Temporary(idx) = target {
+                Some(ExpData::Temporary(node_id, f(idx)).into_exp())
+            } else {
+                None
+            }
+        };
+        ExpRewriter::new(func_target.global_env(), &mut replacer).rewrite_exp(exp)
+    }
+
+    pub fn instantiate(&self, env: &GlobalEnv, params: &[Type]) -> Self {
         use Operation::*;
         match self {
             Self::Call(attr_id, dsts, op, srcs, on_abort) => {
@@ -601,6 +649,19 @@ impl Bytecode {
                     on_abort.clone(),
                 )
             }
+            Self::SaveMem(attr_id, label, qid) => {
+                Self::SaveMem(*attr_id, *label, qid.instantiate_ref(params))
+            }
+            Self::SaveSpecVar(attr_id, label, qid) => {
+                Self::SaveSpecVar(*attr_id, *label, qid.instantiate_ref(params))
+            }
+            Self::Prop(attr_id, kind, exp) => Self::Prop(
+                *attr_id,
+                *kind,
+                ExpData::rewrite_node_id(exp.clone(), &mut |id| {
+                    ExpData::instantiate_node(env, id, params)
+                }),
+            ),
             _ => self.clone(),
         }
     }
@@ -781,6 +842,30 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
                     write!(f, " {} => {}", i, self.label_str(*l))?;
                 }
                 write!(f, "}}")?;
+            }
+            SaveMem(_, label, qid) => {
+                let env = self.func_target.global_env();
+                write!(f, "@{} := save_mem({})", label.as_usize(), env.display(qid))?;
+            }
+            SaveSpecVar(_, label, qid) => {
+                let env = self.func_target.global_env();
+                let module_env = env.get_module(qid.module_id);
+                let spec_var = module_env.get_spec_var(qid.id);
+                write!(
+                    f,
+                    "@{} := save_spec_var({}::{})",
+                    label.as_usize(),
+                    module_env.get_name().display(env.symbol_pool()),
+                    spec_var.name.display(env.symbol_pool())
+                )?;
+            }
+            Prop(_, kind, exp) => {
+                let exp_display = exp.display(self.func_target.func_env.module_env.env);
+                match kind {
+                    PropKind::Assume => write!(f, "assume {}", exp_display)?,
+                    PropKind::Assert => write!(f, "assert {}", exp_display)?,
+                    PropKind::Modifies => write!(f, "modifies {}", exp_display)?,
+                }
             }
         }
         Ok(())
@@ -1066,6 +1151,18 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
                         .display(enum_env.symbol_pool())
                 )?;
             }
+            TraceExp(kind, node_id) => {
+                let loc = self.func_target.global_env().get_node_loc(*node_id);
+                write!(
+                    f,
+                    "trace_exp[{}, {}]",
+                    kind,
+                    loc.display(self.func_target.global_env())
+                )?
+            }
+            EmitEvent => write!(f, "emit_event")?,
+            EventStoreDiverge => write!(f, "event_store_diverge")?,
+            TraceGlobalMem(_) => write!(f, "trace_global_mem")?,
         }
         Ok(())
     }
