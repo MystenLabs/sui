@@ -1,5 +1,6 @@
 [package]
 name = "PackageBasics"
+edition = "2024.beta"
 
 [addresses]
 std = "0x1"

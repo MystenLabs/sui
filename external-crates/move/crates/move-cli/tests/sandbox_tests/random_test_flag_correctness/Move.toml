@@ -1,5 +1,6 @@
 [package]
 name = "random_test_flag_correctness"
+edition = "2024.beta"
 
 [addresses]
 std = "0x1"
