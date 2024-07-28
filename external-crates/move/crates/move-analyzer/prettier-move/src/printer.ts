@@ -31,6 +31,7 @@ export type MoveOptions = {
 	alwaysBreakFunctions: boolean;
 	alwaysBreakConditionals: boolean;
 	alwaysBreakStructDefinition: boolean;
+	useModuleLabel: boolean;
 };
 
 export type printFn = (path: AstPath) => Doc;

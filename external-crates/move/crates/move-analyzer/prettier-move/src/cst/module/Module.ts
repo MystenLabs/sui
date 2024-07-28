@@ -45,10 +45,43 @@ export enum Module {
  */
 export function printModuleDefinition(
 	path: AstPath<Node>,
-	options: ParserOptions,
+	options: ParserOptions & MoveOptions,
 	print: printFn,
 ): Doc {
-	return join(' ', ['module', ...path.map(print, 'nonFormattingChildren')]);
+	let useLabel = false;
+
+	// when option is present we must check that there's only one module per file
+	if (options.useModuleLabel) {
+		let modules = path.parent!.nonFormattingChildren.filter(
+			(node) => node.type === path.node.type,
+		);
+
+		useLabel = modules.length == 1;
+	}
+
+	if (options.useModuleLabel) console.log(useLabel);
+
+	let result = [
+		'module ',
+		path.call(print, 'nonFormattingChildren', 0),
+		// path.call(print, 'nonFormattingChildren', 1),
+	];
+
+	if (useLabel) {
+		result.push(...[';', hardline, path.call(print, 'nonFormattingChildren', 1)]);
+	} else {
+		result.push(
+			...[
+				' {',
+				indent(hardline),
+				indent(path.call(print, 'nonFormattingChildren', 1)),
+				hardline,
+				'}',
+			],
+		);
+	}
+
+	return result;
 }
 
 /**
@@ -112,5 +145,5 @@ function printModuleBody(
 		return path.call(print);
 	}, 'namedAndEmptyLineChildren');
 
-	return ['{', indent(hardline), indent(join(hardline, printed)), hardline, '}'];
+	return join(hardline, printed);
 }

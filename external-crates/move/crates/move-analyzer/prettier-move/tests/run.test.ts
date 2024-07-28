@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as plugin from '../';
 import * as prettier from 'prettier';
 import { describe, it } from 'vitest';
+import { MoveOptions } from "../src/printer";
 
 const UB = process.env['UB'];
 const OPTIONS_HEADER = '// options:';
@@ -36,12 +37,15 @@ function runSpec(dirname: string) {
 				// allows `// options:` header in the test file to set prettier options
 				// e.g.
 				// ```
-				// // options: printWidth: 80
+				// // options:
+				// // printWidth: 80
 				// // tabWidth: 2
+				// // useModuleLabel: true
 				// ```
 				let config = {
 					printWidth: 80,
 					tabWidth: 4,
+					useModuleLabel: false,
 				};
 
 				if (content.startsWith(OPTIONS_HEADER)) {
@@ -49,10 +53,16 @@ function runSpec(dirname: string) {
 					while (lines.length) {
 						let line = lines.shift();
 						if (line?.startsWith('// ')) {
-							let value = /(printWidth|tabWidth)\:\ ([0-9]+)/.exec(line);
+							let value = /(printWidth|tabWidth|useModuleLabel)\:\ (true|[0-9]+)/.exec(
+								line,
+							);
 							if (value) {
 								let [_, key, val] = value || [];
-								config[key] = parseInt(val);
+								if (key == 'useModuleLabel') {
+									config[key] = val == 'true';
+								} else {
+									config[key] = parseInt(val);
+								}
 							}
 						}
 					}
@@ -66,11 +76,14 @@ function runSpec(dirname: string) {
 							// @ts-ignore
 							printers: plugin.printers,
 							defaultOptions: plugin.defaultOptions,
+							// @ts-ignore
+							options: plugin.options,
 						},
 					],
 					parser: 'move-parse',
 					printWidth: config.printWidth,
 					tabWidth: config.tabWidth,
+					useModuleLabel: config.useModuleLabel,
 				});
 
 				// user asked to regenerate output

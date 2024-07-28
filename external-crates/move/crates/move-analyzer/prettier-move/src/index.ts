@@ -78,11 +78,12 @@ export const options: Record<string, SupportOption> = {
 		default: true,
 		description: 'Always break function body into multiple lines.',
 	},
-	alwaysBreakConditionals: {
+	useModuleLabel: {
 		type: 'boolean',
 		category: 'Global',
-		default: true,
-		description: 'Always break conditional body into multiple lines.',
+		default: false,
+		description:
+			'Enable module labels instead of module with braces. This option will be ignored if there is more than one module in the file.',
 	},
 };
 
@@ -90,6 +91,7 @@ export const defaultOptions = {
 	tabWidth: 4,
 	useTabs: false,
 	printWidth: 100,
+	useModuleLabel: false,
 };
 
 export default {

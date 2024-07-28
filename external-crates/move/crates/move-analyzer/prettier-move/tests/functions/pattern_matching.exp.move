@@ -1,9 +1,9 @@
 module prettier::pattern_matching {
     fun f(x: MyEnum): u8 {
         match (x) {
-            MyEnum::Variant(ERROR) => 1,
+            MyEnum::Variant(1, true) => 1,
             MyEnum::Variant(_, _) => 1,
-            MyEnum::OtherVariant(_, ERROR) => 2,
+            MyEnum::OtherVariant(_, 3) => 2,
             // Now exhaustive since this will match all values of MyEnum::OtherVariant
             MyEnum::OtherVariant(..) => 2,
         }
