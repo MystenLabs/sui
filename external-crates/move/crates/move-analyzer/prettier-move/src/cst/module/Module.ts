@@ -59,12 +59,9 @@ export function printModuleDefinition(
 		useLabel = modules.length == 1;
 	}
 
-	if (options.useModuleLabel) console.log(useLabel);
-
 	let result = [
 		'module ',
 		path.call(print, 'nonFormattingChildren', 0),
-		// path.call(print, 'nonFormattingChildren', 1),
 	];
 
 	if (useLabel) {
