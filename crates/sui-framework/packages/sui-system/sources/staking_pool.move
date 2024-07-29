@@ -662,6 +662,7 @@ module sui_system::staking_pool {
         bag::borrow(&pool.extra_fields, FungibleStakedSuiDataKey {})
     }
 
+    #[test_only]
     public use fun fungible_staked_sui_data_total_supply as FungibleStakedSuiData.total_supply;
 
     #[test_only]
@@ -669,6 +670,7 @@ module sui_system::staking_pool {
         fungible_staked_sui_data.total_supply
     }
 
+    #[test_only]
     public use fun fungible_staked_sui_data_principal_value as FungibleStakedSuiData.principal_value;
 
     #[test_only]
