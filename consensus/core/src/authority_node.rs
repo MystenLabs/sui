@@ -452,12 +452,15 @@ mod tests {
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
-        let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
+        const NUM_OF_AUTHORITIES: usize = 4;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let temp_dirs = (0..NUM_OF_AUTHORITIES)
+            .map(|_| TempDir::new().unwrap())
+            .collect::<Vec<_>>();
 
         let mut output_receivers = Vec::with_capacity(committee.size());
         let mut authorities = Vec::with_capacity(committee.size());
-        let mut boot_counters = [0; 4];
+        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
             let (authority, receiver) = make_authority(
@@ -550,7 +553,7 @@ mod tests {
         let mut output_receivers = vec![];
         let mut authorities = BTreeMap::new();
         let mut temp_dirs = BTreeMap::new();
-        let mut boot_counters = [0; 4];
+        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
