@@ -577,6 +577,7 @@ mod tests {
         BridgeTestClusterBuilder::new()
             .with_eth_env(true)
             .with_bridge_cluster(false)
+            .with_num_validators(2)
             .build()
             .await
     }

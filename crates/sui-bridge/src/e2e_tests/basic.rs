@@ -157,6 +157,7 @@ async fn test_add_new_coins_on_sui() {
     let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
         .with_eth_env(true)
         .with_bridge_cluster(false)
+        .with_num_validators(3)
         .build()
         .await;
 
@@ -180,7 +181,6 @@ async fn test_add_new_coins_on_sui() {
     info!("Starting bridge cluster");
 
     bridge_test_cluster.set_approved_governance_actions_for_next_start(vec![
-        vec![action.clone()],
         vec![action.clone()],
         vec![action.clone()],
         vec![],
@@ -469,11 +469,19 @@ async fn wait_for_transfer_action_status(
 ) -> Result<(), anyhow::Error> {
     // Wait for the bridge action to be approved
     let now = std::time::Instant::now();
+    info!(
+        "Waiting for onchain status {:?}. chain: {:?}, nonce: {nonce}",
+        status, chain_id as u8
+    );
     loop {
         let res = sui_bridge_client
             .get_token_transfer_action_onchain_status_until_success(chain_id as u8, nonce)
             .await;
         if res == status {
+            info!(
+                "detected on chain status {:?}. chain: {:?}, nonce: {nonce}",
+                status, chain_id as u8
+            );
             return Ok(());
         }
         if now.elapsed().as_secs() > 60 {

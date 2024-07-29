@@ -73,6 +73,7 @@ pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1
 /// A helper struct that holds TestCluster and other Bridge related
 /// structs that are needed for testing.
 pub struct BridgeTestCluster {
+    pub num_validators: usize,
     pub test_cluster: TestCluster,
     bridge_client: SuiBridgeClient,
     eth_environment: EthBridgeEnvironment,
@@ -86,6 +87,7 @@ pub struct BridgeTestCluster {
 pub struct BridgeTestClusterBuilder {
     with_eth_env: bool,
     with_bridge_cluster: bool,
+    num_validators: usize,
     approved_governance_actions: Option<Vec<Vec<BridgeAction>>>,
     eth_chain_id: BridgeChainId,
     sui_chain_id: BridgeChainId,
@@ -102,6 +104,7 @@ impl BridgeTestClusterBuilder {
         BridgeTestClusterBuilder {
             with_eth_env: false,
             with_bridge_cluster: false,
+            num_validators: 4,
             approved_governance_actions: None,
             eth_chain_id: BridgeChainId::EthCustom,
             sui_chain_id: BridgeChainId::SuiCustom,
@@ -118,10 +121,16 @@ impl BridgeTestClusterBuilder {
         self
     }
 
+    pub fn with_num_validators(mut self, num_validators: usize) -> Self {
+        self.num_validators = num_validators;
+        self
+    }
+
     pub fn with_approved_governance_actions(
         mut self,
         approved_governance_actions: Vec<Vec<BridgeAction>>,
     ) -> Self {
+        assert_eq!(approved_governance_actions.len(), self.num_validators);
         self.approved_governance_actions = Some(approved_governance_actions);
         self
     }
@@ -139,15 +148,15 @@ impl BridgeTestClusterBuilder {
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
         std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
-
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
-        for _ in 0..=3 {
+        for _ in 0..self.num_validators {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp.copy());
             bridge_keys_copy.push(kp);
         }
-        let start_cluster_task = tokio::task::spawn(Self::start_test_cluster(bridge_keys));
+        let start_cluster_task =
+            tokio::task::spawn(Self::start_test_cluster(bridge_keys, self.num_validators));
         let start_eth_env_task = tokio::task::spawn(Self::start_eth_env(bridge_keys_copy));
         let (start_cluster_res, start_eth_env_res) = join!(start_cluster_task, start_eth_env_task);
         let test_cluster = start_cluster_res.unwrap();
@@ -158,7 +167,7 @@ impl BridgeTestClusterBuilder {
             let approved_governace_actions = self
                 .approved_governance_actions
                 .clone()
-                .unwrap_or(vec![vec![], vec![], vec![], vec![]]);
+                .unwrap_or(vec![vec![]; self.num_validators]);
             bridge_node_handles = Some(
                 start_bridge_cluster(&test_cluster, &eth_environment, approved_governace_actions)
                     .await,
@@ -168,6 +177,7 @@ impl BridgeTestClusterBuilder {
             .await
             .unwrap();
         BridgeTestCluster {
+            num_validators: self.num_validators,
             test_cluster,
             bridge_client,
             eth_environment,
@@ -179,8 +189,13 @@ impl BridgeTestClusterBuilder {
         }
     }
 
-    async fn start_test_cluster(bridge_keys: Vec<BridgeAuthorityKeyPair>) -> TestCluster {
+    async fn start_test_cluster(
+        bridge_keys: Vec<BridgeAuthorityKeyPair>,
+        num_validators: usize,
+    ) -> TestCluster {
+        assert_eq!(bridge_keys.len(), num_validators);
         let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_num_validators(num_validators)
             .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
             .build_with_bridge(bridge_keys, true)
             .await;
@@ -303,6 +318,7 @@ impl BridgeTestCluster {
         &mut self,
         approved_governance_actions: Vec<Vec<BridgeAction>>,
     ) {
+        assert_eq!(approved_governance_actions.len(), self.num_validators);
         self.approved_governance_actions_for_next_start = Some(approved_governance_actions);
     }
 
@@ -470,7 +486,9 @@ pub(crate) async fn deploy_sol_contract(
             )
         })
         .collect::<Vec<_>>();
-    let committee_member_stake = vec![stake; node_len];
+    let mut committee_member_stake = vec![stake; node_len];
+    // Adjust it so that the total stake is equal to TOTAL_VOTING_POWER
+    committee_member_stake[node_len - 1] = TOTAL_VOTING_POWER - stake * (node_len as u64 - 1);
     let deploy_config = SolDeployConfig {
         committee_member_stake: committee_member_stake.clone(),
         committee_members: committee_members.clone(),
