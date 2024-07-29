@@ -79,7 +79,7 @@ See the [Order API](../deepbookv3/orders) for the different order types and self
 interface PlaceLimitOrderParams {
     poolKey: string;
     balanceManagerKey: string;
-    clientOrderId: number;
+    clientOrderId: string;
     price: number;
     quantity: number;
     isBid: boolean;
@@ -105,7 +105,7 @@ customPlaceLimitOrder = (tx: Transaction) => {
     this.deepBook.placeLimitOrder({
       poolKey: poolKey,
       balanceManagerKey: managerKey,
-      clientOrderId: 1,
+      clientOrderId: '1',
       price: 0.1,
       quantity: 10,
       isBid: true,
@@ -124,7 +124,7 @@ Example of placing a market order.
 interface PlaceMarketOrderParams {
     poolKey: string;
     balanceManagerKey: string;
-    clientOrderId: number;
+    clientOrderId: string;
     quantity: number;
     isBid: boolean;
     selfMatchingOption?: SelfMatchingOptions;
@@ -140,7 +140,7 @@ customPlaceMarketOrder = (tx: Transaction) => {
     this.deepBook.placeMarketOrder({
       poolKey: poolKey,
       balanceManagerKey: managerKey,
-      clientOrderId: 2,
+      clientOrderId: '2',
       quantity: 10,
       isBid: true,
       payWithDeep: true,
