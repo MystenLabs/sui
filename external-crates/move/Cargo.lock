@@ -1542,6 +1542,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "once_cell",
  "serde",
  "serde_json",
  "sha2",
