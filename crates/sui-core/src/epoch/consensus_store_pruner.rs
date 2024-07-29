@@ -6,7 +6,7 @@ use narwhal_config::Epoch;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::Instant};
 use tracing::{error, info};
 use typed_store::rocks::safe_drop_db;
 
@@ -39,7 +39,10 @@ impl ConsensusStorePruner {
         spawn_logged_monitored_task!(async {
             info!("Starting consensus store pruner with epoch retention {epoch_retention} and prune period {epoch_prune_period:?}");
 
-            let mut timeout = tokio::time::interval(epoch_prune_period);
+            let mut timeout = tokio::time::interval_at(
+                Instant::now() + Duration::from_secs(60), // allow some time for the node to boot etc before attempting to prune
+                epoch_prune_period,
+            );
             loop {
                 tokio::select! {
                     _ = timeout.tick() => {
