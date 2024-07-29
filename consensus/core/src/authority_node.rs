@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
@@ -44,12 +43,6 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
-/// A counter that keeps track of how many times the authority node has been booted while the binary
-/// or the component that is calling the `ConsensusAuthority` has been running. It's mostly useful to
-/// make decisions on whether amnesia recovery should run or not.
-
-pub type ConsensusAuthorityBootCounter = AtomicU64;
-
 impl ConsensusAuthority {
     pub async fn start(
         network_type: ConsensusNetwork,
@@ -62,7 +55,11 @@ impl ConsensusAuthority {
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
-        boot_counter: Arc<ConsensusAuthorityBootCounter>,
+        // A counter that keeps track of how many times the authority node has been booted while the binary
+        // or the component that is calling the `ConsensusAuthority` has been running. It's mostly useful to
+        // make decisions on whether amnesia recovery should run or not. When `boot_counter` is 0, then `ConsensusAuthority`
+        // will initiate the process of amnesia recovery if that's enabled in the parameters.
+        boot_counter: u64,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -166,15 +163,11 @@ where
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
-        boot_counter: Arc<ConsensusAuthorityBootCounter>,
+        boot_counter: u64,
     ) -> Self {
         info!(
-            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}\nBoot counter: {:?}",
-            own_index,
-            committee,
-            parameters,
-            protocol_config.version,
-            boot_counter.load(Ordering::SeqCst)
+            "Starting consensus authority {}\n{:#?}\n{:#?}\n{:?}\nBoot counter: {}",
+            own_index, committee, parameters, protocol_config.version, boot_counter
         );
         assert!(committee.is_valid_index(own_index));
         let context = Arc::new(Context::new(
@@ -210,7 +203,7 @@ where
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let sync_last_known_own_block = boot_counter.load(Ordering::SeqCst) == 0
+        let sync_last_known_own_block = boot_counter == 0
             && dag_state.read().highest_accepted_round() == 0
             && !context
                 .parameters
@@ -329,9 +322,6 @@ where
             start_time.elapsed()
         );
 
-        // Increment the counter that this node has been running for
-        boot_counter.fetch_add(1, Ordering::SeqCst);
-
         Self {
             context,
             start_time,
@@ -442,7 +432,7 @@ mod tests {
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
-            Arc::new(ConsensusAuthorityBootCounter::default()),
+            0,
         )
         .await;
 
@@ -467,9 +457,7 @@ mod tests {
 
         let mut output_receivers = Vec::with_capacity(committee.size());
         let mut authorities = Vec::with_capacity(committee.size());
-        let boot_counters = (0..4)
-            .map(|_| Arc::new(ConsensusAuthorityBootCounter::default()))
-            .collect::<Vec<_>>();
+        let mut boot_counters = [0; 4];
 
         for (index, _authority_info) in committee.authorities() {
             let (authority, receiver) = make_authority(
@@ -478,9 +466,10 @@ mod tests {
                 committee.clone(),
                 keypairs.clone(),
                 network_type,
-                Some(boot_counters[index].clone()),
+                boot_counters[index],
             )
             .await;
+            boot_counters[index] += 1;
             output_receivers.push(receiver);
             authorities.push(authority);
         }
@@ -533,9 +522,10 @@ mod tests {
             committee.clone(),
             keypairs.clone(),
             network_type,
-            Some(boot_counters[index].clone()),
+            boot_counters[index],
         )
         .await;
+        boot_counters[index] += 1;
         output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
         sleep(Duration::from_secs(10)).await;
@@ -560,9 +550,7 @@ mod tests {
         let mut output_receivers = vec![];
         let mut authorities = BTreeMap::new();
         let mut temp_dirs = BTreeMap::new();
-        let mut boot_counters = (0..4)
-            .map(|_| Arc::new(ConsensusAuthorityBootCounter::default()))
-            .collect::<Vec<_>>();
+        let mut boot_counters = [0; 4];
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
@@ -572,10 +560,11 @@ mod tests {
                 committee.clone(),
                 keypairs.clone(),
                 network_type,
-                Some(boot_counters[index].clone()),
+                boot_counters[index],
             )
             .await;
             assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
+            boot_counters[index] += 1;
             output_receivers.push(receiver);
             authorities.insert(index, authority);
             temp_dirs.insert(index, dir);
@@ -611,21 +600,22 @@ mod tests {
         // to consensus but now will attempt to synchronize the last own block and recover from there. It won't be able
         // to do that successfully as authority 2 is still down.
         let dir = TempDir::new().unwrap();
-        // We do provide a new boot counter for this one to simulate a "binary" restart
-        boot_counters[index_1] = Arc::new(ConsensusAuthorityBootCounter::default());
+        // We do reset the boot counter for this one to simulate a "binary" restart
+        boot_counters[index_1] = 0;
         let (authority, mut receiver) = make_authority(
             index_1,
             &dir,
             committee.clone(),
             keypairs.clone(),
             network_type,
-            Some(boot_counters[index_1].clone()),
+            boot_counters[index_1],
         )
         .await;
         assert!(
             authority.sync_last_known_own_block_enabled(),
             "Authority should have the sync of last own block enabled"
         );
+        boot_counters[index_1] += 1;
         authorities.insert(index_1, authority);
         temp_dirs.insert(index_1, dir);
         sleep(Duration::from_secs(5)).await;
@@ -638,13 +628,14 @@ mod tests {
             committee.clone(),
             keypairs,
             network_type,
-            Some(boot_counters[index_2].clone()),
+            boot_counters[index_2],
         )
         .await;
         assert!(
             !authority.sync_last_known_own_block_enabled(),
             "Authority should not have attempted to sync the last own block"
         );
+        boot_counters[index_2] += 1;
         authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
 
@@ -670,10 +661,8 @@ mod tests {
         committee: Committee,
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
         network_type: ConsensusNetwork,
-        boot_counter: Option<Arc<ConsensusAuthorityBootCounter>>,
+        boot_counter: u64,
     ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
-        let boot_counter =
-            boot_counter.unwrap_or(Arc::new(ConsensusAuthorityBootCounter::default()));
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.
@@ -704,14 +693,9 @@ mod tests {
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
-            boot_counter.clone(),
+            boot_counter,
         )
         .await;
-
-        assert!(
-            boot_counter.load(Ordering::SeqCst) >= 1,
-            "Boot counter should have been incremented now at least >= 1"
-        );
 
         (authority, receiver)
     }

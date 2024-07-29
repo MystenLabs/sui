@@ -41,7 +41,7 @@ pub struct MysticetiManager {
     metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
-    boot_counter: Arc<ConsensusAuthorityBootCounter>,
+    boot_counter: Mutex<u64>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -70,7 +70,7 @@ impl MysticetiManager {
             authority: ArcSwapOption::empty(),
             client,
             consensus_handler: Mutex::new(None),
-            boot_counter: Arc::new(ConsensusAuthorityBootCounter::default()),
+            boot_counter: Mutex::new(0),
         }
     }
 
@@ -151,6 +151,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
+        let boot_counter = *self.boot_counter.lock().await;
         let authority = ConsensusAuthority::start(
             network_type,
             own_index,
@@ -162,10 +163,14 @@ impl ConsensusManagerTrait for MysticetiManager {
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),
-            self.boot_counter.clone(),
+            boot_counter,
         )
         .await;
         let client = authority.transaction_client();
+
+        // Now increment the boot counter
+        let mut boot_counter = self.boot_counter.lock().await;
+        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 

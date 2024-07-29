@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::Ordering;
 use std::{sync::Arc, time::Duration};
 
 use fastcrypto::traits::KeyPair;
@@ -55,6 +54,9 @@ async fn test_mysticeti_manager() {
         client,
     );
 
+    let boot_counter = *manager.boot_counter.lock().await;
+    assert_eq!(boot_counter, 0);
+
     for i in 1..=3 {
         let consensus_handler_initializer = ConsensusHandlerInitializer::new_for_testing(
             state.clone(),
@@ -87,6 +89,8 @@ async fn test_mysticeti_manager() {
 
         // THEN
         assert!(!manager.is_running().await);
-        assert_eq!(manager.boot_counter.load(Ordering::SeqCst), i);
+
+        let boot_counter = *manager.boot_counter.lock().await;
+        assert_eq!(boot_counter, i);
     }
 }
