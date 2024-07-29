@@ -162,21 +162,15 @@ impl ConsensusManagerTrait for MysticetiManager {
             registry.clone(),
         )
         .await;
+        let client = authority.transaction_client();
 
         let registry_id = self.registry_service.add(registry.clone());
 
         self.authority
             .swap(Some(Arc::new((authority, registry_id))));
 
-        // create the client to send transactions to Mysticeti and update it.
-        self.client.set(
-            self.authority
-                .load()
-                .as_ref()
-                .expect("ConsensusAuthority should have been created by now.")
-                .0
-                .transaction_client(),
-        );
+        // Initialize the client to send transactions to this Mysticeti instance.
+        self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
         let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
@@ -189,6 +183,9 @@ impl ConsensusManagerTrait for MysticetiManager {
         else {
             return;
         };
+
+        // Stop consensus submissions.
+        self.client.clear();
 
         // swap with empty to ensure there is no other reference to authority and we can safely do Arc unwrap
         let r = self.authority.swap(None).unwrap();
