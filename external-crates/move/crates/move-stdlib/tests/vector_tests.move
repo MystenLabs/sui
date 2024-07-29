@@ -679,7 +679,9 @@ module std::vector_tests {
         assert!(r.find_index!(|e| *e == 10_000).is_none());
 
         let v = vector[Droppable{}, Droppable{}];
-        assert!(v.find_index!(|e| e == Droppable{}).destroy_some() == 0);
+        let idx = v.find_index!(|e| e == Droppable{});
+        assert!(idx.destroy_some() == 0);
+        assert!(&v[idx.destroy_some()] == Droppable{});
     }
 
     #[test]
