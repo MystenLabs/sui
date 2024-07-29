@@ -23,6 +23,7 @@ fastcrypto.workspace = true
 futures.workspace = true
 http.workspace = true
 hyper.workspace = true
+hyper-util.workspace = true
 hyper-rustls.workspace = true
 itertools.workspace = true
 quinn-proto.workspace = true

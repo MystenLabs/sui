@@ -1,6 +1,7 @@
 processed 8 tasks
 
-task 0 'publish'. lines 1-11:
+task 0, lines 1-11:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 1 'publish'. lines 13-24:
+task 1, lines 13-24:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::N'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 2 'publish'. lines 26-37:
+task 2, lines 26-37:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::O'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 3 'publish'. lines 39-50:
+task 3, lines 39-50:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::P'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 3)],
 }
 
-task 4 'publish'. lines 53-63:
+task 4, lines 53-63:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -45,7 +50,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 5 'publish'. lines 65-76:
+task 5, lines 65-76:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::N'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -54,7 +60,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 6 'publish'. lines 78-89:
+task 6, lines 78-89:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,
@@ -63,7 +70,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 7 'publish'. lines 91-102:
+task 7, lines 91-102:
+//# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::P'. Got VMError: {
     major_status: PACK_TYPE_MISMATCH_ERROR,
     sub_status: None,

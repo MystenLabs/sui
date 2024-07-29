@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-18:
+task 0, lines 1-18:
+//# print-bytecode
 // Move bytecode v6
 module 1d12.M {
 struct T {
@@ -30,5 +31,6 @@ B0:
 }
 }
 
-task 2 'print-bytecode'. lines 31-44:
+task 2, lines 31-44:
+//# print-bytecode
 Error: Missing struct definition for T

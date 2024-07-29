@@ -74,7 +74,7 @@ impl SharedObjectCongestionTracker {
     pub fn should_defer_due_to_object_congestion(
         &self,
         cert: &VerifiedExecutableTransaction,
-        max_accumulated_txn_cost_per_object_in_checkpoint: u64,
+        max_accumulated_txn_cost_per_object_in_commit: u64,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
@@ -89,7 +89,7 @@ impl SharedObjectCongestionTracker {
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
 
-        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_checkpoint {
+        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_commit {
             return None;
         }
 
@@ -273,8 +273,8 @@ mod object_cost_tests {
 
         let tx_gas_budget = 100;
 
-        // Set max_accumulated_txn_cost_per_object_in_checkpoint to only allow 1 transaction to go through.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = match mode {
+        // Set max_accumulated_txn_cost_per_object_in_commit to only allow 1 transaction to go through.
+        let max_accumulated_txn_cost_per_object_in_commit = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
@@ -310,7 +310,7 @@ mod object_cost_tests {
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     &HashMap::new(),
                     0,
                 )
@@ -328,7 +328,7 @@ mod object_cost_tests {
             assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
-                    max_accumulated_txn_cost_per_object_in_checkpoint,
+                    max_accumulated_txn_cost_per_object_in_commit,
                     &HashMap::new(),
                     0,
                 )
@@ -345,7 +345,7 @@ mod object_cost_tests {
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
-                        max_accumulated_txn_cost_per_object_in_checkpoint,
+                        max_accumulated_txn_cost_per_object_in_commit,
                         &HashMap::new(),
                         0,
                     )
@@ -370,7 +370,7 @@ mod object_cost_tests {
         let shared_obj_0 = ObjectID::random();
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
         // Make should_defer_due_to_object_congestion always defer transactions.
-        let max_accumulated_txn_cost_per_object_in_checkpoint = 0;
+        let max_accumulated_txn_cost_per_object_in_commit = 0;
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(mode);
 
         // Insert a random pre-existing transaction.
@@ -392,7 +392,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {
@@ -419,7 +419,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {
@@ -447,7 +447,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
-            max_accumulated_txn_cost_per_object_in_checkpoint,
+            max_accumulated_txn_cost_per_object_in_commit,
             &previously_deferred_tx_digests,
             10,
         ) {

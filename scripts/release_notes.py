@@ -59,6 +59,7 @@ NOTE_ORDER = [
     "GraphQL",
     "CLI",
     "Rust SDK",
+    "REST API",
 ]
 
 

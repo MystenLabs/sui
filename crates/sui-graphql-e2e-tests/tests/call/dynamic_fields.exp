@@ -3,30 +3,36 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 13-52:
+task 1, lines 13-52:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8329600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 54-54:
+task 2, line 54:
+//# run Test::m::create_obj --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 56-56:
+task 3, line 56:
+//# run Test::m::add_df --sender A --args object(2,0)
 created: object(3,0), object(3,1), object(3,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6536000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 4 'run'. lines 58-58:
+task 4, line 58:
+//# run Test::m::add_dof --sender A --args object(2,0)
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 5 'create-checkpoint'. lines 60-60:
+task 5, line 60:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 62-85:
+task 6, lines 62-85:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -94,16 +100,19 @@ Response: {
   }
 }
 
-task 7 'run'. lines 87-87:
+task 7, line 87:
+//# run Test::m::wrap --sender A --args object(2,0)
 created: object(7,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 8 'create-checkpoint'. lines 89-89:
+task 8, line 89:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 91-114:
+task 9, lines 91-114:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -171,7 +180,8 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 116-141:
+task 10, lines 116-141:
+//# run-graphql
 Response: {
   "data": {
     "owner": {
@@ -251,7 +261,8 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 143-163:
+task 11, lines 143-163:
+//# run-graphql
 Response: {
   "data": {
     "owner": {
@@ -277,7 +288,8 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 165-176:
+task 12, lines 165-176:
+//# run-graphql
 Response: {
   "data": {
     "owner": {

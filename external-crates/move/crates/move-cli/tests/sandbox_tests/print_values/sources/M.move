@@ -1,33 +1,26 @@
-address 0x2 {
 #[allow(unused_field)]
-module M {
+module 0x2::M {
     #[test_only]
     use std::ascii;
     #[test_only]
     use std::debug::print;
-    #[test_only]
-    use std::debug::print_string;
     use std::string;
-    #[test_only]
-    use std::unit_test::create_signers_for_testing;
-    #[test_only]
-    use std::vector;
 
-    struct Foo has drop {}
-    struct Bar has drop { x: u128, y: Foo, z: bool }
-    struct Box<T> has drop { x: T }
+    public struct Foo has drop {}
+    public struct Bar has drop { x: u128, y: Foo, z: bool }
+    public struct Box<T> has drop { x: T }
 
-    struct GenericStruct<phantom T> has drop {
+    public struct GenericStruct<phantom T> has drop {
         val: u64,
     }
 
-    struct TestInner has drop {
+    public struct TestInner has drop {
         val: u128,
         vec: vector<u128>,
         msgs: vector<vector<u8>>
     }
 
-    struct TestStruct has drop {
+    public struct TestStruct has drop {
         addr: address,
         number: u8,
         bytes: vector<u8>,
@@ -40,7 +33,7 @@ module M {
         let x = 42;
         print(&x);
 
-        let v = vector::empty();
+        let mut v = vector::empty();
         vector::push_back(&mut v, 100);
         vector::push_back(&mut v, 200);
         vector::push_back(&mut v, 300);
@@ -124,11 +117,6 @@ module M {
 
         let a = @0x1234c0ffee;
         print(&a);
-
-        // print a signer
-        let senders = create_signers_for_testing(1);
-        let sender = vector::pop_back(&mut senders);
-        print(&sender);
     }
 
     #[allow(unused_const)]
@@ -185,9 +173,6 @@ module M {
         let v_addr = vector[@0x1234, @0x5678, @0xabcdef];
         print(&v_addr);
 
-        let v_signer = create_signers_for_testing(4);
-        print(&v_signer);
-
         let v = vector[
             TestInner {
                 val: 4u128,
@@ -231,9 +216,6 @@ module M {
         let v_addr = vector[vector[@0x1234, @0x5678], vector[@0xabcdef, @0x9999]];
         print(&v_addr);
 
-        let v_signer = vector[create_signers_for_testing(2), create_signers_for_testing(2)];
-        print(&v_signer);
-
         let v = vector[
             vector[
                 TestInner { val: 4u128, vec: vector[127u128, 128u128], msgs: vector[] },
@@ -275,5 +257,9 @@ module M {
 
         print(&obj);
     }
-}
+
+    #[test_only]
+    public fun print_string(utf8_bytes: vector<u8>) {
+        print<string::String>(&string::utf8(utf8_bytes));
+    }
 }

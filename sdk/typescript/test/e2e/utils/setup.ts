@@ -174,7 +174,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 
 	const { modules, dependencies } = JSON.parse(
 		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+			`${SUI_BIN} move --client.config ${toolbox.configPath} build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
 			{ encoding: 'utf-8' },
 		),
 	);
@@ -228,7 +228,7 @@ export async function upgradePackage(
 
 	const { modules, dependencies, digest } = JSON.parse(
 		execSync(
-			`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
+			`${SUI_BIN} move --client.config ${toolbox.configPath} build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
 			{ encoding: 'utf-8' },
 		),
 	);
@@ -238,7 +238,7 @@ export async function upgradePackage(
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
 		target: '0x2::package::authorize_upgrade',
-		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure.vector('u8', digest)],
 	});
 
 	const receipt = tx.upgrade({

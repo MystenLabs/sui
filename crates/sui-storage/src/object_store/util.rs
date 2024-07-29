@@ -160,7 +160,7 @@ pub async fn copy_recursively<S: ObjectStoreGetExt + ObjectStoreListExt, D: Obje
 ) -> Result<Vec<()>> {
     let mut input_paths = vec![];
     let mut output_paths = vec![];
-    let mut paths = src_store.list_objects(Some(dir)).await?;
+    let mut paths = src_store.list_objects(Some(dir)).await;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             input_paths.push(object_metadata.location.clone());
@@ -207,7 +207,7 @@ pub async fn delete_recursively<S: ObjectStoreDeleteExt + ObjectStoreListExt>(
     concurrency: NonZeroUsize,
 ) -> Result<Vec<()>> {
     let mut paths_to_delete = vec![];
-    let mut paths = store.list_objects(Some(path)).await?;
+    let mut paths = store.list_objects(Some(path)).await;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             paths_to_delete.push(object_metadata.location);
@@ -381,7 +381,7 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     epoch_prefix: String,
 ) -> Result<()> {
     let mut file_names = vec![];
-    let mut paths = store.list_objects(Some(dir)).await?;
+    let mut paths = store.list_objects(Some(dir)).await;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             // trim the "epoch_XX/" dir prefix here

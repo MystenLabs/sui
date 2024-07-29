@@ -7,8 +7,7 @@ use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
-use crate::authority_server::ValidatorService;
-use crate::authority_server::ValidatorServiceMetrics;
+use crate::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
@@ -28,7 +27,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use itertools::Itertools;
 use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -776,13 +774,10 @@ async fn test_authority_txn_signing_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
-        TrafficControllerMetrics::new_for_tests(),
-        None,
-        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
@@ -908,13 +903,10 @@ async fn test_authority_txn_execution_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
-        TrafficControllerMetrics::new_for_tests(),
-        None,
-        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.

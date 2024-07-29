@@ -18,7 +18,6 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
-use axum::http::StatusCode;
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -26,6 +25,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use reqwest::StatusCode;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
@@ -684,6 +684,7 @@ impl SuiClientCommands {
                     executor_version: None,
                     protocol_version: None,
                     profile_output,
+                    config_objects: None,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
@@ -704,6 +705,7 @@ impl SuiClientCommands {
                     show_effects: true,
                     executor_version,
                     protocol_version,
+                    config_objects: None,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();

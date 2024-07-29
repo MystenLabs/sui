@@ -6,6 +6,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
 
+    use crate::execution_mode::{self, ExecutionMode};
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
@@ -13,7 +14,6 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
-    use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -917,7 +917,7 @@ mod checked {
 
         if protocol_config.fresh_vm_on_framework_upgrade() {
             let new_vm = new_move_vm(
-                all_natives(/* silent */ true),
+                all_natives(/* silent */ true, protocol_config),
                 protocol_config,
                 /* enable_profiler */ None,
             )

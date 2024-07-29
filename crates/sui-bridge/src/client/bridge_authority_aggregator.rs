@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_common::authority_aggregation::quorum_map_then_reduce_with_timeout_and_prefs;
-use sui_common::authority_aggregation::ReduceOutput;
+use sui_authority_aggregation::quorum_map_then_reduce_with_timeout_and_prefs;
+use sui_authority_aggregation::ReduceOutput;
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::StakeUnit;
 use sui_types::committee::TOTAL_VOTING_POWER;
@@ -31,7 +31,7 @@ pub struct BridgeAuthorityAggregator {
 
 impl BridgeAuthorityAggregator {
     pub fn new(committee: Arc<BridgeCommittee>) -> Self {
-        let clients = committee
+        let clients: BTreeMap<BridgeAuthorityPublicKeyBytes, Arc<BridgeClient>> = committee
             .members()
             .iter()
             .filter_map(|(name, authority)| {

@@ -196,8 +196,6 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
-scoring_decision_mad_divisor: 2.3
-scoring_decision_cutoff_value: 2.5
 execution_version: 2
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240

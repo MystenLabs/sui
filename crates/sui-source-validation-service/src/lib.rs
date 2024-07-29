@@ -14,11 +14,10 @@ use tokio::sync::oneshot::Sender;
 use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, IntoMakeService};
+use axum::routing::get;
 use axum::Extension;
-use axum::{Json, Router, Server};
+use axum::{Json, Router};
 use hyper::http::{HeaderName, HeaderValue, Method};
-use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
 use mysten_metrics::RegistryService;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
@@ -445,9 +444,7 @@ pub struct AppState {
     pub sources_list: NetworkLookup,
 }
 
-pub fn serve(
-    app_state: Arc<RwLock<AppState>>,
-) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+pub async fn serve(app_state: Arc<RwLock<AppState>>) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/api", get(api_route))
         .route("/api/list", get(list_route))
@@ -462,7 +459,10 @@ pub fn serve(
         )
         .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
-    Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
+    listener.set_nonblocking(true).unwrap();
+    let listener = tokio::net::TcpListener::from_std(listener)?;
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -535,10 +535,10 @@ async fn api_route(
     }
 }
 
-async fn check_version_header<B>(
+async fn check_version_header(
     headers: HeaderMap,
-    req: hyper::Request<B>,
-    next: Next<B>,
+    req: hyper::Request<axum::body::Body>,
+    next: Next,
 ) -> Response {
     let version = headers
         .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
@@ -599,7 +599,7 @@ impl SourceServiceMetrics {
     }
 }
 
-pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
+pub fn start_prometheus_server(listener: TcpListener) -> RegistryService {
     let registry = Registry::new();
 
     let registry_service = RegistryService::new(registry);
@@ -609,11 +609,9 @@ pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
         .layer(Extension(registry_service.clone()));
 
     tokio::spawn(async move {
-        axum::Server::from_tcp(addr)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
 
     registry_service

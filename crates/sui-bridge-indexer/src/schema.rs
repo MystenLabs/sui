@@ -19,6 +19,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    sui_error_transactions (txn_digest) {
+        txn_digest -> Bytea,
+        sender_address -> Bytea,
+        timestamp_ms -> Int8,
+        failure_status -> Text,
+        cmd_idx -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     token_transfer (chain_id, nonce, status) {
         chain_id -> Int4,
         nonce -> Int8,
@@ -49,6 +59,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     progress_store,
+    sui_error_transactions,
     sui_progress_store,
     token_transfer,
     token_transfer_data,

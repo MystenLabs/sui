@@ -15,7 +15,7 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{btree_map::BTreeMap, HashMap},
+    collections::{btree_map::BTreeMap, HashMap, HashSet},
     ops::Bound,
     sync::Arc,
     time::{self, Duration},
@@ -191,6 +191,7 @@ enum RandomnessMessage {
         Vec<Vec<u8>>,
         Option<RandomnessSignature>,
     ),
+    MaybeIgnoreByzantinePeer(EpochId, PeerId),
     AdminGetPartialSignatures(RandomnessRound, oneshot::Sender<Vec<u8>>),
     AdminInjectPartialSignatures(
         AuthorityName,
@@ -209,14 +210,17 @@ struct RandomnessEventLoop {
     name: AuthorityName,
     config: RandomnessConfig,
     mailbox: mpsc::Receiver<RandomnessMessage>,
+    mailbox_sender: mpsc::WeakSender<RandomnessMessage>,
     network: anemo::Network,
     allowed_peers: AllowedPeersUpdatable,
+    allowed_peers_set: HashSet<PeerId>,
     metrics: Metrics,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
     epoch: EpochId,
     authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
     peer_share_ids: Option<HashMap<PeerId, Vec<ShareIndex>>>,
+    blocked_share_id_count: usize,
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
     aggregation_threshold: u16,
     highest_requested_round: BTreeMap<EpochId, RandomnessRound>,
@@ -285,6 +289,9 @@ impl RandomnessEventLoop {
                     self.receive_partial_signatures(peer_id, epoch, round, partial_sigs)
                 }
             }
+            RandomnessMessage::MaybeIgnoreByzantinePeer(epoch, peer_id) => {
+                self.maybe_ignore_byzantine_peer(epoch, peer_id)
+            }
             RandomnessMessage::AdminGetPartialSignatures(round, tx) => {
                 self.admin_get_partial_signatures(round, tx)
             }
@@ -330,12 +337,12 @@ impl RandomnessEventLoop {
                 Ok(acc)
             },
         )?);
-        self.allowed_peers.update(Arc::new(
-            authority_info
-                .values()
-                .map(|(peer_id, _)| *peer_id)
-                .collect(),
-        ));
+        self.allowed_peers_set = authority_info
+            .values()
+            .map(|(peer_id, _)| *peer_id)
+            .collect();
+        self.allowed_peers
+            .update(Arc::new(self.allowed_peers_set.clone()));
         self.epoch = new_epoch;
         self.authority_info = Arc::new(authority_info);
         self.dkg_output = Some(dkg_output);
@@ -641,7 +648,13 @@ impl RandomnessEventLoop {
                         warn!(
                             "received invalid partial signatures from possibly-Byzantine peer {peer_id}"
                         );
-                        // TODO: Ignore future messages from peers sending bad signatures.
+                        if let Some(sender) = self.mailbox_sender.upgrade() {
+                            sender.try_send(RandomnessMessage::MaybeIgnoreByzantinePeer(
+                                epoch,
+                                peer_id,
+                            ))
+                            .expect("RandomnessEventLoop mailbox should not overflow or be closed");
+                        }
                         return false;
                     }
                     true
@@ -713,11 +726,15 @@ impl RandomnessEventLoop {
             return;
         }
 
-        // TODO: ignore future messages from peers sending bad signatures.
         if let Err(e) =
             ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
         {
             info!("received invalid full signature from peer {peer_id}: {e:?}");
+            if let Some(sender) = self.mailbox_sender.upgrade() {
+                sender
+                    .try_send(RandomnessMessage::MaybeIgnoreByzantinePeer(epoch, peer_id))
+                    .expect("RandomnessEventLoop mailbox should not overflow or be closed");
+            }
             return;
         }
 
@@ -754,6 +771,41 @@ impl RandomnessEventLoop {
         self.randomness_tx
             .try_send((epoch, round, sig_bytes))
             .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
+    }
+
+    fn maybe_ignore_byzantine_peer(&mut self, epoch: EpochId, peer_id: PeerId) {
+        if epoch != self.epoch {
+            return; // make sure we're still on the same epoch
+        }
+        let Some(dkg_output) = &self.dkg_output else {
+            return; // can't ignore a peer if we haven't finished DKG
+        };
+        if !self.allowed_peers_set.contains(&peer_id) {
+            return; // peer is already disallowed
+        }
+        let Some(peer_share_ids) = &self.peer_share_ids else {
+            return; // can't ignore a peer if we haven't finished DKG
+        };
+        let Some(peer_shares) = peer_share_ids.get(&peer_id) else {
+            warn!("can't ignore unknown byzantine peer {peer_id:?}");
+            return;
+        };
+        let max_ignored_shares = (self.config.max_ignored_peer_weight_factor()
+            * (dkg_output.nodes.total_weight() as f64)) as usize;
+        if self.blocked_share_id_count + peer_shares.len() > max_ignored_shares {
+            warn!("ignoring byzantine peer {peer_id:?} with {} shares would exceed max ignored peer weight {max_ignored_shares}", peer_shares.len());
+            return;
+        }
+
+        warn!(
+            "ignoring byzantine peer {peer_id:?} with {} shares",
+            peer_shares.len()
+        );
+        self.blocked_share_id_count += peer_shares.len();
+        self.allowed_peers_set.remove(&peer_id);
+        self.allowed_peers
+            .update(Arc::new(self.allowed_peers_set.clone()));
+        self.metrics.inc_num_ignored_byzantine_peers();
     }
 
     fn maybe_start_pending_tasks(&mut self) {

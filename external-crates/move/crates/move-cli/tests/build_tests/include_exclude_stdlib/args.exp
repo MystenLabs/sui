@@ -1,24 +1,16 @@
 Command `build -v`:
 BUILDING build_include_exclude_stdlib
 error[E03002]: unbound module
-  ┌─ ./sources/UseSigner.move:2:7
+  ┌─ ./sources/UseSigner.move:2:9
   │
-2 │   use std::signer;
-  │       ^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::signer'
+2 │     use std::address;
+  │         ^^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::address'
 
-warning[W09002]: unused variable
-  ┌─ ./sources/UseSigner.move:4:16
+error[E03006]: unexpected name in this position
+  ┌─ ./sources/UseSigner.move:5:9
   │
-4 │   public fun f(account: &signer): address {
-  │                ^^^^^^^ Unused parameter 'account'. Consider removing or prefixing with an underscore: '_account'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-error[E03002]: unbound module
-  ┌─ ./sources/UseSigner.move:5:5
-  │
-5 │     signer::address_of(account)
-  │     ^^^^^^ Unbound module alias 'signer'
+5 │         address::length()
+  │         ^^^^^^^ Could not resolve the name 'address'
 
 Command `-d -v build`:
 INCLUDING DEPENDENCY MoveStdlib

@@ -169,10 +169,8 @@ impl RestService {
             app = Router::new().nest(&base, app);
         }
 
-        axum::Server::bind(&socket_address)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     }
 }
 
@@ -195,6 +193,38 @@ fn info() -> openapiv3::v3_1::Info {
         }),
         version: "0.0.0".to_owned(),
         ..Default::default()
+    }
+}
+
+mod _schemars {
+    use schemars::schema::InstanceType;
+    use schemars::schema::Metadata;
+    use schemars::schema::SchemaObject;
+    use schemars::JsonSchema;
+
+    pub(crate) struct U64;
+
+    impl JsonSchema for U64 {
+        fn schema_name() -> String {
+            "u64".to_owned()
+        }
+
+        fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            SchemaObject {
+                metadata: Some(Box::new(Metadata {
+                    description: Some("Radix-10 encoded 64-bit unsigned integer".to_owned()),
+                    ..Default::default()
+                })),
+                instance_type: Some(InstanceType::String.into()),
+                format: Some("u64".to_owned()),
+                ..Default::default()
+            }
+            .into()
+        }
+
+        fn is_referenceable() -> bool {
+            false
+        }
     }
 }
 
@@ -253,9 +283,9 @@ mod test {
 
         let router = openapi::OpenApiDocument::new(openapi).into_router();
 
-        axum::Server::bind(&"127.0.0.1:8000".parse().unwrap())
-            .serve(router.into_make_service())
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:8000")
             .await
             .unwrap();
+        axum::serve(listener, router).await.unwrap();
     }
 }

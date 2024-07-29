@@ -1,7 +1,9 @@
 error[E04001]: restricted visibility
    ┌─ tests/sui_mode/id_leak/private_pack.move:19:9
    │
+ 5 │     struct A has key {
+   │            - Struct defined in module 'a::a'
+   ·
 19 │         A { id }
-   │         ^^^^^^^^ Invalid instantiation of 'a::a::A'.
-All structs can only be constructed in the module in which they are declared
+   │         ^^^^^^^^ Struct 'a::a::A' can only be instantiated within its defining module 'a::a'
 

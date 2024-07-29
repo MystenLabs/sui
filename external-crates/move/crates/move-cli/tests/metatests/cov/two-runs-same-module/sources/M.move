@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     public entry fun test(x: u8) {
         if (x == 0) {
             return ()
@@ -7,5 +6,4 @@ module M {
             return ()
         }
     }
-}
 }

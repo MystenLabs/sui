@@ -1,7 +1,6 @@
-address 0x1 {
-module B {
+module 0x1::B {
     #[test_only]
-    struct TestingStruct has drop { x: u64 }
+    public struct TestingStruct has drop { x: u64 }
 
     #[test_only]
     public fun construct_with_number(x: u64): TestingStruct {
@@ -14,7 +13,7 @@ module B {
     }
 }
 
-module M {
+module 0x1::M {
     #[test_only]
     use 0x1::B;
 
@@ -29,5 +28,4 @@ module M {
         let s = B::construct_with_number(0);
         assert!(B::get_struct_x_field(&s) != 0, 0);
     }
-}
 }

@@ -248,11 +248,11 @@ impl AnemoConnectionMonitor {
         self.connection_metrics
             .network_peer_udp_transmits
             .with_label_values(&[peer_id, hostname, "transmitted"])
-            .set(stats.udp_tx.transmits as i64);
+            .set(stats.udp_tx.ios as i64);
         self.connection_metrics
             .network_peer_udp_transmits
             .with_label_values(&[peer_id, hostname, "received"])
-            .set(stats.udp_rx.transmits as i64);
+            .set(stats.udp_rx.ios as i64);
     }
 }
 

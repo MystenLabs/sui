@@ -13,6 +13,7 @@ pub mod eth_syncer;
 pub mod eth_transaction_builder;
 pub mod events;
 pub mod metrics;
+pub mod monitor;
 pub mod node;
 pub mod orchestrator;
 pub mod server;

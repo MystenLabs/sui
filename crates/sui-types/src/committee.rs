@@ -8,9 +8,9 @@ use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
-use rand::rngs::ThreadRng;
+use rand::rngs::{StdRng, ThreadRng};
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
@@ -223,6 +223,19 @@ impl Committee {
         self.voting_rights
             .binary_search_by_key(name, |(a, _)| *a)
             .is_ok()
+    }
+
+    /// Derive a seed deterministically from the transaction digest and shuffle the validators.
+    pub fn shuffle_by_stake_from_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Vec<AuthorityName> {
+        // the 32 is as requirement of the default StdRng::from_seed choice
+        let digest_bytes = tx_digest.into_inner();
+
+        // permute the validators deterministically, based on the digest
+        let mut rng = StdRng::from_seed(digest_bytes);
+        self.shuffle_by_stake_with_rng(None, None, &mut rng)
     }
 
     // ===== Testing-only methods =====

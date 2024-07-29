@@ -3,30 +3,36 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-28:
+task 1, lines 6-28:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5251600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 30-30:
+task 2, line 30:
+//# run Test::M1::emit_1 --sender A --args 1
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 32-32:
+task 3, line 32:
+//# run Test::M1::emit_2 --sender A --args 10
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [11, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'run'. lines 34-34:
+task 4, line 34:
+//# run Test::M1::emit_3 --sender A --args 100
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [100, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [101, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [102, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'create-checkpoint'. lines 36-36:
+task 5, line 36:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 38-57:
+task 6, lines 38-57:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -126,7 +132,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 59-70:
+task 7, lines 59-70:
+//# run-graphql
 Response: {
   "data": {
     "events": {
@@ -190,7 +197,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 72-91:
+task 8, lines 72-91:
+//# run-graphql
 Response: {
   "data": {
     "transactionBlocks": {
@@ -219,7 +227,8 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 93-112:
+task 9, lines 93-112:
+//# run-graphql --cursors {"i":0,"c":1}
 Response: {
   "data": {
     "transactionBlocks": {

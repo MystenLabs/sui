@@ -228,6 +228,7 @@ where
                 good_response_metrics.inc();
                 let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
+                    debug!(?tx_digest, ?wait_for_local_execution, "success");
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events.unwrap_or_default(),
@@ -249,11 +250,15 @@ where
                 )
                 .await
                 {
-                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events.unwrap_or_default(),
-                        true,
-                    )))),
+                    Ok(_) => {
+                        debug!(?tx_digest, ?wait_for_local_execution, "success");
+
+                        Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            response.events.unwrap_or_default(),
+                            true,
+                        ))))
+                    }
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events.unwrap_or_default(),
@@ -265,6 +270,8 @@ where
     }
 
     // Utilize the handle_certificate_v3 validator api to request input/output objects
+    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "trace", skip_all,
+                 fields(tx_digest = ?request.transaction.digest()))]
     pub async fn execute_transaction_v3(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -351,6 +358,7 @@ where
 
     /// Submits the transaction to Quorum Driver for execution.
     /// Returns an awaitable Future.
+    #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
     async fn submit(
         &self,
         transaction: VerifiedTransaction,

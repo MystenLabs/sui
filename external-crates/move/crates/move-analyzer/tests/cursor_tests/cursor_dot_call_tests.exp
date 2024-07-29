@@ -124,7 +124,7 @@ cursor info:
 - module: Move2024::M2
 - definition: function baz
 - position: seq item
-- value: Bind([Var(None, Var("some_struct"))], Some(Apply(Single(PathEntry { name: "SomeStructAlias", tyargs: None, is_macro: None }))), Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }] }), []))
+- value: Bind([Var(None, Var("some_struct"))], Some(Apply(Single(PathEntry { name: "SomeStructAlias", tyargs: None, is_macro: None }))), Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }], is_incomplete: false }), []))
 
 -- test 17 @ 31:18 ------------
 expected: binding in the lhs of a let-binding
@@ -140,7 +140,7 @@ cursor info:
 - module: Move2024::M2
 - definition: function baz
 - position: exp
-- value: Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }] }), [])
+- value: Call(Path(NamePath { root: RootPathEntry { name: M1, tyargs: None, is_macro: None }, entries: [PathEntry { name: "snew", tyargs: None, is_macro: None }], is_incomplete: false }), [])
 
 -- test 19 @ 34:28 ------------
 expected: name in a dot call

@@ -824,7 +824,16 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             context.tokens.start_loc(),
             " after an address in a module access chain",
         )?;
-        let name = parse_identifier(context)?;
+        let name = match parse_identifier(context) {
+            Ok(ident) => ident,
+            Err(_) => {
+                // diagnostic for this is reported in path expansion (as a parsing error) when we
+                // detect incomplete chaing (adding "default" diag here would make error reporting
+                // somewhat redundant in this case)
+                path.is_incomplete = true;
+                return Ok(NameAccessChain_::Path(path));
+            }
+        };
         let (mut is_macro, mut tys) =
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {
@@ -2932,21 +2941,28 @@ fn parse_type_(
             ));
         }
         _ => {
-            let tn = if whitespace_sensitive_ty_args {
-                parse_name_access_chain(
-                    context,
-                    /* macros */ false,
-                    /* tyargs */ true,
-                    || "a type name",
-                )?
+            if context.at_stop_set() {
+                context
+                    .env
+                    .add_diag(*unexpected_token_error(context.tokens, "a type name"));
+                Type_::UnresolvedError
             } else {
-                parse_name_access_chain_with_tyarg_whitespace(
-                    context,
-                    /* macros */ false,
-                    || "a type name",
-                )?
-            };
-            Type_::Apply(Box::new(tn))
+                let tn = if whitespace_sensitive_ty_args {
+                    parse_name_access_chain(
+                        context,
+                        /* macros */ false,
+                        /* tyargs */ true,
+                        || "a type name",
+                    )?
+                } else {
+                    parse_name_access_chain_with_tyarg_whitespace(
+                        context,
+                        /* macros */ false,
+                        || "a type name",
+                    )?
+                };
+                Type_::Apply(Box::new(tn))
+            }
         }
     };
     let end_loc = context.tokens.previous_end_loc();

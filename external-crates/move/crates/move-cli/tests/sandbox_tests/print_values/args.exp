@@ -1,6 +1,5 @@
 Command `sandbox publish`:
 Command `test`:
-INCLUDING DEPENDENCY MoveNursery
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING print_values
 Running Move unit tests
@@ -38,7 +37,6 @@ Running Move unit tests
 [debug] false
 [debug] true
 [debug] @0x1234c0ffee
-[debug] signer(0x0)
 [debug] "test_print_struct"
 [debug] 0x2::M::TestInner {
   val: 100,
@@ -62,7 +60,6 @@ Running Move unit tests
 [debug] [ 256, 257, 258, 259 ]
 [debug] [ true, false ]
 [debug] [ @0x1234, @0x5678, @0xabcdef ]
-[debug] [ signer(0x0), signer(0x100000000000000000000000000000000000000000000000000000000000000), signer(0x200000000000000000000000000000000000000000000000000000000000000), signer(0x300000000000000000000000000000000000000000000000000000000000000) ]
 [debug] [
   0x2::M::TestInner {
     val: 4,
@@ -112,10 +109,6 @@ Running Move unit tests
 [debug] [
   [ @0x1234, @0x5678 ],
   [ @0xabcdef, @0x9999 ]
-]
-[debug] [
-  [ signer(0x0), signer(0x100000000000000000000000000000000000000000000000000000000000000) ],
-  [ signer(0x0), signer(0x100000000000000000000000000000000000000000000000000000000000000) ]
 ]
 [debug] [
   [

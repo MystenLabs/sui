@@ -54,9 +54,9 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "594c417e3716fc909b71a0a8ffd01ee5b25bf4b0"'
+    --config 'patch.crates-io.tokio.rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b"'
     --config 'patch.crates-io.futures-timer.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.futures-timer.rev = "594c417e3716fc909b71a0a8ffd01ee5b25bf4b0"'
+    --config 'patch.crates-io.futures-timer.rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b"'
   )
 fi
 
@@ -95,6 +95,11 @@ fi
 
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
 export TMPDIR=$(mktemp -d)
+
+# Set the example move package for the simtest static initializer
+# https://github.com/MystenLabs/sui/blob/7bc276d534c6c758ac2cfefe96431c2b1318ca01/crates/sui-proc-macros/src/lib.rs#L52
+root_dir=$(git rev-parse --show-toplevel)
+export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
 
 cargo ${CARGO_COMMAND[@]} \
   --config "build.rustflags = [$RUST_FLAGS]" \

@@ -52,13 +52,6 @@ fn endpoint_from_multiaddr(addr: &Multiaddr) -> Result<MyEndpoint> {
             let uri = format!("{http_or_https}://{socket_addr}");
             MyEndpoint::try_from_uri(uri)?
         }
-        // Protocol::Memory(_) => todo!(),
-        #[cfg(unix)]
-        Protocol::Unix(_) => {
-            let (path, http_or_https) = crate::multiaddr::parse_unix(addr)?;
-            let uri = format!("{http_or_https}://localhost");
-            MyEndpoint::try_from_uri(uri)?.with_uds_connector(path.as_ref().into())
-        }
         unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
     };
 
@@ -67,17 +60,11 @@ fn endpoint_from_multiaddr(addr: &Multiaddr) -> Result<MyEndpoint> {
 
 struct MyEndpoint {
     endpoint: Endpoint,
-    #[cfg(unix)]
-    uds_connector: Option<std::path::PathBuf>,
 }
 
 impl MyEndpoint {
     fn new(endpoint: Endpoint) -> Self {
-        Self {
-            endpoint,
-            #[cfg(unix)]
-            uds_connector: None,
-        }
+        Self { endpoint }
     }
 
     fn try_from_uri(uri: String) -> Result<Self> {
@@ -88,50 +75,16 @@ impl MyEndpoint {
         Ok(Self::new(endpoint))
     }
 
-    #[cfg(unix)]
-    fn with_uds_connector(self, path: std::path::PathBuf) -> Self {
-        Self {
-            endpoint: self.endpoint,
-            uds_connector: Some(path),
-        }
-    }
-
     fn apply_config(mut self, config: &Config) -> Self {
         self.endpoint = apply_config_to_endpoint(config, self.endpoint);
         self
     }
 
     fn connect_lazy(self) -> Channel {
-        #[cfg(unix)]
-        if let Some(path) = self.uds_connector {
-            return self
-                .endpoint
-                .connect_with_connector_lazy(tower::service_fn(move |_: Uri| {
-                    let path = path.clone();
-
-                    // Connect to a Uds socket
-                    tokio::net::UnixStream::connect(path)
-                }));
-        }
-
         self.endpoint.connect_lazy()
     }
 
     async fn connect(self) -> Result<Channel> {
-        #[cfg(unix)]
-        if let Some(path) = self.uds_connector {
-            return self
-                .endpoint
-                .connect_with_connector(tower::service_fn(move |_: Uri| {
-                    let path = path.clone();
-
-                    // Connect to a Uds socket
-                    tokio::net::UnixStream::connect(path)
-                }))
-                .await
-                .map_err(Into::into);
-        }
-
         self.endpoint.connect().await.map_err(Into::into)
     }
 }

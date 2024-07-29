@@ -13,13 +13,12 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::TypeLayoutStore,
-    execution_mode::{self, ExecutionResult},
+    execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
+    layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
-    type_resolver::LayoutResolver,
 };
 
 use move_bytecode_verifier_meter::Meter;
@@ -35,6 +34,7 @@ use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
+use sui_adapter_latest::execution_mode;
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -50,7 +50,7 @@ impl Executor {
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
-            all_natives(silent),
+            all_natives(silent, protocol_config),
             protocol_config,
             enable_profiler,
         )?)))

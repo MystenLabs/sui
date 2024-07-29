@@ -31,6 +31,7 @@ use move_core_types::{
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
+use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
@@ -177,6 +178,34 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
+
+    fn render_command_input(
+        &self,
+        task: &TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >,
+    ) -> Option<String> {
+        match &task.command {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+                let data_str = std::fs::read_to_string(task.data.as_ref()?)
+                    .ok()?
+                    .trim()
+                    .to_string();
+                Some(format!("{}\n{}", task.task_text, data_str))
+            }
+            TaskCommand::Init(_, _)
+            | TaskCommand::PrintBytecode(_)
+            | TaskCommand::Publish(_, _)
+            | TaskCommand::Run(_, _)
+            | TaskCommand::Subcommand(..) => None,
+        }
+    }
 
     fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
@@ -513,15 +542,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             command_lines_stop,
             stop_line,
             data,
+            task_text,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident, $version:expr) => {{
                 let id = match self.fake_to_real_object_id($fake_id) {
                     None => bail!(
-                        "task {}, lines {}-{}. Unbound fake id {}",
+                        "task {}, lines {}-{}\n{}\n. Unbound fake id {}",
                         number,
                         start_line,
                         command_lines_stop,
+                        task_text,
                         $fake_id
                     ),
                     Some(res) => res,

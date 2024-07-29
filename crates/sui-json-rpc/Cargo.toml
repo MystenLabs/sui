@@ -12,6 +12,7 @@ chrono.workspace = true
 fastcrypto.workspace = true
 jsonrpsee.workspace = true
 hyper.workspace = true
+http-body = "0.4"
 itertools.workspace = true
 indexmap.workspace = true
 tower.workspace = true

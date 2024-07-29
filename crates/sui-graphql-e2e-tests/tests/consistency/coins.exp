@@ -3,24 +3,31 @@ processed 21 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 12-39:
+task 1, lines 12-39:
+//# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 41-41:
+task 2, line 41:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 3 'programmable'. lines 43-45:
+task 3, lines 43-45:
+//# programmable --sender A --inputs object(1,5) 100000 object(1,1)
+//> 0: sui::coin::mint<P0::fake::FAKE>(Input(0), Input(1));
+//> MergeCoins(Input(2), [Result(0)]);
 mutated: object(0,0), object(1,1), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
 
-task 4 'create-checkpoint'. lines 47-47:
+task 4, line 47:
+//# create-checkpoint
 Checkpoint created: 2
 
-task 5 'run-graphql'. lines 49-90:
+task 5, lines 49-90:
+//# run-graphql
 Response: {
   "data": {
     "queryCoinsAtLatest": {
@@ -258,7 +265,8 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 92-133:
+task 6, lines 92-133:
+//# run-graphql --cursors @{obj_1_3,1}
 Response: {
   "data": {
     "queryCoinsAtChkpt1": {
@@ -422,20 +430,24 @@ Response: {
   }
 }
 
-task 7 'transfer-object'. lines 135-135:
+task 7, line 135:
+//# transfer-object 1,2 --sender A --recipient B
 mutated: object(0,0), object(1,2)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 8 'transfer-object'. lines 137-137:
+task 8, line 137:
+//# transfer-object 1,3 --sender A --recipient B
 mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 9 'create-checkpoint'. lines 139-139:
+task 9, line 139:
+//# create-checkpoint
 Checkpoint created: 3
 
-task 10 'run-graphql'. lines 141-194:
+task 10, lines 141-194:
+//# run-graphql
 Response: {
   "data": {
     "queryCoins": {
@@ -627,16 +639,20 @@ Response: {
   }
 }
 
-task 12 'create-checkpoint'. lines 198-198:
+task 12, line 198:
+//# create-checkpoint
 Checkpoint created: 4
 
-task 14 'create-checkpoint'. lines 202-202:
+task 14, line 202:
+//# create-checkpoint
 Checkpoint created: 5
 
-task 16 'create-checkpoint'. lines 206-206:
+task 16, line 206:
+//# create-checkpoint
 Checkpoint created: 6
 
-task 17 'run-graphql'. lines 208-249:
+task 17, lines 208-249:
+//# run-graphql --cursors @{obj_1_3,1}
 Response: {
   "data": {
     "queryCoinsAtChkpt1BeforeSnapshotCatchup": {
@@ -800,13 +816,16 @@ Response: {
   }
 }
 
-task 18 'force-object-snapshot-catchup'. lines 251-251:
+task 18, line 251:
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 Objects snapshot updated to [0 to 4)
 
-task 19 'create-checkpoint'. lines 253-253:
+task 19, line 253:
+//# create-checkpoint
 Checkpoint created: 7
 
-task 20 'run-graphql'. lines 255-284:
+task 20, lines 255-284:
+//# run-graphql --cursors @{obj_1_3,1}
 Response: {
   "data": null,
   "errors": [

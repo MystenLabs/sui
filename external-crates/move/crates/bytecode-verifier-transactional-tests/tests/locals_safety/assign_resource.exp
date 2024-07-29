@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 10-22:
+task 1, lines 10-22:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
     sub_status: None,

@@ -38,7 +38,9 @@ impl Worker for BlobWorker {
             "{}.chk",
             checkpoint.checkpoint_summary.sequence_number
         ));
-        self.remote_store.put(&location, Bytes::from(bytes)).await?;
+        self.remote_store
+            .put(&location, Bytes::from(bytes).into())
+            .await?;
         Ok(())
     }
 }

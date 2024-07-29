@@ -3,45 +3,54 @@ processed 17 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 20-68:
+task 1, lines 20-68:
+//# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8770400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 70-70:
+task 2, line 70:
+//# run Test::M1::parent --sender A --args @A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 72-72:
+task 3, line 72:
+//# run Test::M1::child --sender A --args @A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'run'. lines 74-74:
+task 4, line 74:
+//# run Test::M1::child --sender A --args @A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'run'. lines 76-76:
+task 5, line 76:
+//# run Test::M1::add_child --sender A --args object(2,0) object(3,0) 42
 created: object(5,0)
 mutated: object(0,0), object(2,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 6 'run'. lines 78-78:
+task 6, line 78:
+//# run Test::M1::add_nested_child --sender A --args object(2,0) 42 object(4,0) 420
 created: object(6,0)
 mutated: object(0,0), object(2,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 7 'run'. lines 80-80:
+task 7, line 80:
+//# run Test::M1::reclaim_and_freeze_child --sender A --args object(2,0) 42
 mutated: object(0,0), object(2,0), object(3,0)
 deleted: object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-task 8 'create-checkpoint'. lines 82-82:
+task 8, line 82:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 84-114:
+task 9, lines 84-114:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -68,7 +77,8 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 116-146:
+task 10, lines 116-146:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -108,7 +118,8 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 148-178:
+task 11, lines 148-178:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -119,14 +130,16 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 180-210:
+task 12, lines 180-210:
+//# run-graphql
 Response: {
   "data": {
     "object": null
   }
 }
 
-task 13 'run-graphql'. lines 212-239:
+task 13, lines 212-239:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -142,14 +155,16 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 241-258:
+task 14, lines 241-258:
+//# run-graphql
 Response: {
   "data": {
     "object": null
   }
 }
 
-task 15 'run-graphql'. lines 260-287:
+task 15, lines 260-287:
+//# run-graphql
 Response: {
   "data": {
     "object": {
@@ -176,7 +191,8 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 289-316:
+task 16, lines 289-316:
+//# run-graphql
 Response: {
   "data": {
     "object": {

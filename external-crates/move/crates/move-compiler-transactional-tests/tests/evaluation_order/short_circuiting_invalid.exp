@@ -1,6 +1,7 @@
 processed 6 tasks
 
-task 1 'run'. lines 10-16:
+task 1, lines 10-16:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(42),
@@ -9,7 +10,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 2 'run'. lines 19-25:
+task 2, lines 19-25:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(42),
@@ -18,7 +20,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 3 'run'. lines 27-33:
+task 3, lines 27-33:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(42),
@@ -27,7 +30,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 4 'run'. lines 35-41:
+task 4, lines 35-41:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(42),
@@ -36,7 +40,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 5 'run'. lines 43-48:
+task 5, lines 43-48:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(0),

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{
+    body::Body,
     extract::{Path, State},
-    headers,
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use axum_extra::headers;
 
 use crate::{
     config::Version,
@@ -49,11 +50,11 @@ impl headers::Header for SuiRpcVersion {
 /// that this instance of the RPC matches that version constraint.  Each RPC instance only supports
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
-pub(crate) async fn check_version_middleware<B>(
+pub(crate) async fn check_version_middleware(
     version: Option<Path<String>>,
     State(service_version): State<Version>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request<Body>,
+    next: Next,
 ) -> Response {
     let Some(Path(version)) = version else {
         return next.run(request).await;
@@ -91,10 +92,10 @@ pub(crate) async fn check_version_middleware<B>(
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
 /// used (including the patch version and sha).
-pub(crate) async fn set_version_middleware<B>(
+pub(crate) async fn set_version_middleware(
     State(version): State<Version>,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request<Body>,
+    next: Next,
 ) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
@@ -196,7 +197,9 @@ mod tests {
     }
 
     async fn response_body(response: Response) -> String {
-        let bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let value: serde_json::Value = serde_json::from_slice(bytes.as_ref()).unwrap();
         serde_json::to_string_pretty(&value).unwrap()
     }

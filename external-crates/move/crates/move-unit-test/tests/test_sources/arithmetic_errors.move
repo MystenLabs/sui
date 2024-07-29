@@ -1,5 +1,4 @@
-address 0x1 {
-module M {
+module 0x1::M {
     #[test]
     #[expected_failure]
     fun u64_sub_underflow() {
@@ -23,5 +22,4 @@ module M {
     fun u64_mul_overflow() {
         4294967296 * 4294967296;
     }
-}
 }

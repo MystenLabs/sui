@@ -201,14 +201,24 @@ impl AliasAutocompleteInfo {
     }
 }
 
-impl From<&BTreeMap<Symbol, LeadingAccessEntry>> for AliasAutocompleteInfo {
-    fn from(names: &BTreeMap<Symbol, LeadingAccessEntry>) -> Self {
+impl
+    From<(
+        BTreeMap<Symbol, LeadingAccessEntry>,
+        BTreeMap<Symbol, MemberEntry>,
+    )> for AliasAutocompleteInfo
+{
+    fn from(
+        (leading_names, member_names): (
+            BTreeMap<Symbol, LeadingAccessEntry>,
+            BTreeMap<Symbol, MemberEntry>,
+        ),
+    ) -> Self {
         let mut addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
         let mut modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
         let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
-        for (symbol, entry) in names
+        for (symbol, entry) in leading_names
             .iter()
             .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
         {
@@ -228,23 +238,8 @@ impl From<&BTreeMap<Symbol, LeadingAccessEntry>> for AliasAutocompleteInfo {
             }
         }
 
-        AliasAutocompleteInfo {
-            members,
-            modules,
-            addresses,
-            type_params,
-        }
-    }
-}
-
-impl From<&BTreeMap<Symbol, MemberEntry>> for AliasAutocompleteInfo {
-    fn from(names: &BTreeMap<Symbol, MemberEntry>) -> Self {
-        let addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
-        let modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
-        let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
-        let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
-
-        for (symbol, entry) in names
+        // The member names shadow, though this should be no issue as they should be identical.
+        for (symbol, entry) in member_names
             .iter()
             .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_FUN_NAME.to_string())
         {
@@ -303,26 +298,27 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                     addresses,
                     type_params,
                 } = *info;
-                let names = members
+
+                let members = members
                     .into_iter()
-                    .map(|(name, m, f)| format!("{name} -> {m}::{f}"))
-                    .chain(
-                        modules
-                            .into_iter()
-                            .map(|(name, m)| format!("{name} -> {m}")),
-                    )
-                    .chain(
-                        addresses
-                            .into_iter()
-                            .map(|(name, a)| format!("{name} -> {a}")),
-                    )
-                    .chain(type_params.into_iter().map(|p| format!("{p}")))
-                    .collect::<Vec<_>>();
-                let msg = format!(
-                    "Possible in-scope names: {}",
-                    format_oxford_list!("or", "'{}'", names)
-                );
-                diag!(IDE::PathAutocomplete, (loc, msg))
+                    .map(|(name, m, f)| format!("{name} -> {m}::{f}"));
+                let member_names = format_oxford_list!(ITER, "or", "'{}'", members);
+                let modules = modules
+                    .into_iter()
+                    .map(|(name, m)| format!("{name} -> {m}"));
+                let module_names = format_oxford_list!(ITER, "or", "'{}'", modules);
+                let addrs = addresses
+                    .into_iter()
+                    .map(|(name, a)| format!("{name} -> {a}"));
+                let address_names = format_oxford_list!(ITER, "or", "'{}'", addrs);
+                let type_params = type_params.into_iter().map(|p| format!("{p}"));
+                let type_param_names = format_oxford_list!(ITER, "or", "'{}'", type_params);
+                let mut diag = diag!(IDE::PathAutocomplete, (loc, "Possible in-scope names"));
+                diag.add_note(format!("members: {member_names}"));
+                diag.add_note(format!("modules: {module_names}"));
+                diag.add_note(format!("addresses: {address_names}"));
+                diag.add_note(format!("type params: {type_param_names}"));
+                diag
             }
             IDEAnnotation::DotAutocompleteInfo(info) => {
                 let DotAutocompleteInfo { methods, fields } = *info;

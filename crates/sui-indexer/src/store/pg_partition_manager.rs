@@ -116,13 +116,11 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         )
     }
 
-    pub fn advance_and_prune_epoch_partition(
+    pub fn advance_epoch(
         &self,
         table: String,
-        first_partition: u64,
         last_partition: u64,
         data: &EpochPartitionData,
-        epochs_to_keep: Option<u64>,
     ) -> Result<(), IndexerError> {
         if data.next_epoch == 0 {
             tracing::info!("Epoch 0 partition has been created in the initial setup.");
@@ -154,46 +152,11 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                 },
                 Duration::from_secs(10)
             )?;
+
             info!(
                 "Advanced epoch partition for table {} from {} to {}, prev partition upper bound {}",
                 table, last_partition, data.next_epoch, data.last_epoch_start_cp
             );
-
-            // prune old partitions beyond the retention period
-            if let Some(epochs_to_keep) = epochs_to_keep {
-                for epoch in first_partition..(data.next_epoch - epochs_to_keep + 1) {
-                    #[cfg(feature = "postgres-feature")]
-                    transactional_blocking_with_retry!(
-                        &self.cp,
-                        |conn| {
-                            RunQueryDsl::execute(
-                                diesel::sql_query("CALL drop_partition($1, $2)")
-                                    .bind::<diesel::sql_types::Text, _>(table.clone())
-                                    .bind::<diesel::sql_types::BigInt, _>(epoch as i64),
-                                conn,
-                            )
-                        },
-                        Duration::from_secs(10)
-                    )?;
-                    #[cfg(feature = "mysql-feature")]
-                    #[cfg(not(feature = "postgres-feature"))]
-                    transactional_blocking_with_retry!(
-                        &self.cp,
-                        |conn| {
-                            RunQueryDsl::execute(
-                                diesel::sql_query(format!(
-                                    "ALTER TABLE {} DROP PARTITION partition_{}",
-                                    table.clone(),
-                                    epoch
-                                )),
-                                conn,
-                            )
-                        },
-                        Duration::from_secs(10)
-                    )?;
-                    info!("Dropped epoch partition {} for table {}", epoch, table);
-                }
-            }
         } else if last_partition != data.next_epoch {
             // skip when the partition is already advanced once, which is possible when indexer
             // crashes and restarts; error otherwise.
@@ -201,7 +164,45 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                 "Epoch partition for table {} is not in sync with the last epoch {}.",
                 table, data.last_epoch
             );
+        } else {
+            info!(
+                "Epoch has been advanced to {} already, skipping.",
+                data.next_epoch
+            );
         }
+        Ok(())
+    }
+
+    pub fn drop_table_partition(&self, table: String, partition: u64) -> Result<(), IndexerError> {
+        #[cfg(feature = "postgres-feature")]
+        transactional_blocking_with_retry!(
+            &self.cp,
+            |conn| {
+                RunQueryDsl::execute(
+                    diesel::sql_query("CALL drop_partition($1, $2)")
+                        .bind::<diesel::sql_types::Text, _>(table.clone())
+                        .bind::<diesel::sql_types::BigInt, _>(partition as i64),
+                    conn,
+                )
+            },
+            Duration::from_secs(10)
+        )?;
+        #[cfg(feature = "mysql-feature")]
+        #[cfg(not(feature = "postgres-feature"))]
+        transactional_blocking_with_retry!(
+            &self.cp,
+            |conn| {
+                RunQueryDsl::execute(
+                    diesel::sql_query(format!(
+                        "ALTER TABLE {} DROP PARTITION partition_{}",
+                        table.clone(),
+                        partition
+                    )),
+                    conn,
+                )
+            },
+            Duration::from_secs(10)
+        )?;
         Ok(())
     }
 }

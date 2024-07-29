@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Examples of BLS siganture related operations.
+/// Examples of BLS signature related operations.
 module bls_signature::example {
     use sui::bls12381;
     use std::hash::sha2_256;

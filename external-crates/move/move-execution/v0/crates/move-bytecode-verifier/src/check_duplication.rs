@@ -12,9 +12,9 @@
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, Constant, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-        ModuleHandle, Signature, StructFieldInformation, DatatypeHandle, DatatypeHandleIndex,
-        TableIndex,
+        CompiledModule, Constant, DatatypeHandle, DatatypeHandleIndex, FunctionHandle,
+        FunctionHandleIndex, FunctionInstantiation, ModuleHandle, Signature,
+        StructFieldInformation, TableIndex,
     },
     IndexKind,
 };

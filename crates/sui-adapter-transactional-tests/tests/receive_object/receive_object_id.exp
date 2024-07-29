@@ -1,16 +1,19 @@
 processed 10 tasks
 
-task 1 'publish'. lines 6-29:
+task 1, lines 6-29:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6650000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 31-31:
+task 2, line 31:
+//# run tto::M1::start
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'view-object'. lines 33-33:
+task 3, line 33:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
 Contents: tto::M1::A {
@@ -21,7 +24,8 @@ Contents: tto::M1::A {
     },
 }
 
-task 4 'view-object'. lines 35-35:
+task 4, line 35:
+//# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
 Contents: tto::M1::B {
@@ -32,19 +36,25 @@ Contents: tto::M1::B {
     },
 }
 
-task 5 'run'. lines 37-37:
+task 5, line 37:
+//# run tto::M1::receiver --args receiving(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'programmable'. lines 39-40:
+task 6, lines 39-40:
+//# programmable --inputs receiving(2,1)
+//> sui::transfer::receiving_object_id<tto::M1::B>(Input(0))
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'programmable'. lines 42-43:
+task 7, lines 42-43:
+//# programmable --inputs receiving(2,1)
+//> tto::M1::receiver(Input(0))
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'view-object'. lines 45-45:
+task 8, line 45:
+//# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
 Contents: tto::M1::A {
@@ -55,7 +65,8 @@ Contents: tto::M1::A {
     },
 }
 
-task 9 'view-object'. lines 47-47:
+task 9, line 47:
+//# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
 Contents: tto::M1::B {

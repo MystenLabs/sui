@@ -40,10 +40,8 @@ pub fn start_prometheus_server(
         .layer(Extension(registry_service.clone()));
 
     tokio::spawn(async move {
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
     Ok((registry_service, registry))
 }
@@ -180,9 +178,13 @@ pub struct IndexerMetrics {
     // indexer state metrics
     pub db_conn_pool_size: IntGauge,
     pub idle_db_conn: IntGauge,
-
     pub address_processor_failure: IntCounter,
     pub checkpoint_metrics_processor_failure: IntCounter,
+    // pruner metrics
+    pub last_pruned_epoch: IntGauge,
+    pub last_pruned_checkpoint: IntGauge,
+    pub last_pruned_transaction: IntGauge,
+    pub epoch_pruning_latency: Histogram,
 }
 
 impl IndexerMetrics {
@@ -742,6 +744,29 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            last_pruned_epoch: register_int_gauge_with_registry!(
+                "last_pruned_epoch",
+                "Last pruned epoch number",
+                registry,
+            )
+            .unwrap(),
+            last_pruned_checkpoint: register_int_gauge_with_registry!(
+                "last_pruned_checkpoint",
+                "Last pruned checkpoint sequence number",
+                registry,
+            )
+            .unwrap(),
+            last_pruned_transaction: register_int_gauge_with_registry!(
+                "last_pruned_transaction",
+                "Last pruned transaction sequence number",
+                registry,
+            ).unwrap(),
+            epoch_pruning_latency: register_histogram_with_registry!(
+                "epoch_pruning_latency",
+                "Time spent in pruning one epoch",
+                DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
         }
     }
 }

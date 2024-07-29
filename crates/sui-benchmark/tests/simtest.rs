@@ -466,15 +466,21 @@ mod test {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
                 PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
-                PerObjectCongestionControlMode::TotalGasBudget =>
-                config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    checkpoint_budget_factor
+                PerObjectCongestionControlMode::TotalGasBudget => {
+                    let total_gas_limit = checkpoint_budget_factor
                         * DEFAULT_VALIDATOR_GAS_PRICE
-                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-                ),
-                PerObjectCongestionControlMode::TotalTxCount => config.set_max_accumulated_txn_cost_per_object_in_checkpoint_for_testing(
-                    txn_count_limit
-                ),
+                        * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                },
+                PerObjectCongestionControlMode::TotalTxCount => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        txn_count_limit
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        txn_count_limit
+                    );
+                },
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             config
@@ -805,6 +811,7 @@ mod test {
         batch_payment_weight: u32,
         shared_deletion_weight: u32,
         shared_counter_hotness_factor: u32,
+        randomness_weight: u32,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -820,6 +827,7 @@ mod test {
                 batch_payment_weight: 1,
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
+                randomness_weight: 1,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -880,6 +888,7 @@ mod test {
         let delegation_weight = config.delegation_weight;
         let batch_payment_weight = config.batch_payment_weight;
         let shared_object_deletion_weight = config.shared_deletion_weight;
+        let randomness_weight = config.randomness_weight;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -910,6 +919,7 @@ mod test {
             shared_object_deletion_weight,
             adversarial_weight,
             adversarial_cfg,
+            randomness_weight,
             batch_payment_size,
             shared_counter_hotness_factor,
             num_shared_counters,

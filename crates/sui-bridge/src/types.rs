@@ -43,6 +43,10 @@ pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
 pub const USD_MULTIPLIER: u64 = 10000; // decimal places = 4
 
+pub type IsBridgePaused = bool;
+pub const BRIDGE_PAUSED: bool = true;
+pub const BRIDGE_UNPAUSED: bool = false;
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
     pub pubkey: BridgeAuthorityPublicKey,
@@ -169,7 +173,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,

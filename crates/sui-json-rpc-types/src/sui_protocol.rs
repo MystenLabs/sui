@@ -48,7 +48,6 @@ impl From<ProtocolConfigValue> for SuiProtocolConfigValue {
             ProtocolConfigValue::u16(y) => SuiProtocolConfigValue::U16(y),
             ProtocolConfigValue::u32(y) => SuiProtocolConfigValue::U32(y),
             ProtocolConfigValue::u64(x) => SuiProtocolConfigValue::U64(x),
-            ProtocolConfigValue::f64(z) => SuiProtocolConfigValue::F64(z),
             ProtocolConfigValue::bool(z) => SuiProtocolConfigValue::Bool(z),
         }
     }

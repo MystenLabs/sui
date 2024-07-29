@@ -3,8 +3,7 @@
 
 use super::ClientError;
 use async_graphql::{Response, ServerError, Value};
-use axum::http::HeaderName;
-use hyper::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderName};
 use reqwest::Response as ReqwestResponse;
 use serde_json::json;
 use std::{collections::BTreeMap, net::SocketAddr};
@@ -14,8 +13,8 @@ use sui_graphql_rpc_headers::VERSION_HEADER;
 pub struct GraphqlResponse {
     headers: HeaderMap,
     remote_address: Option<SocketAddr>,
-    http_version: hyper::Version,
-    status: hyper::StatusCode,
+    http_version: reqwest::Version,
+    status: reqwest::StatusCode,
     full_response: Response,
 }
 
@@ -39,7 +38,7 @@ impl GraphqlResponse {
     pub fn graphql_version(&self) -> Result<String, ClientError> {
         Ok(self
             .headers
-            .get(&VERSION_HEADER)
+            .get(VERSION_HEADER.as_str())
             .ok_or(ClientError::ServiceVersionHeaderNotFound)?
             .to_str()
             .map_err(|e| ClientError::ServiceVersionHeaderValueInvalidString { error: e })?
@@ -58,11 +57,11 @@ impl GraphqlResponse {
         serde_json::to_string_pretty(&self.full_response).unwrap()
     }
 
-    pub fn http_status(&self) -> hyper::StatusCode {
+    pub fn http_status(&self) -> reqwest::StatusCode {
         self.status
     }
 
-    pub fn http_version(&self) -> hyper::Version {
+    pub fn http_version(&self) -> reqwest::Version {
         self.http_version
     }
 

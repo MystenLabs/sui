@@ -321,6 +321,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             config.clone(),
             usize::MAX,
             ArchiveReaderBalancer::default(),
+            None,
         )
         .await;
 

@@ -61,10 +61,7 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
             if !modules.is_empty() {
                 change_set
-                    .add_account_changeset(
-                        addr,
-                        AccountChangeSet::from_modules(modules),
-                    )
+                    .add_account_changeset(addr, AccountChangeSet::from_modules(modules))
                     .expect("accounts should be unique");
             }
         }
