@@ -1089,13 +1089,13 @@ pub mod tests {
 
     pub async fn test_query_mutation_payload_impl() {
         async fn execute_request(
-            max_mutation_payload_size: u32,
+            max_tx_payload_size: u32,
             max_query_payload_size: u32,
             query: &str,
         ) -> Response {
             let service_config = ServiceConfig {
                 limits: Limits {
-                    max_mutation_payload_size,
+                    max_tx_payload_size,
                     max_query_payload_size,
                     ..Default::default()
                 },
