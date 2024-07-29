@@ -56,7 +56,7 @@ export interface ExecuteTransactionBlockParams {
 	signature: string | string[];
 	/** options for specifying the content to be returned */
 	options?: RpcTypes.SuiTransactionBlockResponseOptions | null | undefined;
-	/** The request type, derived from `SuiTransactionBlockResponseOptions` if None */
+	/** @deprecated the requestType parameter will be ignored */
 	requestType?: RpcTypes.ExecuteTransactionRequestType | null | undefined;
 }
 /** Return the first four bytes of the chain's genesis checkpoint digest. */
