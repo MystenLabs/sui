@@ -1368,6 +1368,9 @@
                 "base_tx_cost_per_byte": {
                   "u64": "0"
                 },
+                "bcs_failure_cost": null,
+                "bcs_legacy_min_output_size_cost": null,
+                "bcs_per_byte_serialized_cost": null,
                 "binary_address_identifiers": null,
                 "binary_constant_pool": null,
                 "binary_enum_def_instantiations": null,
@@ -1419,6 +1422,8 @@
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
+                "debug_print_base_cost": null,
+                "debug_print_stack_trace_base_cost": null,
                 "dynamic_field_add_child_object_cost_base": {
                   "u64": "100"
                 },
@@ -1652,6 +1657,12 @@
                 "hash_keccak256_data_cost_per_byte": {
                   "u64": "2"
                 },
+                "hash_sha2_256_base_cost": null,
+                "hash_sha2_256_legacy_min_input_len_cost": null,
+                "hash_sha2_256_per_byte_cost": null,
+                "hash_sha3_256_base_cost": null,
+                "hash_sha3_256_legacy_min_input_len_cost": null,
+                "hash_sha3_256_per_byte_cost": null,
                 "hmac_hmac_sha3_256_cost_base": {
                   "u64": "52"
                 },
@@ -1875,6 +1886,14 @@
                 "storage_rebate_rate": {
                   "u64": "9900"
                 },
+                "string_check_utf8_base_cost": null,
+                "string_check_utf8_per_byte_cost": null,
+                "string_index_of_base_cost": null,
+                "string_index_of_per_byte_pattern_cost": null,
+                "string_index_of_per_byte_searched_cost": null,
+                "string_is_char_boundary_base_cost": null,
+                "string_sub_string_base_cost": null,
+                "string_sub_string_per_byte_cost": null,
                 "transfer_freeze_object_cost_base": {
                   "u64": "52"
                 },
@@ -1888,6 +1907,8 @@
                 "tx_context_derive_id_cost_base": {
                   "u64": "52"
                 },
+                "type_name_get_base_cost": null,
+                "type_name_get_per_byte_cost": null,
                 "types_is_one_time_witness_cost_base": {
                   "u64": "52"
                 },
@@ -1904,7 +1925,15 @@
                   "u64": "2"
                 },
                 "vdf_hash_to_input_cost": null,
-                "vdf_verify_vdf_cost": null
+                "vdf_verify_vdf_cost": null,
+                "vector_borrow_base_cost": null,
+                "vector_destroy_empty_base_cost": null,
+                "vector_empty_base_cost": null,
+                "vector_length_base_cost": null,
+                "vector_pop_back_base_cost": null,
+                "vector_push_back_base_cost": null,
+                "vector_push_back_legacy_per_abstract_memory_unit_cost": null,
+                "vector_swap_base_cost": null
               }
             }
           }

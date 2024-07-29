@@ -1,14 +1,12 @@
-address 0x2 {
 #[allow(unused_type_parameter, unused_mut_ref)]
-module N {
+module 0x2::N {
     use 0x2::M;
 
     public fun foo<T1, T2>(): u64 {
-        let x = 3;
+        let mut x = 3;
         let y = &mut x;
         let z = M::sum(4);
         _ = y;
         z
     }
-}
 }

@@ -1,7 +1,11 @@
+// dep: ../move-stdlib/sources/macros.move
+// dep: ../move-stdlib/sources/u64.move
+// dep: ../move-stdlib/sources/option.move
+// dep: ../move-stdlib/sources/ascii.move
+// dep: ../move-stdlib/sources/string.move
 // dep: ../move-stdlib/sources/vector.move
 
 module 0x1::ReturnRefsIntoVec {
-    use std::vector;
 
     // should not complain
     fun return_vec_index_immut(v: &vector<u64>): &u64 {
