@@ -1,10 +1,11 @@
 # config.yaml format:
 # Database connection URL
 # db_url: postgres://dariorussi:dariodb@localhost:5432/deepbook
-db_url: postgres://<USER>:<DB>@localhost:5432/<TABLE>
+db_url: postgres://aslantashtanov:OzPogo101@localhost:5433/deepbook
 
 # URL of the remote store
-remote_store_url: http://checkpoints.testnet.sui.io
+# remote_store_url: http://checkpoints.testnet.sui.io
+remote_store_url: http://usw1a-tnt-rpc-0-3a5838e.testnet.sui.io:9000/rest
 # remote_store_url: http://sjc-bnt-rpc-00.mystenlabs.com:9000/rest
 # Path to the checkpoints
 # checkpoints_path: /Users/dariorussi/tmp/deepbook_indexer/checkpoints
@@ -18,5 +19,5 @@ metric_url: "0.0.0.0"
 metric_port: 1000
 
 # Optional starting and ending checkpoints
-start_checkpoint: 88912150
-end_checkpoint: 89800000
+start_checkpoint: 93481960
+end_checkpoint: 93481980

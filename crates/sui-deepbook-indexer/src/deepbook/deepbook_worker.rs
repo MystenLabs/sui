@@ -64,13 +64,15 @@ impl DeepbookWorker {
         checkpoint: u64,
         _timestamp_ms: u64,
     ) -> Deepbook {
-        info!(
-            "Processing deepbook transaction [{}] {}: {:?}",
-            checkpoint,
-            transaction.transaction.digest().base58_encode(),
-            transaction.transaction.transaction_data(),
-        );
+        // info!(
+        //     "Processing deepbook transaction [{}] {}: {:#?}",
+        //     checkpoint,
+        //     transaction.transaction.digest().base58_encode(),
+        //     transaction.transaction.transaction_data(),
+        // );
         let txn_data = transaction.transaction.transaction_data();
+        let print_data = transaction.transaction.transaction_data();
+        info!("Transaction data: {:#?}", print_data);
         let digest = transaction.transaction.digest().base58_encode();
         Deepbook {
             digest,
@@ -94,7 +96,7 @@ impl Worker for DeepbookWorker {
             .collect::<Vec<Deepbook>>();
 
         write(&self.pg_pool, data).tap_ok(|_| {
-            info!("Processed checkpoint [{}] successfully", checkpoint_num);
+            // info!("Processed checkpoint [{}] successfully", checkpoint_num);
             self.metrics.data_ingestion_checkpoint.inc();
         })
     }

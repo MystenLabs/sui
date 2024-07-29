@@ -12916,7 +12916,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "sui-config",
  "sui-data-ingestion-core",
- "sui-sdk 1.30.0",
+ "sui-sdk 1.31.0",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",

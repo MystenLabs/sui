@@ -91,7 +91,7 @@ impl SuiCheckpointSyncer {
         let indexer_metrics_cloned = indexer_meterics.clone();
 
         let object_types = vec![
-            "d8bb402e5ee5e9d59b720077a14ad19cb51f5cbd53a7d2794eb5f03c212311d0::pool::Pool"
+            "f8d6f54a3e5468911b55180d5f2ff6d8844dd7535519a80c19deffff78cb58a8::pool::Pool"
                 .to_string(),
         ];
         let worker = DeepbookWorker::new(object_types, pool, indexer_metrics_cloned);
