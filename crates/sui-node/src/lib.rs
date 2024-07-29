@@ -1180,7 +1180,7 @@ impl SuiNode {
 
         let mut consensus_store_pruner = ConsensusStorePruner::new(
             consensus_manager.get_storage_base_path(),
-            consensus_config.db_retaintion_epochs(),
+            consensus_config.db_retention_epochs(),
             consensus_config.db_pruner_period(),
         );
 

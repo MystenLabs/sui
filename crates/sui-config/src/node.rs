@@ -414,7 +414,7 @@ pub struct ConsensusConfig {
 
     // The number of epochs for which to retain the consensus DBs. Setting it to 0 will make an epoch DB getting
     // dropped as soon as system is switched to a new epoch.
-    pub db_retaintion_epochs: Option<u64>,
+    pub db_retention_epochs: Option<u64>,
 
     // Pruner will run on every epoch change but it will also check periodically on every `db_pruner_period_millis`
     // seconds to see if there are any epoch DBs to remove.
@@ -464,8 +464,8 @@ impl ConsensusConfig {
         &self.narwhal_config
     }
 
-    pub fn db_retaintion_epochs(&self) -> u64 {
-        self.db_retaintion_epochs.unwrap_or(1)
+    pub fn db_retention_epochs(&self) -> u64 {
+        self.db_retention_epochs.unwrap_or(1)
     }
 
     pub fn db_pruner_period(&self) -> Duration {
