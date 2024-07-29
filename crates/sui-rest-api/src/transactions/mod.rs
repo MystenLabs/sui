@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod execution;
+pub use execution::EffectsFinality;
 pub use execution::ExecuteTransaction;
 pub use execution::ExecuteTransactionQueryParameters;
+pub use execution::TransactionExecutionResponse;
 pub use execution::TransactionExecutor;
 
 use axum::extract::{Path, Query, State};

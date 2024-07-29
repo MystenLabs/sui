@@ -779,5 +779,5 @@ async fn get_gas_info(
 pub struct GasInfo {
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     #[schemars(with = "crate::_schemars::U64")]
-    reference_gas_price: u64,
+    pub reference_gas_price: u64,
 }
