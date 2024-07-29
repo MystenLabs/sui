@@ -1,0 +1,29 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:quote_1_0_35",
+  "//buck/third-party:syn_2_0_48",
+  "//external-crates/move/crates/enum-compat-util:enum-compat-util"
+]
+# buckify!
+
+rust_library(
+    name = "move-proc-macros",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_NAME": "move-proc-macros",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    proc_macro = True,
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

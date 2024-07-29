@@ -1,0 +1,28 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:futures_0_3_29",
+  "//buck/third-party:parking_lot_0_12_1",
+  "//buck/third-party:tokio_1_36_0"
+]
+# buckify!
+
+rust_library(
+    name = "mysten-common",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "mysten-common",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "OUT_DIR": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
