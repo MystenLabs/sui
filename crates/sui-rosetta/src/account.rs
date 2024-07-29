@@ -18,6 +18,7 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
+use sui_sdk::error::SuiRpcResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
@@ -34,10 +35,10 @@ pub async fn balance(
     let mut retry_attempts = 5;
     while retry_attempts > 0 {
         let balances_first = get_balances(&ctx, &request, address, currencies.clone()).await?;
-        let checkpoint1 = get_checkpoint(&ctx).await;
-        let mut checkpoint2 = get_checkpoint(&ctx).await;
+        let checkpoint1 = get_checkpoint(&ctx).await.unwrap();
+        let mut checkpoint2 = get_checkpoint(&ctx).await.unwrap();
         while checkpoint2 <= checkpoint1 {
-            checkpoint2 = get_checkpoint(&ctx).await;
+            checkpoint2 = get_checkpoint(&ctx).await.unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
         let balances_second = get_balances(&ctx, &request, address, currencies.clone()).await?;
@@ -61,12 +62,11 @@ pub async fn balance(
     Err(Error::RetryExhausted(String::from("retry")))
 }
 
-async fn get_checkpoint(ctx: &OnlineServerContext) -> CheckpointSequenceNumber {
+async fn get_checkpoint(ctx: &OnlineServerContext) -> SuiRpcResult<CheckpointSequenceNumber> {
     ctx.client
         .read_api()
         .get_latest_checkpoint_sequence_number()
         .await
-        .unwrap()
 }
 
 async fn get_balances(
