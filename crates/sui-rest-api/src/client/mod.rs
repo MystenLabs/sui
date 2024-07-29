@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::ListCheckpointsQueryParameters;
+pub mod sdk;
+
 use crate::transactions::ExecuteTransactionQueryParameters;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -13,89 +14,65 @@ use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 use sui_types::TypeTag;
 
+use self::sdk::Response;
+
 #[derive(Clone)]
 pub struct Client {
-    inner: reqwest::Client,
-    base_url: String,
+    inner: sdk::Client,
 }
 
 impl Client {
-    pub fn new<S: Into<String>>(base_url: S) -> Self {
+    pub fn new<S: AsRef<str>>(base_url: S) -> Self {
         Self {
-            inner: reqwest::Client::new(),
-            base_url: base_url.into(),
+            inner: sdk::Client::new(base_url.as_ref()).unwrap(),
         }
     }
 
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
-        let url = format!("{}/checkpoints", self.base_url);
-
-        let query = ListCheckpointsQueryParameters {
-            limit: Some(1),
-            start: None,
-            direction: None,
-        };
-
-        let response = self
-            .inner
-            .get(url)
-            .query(&query)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        let mut page: Vec<CertifiedCheckpointSummary> = self.bcs(response).await?;
-
-        page.pop()
-            .ok_or_else(|| anyhow!("server returned empty checkpoint list"))
+        self.inner
+            .get_latest_checkpoint()
+            .await
+            .map(Response::into_inner)
+            .map(Into::into)
     }
 
     pub async fn get_full_checkpoint(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
-        let url = format!(
-            "{}/checkpoints/{checkpoint_sequence_number}/full",
-            self.base_url
-        );
+        let url = self
+            .inner
+            .url()
+            .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
 
         let response = self
             .inner
+            .client()
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
             .await?;
 
-        self.bcs(response).await
+        self.inner.bcs(response).await.map(Response::into_inner)
     }
 
     pub async fn get_checkpoint_summary(
         &self,
         checkpoint_sequence_number: CheckpointSequenceNumber,
     ) -> Result<CertifiedCheckpointSummary> {
-        let url = format!("{}/checkpoints/{checkpoint_sequence_number}", self.base_url);
-
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        self.bcs(response).await
+        self.inner
+            .get_checkpoint(checkpoint_sequence_number)
+            .await
+            .map(Response::into_inner)
+            .map(Into::into)
     }
 
     pub async fn get_object(&self, object_id: ObjectID) -> Result<Object> {
-        let url = format!("{}/objects/{object_id}", self.base_url);
-
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        self.bcs(response).await
+        self.inner
+            .get_object(object_id.into())
+            .await
+            .map(Response::into_inner)
+            .map(Into::into)
     }
 
     pub async fn get_object_with_version(
@@ -103,16 +80,11 @@ impl Client {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Result<Object> {
-        let url = format!("{}/objects/{object_id}/version/{version}", self.base_url);
-
-        let response = self
-            .inner
-            .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
-            .send()
-            .await?;
-
-        self.bcs(response).await
+        self.inner
+            .get_object_with_version(object_id.into(), version.into())
+            .await
+            .map(Response::into_inner)
+            .map(Into::into)
     }
 
     pub async fn execute_transaction(
@@ -126,7 +98,7 @@ impl Client {
             signatures: &'a [sui_types::signature::GenericSignature],
         }
 
-        let url = format!("{}/transactions", self.base_url);
+        let url = self.inner.url().join("transactions")?;
         let body = bcs::to_bytes(&SignedTransaction {
             transaction: &transaction.inner().intent_message.value,
             signatures: &transaction.inner().tx_signatures,
@@ -134,6 +106,7 @@ impl Client {
 
         let response = self
             .inner
+            .client()
             .post(url)
             .query(parameters)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
@@ -142,32 +115,7 @@ impl Client {
             .send()
             .await?;
 
-        self.bcs(response).await
-    }
-
-    fn check_response(&self, response: reqwest::Response) -> Result<reqwest::Response> {
-        if !response.status().is_success() {
-            let status = response.status();
-            return Err(anyhow::anyhow!("request failed with status {status}"));
-        }
-
-        Ok(response)
-    }
-
-    #[allow(unused)]
-    async fn json<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
-        let response = self.check_response(response)?;
-
-        let json = response.json().await?;
-        Ok(json)
-    }
-
-    async fn bcs<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
-        let response = self.check_response(response)?;
-
-        let bytes = response.bytes().await?;
-        let bcs = bcs::from_bytes(&bytes)?;
-        Ok(bcs)
+        self.inner.bcs(response).await.map(Response::into_inner)
     }
 }
 
