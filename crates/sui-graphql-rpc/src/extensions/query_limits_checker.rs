@@ -52,7 +52,7 @@ impl<'a> PayloadSizeCheck<'a> {
     fn new(limits: &Limits, variables: &'a Variables) -> Self {
         Self {
             max_query_payload_size: limits.max_query_payload_size,
-            max_mutation_payload_size: limits.max_mutation_payload_size,
+            max_mutation_payload_size: limits.max_tx_payload_size,
             variables,
         }
     }
@@ -74,23 +74,25 @@ impl<'a> PayloadSizeCheck<'a> {
     ) -> ServerResult<()> {
         let payload_size: &PayloadSize = ctx.data_unchecked();
         let payload_size = payload_size.0;
+        // keep track of variables that are used in the dryRunTransactionBlock and
+        // executeTransactionBlock. We will remove them from the total query size
+        // but we keep them in a map in case one variable is used in multiple places,
+        // to avoid over counting
         let mut track_vars = BTreeMap::<String, usize>::new();
         for (_, val) in doc.operations.iter() {
             for n in val.node.selection_set.node.items.iter() {
-                match &n.node {
-                    Selection::Field(f) => {
-                        if f.node.name.node == "dryRunTransactionBlock" {
-                            for arg in &f.node.arguments {
-                                if arg.0.node == "txBytes" {
-                                    let tx_bytes_len =
-                                        get_value_str_len(&arg.1.node, self.variables);
-                                    if tx_bytes_len > self.max_mutation_payload_size as usize {
-                                        self.log_metric(
+                if let Selection::Field(f) = &n.node {
+                    if f.node.name.node == "dryRunTransactionBlock" {
+                        for arg in &f.node.arguments {
+                            if arg.0.node == "txBytes" {
+                                let tx_bytes_len = get_value_str_len(&arg.1.node, self.variables);
+                                if tx_bytes_len > self.max_mutation_payload_size as usize {
+                                    self.log_metric(
                                             ctx,
                                             "The txBytes size of dryRunTransactionBlock node is too large: {}",
                                             payload_size
                                         );
-                                        return Err(graphql_error_at_pos(
+                                    return Err(graphql_error_at_pos(
                                             code::BAD_USER_INPUT,
                                             format!(
                                                 "The txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is {} bytes",
@@ -98,22 +100,22 @@ impl<'a> PayloadSizeCheck<'a> {
                                             ),
                                             f.pos
                                         ));
-                                    }
-                                    track_vars.insert(arg.1.node.to_string(), tx_bytes_len);
                                 }
+                                track_vars.insert(arg.1.node.to_string(), tx_bytes_len);
                             }
-                        } else if f.node.name.node == "executeTransactionBlock" {
-                            let mut tx_bytes_len = 0;
-                            for arg in &f.node.arguments {
-                                tx_bytes_len += get_value_str_len(&arg.1.node, self.variables);
-                            }
-                            if tx_bytes_len > self.max_mutation_payload_size as usize {
-                                self.log_metric(
-                                    ctx,
-                                    "The txBytes+signatures size of {} node is too large: {}",
-                                    payload_size,
-                                );
-                                return Err(graphql_error_at_pos(
+                        }
+                    } else if f.node.name.node == "executeTransactionBlock" {
+                        let mut tx_bytes_len = 0;
+                        for arg in &f.node.arguments {
+                            tx_bytes_len += get_value_str_len(&arg.1.node, self.variables);
+                        }
+                        if tx_bytes_len > self.max_mutation_payload_size as usize {
+                            self.log_metric(
+                                ctx,
+                                "The txBytes+signatures size of {} node is too large: {}",
+                                payload_size,
+                            );
+                            return Err(graphql_error_at_pos(
                                     code::BAD_USER_INPUT,
                                     format!(
                                         "The txBytes+signatures size of {} node is too large. The maximum allowed is {} bytes",
@@ -122,19 +124,21 @@ impl<'a> PayloadSizeCheck<'a> {
                                     ),
                                     f.pos
                                 ));
-                            }
-
-                            track_vars.insert(
-                                format!(
-                                    "{}_{}",
-                                    &f.node.arguments.get(0).unwrap().1.node,
-                                    &f.node.arguments.get(1).unwrap().1.node
-                                ),
-                                tx_bytes_len,
-                            );
                         }
+
+                        track_vars.insert(
+                            format!(
+                                "{}",
+                                &f.node
+                                    .arguments
+                                    .iter()
+                                    .map(|x| x.1.node.to_string())
+                                    .collect::<Vec<_>>()
+                                    .concat(),
+                            ),
+                            tx_bytes_len,
+                        );
                     }
-                    _ => {}
                 }
             }
         }
@@ -161,15 +165,13 @@ impl<'a> PayloadSizeCheck<'a> {
         Ok(())
     }
 
-    /// Check the whole query against the allowed payload.
-    ///
-    /// This does not take into consideration variables.
+    /// Check the whole query (content-length) against the allowed payload.
     fn check_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
         let payload_size: &PayloadSize = ctx.data_unchecked();
         let payload_size = payload_size.0;
 
-        if let Some(max_payload_size) =
-            u64::try_from(self.max_query_payload_size + self.max_mutation_payload_size).ok()
+        if let Ok(max_payload_size) =
+            u64::try_from(self.max_query_payload_size + self.max_mutation_payload_size)
         {
             if payload_size > max_payload_size {
                 let metrics: &Metrics = ctx.data_unchecked();
@@ -604,7 +606,7 @@ impl Extension for QueryLimitsCheckerExt {
         }
 
         let payload_checker = PayloadSizeCheck::new(&cfg.limits, variables);
-        payload_checker.check_document(&doc, &ctx)?;
+        payload_checker.check_document(&doc, ctx)?;
 
         let mut traversal = LimitsTraversal::new(&cfg.limits, &doc.fragments, variables);
         let res = traversal.check_document(&doc);
@@ -622,6 +624,12 @@ impl Extension for QueryLimitsCheckerExt {
     }
 }
 
+/// Get the length of a string value. If the value is a list, then we expect
+/// the list to contain strings, and we sum the lengths of all the strings.
+///
+/// This is specifically designed to work with the txBytes and signatures
+/// of the executeTransactionBlock and dryRunTransactionBlock nodes, which are strings or list of
+/// strings.
 fn get_value_str_len(arg: &GqlValue, variables: &Variables) -> usize {
     match arg {
         GqlValue::String(s) => s.len(),

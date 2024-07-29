@@ -886,10 +886,6 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_mutation_payload() {}
-
-    #[tokio::test]
-    #[serial]
     async fn test_query_depth_limit() {
         test_query_depth_limit_impl().await;
     }
@@ -951,7 +947,7 @@ mod tests {
         // transfer sui transaction. The combined length of those is higher than 10 bytes
         let limits = Limits {
             max_query_payload_size: 100,
-            max_mutation_payload_size: 10,
+            max_tx_payload_size: 10,
             ..Default::default()
         };
         let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -1019,7 +1015,7 @@ mod tests {
         // transfer sui transaction
         let limits = Limits {
             max_query_payload_size: 180,
-            max_mutation_payload_size: 450,
+            max_tx_payload_size: 450,
             ..Default::default()
         };
         let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -1077,7 +1073,7 @@ mod tests {
         // This request should fail because the read part of the request is too large
         let limits = Limits {
             max_query_payload_size: 150,
-            max_mutation_payload_size: 450,
+            max_tx_payload_size: 450,
             ..Default::default()
         };
         let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -1142,7 +1138,7 @@ mod tests {
         // This request should fail because the read part of the request is too large
         let limits = Limits {
             max_query_payload_size: 100,
-            max_mutation_payload_size: 450,
+            max_tx_payload_size: 450,
             ..Default::default()
         };
 
@@ -1225,7 +1221,7 @@ mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Read query payload is too large. The maximum allowed is 100 bytes"]
+            vec!["Query payload is too large. The maximum allowed is 100 bytes"]
         );
     }
 
@@ -1236,7 +1232,7 @@ mod tests {
         // This request should fail because the txBytes of the request is too large
         let limits = Limits {
             max_query_payload_size: 1500,
-            max_mutation_payload_size: 50,
+            max_tx_payload_size: 50,
             ..Default::default()
         };
 
@@ -1319,10 +1315,7 @@ mod tests {
             .collect();
         assert_eq!(
             err,
-            vec![
-                "The payload txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 50 bytes"
-                    .to_string()
-            ]
+            vec!["The txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 50 bytes".to_string()]
         );
     }
 }
