@@ -10,6 +10,8 @@ use sui_types::{
     messages_consensus::{
         ConsensusCommitPrologue as NativeConsensusCommitPrologueTransactionV1,
         ConsensusCommitPrologueV2 as NativeConsensusCommitPrologueTransactionV2,
+        ConsensusCommitPrologueV3 as NativeConsensusCommitPrologueTransactionV3,
+        ConsensusDeterminedVersionAssignments,
     },
 };
 
@@ -22,10 +24,17 @@ use sui_types::{
 pub(crate) struct ConsensusCommitPrologueTransaction {
     epoch: u64,
     round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    sub_dag_index: Option<u64>,
     commit_timestamp_ms: CheckpointTimestamp,
     consensus_commit_digest: Option<ConsensusCommitDigest>,
     /// The checkpoint sequence number this was viewed at.
     checkpoint_viewed_at: u64,
+    /// Stores consensus handler determined shared object version assignments for transactions
+    /// within the consensus commit.
+    /// Note that currently it only stores cancelled transactions' version assignments.
+    consensus_determined_version_assignments: Option<ConsensusDeterminedVersionAssignments>,
 }
 
 /// System transaction that runs at the beginning of a checkpoint, and is responsible for setting
@@ -65,9 +74,11 @@ impl ConsensusCommitPrologueTransaction {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
+            sub_dag_index: None,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: None,
             checkpoint_viewed_at,
+            consensus_determined_version_assignments: None,
         }
     }
 
@@ -78,9 +89,28 @@ impl ConsensusCommitPrologueTransaction {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
+            sub_dag_index: None,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: Some(ccp.consensus_commit_digest),
             checkpoint_viewed_at,
+            consensus_determined_version_assignments: None,
+        }
+    }
+
+    pub(crate) fn from_v3(
+        ccp: NativeConsensusCommitPrologueTransactionV3,
+        checkpoint_viewed_at: u64,
+    ) -> Self {
+        Self {
+            epoch: ccp.epoch,
+            round: ccp.round,
+            sub_dag_index: ccp.sub_dag_index,
+            commit_timestamp_ms: ccp.commit_timestamp_ms,
+            consensus_commit_digest: Some(ccp.consensus_commit_digest),
+            checkpoint_viewed_at,
+            consensus_determined_version_assignments: Some(
+                ccp.consensus_determined_version_assignments,
+            ),
         }
     }
 }
