@@ -13,3 +13,13 @@ CREATE TABLE IF NOT EXISTS deepbook
     checkpoint                  BIGINT       NOT NULL
 );
 CREATE INDEX deepbook_sender ON deepbook (sender);
+
+CREATE TABLE IF NOT EXISTS deep_price
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    target_pool                 TEXT         NOT NULL,
+    reference_pool              TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   BIGINT       DEFAULT CURRENT_TIMESTAMP
+)

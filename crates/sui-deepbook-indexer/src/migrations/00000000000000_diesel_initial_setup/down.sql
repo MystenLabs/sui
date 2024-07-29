@@ -1,2 +1,3 @@
 DROP TABLE IF EXISTS progress_store;
 DROP TABLE IF EXISTS deepbook;
+DROP TABLE IF EXISTS deep_price;

@@ -20,3 +20,14 @@ pub struct Deepbook {
     pub sender: String,
     pub checkpoint: i64,
 }
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = deep_price, primary_key(digest))]
+pub struct DeepPrice {
+    pub digest: String,
+    pub sender: String,
+    pub target_pool: String,
+    pub reference_pool: String,
+    pub checkpoint: i64,
+    pub timestamp: i64,
+}
