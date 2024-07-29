@@ -70,10 +70,6 @@ export class DeepBookClient {
 		this.governance = new GovernanceContract(this.#config);
 	}
 
-	setConfig(config: DeepBookConfig) {
-		this.#config = config;
-	}
-
 	/**
 	 * @description Check the balance of a balance manager for a specific coin
 	 * @param {string} managerKey Key of the balance manager
