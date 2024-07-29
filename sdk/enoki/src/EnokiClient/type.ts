@@ -7,12 +7,19 @@ import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import type { AuthProvider } from '../EnokiFlow.js';
 
 export type EnokiNetwork = 'mainnet' | 'testnet' | 'devnet';
+export type EnokiDomainNetwork = 'mainnet' | 'testnet';
 
 export interface GetAppApiInput {}
 export interface GetAppApiResponse {
+	allowedOrigins: string[];
 	authenticationProviders: {
 		providerType: AuthProvider;
 		clientId: string;
+	}[];
+	domains: {
+		nftId: string;
+		name: string;
+		network: EnokiDomainNetwork;
 	}[];
 }
 
@@ -76,4 +83,34 @@ export interface ExecuteSponsoredTransactionApiInput {
 
 export interface ExecuteSponsoredTransactionApiResponse {
 	digest: string;
+}
+
+export interface GetSubnamesApiInput {
+	address?: string;
+	network?: EnokiDomainNetwork;
+	domain?: string;
+}
+export interface GetSubnamesApiResponse {
+	subnames: {
+		name: string;
+	}[];
+}
+
+export interface CreateSubnameApiInput {
+	domain: string;
+	network?: EnokiDomainNetwork;
+	subname: string;
+	targetAddress?: string;
+}
+export interface CreateSubnameApiResponse {
+	name: string;
+}
+
+export interface DeleteSubnameApiInput {
+	domain: string;
+	network?: EnokiDomainNetwork;
+	subname: string;
+}
+export interface DeleteSubnameApiResponse {
+	name: string;
 }

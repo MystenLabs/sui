@@ -4,14 +4,20 @@
 import type {
 	CreateSponsoredTransactionApiInput,
 	CreateSponsoredTransactionApiResponse,
+	CreateSubnameApiInput,
+	CreateSubnameApiResponse,
 	CreateZkLoginNonceApiInput,
 	CreateZkLoginNonceApiResponse,
 	CreateZkLoginZkpApiInput,
 	CreateZkLoginZkpApiResponse,
+	DeleteSubnameApiInput,
+	DeleteSubnameApiResponse,
 	ExecuteSponsoredTransactionApiInput,
 	ExecuteSponsoredTransactionApiResponse,
 	GetAppApiInput,
 	GetAppApiResponse,
+	GetSubnamesApiInput,
+	GetSubnamesApiResponse,
 	GetZkLoginApiInput,
 	GetZkLoginApiResponse,
 } from './type.js';
@@ -132,6 +138,40 @@ export class EnokiClient {
 				}),
 			},
 		);
+	}
+
+	getSubnames(input: GetSubnamesApiInput) {
+		return this.#fetch<GetSubnamesApiResponse>('subnames', {
+			method: 'GET',
+			body: JSON.stringify({
+				address: input.address,
+				network: input.network,
+				domain: input.domain,
+			}),
+		});
+	}
+
+	createSubname(input: CreateSubnameApiInput) {
+		return this.#fetch<CreateSubnameApiResponse>('subnames', {
+			method: 'POST',
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+				targetAddress: input.targetAddress,
+			}),
+		});
+	}
+
+	deleteSubname(input: DeleteSubnameApiInput) {
+		this.#fetch<DeleteSubnameApiResponse>('subnames', {
+			method: 'DELETE',
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+			}),
+		});
 	}
 
 	async #fetch<T = unknown>(path: string, init: RequestInit): Promise<T> {
