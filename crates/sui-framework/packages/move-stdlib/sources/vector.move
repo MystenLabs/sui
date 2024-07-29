@@ -238,7 +238,7 @@ module std::vector {
 
     /// Finds the index of first element in the vector `v` that satisfies the predicate `f`.
     /// Returns `some(index)` if such an element is found, otherwise `none()`.
-    public macro fun find_index<$T>($v: vector<$T>, $f: |&$T| -> bool): Option<u64> {
+    public macro fun find_index<$T>($v: &vector<$T>, $f: |&$T| -> bool): Option<u64> {
         let v = $v;
         'find_index: {
             v.length().do!(|i| if ($f(&v[i])) return 'find_index option::some(i));
