@@ -99,7 +99,7 @@ impl IndexerProgressStore for PgBridgePersistent {
             .values(&models::ProgressStore {
                 task_name,
                 checkpoint: checkpoint_number as i64,
-                // Target checkpoint will only be written for new entries,
+                // Target checkpoint and timestamp will only be written for new entries
                 target_checkpoint: i64::MAX,
                 timestamp: None,
             })
