@@ -37,7 +37,7 @@ export type SuiSignAndExecuteTransactionBlockMethod = (
 /** Input for signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionBlockInput extends SuiSignTransactionBlockInput {
 	/**
-	 * @deprecated requestType will be ignored by JSON RPC
+	 * @deprecated requestType will be ignored by JSON RPC in the future
 	 */
 	requestType?: ExecuteTransactionRequestType;
 	/** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */

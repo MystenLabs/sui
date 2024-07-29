@@ -175,7 +175,7 @@ const options: {
 					typeAlias: 'string | string[]',
 				},
 				requestType: {
-					deprecated: 'requestType will be ignored by JSON RPC',
+					deprecated: 'requestType will be ignored by JSON RPC in the future',
 				},
 			},
 		},
