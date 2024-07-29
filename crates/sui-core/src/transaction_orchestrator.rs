@@ -35,9 +35,9 @@ use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffe
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
-    ExecuteTransactionResponse, ExecuteTransactionResponseV3, FinalizedEffects,
-    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverEffectsQueueResult,
+    QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
@@ -148,125 +148,60 @@ where
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all,
     fields(
         tx_digest = ?request.transaction.digest(),
-        tx_type = ?request.transaction_type(),
+        tx_type = ?request_type,
     ),
     err)]
     pub async fn execute_transaction_block(
         &self,
-        request: ExecuteTransactionRequest,
+        request: ExecuteTransactionRequestV3,
+        request_type: ExecuteTransactionRequestType,
         client_addr: Option<SocketAddr>,
-    ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
-        // TODO check if tx is already executed on this node.
-        // Note: since EffectsCert is not stored today, we need to gather that from validators
-        // (and maybe store it for caching purposes)
+    ) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError>
+    {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
 
-        let transaction = epoch_store
-            .verify_transaction(request.transaction)
-            .map_err(QuorumDriverError::InvalidUserSignature)?;
-        let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
-        let tx_digest = *transaction.digest();
-        debug!(?tx_digest, "TO Received transaction execution request.");
+        let (transaction, response) = self
+            .execute_transaction_impl(&epoch_store, request, client_addr)
+            .await?;
 
-        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.contains_shared_object() {
-            (
-                self.metrics.request_latency_shared_obj.start_timer(),
-                self.metrics
-                    .wait_for_finality_latency_shared_obj
-                    .start_timer(),
-            )
-        } else {
-            (
-                self.metrics.request_latency_single_writer.start_timer(),
-                self.metrics
-                    .wait_for_finality_latency_single_writer
-                    .start_timer(),
-            )
-        };
-
-        // TODO: refactor all the gauge and timer metrics with `monitored_scope`
-        let wait_for_finality_gauge = self.metrics.wait_for_finality_in_flight.clone();
-        wait_for_finality_gauge.inc();
-        let _wait_for_finality_gauge = scopeguard::guard(wait_for_finality_gauge, |in_flight| {
-            in_flight.dec();
-        });
-
-        let ticket = self
-            .submit(
-                transaction.clone(),
-                ExecuteTransactionRequestV3::new_v2(transaction.clone()),
-                client_addr,
+        let executed_locally = if matches!(
+            request_type,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ) {
+            let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                transaction,
+                response.effects_cert.executed_epoch(),
+            );
+            Self::execute_finalized_tx_locally_with_timeout(
+                &self.validator_state,
+                &epoch_store,
+                &executable_tx,
+                &response.effects_cert,
+                &self.metrics,
             )
             .await
-            .map_err(|e| {
-                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?;
-
-        let wait_for_local_execution = matches!(
-            request.request_type,
-            ExecuteTransactionRequestType::WaitForLocalExecution
-        );
-
-        let Ok(result) = timeout(WAIT_FOR_FINALITY_TIMEOUT, ticket).await else {
-            debug!(?tx_digest, "Timeout waiting for transaction finality.");
-            self.metrics.wait_for_finality_timeout.inc();
-            return Err(QuorumDriverError::TimeoutBeforeFinality);
+            .is_ok()
+        } else {
+            false
         };
 
-        drop(_txn_finality_timer);
-        drop(_wait_for_finality_gauge);
-        self.metrics.wait_for_finality_finished.inc();
+        let QuorumDriverResponse {
+            effects_cert,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        } = response;
 
-        match result {
-            Err(err) => {
-                warn!(?tx_digest, "QuorumDriverInternalError: {err:?}");
-                Err(QuorumDriverError::QuorumDriverInternalError(err))
-            }
-            Ok(Err(err)) => Err(err),
-            Ok(Ok(response)) => {
-                good_response_metrics.inc();
-                let QuorumDriverResponse { effects_cert, .. } = response;
-                if !wait_for_local_execution {
-                    debug!(?tx_digest, ?wait_for_local_execution, "success");
-                    return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events.unwrap_or_default(),
-                        false,
-                    ))));
-                }
+        let response = ExecuteTransactionResponseV3 {
+            effects: FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        };
 
-                let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                    transaction,
-                    effects_cert.executed_epoch(),
-                );
-
-                match Self::execute_finalized_tx_locally_with_timeout(
-                    &self.validator_state,
-                    &epoch_store,
-                    &executable_tx,
-                    &effects_cert,
-                    &self.metrics,
-                )
-                .await
-                {
-                    Ok(_) => {
-                        debug!(?tx_digest, ?wait_for_local_execution, "success");
-
-                        Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                            response.events.unwrap_or_default(),
-                            true,
-                        ))))
-                    }
-                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        response.events.unwrap_or_default(),
-                        false,
-                    )))),
-                }
-            }
-        }
+        Ok((response, executed_locally))
     }
 
     // Utilize the handle_certificate_v3 validator api to request input/output objects
@@ -277,11 +212,37 @@ where
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
-        // TODO check if tx is already executed on this node.
-        // Note: since EffectsCert is not stored today, we need to gather that from validators
-        // (and maybe store it for caching purposes)
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
 
+        let QuorumDriverResponse {
+            effects_cert,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        } = self
+            .execute_transaction_impl(&epoch_store, request, client_addr)
+            .await
+            .map(|(_, r)| r)?;
+
+        Ok(ExecuteTransactionResponseV3 {
+            effects: FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        })
+    }
+
+    // TODO check if tx is already executed on this node.
+    // Note: since EffectsCert is not stored today, we need to gather that from validators
+    // (and maybe store it for caching purposes)
+    pub async fn execute_transaction_impl(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        request: ExecuteTransactionRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<(VerifiedTransaction, QuorumDriverResponse), QuorumDriverError> {
         let transaction = epoch_store
             .verify_transaction(request.transaction.clone())
             .map_err(QuorumDriverError::InvalidUserSignature)?;
@@ -313,7 +274,7 @@ where
         });
 
         let ticket = self
-            .submit(transaction, request, client_addr)
+            .submit(transaction.clone(), request, client_addr)
             .await
             .map_err(|e| {
                 warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
@@ -338,20 +299,7 @@ where
             Ok(Err(err)) => Err(err),
             Ok(Ok(response)) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse {
-                    effects_cert,
-                    events,
-                    input_objects,
-                    output_objects,
-                    auxiliary_data,
-                } = response;
-                Ok(ExecuteTransactionResponseV3 {
-                    effects: FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                    events,
-                    input_objects,
-                    output_objects,
-                    auxiliary_data,
-                })
+                Ok((transaction, response))
             }
         }
     }
