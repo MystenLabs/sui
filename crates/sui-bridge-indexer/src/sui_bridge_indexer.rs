@@ -119,7 +119,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let cp: Vec<models::ProgressStore> = dsl::progress_store
             .filter(columns::task_name.like(format!("{prefix} - %")))
             .filter(columns::checkpoint.lt(columns::target_checkpoint))
-            .order_by(columns::checkpoint.desc())
+            .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)?;
         Ok(cp.into_iter().map(|d| d.into()).collect())
     }

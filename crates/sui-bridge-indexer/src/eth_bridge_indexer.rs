@@ -65,7 +65,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<EthData>>), Error> {
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<(u64, Vec<EthData>)>), Error> {
         let eth_client = Arc::new(
             EthClient::<Http>::new(
                 &self.eth_rpc_url,
@@ -141,17 +141,13 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                     indexer_metrics
                         .last_committed_eth_block
                         .set(block_number as i64);
-                    data_sender.send(data).await?;
+                    data_sender.send((block_number, data)).await?;
                 }
             }
             task_handles.iter().for_each(|h| h.abort());
             Ok::<_, Error>(())
         });
         Ok((handle, data_receiver))
-    }
-
-    fn get_block_number((log, _, _): &EthData) -> u64 {
-        log.block_number
     }
 }
 
@@ -186,7 +182,13 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinal
         task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<RawEthData>>), Error> {
+    ) -> Result<
+        (
+            JoinHandle<Result<(), Error>>,
+            Receiver<(u64, Vec<RawEthData>)>,
+        ),
+        Error,
+    > {
         let eth_client = Arc::new(
             EthClient::<Http>::new(
                 &self.eth_rpc_url,
@@ -253,17 +255,13 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinal
                     indexer_metrics
                         .last_committed_unfinalized_eth_block
                         .set(block_number as i64);
-                    data_sender.send(data).await?;
+                    data_sender.send((block_number, data)).await?;
                 }
             }
             task_handles.iter().for_each(|h| h.abort());
             Ok::<_, Error>(())
         });
         Ok((handle, data_receiver))
-    }
-
-    fn get_block_number((log, _, _): &RawEthData) -> u64 {
-        log.block_number
     }
 }
 

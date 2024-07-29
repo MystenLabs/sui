@@ -224,18 +224,15 @@ pub trait Datasource<T: Send, P, R> {
         let (join_handle, mut data_channel) = self
             .start_data_retrieval(task_name.clone(), starting_checkpoint, target_checkpoint)
             .await?;
-        while let Some(data) = data_channel.recv().await {
-            if data.is_empty() {
-                continue;
+        while let Some((block_number, data)) = data_channel.recv().await {
+            if !data.is_empty() {
+                let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
+                    result.append(&mut data_mapper.map(d)?);
+                    Ok::<Vec<_>, Error>(result)
+                })?;
+                // TODO: we might be able to write data and progress in a single transaction.
+                storage.write(processed_data)?;
             }
-            // Ok to unwrap here, checked if the data is empty above.
-            let block_number = Self::get_block_number(data.first().unwrap());
-            let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
-                result.append(&mut data_mapper.map(d)?);
-                Ok::<Vec<_>, Error>(result)
-            })?;
-            // TODO: we might be able to write data and progress in a single transaction.
-            storage.write(processed_data)?;
             storage
                 .save_progress(task_name.clone(), block_number)
                 .await?;
@@ -249,9 +246,7 @@ pub trait Datasource<T: Send, P, R> {
         task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<Vec<T>>), Error>;
-
-    fn get_block_number(data: &T) -> u64;
+    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<(u64, Vec<T>)>), Error>;
 }
 
 pub struct SuiCheckpointDatasource {
@@ -290,7 +285,7 @@ where
     ) -> Result<
         (
             JoinHandle<Result<(), Error>>,
-            Receiver<Vec<CheckpointTxnData>>,
+            Receiver<(u64, Vec<CheckpointTxnData>)>,
         ),
         Error,
     > {
@@ -326,10 +321,6 @@ where
             Ok(())
         });
         Ok((join_handle, data_receiver))
-    }
-
-    fn get_block_number((_, block_number, _): &CheckpointTxnData) -> u64 {
-        *block_number
     }
 }
 
@@ -374,11 +365,11 @@ impl ProgressStore for SimpleProgressStore {
 }
 
 pub struct IndexerWorker<T> {
-    data_sender: metered_channel::Sender<Vec<T>>,
+    data_sender: metered_channel::Sender<(u64, Vec<T>)>,
 }
 
 impl<T> IndexerWorker<T> {
-    pub fn new(data_sender: metered_channel::Sender<Vec<T>>) -> Self {
+    pub fn new(data_sender: metered_channel::Sender<(u64, Vec<T>)>) -> Self {
         Self { data_sender }
     }
 }
@@ -402,6 +393,9 @@ impl Worker for IndexerWorker<CheckpointTxnData> {
             .into_iter()
             .map(|tx| (tx, checkpoint_num, timestamp_ms))
             .collect();
-        Ok(self.data_sender.send(transactions).await?)
+        Ok(self
+            .data_sender
+            .send((checkpoint_num, transactions))
+            .await?)
     }
 }
