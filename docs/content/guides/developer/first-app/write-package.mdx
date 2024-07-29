@@ -17,7 +17,7 @@ The manifest file contents include available sections of the manifest and commen
 
 - **[package]:** Contains metadata for the package. By default, the `sui move new` command populates only the `name` value of the metadata. In this case, the example passes `my_first_package` to the command, which becomes the name of the package. You can delete the first `#` of subsequent lines of the `[package]` section to provide values for the other available metadata fields.
 - **[dependencies]:** Lists the other packages that your package depends on to run. By default, the `sui move new` command lists the `Sui` package on GitHub (Testnet version) as the lone dependency.
-- **[addresses]:** Declares named addresses that your package uses. By default, the section includes the package you create with the `sui move new` command and an address of `0x0`. The publish process replaces the `0x0` address with an actual on-chain address.
+- **[addresses]:** Declares named addresses that your package uses. By default, the section includes the package you create with the `sui move new` command and an address of `0x0`. This value can be left as-is and indicates that [package addresses are automatically managed](../../../../concepts/sui-move-concepts/packages/automated-address-management) when published and upgraded.
 - **[dev-dependencies]:** Includes only comments that describe the section.
 - **[dev-addresses]:** Includes only comments that describe the section.
 
