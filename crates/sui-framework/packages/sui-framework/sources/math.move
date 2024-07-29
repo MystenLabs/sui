@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// DEPRECATED, use the each integer type's individual module instead, e.g. `std::u64`
+#[deprecated(note = b"Use the each integer type's individual module instead, e.g. `std::u64`")]
 module sui::math {
 
     /// DEPRECATED, use `std::u64::max` instead
