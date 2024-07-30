@@ -3,14 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    loader::{ast::Function, Loader, Resolver},
+    loader::{
+        arena,
+        ast::{Bytecode, Function},
+        Loader, Resolver,
+    },
     native_functions::NativeContext,
     trace,
 };
 use fail::fail_point;
 use move_binary_format::{
     errors::*,
-    file_format::{Bytecode, FunctionHandleIndex, FunctionInstantiationIndex, JumpTableInner},
+    file_format::{FunctionInstantiationIndex, JumpTableInner},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -37,7 +41,7 @@ use move_vm_types::{
 use smallvec::SmallVec;
 
 use crate::native_extensions::NativeContextExtensions;
-use std::{cmp::min, collections::VecDeque, fmt::Write, sync::Arc};
+use std::{cmp::min, collections::VecDeque, fmt::Write};
 use tracing::error;
 
 macro_rules! debug_write {
@@ -60,7 +64,8 @@ macro_rules! debug_writeln {
 
 macro_rules! set_err_info {
     ($frame:ident, $e:expr) => {{
-        $e.at_code_offset($frame.function.index(), $frame.pc)
+        let function = arena::to_ref($frame.function);
+        $e.at_code_offset(function.index(), $frame.pc)
             .finish($frame.location())
     }};
 }
@@ -103,7 +108,7 @@ impl Interpreter {
     /// Entrypoint into the interpreter. All external calls need to be routed through this
     /// function.
     pub(crate) fn entrypoint(
-        function: Arc<Function>,
+        fun_ref: *const Function,
         ty_args: Vec<Type>,
         args: Vec<Value>,
         data_store: &mut impl DataStore,
@@ -116,9 +121,10 @@ impl Interpreter {
             call_stack: CallStack::new(),
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
-        profile_open_frame!(gas_meter, function.pretty_string());
+        let fun_ref = arena::to_ref(fun_ref);
+        profile_open_frame!(gas_meter, fun_ref.pretty_string());
 
-        if function.is_native() {
+        if fun_ref.is_native() {
             for arg in args {
                 interpreter
                     .operand_stack
@@ -126,27 +132,21 @@ impl Interpreter {
                     .map_err(|e| e.finish(Location::Undefined))?;
             }
             let link_context = data_store.link_context();
-            let resolver = function.get_resolver(link_context, loader);
+            let resolver = fun_ref.get_resolver(link_context, loader);
 
             let return_values = interpreter
-                .call_native_return_values(
-                    &resolver,
-                    gas_meter,
-                    extensions,
-                    function.clone(),
-                    &ty_args,
-                )
+                .call_native_return_values(&resolver, gas_meter, extensions, fun_ref, &ty_args)
                 .map_err(|e| {
-                    e.at_code_offset(function.index(), 0)
-                        .finish(Location::Module(function.module_id().clone()))
+                    e.at_code_offset(fun_ref.index(), 0)
+                        .finish(Location::Module(fun_ref.module_id().clone()))
                 })?;
 
-            profile_close_frame!(gas_meter, function.pretty_string());
+            profile_close_frame!(gas_meter, fun_ref.pretty_string());
 
             Ok(return_values.into_iter().collect())
         } else {
             interpreter.execute_main(
-                loader, data_store, gas_meter, extensions, function, ty_args, args,
+                loader, data_store, gas_meter, extensions, fun_ref, ty_args, args,
             )
         }
     }
@@ -163,7 +163,7 @@ impl Interpreter {
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<Vec<Value>> {
@@ -188,7 +188,10 @@ impl Interpreter {
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
 
-                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
+                    profile_close_frame!(
+                        gas_meter,
+                        arena::to_ref(current_frame.function).pretty_string()
+                    );
 
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
@@ -199,8 +202,8 @@ impl Interpreter {
                         return Ok(self.operand_stack.value);
                     }
                 }
-                ExitCode::Call(fh_idx) => {
-                    let func = resolver.function_from_handle(fh_idx);
+                ExitCode::Call(function) => {
+                    let func = arena::to_ref(function);
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
@@ -239,11 +242,13 @@ impl Interpreter {
                     current_frame = frame;
                 }
                 ExitCode::CallGeneric(idx) => {
+                    let _func = arena::to_ref(function);
                     // TODO(Gas): We should charge gas as we do type substitution...
                     let ty_args = resolver
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
-                    let func = resolver.function_from_instantiation(idx);
+                    let func_ptr = resolver.function_from_instantiation(idx);
+                    let func = arena::to_ref(func_ptr);
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
@@ -291,20 +296,26 @@ impl Interpreter {
     /// function are incorrectly attributed to the caller.
     fn make_call_frame(
         &mut self,
-        func: Arc<Function>,
+        fun_ptr: *const Function,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<Frame> {
+        let fun = arena::to_ref(fun_ptr);
         // The values are on the stack, in order.
-        let args = self.operand_stack.popn(func.arg_count() as u16)?;
-        let locals = Locals::new_from(args, func.local_count());
-        Ok(self.make_new_frame(func, ty_args, locals))
+        let args = self.operand_stack.popn(fun.arg_count() as u16)?;
+        let locals = Locals::new_from(args, fun.local_count());
+        Ok(self.make_new_frame(fun, ty_args, locals))
     }
 
     /// Create a new `Frame` given a `Function` and the function `Locals`.
     ///
     /// The locals must be loaded before calling this.
     #[inline]
-    fn make_new_frame(&self, function: Arc<Function>, ty_args: Vec<Type>, locals: Locals) -> Frame {
+    fn make_new_frame(
+        &self,
+        function: *const Function,
+        ty_args: Vec<Type>,
+        locals: Locals,
+    ) -> Frame {
         Frame {
             pc: 0,
             locals,
@@ -319,11 +330,11 @@ impl Interpreter {
         resolver: &Resolver,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: Vec<Type>,
     ) -> VMResult<()> {
         // Note: refactor if native functions push a frame on the stack
-        self.call_native_impl(resolver, gas_meter, extensions, function.clone(), ty_args)
+        self.call_native_impl(resolver, gas_meter, extensions, function, ty_args)
             .map_err(|e| {
                 let id = function.module_id();
                 let e = if resolver.loader().vm_config().error_execution_state {
@@ -341,16 +352,11 @@ impl Interpreter {
         resolver: &Resolver,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<()> {
-        let return_values = self.call_native_return_values(
-            resolver,
-            gas_meter,
-            extensions,
-            function.clone(),
-            &ty_args,
-        )?;
+        let return_values =
+            self.call_native_return_values(resolver, gas_meter, extensions, function, &ty_args)?;
         // Put return values on the top of the operand stack, where the caller will find them.
         // This is one of only two times the operand stack is shared across call stack frames; the other is in handling
         // the Return instruction for normal calls
@@ -366,7 +372,7 @@ impl Interpreter {
         resolver: &Resolver,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: &[Type],
     ) -> PartialVMResult<SmallVec<[Value; 1]>> {
         let return_type_count = function.return_type_count();
@@ -493,7 +499,8 @@ impl Interpreter {
         frame: &Frame,
     ) -> PartialVMResult<()> {
         // Print out the function name with type arguments.
-        let func = &frame.function;
+        let _func_ptr = frame.function;
+        let func = arena::to_ref(frame.function);
 
         debug_write!(buf, "    [{}] ", idx)?;
         let module = func.module_id();
@@ -577,12 +584,13 @@ impl Interpreter {
     /// of an execution.
     fn internal_state_str(&self, current_frame: &Frame) -> String {
         let mut internal_state = "Call stack:\n".to_string();
+
         for (i, frame) in self.call_stack.0.iter().enumerate() {
             internal_state.push_str(
                 format!(
                     " frame #{}: {} [pc = {}]\n",
                     i,
-                    frame.function.pretty_string(),
+                    arena::to_ref(frame.function).pretty_string(),
                     frame.pc,
                 )
                 .as_str(),
@@ -592,12 +600,12 @@ impl Interpreter {
             format!(
                 "*frame #{}: {} [pc = {}]:\n",
                 self.call_stack.0.len(),
-                current_frame.function.pretty_string(),
+                arena::to_ref(current_frame.function).pretty_string(),
                 current_frame.pc,
             )
             .as_str(),
         );
-        let code = current_frame.function.code();
+        let code = arena::to_ref(current_frame.function).code();
         let pc = current_frame.pc as usize;
         if pc < code.len() {
             let mut i = 0;
@@ -642,11 +650,8 @@ impl Interpreter {
             .rev()
             .take(count)
             .map(|frame| {
-                (
-                    frame.function.module_id().clone(),
-                    frame.function.index(),
-                    frame.pc,
-                )
+                let fun = arena::to_ref(frame.function);
+                (fun.module_id().clone(), fun.index(), frame.pc)
             })
             .collect();
         ExecutionState::new(stack_trace)
@@ -752,7 +757,7 @@ impl CallStack {
 struct Frame {
     pc: u16,
     locals: Locals,
-    function: Arc<Function>,
+    function: *const Function,
     ty_args: Vec<Type>,
 }
 
@@ -760,7 +765,7 @@ struct Frame {
 #[derive(Debug)]
 enum ExitCode {
     Return,
-    Call(FunctionHandleIndex),
+    Call(*const Function),
     CallGeneric(FunctionInstantiationIndex),
 }
 
@@ -779,7 +784,8 @@ impl Frame {
                 } else {
                     e
                 };
-                e.at_code_offset(self.function.index(), self.pc)
+                let fun = arena::to_ref(self.function);
+                e.at_code_offset(fun.index(), self.pc)
                     .finish(self.location())
             })
     }
@@ -788,7 +794,7 @@ impl Frame {
         pc: &mut u16,
         locals: &mut Locals,
         ty_args: &[Type],
-        function: &Arc<Function>,
+        function: &Function,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
@@ -909,8 +915,8 @@ impl Frame {
                         .enable_invariant_violation_check_in_swap_loc,
                 )?;
             }
-            Bytecode::Call(idx) => {
-                return Ok(InstrRet::ExitCode(ExitCode::Call(*idx)));
+            Bytecode::Call(fun) => {
+                return Ok(InstrRet::ExitCode(ExitCode::Call(*fun)));
             }
             Bytecode::CallGeneric(idx) => {
                 return Ok(InstrRet::ExitCode(ExitCode::CallGeneric(*idx)));
@@ -1149,18 +1155,6 @@ impl Frame {
                     .operand_stack
                     .push(Value::bool(!lhs.equals(&rhs)?))?;
             }
-            Bytecode::MutBorrowGlobalDeprecated(_)
-            | Bytecode::ImmBorrowGlobalDeprecated(_)
-            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
-            | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
-            | Bytecode::ExistsDeprecated(_)
-            | Bytecode::ExistsGenericDeprecated(_)
-            | Bytecode::MoveFromDeprecated(_)
-            | Bytecode::MoveFromGenericDeprecated(_)
-            | Bytecode::MoveToDeprecated(_)
-            | Bytecode::MoveToGenericDeprecated(_) => {
-                unreachable!("Global bytecodes deprecated")
-            }
             Bytecode::FreezeRef => {
                 gas_meter.charge_simple_instr(S::FreezeRef)?;
                 // FreezeRef should just be a null op as we don't distinguish between mut
@@ -1334,11 +1328,12 @@ impl Frame {
         interpreter: &mut Interpreter,
         gas_meter: &mut impl GasMeter,
     ) -> PartialVMResult<ExitCode> {
-        let code = self.function.code();
+        let fun_ref = arena::to_ref(self.function);
+        let code = fun_ref.code();
         loop {
             for instruction in &code[self.pc as usize..] {
                 trace!(
-                    &self.function,
+                    fun_ref,
                     &self.locals,
                     self.pc,
                     instruction,
@@ -1360,7 +1355,7 @@ impl Frame {
                     &mut self.pc,
                     &mut self.locals,
                     &self.ty_args,
-                    &self.function,
+                    fun_ref,
                     resolver,
                     interpreter,
                     gas_meter,
@@ -1401,11 +1396,11 @@ impl Frame {
     }
 
     fn resolver<'a>(&self, link_context: AccountAddress, loader: &'a Loader) -> Resolver<'a> {
-        self.function.get_resolver(link_context, loader)
+        arena::to_ref(self.function).get_resolver(link_context, loader)
     }
 
     fn location(&self) -> Location {
-        Location::Module(self.function.module_id().clone())
+        Location::Module(arena::to_ref(self.function).module_id().clone())
     }
 
     fn check_depth_of_type(resolver: &Resolver, ty: &Type) -> PartialVMResult<u64> {

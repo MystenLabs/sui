@@ -303,7 +303,7 @@ impl VMRuntime {
 
     fn execute_function_impl(
         &self,
-        func: Arc<Function>,
+        func: *const Function,
         ty_args: Vec<Type>,
         param_types: Vec<Type>,
         return_types: Vec<Type>,

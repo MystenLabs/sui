@@ -7,7 +7,6 @@ use crate::debug::DebugContext;
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
 use ::{
-    move_binary_format::file_format::Bytecode,
     move_vm_types::values::Locals,
     once_cell::sync::Lazy,
     std::{
@@ -23,7 +22,10 @@ use ::{
 #[cfg(any(debug_assertions, feature = "debugging"))]
 use crate::{
     interpreter::Interpreter,
-    loader::{ast::Function, Loader},
+    loader::{
+        ast::{Bytecode, Function},
+        Loader,
+    },
 };
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
@@ -96,10 +98,10 @@ macro_rules! trace {
         // Only include this code in debug releases
         #[cfg(any(debug_assertions, feature = "debugging"))]
         $crate::tracing::trace(
-            &$function_desc,
+            $function_desc,
             $locals,
             $pc,
-            &$instr,
+            $instr,
             $resolver.loader(),
             $interp,
         )
