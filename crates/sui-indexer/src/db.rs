@@ -205,7 +205,7 @@ pub mod setup_postgres {
     use secrecy::ExposeSecret;
     use tracing::{error, info};
 
-    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
+    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
     pub fn reset_database(
         conn: &mut PoolConnection<PgConnection>,
