@@ -1178,14 +1178,12 @@ impl SuiNode {
         let consensus_manager =
             ConsensusManager::new(&config, consensus_config, registry_service, client);
 
-        let mut consensus_store_pruner = ConsensusStorePruner::new(
+        // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
+        let consensus_store_pruner = ConsensusStorePruner::new(
             consensus_manager.get_storage_base_path(),
             consensus_config.db_retention_epochs(),
             consensus_config.db_pruner_period(),
         );
-
-        // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
-        consensus_store_pruner.run().await;
 
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =

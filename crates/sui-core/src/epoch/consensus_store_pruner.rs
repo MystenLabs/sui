@@ -14,42 +14,26 @@ use tracing::{error, info};
 use typed_store::rocks::safe_drop_db;
 
 pub struct ConsensusStorePruner {
-    base_path: PathBuf,
     tx_remove: mpsc::Sender<Epoch>,
-    epoch_retention: u64,
-    epoch_prune_period: Duration,
+    _handle: tokio::task::JoinHandle<()>,
 }
 
 impl ConsensusStorePruner {
     pub fn new(base_path: PathBuf, epoch_retention: u64, epoch_prune_period: Duration) -> Self {
-        let (tx_remove, _rx_remove) = mpsc::channel(1);
-        Self {
-            base_path,
-            tx_remove,
-            epoch_retention,
-            epoch_prune_period,
-        }
-    }
-
-    pub async fn run(&mut self) {
         let (tx_remove, mut rx_remove) = mpsc::channel(1);
-        self.tx_remove = tx_remove;
-        let base_path = self.base_path.clone();
-        let epoch_retention = self.epoch_retention;
-        let epoch_prune_period = self.epoch_prune_period;
-        let mut latest_epoch = 0;
 
-        spawn_logged_monitored_task!(async {
+        let _handle = spawn_logged_monitored_task!(async {
             info!("Starting consensus store pruner with epoch retention {epoch_retention} and prune period {epoch_prune_period:?}");
 
             let mut timeout = tokio::time::interval_at(
                 Instant::now() + Duration::from_secs(60), // allow some time for the node to boot etc before attempting to prune
                 epoch_prune_period,
             );
+            let mut latest_epoch = 0;
             loop {
                 tokio::select! {
                     _ = timeout.tick() => {
-                        Self::prune_old_epoch_data(base_path.clone(), latest_epoch, epoch_retention).await;
+                        Self::prune_old_epoch_data(&base_path, latest_epoch, epoch_retention).await;
                     }
                     result = rx_remove.recv() => {
                         if result.is_none() {
@@ -57,11 +41,13 @@ impl ConsensusStorePruner {
                             break;
                         }
                         latest_epoch = result.unwrap();
-                        Self::prune_old_epoch_data(base_path.clone(), latest_epoch, epoch_retention).await;
+                        Self::prune_old_epoch_data(&base_path, latest_epoch, epoch_retention).await;
                     }
                 }
             }
         });
+
+        Self { tx_remove, _handle }
     }
 
     /// This method will remove all epoch data stores and directories that are older than the current epoch minus the epoch retention. The method ensures
@@ -77,7 +63,7 @@ impl ConsensusStorePruner {
     }
 
     async fn prune_old_epoch_data(
-        storage_base_path: PathBuf,
+        storage_base_path: &PathBuf,
         current_epoch: Epoch,
         epoch_retention: u64,
     ) {
@@ -173,6 +159,7 @@ impl ConsensusStorePruner {
 mod tests {
     use crate::epoch::consensus_store_pruner::ConsensusStorePruner;
     use std::fs;
+    use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_remove_old_epoch_data() {
@@ -188,7 +175,7 @@ mod tests {
             create_epoch_directories(&base_directory, vec!["0", "other"]);
 
             ConsensusStorePruner::prune_old_epoch_data(
-                base_directory.clone(),
+                &base_directory,
                 current_epoch,
                 epoch_retention,
             )
@@ -210,7 +197,7 @@ mod tests {
             create_epoch_directories(&base_directory, vec!["97", "98", "99", "100", "other"]);
 
             ConsensusStorePruner::prune_old_epoch_data(
-                base_directory.clone(),
+                &base_directory,
                 current_epoch,
                 epoch_retention,
             )
@@ -234,7 +221,7 @@ mod tests {
             create_epoch_directories(&base_directory, vec!["97", "98", "99", "100", "other"]);
 
             ConsensusStorePruner::prune_old_epoch_data(
-                base_directory.clone(),
+                &base_directory,
                 current_epoch,
                 epoch_retention,
             )
@@ -245,6 +232,38 @@ mod tests {
             assert_eq!(epochs_left.len(), 1);
             assert_eq!(epochs_left[0], 100);
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_consensus_store_pruner() {
+        let epoch_retention = 1;
+        let epoch_prune_period = std::time::Duration::from_millis(500);
+
+        let base_directory = tempfile::tempdir().unwrap().into_path();
+
+        // We create some directories up to epoch 100
+        create_epoch_directories(&base_directory, vec!["97", "98", "99", "100", "other"]);
+
+        let pruner =
+            ConsensusStorePruner::new(base_directory.clone(), epoch_retention, epoch_prune_period);
+
+        // We let the pruner run for a couple of times to prune the old directories. Since the default epoch of 0 is used no dirs should be pruned.
+        sleep(3 * epoch_prune_period).await;
+
+        // We expect the directories to be the same as before
+        let epoch_dirs = read_epoch_directories(&base_directory);
+        assert_eq!(epoch_dirs.len(), 4);
+
+        // Then we update the epoch and instruct to prune for current epoch = 100
+        pruner.prune(100).await;
+
+        // We let the pruner run and check again the directories - no directories of epoch < 99 should be left
+        sleep(2 * epoch_prune_period).await;
+
+        let epoch_dirs = read_epoch_directories(&base_directory);
+        assert_eq!(epoch_dirs.len(), 2);
+        assert_eq!(epoch_dirs[0], 99);
+        assert_eq!(epoch_dirs[1], 100);
     }
 
     fn create_epoch_directories(base_directory: &std::path::Path, epochs: Vec<&str>) {
