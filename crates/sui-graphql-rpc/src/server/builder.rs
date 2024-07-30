@@ -1134,7 +1134,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Mutation payload (txBytes + signatures) size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+            vec!["The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
         );
 
         // dryRunTransactionBlock check, should fail
