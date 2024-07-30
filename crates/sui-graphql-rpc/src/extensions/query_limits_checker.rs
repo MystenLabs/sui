@@ -27,6 +27,9 @@ use tracing::info;
 use uuid::Uuid;
 
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
+const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
+const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
+const TX_BYTES: &str = "txBytes";
 
 #[derive(Debug)]
 pub(crate) struct PayloadSize(pub u64);
@@ -82,9 +85,9 @@ impl<'a> PayloadSizeCheck<'a> {
         for (_, val) in doc.operations.iter() {
             for n in val.node.selection_set.node.items.iter() {
                 if let Selection::Field(f) = &n.node {
-                    if f.node.name.node == "dryRunTransactionBlock" {
+                    if f.node.name.node == DRY_RUN_TX_BLOCK {
                         for arg in &f.node.arguments {
-                            if arg.0.node == "txBytes" {
+                            if arg.0.node == TX_BYTES {
                                 let tx_bytes_len = get_value_str_len(&arg.1.node, self.variables);
                                 if tx_bytes_len > self.max_mutation_payload_size as usize {
                                     self.log_metric(
@@ -95,7 +98,7 @@ impl<'a> PayloadSizeCheck<'a> {
                                     return Err(graphql_error_at_pos(
                                             code::BAD_USER_INPUT,
                                             format!(
-                                                "The txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is {} bytes",
+                                                "The {TX_BYTES} size of dryRunTransactionBlock node is too large. The maximum allowed is {} bytes",
                                                 self.max_mutation_payload_size
                                             ),
                                             f.pos
@@ -106,7 +109,7 @@ impl<'a> PayloadSizeCheck<'a> {
                                 }
                             }
                         }
-                    } else if f.node.name.node == "executeTransactionBlock" {
+                    } else if f.node.name.node == EXECUTE_TX_BLOCK {
                         let mut tx_bytes_len = 0;
                         for arg in &f.node.arguments {
                             tx_bytes_len += get_value_str_len(&arg.1.node, self.variables);
@@ -164,7 +167,8 @@ impl<'a> PayloadSizeCheck<'a> {
         Ok(())
     }
 
-    /// Check the whole query (content-length) against the allowed payload.
+    /// Check the whole query (content-length) against the allowed payload. This will include
+    /// variables.
     fn check_overall_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
         let payload_size: &PayloadSize = ctx.data_unchecked();
         let payload_size = payload_size.0;
