@@ -154,6 +154,11 @@ export class EnokiClient {
 	createSubname(input: CreateSubnameApiInput) {
 		return this.#fetch<CreateSubnameApiResponse>('subnames', {
 			method: 'POST',
+			headers: input.jwt
+				? {
+						[ZKLOGIN_HEADER]: input.jwt,
+					}
+				: {},
 			body: JSON.stringify({
 				network: input.network,
 				domain: input.domain,

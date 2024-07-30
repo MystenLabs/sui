@@ -96,12 +96,20 @@ export interface GetSubnamesApiResponse {
 	}[];
 }
 
-export interface CreateSubnameApiInput {
+export type CreateSubnameApiInput = {
 	domain: string;
 	network?: EnokiDomainNetwork;
 	subname: string;
-	targetAddress?: string;
-}
+} & (
+	| {
+			jwt: string;
+			targetAddress?: never;
+	  }
+	| {
+			targetAddress: string;
+			jwt?: never;
+	  }
+);
 export interface CreateSubnameApiResponse {
 	name: string;
 }
