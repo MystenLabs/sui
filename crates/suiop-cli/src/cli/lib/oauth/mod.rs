@@ -6,12 +6,12 @@ mod util;
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::{extract::Query, routing::get, Router};
 use chrono;
 use dirs;
 use reqwest;
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
