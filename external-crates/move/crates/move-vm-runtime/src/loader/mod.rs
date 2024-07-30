@@ -407,14 +407,6 @@ impl ModuleCache {
             }
         }
 
-        /*
-        for (idx, func) in module.function_defs().iter().enumerate() {
-            let findex = FunctionDefinitionIndex(idx as TableIndex);
-            let function = translate::function(natives, findex, func, module);
-            self.functions.push(Arc::new(function));
-        }
-        */
-
         let loaded_module =
             translate::module(cursor, natives, link_context, storage_id, module, self)?;
         self.loaded_modules
