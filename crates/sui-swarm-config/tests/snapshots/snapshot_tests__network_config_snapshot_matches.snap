@@ -45,34 +45,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -217,34 +190,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -389,34 +335,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -561,34 +480,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -733,34 +625,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -905,34 +770,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
@@ -1077,34 +915,7 @@ validator_configs:
           send_certificate_rate_limit: ~
           report_batch_rate_limit: ~
           request_batches_rate_limit: ~
-      parameters:
-        db_path: ~
-        leader_timeout:
-          secs: 0
-          nanos: 250000000
-        min_round_delay:
-          secs: 0
-          nanos: 50000000
-        max_forward_time_drift:
-          secs: 0
-          nanos: 500000000
-        max_blocks_per_fetch: 1000
-        dag_state_cached_rounds: 500
-        commit_sync_parallel_fetches: 20
-        commit_sync_batch_size: 100
-        commit_sync_batches_ahead: 200
-        anemo:
-          excessive_message_size: 8388608
-        tonic:
-          keepalive_interval:
-            secs: 5
-            nanos: 0
-          connection_buffer_size: 33554432
-          excessive_message_size: 16777216
-          message_size_limit: 67108864
-        sync_last_known_own_block_timeout:
-          secs: 5
-          nanos: 0
+      parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
     grpc-load-shed: ~
