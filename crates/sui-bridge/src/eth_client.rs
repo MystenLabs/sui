@@ -6,12 +6,13 @@ use std::sync::Arc;
 
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
+use crate::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
 use crate::metrics::BridgeMetrics;
 use crate::types::{BridgeAction, EthLog, RawEthLog};
-use ethers::providers::{Http, JsonRpcClient, Middleware, Provider};
+use ethers::providers::{JsonRpcClient, Middleware, Provider};
 use ethers::types::TxHash;
 use ethers::types::{Block, Filter};
-use tap::{Tap, TapFallible};
+use tap::TapFallible;
 
 #[cfg(test)]
 use crate::eth_mock_provider::EthMockProvider;
@@ -19,20 +20,18 @@ use ethers::types::Address as EthAddress;
 pub struct EthClient<P> {
     provider: Provider<P>,
     contract_addresses: HashSet<EthAddress>,
-    metrics: Arc<BridgeMetrics>,
 }
 
-impl EthClient<Http> {
+impl EthClient<MeteredEthHttpProvier> {
     pub async fn new(
         provider_url: &str,
         contract_addresses: HashSet<EthAddress>,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<Self> {
-        let provider = Provider::try_from(provider_url)?;
+        let provider = new_metered_eth_provider(provider_url, metrics)?;
         let self_ = Self {
             provider,
             contract_addresses,
-            metrics,
         };
         self_.describe().await?;
         Ok(self_)
@@ -46,7 +45,6 @@ impl EthClient<EthMockProvider> {
         Self {
             provider,
             contract_addresses,
-            metrics: Arc::new(BridgeMetrics::new_for_testing()),
         }
     }
 }
@@ -77,7 +75,6 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::TxNotFound)?;
         let receipt_block_num = receipt.block_number.ok_or(BridgeError::ProviderError(
@@ -115,8 +112,7 @@ where
         let block: Result<Option<Block<ethers::types::TxHash>>, ethers::prelude::ProviderError> =
             self.provider
                 .request("eth_getBlockByNumber", ("finalized", false))
-                .await
-                .tap(|_| self.metrics.eth_provider_queries.inc());
+                .await;
         let block = block?.ok_or(BridgeError::TransientProviderError(
             "Provider fails to return last finalized block".into(),
         ))?;
@@ -140,9 +136,9 @@ where
             .address(address);
         let logs = self
             .provider
+            // TODO use get_logs_paginated?
             .get_logs(&filter)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)
             .tap_err(|e| {
                 tracing::error!(
@@ -193,7 +189,6 @@ where
             .provider
             .get_logs(&filter)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)
             .tap_err(|e| {
                 tracing::error!(
@@ -241,7 +236,6 @@ where
             .provider
             .get_transaction_receipt(tx_hash)
             .await
-            .tap(|_| self.metrics.eth_provider_queries.inc())
             .map_err(BridgeError::from)?
             .ok_or(BridgeError::ProviderError(format!(
                 "Provide cannot find eth transaction for log: {:?})",
