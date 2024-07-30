@@ -332,7 +332,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                 }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
                     // Only write unfinalized claims
-                    if self.finalized {
+                    if !self.finalized {
                         return Ok(vec![]);
                     }
                     info!("Observed Unfinalized Eth Claim");
