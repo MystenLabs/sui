@@ -180,21 +180,20 @@ impl TransactionExecutionApi {
     ) -> Result<SuiTransactionBlockResponse, Error> {
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
 
-        let events = match response.events {
-            Some(events) if opts.show_events => {
-                let epoch_store = self.state.load_epoch_store_one_call_per_task();
-                let backing_package_store = self.state.get_backing_package_store();
-                let mut layout_resolver = epoch_store
-                    .executor()
-                    .type_layout_resolver(Box::new(backing_package_store.as_ref()));
-                Some(SuiTransactionBlockEvents::try_from(
-                    events,
-                    digest,
-                    None,
-                    layout_resolver.as_mut(),
-                )?)
-            }
-            _ => None,
+        let events = if opts.show_events {
+            let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            let backing_package_store = self.state.get_backing_package_store();
+            let mut layout_resolver = epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+            Some(SuiTransactionBlockEvents::try_from(
+                response.events.unwrap_or_default(),
+                digest,
+                None,
+                layout_resolver.as_mut(),
+            )?)
+        } else {
+            None
         };
 
         let object_cache = response.output_objects.map(|output_objects| {
