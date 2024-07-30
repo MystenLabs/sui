@@ -599,12 +599,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
-        if checkpoints.is_empty() {
+        let Some(first_checkpoint) = checkpoints.first() else {
             return Ok(());
-        }
+        };
+
         // If the first checkpoint has sequence number 0, we need to persist the digest as
         // chain identifier.
-        let first_checkpoint = checkpoints.first().unwrap();
         if first_checkpoint.sequence_number == 0 {
             transactional_blocking_with_retry!(
                 &self.blocking_cp,
