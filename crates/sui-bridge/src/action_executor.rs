@@ -408,8 +408,7 @@ where
         >,
         bridge_object_arg: ObjectArg,
         mut token_config_rx: tokio::sync::watch::Receiver<HashMap<u8, TypeTag>>,
-        // TODO: wire this up
-        _bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
+        bridge_pause_rx: tokio::sync::watch::Receiver<IsBridgePaused>,
         metrics: Arc<BridgeMetrics>,
     ) {
         info!("Starting run_onchain_execution_loop");
@@ -429,6 +428,14 @@ where
                     }
                 },
                 certificate_wrapper = execution_queue_receiver.recv() => {
+                    // When bridge is paused, skip execution.
+                    // Skipped actions will be picked up upon node restarting
+                    // if bridge is unpaused.
+                    if *bridge_pause_rx.borrow() {
+                        warn!("Bridge is paused, skipping execution");
+                        metrics.action_executor_execution_queue_skipped_actions_due_to_pausing.inc();
+                        continue;
+                    }
                     match certificate_wrapper {
                         Some(certificate_wrapper) => {
                             Self::handle_execution_task(
@@ -663,6 +670,7 @@ pub async fn submit_to_executor(
 mod tests {
     use crate::events::init_all_struct_tags;
     use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+    use crate::types::BRIDGE_PAUSED;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
@@ -1152,6 +1160,103 @@ mod tests {
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
+    }
+
+    #[tokio::test]
+    async fn test_skip_tx_submission_if_bridge_is_paused() {
+        let (
+            _signing_tx,
+            execution_tx,
+            sui_client_mock,
+            mut tx_subscription,
+            store,
+            secrets,
+            dummy_sui_key,
+            mock0,
+            mock1,
+            mock2,
+            mock3,
+            _handles,
+            gas_object_ref,
+            sui_address,
+            token_tx,
+            bridge_pause_tx,
+        ) = setup().await;
+        let id_token_map = token_tx.borrow();
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
+            vec![&mock0, &mock1, &mock2, &mock3],
+            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+        );
+
+        let action = action_certificate.data().clone();
+        let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+        let tx_data = build_sui_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate.clone(),
+            arg,
+            &id_token_map,
+            1000,
+        )
+        .unwrap();
+        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
+        mock_transaction_error(
+            &sui_client_mock,
+            tx_digest,
+            BridgeError::Generic("some random error".to_string()),
+            true,
+        );
+
+        let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
+        sui_client_mock.add_gas_object_info(
+            gas_coin.clone(),
+            gas_object_ref,
+            Owner::AddressOwner(sui_address),
+        );
+        let action_digest = action.digest();
+        sui_client_mock.set_action_onchain_status(&action, BridgeActionStatus::Pending);
+
+        // assert bridge is unpaused now
+        assert!(!*bridge_pause_tx.borrow());
+
+        store.insert_pending_actions(&[action.clone()]).unwrap();
+        assert_eq!(
+            store.get_all_pending_actions()[&action.digest()],
+            action.clone()
+        );
+
+        // Kick it (send to the execution queue, skipping the signing queue)
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(
+                action_certificate.clone(),
+                0,
+            ))
+            .await
+            .unwrap();
+
+        // Some requests come in and will fail.
+        tx_subscription.recv().await.unwrap();
+
+        // Pause the bridge
+        bridge_pause_tx.send(BRIDGE_PAUSED).unwrap();
+
+        // Kick it again
+        execution_tx
+            .send(CertifiedBridgeActionExecutionWrapper(action_certificate, 0))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // Nothing is sent to execute
+        assert_eq!(
+            tx_subscription.try_recv().unwrap_err(),
+            tokio::sync::broadcast::error::TryRecvError::Empty
+        );
+        // Still in WAL
+        assert_eq!(
+            store.get_all_pending_actions()[&action_digest],
+            action.clone()
+        );
     }
 
     fn mock_bridge_authority_sigs(
