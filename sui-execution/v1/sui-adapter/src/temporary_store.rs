@@ -213,6 +213,9 @@ impl<'backing> TemporaryStore<'backing> {
                     SharedInput::Deleted(_) => {
                         unreachable!("Shared object deletion not supported in effects v1")
                     }
+                    SharedInput::Cancelled(_) => {
+                        unreachable!("Per object congestion control not supported in effects v1.")
+                    }
                 })
                 .collect();
             self.into_effects_v1(
