@@ -104,9 +104,9 @@ impl<'a> PayloadSizeCheck<'a> {
                                             f.pos
                                         ));
                                 }
-                                if !track_vars.contains_key(&arg.1.node.to_string()) {
-                                    track_vars.insert(arg.1.node.to_string(), tx_bytes_len);
-                                }
+                                track_vars
+                                    .entry(arg.1.node.to_string())
+                                    .or_insert(tx_bytes_len);
                             }
                         }
                     } else if f.node.name.node == EXECUTE_TX_BLOCK {
@@ -137,9 +137,7 @@ impl<'a> PayloadSizeCheck<'a> {
                             .map(|x| x.1.node.to_string())
                             .collect::<Vec<_>>()
                             .concat();
-                        if !track_vars.contains_key(&var_name) {
-                            track_vars.insert(var_name, tx_bytes_len);
-                        }
+                        track_vars.entry(var_name).or_insert(tx_bytes_len);
                     }
                 }
             }
