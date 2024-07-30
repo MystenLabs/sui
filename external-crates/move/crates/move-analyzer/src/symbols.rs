@@ -395,7 +395,7 @@ pub struct CursorContext {
 }
 
 #[derive(Clone, Debug, Copy)]
-pub enum ChainCompletionTarget {
+pub enum ChainCompletionKind {
     Type,
     Function,
     All,
@@ -413,9 +413,9 @@ impl CursorContext {
 
     /// Returns access chain at cursor position (if any) along with the information of what the chain's
     /// auto-completed target kind should be
-    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionTarget)> {
+    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionKind)> {
         // TODO: handle access chains in uses and attributes
-        use ChainCompletionTarget as CT;
+        use ChainCompletionKind as CT;
         use CursorPosition as CP;
         let chain_info = match &self.position {
             CP::Exp(sp!(_, exp)) => match exp {
