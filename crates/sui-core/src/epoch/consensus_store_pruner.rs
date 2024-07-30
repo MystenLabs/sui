@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_config::Epoch;
 use mysten_metrics::spawn_logged_monitored_task;
-use narwhal_config::Epoch;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
