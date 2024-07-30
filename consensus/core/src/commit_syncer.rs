@@ -58,6 +58,7 @@ use crate::{
     CommitConsumerMonitor, CommitIndex,
 };
 
+// Handle to stop the CommitSyncer loop.
 pub(crate) struct CommitSyncerHandle {
     schedule_task: JoinHandle<()>,
     tx_shutdown: oneshot::Sender<()>,
@@ -67,32 +68,37 @@ impl CommitSyncerHandle {
     pub(crate) async fn stop(self) {
         let _ = self.tx_shutdown.send(());
         // Do not abort schedule task, which waits for fetches to shut down.
-        let _ = self.schedule_task.await;
+        if let Err(e) = self.schedule_task.await {
+            if e.is_panic() {
+                std::panic::resume_unwind(e.into_panic());
+            }
+        }
     }
 }
 
 pub(crate) struct CommitSyncer<C: NetworkClient> {
     // States shared by scheduler and fetch tasks.
 
-    // Shared components.
+    // Shared components wrapper.
     inner: Arc<Inner<C>>,
-    // State of peers shared by fetch tasks, to determine the peer to against.
+    // State of peers shared by fetch tasks, to determine the next peer to fetch against.
     peer_state: Arc<Mutex<PeerState>>,
 
-    // States only used by the scheduler logic.
+    // States only used by the scheduler.
 
     // Inflight requests to fetch commits from different authorities.
     inflight_fetches: JoinSet<(u32, Vec<TrustedCommit>, Vec<VerifiedBlock>)>,
-    // Additional ranges (inclusive start and end) of commits to fetch.
+    // Additional ranges of commits to fetch.
     pending_fetches: BTreeSet<CommitRange>,
-    // Fetched commits and blocks by commit indices.
+    // Fetched commits and blocks by commit range.
     fetched_ranges: BTreeMap<CommitRange, Vec<VerifiedBlock>>,
     // Highest commit index among inflight and pending fetches.
-    // Used to determine if and which new range to fetch.
+    // Used to determine the start of new ranges to be fetched.
     highest_scheduled_index: Option<CommitIndex>,
-    // Highest index among fetched commits, before verifications.
+    // Highest index among fetched commits, after commits and blocks are verified.
+    // Used for metrics.
     highest_fetched_commit_index: CommitIndex,
-    // The commit index that is the max of local last commit index and highest commit index of blocks sent to Core.
+    // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
 }
@@ -152,12 +158,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 // Handles results from fetch tasks.
                 Some(result) = self.inflight_fetches.join_next(), if !self.inflight_fetches.is_empty() => {
                     if let Err(e) = result {
-                        warn!("Fetch cancelled or panicked, CommitSyncer shutting down: {}", e);
+                        if e.is_panic() {
+                            std::panic::resume_unwind(e.into_panic());
+                        }
+                        warn!("Fetch cancelled. CommitSyncer shutting down: {}", e);
                         // If any fetch is cancelled or panicked, try to shutdown and exit the loop.
                         self.inflight_fetches.shutdown().await;
                         return;
                     }
-                    let (target_end, commits, blocks): (CommitIndex, Vec<TrustedCommit>, Vec<VerifiedBlock>) = result.unwrap();
+                    let (target_end, commits, blocks) = result.unwrap();
                     self.handle_fetch_result(target_end, commits, blocks).await;
                 }
                 _ = &mut rx_shutdown => {
@@ -184,7 +193,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             .set(local_commit_index as i64);
         let highest_handled_index = self.inner.commit_consumer_monitor.highest_handled_commit();
         let highest_scheduled_index = self.highest_scheduled_index.unwrap_or(0);
-        // Update synced_commit_index periodically to make sure it is not smaller than
+        // Update synced_commit_index periodically to make sure it is no smaller than
         // local commit index.
         self.synced_commit_index = self.synced_commit_index.max(local_commit_index);
         let unhandled_commits_threshold = self.unhandled_commits_threshold();
