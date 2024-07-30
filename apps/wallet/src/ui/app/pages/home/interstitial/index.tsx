@@ -53,9 +53,9 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 							ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Interstitial' });
 							closeInterstitial();
 						}}
-						className="w-full h-full"
+						className="w-full h-full pt-2 text-center"
 					>
-						<img src={imageUrl} alt="interstitial-banner" />
+						<img className="rounded-2xl" src={imageUrl} alt="interstitial-banner" />
 					</ExternalLink>
 				)}
 				<button
