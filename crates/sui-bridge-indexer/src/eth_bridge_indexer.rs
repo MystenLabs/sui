@@ -141,7 +141,11 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                     indexer_metrics
                         .last_committed_eth_block
                         .set(block_number as i64);
-                    data_sender.send((block_number, data)).await?;
+
+                    if Err(_) = data_sender.send((block_number, data)).await {
+                        // exit data retrieval loop when receiver dropped
+                        break 'outer;
+                    }
                 }
             }
             task_handles.iter().for_each(|h| h.abort());
@@ -255,7 +259,10 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinal
                     indexer_metrics
                         .last_committed_unfinalized_eth_block
                         .set(block_number as i64);
-                    data_sender.send((block_number, data)).await?;
+                    if Err(_) = data_sender.send((block_number, data)).await {
+                        // exit data retrieval loop when receiver dropped
+                        break 'outer;
+                    }
                 }
             }
             task_handles.iter().for_each(|h| h.abort());
