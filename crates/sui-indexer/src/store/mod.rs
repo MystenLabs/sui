@@ -201,6 +201,32 @@ pub mod diesel_macro {
     }
 
     #[macro_export]
+    macro_rules! insert_or_ignore_into {
+        ($table:expr, $values:expr, $conn:expr) => {{
+            use diesel::RunQueryDsl;
+            let error_message = concat!("Failed to write to ", stringify!($table), " DB");
+            #[cfg(feature = "postgres-feature")]
+            {
+                diesel::insert_into($table)
+                    .values($values)
+                    .on_conflict_do_nothing()
+                    .execute($conn)
+                    .map_err(IndexerError::from)
+                    .context(error_message)?;
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                diesel::insert_or_ignore_into($table)
+                    .values($values)
+                    .execute($conn)
+                    .map_err(IndexerError::from)
+                    .context(error_message)?;
+            }
+        }};
+    }
+
+    #[macro_export]
     macro_rules! run_query {
         ($pool:expr, $query:expr) => {{
             blocking_call_is_ok_or_panic!();

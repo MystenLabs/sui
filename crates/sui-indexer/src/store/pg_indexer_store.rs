@@ -27,7 +27,9 @@ use crate::db::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
+use crate::insert_or_ignore_into;
 use crate::metrics::IndexerMetrics;
+use crate::models::checkpoints::StoredChainIdentifier;
 use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
@@ -39,9 +41,9 @@ use crate::models::objects::{
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
-    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-    tx_senders,
+    chain_identifier, checkpoints, display, epochs, events, objects, objects_history,
+    objects_snapshot, packages, transactions, tx_calls, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{read_only_blocking, transactional_blocking_with_retry};
@@ -468,8 +470,27 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
-        if checkpoints.is_empty() {
+        let Some(first_checkpoint) = checkpoints.first() else {
             return Ok(());
+        };
+
+        // If the first checkpoint has sequence number 0, we need to persist the digest as
+        // chain identifier.
+        if first_checkpoint.sequence_number == 0 {
+            transactional_blocking_with_retry!(
+                &self.blocking_cp,
+                |conn| {
+                    let checkpoint_digest =
+                        first_checkpoint.checkpoint_digest.into_inner().to_vec();
+                    insert_or_ignore_into!(
+                        chain_identifier::table,
+                        StoredChainIdentifier { checkpoint_digest },
+                        conn
+                    );
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )?;
         }
         let guard = self
             .metrics

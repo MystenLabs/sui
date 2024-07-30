@@ -1,0 +1,14 @@
+processed 3 tasks
+
+init:
+C: object(0,0)
+
+task 1 'create-checkpoint'. lines 7-7:
+Checkpoint created: 1
+
+task 2 'run-graphql'. lines 9-12:
+Response: {
+  "data": {
+    "chainIdentifier": "c49694ff"
+  }
+}
