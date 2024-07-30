@@ -222,6 +222,10 @@ CompressedSignature:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginAuthenticatorAsBytes
+CongestedObjects:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: ObjectID
 ConsensusCommitDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -447,6 +451,11 @@ ExecutionFailureStatus:
       SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
+    33:
+      ExecutionCancelledDueToSharedObjectCongestion:
+        STRUCT:
+          - congested_objects:
+              TYPENAME: CongestedObjects
 ExecutionStatus:
   ENUM:
     0:
@@ -1071,6 +1080,10 @@ UnchangedSharedKind:
           TYPENAME: SequenceNumber
     2:
       ReadDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    3:
+      Cancelled:
         NEWTYPE:
           TYPENAME: SequenceNumber
 UpgradeInfo:

@@ -118,6 +118,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     UnchangedSharedKind::ReadDeleted(seqno) => {
                         InputSharedObject::ReadDeleted(*id, *seqno)
                     }
+                    UnchangedSharedKind::Cancelled(seqno) => {
+                        InputSharedObject::Cancelled(*id, *seqno)
+                    }
                 },
             ))
             .collect()
@@ -354,6 +357,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             InputSharedObject::MutateDeleted(obj_id, seqno) => self
                 .unchanged_shared_objects
                 .push((obj_id, UnchangedSharedKind::MutateDeleted(seqno))),
+            InputSharedObject::Cancelled(obj_id, seqno) => self
+                .unchanged_shared_objects
+                .push((obj_id, UnchangedSharedKind::Cancelled(seqno))),
         }
     }
 
@@ -419,6 +425,10 @@ impl TransactionEffectsV2 {
                     } else {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
+                }
+                SharedInput::Cancelled((id, version)) => {
+                    debug_assert!(!changed_objects.contains_key(&id));
+                    Some((id, UnchangedSharedKind::Cancelled(version)))
                 }
             })
             .collect();
@@ -575,4 +585,6 @@ pub enum UnchangedSharedKind {
     MutateDeleted(SequenceNumber),
     /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
+    /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
+    Cancelled(SequenceNumber),
 }
