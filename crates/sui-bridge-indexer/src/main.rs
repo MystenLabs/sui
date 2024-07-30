@@ -10,6 +10,7 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
+use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::eth_worker::EthBridgeWorker;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
@@ -82,7 +83,7 @@ async fn main() -> Result<()> {
     )?;
 
     let eth_client = Arc::new(
-        EthClient::<ethers::providers::Http>::new(
+        EthClient::<MeteredEthHttpProvier>::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![eth_worker.bridge_address()]),
             bridge_metrics.clone(),

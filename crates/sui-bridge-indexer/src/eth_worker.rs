@@ -10,14 +10,15 @@ use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
 };
 use anyhow::{anyhow, Result};
+use ethers::providers::Middleware;
 use ethers::providers::Provider;
-use ethers::providers::{Http, Middleware};
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
+use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::EthEvent;
 use sui_bridge::{eth_client::EthClient, eth_syncer::EthSyncer};
@@ -27,7 +28,7 @@ use tracing::log::error;
 
 #[derive(Clone)]
 pub struct EthBridgeWorker {
-    provider: Arc<Provider<Http>>,
+    provider: Arc<Provider<MeteredEthHttpProvier>>,
     pg_pool: PgPool,
     bridge_metrics: Arc<BridgeMetrics>,
     metrics: BridgeIndexerMetrics,
@@ -45,7 +46,7 @@ impl EthBridgeWorker {
         let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
 
         let provider = Arc::new(
-            Provider::<Http>::try_from(&config.eth_rpc_url)?
+            new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone())?
                 .interval(std::time::Duration::from_millis(2000)),
         );
 
@@ -61,7 +62,7 @@ impl EthBridgeWorker {
 
     pub async fn start_indexing_finalized_events(
         &self,
-        eth_client: Arc<EthClient<ethers::providers::Http>>,
+        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     ) -> Result<JoinHandle<()>> {
         let newest_finalized_block = match get_latest_eth_token_transfer(&self.pg_pool, true)? {
             Some(transfer) => transfer.block_height as u64,
@@ -97,7 +98,7 @@ impl EthBridgeWorker {
 
     pub async fn start_indexing_unfinalized_events(
         &self,
-        eth_client: Arc<EthClient<ethers::providers::Http>>,
+        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     ) -> Result<JoinHandle<()>> {
         let newest_unfinalized_block_recorded =
             match get_latest_eth_token_transfer(&self.pg_pool, false)? {
@@ -146,7 +147,7 @@ impl EthBridgeWorker {
 }
 
 async fn process_eth_events<E: EthEvent>(
-    provider: Arc<Provider<Http>>,
+    provider: Arc<Provider<MeteredEthHttpProvier>>,
     pg_pool: PgPool,
     metrics: BridgeIndexerMetrics,
     mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<E>)>,
