@@ -33,6 +33,7 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_signing_queue_received_actions: IntCounter,
     pub(crate) action_executor_signing_queue_skipped_actions: IntCounter,
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
+    pub(crate) action_executor_execution_queue_skipped_actions_due_to_pausing: IntCounter,
 
     pub(crate) signer_with_cache_hit: IntCounterVec,
     pub(crate) signer_with_cache_miss: IntCounterVec,
@@ -159,6 +160,12 @@ impl BridgeMetrics {
             action_executor_execution_queue_received_actions: register_int_counter_with_registry!(
                 "bridge_action_executor_execution_queue_received_actions",
                 "Total number of received actions in action executor execution queue",
+                registry,
+            )
+            .unwrap(),
+            action_executor_execution_queue_skipped_actions_due_to_pausing: register_int_counter_with_registry!(
+                "bridge_action_executor_execution_queue_skipped_actions_due_to_pausing",
+                "Total number of skipped actions in action executor execution queue because of pausing",
                 registry,
             )
             .unwrap(),
