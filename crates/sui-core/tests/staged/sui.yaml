@@ -1086,6 +1086,8 @@ UnchangedSharedKind:
       Cancelled:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    4:
+      PerEpochConfig: UNIT
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

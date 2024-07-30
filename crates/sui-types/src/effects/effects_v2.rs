@@ -107,22 +107,28 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 }
                 _ => None,
             })
-            .chain(self.unchanged_shared_objects.iter().map(
-                |(id, change_kind)| match change_kind {
-                    UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
-                        InputSharedObject::ReadOnly((*id, *version, *digest))
-                    }
-                    UnchangedSharedKind::MutateDeleted(seqno) => {
-                        InputSharedObject::MutateDeleted(*id, *seqno)
-                    }
-                    UnchangedSharedKind::ReadDeleted(seqno) => {
-                        InputSharedObject::ReadDeleted(*id, *seqno)
-                    }
-                    UnchangedSharedKind::Cancelled(seqno) => {
-                        InputSharedObject::Cancelled(*id, *seqno)
-                    }
-                },
-            ))
+            .chain(
+                self.unchanged_shared_objects
+                    .iter()
+                    .filter_map(|(id, change_kind)| match change_kind {
+                        UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+                            Some(InputSharedObject::ReadOnly((*id, *version, *digest)))
+                        }
+                        UnchangedSharedKind::MutateDeleted(seqno) => {
+                            Some(InputSharedObject::MutateDeleted(*id, *seqno))
+                        }
+                        UnchangedSharedKind::ReadDeleted(seqno) => {
+                            Some(InputSharedObject::ReadDeleted(*id, *seqno))
+                        }
+                        UnchangedSharedKind::Cancelled(seqno) => {
+                            Some(InputSharedObject::Cancelled(*id, *seqno))
+                        }
+                        // We can not expose the per epoch config object as input shared object,
+                        // since it does not require sequencing, and hence shall not be considered
+                        // as a normal input shared object.
+                        UnchangedSharedKind::PerEpochConfig => None,
+                    }),
+            )
             .collect()
     }
 
@@ -587,4 +593,6 @@ pub enum UnchangedSharedKind {
     ReadDeleted(SequenceNumber),
     /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
     Cancelled(SequenceNumber),
+    /// Read of a per-epoch config object that should remain the same during an epoch.
+    PerEpochConfig,
 }
