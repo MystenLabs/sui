@@ -1003,8 +1003,8 @@ mod tests {
             .map(|e| e.message.to_string())
             .collect();
         assert_eq!(err,
-            vec!["Mutation payload (txBytes + signatures) size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
-);
+            vec!["The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+        );
     }
 
     #[tokio::test]

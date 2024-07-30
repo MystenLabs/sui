@@ -1140,7 +1140,7 @@ pub mod tests {
         // dryRunTransactionBlock check, should fail
         let err: Vec<_> = execute_request(
             10,
-            10,
+            200,
             "query { dryRunTransactionBlock(txBytes: \"AAA\") { error transaction { digest } } }",
         )
         .await
@@ -1154,8 +1154,8 @@ pub mod tests {
             vec!["Read query payload is too large. The maximum allowed is 10 bytes".to_string()]
         );
 
-        // dryRunTransactionBlock check, should fail
-        let err: Vec<_> = execute_request(5, 100, "query { dryRunTransactionBlock(txBytes: \"AAAABAS\") { error transaction { digest } } }")
+        // Should fail: query size too big
+        let err: Vec<_> = execute_request(10, 10, "query { dryRunTransactionBlock(txBytes: \"AAAABAS\") { error transaction { digest } } }")
             .await
             .into_result()
             .unwrap_err()
@@ -1164,8 +1164,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["The payload txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 5 bytes".to_string(),
-]
+            vec!["Query payload too large. Max allowed is 20".to_string()]
         );
     }
 }
