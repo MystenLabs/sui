@@ -62,7 +62,7 @@ impl<'a> PayloadSizeCheck<'a> {
         doc: &ExecutableDocument,
         ctx: &ExtensionContext<'_>,
     ) -> ServerResult<()> {
-        self.check_payload_size(ctx)?;
+        self.check_overall_payload_size(ctx)?;
         self.check_mutation_dry_run(doc, ctx)?;
         Ok(())
     }
@@ -78,10 +78,14 @@ impl<'a> PayloadSizeCheck<'a> {
         // executeTransactionBlock. We will remove them from the total query size
         // but we keep them in a map in case one variable is used in multiple places,
         // to avoid over counting
-        let mut track_vars = BTreeMap::<String, usize>::new();
+        // We also need to ensure that someone cannot run i.e. 100 dryRuns with the same txBytes
+        // that are close to the limits, so we need to actually keep track how many times a
+        // variable is actually used throughout the query
+        let mut track_vars = BTreeMap::<String, (usize, usize)>::new();
         for (_, val) in doc.operations.iter() {
             for n in val.node.selection_set.node.items.iter() {
                 if let Selection::Field(f) = &n.node {
+                    println!("{:?}", f.node.name.node);
                     if f.node.name.node == "dryRunTransactionBlock" {
                         for arg in &f.node.arguments {
                             if arg.0.node == "txBytes" {
@@ -101,7 +105,13 @@ impl<'a> PayloadSizeCheck<'a> {
                                             f.pos
                                         ));
                                 }
-                                track_vars.insert(arg.1.node.to_string(), tx_bytes_len);
+                                if let Some((_, count)) =
+                                    track_vars.get_mut(&arg.1.node.to_string())
+                                {
+                                    *count += 1;
+                                } else {
+                                    track_vars.insert(arg.1.node.to_string(), (tx_bytes_len, 1));
+                                }
                             }
                         }
                     } else if f.node.name.node == "executeTransactionBlock" {
@@ -125,19 +135,19 @@ impl<'a> PayloadSizeCheck<'a> {
                                     f.pos
                                 ));
                         }
-
-                        track_vars.insert(
-                            format!(
-                                "{}",
-                                &f.node
-                                    .arguments
-                                    .iter()
-                                    .map(|x| x.1.node.to_string())
-                                    .collect::<Vec<_>>()
-                                    .concat(),
-                            ),
-                            tx_bytes_len,
-                        );
+                        let var_name = (&f
+                            .node
+                            .arguments
+                            .iter()
+                            .map(|x| x.1.node.to_string())
+                            .collect::<Vec<_>>()
+                            .concat())
+                            .to_string();
+                        if let Some((_, count)) = track_vars.get_mut(&var_name) {
+                            *count += 1;
+                        } else {
+                            track_vars.insert(var_name, (tx_bytes_len, 1));
+                        }
                     }
                 }
             }
@@ -149,7 +159,10 @@ impl<'a> PayloadSizeCheck<'a> {
 
         // remove the executeTransactionBlock and the dryRunTransactionBlock variables from the
         // total query size, and check if the rest is bigger than the allowed limit
-        if (payload_size - track_vars.values().sum::<usize>() as u64)
+        // check that the variables are not repeatedly used everywhere (this is a problem
+        // particularly for dry run because it will run in parallel), so we simply multiply the
+        // counter with the variable size
+        if (payload_size - track_vars.values().map(|x| x.0 * x.1).sum::<usize>() as u64)
             > cfg.limits.max_query_payload_size.into()
         {
             self.log_metric(ctx, "Query payload is too large: {}", payload_size);
@@ -166,7 +179,7 @@ impl<'a> PayloadSizeCheck<'a> {
     }
 
     /// Check the whole query (content-length) against the allowed payload.
-    fn check_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
+    fn check_overall_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
         let payload_size: &PayloadSize = ctx.data_unchecked();
         let payload_size = payload_size.0;
 

@@ -926,6 +926,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
@@ -1037,7 +1038,7 @@ pub mod tests {
     }
 
     pub async fn test_query_complexity_metrics_impl() {
-        let server_builder = prep_schema(None, None);
+        let server_builder = prep_schema(None, None).context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1103,6 +1104,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(115))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
