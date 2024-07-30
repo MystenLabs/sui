@@ -136,7 +136,7 @@ impl Parameters {
 
     pub(crate) fn default_sync_last_known_own_block_timeout() -> Duration {
         if cfg!(msim) {
-            Duration::from_millis(200)
+            Duration::from_millis(500)
         } else {
             // Here we prioritise liveness over the complete de-risking of block equivocation. 5 seconds
             // in the majority of cases should be good enough for this given a healthy network.
