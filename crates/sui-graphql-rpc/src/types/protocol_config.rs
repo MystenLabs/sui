@@ -3,7 +3,7 @@
 
 use async_graphql::*;
 use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::schema::{checkpoints, epochs};
+use sui_indexer::schema::{chain_identifier, epochs};
 use sui_protocol_config::{ProtocolConfig as NativeProtocolConfig, ProtocolVersion};
 
 use crate::{
@@ -90,7 +90,7 @@ impl ProtocolConfigs {
 
 impl ProtocolConfigs {
     pub(crate) async fn query(db: &Db, protocol_version: Option<u64>) -> Result<Self, Error> {
-        use checkpoints::dsl as c;
+        use chain_identifier::dsl as c;
         use epochs::dsl as e;
 
         let (latest_version, digest_bytes): (i64, Option<Vec<u8>>) = db
@@ -99,9 +99,8 @@ impl ProtocolConfigs {
                     e::epochs
                         .select((
                             e::protocol_version,
-                            c::checkpoints
+                            c::chain_identifier
                                 .select(c::checkpoint_digest)
-                                .filter(c::sequence_number.eq(0))
                                 .single_value(),
                         ))
                         .order_by(e::epoch.desc())
