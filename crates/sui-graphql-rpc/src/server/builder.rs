@@ -1112,7 +1112,7 @@ pub mod tests {
         }
 
         // Should fail: read part of query is too big
-        let err: Vec<_> = execute_request(10, 10, "mutation { executeTransactionBlock(txBytes: \"AAA\", signatures: \"BBB\") { effects { status } } }")
+        let err: Vec<_> = execute_request(200, 10, "mutation { executeTransactionBlock(txBytes: \"AAA\", signatures: \"BBB\") { effects { status } } }")
             .await
             .into_result()
             .unwrap_err()
@@ -1121,11 +1121,11 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Mutation payload txBytes + sigantures size OK. The read part of the request is too large. Maximum allowed is 10".to_string()]
+            vec!["Query payload is too large. The maximum allowed is 10 bytes".to_string()]
         );
 
         // Should fail: tx_bytes part of query is too big
-        let err: Vec<_> = execute_request(10, 10, "mutation { executeTransactionBlock(txBytes: \"AAABGKHSA\", signatures: \"BBB\") { effects { status } } }")
+        let err: Vec<_> = execute_request(10, 200, "mutation { executeTransactionBlock(txBytes: \"AAABGKHSA\", signatures: \"BBB\") { effects { status } } }")
             .await
             .into_result()
             .unwrap_err()

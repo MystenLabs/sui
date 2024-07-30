@@ -946,7 +946,7 @@ mod tests {
         // This request should fail as we're passing the actual txBytes and sigs corresponding to a
         // transfer sui transaction. The combined length of those is higher than 10 bytes
         let limits = Limits {
-            max_query_payload_size: 100,
+            max_query_payload_size: 500,
             max_tx_payload_size: 10,
             ..Default::default()
         };
