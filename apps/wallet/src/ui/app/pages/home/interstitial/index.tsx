@@ -45,7 +45,7 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 
 	return (
 		<Portal containerId="overlay-portal-container">
-			<div className="flex flex-col justify-center flex-nowrap items-center rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm">
+			<div className="flex flex-col justify-center flex-nowrap items-center rounded-lg z-50 overflow-hidden absolute top-0 bottom-0 left-0 right-0 backdrop-blur-sm bg-[rgba(17,35,55,.56)]">
 				{bannerUrl && (
 					<ExternalLink
 						href={bannerUrl}
@@ -63,7 +63,7 @@ function Interstitial({ enabled, dismissKey, imageUrl, bannerUrl, onClose }: Int
 					className="appearance-none bg-transparent border-none cursor-pointer absolute bottom-0 pb-5 w-full"
 					onClick={() => closeInterstitial(dismissKey)}
 				>
-					<X32 className="text-black h-8 w-8" />
+					<X32 className="text-white h-8 w-8" />
 				</button>
 			</div>
 		</Portal>
