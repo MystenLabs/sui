@@ -221,6 +221,7 @@ pub trait Datasource<T: Send, P, R> {
         M: DataMapper<T, R> + 'static,
         P: Persistent<R> + 'static,
     {
+        // todo: add metrics for number of tasks
         let (join_handle, mut data_channel) = self
             .start_data_retrieval(task_name.clone(), starting_checkpoint, target_checkpoint)
             .await?;
@@ -290,7 +291,7 @@ where
         Error,
     > {
         let (exit_sender, exit_receiver) = oneshot::channel();
-        let progress_store = SimpleProgressStore {
+        let progress_store = PerTaskInMemProgressStore {
             current_checkpoint: starting_checkpoint,
             exit_checkpoint: target_checkpoint,
             exit_sender: Some(exit_sender),
@@ -334,14 +335,14 @@ pub trait DataMapper<T, R>: Sync + Send {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
 }
 
-struct SimpleProgressStore {
+struct PerTaskInMemProgressStore {
     pub current_checkpoint: u64,
     pub exit_checkpoint: u64,
     pub exit_sender: Option<Sender<()>>,
 }
 
 #[async_trait]
-impl ProgressStore for SimpleProgressStore {
+impl ProgressStore for PerTaskInMemProgressStore {
     async fn load(
         &mut self,
         _task_name: String,

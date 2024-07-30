@@ -40,6 +40,7 @@ impl PgBridgePersistent {
     }
 }
 
+// TODO: this is shared between SUI and ETH, move to different file.
 impl Persistent<ProcessedTxnData> for PgBridgePersistent {
     fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
         if data.is_empty() {
@@ -101,6 +102,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 checkpoint: checkpoint_number as i64,
                 // Target checkpoint and timestamp will only be written for new entries
                 target_checkpoint: i64::MAX,
+                // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
             })
             .on_conflict(dsl::task_name)
@@ -117,6 +119,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
+            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             .filter(columns::task_name.like(format!("{prefix} - %")))
             .filter(columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
@@ -136,6 +139,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 task_name,
                 checkpoint: checkpoint as i64,
                 target_checkpoint,
+                // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
             })
             .execute(&mut conn)?;
