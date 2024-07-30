@@ -838,7 +838,11 @@ impl ValidatorService {
         request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
     ) -> WrappedServiceResponse<HandleSoftBundleCertificatesResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let client_addr = self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr);
+        let client_addr = if self.client_id_source.is_none() {
+            self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr)
+        } else {
+            self.get_client_ip_addr(&request, self.client_id_source.as_ref().unwrap())
+        };
         let request = request.into_inner();
 
         let certificates = NonEmpty::from_vec(request.certificates)
