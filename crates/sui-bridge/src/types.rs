@@ -664,7 +664,7 @@ mod tests {
         let action = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert_eq!(action.approval_threshold(), 3334);
 
-        let action = get_test_eth_to_sui_bridge_action(None, None, None);
+        let action = get_test_eth_to_sui_bridge_action(None, None, None, None);
         assert_eq!(action.approval_threshold(), 3334);
 
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
