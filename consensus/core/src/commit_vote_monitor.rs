@@ -62,7 +62,6 @@ impl CommitVoteMonitor {
     }
 }
 
-// TODO: add more unit and integration tests.
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
