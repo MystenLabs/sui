@@ -27,6 +27,7 @@ use crate::db::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
+use crate::insert_or_ignore_into;
 use crate::metrics::IndexerMetrics;
 use crate::models::checkpoints::StoredChainIdentifier;
 use crate::models::checkpoints::StoredCheckpoint;
