@@ -169,7 +169,7 @@ where
                 error!("Failed to get events from eth client after retry");
                 continue;
             };
-            tracing::info!(
+            tracing::debug!(
                 ?contract_address,
                 start_block,
                 end_block,
