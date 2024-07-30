@@ -174,7 +174,6 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_consensus_latency: MystenHistogram,
     pub handle_certificate_non_consensus_latency: MystenHistogram,
     pub handle_soft_bundle_certificates_consensus_latency: MystenHistogram,
-    pub handle_soft_bundle_certificates_non_consensus_latency: MystenHistogram,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
     num_rejected_cert_in_epoch_boundary: IntCounter,
@@ -233,11 +232,6 @@ impl ValidatorServiceMetrics {
             handle_soft_bundle_certificates_consensus_latency: MystenHistogram::new_in_registry(
                 "validator_service_handle_soft_bundle_certificates_consensus_latency",
                 "Latency of handling a consensus soft bundle",
-                registry,
-            ),
-            handle_soft_bundle_certificates_non_consensus_latency: MystenHistogram::new_in_registry(
-                "validator_service_handle_soft_bundle_certificates_non_consensus_latency",
-                "Latency of handling a non-consensus soft bundle",
                 registry,
             ),
             num_rejected_tx_in_epoch_boundary: register_int_counter_with_registry!(
@@ -463,7 +457,9 @@ impl ValidatorService {
             SuiError::FullNodeCantHandleCertificate.into()
         );
 
-        let shared_object_tx = certificates[0].contains_shared_object();
+        let shared_object_tx = certificates
+            .iter()
+            .any(|cert| cert.contains_shared_object());
 
         let metrics = if certificates.len() == 1 {
             if wait_for_effects {
@@ -476,15 +472,10 @@ impl ValidatorService {
                 &self.metrics.submit_certificate_consensus_latency
             }
         } else {
-            if wait_for_effects {
-                &self
-                    .metrics
-                    .handle_soft_bundle_certificates_consensus_latency
-            } else {
-                &self
-                    .metrics
-                    .handle_soft_bundle_certificates_non_consensus_latency
-            }
+            // `soft_bundle_validity_check` ensured that all certificates contain shared objects.
+            &self
+                .metrics
+                .handle_soft_bundle_certificates_consensus_latency
         };
 
         let _metrics_guard = metrics.start_timer();
