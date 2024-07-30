@@ -622,7 +622,7 @@ fn pkg_mod_identifiers(
     modules
         .values()
         .filter(|mod_ident| is_pkg_mod_ident(&mod_ident.value, leading_name))
-        .map(|mod_ident| *mod_ident)
+        .copied()
         .chain(
             symbols
                 .file_mods
@@ -837,14 +837,10 @@ fn is_package_address(
         return true;
     }
 
-    symbols
-        .file_mods
-        .values()
-        .flatten()
-        .any(|mdef| match mdef.ident.address {
-            Address::Numerical { value, .. } if value.value == pkg_addr => true,
-            _ => false,
-        })
+    symbols.file_mods.values().flatten().any(|mdef| {
+        matches!(mdef.ident.address,
+            Address::Numerical { value, .. } if value.value == pkg_addr)
+    })
 }
 
 /// Check if a given name represents a package within the current program.
@@ -904,7 +900,7 @@ fn first_name_chain_component_kind(
 ) -> Option<ChainComponentKind> {
     match leading_name.value {
         LeadingNameAccess_::Name(n) => {
-            if is_package_name(symbols, &info, n) {
+            if is_package_name(symbols, info, n) {
                 Some(ChainComponentKind::Package(leading_name))
             } else if let Some(mod_ident) = info.modules.get(&n.value) {
                 Some(ChainComponentKind::Module(*mod_ident))
@@ -925,7 +921,7 @@ fn first_name_chain_component_kind(
             }
         }
         LeadingNameAccess_::AnonymousAddress(addr) => {
-            if is_package_address(symbols, &info, addr) {
+            if is_package_address(symbols, info, addr) {
                 Some(ChainComponentKind::Package(leading_name))
             } else {
                 None
@@ -934,7 +930,7 @@ fn first_name_chain_component_kind(
         LeadingNameAccess_::GlobalAddress(n) => {
             // if leading name is global address then the first component can only be a
             // package
-            if is_package_name(symbols, &info, n) {
+            if is_package_name(symbols, info, n) {
                 Some(ChainComponentKind::Package(leading_name))
             } else {
                 None
@@ -1005,8 +1001,8 @@ fn name_chain_completions(
         if let LeadingNameAccess_::Name(_) = &leading_name.value {
             completions.extend(
                 info.modules
-                    .iter()
-                    .map(|(n, _)| completion_item(n.as_str(), CompletionItemKind::MODULE)),
+                    .keys()
+                    .map(|n| completion_item(n.as_str(), CompletionItemKind::MODULE)),
             );
             completions.extend(all_single_name_member_completions(
                 symbols,
@@ -1022,20 +1018,18 @@ fn name_chain_completions(
                 );
             }
         }
-    } else {
-        if let Some(next_kind) = first_name_chain_component_kind(symbols, &info, leading_name) {
-            completions_for_name_chain_entry(
-                symbols,
-                cursor,
-                &info,
-                ChainComponentInfo::new(leading_name.loc, next_kind),
-                chain_target,
-                &path_entries,
-                /* path_index */ 0,
-                colon_colon_triggered,
-                &mut completions,
-            );
-        }
+    } else if let Some(next_kind) = first_name_chain_component_kind(symbols, &info, leading_name) {
+        completions_for_name_chain_entry(
+            symbols,
+            cursor,
+            &info,
+            ChainComponentInfo::new(leading_name.loc, next_kind),
+            chain_target,
+            &path_entries,
+            /* path_index */ 0,
+            colon_colon_triggered,
+            &mut completions,
+        );
     }
 
     eprintln!("found {} access chain completions", completions.len());
