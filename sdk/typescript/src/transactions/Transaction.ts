@@ -179,6 +179,13 @@ export class Transaction {
 	setGasBudget(budget: number | bigint) {
 		this.#data.gasConfig.budget = String(budget);
 	}
+
+	setGasBudgetIfNotSet(budget: number | bigint) {
+		if (this.#data.gasData.budget == null) {
+			this.#data.gasConfig.budget = String(budget);
+		}
+	}
+
 	setGasOwner(owner: string) {
 		this.#data.gasConfig.owner = owner;
 	}
