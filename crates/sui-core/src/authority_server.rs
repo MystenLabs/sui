@@ -847,7 +847,7 @@ impl ValidatorService {
         request: tonic::Request<HandleSoftBundleCertificatesRequestV3>,
     ) -> WrappedServiceResponse<HandleSoftBundleCertificatesResponseV3> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let client_addr = self.get_client_ip_addr(&request);
+        let client_addr = self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr);
         let request = request.into_inner();
 
         let certificates = NonEmpty::from_vec(request.certificates)
@@ -942,12 +942,12 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::one()))
     }
 
-    fn get_client_ip_addr<T>(&self, request: &tonic::Request<T>) -> Option<IpAddr> {
-        if self.client_id_source.is_none() {
-            return None;
-        }
-
-        match self.client_id_source.as_ref().unwrap() {
+    fn get_client_ip_addr<T>(
+        &self,
+        request: &tonic::Request<T>,
+        source: &ClientIdSource,
+    ) -> Option<IpAddr> {
+        match source {
             ClientIdSource::SocketAddr => {
                 let socket_addr: Option<SocketAddr> = request.remote_addr();
 
@@ -1110,7 +1110,7 @@ macro_rules! handle_with_decoration {
             return $self.$func_name($request).await.map(|(result, _)| result);
         }
 
-        let client = $self.get_client_ip_addr(&$request);
+        let client = $self.get_client_ip_addr(&$request, $self.client_id_source.as_ref().unwrap());
 
         // check if either IP is blocked, in which case return early
         $self.handle_traffic_req(client.clone()).await?;
