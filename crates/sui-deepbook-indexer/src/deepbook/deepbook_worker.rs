@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::deepbook::metrics::DeepbookIndexerMetrics;
+use crate::{deepbook::metrics::DeepbookIndexerMetrics, models::DeepPrice};
 use crate::deepbook::postgres_deepbook::write;
-use crate::models::Deepbook;
+use crate::models::{Deepbook, DeepbookType};
 use crate::postgres_manager::PgPool;
+use diesel::data_types::PgTimestamp;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_data_ingestion_core::Worker;
@@ -62,23 +63,61 @@ impl DeepbookWorker {
         &self,
         transaction: &CheckpointTransaction,
         checkpoint: u64,
-        _timestamp_ms: u64,
-    ) -> Deepbook {
+        timestamp_ms: u64,
+    ) -> DeepbookType {
         // info!(
         //     "Processing deepbook transaction [{}] {}: {:#?}",
         //     checkpoint,
         //     transaction.transaction.digest().base58_encode(),
         //     transaction.transaction.transaction_data(),
         // );
+        let deep_price = self.process_deep_price(transaction, checkpoint, timestamp_ms);
+        if let Some(deep_price) = deep_price {
+            info!("Processed deep_price: {:?}", deep_price);
+            return DeepbookType::DeepPrice(deep_price);
+        }
         let txn_data = transaction.transaction.transaction_data();
-        let print_data = transaction.transaction.transaction_data();
-        info!("Transaction data: {:#?}", print_data);
+
         let digest = transaction.transaction.digest().base58_encode();
-        Deepbook {
+        DeepbookType::Deepbook(Deepbook {
             digest,
             sender: txn_data.sender().to_string(),
             checkpoint: checkpoint as i64,
+        })
+    }
+
+    fn process_deep_price(
+        &self,
+        transaction: &CheckpointTransaction,
+        checkpoint: u64,
+        timestamp_ms: u64,
+    ) -> Option<DeepPrice> {
+        let digest = transaction.transaction.digest().base58_encode();
+        let txn_data = transaction.transaction.transaction_data();
+        let sender = txn_data.sender().to_string();
+        let command = txn_data.move_calls();
+        if command.len() == 1 {
+            let (_, _, fun_name) = command[0];
+            if fun_name.as_str() == "add_deep_price_point" {
+                info!("Found create_deep_price_point function call: {:?}", txn_data);
+            }
+            if let Ok(input_objects) = txn_data.input_objects() {
+                if input_objects.len() >= 3 {
+                    let target_pool = &input_objects[0].object_id().to_string();
+                    let reference_pool = &input_objects[1].object_id().to_string();
+                    return Some(DeepPrice {
+                        digest,
+                        sender,
+                        target_pool: target_pool.to_string(),
+                        reference_pool: reference_pool.to_string(),
+                        checkpoint: checkpoint as i64,
+                        timestamp: PgTimestamp(timestamp_ms as i64),
+                    });
+                }
+            }
         }
+
+        return None;
     }
 }
 
@@ -93,7 +132,7 @@ impl Worker for DeepbookWorker {
             .iter()
             .filter(|txn| self.is_deepbook_transaction(txn))
             .map(|txn| self.process_transaction(txn, checkpoint_num, timestamp_ms))
-            .collect::<Vec<Deepbook>>();
+            .collect::<Vec<DeepbookType>>();
 
         write(&self.pg_pool, data).tap_ok(|_| {
             // info!("Processed checkpoint [{}] successfully", checkpoint_num);

@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{deepbook, progress_store};
+use crate::schema::{deep_price, deepbook, progress_store};
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
+use diesel::data_types::PgTimestamp;
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
 #[diesel(table_name = progress_store, primary_key(task_name))]
@@ -29,5 +30,10 @@ pub struct DeepPrice {
     pub target_pool: String,
     pub reference_pool: String,
     pub checkpoint: i64,
-    pub timestamp: i64,
+    pub timestamp: PgTimestamp,
+}
+
+pub enum DeepbookType {
+    Deepbook(Deepbook),
+    DeepPrice(DeepPrice),
 }

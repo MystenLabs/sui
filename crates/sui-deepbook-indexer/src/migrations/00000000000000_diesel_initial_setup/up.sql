@@ -21,5 +21,5 @@ CREATE TABLE IF NOT EXISTS deep_price
     target_pool                 TEXT         NOT NULL,
     reference_pool              TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
-    timestamp                   BIGINT       DEFAULT CURRENT_TIMESTAMP
-)
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL
+);

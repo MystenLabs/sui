@@ -1,6 +1,7 @@
 # config.yaml format:
 # Database connection URL
-db_url: postgres://dariorussi:dariodb@localhost:5432/deepbook
+# db_url: postgres://dariorussi:dariodb@localhost:5432/deepbook
+db_url: postgres://aslantashtanov:aslantashtanov@localhost:5433/deepbook
 
 # URL of the remote store
 # remote_store_url: http://checkpoints.testnet.sui.io
