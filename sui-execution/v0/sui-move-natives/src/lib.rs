@@ -707,7 +707,7 @@ pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
     get_nested_struct_field(object, &[0, 0, 0])
 }
 
-// Extract a field valye that's nested inside value `v`. The offset of each nesting
+// Extract a field value that's nested inside value `v`. The offset of each nesting
 // is determined by `offsets`.
 pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value, PartialVMError> {
     for offset in offsets {
