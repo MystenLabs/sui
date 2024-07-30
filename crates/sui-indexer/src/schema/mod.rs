@@ -34,6 +34,7 @@ mod inner {
 #[cfg(feature = "mysql-feature")]
 #[cfg(not(feature = "postgres-feature"))]
 mod inner {
+    pub use crate::schema::mysql::chain_identifier;
     pub use crate::schema::mysql::checkpoints;
     pub use crate::schema::mysql::display;
     pub use crate::schema::mysql::epochs;
@@ -44,7 +45,6 @@ mod inner {
     pub use crate::schema::mysql::packages;
     pub use crate::schema::mysql::pruner_cp_watermark;
     pub use crate::schema::mysql::transactions;
-    pub use crate::schema::mysql::tx_calls;
     pub use crate::schema::mysql::tx_changed_objects;
     pub use crate::schema::mysql::tx_digests;
     pub use crate::schema::mysql::tx_input_objects;

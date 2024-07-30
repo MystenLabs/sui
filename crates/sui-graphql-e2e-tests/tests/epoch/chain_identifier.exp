@@ -3,10 +3,10 @@ processed 3 tasks
 init:
 C: object(0,0)
 
-task 1 'create-checkpoint'. lines 8-8:
+task 1 'create-checkpoint'. lines 7-7:
 Checkpoint created: 1
 
-task 2 'run-graphql'. lines 10-13:
+task 2 'run-graphql'. lines 9-12:
 Response: {
   "data": {
     "chainIdentifier": "8f58ad28"
