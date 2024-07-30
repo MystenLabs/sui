@@ -6,7 +6,10 @@ use narwhal_config::Epoch;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::{sync::mpsc, time::Instant};
+use tokio::{
+    sync::mpsc,
+    time::{sleep, Instant},
+};
 use tracing::{error, info};
 use typed_store::rocks::safe_drop_db;
 
@@ -73,7 +76,7 @@ impl ConsensusStorePruner {
         }
     }
 
-    pub(crate) async fn prune_old_epoch_data(
+    async fn prune_old_epoch_data(
         storage_base_path: PathBuf,
         current_epoch: Epoch,
         epoch_retention: u64,
@@ -130,10 +133,26 @@ impl ConsensusStorePruner {
             if file_epoch < drop_boundary {
                 if let Err(e) = safe_drop_db(f.path()) {
                     error!(
-                        "Could not prune old epoch storage \"{:?}\" directory: {:?}",
+                        "Could not prune old epoch storage \"{:?}\" directory with safe approach. Will fallback to force delete: {:?}",
                         f.path(),
                         e
                     );
+
+                    const WAIT_BEFORE_FORCE_DELETE: Duration = Duration::from_secs(5);
+                    sleep(WAIT_BEFORE_FORCE_DELETE).await;
+
+                    if let Err(err) = fs::remove_dir_all(f.path()) {
+                        error!(
+                            "Could not prune old epoch storage \"{:?}\" directory with force delete: {:?}",
+                            f.path(),
+                            err
+                        );
+                    } else {
+                        info!(
+                            "Successfully pruned old epoch storage directory with force delete: {:?}",
+                            f.path()
+                        );
+                    }
                 } else {
                     info!(
                         "Successfully pruned old epoch storage directory: {:?}",

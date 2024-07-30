@@ -412,7 +412,7 @@ pub struct ConsensusConfig {
     // Base consensus DB path for all epochs.
     pub db_path: PathBuf,
 
-    // The number of epochs for which to retain the consensus DBs. Setting it to 0 will make an epoch DB getting
+    // The number of epochs for which to retain the consensus DBs. Setting it to 0 will make a consensus DB getting
     // dropped as soon as system is switched to a new epoch.
     pub db_retention_epochs: Option<u64>,
 
@@ -465,7 +465,7 @@ impl ConsensusConfig {
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
-        self.db_retention_epochs.unwrap_or(1)
+        self.db_retention_epochs.unwrap_or(0)
     }
 
     pub fn db_pruner_period(&self) -> Duration {
