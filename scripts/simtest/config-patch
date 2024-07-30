@@ -12,11 +12,12 @@ diff --git a/Cargo.toml b/Cargo.toml
 index c0829bc1b6..4007f97d66 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -682,3 +682,7 @@ field_names = "0.2.0"
+@@ -682,6 +682,8 @@ field_names = "0.2.0"
  semver = "1.0.16"
  spinners = "4.1.0"
  include_dir = "0.7.3"
-+
-+[patch.crates-io]
+
+ [patch.crates-io]
+ quinn-proto = { git = "https://github.com/quinn-rs/quinn.git", rev = "f0fa66f871b80b9d2d7075d76967c649aecc0b77" }
 +tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b" }
 +futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "220f52a15804a768610ac0ae3b8da7de4a5c4d2b" }
