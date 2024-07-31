@@ -82,9 +82,9 @@ pub struct DotAutocompleteInfo {
 #[derive(Default, Debug, Clone)]
 pub struct AliasAutocompleteInfo {
     /// Numerical addresses that are valid autocompletes
-    pub addresses: BTreeSet<(Symbol, NumericalAddress)>,
+    pub addresses: BTreeMap<Symbol, NumericalAddress>,
     /// Modules that are valid autocompletes
-    pub modules: BTreeSet<(Symbol, E::ModuleIdent)>,
+    pub modules: BTreeMap<Symbol, E::ModuleIdent>,
     /// Members that are valid autocompletes
     pub members: BTreeSet<(Symbol, E::ModuleIdent, Name)>,
     /// Type parameters that are valid autocompletes
@@ -213,8 +213,8 @@ impl
             BTreeMap<Symbol, MemberEntry>,
         ),
     ) -> Self {
-        let mut addresses: BTreeSet<(Symbol, NumericalAddress)> = BTreeSet::new();
-        let mut modules: BTreeSet<(Symbol, E::ModuleIdent)> = BTreeSet::new();
+        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+        let mut modules: BTreeMap<Symbol, E::ModuleIdent> = BTreeMap::new();
         let mut members: BTreeSet<(Symbol, E::ModuleIdent, Name)> = BTreeSet::new();
         let mut type_params: BTreeSet<Symbol> = BTreeSet::new();
 
@@ -224,10 +224,10 @@ impl
         {
             match entry {
                 LeadingAccessEntry::Address(addr) => {
-                    addresses.insert((*symbol, *addr));
+                    addresses.insert(*symbol, *addr);
                 }
                 LeadingAccessEntry::Module(mident) => {
-                    modules.insert((*symbol, *mident));
+                    modules.insert(*symbol, *mident);
                 }
                 LeadingAccessEntry::Member(mident, name) => {
                     members.insert((*symbol, *mident, *name));
