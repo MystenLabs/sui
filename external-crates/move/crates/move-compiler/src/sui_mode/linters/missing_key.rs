@@ -51,8 +51,6 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    const VISIT_TYPES: bool = true;
-
     fn visit_struct_custom(
         &mut self,
         _module: ModuleIdent,
