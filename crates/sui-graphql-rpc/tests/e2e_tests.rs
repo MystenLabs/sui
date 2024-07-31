@@ -1010,11 +1010,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_query_mutation_payload_vars_pass() {
-        // Set max mutation payload size to 450 bytes
+        // Set max mutation payload size to 6000 bytes
         // This request should pass as we're passing the actual txBytes and sigs corresponding to a
         // transfer sui transaction
         let limits = Limits {
-            max_query_payload_size: 180,
+            max_query_payload_size: 5000,
             max_tx_payload_size: 6000,
             ..Default::default()
         };
