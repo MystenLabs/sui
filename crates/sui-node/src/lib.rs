@@ -2041,10 +2041,7 @@ pub async fn build_http_server(
             rest_service.with_executor(transaction_orchestrator.clone())
         }
 
-        let rest_router = rest_service.into_router();
-        router = router
-            .nest("/rest", rest_router.clone())
-            .nest("/v2", rest_router);
+        router = router.merge(rest_service.into_router());
     }
 
     let listener = tokio::net::TcpListener::bind(&config.json_rpc_address)

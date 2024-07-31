@@ -127,7 +127,7 @@ pub async fn serve_executor(
 
     let executor_server_handle = tokio::spawn(async move {
         sui_rest_api::RestService::new_without_version(executor)
-            .start_service(executor_server_url, Some("/rest".to_owned()))
+            .start_service(executor_server_url)
             .await;
     });
 
