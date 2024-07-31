@@ -11,7 +11,7 @@ use crate::{
         codes::{custom, DiagnosticInfo, Severity},
         WarningFilters,
     },
-    naming::ast::{TypeName_, Type_},
+    naming::ast::TypeName_,
     shared::{CompilationEnv, Identifier},
     sui_mode::linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME},
     typing::{
@@ -73,7 +73,6 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        use T::UnannotatedExp_ as E;
         if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
             if self.is_freeze_function(fun) {
                 self.check_type_arguments(fun, exp.exp.loc);
