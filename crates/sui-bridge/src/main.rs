@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use mysten_metrics::start_prometheus_server;
+use tokio::try_join;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -44,7 +45,8 @@ async fn main() -> anyhow::Result<()> {
         .with_prom_registry(&prometheus_registry)
         .init();
     let metadata = BridgeNodePublicMetadata::new(VERSION.into());
-    Ok(run_bridge_node(config, metadata, prometheus_registry)
-        .await?
-        .await?)
+    let handles = run_bridge_node(config, metadata, prometheus_registry)
+        .await?;
+    futures::future::join_all(handles).await;
+    Ok(())
 }

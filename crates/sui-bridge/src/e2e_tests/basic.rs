@@ -61,7 +61,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let amount = 42;
     let sui_amount = amount * 100_000_000;
 
-    initiate_bridge_eth_to_sui(&bridge_test_cluster, amount, 0)
+    initiate_bridge_eth_to_sui(&bridge_test_cluster, amount, 0, None)
         .await
         .unwrap();
     let events = bridge_test_cluster
@@ -448,6 +448,7 @@ pub async fn initiate_bridge_erc20_to_sui(
         eth_chain_id,
         nonce,
         BridgeActionStatus::Claimed,
+        None,
     )
     .await
     .tap_ok(|_| {
@@ -462,6 +463,7 @@ pub async fn initiate_bridge_eth_to_sui(
     bridge_test_cluster: &BridgeTestCluster,
     amount: u64,
     nonce: u64,
+    wait_for_status_change_timeout_sec: Option<u64>,
 ) -> Result<(), anyhow::Error> {
     info!("Depositing native Ether to Solidity contract, nonce: {nonce}, amount: {amount}");
     let (eth_signer, eth_address) = bridge_test_cluster
@@ -511,6 +513,7 @@ pub async fn initiate_bridge_eth_to_sui(
         eth_chain_id,
         nonce,
         BridgeActionStatus::Claimed,
+        wait_for_status_change_timeout_sec,
     )
     .await
     .tap_ok(|_| {
@@ -551,7 +554,7 @@ pub async fn initiate_bridge_sui_to_eth(
     {
         Ok(resp) => {
             if !resp.status_ok().unwrap() {
-                return Err(anyhow!("Sui TX error"));
+                return Err(anyhow!("initiate_bridge_sui_to_eth TX error"));
             } else {
                 resp
             }
@@ -598,6 +601,7 @@ pub async fn initiate_bridge_sui_to_eth(
         bridge_test_cluster.sui_chain_id(),
         nonce,
         BridgeActionStatus::Approved,
+        None,
     )
     .await
     .unwrap();
@@ -611,6 +615,7 @@ async fn wait_for_transfer_action_status(
     chain_id: BridgeChainId,
     nonce: u64,
     status: BridgeActionStatus,
+    wait_for_status_change_timeout_sec: Option<u64>,
 ) -> Result<(), anyhow::Error> {
     // Wait for the bridge action to be approved
     let now = std::time::Instant::now();
@@ -636,7 +641,7 @@ async fn wait_for_transfer_action_status(
             );
             return Ok(());
         }
-        if now.elapsed().as_secs() > 60 {
+        if now.elapsed().as_secs() > wait_for_status_change_timeout_sec.unwrap_or(60) {
             return Err(anyhow!(
                 "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id:?}, nonce: {nonce}. Time elapsed: {:?}",
                 status,

@@ -5,6 +5,7 @@ use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::e2e_tests::basic::initiate_bridge_eth_to_sui;
 use crate::e2e_tests::basic::initiate_bridge_sui_to_eth;
 use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
+use crate::events::SuiBridgeEvent;
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, EmergencyAction};
 use crate::types::{BridgeActionStatus, EmergencyActionType};
@@ -33,13 +34,12 @@ async fn test_sui_bridge_paused() {
     });
 
     // Setup bridge test env
-    let bridge_test_cluster = BridgeTestClusterBuilder::new()
+    let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
         .with_eth_env(true)
         .with_bridge_cluster(true)
-        .with_num_validators(4)
+        .with_num_validators(3)
         .with_approved_governance_actions(vec![
             vec![pause_action.clone(), unpause_action.clone()],
-            vec![unpause_action.clone()],
             vec![unpause_action.clone()],
             vec![],
         ])
@@ -54,7 +54,7 @@ async fn test_sui_bridge_paused() {
     assert!(!bridge_client.get_bridge_summary().await.unwrap().is_frozen);
 
     // try bridge from eth and verify it works on sui
-    initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 0)
+    initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 0, None)
         .await
         .unwrap();
     // verify Eth was transferred to Sui address
@@ -101,14 +101,34 @@ async fn test_sui_bridge_paused() {
         response.effects.unwrap().status(),
         &SuiExecutionStatus::Success
     );
+    assert!(response.events.unwrap().data.iter().any(|event| {
+        if let Ok(Some(SuiBridgeEvent::EmergencyOpEvent(e))) =
+            SuiBridgeEvent::try_from_sui_event(event)
+        {
+            assert!(e.frozen);
+            true
+        } else {
+            false
+        }
+    }));
     info!("Bridge paused");
 
     // verify bridge paused
     assert!(bridge_client.get_bridge_summary().await.unwrap().is_frozen);
 
+    // advance cursor to the last bridge tx
+    let txes = bridge_test_cluster.new_bridge_transactions(true).await;
+    assert!(!txes.is_empty());
+
     // Transfer from eth to sui should fail on Sui
-    let eth_to_sui_bridge_action = initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 1).await;
+    let eth_to_sui_bridge_action =
+        initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 1, Some(10)).await;
     assert!(eth_to_sui_bridge_action.is_err());
+
+    // Bridge node should not submit the transaction when the bridge is paused, so we assert there is no new bridge tx at all
+    let txes = bridge_test_cluster.new_bridge_transactions(true).await;
+    assert!(txes.is_empty());
+
     // message should not be recorded on Sui when the bridge is paused
     let res = bridge_test_cluster
         .bridge_client()
@@ -118,6 +138,7 @@ async fn test_sui_bridge_paused() {
         )
         .await;
     assert_eq!(BridgeActionStatus::NotFound, res);
+
     // Transfer from Sui to eth should fail
     let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
         &bridge_test_cluster,
@@ -127,5 +148,8 @@ async fn test_sui_bridge_paused() {
         10,
     )
     .await;
-    assert!(sui_to_eth_bridge_action.is_err())
+    assert!(sui_to_eth_bridge_action
+        .unwrap_err()
+        .to_string()
+        .contains("initiate_bridge_sui_to_eth TX error"));
 }
