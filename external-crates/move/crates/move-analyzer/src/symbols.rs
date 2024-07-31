@@ -2857,6 +2857,10 @@ impl<'a> ParsingSymbolicator<'a> {
 
     /// Get symbols for a use declaration
     fn use_decl_symbols(&mut self, use_decl: &P::UseDecl) {
+        use_decl
+            .attributes
+            .iter()
+            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
