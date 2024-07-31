@@ -1,6 +1,5 @@
 //# publish
 module 0x1.Token {
-    import 0x1.signer;
 
     struct T has key {v: u64}
 
@@ -19,23 +18,21 @@ module 0x1.Token {
         return move(res);
     }
 
-    public publish(account: &signer, t: Self.T) {
+    public publish(account: address, t: Self.T) {
     label b0:
         abort(0);
     }
 
     fake(addr: address): &mut Self.T { label b0: abort(0); }
 
-    public test(account: &signer) {
-        let addr: address;
+    public test(account: address) {
         let t: Self.T;
         let tref: &mut Self.T;
         let y: Self.T;
     label b0:
-        addr = signer.address_of(copy(account));
         t = Self.new(0);
         Self.publish(copy(account), move(t));
-        tref = Self.fake(move(addr));
+        tref = Self.fake(move(account));
         y = *move(tref);
         return;
     }
@@ -43,7 +40,6 @@ module 0x1.Token {
 
 //# publish
 module 0x2.Token {
-    import 0x1.signer;
 
     enum T has key { V{v: u64}}
 
@@ -62,23 +58,21 @@ module 0x2.Token {
         return move(res);
     }
 
-    public publish(account: &signer, t: Self.T) {
+    public publish(account: address, t: Self.T) {
     label b0:
         abort(0);
     }
 
     fake(addr: address): &mut Self.T { label b0: abort(0); }
 
-    public test(account: &signer) {
-        let addr: address;
+    public test(account: address) {
         let t: Self.T;
         let tref: &mut Self.T;
         let y: Self.T;
     label b0:
-        addr = signer.address_of(copy(account));
         t = Self.new(0);
         Self.publish(copy(account), move(t));
-        tref = Self.fake(move(addr));
+        tref = Self.fake(move(account));
         y = *move(tref);
         return;
     }

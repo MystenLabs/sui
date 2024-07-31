@@ -39,10 +39,3 @@ public fun StructEq::new(): StructEq::S {
   1: $t1 := pack StructEq::S($t0)
   2: return $t1
 }
-
-============ Diagnostics ================
-warning: DEPRECATED. will be removed
-  ┌─ tests/escape_analysis/struct_eq.move:5:5
-  │
-5 │     invariant forall s: S: s == S { f: 10 };
-  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Specification blocks are deprecated and are no longer used

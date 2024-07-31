@@ -57,6 +57,7 @@ pub(crate) fn create_rustls_client_config(
 }
 
 // Checks if the public key from a TLS certificate belongs to one of the validators.
+#[derive(Debug)]
 struct AllowedPublicKeys {
     // TODO: refactor to use key bytes
     keys: BTreeSet<Ed25519PublicKey>,

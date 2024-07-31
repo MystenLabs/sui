@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
+use std::env;
 #[cfg(not(msim))]
 use std::str::FromStr;
 
@@ -3931,6 +3932,59 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     );
 
     insta::assert_snapshot!(error_string);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_move_build_bytecode_with_address_resolution() -> Result<(), anyhow::Error> {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+
+    // Package setup: a simple package depends on another and copied to tmpdir
+    let mut simple_package_path = PathBuf::from(TEST_DATA_DIR);
+    simple_package_path.push("simple");
+
+    let mut depends_on_simple_package_path = PathBuf::from(TEST_DATA_DIR);
+    depends_on_simple_package_path.push("depends_on_simple");
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+
+    fs_extra::dir::copy(
+        &simple_package_path,
+        &tmp_dir,
+        &fs_extra::dir::CopyOptions::default(),
+    )?;
+
+    fs_extra::dir::copy(
+        &depends_on_simple_package_path,
+        &tmp_dir,
+        &fs_extra::dir::CopyOptions::default(),
+    )?;
+
+    // Publish simple package.
+    let simple_tmp_dir = tmp_dir.path().join("simple");
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "publish",
+        simple_tmp_dir.to_str().unwrap(),
+    ])
+    .await?;
+
+    // Build the package that depends on 'simple' package. Addresses must resolve successfully
+    // from the `Move.lock` for this command to succeed at all.
+    let depends_on_simple_tmp_dir = tmp_dir.path().join("depends_on_simple");
+    test_with_sui_binary(&[
+        "move",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "build",
+        "--dump-bytecode-as-base64",
+        "--path",
+        depends_on_simple_tmp_dir.to_str().unwrap(),
+    ])
+    .await?;
     Ok(())
 }
 

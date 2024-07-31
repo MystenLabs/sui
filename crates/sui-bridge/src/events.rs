@@ -506,6 +506,7 @@ pub mod tests {
         let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
             .with_eth_env(false)
             .with_bridge_cluster(false)
+            .with_num_validators(2)
             .build()
             .await;
 

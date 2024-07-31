@@ -126,7 +126,7 @@ pub enum ErrorConstants {
     /// No constant information is available, only a line number.
     None,
     /// The error is a complete error, with an error identifier and constant that can be rendered.
-    /// The the rendered string representation of the constant is returned only when the contant
+    /// The rendered string representation of the constant is returned only when the contant
     /// value is one of the following types:
     /// * A vector of bytes convertible to a valid UTF-8 string; or
     /// * A numeric value (u8, u16, u32, u64, u128, u256); or

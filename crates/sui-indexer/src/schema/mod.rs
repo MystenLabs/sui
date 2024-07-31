@@ -12,6 +12,7 @@ mod pg;
 
 #[cfg(feature = "postgres-feature")]
 mod inner {
+    pub use crate::schema::pg::chain_identifier;
     pub use crate::schema::pg::checkpoints;
     pub use crate::schema::pg::display;
     pub use crate::schema::pg::epochs;
@@ -33,6 +34,7 @@ mod inner {
 #[cfg(feature = "mysql-feature")]
 #[cfg(not(feature = "postgres-feature"))]
 mod inner {
+    pub use crate::schema::mysql::chain_identifier;
     pub use crate::schema::mysql::checkpoints;
     pub use crate::schema::mysql::display;
     pub use crate::schema::mysql::epochs;
@@ -51,6 +53,7 @@ mod inner {
     pub use crate::schema::mysql::tx_senders;
 }
 
+pub use inner::chain_identifier;
 pub use inner::checkpoints;
 pub use inner::display;
 pub use inner::epochs;

@@ -8,7 +8,7 @@ use sui_analytics_indexer::{
     analytics_metrics::AnalyticsMetrics, errors::AnalyticsIndexerError, make_analytics_processor,
     AnalyticsIndexerConfig,
 };
-use sui_data_ingestion_core::setup_single_workflow;
+use sui_data_ingestion_core::{setup_single_workflow, ReaderOptions};
 use tokio::signal;
 use tracing::info;
 
@@ -37,8 +37,18 @@ async fn main() -> Result<()> {
         .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
     let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
 
-    let (executor, exit_sender) =
-        setup_single_workflow(processor, remote_store_url, watermark, 1, None).await?;
+    let reader_options = ReaderOptions {
+        batch_size: 10,
+        ..Default::default()
+    };
+    let (executor, exit_sender) = setup_single_workflow(
+        processor,
+        remote_store_url,
+        watermark,
+        1,
+        Some(reader_options),
+    )
+    .await?;
 
     tokio::spawn(async {
         signal::ctrl_c()

@@ -7,6 +7,7 @@ use move_command_line_common::files::{
     extension_equals, find_filenames, find_move_filenames, FileHash, MOVE_COMPILED_EXTENSION,
 };
 use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
+use move_compiler::editions::Edition;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
@@ -574,7 +575,7 @@ impl Package {
                 .package
                 .edition
                 .or(config.default_edition)
-                .unwrap_or_default(),
+                .unwrap_or(Edition::LEGACY), // TODO require edition
             warning_filter: WarningFilters::new_for_source(),
         }
     }

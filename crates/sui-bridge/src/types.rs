@@ -43,6 +43,10 @@ pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
 pub const USD_MULTIPLIER: u64 = 10000; // decimal places = 4
 
+pub type IsBridgePaused = bool;
+pub const BRIDGE_PAUSED: bool = true;
+pub const BRIDGE_UNPAUSED: bool = false;
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
     pub pubkey: BridgeAuthorityPublicKey,
@@ -169,7 +173,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,
@@ -660,7 +664,7 @@ mod tests {
         let action = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert_eq!(action.approval_threshold(), 3334);
 
-        let action = get_test_eth_to_sui_bridge_action(None, None, None);
+        let action = get_test_eth_to_sui_bridge_action(None, None, None, None);
         assert_eq!(action.approval_threshold(), 3334);
 
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {

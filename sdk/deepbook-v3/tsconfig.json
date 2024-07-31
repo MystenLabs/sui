@@ -1,0 +1,11 @@
+{
+	"extends": "../build-scripts/tsconfig.shared.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"module": "CommonJS",
+		"outDir": "dist/cjs",
+		"isolatedModules": true,
+		"rootDir": "src"
+	},
+	"references": [{ "path": "../typescript" }]
+}

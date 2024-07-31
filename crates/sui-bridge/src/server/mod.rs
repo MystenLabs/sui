@@ -83,10 +83,15 @@ pub fn run_server(
     metrics: Arc<BridgeMetrics>,
     metadata: Arc<BridgeNodePublicMetadata>,
 ) -> tokio::task::JoinHandle<()> {
-    let service = axum::Server::bind(socket_address)
-        .serve(make_router(Arc::new(handler), metrics, metadata).into_make_service());
+    let socket_address = *socket_address;
     tokio::spawn(async move {
-        service.await.unwrap();
+        let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
+        axum::serve(
+            listener,
+            make_router(Arc::new(handler), metrics, metadata).into_make_service(),
+        )
+        .await
+        .unwrap();
     })
 }
 

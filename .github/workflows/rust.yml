@@ -43,8 +43,6 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
-  RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 
@@ -262,7 +260,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
-          cargo nextest run -p sui-framework-tests -- unit_tests::
+          cargo nextest run -p sui-framework-tests --test move_tests
 
   # # Disabled
   # rosetta-validation:

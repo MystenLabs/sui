@@ -105,10 +105,8 @@ pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHand
 
     spawn_logged_monitored_task!(
         async move {
-            axum::Server::bind(&socket_addr)
-                .serve(app.into_make_service())
-                .await
-                .unwrap();
+            let listener = tokio::net::TcpListener::bind(&socket_addr).await.unwrap();
+            axum::serve(listener, app).await.unwrap();
         },
         "MetricsServerTask"
     )

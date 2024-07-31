@@ -21,8 +21,10 @@ mod tests {
     use super::*;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::traits::KeyPair;
-    use rustls::client::ServerCertVerifier as _;
-    use rustls::server::ClientCertVerifier as _;
+    use rustls::client::danger::ServerCertVerifier as _;
+    use rustls::pki_types::ServerName;
+    use rustls::pki_types::UnixTime;
+    use rustls::server::danger::ClientCertVerifier as _;
 
     #[test]
     fn verify_allowall() {
@@ -38,11 +40,7 @@ mod tests {
 
         // The bob passes validation
         verifier
-            .verify_client_cert(
-                &random_cert_bob.rustls_certificate(),
-                &[],
-                std::time::SystemTime::now(),
-            )
+            .verify_client_cert(&random_cert_bob.rustls_certificate(), &[], UnixTime::now())
             .unwrap();
 
         // The alice passes validation
@@ -50,7 +48,7 @@ mod tests {
             .verify_client_cert(
                 &random_cert_alice.rustls_certificate(),
                 &[],
-                std::time::SystemTime::now(),
+                UnixTime::now(),
             )
             .unwrap();
     }
@@ -74,10 +72,9 @@ mod tests {
             .verify_server_cert(
                 &random_cert_bob.rustls_certificate(),
                 &[],
-                &rustls::ServerName::try_from("example.com").unwrap(),
-                &mut Vec::<&[u8]>::new().iter().cloned(),
+                &ServerName::try_from("example.com").unwrap(),
                 &[],
-                std::time::SystemTime::now(),
+                UnixTime::now(),
             )
             .unwrap();
 
@@ -86,10 +83,9 @@ mod tests {
             .verify_server_cert(
                 &random_cert_alice.rustls_certificate(),
                 &[],
-                &rustls::ServerName::try_from("example.com").unwrap(),
-                &mut Vec::<&[u8]>::new().iter().cloned(),
+                &ServerName::try_from("example.com").unwrap(),
                 &[],
-                std::time::SystemTime::now(),
+                UnixTime::now(),
             )
             .unwrap_err();
         assert!(
@@ -123,20 +119,12 @@ mod tests {
 
         // The allowed cert passes validation
         verifier
-            .verify_client_cert(
-                &allowed_cert.rustls_certificate(),
-                &[],
-                std::time::SystemTime::now(),
-            )
+            .verify_client_cert(&allowed_cert.rustls_certificate(), &[], UnixTime::now())
             .unwrap();
 
         // The disallowed cert fails validation
         let err = verifier
-            .verify_client_cert(
-                &disallowed_cert.rustls_certificate(),
-                &[],
-                std::time::SystemTime::now(),
-            )
+            .verify_client_cert(&disallowed_cert.rustls_certificate(), &[], UnixTime::now())
             .unwrap_err();
         assert!(
             matches!(err, rustls::Error::General(_)),
@@ -146,11 +134,7 @@ mod tests {
         // After removing the allowed public key from the set it now fails validation
         allowlist.inner_mut().write().unwrap().clear();
         let err = verifier
-            .verify_client_cert(
-                &allowed_cert.rustls_certificate(),
-                &[],
-                std::time::SystemTime::now(),
-            )
+            .verify_client_cert(&allowed_cert.rustls_certificate(), &[], UnixTime::now())
             .unwrap_err();
         assert!(
             matches!(err, rustls::Error::General(_)),
@@ -178,11 +162,7 @@ mod tests {
 
         // Allowed public key but the server-name in the cert is not the required "sui"
         let err = client_verifier
-            .verify_client_cert(
-                &cert.rustls_certificate(),
-                &[],
-                std::time::SystemTime::now(),
-            )
+            .verify_client_cert(&cert.rustls_certificate(), &[], UnixTime::now())
             .unwrap_err();
         assert_eq!(
             err,
@@ -198,10 +178,9 @@ mod tests {
             .verify_server_cert(
                 &cert.rustls_certificate(),
                 &[],
-                &rustls::ServerName::try_from("example.com").unwrap(),
-                &mut Vec::<&[u8]>::new().iter().cloned(),
+                &ServerName::try_from("example.com").unwrap(),
                 &[],
-                std::time::SystemTime::now(),
+                UnixTime::now(),
             )
             .unwrap_err();
         assert_eq!(

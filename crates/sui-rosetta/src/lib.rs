@@ -7,10 +7,8 @@ use std::sync::Arc;
 use axum::routing::post;
 use axum::{Extension, Router};
 use once_cell::sync::Lazy;
-use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::spawn_monitored_task;
 use sui_sdk::SuiClient;
 
 use crate::errors::Error;
@@ -46,7 +44,7 @@ impl RosettaOnlineServer {
         }
     }
 
-    pub fn serve(self, addr: SocketAddr) -> JoinHandle<hyper::Result<()>> {
+    pub async fn serve(self, addr: SocketAddr) {
         // Online endpoints
         let app = Router::new()
             .route("/account/balance", post(account::balance))
@@ -60,12 +58,14 @@ impl RosettaOnlineServer {
             .route("/network/options", post(network::options))
             .layer(Extension(self.env))
             .with_state(self.context);
-        let server = axum::Server::bind(&addr).serve(app.into_make_service());
+
+        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+
         info!(
             "Sui Rosetta online server listening on {}",
-            server.local_addr()
+            listener.local_addr().unwrap()
         );
-        spawn_monitored_task!(server)
+        axum::serve(listener, app).await.unwrap();
     }
 }
 
@@ -78,7 +78,7 @@ impl RosettaOfflineServer {
         Self { env }
     }
 
-    pub fn serve(self, addr: SocketAddr) -> JoinHandle<hyper::Result<()>> {
+    pub async fn serve(self, addr: SocketAddr) {
         // Online endpoints
         let app = Router::new()
             .route("/construction/derive", post(construction::derive))
@@ -90,11 +90,12 @@ impl RosettaOfflineServer {
             .route("/network/list", post(network::list))
             .route("/network/options", post(network::options))
             .layer(Extension(self.env));
-        let server = axum::Server::bind(&addr).serve(app.into_make_service());
+        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+
         info!(
             "Sui Rosetta offline server listening on {}",
-            server.local_addr()
+            listener.local_addr().unwrap()
         );
-        spawn_monitored_task!(server)
+        axum::serve(listener, app).await.unwrap();
     }
 }

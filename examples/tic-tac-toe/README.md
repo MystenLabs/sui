@@ -109,7 +109,7 @@ The multisig account does not own anything other than the game object
 (it does not have any gas coins of its own), so the player sponsors
 the transaction, using one of its own gas coins.
 
-Sharing a resource while avoiding consensus by transfering it to a
+Sharing a resource while avoiding consensus by transferring it to a
 multisig account can be generalized from two accounts to a max of ten
 (the limit being the number of keys that can be associated with one
 multisig).

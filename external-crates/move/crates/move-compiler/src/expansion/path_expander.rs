@@ -50,9 +50,8 @@ pub enum Access {
     Module, // Just used for errors
 }
 
-// This trait describes the commands available to handle alias scopes and expanding name access
-// chains. This is used to model both legacy and modern path expansion.
-
+/// This trait describes the commands available to handle alias scopes and expanding name access
+/// chains. This is used to model both legacy and modern path expansion.
 pub trait PathExpander {
     // Push a new innermost alias scope
     fn push_alias_scope(
@@ -1216,10 +1215,10 @@ impl PathExpander for LegacyPathExpander {
         if context.env.ide_mode() && context.is_source_definition {
             let mut info = AliasAutocompleteInfo::new();
             for (name, addr) in context.named_address_mapping.unwrap().iter() {
-                info.addresses.insert((*name, *addr));
+                info.addresses.insert(*name, *addr);
             }
             for (_, name, (_, mident)) in self.aliases.modules.iter() {
-                info.modules.insert((*name, *mident));
+                info.modules.insert(*name, *mident);
             }
             for (_, name, (_, (mident, member))) in self.aliases.members.iter() {
                 info.members.insert((*name, *mident, *member));

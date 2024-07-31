@@ -168,6 +168,18 @@ impl Multiaddr {
         Self(new_address)
     }
 
+    pub fn is_localhost_ip(&self) -> bool {
+        let Some(protocol) = self.0.iter().next() else {
+            error!("Multiaddr is empty");
+            return false;
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(addr) => addr == Ipv4Addr::LOCALHOST,
+            multiaddr::Protocol::Ip6(addr) => addr == Ipv6Addr::LOCALHOST,
+            _ => false,
+        }
+    }
+
     pub fn hostname(&self) -> Option<String> {
         for component in self.iter() {
             match component {
@@ -338,24 +350,6 @@ pub(crate) fn parse_ip6(address: &Multiaddr) -> Result<(SocketAddr, &'static str
     let socket_addr = SocketAddr::new(ip_addr, tcp_port);
 
     Ok((socket_addr, http_or_https))
-}
-
-// Parse a full /unix/-/{http,https} address
-#[cfg(unix)]
-pub(crate) fn parse_unix(address: &Multiaddr) -> Result<(Cow<'_, str>, &'static str)> {
-    let mut iter = address.iter();
-
-    let path = match iter
-        .next()
-        .ok_or_else(|| eyre!("unexpected end of multiaddr"))?
-    {
-        Protocol::Unix(path) => path,
-        other => return Err(eyre!("expected unix found {other}")),
-    };
-    let http_or_https = parse_http_https(&mut iter)?;
-    parse_end(&mut iter)?;
-
-    Ok((path, http_or_https))
 }
 
 #[cfg(test)]

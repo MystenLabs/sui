@@ -7,7 +7,8 @@ use crate::events::SuiBridgeEvent;
 use crate::server::mock_handler::run_mock_server;
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{
-    BridgeCommitteeValiditySignInfo, CertifiedBridgeAction, VerifiedCertifiedBridgeAction,
+    BridgeCommittee, BridgeCommitteeValiditySignInfo, CertifiedBridgeAction,
+    VerifiedCertifiedBridgeAction,
 };
 use crate::{
     crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKey, BridgeAuthoritySignInfo},
@@ -38,7 +39,9 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
+use sui_types::bridge::MoveTypeCommitteeMember;
+use sui_types::bridge::{BridgeChainId, BridgeCommitteeSummary, TOKEN_ID_USDC};
+use sui_types::crypto::ToFromBytes;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
@@ -100,6 +103,7 @@ pub fn get_test_eth_to_sui_bridge_action(
     nonce: Option<u64>,
     amount: Option<u64>,
     sui_address: Option<SuiAddress>,
+    token_id: Option<u8>,
 ) -> BridgeAction {
     BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
         eth_tx_hash: TxHash::random(),
@@ -108,7 +112,7 @@ pub fn get_test_eth_to_sui_bridge_action(
             eth_chain_id: BridgeChainId::EthCustom,
             nonce: nonce.unwrap_or_default(),
             sui_chain_id: BridgeChainId::SuiCustom,
-            token_id: TOKEN_ID_USDC,
+            token_id: token_id.unwrap_or(TOKEN_ID_USDC),
             sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_address: EthAddress::random(),
@@ -391,4 +395,30 @@ pub async fn approve_action_with_validator_secrets(
         "Didn't find the creted object owned by {}",
         expected_token_receiver
     );
+}
+
+pub fn bridge_committee_to_bridge_committee_summary(
+    committee: BridgeCommittee,
+) -> BridgeCommitteeSummary {
+    BridgeCommitteeSummary {
+        members: committee
+            .members()
+            .iter()
+            .map(|(k, v)| {
+                let bytes = k.as_bytes().to_vec();
+                (
+                    bytes.clone(),
+                    MoveTypeCommitteeMember {
+                        sui_address: SuiAddress::random_for_testing_only(),
+                        bridge_pubkey_bytes: bytes,
+                        voting_power: v.voting_power,
+                        http_rest_url: v.base_url.as_bytes().to_vec(),
+                        blocklisted: v.is_blocklisted,
+                    },
+                )
+            })
+            .collect(),
+        member_registration: vec![],
+        last_committee_update_epoch: 0,
+    }
 }

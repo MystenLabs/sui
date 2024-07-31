@@ -35,13 +35,14 @@ async fn test_sui_bridge_paused() {
     // Setup bridge test env
     let bridge_test_cluster = BridgeTestClusterBuilder::new()
         .with_eth_env(true)
+        .with_bridge_cluster(true)
+        .with_num_validators(4)
         .with_approved_governance_actions(vec![
             vec![pause_action.clone(), unpause_action.clone()],
-            vec![pause_action.clone(), unpause_action.clone()],
-            vec![pause_action.clone(), unpause_action.clone()],
+            vec![unpause_action.clone()],
+            vec![unpause_action.clone()],
             vec![],
         ])
-        .with_bridge_cluster(true)
         .build()
         .await;
 

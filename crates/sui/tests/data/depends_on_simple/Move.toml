@@ -1,0 +1,9 @@
+[package]
+name = "depends_on_simple"
+edition = "2024.beta"
+
+[dependencies]
+simple = { local = "../simple" }
+
+[addresses]
+depends_on_simple = "0x0"
