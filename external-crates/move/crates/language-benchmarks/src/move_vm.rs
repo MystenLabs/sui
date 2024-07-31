@@ -58,8 +58,10 @@ fn make_path(file: &str) -> PathBuf {
 // Compile `bench.move` and its dependencies
 pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
     let src_files = vec![make_path(filename).to_str().unwrap().to_owned()];
-    let mut pkg_config = PackageConfig::default();
-    pkg_config.edition = Edition::E2024_BETA;
+    let pkg_config = move_compiler::shared::PackageConfig {
+        edition: Edition::E2024_BETA,
+        ..Default::default()
+    };
     let (_files, compiled_units) = Compiler::from_files(
         None,
         src_files,
