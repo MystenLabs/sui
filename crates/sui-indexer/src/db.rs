@@ -258,6 +258,7 @@ pub mod setup_postgres {
         indexer_config: IndexerConfig,
         registry: Registry,
     ) -> Result<(), IndexerError> {
+        info!("Setting up Postgres database ...");
         let db_url_secret = indexer_config.get_db_url().map_err(|e| {
             IndexerError::PgPoolConnectionError(format!(
                 "Failed parsing database url with error {:?}",
@@ -401,6 +402,7 @@ pub mod setup_mysql {
         indexer_config: IndexerConfig,
         registry: Registry,
     ) -> Result<(), IndexerError> {
+        info!("Setting up MySQL database ...");
         let db_url_secret = indexer_config.get_db_url().map_err(|e| {
             IndexerError::PgPoolConnectionError(format!(
                 "Failed parsing database url with error {:?}",
