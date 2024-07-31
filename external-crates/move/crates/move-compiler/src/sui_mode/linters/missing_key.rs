@@ -26,7 +26,7 @@ const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::MissingKey as u8,
-    "The struct's first field is 'id' of type 'sui::object::UID' but is missing the 'key' ability.",
+    "struct with id but missing key ability",
 );
 
 pub struct MissingKeyVisitor;

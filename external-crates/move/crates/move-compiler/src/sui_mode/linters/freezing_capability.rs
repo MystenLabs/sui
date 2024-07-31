@@ -15,20 +15,20 @@ use crate::{
     shared::{CompilationEnv, Identifier},
     sui_mode::linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME},
     typing::{
-        ast as T,
+        ast as T, core,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 use move_ir_types::location::*;
+use once_cell::sync::Lazy;
 use regex::Regex;
-use std::cell::LazyCell;
 
 const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::FreezingCapability as u8,
-    "Freezing a capability-like type can lead to design issues.",
+    "freezing potential capability",
 );
 
 const FREEZE_FUNCTIONS: &[(&str, &str, &str)] = &[
@@ -42,8 +42,8 @@ pub struct Context<'a> {
     env: &'a mut CompilationEnv,
 }
 
-static REGEX: LazyCell<Regex> =
-    LazyCell::new(|| Regex::new(r".*((Cap[A-Z0-9_)|Capability).*").unwrap());
+static REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r".*((Cap[A-Z0-9_]+)|Capability|(Cap$)).*").unwrap());
 
 impl TypingVisitorConstructor for WarnFreezeCapability {
     type Context<'a> = Context<'a>;
@@ -74,8 +74,8 @@ impl<'a> TypingVisitorContext for Context<'a> {
 
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
-            if self.is_freeze_function(fun) {
-                self.check_type_arguments(fun, exp.exp.loc);
+            if is_freeze_function(fun) {
+                check_type_arguments(self, fun, exp.exp.loc);
             }
         }
         false
@@ -90,27 +90,26 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 }
 
-impl<'a> Context<'a> {
-    fn is_freeze_function(&self, fun: &T::ModuleCall) -> bool {
-        FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
-            fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
-        })
-    }
+fn is_freeze_function(fun: &T::ModuleCall) -> bool {
+    FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
+        fun.module.value.is(*addr, *module) && &fun.name.value().as_str() == fname
+    })
+}
 
-    fn check_type_arguments(&mut self, fun: &T::ModuleCall, loc: Loc) {
-        for sp!(_, type_arg) in &fun.type_arguments {
-            if let Some(sp!(_, TypeName_::ModuleType(_, struct_name))) = type_arg.type_name() {
-                if self.capability_regex.is_match(struct_name.value().as_str()) {
-                    self.report_freeze_capability(loc);
-                    break;
-                }
-            }
-        }
-    }
-
-    fn report_freeze_capability(&mut self, loc: Loc) {
-        let msg = "Freezing a capability-like type can lead to design issues.";
-        let diag = diag!(FREEZE_CAPABILITY_DIAG, (loc, msg));
-        self.env.add_diag(diag);
+fn check_type_arguments(context: &mut Context, fun: &T::ModuleCall, loc: Loc) {
+    for sp!(_, type_arg) in &fun.type_arguments {
+        let Some(sp!(_, TypeName_::ModuleType(_, struct_name))) = type_arg.type_name() else {
+            continue;
+        };
+        if REGEX.is_match(struct_name.value().as_str()) {
+            let msg = format!(
+                "The type {} is potentially a capability based on its name. Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted.",
+                core::error_format_(type_arg, &core::Subst::empty()),
+            );
+            let diag = diag!(FREEZE_CAPABILITY_DIAG, (loc, msg));
+            context.env.add_diag(diag);
+        };
     }
 }
+
+impl<'a> Context<'a> {}
