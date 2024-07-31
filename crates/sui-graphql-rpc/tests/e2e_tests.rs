@@ -1069,7 +1069,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_query_mutation_payload_vars_read_part_fail() {
-        // Set max mutation payload size to 450 bytes and query payload to 150
+        // Set max mutation payload size to 6000 bytes and query payload to 50
         // This request should fail because the read part of the request is too large
         let limits = Limits {
             max_query_payload_size: 50,
