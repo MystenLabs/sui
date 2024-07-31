@@ -96,11 +96,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -233,11 +235,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -370,11 +374,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -507,11 +513,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -644,11 +652,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -781,11 +791,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
@@ -918,11 +930,13 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
         - Twitch
       Testnet:
+        - Ambrus
         - Apple
         - Facebook
         - Google
