@@ -70,9 +70,12 @@ impl TypingVisitorContext for Context<'_> {
 }
 
 fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
-    matches!(&sdef.fields, StructFields::Defined(_, fields) if fields.iter().any(|(_, symbol, ftype)| {
-        ftype.0 == 0 && symbol == &symbol!("id") && ftype.1.value.is("sui", "object", "UID")
-    }))
+    match &sdef.fields {
+        StructFields::Defined(_, fields) => fields.iter().any(|(_, symbol, (idx, ty))| {
+            *idx == 0 && symbol == &symbol!("id") && ty.value.is("sui", "object", "UID")
+        }),
+        StructFields::Native(_) => false,
+    }
 }
 
 fn lacks_key_ability(sdef: &StructDefinition) -> bool {
