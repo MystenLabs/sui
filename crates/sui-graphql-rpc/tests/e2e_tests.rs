@@ -25,6 +25,7 @@ mod tests {
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
+    use tokio::join;
     use tokio::time::sleep;
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
@@ -93,6 +94,7 @@ mod tests {
             chain_id_actual
         );
         assert_eq!(&format!("{}", res), &exp);
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -411,6 +413,7 @@ mod tests {
             .as_str()
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -433,7 +436,7 @@ mod tests {
             sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
                 .await;
 
-        let test_cluster = cluster.validator_fullnode_handle;
+        let test_cluster = &cluster.validator_fullnode_handle;
         test_cluster.wait_for_epoch_all_nodes(1).await;
         test_cluster.wait_for_authenticator_state_update().await;
 
@@ -532,6 +535,7 @@ mod tests {
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("verifyZkloginSignature").unwrap();
         assert_eq!(res.get("success").unwrap(), false);
+        cluster.cleanup_resources().await
     }
 
     // TODO: add more test cases for transaction execution/dry run in transactional test runner.
@@ -625,6 +629,7 @@ mod tests {
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
         assert!(res.get("results").unwrap().is_array());
+        cluster.cleanup_resources().await
     }
 
     // Test dry run where the transaction kind is provided instead of the full transaction.
@@ -695,12 +700,14 @@ mod tests {
         // in which case the sender is null.
         assert!(sender_read.is_null());
         assert!(res.get("results").unwrap().is_array());
+        cluster.cleanup_resources().await
     }
 
     // Test that we can handle dry run with failures at execution stage too.
     #[tokio::test]
     #[serial]
     async fn test_dry_run_failed_execution() {
+        println!("test_dry_run_failed_execution: beginning");
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
@@ -708,6 +715,8 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
                 .await;
+
+        println!("test_dry_run_failed_execution: cluster started");
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -766,6 +775,7 @@ mod tests {
             ty: "String!".to_string(),
             value: json!(tx_bytes),
         }];
+        println!("test_dry_run_failed_execution: executing query");
         let res = cluster
             .graphql_client
             .execute_to_graphql(query.to_string(), true, variables, vec![])
@@ -773,6 +783,7 @@ mod tests {
             .unwrap();
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("dryRunTransactionBlock").unwrap();
+        println!("test_dry_run_failed_execution: query executed");
 
         // Execution failed so the results are null.
         assert!(res.get("results").unwrap().is_null());
@@ -783,11 +794,15 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("UnusedValueWithoutDrop"));
+
+        println!("test_dry_run_failed_execution: end");
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
     #[serial]
     async fn test_epoch_data() {
+        println!("start test_epoch_data");
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
@@ -828,6 +843,7 @@ mod tests {
             .get("liveObjectSetDigest")
             .unwrap()
             .is_null());
+        cluster.cleanup_resources().await
     }
 
     use sui_graphql_rpc::server::builder::tests::*;
@@ -846,8 +862,9 @@ mod tests {
             .await;
         // timeout test includes mutation timeout, which requies a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.
-        let wallet = cluster.validator_fullnode_handle.wallet;
+        let wallet = &cluster.validator_fullnode_handle.wallet;
         test_timeout_impl(wallet).await;
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -896,5 +913,6 @@ mod tests {
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
         test_health_check_impl().await;
+        cluster.cleanup_resources().await
     }
 }
