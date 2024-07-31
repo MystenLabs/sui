@@ -1072,7 +1072,7 @@ mod tests {
         // Set max mutation payload size to 450 bytes and query payload to 150
         // This request should fail because the read part of the request is too large
         let limits = Limits {
-            max_query_payload_size: 150,
+            max_query_payload_size: 50,
             max_tx_payload_size: 6000,
             ..Default::default()
         };
