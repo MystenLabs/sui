@@ -19,6 +19,7 @@ use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
+use sui_bridge::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_bridge::types::{EthEvent, EthLog, RawEthLog};
@@ -67,7 +68,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
         target_checkpoint: u64,
     ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<(u64, Vec<EthData>)>), Error> {
         let eth_client = Arc::new(
-            EthClient::<Http>::new(
+            EthClient::<MeteredEthHttpProvier>::new(
                 &self.eth_rpc_url,
                 HashSet::from_iter(vec![self.bridge_address]),
                 self.bridge_metrics.clone(),
@@ -117,7 +118,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                     let mut data = vec![];
                     let Ok(Ok(Some(block))) = retry_with_max_elapsed_time!(
                         provider.get_block(block_number),
-                        Duration::from_secs(30)
+                        Duration::from_secs(300)
                     ) else {
                         panic!("Failed to query block {block_number} from Ethereum after retry");
                     };
@@ -126,7 +127,7 @@ impl Datasource<EthData, PgBridgePersistent, ProcessedTxnData> for EthFinalizedD
                         let tx_hash = log.tx_hash();
                         let Ok(Ok(Some(transaction))) = retry_with_max_elapsed_time!(
                             provider.get_transaction(tx_hash),
-                            Duration::from_secs(30)
+                            Duration::from_secs(300)
                         ) else {
                             panic!(
                                 "Failed to query transaction {tx_hash} from Ethereum after retry"
@@ -194,7 +195,7 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinal
         Error,
     > {
         let eth_client = Arc::new(
-            EthClient::<Http>::new(
+            EthClient::<MeteredEthHttpProvier>::new(
                 &self.eth_rpc_url,
                 HashSet::from_iter(vec![self.bridge_address]),
                 self.bridge_metrics.clone(),
@@ -203,8 +204,8 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthUnfinal
         );
 
         let provider = Arc::new(
-            Provider::<Http>::try_from(&self.eth_rpc_url)?
-                .interval(std::time::Duration::from_millis(2000)),
+            new_metered_eth_provider(&self.eth_rpc_url, self.bridge_metrics.clone())?
+                .interval(Duration::from_millis(2000)),
         );
 
         info!("Starting from unfinalized block: {}", starting_checkpoint);
@@ -332,7 +333,7 @@ impl<E: EthEvent> DataMapper<(E, Block<H256>, Transaction), ProcessedTxnData> fo
                 }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
                     // Only write unfinalized claims
-                    if !self.finalized {
+                    if self.finalized {
                         return Ok(vec![]);
                     }
                     info!("Observed Unfinalized Eth Claim");

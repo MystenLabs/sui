@@ -13,8 +13,6 @@ use tracing::info;
 use mysten_metrics::metered_channel::channel;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
-use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::{
