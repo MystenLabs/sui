@@ -74,10 +74,9 @@ pub struct LocalDBPackageStore {
 
 impl LocalDBPackageStore {
     pub fn new(path: &Path, rest_url: &str) -> Self {
-        let rest_api_url = format!("{}/rest", rest_url);
         Self {
             package_store_tables: PackageStoreTables::new(path),
-            fallback_client: Client::new(rest_api_url),
+            fallback_client: Client::new(rest_url),
         }
     }
 
