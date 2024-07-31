@@ -21,6 +21,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use regex::Regex;
+use std::cell::LazyCell;
 
 const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
@@ -39,16 +40,15 @@ pub struct WarnFreezeCapability;
 
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    capability_regex: Regex,
 }
+
+static REGEX: LazyCell<Regex> =
+    LazyCell::new(|| Regex::new(r".*((Cap[A-Z0-9_)|Capability).*").unwrap());
 
 impl TypingVisitorConstructor for WarnFreezeCapability {
     type Context<'a> = Context<'a>;
     fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
-        Context {
-            env,
-            capability_regex: Regex::new(r"Cap(ability)?(\w*v?\d*)?$").unwrap(),
-        }
+        Context { env }
     }
 }
 
