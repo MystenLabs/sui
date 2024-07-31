@@ -1073,7 +1073,7 @@ mod tests {
         // This request should fail because the read part of the request is too large
         let limits = Limits {
             max_query_payload_size: 150,
-            max_tx_payload_size: 450,
+            max_tx_payload_size: 6000,
             ..Default::default()
         };
         let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -1128,7 +1128,10 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        assert_eq!(err, vec!["Mutation payload txBytes + sigantures size OK. The read part of the request is too large. Maximum allowed is 150".to_string()]);
+        assert_eq!(
+            err,
+            vec!["Query payload is too large. The maximum allowed is 150 bytes".to_string()]
+        );
     }
 
     #[tokio::test]
