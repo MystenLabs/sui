@@ -5,8 +5,6 @@ use futures::Future;
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::ws_client::WsClient;
-use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -88,7 +86,6 @@ pub struct FullNodeHandle {
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
-    pub ws_url: String,
 }
 
 impl FullNodeHandle {
@@ -96,7 +93,6 @@ impl FullNodeHandle {
         let rpc_url = format!("http://{}", json_rpc_address);
         let rpc_client = HttpClientBuilder::default().build(&rpc_url).unwrap();
 
-        let ws_url = format!("ws://{}", json_rpc_address);
         let sui_client = SuiClientBuilder::default().build(&rpc_url).await.unwrap();
 
         Self {
@@ -104,15 +100,7 @@ impl FullNodeHandle {
             sui_client,
             rpc_client,
             rpc_url,
-            ws_url,
         }
-    }
-
-    pub async fn ws_client(&self) -> WsClient {
-        WsClientBuilder::default()
-            .build(&self.ws_url)
-            .await
-            .unwrap()
     }
 }
 
