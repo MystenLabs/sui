@@ -73,6 +73,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
 use super::ExecutionCacheAPI;
@@ -1453,7 +1454,10 @@ impl ObjectCacheRead for WritebackCache {
                 // exists only to ensure correctness in all the edge cases.
                 let latest: Option<(SequenceNumber, ObjectEntry)> =
                     if let Some(dirty_set) = dirty_entry {
-                        dirty_set.get_highest().cloned()
+                        dirty_set
+                            .get_highest()
+                            .cloned()
+                            .tap_none(|| panic!("dirty set cannot be empty"))
                     } else {
                         self.record_db_get("object_lt_or_eq_version_latest")
                             .get_latest_object_or_tombstone(object_id)?
@@ -1485,7 +1489,12 @@ impl ObjectCacheRead for WritebackCache {
                     }
                 } else {
                     // no object found in dirty set or db, object does not exist
-                    assert!(cached_entry.is_none());
+                    // When this is called from a read api (i.e. not the execution path) it is
+                    // possible that the object has been deleted and pruned. In this case,
+                    // there would be no entry at all on disk, but we may have a tombstone in the
+                    // cache
+                    let highest = cached_entry.and_then(|c| c.get_highest());
+                    assert!(highest.is_none() || highest.unwrap().1.is_tombstone());
                     self.cache_object_not_found(&object_id);
                     Ok(None)
                 }

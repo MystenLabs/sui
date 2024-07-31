@@ -397,6 +397,6 @@ impl Serialize for Flavor {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition::LEGACY
+        Edition::E2024_BETA
     }
 }

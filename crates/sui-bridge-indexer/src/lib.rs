@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::TokenTransferData as DBTokenTransferData;
-use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use std::fmt::{Display, Formatter};
+
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
+use crate::models::TokenTransferData as DBTokenTransferData;
+use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
+
 pub mod config;
-pub mod eth_worker;
 pub mod latest_eth_syncer;
 pub mod metrics;
 pub mod models;
@@ -16,8 +17,12 @@ pub mod schema;
 pub mod sui_checkpoint_ingestion;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
-pub mod sui_worker;
 pub mod types;
+
+pub mod indexer_builder;
+
+pub mod eth_bridge_indexer;
+pub mod sui_bridge_indexer;
 
 #[derive(Clone)]
 pub enum ProcessedTxnData {

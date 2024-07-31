@@ -114,7 +114,10 @@ pub fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        sui_move_natives::all_natives(/* silent */ false),
+        sui_move_natives::all_natives(
+            /* silent */ false,
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),

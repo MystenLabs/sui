@@ -1,30 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
-use clap::*;
-use mysten_metrics::spawn_logged_monitored_task;
-use mysten_metrics::start_prometheus_server;
-use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_bridge::eth_client::EthClient;
-use sui_bridge::metrics::BridgeMetrics;
-use sui_bridge_indexer::eth_worker::EthBridgeWorker;
-use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
-use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
-use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
-use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
-use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_sdk::SuiClientBuilder;
+
+use anyhow::Result;
+use clap::*;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 use mysten_metrics::metered_channel::channel;
+use mysten_metrics::spawn_logged_monitored_task;
+use mysten_metrics::start_prometheus_server;
+use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::sui_checkpoint_ingestion::SuiCheckpointSyncer;
+use sui_bridge_indexer::eth_bridge_indexer::{
+    EthDataMapper, EthFinalizedDatasource, EthUnfinalizedDatasource,
+};
+use sui_bridge_indexer::indexer_builder::{IndexerBuilder, SuiCheckpointDatasource};
+use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
+use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
+use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
+use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
+use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_config::Config;
-use tracing::info;
+use sui_data_ingestion_core::DataIngestionMetrics;
+use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
 struct Args {
@@ -50,7 +52,6 @@ async fn main() -> Result<()> {
             .join("config.yaml")
     };
     let config = IndexerConfig::load(&config_path)?;
-    let config_clone = config.clone();
 
     // Init metrics server
     let registry_service = start_prometheus_server(
@@ -70,35 +71,45 @@ async fn main() -> Result<()> {
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
-    // unwrap safe: db_url must be set in `load_config` above
     let db_url = config.db_url.clone();
 
-    // TODO: retry_with_max_elapsed_time
-    let eth_worker = EthBridgeWorker::new(
-        get_connection_pool(db_url.clone()),
+    let datastore = PgBridgePersistent::new(get_connection_pool(db_url.clone()));
+    let eth_checkpoint_datasource = EthFinalizedDatasource::new(
+        config.eth_sui_bridge_contract_address.clone(),
+        config.eth_rpc_url.clone(),
         bridge_metrics.clone(),
         indexer_meterics.clone(),
-        config.clone(),
     )?;
+    let eth_finalized_indexer = IndexerBuilder::new(
+        "FinalizedEthBridgeIndexer",
+        eth_checkpoint_datasource,
+        EthDataMapper {
+            finalized: true,
+            metrics: indexer_meterics.clone(),
+        },
+    )
+    .build(config.start_block, config.start_block, datastore.clone());
+    let finalized_indexer_fut = spawn_logged_monitored_task!(eth_finalized_indexer.start());
 
-    let eth_client = Arc::new(
-        EthClient::<ethers::providers::Http>::new(
-            &config.eth_rpc_url,
-            HashSet::from_iter(vec![eth_worker.bridge_address()]),
-            bridge_metrics.clone(),
-        )
-        .await?,
-    );
-
-    let unfinalized_handle = eth_worker
-        .start_indexing_unfinalized_events(eth_client.clone())
-        .await?;
-    let finalized_handle = eth_worker
-        .start_indexing_finalized_events(eth_client.clone())
-        .await?;
-    let handles = vec![unfinalized_handle, finalized_handle];
+    let eth_unfinalized_datasource = EthUnfinalizedDatasource::new(
+        config.eth_sui_bridge_contract_address.clone(),
+        config.eth_rpc_url.clone(),
+        bridge_metrics.clone(),
+        indexer_meterics.clone(),
+    )?;
+    let eth_unfinalized_indexer = IndexerBuilder::new(
+        "UnFinalizedEthBridgeIndexer",
+        eth_unfinalized_datasource,
+        EthDataMapper {
+            finalized: false,
+            metrics: indexer_meterics.clone(),
+        },
+    )
+    .build(config.start_block, config.start_block, datastore.clone());
+    let unfinalized_indexer_fut = spawn_logged_monitored_task!(eth_unfinalized_indexer.start());
 
     if let Some(sui_rpc_url) = config.sui_rpc_url.clone() {
+        // Todo: impl datasource for sui RPC datasource
         start_processing_sui_checkpoints_by_querying_txns(
             sui_rpc_url,
             db_url.clone(),
@@ -107,13 +118,30 @@ async fn main() -> Result<()> {
         )
         .await?;
     } else {
-        let pg_pool = get_connection_pool(db_url.clone());
-        SuiCheckpointSyncer::new(pg_pool, config.bridge_genesis_checkpoint)
-            .start(&config_clone, indexer_meterics, ingestion_metrics)
-            .await?;
+        let sui_checkpoint_datasource = SuiCheckpointDatasource::new(
+            config.remote_store_url,
+            config.concurrency as usize,
+            config.checkpoints_path.clone().into(),
+            ingestion_metrics.clone(),
+        );
+        let indexer = IndexerBuilder::new(
+            "SuiBridgeIndexer",
+            sui_checkpoint_datasource,
+            SuiBridgeDataMapper {
+                metrics: indexer_meterics.clone(),
+            },
+        )
+        .build(
+            config
+                .resume_from_checkpoint
+                .unwrap_or(config.bridge_genesis_checkpoint),
+            config.bridge_genesis_checkpoint,
+            datastore,
+        );
+        indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(handles).await;
+    futures::future::join_all(vec![finalized_indexer_fut, unfinalized_indexer_fut]).await;
 
     Ok(())
 }

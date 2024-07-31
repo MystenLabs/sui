@@ -5,8 +5,8 @@ task 0, line 2:
 return values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 task 1, line 4:
-//# run std::signer::borrow_address --args @3735928559
-return values: 00000000000000000000000000000000000000000000000000000000deadbeef
+//# run std::vector::borrow --type-args u64 --args vector[42] 0
+return values: 42
 
 task 2, line 6:
 //# run std::type_name::get --type-args vector<std::type_name::TypeName>

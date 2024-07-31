@@ -2355,7 +2355,7 @@ pub const VALUE_DEPTH_MAX: u64 = 128;
 
 /// Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for struct types.
-/// Maximal nodes which are allowed when converting to layout. This includes the the types of
+/// Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for datatypes.
 const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 

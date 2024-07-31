@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 1.4.0
+
+### Minor Changes
+
+- 4419234: Add setGasBudgetIfNotSet helper to Transaction class
+
+## 1.3.1
+
+### Patch Changes
+
+- a45f461: Shared objects passed to MakeMoveVec, MergeCoins, and SplitCoin are now marked as mutable
+
 ## 1.3.0
 
 ### Minor Changes

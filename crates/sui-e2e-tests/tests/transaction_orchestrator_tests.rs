@@ -13,8 +13,8 @@ use sui_test_transaction_builder::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
-    ExecuteTransactionResponse, FinalizedEffects, QuorumDriverError,
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverError,
 };
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
@@ -63,7 +63,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
 
-    let res = execute_with_orchestrator(
+    let (_, executed_locally) = execute_with_orchestrator(
         &orchestrator,
         txn,
         ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -71,8 +71,6 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .await
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let ExecuteTransactionResponse::EffectsCert(result) = res;
-    let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
     let metrics = KeyValueStoreMetrics::new_for_tests();
@@ -250,18 +248,15 @@ async fn test_tx_across_epoch_boundaries() {
     tokio::task::spawn(async move {
         match to
             .execute_transaction_block(
-                ExecuteTransactionRequest {
-                    transaction: tx.clone(),
-                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-                },
-                Some(make_socket_addr()),
+                ExecuteTransactionRequestV3::new_v2(tx.clone()),
+                ExecuteTransactionRequestType::WaitForEffectsCert,
+                None,
             )
             .await
         {
-            Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
+            Ok((response, _)) => {
                 info!(?tx_digest, "tx result: ok");
-                let (effects_cert, _, _) = *res;
-                result_tx.send(effects_cert).await.unwrap();
+                result_tx.send(response.effects).await.unwrap();
             }
             Err(QuorumDriverError::TimeoutBeforeFinality) => {
                 info!(?tx_digest, "tx result: timeout and will retry")
@@ -294,15 +289,9 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
     txn: Transaction,
     request_type: ExecuteTransactionRequestType,
-) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
+) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {
     orchestrator
-        .execute_transaction_block(
-            ExecuteTransactionRequest {
-                transaction: txn,
-                request_type,
-            },
-            Some(make_socket_addr()),
-        )
+        .execute_transaction_block(ExecuteTransactionRequestV3::new_v2(txn), request_type, None)
         .await
 }
 

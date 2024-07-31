@@ -608,9 +608,6 @@ describe('GraphQL SuiClient compatibility', () => {
 				},
 			})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 
-		// Deleted gas coin isn't included in changes when executing transaction block
-		rpc.objectChanges?.pop();
-
 		expect(graphql).toEqual(rpc);
 	});
 

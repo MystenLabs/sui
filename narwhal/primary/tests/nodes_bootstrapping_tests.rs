@@ -40,12 +40,7 @@ async fn test_response_error_after_shutdown_internal_consensus() {
     let Err(e) = client.submit_transaction(txn).await else {
         panic!("Submitting transactions after Narwhal shutdown should fail!");
     };
-    assert!(
-        e.message()
-            .contains("error trying to connect: tcp connect error:"),
-        "Actual: {}",
-        e
-    );
+    assert!(e.message().contains("tcp connect error:"), "Actual: {}", e);
 }
 
 /// Nodes will be started in a staggered fashion. This is simulating

@@ -299,7 +299,8 @@ async fn test_api_route() -> anyhow::Result<()> {
         metrics: None,
         sources_list,
     }));
-    tokio::spawn(serve(app_state).expect("Cannot start service."));
+    tokio::spawn(async move { serve(app_state).await.expect("Cannot start service.") });
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     let client = Client::new();
 

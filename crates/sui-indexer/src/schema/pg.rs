@@ -3,6 +3,12 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    chain_identifier (checkpoint_digest) {
+        checkpoint_digest -> Bytea,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Bytea,
@@ -284,19 +290,17 @@ diesel::table! {
 macro_rules! for_all_tables {
     ($action:path) => {
         $action!(
+            chain_identifier,
             checkpoints,
             pruner_cp_watermark,
             display,
             epochs,
             events,
-            events_partition_0,
             objects,
             objects_history,
-            objects_history_partition_0,
             objects_snapshot,
             packages,
             transactions,
-            transactions_partition_0,
             tx_calls,
             tx_changed_objects,
             tx_digests,

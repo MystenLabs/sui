@@ -2,12 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Registry,
 };
 
-#[derive(Clone)]
+const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
+    1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5,
+    10., 15., 20., 25., 30., 35., 40., 45., 50., 60., 70., 80., 90., 100., 120., 140., 160., 180.,
+    200., 250., 300., 350., 400.,
+];
+
+#[derive(Clone, Debug)]
 pub struct BridgeMetrics {
     pub(crate) err_build_sui_transaction: IntCounter,
     pub(crate) err_signature_aggregation: IntCounter,
@@ -33,11 +41,14 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_signing_queue_received_actions: IntCounter,
     pub(crate) action_executor_signing_queue_skipped_actions: IntCounter,
     pub(crate) action_executor_execution_queue_received_actions: IntCounter,
+    pub(crate) action_executor_execution_queue_skipped_actions_due_to_pausing: IntCounter,
 
     pub(crate) signer_with_cache_hit: IntCounterVec,
     pub(crate) signer_with_cache_miss: IntCounterVec,
 
-    pub(crate) eth_provider_queries: IntCounter,
+    pub(crate) eth_rpc_queries: IntCounterVec,
+    pub(crate) eth_rpc_queries_latency: HistogramVec,
+
     pub(crate) gas_coin_balance: IntGauge,
 }
 
@@ -162,15 +173,30 @@ impl BridgeMetrics {
                 registry,
             )
             .unwrap(),
+            action_executor_execution_queue_skipped_actions_due_to_pausing: register_int_counter_with_registry!(
+                "bridge_action_executor_execution_queue_skipped_actions_due_to_pausing",
+                "Total number of skipped actions in action executor execution queue because of pausing",
+                registry,
+            )
+            .unwrap(),
             gas_coin_balance: register_int_gauge_with_registry!(
                 "bridge_gas_coin_balance",
                 "Current balance of gas coin, in mist",
                 registry,
             )
             .unwrap(),
-            eth_provider_queries: register_int_counter_with_registry!(
-                "bridge_eth_provider_queries",
-                "Total number of queries issued to eth provider",
+            eth_rpc_queries: register_int_counter_vec_with_registry!(
+                "bridge_eth_rpc_queries",
+                "Total number of queries issued to eth provider, by request type",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            eth_rpc_queries_latency: register_histogram_vec_with_registry!(
+                "bridge_eth_rpc_queries_latency",
+                "Latency of queries issued to eth provider, by request type",
+                &["type"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

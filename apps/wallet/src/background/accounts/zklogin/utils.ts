@@ -34,7 +34,7 @@ export function prepareZkLogin(currentEpoch: number) {
 const forceSilentGetProviders: ZkLoginProvider[] = ['twitch'];
 
 /**
- * This method does a get request to the authorize url and is used as a workarround
+ * This method does a get request to the authorize url and is used as a workaround
  * for `forceSilentGetProviders` that they do the silent login/token refresh using
  * html directives or js code to redirect to the redirect_url (instead of response headers) and that forces the launchWebAuthFlow
  * to open and close quickly a new window. Which closes the popup window when open but also creates a weird flickering effect.

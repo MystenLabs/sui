@@ -153,9 +153,9 @@ pub enum FunType {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantInfo {
-    name: Symbol,
-    empty: bool,
-    positional: bool,
+    pub name: Name,
+    pub empty: bool,
+    pub positional: bool,
 }
 /// Information about a definition of some identifier
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -394,6 +394,13 @@ pub struct CursorContext {
     pub loc: Loc,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub enum ChainCompletionKind {
+    Type,
+    Function,
+    All,
+}
+
 impl CursorContext {
     fn new(loc: Loc) -> Self {
         CursorContext {
@@ -402,6 +409,43 @@ impl CursorContext {
             position: CursorPosition::Unknown,
             loc,
         }
+    }
+
+    /// Returns access chain at cursor position (if any) along with the information of what the chain's
+    /// auto-completed target kind should be
+    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionKind)> {
+        // TODO: handle access chains in uses and attributes
+        use ChainCompletionKind as CT;
+        use CursorPosition as CP;
+        let chain_info = match &self.position {
+            CP::Exp(sp!(_, exp)) => match exp {
+                P::Exp_::Name(chain) => Some((chain.clone(), CT::All)),
+                P::Exp_::Call(chain, _) => Some((chain.clone(), CT::Function)),
+                P::Exp_::Pack(chain, _) => Some((chain.clone(), CT::Type)),
+                _ => None,
+            },
+            CP::Binding(sp!(_, bind)) => {
+                if let P::Bind_::Unpack(chain, _) = bind {
+                    Some((*(chain.clone()), CT::Type))
+                } else {
+                    None
+                }
+            }
+            CP::Type(sp!(_, ty)) => {
+                if let P::Type_::Apply(chain) = ty {
+                    Some((*(chain.clone()), CT::Type))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some((c, _)) = &chain_info {
+            if c.loc.contains(&self.loc) {
+                return chain_info;
+            }
+        }
+        None
     }
 }
 
@@ -2157,7 +2201,7 @@ fn get_mod_outer_defs(
             };
             let field_names = field_defs.iter().map(|f| sp(f.loc, f.name)).collect();
             def_info_variants.push(VariantInfo {
-                name: *vname,
+                name: sp(vname_loc, *vname),
                 empty: field_defs.is_empty(),
                 positional,
             });
