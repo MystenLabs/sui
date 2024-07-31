@@ -96,8 +96,8 @@ struct Config {
 }
 
 impl Config {
-    pub fn rest_url(&self) -> String {
-        format!("{}/rest", self.full_node_url)
+    pub fn rest_url(&self) -> &str {
+        &self.full_node_url
     }
 }
 

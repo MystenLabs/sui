@@ -31,6 +31,5 @@ sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
 
-
 [dev-dependencies]
 diffy = "0.3"

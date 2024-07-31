@@ -15,9 +15,7 @@ use test_cluster::TestClusterBuilder;
 async fn execute_transaction_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
-    let rest_url = format!("{}/v2", test_cluster.rpc_url());
-
-    let client = Client::new(rest_url);
+    let client = Client::new(test_cluster.rpc_url());
     let address = SuiAddress::random_for_testing_only();
     let amount = 9;
 
