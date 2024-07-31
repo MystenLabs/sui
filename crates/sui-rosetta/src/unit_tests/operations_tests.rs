@@ -44,6 +44,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         total_coin_value: 0,
         gas_price,
         budget: TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+        coin_type: None,
     };
     let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
     assert_eq!(data, parsed_data);
