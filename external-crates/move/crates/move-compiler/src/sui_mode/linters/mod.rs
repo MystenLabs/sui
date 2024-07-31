@@ -18,6 +18,7 @@ pub mod coin_field;
 pub mod collection_equality;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
+pub mod freezing_capability;
 pub mod missing_key;
 pub mod public_random;
 pub mod self_transfer;
@@ -70,6 +71,7 @@ pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
 pub const PUBLIC_RANDOM_FILTER_NAME: &str = "public_random";
 pub const MISSING_KEY_FILTER_NAME: &str = "missing_key";
+pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
 
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
@@ -87,6 +89,7 @@ pub enum LinterDiagnosticCode {
     CollectionEquality,
     PublicRandom,
     MissingKey,
+    FreezingCapability,
 }
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
@@ -140,6 +143,12 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             LinterDiagnosticCode::MissingKey as u8,
             Some(MISSING_KEY_FILTER_NAME),
         ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::FreezingCapability as u8,
+            Some(FREEZING_CAPABILITY_FILTER_NAME),
+        ),
     ];
 
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
@@ -148,17 +157,20 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
-            vec![
-                share_owned::ShareOwnedVerifier.visitor(),
-                self_transfer::SelfTransferVerifier.visitor(),
-                custom_state_change::CustomStateChangeVerifier.visitor(),
-                coin_field::CoinFieldVisitor.visitor(),
-                freeze_wrapped::FreezeWrappedVisitor.visitor(),
-                collection_equality::CollectionEqualityVisitor.visitor(),
-                public_random::PublicRandomVisitor.visitor(),
-                missing_key::MissingKeyVisitor.visitor(),
-            ]
+        LintLevel::Default => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+            missing_key::MissingKeyVisitor.visitor(),
+        ],
+        LintLevel::All => {
+            let mut visitors = linter_visitors(LintLevel::Default);
+            visitors.extend([freezing_capability::WarnFreezeCapability.visitor()]);
+            visitors
         }
     }
 }
