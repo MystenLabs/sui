@@ -1015,7 +1015,7 @@ mod tests {
         // transfer sui transaction
         let limits = Limits {
             max_query_payload_size: 180,
-            max_tx_payload_size: 450,
+            max_tx_payload_size: 6000,
             ..Default::default()
         };
         let _guard = telemetry_subscribers::TelemetryConfig::new()
