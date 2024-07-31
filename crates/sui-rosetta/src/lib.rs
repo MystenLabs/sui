@@ -27,7 +27,6 @@ mod state;
 pub mod types;
 
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
-    coin_type: SUI_COIN_TYPE.to_string(),
     symbol: "SUI".to_string(),
     decimals: 9,
     metadata: CurrencyMetadata {
