@@ -76,6 +76,8 @@ function Interstitial({
 					className="flex appearance-none border-none rounded-full bg-[#4CA2FF] h-10 px-6 cursor-pointer items-center no-underline"
 					onClick={onClick}
 					to={bannerUrl}
+					target="_blank"
+					rel="noreferrer noopener"
 				>
 					<Text variant="body" weight="semibold" color="white">
 						{buttonText || 'Join for a chance to win'}
