@@ -18,7 +18,7 @@ use crate::{
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
-const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
+const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 1_000;
 
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
 /// When its last transaction is included to a block then `included_in_block_ack` will be signalled.
