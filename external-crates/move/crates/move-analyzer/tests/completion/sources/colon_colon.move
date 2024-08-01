@@ -59,4 +59,8 @@ module Completion::colon_colon {
         let _local: SOME_TYPE = p;
     }
 
+    #[test, expected_failure(abort_code = Self::SOME_CONST)]
+    public fun attr_chain() {
+        abort(SOME_CONST);
+    }
 }
