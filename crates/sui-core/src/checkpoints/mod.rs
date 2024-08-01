@@ -69,12 +69,12 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, warn};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
     rocks::{DBMap, MetricConf},
     TypedStoreError,
 };
-use typed_store_derive::DBMapUtils;
 
 pub type CheckpointHeight = u64;
 
