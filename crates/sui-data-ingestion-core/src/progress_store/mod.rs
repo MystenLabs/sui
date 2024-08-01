@@ -38,11 +38,14 @@ impl<P: ProgressStore> ProgressStore for ProgressStoreWrapper<P> {
         task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<()> {
-        if checkpoint_number > self.load(task_name.clone()).await? {
+        let last_saved = self.load(task_name.clone()).await?;
+        if checkpoint_number > last_saved {
             self.progress_store
                 .save(task_name.clone(), checkpoint_number)
                 .await?;
             self.pending_state.insert(task_name, checkpoint_number);
+        } else {
+            self.pending_state.insert(task_name, last_saved);
         }
         Ok(())
     }
