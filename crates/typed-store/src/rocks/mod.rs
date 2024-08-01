@@ -60,7 +60,7 @@ const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
 // Environment variable to control behavior of write throughput optimized tables.
 const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
-const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 6;
+const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 4;
 const ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB: &str = "MAX_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_MAX_WRITE_BUFFER_SIZE_MB: usize = 256;
 const ENV_VAR_MAX_WRITE_BUFFER_NUMBER: &str = "MAX_WRITE_BUFFER_NUMBER";
@@ -2346,7 +2346,7 @@ impl DBOptions {
         let target_file_size_base = 64 << 20;
         self.options
             .set_target_file_size_base(target_file_size_base);
-        // Level 1 default to 64MiB * 6 ~ 384MiB.
+        // Level 1 default to 64MiB * 4 ~ 256MiB.
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
             .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
         self.options
@@ -2395,10 +2395,10 @@ impl DBOptions {
             max_level_zero_file_num.try_into().unwrap(),
         );
         self.options.set_level_zero_slowdown_writes_trigger(
-            (max_level_zero_file_num * 4).try_into().unwrap(),
+            (max_level_zero_file_num * 12).try_into().unwrap(),
         );
         self.options
-            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 5).try_into().unwrap());
+            .set_level_zero_stop_writes_trigger((max_level_zero_file_num * 16).try_into().unwrap());
 
         // Increase sst file size to 128MiB.
         self.options.set_target_file_size_base(
