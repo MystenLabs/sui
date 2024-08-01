@@ -20,13 +20,13 @@ use axum::{
 };
 use axum::{http::StatusCode, routing::get, Router};
 use ethers::types::Address as EthAddress;
+use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     traits::ToFromBytes,
 };
 use std::sync::Arc;
 use std::{net::SocketAddr, str::FromStr};
-use sui_types::crypto::{get_key_pair_from_rng, NetworkKeyPair};
 use sui_types::{bridge::BridgeChainId, TypeTag};
 use tracing::{info, instrument};
 
@@ -64,26 +64,15 @@ pub const ADD_TOKENS_ON_EVM_PATH: &str =
 // Be careful with what to put here, as it is public.
 #[derive(serde::Serialize)]
 pub struct BridgeNodePublicMetadata {
-    pub version: Option<String>,
-    pub network_key_pair: Option<Arc<NetworkKeyPair>>,
-}
-
-fn default_ed25519_key_pair() -> NetworkKeyPair {
-    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+    pub version: String,
+    pub metrics_pubkey: Arc<Ed25519PublicKey>,
 }
 
 impl BridgeNodePublicMetadata {
-    pub fn new(version: String) -> Self {
+    pub fn new(version: String, metrics_pubkey: Ed25519PublicKey) -> Self {
         Self {
-            version: Some(version),
-            network_key_pair: Some(default_ed25519_key_pair().into()),
-        }
-    }
-
-    pub fn empty_for_testing() -> Self {
-        Self {
-            version: None,
-            network_key_pair: None,
+            version,
+            metrics_pubkey: metrics_pubkey.into(),
         }
     }
 }
@@ -177,8 +166,8 @@ async fn metrics_network_key_fetch(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
-) -> Result<Json<Option<Arc<NetworkKeyPair>>>, BridgeError> {
-    Ok(Json(metadata.network_key_pair.clone()))
+) -> Result<Json<Arc<Ed25519PublicKey>>, BridgeError> {
+    Ok(Json(metadata.metrics_pubkey.clone()))
 }
 
 #[instrument(level = "error", skip_all, fields(tx_hash_hex=tx_hash_hex, event_idx=event_idx))]
