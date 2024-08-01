@@ -37,7 +37,7 @@ pub(crate) struct PayloadSize(pub u64);
 struct PayloadSizeCheck<'a> {
     variables: &'a Variables,
     max_query_payload_size: u32,
-    max_mutation_payload_size: u32,
+    max_tx_payload_size: u32,
 }
 
 /// Extension factory for adding checks that the query is within configurable limits.
@@ -51,15 +51,17 @@ struct QueryLimitsCheckerExt {
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
 
+/// Payload size state for checking the query against mutation limits.
 impl<'a> PayloadSizeCheck<'a> {
     fn new(limits: &Limits, variables: &'a Variables) -> Self {
         Self {
             max_query_payload_size: limits.max_query_payload_size,
-            max_mutation_payload_size: limits.max_tx_payload_size,
+            max_tx_payload_size: limits.max_tx_payload_size,
             variables,
         }
     }
 
+    /// Run the payload check against the whole document.
     fn check_document(
         &self,
         doc: &ExecutableDocument,
@@ -70,6 +72,18 @@ impl<'a> PayloadSizeCheck<'a> {
         Ok(())
     }
 
+    /// Check the payload size for mutation nodes and for dryRunTransactionBlock nodes.
+    ///
+    /// The function iterates through the nodes of a query, and for each node it checks if it is a
+    /// `dryRunTransactionBlock` or a `executeTransactionBlock` node. Then, it does the following:
+    ///  - extracts the `txBytes` and `signatures` arguments from the `executeTransactionBlock`
+    ///  node and checks if the sum of their lengths is less than the `max_tx_payload_size`.
+    ///  - extracts the `txBytes` argument from the `dryRunTransactionBlock` node and checks if its
+    ///  length is less than the `max_tx_payload_size`.
+    ///
+    /// Finally, it checks if the total payload size (a.k.a the content-length header) minus the
+    /// values of the fields from above is less than the `max_query_payload_size`. This verifies
+    /// that the "read" part of the query is within the set limits.
     fn check_mutation_dry_run(
         &self,
         doc: &ExecutableDocument,
@@ -89,7 +103,7 @@ impl<'a> PayloadSizeCheck<'a> {
                         for arg in &f.node.arguments {
                             if arg.0.node == TX_BYTES {
                                 let tx_bytes_len = get_value_str_len(&arg.1.node, self.variables);
-                                if tx_bytes_len > self.max_mutation_payload_size as usize {
+                                if tx_bytes_len > self.max_tx_payload_size as usize {
                                     self.log_metric(
                                             ctx,
                                             "The txBytes size of dryRunTransactionBlock node is too large: {}",
@@ -99,22 +113,22 @@ impl<'a> PayloadSizeCheck<'a> {
                                             code::BAD_USER_INPUT,
                                             format!(
                                                 "The {TX_BYTES} size of dryRunTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                                self.max_mutation_payload_size
+                                                self.max_tx_payload_size
                                             ),
                                             f.pos
                                         ));
                                 }
+                                // the key is the txBytes value itself or the variable's name
                                 track_vars
                                     .entry(arg.1.node.to_string())
                                     .or_insert(tx_bytes_len);
                             }
                         }
                     } else if f.node.name.node == EXECUTE_TX_BLOCK {
-                        let mut tx_bytes_len = 0;
-                        for arg in &f.node.arguments {
-                            tx_bytes_len += get_value_str_len(&arg.1.node, self.variables);
-                        }
-                        if tx_bytes_len > self.max_mutation_payload_size as usize {
+                        let tx_bytes_len = f.node.arguments.iter().fold(0, |acc, arg| {
+                            acc + get_value_str_len(&arg.1.node, self.variables)
+                        });
+                        if tx_bytes_len > self.max_tx_payload_size as usize {
                             self.log_metric(
                                 ctx,
                                 "The txBytes+signatures size of {} node is too large: {}",
@@ -125,7 +139,7 @@ impl<'a> PayloadSizeCheck<'a> {
                                     format!(
                                         "The txBytes+signatures size of {} node is too large. The maximum allowed is {} bytes",
                                         f.node.name.node,
-                                        self.max_mutation_payload_size
+                                        self.max_tx_payload_size
                                     ),
                                     f.pos
                                 ));
@@ -137,6 +151,7 @@ impl<'a> PayloadSizeCheck<'a> {
                             .map(|x| x.1.node.to_string())
                             .collect::<Vec<_>>()
                             .concat();
+                        // the key is the txBytes+signatures value itself or the variables' names
                         track_vars.entry(var_name).or_insert(tx_bytes_len);
                     }
                 }
@@ -165,13 +180,12 @@ impl<'a> PayloadSizeCheck<'a> {
         Ok(())
     }
 
-    /// Check the whole query (content-length) against the allowed payload. This will include
-    /// variables.
+    /// Check the body content-length against the allowed payload. The content-length will include
+    /// variables data as well.
     fn check_overall_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
         let payload_size: &PayloadSize = ctx.data_unchecked();
         let payload_size = payload_size.0;
-        let max_payload_size =
-            (self.max_query_payload_size + self.max_mutation_payload_size).into();
+        let max_payload_size = (self.max_query_payload_size + self.max_tx_payload_size).into();
         if payload_size > max_payload_size {
             let metrics: &Metrics = ctx.data_unchecked();
             let query_id: &Uuid = ctx.data_unchecked();
@@ -622,8 +636,8 @@ impl Extension for QueryLimitsCheckerExt {
     }
 }
 
-/// Get the length of a string value. If the value is a list, then we expect
-/// the list to contain strings, and we sum the lengths of all the strings.
+/// Get the length of a string value. If the value is a list, then we expect he list to contain
+/// strings, and we sum the lengths of all the strings.
 ///
 /// This is specifically designed to work with the txBytes and signatures
 /// of the executeTransactionBlock and dryRunTransactionBlock nodes, which are strings or list of

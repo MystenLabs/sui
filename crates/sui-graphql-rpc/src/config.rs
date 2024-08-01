@@ -67,11 +67,12 @@ pub struct Limits {
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u32,
-    /// Maximum size in bytes allowed for the txBytes and signatures of a GraphQL mutation request,
-    /// or for the `txBytes` of a `dryRunTransactionBlock`.
+    /// Maximum size in bytes allowed for the `txBytes` and `signatures` fields of a GraphQL
+    /// mutation request in the `executeTransactionBlock` node, and for the `txBytes` of a
+    /// `dryRunTransactionBlock` node.
     pub max_tx_payload_size: u32,
     /// Maximum size in bytes of the JSON payload of a GraphQL read request (excluding
-    /// `max_tx_payload_size).
+    /// `max_tx_payload_size`).
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
@@ -264,9 +265,8 @@ impl ServiceConfig {
         self.limits.request_timeout_ms
     }
 
-    /// The maximum bytes allowed for txBytes and signatures in the request body of a GraphQL
-    /// executeTransactionBlock mutation request, or for the `txBytes` of a
-    /// `dryRunTransactionBlock`.
+    /// The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+    /// `executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
     ///
     /// It is the value of the maximum transaction bytes (including the signatures) allowed by the
     /// protocol, plus the Base64 overhead (roughly 1/3 of the original string).
@@ -274,7 +274,8 @@ impl ServiceConfig {
         self.limits.max_tx_payload_size
     }
 
-    /// The maximum bytes allowed for the JSON object in the request body of a GraphQL read query.
+    /// The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+    /// the read part of the query.
     /// In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
     /// included in this limit.
     async fn max_query_payload_size(&self) -> u32 {
