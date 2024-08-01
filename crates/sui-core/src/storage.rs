@@ -233,7 +233,8 @@ impl ReadStore for RocksDbStore {
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
         self.checkpoint_store
-            .get_latest_certified_checkpoint()
+            .get_highest_executed_checkpoint()
+            .map_err(sui_types::storage::error::Error::custom)?
             .ok_or_else(|| {
                 sui_types::storage::error::Error::missing("unable to get latest checkpoint")
             })
