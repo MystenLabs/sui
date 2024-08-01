@@ -64,15 +64,22 @@ pub const ADD_TOKENS_ON_EVM_PATH: &str =
 // Be careful with what to put here, as it is public.
 #[derive(serde::Serialize)]
 pub struct BridgeNodePublicMetadata {
-    pub version: String,
-    pub metrics_pubkey: Arc<Ed25519PublicKey>,
+    pub version: Option<String>,
+    pub metrics_pubkey: Option<Arc<Ed25519PublicKey>>,
 }
 
 impl BridgeNodePublicMetadata {
     pub fn new(version: String, metrics_pubkey: Ed25519PublicKey) -> Self {
         Self {
-            version,
-            metrics_pubkey: metrics_pubkey.into(),
+            version: Some(version),
+            metrics_pubkey: Some(metrics_pubkey.into()),
+        }
+    }
+
+    pub fn empty_for_testing() -> Self {
+        Self {
+            version: None,
+            metrics_pubkey: None,
         }
     }
 }
@@ -166,7 +173,7 @@ async fn metrics_network_key_fetch(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
-) -> Result<Json<Arc<Ed25519PublicKey>>, BridgeError> {
+) -> Result<Json<Option<Arc<Ed25519PublicKey>>>, BridgeError> {
     Ok(Json(metadata.metrics_pubkey.clone()))
 }
 
