@@ -45,6 +45,7 @@ pub enum Direction {
     Descending,
 }
 
+#[derive(Debug)]
 pub struct Page<T, C> {
     pub entries: response::ResponseContent<Vec<T>>,
     pub cursor: Option<C>,
