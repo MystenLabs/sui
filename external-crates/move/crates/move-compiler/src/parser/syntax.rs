@@ -4140,7 +4140,11 @@ fn parse_use_decl(
                 " after an address in a use declaration",
             ) {
                 context.env.add_diag(*diag);
-                Use::Partial(address, None, None)
+                Use::Partial {
+                    package: address,
+                    colon_colon: None,
+                    opening_brace: None,
+                }
             } else {
                 match context.tokens.peek() {
                     Tok::LBrace => {
@@ -4167,7 +4171,11 @@ fn parse_use_decl(
                         );
                         if use_decls.is_empty() && module_uses_to_parse_exist {
                             // we failed to parse a non-empty list
-                            Use::Partial(address, Some(colon_colon_loc), Some(lbrace_loc))
+                            Use::Partial {
+                                package: address,
+                                colon_colon: Some(colon_colon_loc),
+                                opening_brace: Some(lbrace_loc),
+                            }
                         } else {
                             Use::NestedModuleUses(address, use_decls)
                         }
@@ -4187,7 +4195,11 @@ fn parse_use_decl(
                         }
                         Err(diag) => {
                             context.env.add_diag(*diag);
-                            Use::Partial(address, Some(colon_colon_loc), None)
+                            Use::Partial {
+                                package: address,
+                                colon_colon: Some(colon_colon_loc),
+                                opening_brace: None,
+                            }
                         }
                     },
                 }
@@ -4220,7 +4232,10 @@ fn parse_use_module(
             let colon_colon_loc = context.tokens.current_token_loc();
             if let Err(diag) = consume_token(context.tokens, Tok::ColonColon) {
                 context.env.add_diag(*diag);
-                ModuleUse::Partial(None, None)
+                ModuleUse::Partial {
+                    colon_colon: None,
+                    opening_brace: None,
+                }
             } else {
                 match context.tokens.peek() {
                     Tok::LBrace => {
@@ -4243,7 +4258,10 @@ fn parse_use_module(
                         );
                         if sub_uses.is_empty() && sub_uses_to_parse_exist {
                             // we failed to parse a non-empty list
-                            ModuleUse::Partial(Some(colon_colon_loc), Some(lbrace_loc))
+                            ModuleUse::Partial {
+                                colon_colon: Some(colon_colon_loc),
+                                opening_brace: Some(lbrace_loc),
+                            }
                         } else {
                             ModuleUse::Members(sub_uses)
                         }
@@ -4252,7 +4270,10 @@ fn parse_use_module(
                         Ok(m) => ModuleUse::Members(vec![m]),
                         Err(diag) => {
                             context.env.add_diag(*diag);
-                            ModuleUse::Partial(Some(colon_colon_loc), None)
+                            ModuleUse::Partial {
+                                colon_colon: Some(colon_colon_loc),
+                                opening_brace: None,
+                            }
                         }
                     },
                 }

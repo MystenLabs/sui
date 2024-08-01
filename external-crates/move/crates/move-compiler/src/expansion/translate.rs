@@ -1574,7 +1574,7 @@ fn use_(
             };
             use_funs.explicit.push(explicit);
         }
-        P::Use::Partial(..) => (), // no actual module to process
+        P::Use::Partial { .. } => (), // no actual module to process
     }
 }
 
@@ -1704,7 +1704,7 @@ fn module_use(
                 }
             }
         }
-        P::ModuleUse::Partial(..) => (), // no members or aliases to process
+        P::ModuleUse::Partial { .. } => (), // no members or aliases to process
     }
 }
 

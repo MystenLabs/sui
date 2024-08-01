@@ -109,7 +109,11 @@ pub enum Use {
     // - `some_pkg::`
     // - `some_pkg::{`
     // where first location represents `::` and the second one represents `{`
-    Partial(LeadingNameAccess, Option<Loc>, Option<Loc>),
+    Partial {
+        package: LeadingNameAccess,
+        colon_colon: Option<Loc>,
+        opening_brace: Option<Loc>,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -121,7 +125,10 @@ pub enum ModuleUse {
     // - `... some_mod::`
     // - `... some_mod::{`
     // where first location represents `::` and the second one represents `{`
-    Partial(Option<Loc>, Option<Loc>),
+    Partial {
+        colon_colon: Option<Loc>,
+        opening_brace: Option<Loc>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1501,9 +1508,12 @@ impl AstDebug for ModuleUse {
                     alias.map(|alias| w.write(&format!("as {}", alias.value)));
                 })
             }),
-            ModuleUse::Partial(colon_colon_loc, curly_loc) => {
-                colon_colon_loc.map(|_| w.write("::".to_string()));
-                curly_loc.map(|_| w.write("{".to_string()));
+            ModuleUse::Partial {
+                colon_colon,
+                opening_brace,
+            } => {
+                colon_colon.map(|_| w.write("::"));
+                opening_brace.map(|_| w.write("{"));
             }
         }
     }
@@ -1539,10 +1549,14 @@ impl AstDebug for Use {
                 ty.ast_debug(w);
                 w.write(format!(".{method}"));
             }
-            Use::Partial(addr, colon_colon_loc, curly_loc) => {
-                colon_colon_loc.map(|_| w.write("::".to_string()));
-                curly_loc.map(|_| w.write("{".to_string()));
-                w.write(&format!("{}::", addr));
+            Use::Partial {
+                package,
+                colon_colon,
+                opening_brace,
+            } => {
+                w.write(package.to_string());
+                colon_colon.map(|_| w.write("::"));
+                opening_brace.map(|_| w.write("{"));
             }
         }
         w.write(";")
