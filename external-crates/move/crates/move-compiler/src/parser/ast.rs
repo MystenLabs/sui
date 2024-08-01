@@ -104,12 +104,24 @@ pub enum Use {
         ty: Box<NameAccessChain>,
         method: Name,
     },
+    // used for one of the three cases when `LeadingNameAccess` represents `some_pkg`
+    // - `some_pkg`
+    // - `some_pkg::`
+    // - `some_pkg::{`
+    // where first location represents `::` and the second one represents `{`
+    Partial(LeadingNameAccess, Option<Loc>, Option<Loc>),
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum ModuleUse {
     Module(Option<ModuleName>),
     Members(Vec<(Name, Option<Name>)>),
+    // used for one of the three cases when defining `ModuleUse` for `some_mod`:
+    // - `... some_mod`
+    // - `... some_mod::`
+    // - `... some_mod::{`
+    // where first location represents `::` and the second one represents `{`
+    Partial(Option<Loc>, Option<Loc>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1489,6 +1501,10 @@ impl AstDebug for ModuleUse {
                     alias.map(|alias| w.write(&format!("as {}", alias.value)));
                 })
             }),
+            ModuleUse::Partial(colon_colon_loc, curly_loc) => {
+                colon_colon_loc.map(|_| w.write("::".to_string()));
+                curly_loc.map(|_| w.write("{".to_string()));
+            }
         }
     }
 }
@@ -1522,6 +1538,11 @@ impl AstDebug for Use {
                 w.write(" as ");
                 ty.ast_debug(w);
                 w.write(format!(".{method}"));
+            }
+            Use::Partial(addr, colon_colon_loc, curly_loc) => {
+                colon_colon_loc.map(|_| w.write("::".to_string()));
+                curly_loc.map(|_| w.write("{".to_string()));
+                w.write(&format!("{}::", addr));
             }
         }
         w.write(";")

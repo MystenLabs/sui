@@ -4132,40 +4132,64 @@ fn parse_use_decl(
             }
             let address_start_loc = context.tokens.start_loc();
             let address = parse_leading_name_access(context)?;
-            consume_token_(
+            let colon_colon_loc = context.tokens.current_token_loc();
+            if let Err(diag) = consume_token_(
                 context.tokens,
                 Tok::ColonColon,
                 start_loc,
                 " after an address in a use declaration",
-            )?;
-            match context.tokens.peek() {
-                Tok::LBrace => {
-                    let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
-                        let (name, _, use_) = parse_use_module(ctxt)?;
-                        Ok((name, use_))
-                    };
-                    let use_decls = parse_comma_list(
-                        context,
-                        Tok::LBrace,
-                        Tok::RBrace,
-                        &TokenSet::from([Tok::Identifier]),
-                        parse_inner,
-                        "a module use clause",
-                    );
+            ) {
+                context.env.add_diag(*diag);
+                Use::Partial(address, None, None)
+            } else {
+                match context.tokens.peek() {
+                    Tok::LBrace => {
+                        let lbrace_loc = context.tokens.current_token_loc();
+                        // if next token after `{` is not `}` then it means that there are module
+                        // uses that could potentially be parsed
+                        let module_uses_to_parse_exist = !context
+                            .tokens
+                            .lookahead()
+                            .map(|tok| tok == Tok::RBrace)
+                            .unwrap_or_default();
 
-                    Use::NestedModuleUses(address, use_decls)
-                }
-                _ => {
-                    let (name, end_loc, use_) = parse_use_module(context)?;
-                    let loc = make_loc(context.tokens.file_hash(), address_start_loc, end_loc);
-                    let module_ident = sp(
-                        loc,
-                        ModuleIdent_ {
-                            address,
-                            module: name,
-                        },
-                    );
-                    Use::ModuleUse(module_ident, use_)
+                        let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
+                            let (name, _, use_) = parse_use_module(ctxt)?;
+                            Ok((name, use_))
+                        };
+                        let use_decls = parse_comma_list(
+                            context,
+                            Tok::LBrace,
+                            Tok::RBrace,
+                            &TokenSet::from([Tok::Identifier]),
+                            parse_inner,
+                            "a module use clause",
+                        );
+                        if use_decls.is_empty() && module_uses_to_parse_exist {
+                            // we failed to parse a non-empty list
+                            Use::Partial(address, Some(colon_colon_loc), Some(lbrace_loc))
+                        } else {
+                            Use::NestedModuleUses(address, use_decls)
+                        }
+                    }
+                    _ => match parse_use_module(context) {
+                        Ok((name, end_loc, use_)) => {
+                            let loc =
+                                make_loc(context.tokens.file_hash(), address_start_loc, end_loc);
+                            let module_ident = sp(
+                                loc,
+                                ModuleIdent_ {
+                                    address,
+                                    module: name,
+                                },
+                            );
+                            Use::ModuleUse(module_ident, use_)
+                        }
+                        Err(diag) => {
+                            context.env.add_diag(*diag);
+                            Use::Partial(address, Some(colon_colon_loc), None)
+                        }
+                    },
                 }
             }
         }
@@ -4193,19 +4217,46 @@ fn parse_use_module(
     let alias_opt = parse_use_alias(context)?;
     let module_use = match (&alias_opt, context.tokens.peek()) {
         (None, Tok::ColonColon) => {
-            consume_token(context.tokens, Tok::ColonColon)?;
-            let sub_uses = match context.tokens.peek() {
-                Tok::LBrace => parse_comma_list(
-                    context,
-                    Tok::LBrace,
-                    Tok::RBrace,
-                    &TokenSet::from([Tok::Identifier]),
-                    parse_use_member,
-                    "a module member alias",
-                ),
-                _ => vec![parse_use_member(context)?],
-            };
-            ModuleUse::Members(sub_uses)
+            let colon_colon_loc = context.tokens.current_token_loc();
+            if let Err(diag) = consume_token(context.tokens, Tok::ColonColon) {
+                context.env.add_diag(*diag);
+                ModuleUse::Partial(None, None)
+            } else {
+                match context.tokens.peek() {
+                    Tok::LBrace => {
+                        let lbrace_loc = context.tokens.current_token_loc();
+                        // if next token after `{` is not `}` then it means that there are sub uses that
+                        // could potentially be parsed
+                        let sub_uses_to_parse_exist = !context
+                            .tokens
+                            .lookahead()
+                            .map(|tok| tok == Tok::RBrace)
+                            .unwrap_or_default();
+
+                        let sub_uses = parse_comma_list(
+                            context,
+                            Tok::LBrace,
+                            Tok::RBrace,
+                            &TokenSet::from([Tok::Identifier]),
+                            parse_use_member,
+                            "a module member alias",
+                        );
+                        if sub_uses.is_empty() && sub_uses_to_parse_exist {
+                            // we failed to parse a non-empty list
+                            ModuleUse::Partial(Some(colon_colon_loc), Some(lbrace_loc))
+                        } else {
+                            ModuleUse::Members(sub_uses)
+                        }
+                    }
+                    _ => match parse_use_member(context) {
+                        Ok(m) => ModuleUse::Members(vec![m]),
+                        Err(diag) => {
+                            context.env.add_diag(*diag);
+                            ModuleUse::Partial(Some(colon_colon_loc), None)
+                        }
+                    },
+                }
+            }
         }
         _ => ModuleUse::Module(alias_opt.map(ModuleName)),
     };
