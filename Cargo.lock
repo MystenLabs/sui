@@ -16054,6 +16054,7 @@ dependencies = [
  "tracing",
  "typed-store-derive",
  "typed-store-error",
+ "typed-store-workspace-hack",
  "uint",
 ]
 
@@ -16073,6 +16074,23 @@ version = "0.4.0"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "typed-store-workspace-hack"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "memchr",
+ "nom",
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "regex",
+ "regex-syntax 0.7.2",
+ "syn 2.0.48",
+ "zstd-sys",
 ]
 
 [[package]]

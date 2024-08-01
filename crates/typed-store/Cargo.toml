@@ -25,6 +25,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 tracing.workspace = true
 typed-store-error.workspace = true
 typed-store-derive = { path = "../typed-store-derive" }
+typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
 sui-macros.workspace = true
 ouroboros.workspace = true
 rand.workspace = true
