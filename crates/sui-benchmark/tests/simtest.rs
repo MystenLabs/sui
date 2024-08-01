@@ -35,7 +35,7 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
-    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -141,6 +141,29 @@ mod test {
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
         test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_rolling_restarts_all_validators() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 330_000).await;
+
+        let validators = test_cluster.get_validator_pubkeys();
+        let test_cluster_clone = test_cluster.clone();
+        let restarter_task = tokio::task::spawn(async move {
+            for _ in 0..4 {
+                for validator in validators.iter() {
+                    info!("Killing validator {:?}", validator.concise());
+                    test_cluster_clone.stop_node(validator);
+                    tokio::time::sleep(Duration::from_secs(20)).await;
+                    info!("Starting validator {:?}", validator.concise());
+                    test_cluster_clone.start_node(validator).await;
+                }
+            }
+        });
+        test_simulated_load(test_cluster.clone(), 330).await;
+        restarter_task.await.unwrap();
+        test_cluster.wait_for_epoch_all_nodes(1).await;
     }
 
     #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
