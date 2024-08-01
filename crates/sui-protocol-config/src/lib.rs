@@ -164,6 +164,7 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 //             Enable consensus commit prologue V3 on testnet.
 //             Turn on shared object congestion control in testnet.
+//             Switch to certified vote scoring in consensus
 //             Update stdlib natives costs
 // Version 54: Enable random beacon on mainnet.
 //             Enable soft bundle on mainnet.

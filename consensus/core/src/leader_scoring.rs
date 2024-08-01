@@ -102,8 +102,13 @@ impl ScoringSubdag {
         &mut self,
         committed_subdags: Vec<CommittedSubDag>,
     ) {
-        let _scope =
-            mysten_metrics::monitored_scope("ScoringSubdag::add_unscored_committed_subdags");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ScoringSubdag::add_unscored_committed_subdags"])
+            .start_timer();
         for subdag in committed_subdags {
             // If the commit range is not set, then set it to the range of the first
             // committed subdag index.
@@ -163,7 +168,13 @@ impl ScoringSubdag {
     // Iterate through votes and calculate scores for each authority based on
     // scoring strategy that is used. (Vote or CertifiedVote)
     pub(crate) fn calculate_scores(&self) -> ReputationScores {
-        let _scope = mysten_metrics::monitored_scope("ScoringSubdag::calculate_scores");
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["ScoringSubdag::calculate_scores"])
+            .start_timer();
 
         let scores_per_authority = if self
             .context
