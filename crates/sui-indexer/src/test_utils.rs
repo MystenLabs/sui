@@ -102,8 +102,6 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
 
     let mut parsed_url = config.get_db_url().unwrap();
 
-    println!("start_test_indexer_impl: before handling new db");
-
     if reset_database {
         let db_name = parsed_url.expose_secret().split('/').last().unwrap();
         // Switch to default to create a new database
@@ -128,14 +126,10 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
             .into();
     }
 
-    println!("start_test_indexer_impl: after handling new db");
-
     let blocking_pool =
         new_connection_pool_with_config::<T>(parsed_url.expose_secret(), Some(5), pool_config)
             .unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
-
-    println!("start_test_indexer_impl: got the blocking pool");
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
@@ -148,7 +142,6 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-            println!("start_test_indexer_impl: before start_reader");
             tokio::spawn(
                 async move { Indexer::start_reader::<T>(&config, &registry, db_url).await },
             )
@@ -158,8 +151,6 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
                 crate::db::reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
             }
             let store_clone = store.clone();
-
-            println!("start_test_indexer_impl: before start_writer_with_config");
 
             tokio::spawn(async move {
                 Indexer::start_writer_with_config::<PgIndexerStore<T>, T>(

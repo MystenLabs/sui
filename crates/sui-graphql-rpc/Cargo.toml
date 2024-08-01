@@ -94,7 +94,7 @@ sui-test-transaction-builder.workspace = true
 
 
 [features]
-default = ["pg_backend", "postgres-feature", "pg_integration"]
+default = ["pg_backend", "postgres-feature"]
 postgres-feature = ["diesel/postgres", "diesel/postgres_backend"]
 pg_integration = []
 pg_backend = []
