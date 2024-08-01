@@ -116,7 +116,7 @@ pub struct BridgeNodeConfig {
     pub eth: EthConfig,
     /// Network key used for metrics pushing
     #[serde(default = "default_ed25519_key_pair")]
-    pub network_key_pair: NetworkKeyPair,
+    pub metrics_key_pair: NetworkKeyPair,
 }
 
 pub fn default_ed25519_key_pair() -> NetworkKeyPair {
