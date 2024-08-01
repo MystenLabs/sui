@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::EthBridgeCommittee;
+use crate::config::default_ed25519_key_pair;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
@@ -735,12 +736,12 @@ pub(crate) async fn start_bridge_cluster(
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
+            network_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
-        let config_clone = config.clone();
         handles.push(
             run_bridge_node(
-                config_clone,
+                config,
                 BridgeNodePublicMetadata::empty_for_testing(),
                 Registry::new(),
             )
