@@ -102,7 +102,6 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_single_all_examples_structure_valid() {
-        println!("start test_single_all_examples_structure_valid");
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -164,13 +163,11 @@ mod tests {
         );
 
         assert!(errors.is_empty(), "\n{}", errors.join("\n\n"));
-        println!("done");
     }
 
     #[tokio::test]
     #[serial]
     async fn test_bad_examples_fail() {
-        println!("start test_bad_examples_fail");
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -204,6 +201,5 @@ mod tests {
             bad_examples.queries.len(),
             "all examples should fail"
         );
-        println!("finished test_bad_examples_fail");
     }
 }

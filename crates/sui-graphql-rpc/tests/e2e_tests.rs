@@ -25,10 +25,9 @@ mod tests {
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
-    use tokio::join;
     use tokio::time::sleep;
 
-    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
+    async fn prep_executor_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -148,7 +147,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_response() {
-        let (_, cluster) = prep_cluster().await;
+        let (_, cluster) = prep_executor_cluster().await;
 
         let query = r#"
             {
@@ -177,7 +176,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_graphql_client_variables() {
-        let (_, cluster) = prep_cluster().await;
+        let (_, cluster) = prep_executor_cluster().await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -707,7 +706,6 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_dry_run_failed_execution() {
-        println!("test_dry_run_failed_execution: beginning");
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
@@ -715,8 +713,6 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(ConnectionConfig::default(), None)
                 .await;
-
-        println!("test_dry_run_failed_execution: cluster started");
 
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
@@ -775,7 +771,6 @@ mod tests {
             ty: "String!".to_string(),
             value: json!(tx_bytes),
         }];
-        println!("test_dry_run_failed_execution: executing query");
         let res = cluster
             .graphql_client
             .execute_to_graphql(query.to_string(), true, variables, vec![])
@@ -783,7 +778,6 @@ mod tests {
             .unwrap();
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("dryRunTransactionBlock").unwrap();
-        println!("test_dry_run_failed_execution: query executed");
 
         // Execution failed so the results are null.
         assert!(res.get("results").unwrap().is_null());
@@ -795,14 +789,12 @@ mod tests {
             .unwrap()
             .contains("UnusedValueWithoutDrop"));
 
-        println!("test_dry_run_failed_execution: end");
         cluster.cleanup_resources().await
     }
 
     #[tokio::test]
     #[serial]
     async fn test_epoch_data() {
-        println!("start test_epoch_data");
         let _guard = telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init();
@@ -882,7 +874,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_query_default_page_limit() {
-        let (connection_config, _) = prep_cluster().await;
+        let (connection_config, _) = prep_executor_cluster().await;
         test_query_default_page_limit_impl(connection_config).await;
     }
 
@@ -908,7 +900,6 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
-        println!("Cluster started");
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;

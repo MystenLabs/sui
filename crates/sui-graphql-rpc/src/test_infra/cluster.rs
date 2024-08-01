@@ -16,7 +16,6 @@ pub use sui_indexer::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
-use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -65,26 +64,22 @@ pub async fn start_cluster(
     let db_url = graphql_connection_config.db_url.clone();
     let cancellation_token = CancellationToken::new();
     // Starts validator+fullnode
-    println!("start_cluster: try start validator + fullnode");
     let val_fn =
         start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
             .await;
-    println!("start_cluster: validator + fullnode started");
+
     // Starts indexer
-    println!("start_cluster: try start indexer");
     let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None),
-        None,
+        /* reset_database */ false,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
     .await;
-    println!("start_cluster: indexer started");
 
     // Starts graphql server
-    println!("start_cluster: try start graphql server");
     let fn_rpc_url = val_fn.rpc_url().to_string();
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
         graphql_connection_config.clone(),
@@ -92,7 +87,6 @@ pub async fn start_cluster(
         Some(cancellation_token.clone()),
     )
     .await;
-    println!("start_cluster: graphql server started");
 
     let server_url = format!(
         "http://{}:{}/",
@@ -100,10 +94,8 @@ pub async fn start_cluster(
     );
 
     // Starts graphql client
-    println!("start_cluster: try start graphql client");
     let client = SimpleClient::new(server_url);
     wait_for_graphql_server(&client).await;
-    println!("start_cluster: graphql client started");
 
     Cluster {
         validator_fullnode_handle: val_fn,
@@ -143,7 +135,7 @@ pub async fn serve_executor(
         Some(db_url),
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
-        Some(graphql_connection_config.db_name()),
+        /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
