@@ -273,6 +273,10 @@ pub struct AuthorityPerEpochStore {
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
 
+    // Subscribers will get notified when a transaction is executed via checkpoint execution.
+    executed_transactions_to_checkpoint_notify_read:
+        NotifyRead<TransactionDigest, CheckpointSequenceNumber>,
+
     /// Batch verifier for certificates - also caches certificates and tx sigs that are known to have
     /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
     /// within for certs within the current epoch.
@@ -831,6 +835,7 @@ impl AuthorityPerEpochStore {
             user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
+            executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
@@ -1466,6 +1471,13 @@ impl AuthorityPerEpochStore {
         )?;
         batch.write()?;
         trace!("Transactions {digests:?} finalized at checkpoint {sequence}");
+
+        // Notify all readers that the transactions have been finalized as part of a checkpoint execution.
+        for digest in digests {
+            self.executed_transactions_to_checkpoint_notify_read
+                .notify(digest, &sequence);
+        }
+
         Ok(())
     }
 
@@ -1477,6 +1489,16 @@ impl AuthorityPerEpochStore {
             .tables()?
             .executed_transactions_to_checkpoint
             .contains_key(digest)?)
+    }
+
+    pub fn transactions_executed_in_checkpoint(
+        &self,
+        digests: impl Iterator<Item = TransactionDigest>,
+    ) -> SuiResult<Vec<bool>> {
+        Ok(self
+            .tables()?
+            .executed_transactions_to_checkpoint
+            .multi_contains_keys(digests)?)
     }
 
     pub fn get_transaction_checkpoint(
@@ -1955,6 +1977,25 @@ impl AuthorityPerEpochStore {
             .into_iter()
             .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
+            .map(|(registration, _)| registration);
+
+        join_all(unprocessed_keys_registrations).await;
+        Ok(())
+    }
+
+    /// Get notified when a transaction gets executed as part of a checkpoint execution.
+    pub async fn transaction_executed_in_checkpoint_notify(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> Result<(), SuiError> {
+        let registrations = self
+            .executed_transactions_to_checkpoint_notify_read
+            .register_all(&digests);
+
+        let unprocessed_keys_registrations = registrations
+            .into_iter()
+            .zip(self.transactions_executed_in_checkpoint(digests.into_iter())?)
+            .filter(|(_, processed)| !*processed)
             .map(|(registration, _)| registration);
 
         join_all(unprocessed_keys_registrations).await;
