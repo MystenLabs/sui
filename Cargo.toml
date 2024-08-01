@@ -420,13 +420,6 @@ reqwest = { version = "0.12", default_features = false, features = [
   "rustls-tls",
 ] }
 roaring = "=0.10.3"
-rocksdb = { version = "0.21.0", features = [
-  "snappy",
-  "lz4",
-  "zstd",
-  "zlib",
-  "multi-threaded-cf",
-], default-features = false }
 ron = "0.8.0"
 rstest = "0.16.0"
 rusoto_core = { version = "0.48.0", default_features = false, features = [
@@ -670,7 +663,6 @@ telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 test-cluster = { path = "crates/test-cluster" }
 transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
-typed-store-derive = { path = "crates/typed-store-derive" }
 typed-store-error = { path = "crates/typed-store-error" }
 x = { path = "crates/x" }
 

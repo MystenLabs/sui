@@ -37,7 +37,6 @@ prometheus.workspace = true
 rand.workspace = true
 roaring.workspace = true
 rayon.workspace = true
-rocksdb.workspace = true
 reqwest.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
@@ -66,7 +65,6 @@ move-symbol-pool.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
-typed-store-derive.workspace = true
 typed-store.workspace = true
 
 mysten-metrics.workspace = true

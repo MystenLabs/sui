@@ -21,8 +21,8 @@ use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store_derive::DBMapUtils;
-use typed_store_derive::SallyDB;
+use typed_store::DBMapUtils;
+use typed_store::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()

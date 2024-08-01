@@ -5,7 +5,6 @@ use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
-use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
@@ -27,6 +26,7 @@ use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::rocksdb::MultiThreaded;
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
@@ -43,20 +43,23 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
-        .map_err(|e| e.into())
-        .map(|q| {
-            q.iter()
-                .filter_map(|s| {
-                    // The `default` table is not used
-                    if s != "default" {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
+    typed_store::rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
+        &default_db_options().options,
+        path,
+    )
+    .map_err(|e| e.into())
+    .map(|q| {
+        q.iter()
+            .filter_map(|s| {
+                // The `default` table is not used
+                if s != "default" {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 pub fn table_summary(
