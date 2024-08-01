@@ -235,6 +235,7 @@ mod tests {
     use prometheus::Registry;
 
     use super::*;
+    use crate::config::default_ed25519_key_pair;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
@@ -417,6 +418,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: false,
             db_path: None,
+            network_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -480,6 +482,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: true,
             db_path: Some(db_path),
+            network_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -554,6 +557,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: true,
             db_path: Some(db_path),
+            network_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
