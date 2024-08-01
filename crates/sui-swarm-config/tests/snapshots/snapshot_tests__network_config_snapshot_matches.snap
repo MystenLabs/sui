@@ -19,6 +19,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -156,6 +158,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -293,6 +297,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -430,6 +436,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -567,6 +575,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -704,6 +714,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -841,6 +853,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
