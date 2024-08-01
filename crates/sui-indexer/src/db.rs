@@ -257,7 +257,9 @@ pub mod setup_postgres {
     pub async fn setup(
         indexer_config: IndexerConfig,
         registry: Registry,
+        indexer_metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
+        info!("Setting up postgres database connection pool");
         let db_url_secret = indexer_config.get_db_url().map_err(|e| {
             IndexerError::PgPoolConnectionError(format!(
                 "Failed parsing database url with error {:?}",
@@ -291,8 +293,6 @@ pub mod setup_postgres {
             })?;
             info!("Reset Postgres database complete.");
         }
-        let indexer_metrics = IndexerMetrics::new(&registry);
-        mysten_metrics::init_metrics(&registry);
 
         let report_cp = blocking_cp.clone();
         let report_metrics = indexer_metrics.clone();
@@ -400,7 +400,9 @@ pub mod setup_mysql {
     pub async fn setup(
         indexer_config: IndexerConfig,
         registry: Registry,
+        indexer_metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
+        info!("Setting up mysql database connection pool");
         let db_url_secret = indexer_config.get_db_url().map_err(|e| {
             IndexerError::PgPoolConnectionError(format!(
                 "Failed parsing database url with error {:?}",
@@ -433,8 +435,6 @@ pub mod setup_mysql {
             )?;
             info!("Reset MySQL database complete.");
         }
-        let indexer_metrics = IndexerMetrics::new(&registry);
-        mysten_metrics::init_metrics(&registry);
 
         let report_cp = blocking_cp.clone();
         let report_metrics = indexer_metrics.clone();
