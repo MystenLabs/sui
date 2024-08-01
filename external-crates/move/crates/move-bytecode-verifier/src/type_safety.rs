@@ -7,6 +7,7 @@
 
 use std::num::NonZeroU64;
 
+use indexmap::IndexMap;
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
@@ -15,23 +16,28 @@ use move_binary_format::{
         AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, EnumDefinition, FieldHandleIndex,
         FunctionDefinitionIndex, FunctionHandle, JumpTableInner, LocalIndex, Signature,
         SignatureToken, SignatureToken as ST, StructDefinition, StructDefinitionIndex,
-        StructFieldInformation, VariantDefinition, VariantJumpTable,
+        StructFieldInformation, TypeParameterIndex, VariantDefinition, VariantJumpTable,
     },
+    normalized::Type,
     safe_unwrap_err, CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
-struct Locals<'a> {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+struct TypeIndex(usize);
+
+struct Locals {
     param_count: usize,
-    parameters: &'a Signature,
-    locals: &'a Signature,
+    parameters: Vec<TypeIndex>,
+    locals: Vec<TypeIndex>,
 }
 
-const TYPE_NODE_COST: u128 = 30;
+const TYPE_PUSH_COST: u128 = 1;
+const TYPE_LOAD_COST_PER_NODE: u128 = 5;
 
-impl<'a> Locals<'a> {
-    fn new(parameters: &'a Signature, locals: &'a Signature) -> Self {
+impl Locals {
+    fn new(parameters: Vec<TypeIndex>, locals: Vec<TypeIndex>) -> Self {
         Self {
             param_count: parameters.len(),
             parameters,
@@ -39,12 +45,12 @@ impl<'a> Locals<'a> {
         }
     }
 
-    fn local_at(&self, i: LocalIndex) -> &SignatureToken {
+    fn local_at(&self, i: LocalIndex) -> TypeIndex {
         let idx = i as usize;
         if idx < self.param_count {
-            &self.parameters.0[idx]
+            self.parameters[idx]
         } else {
-            &self.locals.0[idx - self.param_count]
+            self.locals[idx - self.param_count]
         }
     }
 }
@@ -52,28 +58,107 @@ impl<'a> Locals<'a> {
 struct TypeSafetyChecker<'a> {
     module: &'a CompiledModule,
     function_context: &'a FunctionContext<'a>,
-    locals: Locals<'a>,
-    stack: AbstractStack<SignatureToken>,
+    types: IndexMap<SignatureToken, Option<AbilitySet>>,
+    locals: Locals,
+    stack: AbstractStack<TypeIndex>,
+}
+
+fn load_type_impl<'a>(
+    meter: &mut (impl Meter + ?Sized),
+    module: &CompiledModule,
+    function_context: &FunctionContext,
+    types: &mut IndexMap<SignatureToken, Option<AbilitySet>>,
+    t: SignatureToken,
+) -> PartialVMResult<TypeIndex> {
+    if let Some(index) = types.get_index_of(&t) {
+        return Ok(TypeIndex(index));
+    }
+    meter.add_items(
+        Scope::Function,
+        TYPE_LOAD_COST_PER_NODE,
+        t.preorder_traversal().count(),
+    )?;
+    let (index, _) = types.insert_full(t, None);
+    Ok(TypeIndex(index))
+}
+
+fn load_types_impl(
+    meter: &mut (impl Meter + ?Sized),
+    module: &CompiledModule,
+    function_context: &FunctionContext,
+    types: &mut IndexMap<SignatureToken, Option<AbilitySet>>,
+    ts: impl IntoIterator<Item = SignatureToken>,
+) -> PartialVMResult<Vec<TypeIndex>> {
+    ts.into_iter()
+        .map(|t| load_type_impl(meter, module, function_context, types, t))
+        .collect()
 }
 
 impl<'a> TypeSafetyChecker<'a> {
-    fn new(module: &'a CompiledModule, function_context: &'a FunctionContext<'a>) -> Self {
-        let locals = Locals::new(function_context.parameters(), function_context.locals());
-        Self {
+    fn new(
+        module: &'a CompiledModule,
+        function_context: &'a FunctionContext<'a>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<Self> {
+        let mut types = IndexMap::new();
+        let parameters = load_types_impl(
+            meter,
             module,
             function_context,
+            &mut types,
+            function_context.parameters().0.clone(),
+        )?;
+        let locals = load_types_impl(
+            meter,
+            module,
+            function_context,
+            &mut types,
+            function_context.locals().0.clone(),
+        )?;
+        let locals = Locals::new(parameters, locals);
+        Ok(Self {
+            module,
+            function_context,
+            types,
             locals,
             stack: AbstractStack::new(),
-        }
+        })
     }
 
-    fn local_at(&self, i: LocalIndex) -> &SignatureToken {
+    fn load_type(
+        &mut self,
+        meter: &mut (impl Meter + ?Sized),
+        t: SignatureToken,
+    ) -> PartialVMResult<TypeIndex> {
+        load_type_impl(
+            meter,
+            self.module,
+            self.function_context,
+            &mut self.types,
+            t,
+        )
+    }
+
+    fn get_type(&self, i: TypeIndex) -> &SignatureToken {
+        self.types.get_index(i.0).unwrap().0
+    }
+
+    fn local_at(&self, i: LocalIndex) -> TypeIndex {
         self.locals.local_at(i)
     }
 
     fn abilities(&self, t: &SignatureToken) -> PartialVMResult<AbilitySet> {
-        self.module
-            .abilities(t, self.function_context.type_parameters())
+        if !self.types.contains_key(t) {
+            self.types.insert(t.clone(), None);
+        }
+        if let Some(abilities) = self.types[t] {
+            Ok(abilities)
+        } else {
+            let abilities = self.compute_abilities(t)?;
+            self.types[t] = Some(abilities);
+            self.types.insert(t.clone(), Some(abilities));
+            Ok(abilities)
+        }
     }
 
     fn error(&self, status: StatusCode, offset: CodeOffset) -> PartialVMError {
@@ -90,9 +175,7 @@ impl<'a> TypeSafetyChecker<'a> {
         meter: &mut (impl Meter + ?Sized),
         ty: SignatureToken,
     ) -> PartialVMResult<()> {
-        self.charge_ty(meter, &ty)?;
-        safe_unwrap_err!(self.stack.push(ty));
-        Ok(())
+        self.push_loaded(meter, self.load_type(meter, ty)?)
     }
 
     fn push_n(
@@ -101,41 +184,86 @@ impl<'a> TypeSafetyChecker<'a> {
         ty: SignatureToken,
         n: u64,
     ) -> PartialVMResult<()> {
-        self.charge_ty(meter, &ty)?;
-        safe_unwrap_err!(self.stack.push_n(ty, n));
+        self.push_loaded_n(meter, self.load_type(meter, ty)?, n)
+    }
+
+    fn push_loaded(
+        &mut self,
+        meter: &mut (impl Meter + ?Sized),
+        t: TypeIndex,
+    ) -> PartialVMResult<()> {
+        self.charge_push(meter, 1)?;
+        safe_unwrap_err!(self.stack.push(t));
         Ok(())
     }
 
-    fn charge_ty(
+    fn push_loaded_n(
         &mut self,
         meter: &mut (impl Meter + ?Sized),
-        ty: &SignatureToken,
-    ) -> PartialVMResult<()> {
-        self.charge_ty_(meter, ty, 1)
-    }
-
-    fn charge_ty_(
-        &mut self,
-        meter: &mut (impl Meter + ?Sized),
-        ty: &SignatureToken,
+        t: TypeIndex,
         n: u64,
     ) -> PartialVMResult<()> {
-        meter.add_items(
-            Scope::Function,
-            TYPE_NODE_COST,
-            ty.preorder_traversal().count() * (n as usize),
-        )
+        self.charge_push(meter, n)?;
+        safe_unwrap_err!(self.stack.push_n(t, n));
+        Ok(())
     }
 
-    fn charge_tys(
-        &mut self,
-        meter: &mut (impl Meter + ?Sized),
-        tys: &[SignatureToken],
-    ) -> PartialVMResult<()> {
-        for ty in tys {
-            self.charge_ty(meter, ty)?
-        }
+    fn charge_push(&mut self, meter: &mut (impl Meter + ?Sized), n: u64) -> PartialVMResult<()> {
+        meter.add(Scope::Function, TYPE_PUSH_COST * (n as u128))?;
         Ok(())
+    }
+
+    pub fn compute_abilities(&mut self, ty: &SignatureToken) -> PartialVMResult<AbilitySet> {
+        use SignatureToken as S;
+
+        Ok(match ty {
+            S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => {
+                AbilitySet::PRIMITIVES
+            }
+
+            S::Reference(_) | S::MutableReference(_) => AbilitySet::REFERENCES,
+            S::Signer => AbilitySet::SIGNER,
+            S::TypeParameter(idx) => self.function_context.type_parameters()[*idx as usize],
+            S::Datatype(idx) => {
+                let sh = self.module.datatype_handle_at(*idx);
+                sh.abilities
+            }
+            S::Vector(inner) => {
+                if !self.types.contains_key(ty) {
+                    self.types.insert(ty.clone(), None);
+                }
+                if let Some(abilities) = &self.types[ty] {
+                    *abilities
+                } else {
+                    let abilities = AbilitySet::polymorphic_abilities(
+                        AbilitySet::VECTOR,
+                        vec![false],
+                        vec![self.compute_abilities(inner)?],
+                    )?;
+                    self.types[ty] = Some(abilities);
+                    abilities
+                }
+            }
+            S::DatatypeInstantiation(inst) => {
+                if !self.types.contains_key(ty) {
+                    self.types.insert(ty.clone(), None);
+                }
+                let (idx, type_args) = &**inst;
+                let sh = self.module.datatype_handle_at(*idx);
+                let declared_abilities = sh.abilities;
+                let type_arg_abilities = type_args
+                    .iter()
+                    .map(|arg| self.compute_abilities(arg))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let abilities = AbilitySet::polymorphic_abilities(
+                    declared_abilities,
+                    sh.type_parameters.iter().map(|param| param.is_phantom),
+                    type_arg_abilities,
+                )?;
+                self.types[ty] = Some(abilities);
+                abilities
+            }
+        })
     }
 }
 
@@ -144,7 +272,7 @@ pub(crate) fn verify<'a>(
     function_context: &'a FunctionContext<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let verifier = &mut TypeSafetyChecker::new(module, function_context);
+    let verifier = &mut TypeSafetyChecker::new(module, function_context, meter)?;
 
     for block_id in function_context.cfg().blocks() {
         for offset in function_context.cfg().instr_indexes(block_id) {
@@ -171,21 +299,21 @@ fn variant_switch(
     let operand = safe_unwrap_err!(verifier.stack.pop());
 
     // Check: type is an immutable reference, and get inner type
-    let inner_type = match operand {
+    let inner_type = match verifier.get_type(operand) {
         ST::Reference(inner) => inner,
         _ => return Err(verifier.error(StatusCode::ENUM_SWITCH_BAD_OPERAND, offset)),
     };
 
     // Check: The type of the reference is the same as the enum definition expected in
     // the jump table.
-    let handle = match *inner_type {
+    let handle = match &**inner_type {
         SignatureToken::Datatype(handle) => handle,
-        SignatureToken::DatatypeInstantiation(inst) => inst.0,
+        SignatureToken::DatatypeInstantiation(inst) => &inst.0,
         _ => return Err(verifier.error(StatusCode::ENUM_TYPE_MISMATCH, offset)),
     };
     let enum_def = {
         let enum_def = verifier.module.enum_def_at(jump_table.head_enum);
-        if handle != enum_def.enum_handle {
+        if handle != &enum_def.enum_handle {
             return Err(verifier.error(StatusCode::ENUM_TYPE_MISMATCH, offset));
         }
         enum_def
@@ -210,7 +338,7 @@ fn borrow_field(
     type_args: &Signature,
 ) -> PartialVMResult<()> {
     // load operand and check mutability constraints
-    let operand = safe_unwrap_err!(verifier.stack.pop());
+    let operand = verifier.get_type(safe_unwrap_err!(verifier.stack.pop()));
     if mut_ && !operand.is_mutable_reference() {
         return Err(verifier.error(StatusCode::BORROWFIELD_TYPE_MISMATCH_ERROR, offset));
     }
@@ -220,9 +348,9 @@ fn borrow_field(
     // For generic fields access, this step materializes that type
     let field_handle = verifier.module.field_handle_at(field_handle_index);
     let struct_def = verifier.module.struct_def_at(field_handle.owner);
-    let expected_type = materialize_type(struct_def.struct_handle, type_args);
+    let expected_type = &materialize_type(struct_def.struct_handle, type_args);
     match operand {
-        ST::Reference(inner) | ST::MutableReference(inner) if expected_type == *inner => (),
+        ST::Reference(inner) | ST::MutableReference(inner) if expected_type == &**inner => (),
         _ => return Err(verifier.error(StatusCode::BORROWFIELD_TYPE_MISMATCH_ERROR, offset)),
     }
 
@@ -257,7 +385,7 @@ fn borrow_loc(
     mut_: bool,
     idx: LocalIndex,
 ) -> PartialVMResult<()> {
-    let loc_signature = verifier.local_at(idx).clone();
+    let loc_signature = verifier.get_type(verifier.local_at(idx)).clone();
 
     if loc_signature.is_reference() {
         return Err(verifier.error(StatusCode::BORROWLOC_REFERENCE_ERROR, offset));
@@ -283,8 +411,8 @@ fn borrow_global(
     type_args: &Signature,
 ) -> PartialVMResult<()> {
     // check and consume top of stack
-    let operand = safe_unwrap_err!(verifier.stack.pop());
-    if operand != ST::Address {
+    let operand = verifier.get_type(safe_unwrap_err!(verifier.stack.pop()));
+    if operand != &ST::Address {
         return Err(verifier.error(StatusCode::BORROWGLOBAL_TYPE_MISMATCH_ERROR, offset));
     }
 
@@ -316,9 +444,8 @@ fn call(
     let parameters = verifier.module.signature_at(function_handle.parameters);
     for parameter in parameters.0.iter().rev() {
         let arg = safe_unwrap_err!(verifier.stack.pop());
-        if (type_actuals.is_empty() && &arg != parameter)
-            || (!type_actuals.is_empty() && arg != instantiate(parameter, type_actuals))
-        {
+        let parameter = verifier.load_type(meter, instantiate(parameter, type_actuals))?;
+        if arg != parameter {
             return Err(verifier.error(StatusCode::CALL_TYPE_MISMATCH_ERROR, offset));
         }
     }
@@ -330,23 +457,22 @@ fn call(
 
 fn type_fields_signature(
     verifier: &mut TypeSafetyChecker,
-    _meter: &mut (impl Meter + ?Sized), // TODO: metering
+    meter: &mut (impl Meter + ?Sized),
     offset: CodeOffset,
     struct_def: &StructDefinition,
     type_args: &Signature,
-) -> PartialVMResult<Signature> {
+) -> PartialVMResult<Vec<TypeIndex>> {
     match &struct_def.field_information {
         StructFieldInformation::Native => {
             // TODO: this is more of "unreachable"
             Err(verifier.error(StatusCode::PACK_TYPE_MISMATCH_ERROR, offset))
         }
-        StructFieldInformation::Declared(fields) => {
-            let mut field_sig = vec![];
-            for field_def in fields.iter() {
-                field_sig.push(instantiate(&field_def.signature.0, type_args));
-            }
-            Ok(Signature(field_sig))
-        }
+        StructFieldInformation::Declared(fields) => fields
+            .iter()
+            .map(|field_def| {
+                verifier.load_type(meter, instantiate(&field_def.signature.0, type_args))
+            })
+            .collect(),
     }
 }
 
@@ -357,16 +483,15 @@ fn pack_struct(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(struct_def.struct_handle, type_args);
     let field_sig = type_fields_signature(verifier, meter, offset, struct_def, type_args)?;
-    for sig in field_sig.0.iter().rev() {
+    for sig in field_sig.iter().copied().rev() {
         let arg = safe_unwrap_err!(verifier.stack.pop());
-        if &arg != sig {
+        if arg != sig {
             return Err(verifier.error(StatusCode::PACK_TYPE_MISMATCH_ERROR, offset));
         }
     }
 
-    verifier.push(meter, struct_type)?;
+    verifier.push(meter, materialize_type(struct_def.struct_handle, type_args))?;
     Ok(())
 }
 
@@ -377,7 +502,8 @@ fn unpack_struct(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(struct_def.struct_handle, type_args);
+    let struct_type =
+        verifier.load_type(meter, materialize_type(struct_def.struct_handle, type_args))?;
 
     // Pop an abstract value from the stack and check if its type is equal to the one
     // declared.
@@ -387,8 +513,8 @@ fn unpack_struct(
     }
 
     let field_sig = type_fields_signature(verifier, meter, offset, struct_def, type_args)?;
-    for sig in field_sig.0 {
-        verifier.push(meter, sig)?
+    for sig in field_sig {
+        verifier.push_loaded(meter, sig)?
     }
     Ok(())
 }
@@ -401,19 +527,19 @@ fn pack_enum_variant(
     variant_def: &VariantDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let enum_type = materialize_type(enum_def.enum_handle, type_args);
     let field_sig = variant_def
         .fields
         .iter()
         .map(|field_def| instantiate(&field_def.signature.0, type_args));
     for sig in field_sig.rev() {
+        let sig = verifier.load_type(meter, sig)?;
         let arg = safe_unwrap_err!(verifier.stack.pop());
         if arg != sig {
             return Err(verifier.error(StatusCode::PACK_TYPE_MISMATCH_ERROR, offset));
         }
     }
 
-    verifier.push(meter, enum_type)?;
+    verifier.push(meter, materialize_type(enum_def.enum_handle, type_args))?;
     Ok(())
 }
 
@@ -425,7 +551,7 @@ fn unpack_enum_variant_by_value(
     variant_def: &VariantDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let enum_type = materialize_type(enum_def.enum_handle, type_args);
+    let enum_type = verifier.load_type(meter, materialize_type(enum_def.enum_handle, type_args))?;
 
     // Pop an abstract value from the stack and check if its type is equal to the one
     // declared.
@@ -453,11 +579,9 @@ fn unpack_enum_variant_by_ref(
     variant_def: &VariantDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let enum_type = materialize_type(enum_def.enum_handle, type_args);
-
     // Pop an abstract value from the stack and check if its type is equal to the one
     // declared.
-    let arg = safe_unwrap_err!(verifier.stack.pop());
+    let arg = verifier.get_type(safe_unwrap_err!(verifier.stack.pop()))?;
 
     // If unpacking the enum mutably the value must be a mutable reference.
     // If unpacking the enum immutably the value must be an immutable reference.
@@ -467,6 +591,7 @@ fn unpack_enum_variant_by_ref(
         _ => return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset)),
     };
 
+    let enum_type = materialize_type(enum_def.enum_handle, type_args);
     if *inner != enum_type {
         return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset));
     }
@@ -619,7 +744,7 @@ fn verify_instr(
 
         Bytecode::StLoc(idx) => {
             let operand = safe_unwrap_err!(verifier.stack.pop());
-            if &operand != verifier.local_at(*idx) {
+            if operand != verifier.local_at(*idx) {
                 return Err(verifier.error(StatusCode::STLOC_TYPE_MISMATCH_ERROR, offset));
             }
         }

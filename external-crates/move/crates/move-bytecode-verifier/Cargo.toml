@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 petgraph.workspace = true
+indexmap.workspace = true
 
 move-borrow-graph.workspace = true
 move-binary-format.workspace = true

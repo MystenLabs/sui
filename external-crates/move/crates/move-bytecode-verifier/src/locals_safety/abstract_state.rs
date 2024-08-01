@@ -26,9 +26,9 @@ pub(crate) enum LocalState {
 }
 use LocalState::*;
 
-pub(crate) const STEP_BASE_COST: u128 = 15;
-pub(crate) const RET_PER_LOCAL_COST: u128 = 30;
-pub(crate) const JOIN_BASE_COST: u128 = 10;
+pub(crate) const STEP_BASE_COST: u128 = 2;
+pub(crate) const RET_PER_LOCAL_COST: u128 = 5;
+pub(crate) const JOIN_BASE_COST: u128 = 2;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

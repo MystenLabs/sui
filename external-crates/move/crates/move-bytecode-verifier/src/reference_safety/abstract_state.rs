@@ -74,16 +74,16 @@ impl std::fmt::Display for Label {
     }
 }
 
-pub(crate) const STEP_BASE_COST: u128 = 10;
-pub(crate) const STEP_PER_LOCAL_COST: u128 = 20;
-pub(crate) const STEP_PER_GRAPH_ITEM_COST: u128 = 50;
-pub(crate) const JOIN_BASE_COST: u128 = 100;
-pub(crate) const JOIN_PER_LOCAL_COST: u128 = 10;
-pub(crate) const JOIN_PER_GRAPH_ITEM_COST: u128 = 50;
+pub(crate) const STEP_BASE_COST: u128 = 2;
+pub(crate) const STEP_PER_LOCAL_COST: u128 = 5;
+pub(crate) const STEP_PER_GRAPH_ITEM_COST: u128 = 100;
+pub(crate) const JOIN_BASE_COST: u128 = 2;
+pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
+pub(crate) const JOIN_PER_GRAPH_ITEM_COST: u128 = 100;
 
 // The cost for an edge from an input reference parameter to output reference.
 pub(crate) const REF_PARAM_EDGE_COST: u128 = 100;
-pub(crate) const REF_PARAM_EDGE_COST_GROWTH: f32 = 1.5;
+pub(crate) const REF_PARAM_EDGE_COST_GROWTH: f32 = 2.0;
 
 // The cost of an acquires in a call.
 pub(crate) const CALL_PER_ACQUIRES_COST: u128 = 100;

@@ -62,6 +62,7 @@ heck = "0.3.2"
 hex = "0.4.3"
 hex-literal = "0.3.4"
 hkdf = "0.10.0"
+indexmap = { version = "2.1.0", features = ["serde"] }
 im = "15.1.0"
 internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
