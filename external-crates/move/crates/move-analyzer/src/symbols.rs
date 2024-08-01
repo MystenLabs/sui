@@ -2889,6 +2889,7 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.chain_symbols(function);
                 self.chain_symbols(ty);
             }
+            P::Use::Partial { .. } => (),
         }
     }
 
@@ -2928,6 +2929,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     self.use_decl_member_symbols(mod_ident_str.clone(), name, alias_opt);
                 }
             }
+            P::ModuleUse::Partial { .. } => (),
         }
     }
 
