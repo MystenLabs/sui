@@ -132,7 +132,7 @@ pub async fn init_package(
     keystore: &Keystore,
     sender: SuiAddress,
 ) -> Result<InitRet> {
-    let path = Path::new("/Users/nikos/Documents/vscodeProjects/sui/crates/sui-rosetta/tests/custom_coins/test_coin");
+    let path = Path::new("tests/custom_coins/test_coin");
     let path_buf = base::reroot_path(Some(path))?;
 
     let move_build_config = MoveBuildConfig::default();
