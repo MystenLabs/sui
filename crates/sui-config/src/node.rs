@@ -412,6 +412,14 @@ pub struct ConsensusConfig {
     // Base consensus DB path for all epochs.
     pub db_path: PathBuf,
 
+    // The number of epochs for which to retain the consensus DBs. Setting it to 0 will make a consensus DB getting
+    // dropped as soon as system is switched to a new epoch.
+    pub db_retention_epochs: Option<u64>,
+
+    // Pruner will run on every epoch change but it will also check periodically on every `db_pruner_period_secs`
+    // seconds to see if there are any epoch DBs to remove.
+    pub db_pruner_period_secs: Option<u64>,
+
     /// Maximum number of pending transactions to submit to consensus, including those
     /// in submission wait.
     /// Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
@@ -454,6 +462,17 @@ impl ConsensusConfig {
 
     pub fn narwhal_config(&self) -> &NarwhalParameters {
         &self.narwhal_config
+    }
+
+    pub fn db_retention_epochs(&self) -> u64 {
+        self.db_retention_epochs.unwrap_or(0)
+    }
+
+    pub fn db_pruner_period(&self) -> Duration {
+        // Default to 1 hour
+        self.db_pruner_period_secs
+            .map(Duration::from_secs)
+            .unwrap_or(Duration::from_secs(3_600))
     }
 }
 
