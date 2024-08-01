@@ -1137,11 +1137,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_transaction_dry_run_payload_check_fail() {
-        // Set max mutation payload size to 450 bytes and query payload to 100
+        // Set max mutation payload size to 6000 bytes and query payload to 100
         // This request should fail because the read part of the request is too large
         let limits = Limits {
             max_query_payload_size: 100,
-            max_tx_payload_size: 450,
+            max_tx_payload_size: 6000,
             ..Default::default()
         };
 

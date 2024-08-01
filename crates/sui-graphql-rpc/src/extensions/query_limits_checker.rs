@@ -189,7 +189,7 @@ impl<'a> PayloadSizeCheck<'a> {
             );
             return Err(graphql_error(
                 code::BAD_USER_INPUT,
-                format!("Query payload too large. Max allowed is {max_payload_size}"),
+                format!("Query payload is too large. Max allowed is {max_payload_size}"),
             ));
         }
         Ok(())

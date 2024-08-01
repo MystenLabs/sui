@@ -1164,7 +1164,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query payload too large. Max allowed is 20".to_string()]
+            vec!["Query payload is too large. Max allowed is 20".to_string()]
         );
     }
 }
