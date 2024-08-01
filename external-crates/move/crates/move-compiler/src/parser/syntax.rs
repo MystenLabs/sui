@@ -1499,12 +1499,8 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut uses = vec![];
     while context.tokens.peek() == Tok::Use {
         let start_loc = context.tokens.start_loc();
-        uses.push(parse_use_decl(
-            vec![],
-            start_loc,
-            Modifiers::empty(),
-            context,
-        )?);
+        let tmp = parse_use_decl(vec![], start_loc, Modifiers::empty(), context)?;
+        uses.push(tmp);
     }
 
     let mut seq: Vec<SequenceItem> = vec![];
@@ -4139,7 +4135,7 @@ fn parse_use_decl(
                 start_loc,
                 " after an address in a use declaration",
             ) {
-                context.env.add_diag(*diag);
+                context.add_diag(*diag);
                 Use::Partial {
                     package: address,
                     colon_colon: None,
@@ -4161,6 +4157,9 @@ fn parse_use_decl(
                             let (name, _, use_) = parse_use_module(ctxt)?;
                             Ok((name, use_))
                         };
+                        // add `;` to stop set to limit number of eaten tokens if the list is parsed
+                        // incorrectly
+                        context.stop_set.add(Tok::Semicolon);
                         let use_decls = parse_comma_list(
                             context,
                             Tok::LBrace,
@@ -4169,7 +4168,7 @@ fn parse_use_decl(
                             parse_inner,
                             "a module use clause",
                         );
-                        if use_decls.is_empty() && module_uses_to_parse_exist {
+                        let use_ = if use_decls.is_empty() && module_uses_to_parse_exist {
                             // we failed to parse a non-empty list
                             Use::Partial {
                                 package: address,
@@ -4178,35 +4177,49 @@ fn parse_use_decl(
                             }
                         } else {
                             Use::NestedModuleUses(address, use_decls)
-                        }
+                        };
+                        context.stop_set.remove(Tok::Semicolon);
+                        use_
                     }
-                    _ => match parse_use_module(context) {
-                        Ok((name, end_loc, use_)) => {
-                            let loc =
-                                make_loc(context.tokens.file_hash(), address_start_loc, end_loc);
-                            let module_ident = sp(
-                                loc,
-                                ModuleIdent_ {
-                                    address,
-                                    module: name,
-                                },
-                            );
-                            Use::ModuleUse(module_ident, use_)
-                        }
-                        Err(diag) => {
-                            context.env.add_diag(*diag);
-                            Use::Partial {
-                                package: address,
-                                colon_colon: Some(colon_colon_loc),
-                                opening_brace: None,
+                    _ => {
+                        // add `;` to stop set to limit number of eaten tokens if the module use is
+                        // parsed incorrectly
+                        context.stop_set.add(Tok::Semicolon);
+                        let use_ = match parse_use_module(context) {
+                            Ok((name, end_loc, use_)) => {
+                                let loc = make_loc(
+                                    context.tokens.file_hash(),
+                                    address_start_loc,
+                                    end_loc,
+                                );
+                                let module_ident = sp(
+                                    loc,
+                                    ModuleIdent_ {
+                                        address,
+                                        module: name,
+                                    },
+                                );
+                                Use::ModuleUse(module_ident, use_)
                             }
-                        }
-                    },
+                            Err(diag) => {
+                                context.add_diag(*diag);
+                                Use::Partial {
+                                    package: address,
+                                    colon_colon: Some(colon_colon_loc),
+                                    opening_brace: None,
+                                }
+                            }
+                        };
+                        context.stop_set.remove(Tok::Semicolon);
+                        use_
+                    }
                 }
             }
         }
     };
-    consume_token(context.tokens, Tok::Semicolon)?;
+    if let Err(diag) = consume_token(context.tokens, Tok::Semicolon) {
+        context.add_diag(*diag);
+    }
     let end_loc = context.tokens.previous_end_loc();
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
     Ok(UseDecl {
@@ -4231,7 +4244,7 @@ fn parse_use_module(
         (None, Tok::ColonColon) => {
             let colon_colon_loc = context.tokens.current_token_loc();
             if let Err(diag) = consume_token(context.tokens, Tok::ColonColon) {
-                context.env.add_diag(*diag);
+                context.add_diag(*diag);
                 ModuleUse::Partial {
                     colon_colon: None,
                     opening_brace: None,
@@ -4269,7 +4282,7 @@ fn parse_use_module(
                     _ => match parse_use_member(context) {
                         Ok(m) => ModuleUse::Members(vec![m]),
                         Err(diag) => {
-                            context.env.add_diag(*diag);
+                            context.add_diag(*diag);
                             ModuleUse::Partial {
                                 colon_colon: Some(colon_colon_loc),
                                 opening_brace: None,

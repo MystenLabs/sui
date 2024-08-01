@@ -1704,7 +1704,14 @@ fn module_use(
                 }
             }
         }
-        P::ModuleUse::Partial { .. } => (), // no members or aliases to process
+        P::ModuleUse::Partial { .. } => {
+            let mident = module_ident(&mut context.defn_context, in_mident);
+            if !context.defn_context.module_members.contains_key(&mident) {
+                context.env().add_diag(unbound_module(&mident));
+                return;
+            };
+            add_module_alias!(mident, mident.value.module.0)
+        }
     }
 }
 
