@@ -408,7 +408,6 @@ proptest-derive = "0.3.0"
 prost = "0.13"
 prost-build = "0.13"
 protobuf = { version = "2.28", features = ["with-bytes"] }
-protobuf-src = "1.1.0"
 quinn-proto = "0.11"
 quote = "1.0.23"
 rand = "0.8.5"
