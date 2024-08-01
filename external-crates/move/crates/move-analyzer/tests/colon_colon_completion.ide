@@ -101,6 +101,14 @@
           "use_line": 59,
           "use_col": 21
         },
+        {
+          "use_line": 62,
+          "use_col": 43
+        },
+        {
+          "use_line": 62,
+          "use_col": 49
+        },
         // cursor after `::`
         {
           "use_line": 21,
