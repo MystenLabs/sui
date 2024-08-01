@@ -604,10 +604,11 @@ impl Core {
 
                 // TODO: refcount subdags
                 let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
-                // TODO(ARUN): Score subdags and dont add them to memory.
                 self.dag_state
                     .write()
-                    .add_unscored_committed_subdags(subdags.clone());
+                    .update_scoring_subdag(|scoring_subdag| {
+                        scoring_subdag.add_unscored_committed_subdags(subdags.clone())
+                    });
                 committed_subdags.extend(subdags);
             }
 
@@ -912,13 +913,13 @@ mod test {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::{CommitAPI as _, CommitRange},
         leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
+        test_dag_builder::DagBuilder,
         transaction::TransactionClient,
         CommitConsumer, CommitIndex,
     };

@@ -2,182 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashSet},
     fmt::Debug,
-    ops::Bound::{Excluded, Included},
     sync::Arc,
 };
 
 use consensus_config::AuthorityIndex;
-use mysten_metrics::monitored_scope;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{BlockAPI, BlockDigest, BlockRef, Slot, VerifiedBlock},
-    commit::{CommitRange, CommittedSubDag, DEFAULT_WAVE_LENGTH},
+    block::{BlockAPI, BlockRef},
+    commit::{CommitRange, CommittedSubDag},
     context::Context,
-    leader_scoring_strategy::ScoringStrategy,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    Round,
 };
-
-pub(crate) struct ReputationScoreCalculator<'a> {
-    // The range of commits that these scores are calculated from.
-    pub(crate) commit_range: CommitRange,
-    // The scores per authority. Vec index is the `AuthorityIndex`.
-    pub(crate) scores_per_authority: Vec<u64>,
-
-    // As leaders are sequenced the subdags are collected and cached in `DagState`.
-    // Then when there are enough commits to trigger a `LeaderSchedule` change,
-    // the subdags are then combined into one `UnscoredSubdag` so that we can
-    // calculate the scores for the leaders in this subdag.
-    unscored_subdag: UnscoredSubdag,
-    // There are multiple scoring strategies that can be used to calculate the scores
-    // and the `ReputationScoreCalculator` is responsible for applying the strategy.
-    // For now this is dynamic while we are experimenting but eventually we can
-    // replace this with the final strategy that works best.
-    scoring_strategy: &'a dyn ScoringStrategy,
-}
-
-impl<'a> ReputationScoreCalculator<'a> {
-    pub(crate) fn new(
-        context: Arc<Context>,
-        unscored_subdags: &[CommittedSubDag],
-        scoring_strategy: &'a dyn ScoringStrategy,
-    ) -> Self {
-        let num_authorities = context.committee.size();
-        let scores_per_authority = vec![0_u64; num_authorities];
-
-        assert!(
-            !unscored_subdags.is_empty(),
-            "Attempted to calculate scores with no unscored subdags"
-        );
-
-        let unscored_subdag = UnscoredSubdag::new(context.clone(), unscored_subdags);
-        let commit_range = unscored_subdag.commit_range.clone();
-
-        Self {
-            unscored_subdag,
-            commit_range,
-            scoring_strategy,
-            scores_per_authority,
-        }
-    }
-
-    pub(crate) fn calculate(&mut self) -> ReputationScores {
-        let _scope = mysten_metrics::monitored_scope("ReputationScoreCalculator::calculate");
-        let leaders = self.unscored_subdag.committed_leaders.clone();
-
-        let unscored_subdag = Arc::new(self.unscored_subdag.clone());
-
-        let results: Vec<_> = leaders
-            .into_par_iter()
-            .map(|leader| {
-                let leader_slot = Slot::from(leader);
-                tracing::trace!("Calculating score for leader {leader_slot}");
-
-                ReputationScoreCalculator::calculate_scores_for_leader(
-                    &unscored_subdag,
-                    leader_slot,
-                )
-            })
-            .collect();
-
-        // Merge the resulting scores from each leader
-        for result in results {
-            self.add_scores(result);
-        }
-
-        ReputationScores::new(self.commit_range.clone(), self.scores_per_authority.clone())
-    }
-
-    fn calculate_scores_for_leader(subdag: &UnscoredSubdag, leader_slot: Slot) -> Vec<u64> {
-        let _scope = mysten_metrics::monitored_scope(
-            "CertifiedVoteScoringStrategyV2::calculate_scores_for_leader",
-        );
-        let num_authorities = subdag.context.committee.size();
-        let mut scores_per_authority = vec![0_u64; num_authorities];
-
-        let decision_round = leader_slot.round + DEFAULT_WAVE_LENGTH - 1;
-
-        let leader_blocks = subdag.get_blocks_at_slot(leader_slot);
-
-        if leader_blocks.is_empty() {
-            tracing::trace!("[{}] No block for leader slot {leader_slot} in this set of unscored committed subdags, skip scoring", subdag.context.own_index);
-            return scores_per_authority;
-        }
-
-        // At this point we are guaranteed that there is only one leader per slot
-        // because we are operating on committed subdags.
-        assert!(leader_blocks.len() == 1);
-
-        let leader_block = leader_blocks.first().unwrap();
-
-        let decision_blocks = subdag.get_blocks_at_round(decision_round);
-
-        let mut all_votes: HashMap<BlockRef, (bool, StakeAggregator<QuorumThreshold>)> =
-            HashMap::new();
-
-        let get_vote_cert_stakes =
-            mysten_metrics::monitored_scope("CertifiedVoteScoringStrategyV2::get_vote_cert_stakes");
-        for potential_cert in decision_blocks {
-            let authority = potential_cert.reference().author;
-            for reference in potential_cert.ancestors() {
-                match all_votes.entry(*reference) {
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        let (is_vote, stake_agg) = entry.get_mut();
-                        if *is_vote {
-                            stake_agg.add(authority, &subdag.context.committee);
-                        }
-                    }
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        if let Some(potential_vote) = subdag.get_block(reference) {
-                            let is_vote = subdag.is_vote(&potential_vote, leader_block);
-                            let mut stake_agg = StakeAggregator::<QuorumThreshold>::new();
-                            stake_agg.add(authority, &subdag.context.committee);
-                            entry.insert((is_vote, stake_agg));
-                        } else {
-                            tracing::trace!(
-                                "Potential vote not found in unscored committed subdags: {:?}",
-                                reference
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        drop(get_vote_cert_stakes);
-
-        let accumulate_scores =
-            mysten_metrics::monitored_scope("CertifiedVoteScoringStrategyV2::accumulate_scores");
-        for (vote_ref, (is_vote, stake_agg)) in all_votes {
-            if is_vote {
-                let authority = vote_ref.author;
-                tracing::trace!(
-                    "Found a certified vote {vote_ref} for leader {leader_block} from authority {authority}"
-                );
-                tracing::trace!(
-                    "[{}] scores +{} reputation for {authority}!",
-                    subdag.context.own_index,
-                    stake_agg.stake()
-                );
-                scores_per_authority[authority] += stake_agg.stake();
-            }
-        }
-        drop(accumulate_scores);
-
-        scores_per_authority
-    }
-
-    fn add_scores(&mut self, scores: Vec<u64>) {
-        assert_eq!(scores.len(), self.scores_per_authority.len());
-
-        for (authority_idx, score) in scores.iter().enumerate() {
-            self.scores_per_authority[authority_idx] += *score;
-        }
-    }
-}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct ReputationScores {
@@ -231,180 +69,203 @@ impl ReputationScores {
     }
 }
 
-/// UnscoredSubdag represents a collection of subdags across multiple commits.
-/// These subdags are considered unscored for the purposes of leader schedule
-/// change. On a leader schedule change, reputation scores will be calculated
-/// based on the dags collected in this struct. Similar graph traversal methods
-/// that are provided in DagState are also added here to help calculate the
-/// scores.
-#[derive(Clone)]
-pub(crate) struct UnscoredSubdag {
+/// ScoringSubdag represents the scoring votes in a collection of subdags across
+/// multiple commits.
+/// These subdags are "scoring" for the purposes of leader schedule change. As
+/// new subdags are added, the DAG is traversed and votes for leaders are recorded
+/// and scored along with stake. On a leader schedule change, finalize reputation
+/// scores will be calculated based on the votes & stake collected in this struct.
+pub(crate) struct ScoringSubdag {
     pub(crate) context: Arc<Context>,
-    pub(crate) commit_range: CommitRange,
-    pub(crate) committed_leaders: Vec<BlockRef>,
-    // When the blocks are collected form the list of provided subdags we ensure
-    // that the CommittedSubDag instances are contiguous in commit index order.
-    // Therefore we can guarantee the blocks of UnscoredSubdag are also sorted
-    // via the commit index.
-    pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    pub(crate) commit_range: Option<CommitRange>,
+    // Only includes committed leaders for now.
+    // TODO(arun): Include skipped leaders as well
+    pub(crate) leaders: HashSet<BlockRef>,
+    // A map of votes to the stake of strongly linked blocks that include that vote
+    // Note: Inlcuding stake aggregator so that we can quickly check if it exceeds
+    // quourum threshold and only include those scores. If we decide to include
+    // all stake from blocks certifying votes then we can replace this with Stake.
+    pub(crate) votes: BTreeMap<BlockRef, StakeAggregator<QuorumThreshold>>,
 }
 
-impl UnscoredSubdag {
-    pub(crate) fn new(context: Arc<Context>, subdags: &[CommittedSubDag]) -> Self {
-        let mut committed_leaders = vec![];
-        let blocks = subdags
-            .iter()
-            .enumerate()
-            .flat_map(|(subdag_index, subdag)| {
-                committed_leaders.push(subdag.leader);
-                if subdag_index == 0 {
-                    subdag.blocks.iter()
-                } else {
-                    let previous_subdag = &subdags[subdag_index - 1];
-                    let expected_next_subdag_index = previous_subdag.commit_ref.index + 1;
-                    assert_eq!(
-                        subdag.commit_ref.index, expected_next_subdag_index,
-                        "Non-contiguous commit index (expected: {}, found: {})",
-                        expected_next_subdag_index, subdag.commit_ref.index
-                    );
-                    subdag.blocks.iter()
-                }
-            })
-            .map(|block| (block.reference(), block.clone()))
-            .collect::<BTreeMap<_, _>>();
-
-        // Guaranteed to have a contiguous list of commit indices
-        let commit_range = CommitRange::new(
-            subdags.first().unwrap().commit_ref.index..=subdags.last().unwrap().commit_ref.index,
-        );
-
-        assert!(
-            !blocks.is_empty(),
-            "Attempted to create UnscoredSubdag with no blocks"
-        );
-
+impl ScoringSubdag {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context,
-            commit_range,
-            committed_leaders,
-            blocks,
+            commit_range: None,
+            leaders: HashSet::new(),
+            votes: BTreeMap::new(),
         }
     }
 
-    pub(crate) fn find_supported_leader_block(
-        &self,
-        leader_slot: Slot,
-        from: &VerifiedBlock,
-    ) -> Option<BlockRef> {
-        let _scope = monitored_scope("UnscoredSubdag::find_supported_leader_block");
-        if from.round() < leader_slot.round {
-            return None;
+    pub(crate) fn add_unscored_committed_subdags(
+        &mut self,
+        committed_subdags: Vec<CommittedSubDag>,
+    ) {
+        let _scope =
+            mysten_metrics::monitored_scope("ScoringSubdag::add_unscored_committed_subdags");
+        for subdag in committed_subdags {
+            // If the commit range is not set, then set it to the range of the first
+            // committed subdag index.
+            if self.commit_range.is_none() {
+                self.commit_range = Some(CommitRange::new(
+                    subdag.commit_ref.index..=subdag.commit_ref.index,
+                ));
+            } else {
+                let commit_range = self.commit_range.as_mut().unwrap();
+                commit_range.extend(subdag.commit_ref.index);
+            }
+
+            // Add the committed leader to the list of leaders we will be scoring.
+            tracing::trace!("Adding new committed leader {} for scoring", subdag.leader);
+            self.leaders.insert(subdag.leader);
+
+            // Check each block in subdag. Blocks are in order so we should traverse the
+            // oldest blocks first
+            for block in subdag.blocks {
+                for ancestor in block.ancestors() {
+                    // Weak links may point to blocks with lower round numbers
+                    // than strong links.
+                    if ancestor.round != block.round().saturating_sub(1) {
+                        continue;
+                    }
+
+                    // If a blocks strong linked ancestor is in leaders, then
+                    // it's a vote for leader.
+                    if self.leaders.contains(ancestor) {
+                        // There should never be duplicate references to blocks
+                        // with strong linked ancestors to leader.
+                        tracing::trace!(
+                            "Found a vote {} for leader {ancestor} from authority {}",
+                            block.reference(),
+                            block.author()
+                        );
+                        assert!(self
+                            .votes
+                            .insert(block.reference(), StakeAggregator::new())
+                            .is_none(), "Vote {block} already exists. Duplicate vote found for leader {ancestor}");
+                    }
+
+                    if let Some(stake) = self.votes.get_mut(ancestor) {
+                        // Vote is strongly linked to a future block, so we
+                        // consider this a certified vote.
+                        tracing::trace!(
+                            "Found a certified vote {ancestor} from authority {}",
+                            ancestor.author
+                        );
+                        stake.add(block.author(), &self.context.committee);
+                    }
+                }
+            }
         }
-        for ancestor in from.ancestors() {
-            if Slot::from(*ancestor) == leader_slot {
-                return Some(*ancestor);
-            }
-            // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round <= leader_slot.round {
-                continue;
-            }
-            if let Some(ancestor) = self.get_block(ancestor) {
-                if let Some(support) = self.find_supported_leader_block(leader_slot, &ancestor) {
-                    return Some(support);
+    }
+
+    // Iterate through votes and calculate scores for each authority based on
+    // scoring strategy that is used. (Vote or CertifiedVote)
+    pub(crate) fn calculate_scores(&self) -> ReputationScores {
+        let _scope = mysten_metrics::monitored_scope("ScoringSubdag::calculate_scores");
+
+        let scores_per_authority = if self
+            .context
+            .protocol_config
+            .consensus_certified_vote_scoring_strategy()
+        {
+            if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
+                if scoring_strategy == "certified_vote_v3" {
+                    self.score_certified_votes_v3()
+                } else {
+                    self.score_certified_votes_v2()
                 }
             } else {
-                // TODO: Add unit test for this case once dagbuilder is ready.
+                self.score_certified_votes_v2()
+            }
+        } else {
+            self.score_votes()
+        };
+
+        // TODO(arun): Normalize scores
+        ReputationScores::new(
+            self.commit_range
+                .clone()
+                .expect("CommitRange should be set if calculate_scores is called."),
+            scores_per_authority,
+        )
+    }
+
+    /// This scoring strategy will give one point to any votes for the leader.
+    fn score_votes(&self) -> Vec<u64> {
+        let num_authorities = self.context.committee.size();
+        let mut scores_per_authority = vec![0_u64; num_authorities];
+
+        for (vote, _) in self.votes.iter() {
+            let authority = vote.author;
+            tracing::trace!(
+                "[{}] scores +1 reputation for {authority}!",
+                self.context.own_index,
+            );
+            scores_per_authority[authority.value()] += 1;
+        }
+
+        scores_per_authority
+    }
+
+    /// This scoring strategy is like `CertifiedVoteScoringStrategyV1` but instead of
+    /// only giving one point for each vote that is included in 2f+1 blocks. We
+    /// give a score equal to the amount of stake of all blocks that included
+    /// the vote.
+    fn score_certified_votes_v2(&self) -> Vec<u64> {
+        let num_authorities = self.context.committee.size();
+        let mut scores_per_authority = vec![0_u64; num_authorities];
+
+        for (vote, stake_agg) in self.votes.iter() {
+            let authority = vote.author;
+            let stake = stake_agg.stake();
+            tracing::trace!(
+                "[{}] scores +{stake} reputation for {authority}!",
+                self.context.own_index,
+            );
+            scores_per_authority[authority.value()] += stake;
+        }
+        scores_per_authority
+    }
+
+    /// This scoring strategy gives points equal to the amount of stake in blocks
+    /// that include the authority's vote, if the amount of total_stake > 2f+1
+    // TODO(arun): Remove after running experiments
+    fn score_certified_votes_v3(&self) -> Vec<u64> {
+        let num_authorities = self.context.committee.size();
+        let mut scores_per_authority = vec![0_u64; num_authorities];
+
+        for (vote, stake_agg) in self.votes.iter() {
+            let authority = vote.author;
+            if stake_agg.reached_threshold(&self.context.committee) {
+                let stake = stake_agg.stake();
                 tracing::trace!(
-                    "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
-                    ancestor
+                    "[{}] scores +{stake} reputation for {authority}!",
+                    self.context.own_index,
                 );
-                return None;
+                scores_per_authority[authority.value()] += stake;
             }
         }
-        None
+        scores_per_authority
     }
 
-    pub(crate) fn is_vote(
-        &self,
-        potential_vote: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-    ) -> bool {
-        let _scope = monitored_scope("UnscoredSubdag::is_vote");
-        let reference = leader_block.reference();
-        let leader_slot = Slot::from(reference);
-        self.find_supported_leader_block(leader_slot, potential_vote) == Some(reference)
-    }
-
-    pub(crate) fn is_certificate(
-        &self,
-        potential_certificate: &VerifiedBlock,
-        leader_block: &VerifiedBlock,
-        all_votes: &mut HashMap<BlockRef, bool>,
-    ) -> bool {
-        let _scope = monitored_scope("UnscoredSubdag::is_certificate");
-        let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        for reference in potential_certificate.ancestors() {
-            let is_vote = if let Some(is_vote) = all_votes.get(reference) {
-                *is_vote
-            } else if let Some(potential_vote) = self.get_block(reference) {
-                let is_vote = self.is_vote(&potential_vote, leader_block);
-                all_votes.insert(*reference, is_vote);
-                is_vote
-            } else {
-                tracing::trace!(
-                    "Potential vote not found in unscored committed subdags: {:?}",
-                    reference
-                );
-                false
-            };
-
-            if is_vote {
-                tracing::trace!("{reference} is a vote for {leader_block}");
-                if votes_stake_aggregator.add(reference.author, &self.context.committee) {
-                    tracing::trace!(
-                        "{potential_certificate} is a certificate for leader {leader_block}"
-                    );
-                    return true;
-                }
-            } else {
-                tracing::trace!("{reference} is not a vote for {leader_block}",);
-            }
+    pub(crate) fn scored_committed_subdags_count(&self) -> usize {
+        if let Some(commit_range) = &self.commit_range {
+            commit_range.size()
+        } else {
+            0
         }
-        tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
-        false
     }
 
-    pub(crate) fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
-        let _scope = monitored_scope("UnscoredSubdag::get_blocks_at_slot");
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.blocks.range((
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
-            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
+    pub(crate) fn is_empty(&self) -> bool {
+        self.leaders.is_empty() && self.votes.is_empty() && self.commit_range.is_none()
     }
 
-    pub(crate) fn get_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        let _scope = monitored_scope("UnscoredSubdag::get_blocks_at_round");
-        let mut blocks = vec![];
-        for (_block_ref, block) in self.blocks.range((
-            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
-            Excluded(BlockRef::new(
-                round + 1,
-                AuthorityIndex::ZERO,
-                BlockDigest::MIN,
-            )),
-        )) {
-            blocks.push(block.clone())
-        }
-        blocks
-    }
-
-    pub(crate) fn get_block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
-        let _scope = monitored_scope("UnscoredSubdag::get_block");
-        self.blocks.get(block_ref).cloned()
+    pub(crate) fn clear(&mut self) {
+        self.leaders.clear();
+        self.votes.clear();
+        self.commit_range = None;
     }
 }
 
@@ -413,8 +274,7 @@ mod tests {
     use std::cmp::max;
 
     use super::*;
-    use crate::commit::{CommitDigest, CommitRef};
-    use crate::{leader_scoring_strategy::VoteScoringStrategy, test_dag_builder::DagBuilder};
+    use crate::test_dag_builder::DagBuilder;
 
     #[tokio::test]
     async fn test_reputation_scores_authorities_by_score() {
@@ -469,7 +329,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_reputation_score_calculator() {
+    async fn test_scoring_subdag() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -493,7 +353,7 @@ mod tests {
             .flatten()
             .collect::<Vec<_>>();
 
-        let mut unscored_subdags = vec![];
+        let mut scoring_subdag = ScoringSubdag::new(context.clone());
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
@@ -506,64 +366,26 @@ mod tests {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            unscored_subdags.push(subdag);
+            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
         }
-        let scoring_strategy = VoteScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        let scores = calculator.calculate();
+
+        let scores = scoring_subdag.calculate_scores();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
         assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
-    #[should_panic(expected = "Attempted to calculate scores with no unscored subdags")]
-    async fn test_reputation_score_calculator_no_subdags() {
+    async fn test_vote_scoring_subdag() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let mut context = Context::new_for_test(4).0;
+        context
+            .protocol_config
+            .set_consensus_certified_vote_scoring_strategy_for_testing(false);
+        let context = Arc::new(context);
 
-        let unscored_subdags = vec![];
-        let scoring_strategy = VoteScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        calculator.calculate();
-    }
-
-    #[tokio::test]
-    #[should_panic(expected = "Attempted to create UnscoredSubdag with no blocks")]
-    async fn test_reputation_score_calculator_no_subdag_blocks() {
-        telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
-
-        let blocks = vec![];
-        let unscored_subdags = vec![CommittedSubDag::new(
-            BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
-            blocks,
-            context.clock.timestamp_utc_ms(),
-            CommitRef::new(1, CommitDigest::MIN),
-            vec![],
-        )];
-        let scoring_strategy = VoteScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        calculator.calculate();
-    }
-
-    #[tokio::test]
-    async fn test_scoring_with_missing_block_in_subdag() {
-        telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
-
+        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
         let mut dag_builder = DagBuilder::new(context.clone());
-        // Build layer 1 with missing leader block, simulating it was committed
-        // as part of another committed subdag.
-        dag_builder
-            .layer(1)
-            .authorities(vec![AuthorityIndex::new_for_test(1)])
-            .skip_block()
-            .build();
-        // Build fully connected layers 2 ~ 3.
-        dag_builder.layers(2..=3).build();
+        dag_builder.layers(1..=3).build();
         // Build round 4 but with just the leader block
         dag_builder
             .layer(4)
@@ -581,29 +403,72 @@ mod tests {
             .flatten()
             .collect::<Vec<_>>();
 
-        let mut unscored_subdags = vec![];
+        let mut scoring_subdag = ScoringSubdag::new(context.clone());
         let mut last_committed_rounds = vec![0; 4];
-        let mut commit_index = 1; // Simulating commit 1 was already processed.
-        for leader in leaders {
-            commit_index += 1;
+        for (idx, leader) in leaders.into_iter().enumerate() {
+            let commit_index = idx as u32 + 1;
             let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
                 leader,
                 last_committed_rounds.clone(),
                 commit_index,
             );
-            tracing::info!("{subdag:?}");
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            unscored_subdags.push(subdag);
+            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
         }
 
-        let scoring_strategy = VoteScoringStrategy {};
-        let mut calculator =
-            ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
-        let scores = calculator.calculate();
-        assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, (2..=4).into());
+        let scores = scoring_subdag.calculate_scores();
+        assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
+        assert_eq!(scores.commit_range, (1..=4).into());
+    }
+
+    #[tokio::test]
+    async fn test_certified_vote_v3_scoring_subdag() {
+        std::env::set_var("CONSENSUS_SCORING_STRATEGY", "certified_vote_v3");
+
+        telemetry_subscribers::init_for_testing();
+        let context = Arc::new(Context::new_for_test(4).0);
+
+        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=3).build();
+        // Build round 4 but with just the leader block
+        dag_builder
+            .layer(4)
+            .authorities(vec![
+                AuthorityIndex::new_for_test(1),
+                AuthorityIndex::new_for_test(2),
+                AuthorityIndex::new_for_test(3),
+            ])
+            .skip_block()
+            .build();
+
+        let leaders = dag_builder
+            .leader_blocks(1..=4)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let mut scoring_subdag = ScoringSubdag::new(context.clone());
+        let mut last_committed_rounds = vec![0; 4];
+        for (idx, leader) in leaders.into_iter().enumerate() {
+            let commit_index = idx as u32 + 1;
+            let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
+                leader,
+                last_committed_rounds.clone(),
+                commit_index,
+            );
+            for block in subdag.blocks.iter() {
+                last_committed_rounds[block.author().value()] =
+                    max(block.round(), last_committed_rounds[block.author().value()]);
+            }
+            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
+        }
+
+        let scores = scoring_subdag.calculate_scores();
+        assert_eq!(scores.scores_per_authority, vec![4, 4, 4, 4]);
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 }

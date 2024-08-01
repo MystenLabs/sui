@@ -6,12 +6,11 @@ use std::{collections::HashSet, sync::Arc};
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use crate::commit::sort_sub_dag_blocks;
-use crate::leader_schedule::LeaderSchedule;
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{Commit, CommittedSubDag, TrustedCommit},
+    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
+    leader_schedule::LeaderSchedule,
 };
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
@@ -263,7 +262,9 @@ mod tests {
         let commits = linearizer.handle_commit(leaders.clone());
 
         // Write them in DagState
-        dag_state.write().add_unscored_committed_subdags(commits);
+        dag_state.write().update_scoring_subdag(|scoring_subdag| {
+            scoring_subdag.add_unscored_committed_subdags(commits)
+        });
 
         // Now update the leader schedule
         leader_schedule.update_leader_schedule(&dag_state);

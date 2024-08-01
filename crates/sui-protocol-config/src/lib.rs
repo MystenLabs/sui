@@ -516,6 +516,10 @@ struct FeatureFlags {
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     rethrow_serialization_type_layout_errors: bool,
+
+    // Use certified vote leader scoring strategy in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_certified_vote_scoring_strategy: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1561,6 +1565,10 @@ impl ProtocolConfig {
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
         self.feature_flags.rethrow_serialization_type_layout_errors
+    }
+
+    pub fn consensus_certified_vote_scoring_strategy(&self) -> bool {
+        self.feature_flags.consensus_certified_vote_scoring_strategy
     }
 }
 
@@ -2632,12 +2640,15 @@ impl ProtocolConfig {
                         cfg.feature_flags.authority_capabilities_v2 = true;
                     }
 
-                    // Turns on shared object congestion control on testnet.
                     if chain != Chain::Mainnet {
+                        // Turns on shared object congestion control on testnet.
                         cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
+
+                        // Enable certified vote scoring
+                        cfg.feature_flags.consensus_certified_vote_scoring_strategy = true;
                     }
 
                     // Adjust stdlib gas costs
@@ -2868,6 +2879,10 @@ impl ProtocolConfig {
 
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
+    }
+
+    pub fn set_consensus_certified_vote_scoring_strategy_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_certified_vote_scoring_strategy = val;
     }
 }
 

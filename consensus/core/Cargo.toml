@@ -25,7 +25,6 @@ enum_dispatch.workspace = true
 fastcrypto.workspace = true
 futures.workspace = true
 http.workspace = true
-rayon.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 hyper-rustls.workspace = true
