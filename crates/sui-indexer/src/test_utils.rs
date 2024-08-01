@@ -50,18 +50,21 @@ pub async fn start_test_indexer<T: R2D2Connection + Send + 'static>(
         db_url,
         rpc_url,
         reader_writer_config,
-        None,
+        /* reset_database */ false,
         Some(data_ingestion_path),
         CancellationToken::new(),
     )
     .await
 }
 
+/// Starts an indexer reader or writer for testing depending on the `reader_writer_config`. If
+/// `reset_database` is true, the database instance named in `db_url` will be dropped and
+/// reinstantiated.
 pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
-    new_database: Option<String>,
+    reset_database: bool,
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
@@ -99,7 +102,8 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
 
     let mut parsed_url = config.get_db_url().unwrap();
 
-    if let Some(new_database) = new_database {
+    if reset_database {
+        let db_name = parsed_url.expose_secret().split('/').last().unwrap();
         // Switch to default to create a new database
         let (default_db_url, _) = replace_db_name(parsed_url.expose_secret(), "postgres");
 
@@ -110,14 +114,14 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
 
         // Delete the old db if it exists
         default_conn
-            .batch_execute(&format!("DROP DATABASE IF EXISTS {}", new_database))
+            .batch_execute(&format!("DROP DATABASE IF EXISTS {}", db_name))
             .unwrap();
 
         // Create the new db
         default_conn
-            .batch_execute(&format!("CREATE DATABASE {}", new_database))
+            .batch_execute(&format!("CREATE DATABASE {}", db_name))
             .unwrap();
-        parsed_url = replace_db_name(parsed_url.expose_secret(), &new_database)
+        parsed_url = replace_db_name(parsed_url.expose_secret(), db_name)
             .0
             .into();
     }

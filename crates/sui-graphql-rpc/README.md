@@ -71,3 +71,8 @@ For local dev, it might be useful to spin up an indexer as well. Instructions ar
 `cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --with-graphql`
 
 `pnpm --filter @mysten/graphql-transport test:e2e`
+
+## Testing
+The full gamut of graphql-specific tests are listed in the [rust.yml](../../.github/workflows/rust.yml).
+
+To run the tests in `sui-graphql-rpc`, you will need to have postgres running locally.
