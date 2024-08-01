@@ -169,6 +169,7 @@ members = [
   "crates/typed-store",
   "crates/typed-store-derive",
   "crates/typed-store-error",
+  "crates/typed-store-workspace-hack",
   "crates/x",
   "narwhal/config",
   "narwhal/crypto",
