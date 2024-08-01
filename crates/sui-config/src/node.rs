@@ -416,7 +416,7 @@ pub struct ConsensusConfig {
     // dropped as soon as system is switched to a new epoch.
     pub db_retention_epochs: Option<u64>,
 
-    // Pruner will run on every epoch change but it will also check periodically on every `db_pruner_period_millis`
+    // Pruner will run on every epoch change but it will also check periodically on every `db_pruner_period_secs`
     // seconds to see if there are any epoch DBs to remove.
     pub db_pruner_period_secs: Option<u64>,
 
