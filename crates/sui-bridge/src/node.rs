@@ -419,6 +419,7 @@ mod tests {
             run_client: false,
             db_path: None,
             metrics_key_pair: default_ed25519_key_pair(),
+            metrics: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -483,6 +484,7 @@ mod tests {
             run_client: true,
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
+            metrics: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -558,6 +560,7 @@ mod tests {
             run_client: true,
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
+            metrics: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
