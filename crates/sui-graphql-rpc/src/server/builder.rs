@@ -743,7 +743,7 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl(wallet: WalletContext) {
+    pub async fn test_timeout_impl(wallet: &WalletContext) {
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }

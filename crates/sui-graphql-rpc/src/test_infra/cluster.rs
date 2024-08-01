@@ -16,7 +16,6 @@ pub use sui_indexer::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
-use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -53,6 +52,7 @@ pub struct Cluster {
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
+    pub cancellation_token: CancellationToken,
 }
 
 /// Starts a validator, fullnode, indexer, and graphql service for testing.
@@ -62,17 +62,20 @@ pub async fn start_cluster(
 ) -> Cluster {
     let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
     let db_url = graphql_connection_config.db_url.clone();
+    let cancellation_token = CancellationToken::new();
     // Starts validator+fullnode
     let val_fn =
         start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
             .await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer(
+    let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None),
-        data_ingestion_path,
+        /* reset_database */ true,
+        Some(data_ingestion_path),
+        cancellation_token.clone(),
     )
     .await;
 
@@ -81,7 +84,7 @@ pub async fn start_cluster(
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
         graphql_connection_config.clone(),
         Some(fn_rpc_url),
-        /* cancellation_token */ None,
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -100,6 +103,7 @@ pub async fn start_cluster(
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
+        cancellation_token,
     }
 }
 
@@ -131,7 +135,7 @@ pub async fn serve_executor(
         Some(db_url),
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
-        Some(graphql_connection_config.db_name()),
+        /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
@@ -287,6 +291,13 @@ impl Cluster {
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Sends a cancellation signal to the graphql and indexer services and waits for them to
+    /// shutdown.
+    pub async fn cleanup_resources(self) {
+        self.cancellation_token.cancel();
+        let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
     }
 }
 
