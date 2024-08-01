@@ -19,6 +19,7 @@ use crate::{
 
 pub struct Bcs<T>(pub T);
 
+#[derive(Debug)]
 pub enum ResponseContent<T, J = T> {
     Bcs(T),
     Json(J),
