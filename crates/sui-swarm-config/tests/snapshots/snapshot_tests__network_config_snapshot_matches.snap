@@ -96,14 +96,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -235,14 +235,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -374,14 +374,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -513,14 +513,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -652,14 +652,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -791,14 +791,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -930,14 +930,14 @@ validator_configs:
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
-        - Ambrus
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -983,4 +983,3 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
-
