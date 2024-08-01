@@ -35,12 +35,12 @@ use sui_types::{
 use tempfile::tempdir;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
+use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
     metrics::SamplingInterval,
     rocks::{DBMap, MetricConf},
 };
-use typed_store_derive::DBMapUtils;
 
 use super::SimulatorStore;
 

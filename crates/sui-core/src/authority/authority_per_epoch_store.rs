@@ -14,7 +14,6 @@ use itertools::{izip, Itertools};
 use narwhal_executor::ExecutionIndices;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
-use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
@@ -41,6 +40,7 @@ use sui_types::transaction::{
 use tokio::sync::OnceCell;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{read_size_from_env, ReadWriteOptions};
+use typed_store::rocksdb::Options;
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
     traits::{TableSummary, TypedStoreDebug},
@@ -108,8 +108,8 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use tap::TapOptional;
 use tokio::time::Instant;
+use typed_store::DBMapUtils;
 use typed_store::{retry_transaction_forever, Map};
-use typed_store_derive::DBMapUtils;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.

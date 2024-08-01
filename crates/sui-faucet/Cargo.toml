@@ -25,7 +25,6 @@ scopeguard.workspace = true
 tap.workspace = true
 ttl_cache.workspace = true
 eyre.workspace = true
-rocksdb.workspace = true
 tempfile.workspace = true
 parking_lot.workspace = true
 
@@ -37,7 +36,6 @@ sui-sdk.workspace = true
 mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
-typed-store-derive.workspace = true
 shared-crypto.workspace = true
 async-recursion.workspace = true
 

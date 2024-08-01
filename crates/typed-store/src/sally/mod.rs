@@ -13,7 +13,7 @@
 //! use typed_store::*;
 //! use typed_store::test_db::*;
 //! use typed_store::sally::SallyDBOptions;
-//! use typed_store_derive::SallyDB;
+//! use typed_store::SallyDB;
 //! use typed_store::sally::SallyColumn;
 //! use typed_store::traits::TypedStoreDebug;
 //! use typed_store::traits::TableSummary;

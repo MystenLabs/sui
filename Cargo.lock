@@ -12342,7 +12342,6 @@ dependencies = [
  "object_store",
  "parquet",
  "prometheus",
- "rocksdb",
  "serde",
  "serde_json",
  "simulacrum",
@@ -12366,7 +12365,6 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "typed-store",
- "typed-store-derive",
  "url",
 ]
 
@@ -12532,7 +12530,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.5",
- "rocksdb",
  "serde",
  "serde_json",
  "serde_with 3.8.1",
@@ -12552,7 +12549,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "typed-store-derive",
  "url",
 ]
 
@@ -12747,7 +12743,6 @@ dependencies = [
  "rayon",
  "reqwest 0.12.5",
  "roaring",
- "rocksdb",
  "rstest",
  "scopeguard",
  "serde",
@@ -12788,7 +12783,6 @@ dependencies = [
  "tracing",
  "twox-hash",
  "typed-store",
- "typed-store-derive",
  "zeroize",
 ]
 
@@ -13008,7 +13002,6 @@ dependencies = [
  "mysten-metrics",
  "parking_lot 0.12.1",
  "prometheus",
- "rocksdb",
  "scopeguard",
  "serde",
  "shared-crypto",
@@ -13028,7 +13021,6 @@ dependencies = [
  "tracing",
  "ttl_cache",
  "typed-store",
- "typed-store-derive",
  "uuid 1.2.2",
 ]
 
@@ -14372,7 +14364,6 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "reqwest 0.12.5",
- "rocksdb",
  "serde",
  "serde_json",
  "sui-config",
@@ -14388,7 +14379,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "typed-store-derive",
  "url",
  "zstd 0.12.3+zstd.1.5.2",
 ]
@@ -14547,7 +14537,6 @@ dependencies = [
  "num_cpus",
  "object_store",
  "prometheus",
- "rocksdb",
  "ron",
  "serde",
  "serde_json",
@@ -14627,7 +14616,6 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "regex",
- "rocksdb",
  "serde_json",
  "simulacrum",
  "sui-config",
@@ -14647,7 +14635,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "typed-store",
- "typed-store-derive",
 ]
 
 [[package]]
@@ -16074,15 +16061,10 @@ dependencies = [
 name = "typed-store-derive"
 version = "0.3.0"
 dependencies = [
- "eyre",
  "itertools 0.10.5",
  "proc-macro2 1.0.78",
  "quote 1.0.35",
- "rocksdb",
  "syn 1.0.107",
- "tempfile",
- "tokio",
- "typed-store",
 ]
 
 [[package]]
