@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
@@ -105,12 +107,17 @@ pub async fn test_certificates(
 
 pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
+    process_via_checkpoint: HashSet<TransactionDigest>,
     execute: bool,
 ) -> Arc<ConsensusAdapter> {
     let metrics = ConsensusAdapterMetrics::new_test();
 
     #[derive(Clone)]
-    struct SubmitDirectly(Arc<AuthorityState>, bool);
+    struct SubmitDirectly {
+        state: Arc<AuthorityState>,
+        process_via_checkpoint: HashSet<TransactionDigest>,
+        execute: bool,
+    }
 
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
@@ -119,21 +126,58 @@ pub fn make_consensus_adapter_for_test(
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
-            let sequenced_transactions = transactions
+            let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
                 .collect();
-            let transactions = epoch_store
-                .process_consensus_transactions_for_tests(
-                    sequenced_transactions,
-                    &Arc::new(CheckpointServiceNoop {}),
-                    self.0.get_object_cache_reader().as_ref(),
-                    &self.0.metrics,
-                    true,
-                )
-                .await?;
-            if self.1 {
-                self.0
+
+            let checkpoint_service = Arc::new(CheckpointServiceNoop {});
+            let mut transactions = Vec::new();
+            let mut executed_via_checkpoint = 0;
+
+            for tx in sequenced_transactions {
+                if let Some(transaction_digest) = tx.transaction.executable_transaction_digest() {
+                    if self.process_via_checkpoint.contains(&transaction_digest) {
+                        epoch_store
+                            .insert_finalized_transactions(vec![transaction_digest].as_slice(), 10)
+                            .expect("Should not fail");
+                        executed_via_checkpoint += 1;
+                    } else {
+                        transactions.extend(
+                            epoch_store
+                                .process_consensus_transactions_for_tests(
+                                    vec![tx],
+                                    &checkpoint_service,
+                                    self.state.get_object_cache_reader().as_ref(),
+                                    &self.state.metrics,
+                                    true,
+                                )
+                                .await?,
+                        );
+                    }
+                } else {
+                    transactions.extend(
+                        epoch_store
+                            .process_consensus_transactions_for_tests(
+                                vec![tx],
+                                &checkpoint_service,
+                                self.state.get_object_cache_reader().as_ref(),
+                                &self.state.metrics,
+                                true,
+                            )
+                            .await?,
+                    );
+                }
+            }
+
+            assert_eq!(
+                executed_via_checkpoint,
+                self.process_via_checkpoint.len(),
+                "Some transactions were not executed via checkpoint"
+            );
+
+            if self.execute {
+                self.state
                     .transaction_manager()
                     .enqueue(transactions, epoch_store);
             }
@@ -143,7 +187,11 @@ pub fn make_consensus_adapter_for_test(
     let epoch_store = state.epoch_store_for_testing();
     // Make a new consensus adapter instance.
     Arc::new(ConsensusAdapter::new(
-        Arc::new(SubmitDirectly(state.clone(), execute)),
+        Arc::new(SubmitDirectly {
+            state: state.clone(),
+            process_via_checkpoint,
+            execute,
+        }),
         state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
@@ -172,7 +220,7 @@ async fn submit_transaction_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state.clone(), false);
+    let adapter = make_consensus_adapter_for_test(state.clone(), HashSet::new(), false);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
@@ -180,6 +228,45 @@ async fn submit_transaction_to_consensus_adapter() {
     let waiter = adapter
         .submit(
             transaction.clone(),
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
+        )
+        .unwrap();
+    waiter.await.unwrap();
+}
+
+#[tokio::test]
+async fn submit_multiple_transactions_to_consensus_adapter() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize an authority with a (owned) gas object and a shared object; then
+    // make a test certificate.
+    let mut objects = test_gas_objects();
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
+    let state = init_state_with_objects(objects).await;
+    let certificates = test_certificates(&state, shared_object).await;
+    let epoch_store = state.epoch_store_for_testing();
+
+    // Mark the first two transactions to be "executed via checkpoint" and the other two to appear via consensus output.
+    assert_eq!(certificates.len(), 4);
+
+    let mut process_via_checkpoint = HashSet::new();
+    process_via_checkpoint.insert(*certificates[0].digest());
+    process_via_checkpoint.insert(*certificates[1].digest());
+
+    // Make a new consensus adapter instance.
+    let adapter = make_consensus_adapter_for_test(state.clone(), process_via_checkpoint, false);
+
+    // Submit the transaction and ensure the adapter reports success to the caller. Note
+    // that consensus may drop some transactions (so we may need to resubmit them).
+    let transactions = certificates
+        .into_iter()
+        .map(|certificate| ConsensusTransaction::new_certificate_message(&state.name, certificate))
+        .collect::<Vec<_>>();
+    let waiter = adapter
+        .submit_batch(
+            &transactions,
             Some(&epoch_store.get_reconfig_state_read_lock_guard()),
             &epoch_store,
         )
