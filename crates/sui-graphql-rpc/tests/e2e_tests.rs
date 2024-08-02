@@ -14,6 +14,8 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::config::ServiceConfig;
+    use sui_graphql_rpc::test_infra::cluster::start_cluster;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
     use sui_types::gas_coin::GAS;
@@ -35,8 +37,7 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
         cluster
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
@@ -53,6 +54,7 @@ mod tests {
             .await
             .unwrap();
         let chain_id_actual = cluster
+            .network
             .validator_fullnode_handle
             .fullnode_handle
             .sui_client
@@ -333,20 +335,25 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
-        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
 
         let sender = addresses[0];
         let recipient = addresses[1];
         let tx = cluster
+            .network
             .validator_fullnode_handle
             .test_transaction_builder()
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
         let signed_tx = cluster
+            .network
             .validator_fullnode_handle
             .wallet
             .sign_transaction(&tx);
@@ -443,10 +450,9 @@ mod tests {
             .init();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
-        let test_cluster = cluster.validator_fullnode_handle;
+        let test_cluster = cluster.network.validator_fullnode_handle;
         test_cluster.wait_for_epoch_all_nodes(1).await;
         test_cluster.wait_for_authenticator_state_update().await;
 
@@ -557,14 +563,18 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
-        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
 
         let sender = addresses[0];
         let recipient = addresses[1];
         let tx = cluster
+            .network
             .validator_fullnode_handle
             .test_transaction_builder()
             .await
@@ -651,13 +661,17 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
-        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
 
         let recipient = addresses[1];
         let tx = cluster
+            .network
             .validator_fullnode_handle
             .test_transaction_builder()
             .await
@@ -722,13 +736,17 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
-        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
 
         let sender = addresses[0];
         let coin = *cluster
+            .network
             .validator_fullnode_handle
             .wallet
             .get_gas_objects_owned_by_address(sender, None)
@@ -737,6 +755,7 @@ mod tests {
             .get(1)
             .unwrap();
         let tx = cluster
+            .network
             .validator_fullnode_handle
             .test_transaction_builder()
             .await
@@ -810,10 +829,10 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
 
         cluster
+            .network
             .validator_fullnode_handle
             .trigger_reconfiguration()
             .await;

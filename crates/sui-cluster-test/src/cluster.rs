@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
 use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -260,6 +260,7 @@ impl Cluster for LocalNewCluster {
                 graphql_connection_config.clone(),
                 Some(fullnode_url.clone()),
                 /* cancellation_token */ None,
+                ServiceConfig::test_defaults(),
             )
             .await;
         }

@@ -15,6 +15,7 @@ pub(crate) mod cursor;
 pub(crate) mod date_time;
 pub(crate) mod digest;
 pub(crate) mod display;
+pub(crate) mod dot_move;
 pub(crate) mod dry_run_result;
 pub(crate) mod dynamic_field;
 pub(crate) mod epoch;

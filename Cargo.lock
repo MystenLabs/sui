@@ -12711,6 +12711,7 @@ dependencies = [
  "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-move-build",
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",

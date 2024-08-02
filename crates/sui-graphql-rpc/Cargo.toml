@@ -88,6 +88,7 @@ serde_json.workspace = true
 sui-framework.workspace = true
 tower.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-move-build.workspace = true
 
 
 [features]

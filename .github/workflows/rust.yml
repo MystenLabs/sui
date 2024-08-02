@@ -465,7 +465,7 @@ jobs:
       - run: sleep 5
       - name: tests-requiring-postgres
         run: |
-          cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration
+          cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --test dot_move_e2e --features pg_integration
           cargo nextest run --test-threads 1 --package sui-graphql-rpc --lib --features pg_integration -- test_query_cost
           cargo nextest run --test-threads 4 --package sui-graphql-e2e-tests --features pg_integration
           cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
