@@ -6,8 +6,9 @@ use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
-use futures::pin_mut;
+use futures::stream::FuturesUnordered;
 use futures::FutureExt;
+use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
 use narwhal_types::{TransactionProto, TransactionsClient};
 use narwhal_worker::LazyNarwhalClient;
@@ -909,31 +910,32 @@ impl ConsensusAdapter {
         transaction_keys: Vec<SequencedConsensusTransactionKey>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        // Filter only the transaction digests to check for occurance executed checkpoint.
-        let transaction_digests = transaction_keys
-            .iter()
-            .flat_map(|key| {
-                if let SequencedConsensusTransactionKey::External(
-                    ConsensusTransactionKey::Certificate(digest),
-                ) = key
-                {
-                    Some(*digest)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let notifications = FuturesUnordered::new();
+        for transaction_key in transaction_keys {
+            let transaction_digest = if let SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::Certificate(digest),
+            ) = transaction_key
+            {
+                Some(digest)
+            } else {
+                None
+            };
 
-        tokio::select! {
-            processed = epoch_store.consensus_messages_processed_notify(transaction_keys) => {
-                processed.expect("Storage error when waiting for consensus message processed");
-                self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
-            },
-            processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests) => {
-                processed.expect("Storage error when waiting for transaction executed in checkpoint");
-                self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
-            }
+            notifications.push(async move {
+                tokio::select! {
+                    processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
+                        processed.expect("Storage error when waiting for consensus message processed");
+                        self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
+                    },
+                    processed = epoch_store.transactions_executed_in_checkpoint_notify(vec![transaction_digest.unwrap()]), if transaction_digest.is_some() => {
+                        processed.expect("Storage error when waiting for transaction executed in checkpoint");
+                        self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
+                    }
+                }
+            });
         }
+
+        notifications.collect::<Vec<()>>().await;
     }
 }
 
