@@ -22,26 +22,26 @@ use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
 
-pub struct CodeUnitVerifier<'a> {
-    module: &'a CompiledModule,
-    function_context: FunctionContext<'a>,
+pub struct CodeUnitVerifier<'env, 'a> {
+    module: &'env CompiledModule,
+    function_context: FunctionContext<'env>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
 }
 
-pub fn verify_module(
+pub fn verify_module<'env>(
     verifier_config: &VerifierConfig,
-    module: &CompiledModule,
-    ability_cache: &mut AbilityCache,
+    module: &'env CompiledModule,
+    ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
     verify_module_impl(verifier_config, module, ability_cache, meter)
         .map_err(|e| e.finish(Location::Module(module.self_id())))
 }
 
-fn verify_module_impl<'a>(
+fn verify_module_impl<'env>(
     verifier_config: &VerifierConfig,
-    module: &CompiledModule,
-    ability_cache: &mut AbilityCache,
+    module: &'env CompiledModule,
+    ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let mut name_def_map = HashMap::new();
@@ -72,12 +72,12 @@ fn verify_module_impl<'a>(
     Ok(())
 }
 
-fn verify_function(
+fn verify_function<'env>(
     verifier_config: &VerifierConfig,
     index: FunctionDefinitionIndex,
-    function_definition: &FunctionDefinition,
-    module: &CompiledModule,
-    ability_cache: &mut AbilityCache,
+    function_definition: &'env FunctionDefinition,
+    module: &'env CompiledModule,
+    ability_cache: &mut AbilityCache<'env>,
     name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<usize> {
@@ -134,11 +134,11 @@ fn verify_function(
     Ok(num_back_edges)
 }
 
-impl<'a> CodeUnitVerifier<'a> {
+impl<'env, 'a> CodeUnitVerifier<'env, 'a> {
     fn verify_common(
         &self,
         verifier_config: &VerifierConfig,
-        ability_cache: &mut AbilityCache,
+        ability_cache: &mut AbilityCache<'env>,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;

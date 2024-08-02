@@ -7,7 +7,7 @@ use crate::{
     ability_cache::AbilityCache,
     ability_field_requirements,
     check_duplication::DuplicationChecker,
-    code_unit_verifier::{self, CodeUnitVerifier},
+    code_unit_verifier::{self},
     constants,
     data_defs::RecursiveDataDefChecker,
     friends,

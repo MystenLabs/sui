@@ -54,7 +54,7 @@ impl<'a> AbilityCache<'a> {
                 match entry {
                     Entry::Occupied(entry) => *entry.get(),
                     Entry::Vacant(entry) => {
-                        meter.add(scope, TYPE_ARG_COST);
+                        meter.add(scope, TYPE_ARG_COST)?;
                         let abilities = AbilitySet::polymorphic_abilities(
                             AbilitySet::VECTOR,
                             vec![false],
@@ -79,7 +79,7 @@ impl<'a> AbilityCache<'a> {
                 match entry {
                     Entry::Occupied(entry) => *entry.get(),
                     Entry::Vacant(entry) => {
-                        meter.add_items(scope, TYPE_ARG_COST, type_args.len());
+                        meter.add_items(scope, TYPE_ARG_COST, std::cmp::max(type_args.len(), 1))?;
                         let sh = self.module.datatype_handle_at(*idx);
                         let declared_abilities = sh.abilities;
                         let abilities = AbilitySet::polymorphic_abilities(

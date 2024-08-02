@@ -52,19 +52,19 @@ impl<'a> Locals<'a> {
     }
 }
 
-struct TypeSafetyChecker<'a> {
-    module: &'a CompiledModule,
-    function_context: &'a FunctionContext<'a>,
-    ability_cache: RefCell<&'a mut AbilityCache<'a>>,
-    locals: Locals<'a>,
+struct TypeSafetyChecker<'env, 'a> {
+    module: &'env CompiledModule,
+    function_context: &'a FunctionContext<'env>,
+    ability_cache: RefCell<&'a mut AbilityCache<'env>>,
+    locals: Locals<'env>,
     stack: AbstractStack<SignatureToken>,
 }
 
-impl<'a> TypeSafetyChecker<'a> {
+impl<'env, 'a> TypeSafetyChecker<'env, 'a> {
     fn new(
-        module: &'a CompiledModule,
-        function_context: &'a FunctionContext<'a>,
-        ability_cache: &'a mut AbilityCache<'a>,
+        module: &'env CompiledModule,
+        function_context: &'a FunctionContext<'env>,
+        ability_cache: &'a mut AbilityCache<'env>,
     ) -> Self {
         let locals = Locals::new(function_context.parameters(), function_context.locals());
         Self {
@@ -107,7 +107,7 @@ impl<'a> TypeSafetyChecker<'a> {
         meter: &mut (impl Meter + ?Sized),
         ty: SignatureToken,
     ) -> PartialVMResult<()> {
-        meter.add(Scope::Function, TYPE_PUSH_COST);
+        meter.add(Scope::Function, TYPE_PUSH_COST)?;
         safe_unwrap_err!(self.stack.push(ty));
         Ok(())
     }
@@ -118,7 +118,7 @@ impl<'a> TypeSafetyChecker<'a> {
         ty: SignatureToken,
         n: u64,
     ) -> PartialVMResult<()> {
-        meter.add_items(Scope::Function, TYPE_PUSH_COST, n as usize);
+        meter.add_items(Scope::Function, TYPE_PUSH_COST, n as usize)?;
         safe_unwrap_err!(self.stack.push_n(ty, n));
         Ok(())
     }
@@ -140,17 +140,10 @@ fn charge_ty(meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialV
     )
 }
 
-fn charge_tys(meter: &mut (impl Meter + ?Sized), tys: &[SignatureToken]) -> PartialVMResult<()> {
-    for ty in tys {
-        charge_ty(meter, ty)?
-    }
-    Ok(())
-}
-
-pub(crate) fn verify(
-    module: &CompiledModule,
-    function_context: &FunctionContext,
-    ability_cache: &mut AbilityCache,
+pub(crate) fn verify<'env, 'a>(
+    module: &'env CompiledModule,
+    function_context: &FunctionContext<'env>,
+    ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let mut checker = TypeSafetyChecker::new(module, function_context, ability_cache);
@@ -230,7 +223,7 @@ fn borrow_field(
     // For generic fields access, this step materializes that type
     let field_handle = verifier.module.field_handle_at(field_handle_index);
     let struct_def = verifier.module.struct_def_at(field_handle.owner);
-    let expected_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let expected_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     match operand {
         ST::Reference(inner) | ST::MutableReference(inner) if expected_type == *inner => (),
         _ => return Err(verifier.error(StatusCode::BORROWFIELD_TYPE_MISMATCH_ERROR, offset)),
@@ -299,7 +292,7 @@ fn borrow_global(
     }
 
     let struct_def = verifier.module.struct_def_at(idx);
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     if !verifier.abilities(meter, &struct_type)?.has_key() {
         return Err(verifier.error(StatusCode::BORROWGLOBAL_WITHOUT_KEY_ABILITY, offset));
     }
@@ -374,7 +367,7 @@ fn pack_struct(
             return Err(verifier.error(StatusCode::PACK_TYPE_MISMATCH_ERROR, offset));
         }
     }
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     verifier.push(meter, struct_type)?;
     Ok(())
 }
@@ -386,7 +379,7 @@ fn unpack_struct(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
 
     // Pop an abstract value from the stack and check if its type is equal to the one
     // declared.
@@ -418,7 +411,7 @@ fn pack_enum_variant(
         }
     }
 
-    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args);
+    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args)?;
     verifier.push(meter, enum_type)?;
     Ok(())
 }
@@ -431,7 +424,7 @@ fn unpack_enum_variant_by_value(
     variant_def: &VariantDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args);
+    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args)?;
 
     // Pop an abstract value from the stack and check if its type is equal to the one
     // declared.
@@ -468,7 +461,7 @@ fn unpack_enum_variant_by_ref(
         _ => return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset)),
     };
 
-    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args);
+    let enum_type = materialize_type(meter, enum_def.enum_handle, type_args)?;
     if *inner != enum_type {
         return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset));
     }
@@ -492,7 +485,7 @@ fn exists(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     if !verifier.abilities(meter, &struct_type)?.has_key() {
         return Err(verifier.error(
             StatusCode::EXISTS_WITHOUT_KEY_ABILITY_OR_BAD_ARGUMENT,
@@ -520,7 +513,7 @@ fn move_from(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     if !verifier.abilities(meter, &struct_type)?.has_key() {
         return Err(verifier.error(StatusCode::MOVEFROM_WITHOUT_KEY_ABILITY, offset));
     }
@@ -541,7 +534,7 @@ fn move_to(
     struct_def: &StructDefinition,
     type_args: &Signature,
 ) -> PartialVMResult<()> {
-    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args);
+    let struct_type = materialize_type(meter, struct_def.struct_handle, type_args)?;
     if !verifier.abilities(meter, &struct_type)?.has_key() {
         return Err(verifier.error(StatusCode::MOVETO_WITHOUT_KEY_ABILITY, offset));
     }
@@ -1178,14 +1171,14 @@ fn materialize_type(
     meter: &mut (impl Meter + ?Sized),
     struct_handle: DatatypeHandleIndex,
     type_args: &Signature,
-) -> SignatureToken {
+) -> PartialVMResult<SignatureToken> {
     let ty = if type_args.is_empty() {
         ST::Datatype(struct_handle)
     } else {
         ST::DatatypeInstantiation(Box::new((struct_handle, type_args.0.clone())))
     };
-    charge_ty(meter, &ty);
-    ty
+    charge_ty(meter, &ty)?;
+    Ok(ty)
 }
 
 fn instantiate(
