@@ -6,8 +6,8 @@
 //! The overall verification is split between stack_usage_verifier.rs and
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
-    acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety, reference_safety,
-    stack_usage_verifier::StackUsageVerifier, type_safety,
+    ability_cache::AbilityCache, acquires_list_verifier::AcquiresVerifier, control_flow,
+    locals_safety, reference_safety, stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_binary_format::{
@@ -32,15 +32,17 @@ impl<'a> CodeUnitVerifier<'a> {
     pub fn verify_module(
         verifier_config: &VerifierConfig,
         module: &'a CompiledModule,
+        ability_cache: &mut AbilityCache,
         meter: &mut (impl Meter + ?Sized),
     ) -> VMResult<()> {
-        Self::verify_module_impl(verifier_config, module, meter)
+        Self::verify_module_impl(verifier_config, module, ability_cache, meter)
             .map_err(|e| e.finish(Location::Module(module.self_id())))
     }
 
     fn verify_module_impl(
         verifier_config: &VerifierConfig,
         module: &CompiledModule,
+        ability_cache: &mut AbilityCache,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         let mut name_def_map = HashMap::new();
@@ -56,6 +58,7 @@ impl<'a> CodeUnitVerifier<'a> {
                 index,
                 function_definition,
                 module,
+                ability_cache,
                 &name_def_map,
                 meter,
             )
@@ -75,6 +78,7 @@ impl<'a> CodeUnitVerifier<'a> {
         index: FunctionDefinitionIndex,
         function_definition: &FunctionDefinition,
         module: &CompiledModule,
+        ability_cache: &mut AbilityCache,
         name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<usize> {
@@ -123,7 +127,7 @@ impl<'a> CodeUnitVerifier<'a> {
             function_context,
             name_def_map,
         };
-        code_unit_verifier.verify_common(verifier_config, meter)?;
+        code_unit_verifier.verify_common(verifier_config, ability_cache, meter)?;
         AcquiresVerifier::verify(module, index, function_definition, meter)?;
 
         meter.transfer(Scope::Function, Scope::Module, 1.0)?;
@@ -134,10 +138,11 @@ impl<'a> CodeUnitVerifier<'a> {
     fn verify_common(
         &self,
         verifier_config: &VerifierConfig,
+        ability_cache: &mut AbilityCache,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
-        type_safety::verify(self.module, &self.function_context, meter)?;
+        type_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
         locals_safety::verify(self.module, &self.function_context, meter)?;
         reference_safety::verify(
             self.module,

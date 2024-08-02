@@ -18,6 +18,14 @@ pub struct AbilityCache<'a> {
 }
 
 impl<'a> AbilityCache<'a> {
+    pub fn new(module: &'a CompiledModule) -> Self {
+        Self {
+            module,
+            vector_results: BTreeMap::new(),
+            datatype_results: BTreeMap::new(),
+        }
+    }
+
     pub fn abilities(
         &mut self,
         scope: Scope,
@@ -34,7 +42,7 @@ impl<'a> AbilityCache<'a> {
 
             S::Reference(_) | S::MutableReference(_) => AbilitySet::REFERENCES,
             S::Signer => AbilitySet::SIGNER,
-            S::TypeParameter(idx) => safe_unwrap!(type_parameter_constraints.get(*idx as usize)),
+            S::TypeParameter(idx) => *safe_unwrap!(type_parameter_constraints.get(*idx as usize)),
             S::Datatype(idx) => {
                 let sh = self.module.datatype_handle_at(*idx);
                 sh.abilities
@@ -67,7 +75,7 @@ impl<'a> AbilityCache<'a> {
                     .datatype_results
                     .entry(*idx)
                     .or_default()
-                    .entry(type_arg_abilities);
+                    .entry(type_arg_abilities.clone());
                 match entry {
                     Entry::Occupied(entry) => *entry.get(),
                     Entry::Vacant(entry) => {

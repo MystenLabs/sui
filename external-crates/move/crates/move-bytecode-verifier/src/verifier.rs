@@ -4,11 +4,18 @@
 
 //! This module contains the public APIs supported by the bytecode verifier.
 use crate::{
-    ability_field_requirements, check_duplication::DuplicationChecker,
-    code_unit_verifier::CodeUnitVerifier, constants, data_defs::RecursiveDataDefChecker, friends,
-    instantiation_loops::InstantiationLoopChecker, instruction_consistency::InstructionConsistency,
-    limits::LimitsVerifier, script_signature,
-    script_signature::no_additional_script_signature_checks, signature::SignatureChecker,
+    ability_cache::AbilityCache,
+    ability_field_requirements,
+    check_duplication::DuplicationChecker,
+    code_unit_verifier::CodeUnitVerifier,
+    constants,
+    data_defs::RecursiveDataDefChecker,
+    friends,
+    instantiation_loops::InstantiationLoopChecker,
+    instruction_consistency::InstructionConsistency,
+    limits::LimitsVerifier,
+    script_signature::{self, no_additional_script_signature_checks},
+    signature::SignatureChecker,
 };
 use move_binary_format::{
     check_bounds::BoundsChecker,
@@ -76,6 +83,7 @@ pub fn verify_module_with_config_metered(
     module: &CompiledModule,
     meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
+    let ability_cache = &mut AbilityCache::new(module);
     BoundsChecker::verify_module(module).map_err(|e| {
         // We can't point the error at the module, because if bounds-checking
         // failed, we cannot safely index into module's handle to itself.
@@ -90,7 +98,7 @@ pub fn verify_module_with_config_metered(
     ability_field_requirements::verify_module(module)?;
     RecursiveDataDefChecker::verify_module(module)?;
     InstantiationLoopChecker::verify_module(module)?;
-    CodeUnitVerifier::verify_module(config, module, meter)?;
+    CodeUnitVerifier::verify_module(config, module, ability_cache, meter)?;
 
     script_signature::verify_module(module, no_additional_script_signature_checks)
 }
