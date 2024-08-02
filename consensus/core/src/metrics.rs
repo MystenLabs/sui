@@ -192,9 +192,9 @@ impl NodeMetrics {
                 registry
             ).unwrap(),
             block_transactions: register_histogram_with_registry!(
-                "block_transaction",
+                "block_transactions",
                 "# of transactions contained in proposed blocks",
-                SIZE_BUCKETS.to_vec(),
+                NUM_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
             block_ancestors: register_histogram_with_registry!(
