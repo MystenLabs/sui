@@ -143,7 +143,7 @@ impl<'env, 'a> CodeUnitVerifier<'env, 'a> {
     ) -> PartialVMResult<()> {
         StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
         type_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
-        locals_safety::verify(self.module, &self.function_context, meter)?;
+        locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
         reference_safety::verify(
             self.module,
             &self.function_context,

@@ -26,6 +26,8 @@ pub(crate) enum LocalState {
 }
 use LocalState::*;
 
+use crate::ability_cache::AbilityCache;
+
 pub(crate) const STEP_BASE_COST: u128 = 2;
 pub(crate) const RET_PER_LOCAL_COST: u128 = 5;
 pub(crate) const JOIN_BASE_COST: u128 = 2;
@@ -41,8 +43,10 @@ pub(crate) struct AbstractState {
 impl AbstractState {
     /// create a new abstract state
     pub fn new(
-        module: &CompiledModule,
+        _module: &CompiledModule,
         function_context: &FunctionContext,
+        ability_ache: &mut AbilityCache,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self> {
         let num_args = function_context.parameters().len();
         let num_locals = num_args + function_context.locals().len();
@@ -55,7 +59,14 @@ impl AbstractState {
             .0
             .iter()
             .chain(function_context.locals().0.iter())
-            .map(|st| module.abilities(st, function_context.type_parameters()))
+            .map(|st| {
+                ability_ache.abilities(
+                    Scope::Function,
+                    meter,
+                    function_context.type_parameters(),
+                    st,
+                )
+            })
             .collect::<PartialVMResult<Vec<_>>>()?;
 
         Ok(Self {

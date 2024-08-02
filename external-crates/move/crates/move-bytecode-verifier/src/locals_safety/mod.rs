@@ -8,7 +8,10 @@
 
 mod abstract_state;
 
-use crate::locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST};
+use crate::{
+    ability_cache::AbilityCache,
+    locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
+};
 use abstract_state::{AbstractState, LocalState};
 use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
@@ -22,9 +25,10 @@ use move_core_types::vm_status::StatusCode;
 pub(crate) fn verify<'a>(
     module: &CompiledModule,
     function_context: &'a FunctionContext<'a>,
+    ability_cache: &mut AbilityCache,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(module, function_context)?;
+    let initial_state = AbstractState::new(module, function_context, ability_cache, meter)?;
     LocalsSafetyAnalysis().analyze_function(initial_state, function_context, meter)
 }
 
