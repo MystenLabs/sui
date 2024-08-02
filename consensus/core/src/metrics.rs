@@ -99,10 +99,10 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 pub(crate) struct NodeMetrics {
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
-    pub(crate) block_size: Histogram,
-    pub(crate) block_transactions: Histogram,
-    pub(crate) block_ancestors: Histogram,
-    pub(crate) block_ancestors_depth: HistogramVec,
+    pub(crate) proposed_block_size: Histogram,
+    pub(crate) proposed_block_transactions: Histogram,
+    pub(crate) proposed_block_ancestors: Histogram,
+    pub(crate) proposed_block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
@@ -185,26 +185,26 @@ impl NodeMetrics {
                 &["force"],
                 registry,
             ).unwrap(),
-            block_size: register_histogram_with_registry!(
-                "block_size",
+            proposed_block_size: register_histogram_with_registry!(
+                "proposed_block_size",
                 "The size (in bytes) of proposed blocks",
                 SIZE_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            block_transactions: register_histogram_with_registry!(
-                "block_transactions",
+            proposed_block_transactions: register_histogram_with_registry!(
+                "proposed_block_transactions",
                 "# of transactions contained in proposed blocks",
                 NUM_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            block_ancestors: register_histogram_with_registry!(
-                "block_ancestors",
+            proposed_block_ancestors: register_histogram_with_registry!(
+                "proposed_block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
                 registry,
             ).unwrap(),
-            block_ancestors_depth: register_histogram_vec_with_registry!(
-                "block_ancestors_depth",
+            proposed_block_ancestors_depth: register_histogram_vec_with_registry!(
+                "proposed_block_ancestors_depth",
                 "The depth in rounds of ancestors included in newly proposed blocks",
                 &["authority"],
                 exponential_buckets(1.0, 2.0, 14).unwrap(),

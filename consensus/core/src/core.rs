@@ -408,14 +408,14 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .block_ancestors
+            .proposed_block_ancestors
             .observe(ancestors.len() as f64);
         for ancestor in &ancestors {
             let authority = &self.context.committee.authority(ancestor.author()).hostname;
             self.context
                 .metrics
                 .node_metrics
-                .block_ancestors_depth
+                .proposed_block_ancestors_depth
                 .with_label_values(&[authority])
                 .observe(clock_round.saturating_sub(ancestor.round()).into());
         }
@@ -437,7 +437,7 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .block_transactions
+            .proposed_block_transactions
             .observe(transactions.len() as f64);
 
         // Consume the commit votes to be included.
@@ -465,7 +465,7 @@ impl Core {
         self.context
             .metrics
             .node_metrics
-            .block_size
+            .proposed_block_size
             .observe(serialized.len() as f64);
         // Unnecessary to verify own blocks.
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
