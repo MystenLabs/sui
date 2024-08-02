@@ -108,21 +108,29 @@ impl LeaderSchedule {
             .with_label_values(&["LeaderSchedule::update_leader_schedule"])
             .start_timer();
 
-        let reputation_scores = dag_state
-            .read()
-            .read_scoring_subdag(|scoring_subdag| scoring_subdag.calculate_scores());
-        reputation_scores.update_metrics(self.context.clone());
+        let (reputation_scores, last_commit_index) = {
+            let dag_state = dag_state.read();
+            let reputation_scores =
+                dag_state.read_scoring_subdag(|scoring_subdag| scoring_subdag.calculate_scores());
 
-        let last_commit_index = dag_state.read().read_scoring_subdag(|scoring_subdag| {
-            scoring_subdag
-                .commit_range
-                .clone()
-                .expect("commit range should exist for scoring subdag")
-                .end()
-        });
+            let last_commit_index = dag_state.read_scoring_subdag(|scoring_subdag| {
+                scoring_subdag
+                    .commit_range
+                    .as_ref()
+                    .expect("commit range should exist for scoring subdag")
+                    .end()
+            });
 
-        let mut dag_state = dag_state.write();
-        dag_state.update_scoring_subdag(|scoring_subdag| scoring_subdag.clear());
+            (reputation_scores, last_commit_index)
+        };
+
+        {
+            let mut dag_state = dag_state.write();
+            // Clear scoring subdag as we have updated the leader schedule
+            dag_state.update_scoring_subdag(|scoring_subdag| scoring_subdag.clear());
+            // Buffer score and last commit rounds in dag state to be persisted later
+            dag_state.add_commit_info(reputation_scores.clone());
+        }
 
         self.update_leader_swap_table(LeaderSwapTable::new(
             self.context.clone(),
@@ -130,14 +138,13 @@ impl LeaderSchedule {
             reputation_scores.clone(),
         ));
 
+        reputation_scores.update_metrics(self.context.clone());
+
         self.context
             .metrics
             .node_metrics
             .num_of_bad_nodes
             .set(self.leader_swap_table.read().bad_nodes.len() as i64);
-
-        // Buffer score and last commit rounds in dag state to be persisted later
-        dag_state.add_commit_info(reputation_scores);
     }
 
     pub(crate) fn elect_leader(&self, round: u32, leader_offset: u32) -> AuthorityIndex {
