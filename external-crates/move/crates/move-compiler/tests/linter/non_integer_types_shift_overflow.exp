@@ -1,0 +1,17 @@
+error[E04003]: built-in operation not supported
+  ┌─ tests/linter/non_integer_types_shift_overflow.move:3:18
+  │
+2 │     fun test_non_integer_types(b: bool, addr: address) {
+  │                                   ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+3 │         let _a = b << 1;  // Should not raise an issue (type mismatch, caught by compiler)
+  │                  ^ Invalid argument to '<<'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/linter/non_integer_types_shift_overflow.move:4:18
+  │
+2 │     fun test_non_integer_types(b: bool, addr: address) {
+  │                                               ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+3 │         let _a = b << 1;  // Should not raise an issue (type mismatch, caught by compiler)
+4 │         let _b = addr >> 2; // Should not raise an issue (type mismatch, caught by compiler)
+  │                  ^^^^ Invalid argument to '>>'
+
