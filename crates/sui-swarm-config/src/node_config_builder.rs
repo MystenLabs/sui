@@ -178,6 +178,7 @@ impl ValidatorConfigBuilder {
         if self.force_unpruned_checkpoints {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
+        // pruning_config.set_num_epochs_to_retain_for_objects(1);
         let pruning_config = pruning_config;
         let checkpoint_executor_config = CheckpointExecutorConfig {
             data_ingestion_dir: self.data_ingestion_dir,
