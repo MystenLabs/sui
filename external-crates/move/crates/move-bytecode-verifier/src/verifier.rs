@@ -91,7 +91,7 @@ pub fn verify_module_with_config_metered(
     })?;
     LimitsVerifier::verify_module(config, module)?;
     DuplicationChecker::verify_module(module)?;
-    SignatureChecker::verify_module(module)?;
+    SignatureChecker::verify_module(module, ability_cache, meter)?;
     InstructionConsistency::verify_module(module)?;
     constants::verify_module(module)?;
     friends::verify_module(module)?;

@@ -15,22 +15,41 @@ use move_binary_format::{
     file_format_common::VERSION_6,
     IndexKind,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
-use std::collections::{HashMap, HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
-pub struct SignatureChecker<'a> {
-    module: &'a CompiledModule,
+use crate::ability_cache::AbilityCache;
+
+pub struct SignatureChecker<'env, 'a, 'b, M: Meter + ?Sized> {
+    module: &'env CompiledModule,
+    module_ability_cache: RefCell<&'a mut AbilityCache<'env>>,
+    meter: RefCell<&'b mut M>,
     abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
-impl<'a> SignatureChecker<'a> {
-    pub fn verify_module(module: &'a CompiledModule) -> VMResult<()> {
-        Self::verify_module_impl(module).map_err(|e| e.finish(Location::Module(module.self_id())))
+impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
+    pub fn verify_module(
+        module: &'env CompiledModule,
+        module_ability_cache: &'a mut AbilityCache<'env>,
+        meter: &'b mut M,
+    ) -> VMResult<()> {
+        Self::verify_module_impl(module, module_ability_cache, meter)
+            .map_err(|e| e.finish(Location::Module(module.self_id())))
     }
 
-    fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
+    fn verify_module_impl(
+        module: &'env CompiledModule,
+        module_ability_cache: &'a mut AbilityCache<'env>,
+        meter: &'b mut M,
+    ) -> PartialVMResult<()> {
         let mut sig_check = Self {
             module,
+            module_ability_cache: RefCell::new(module_ability_cache),
+            meter: RefCell::new(meter),
             abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
@@ -489,8 +508,15 @@ impl<'a> SignatureChecker<'a> {
             );
         }
 
+        let mut m = self.meter.borrow_mut();
+        let meter: &mut M = *m;
         for (constraint, ty) in constraints.into_iter().zip(type_arguments) {
-            let given = self.module.abilities(ty, global_abilities)?;
+            let given = self.module_ability_cache.borrow_mut().abilities(
+                Scope::Module,
+                meter,
+                global_abilities,
+                ty,
+            )?;
             if !constraint.is_subset(given) {
                 return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
                     .with_message(format!(
