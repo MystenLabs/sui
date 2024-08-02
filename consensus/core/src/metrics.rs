@@ -19,7 +19,7 @@ const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
 ];
 
-const NUM_BLOCKS_BUCKETS: &[f64] = &[
+const NUM_BUCKETS: &[f64] = &[
     1.0,
     2.0,
     4.0,
@@ -100,6 +100,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) block_size: Histogram,
+    pub(crate) block_transactions: Histogram,
     pub(crate) block_ancestors: Histogram,
     pub(crate) block_ancestors_depth: HistogramVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
@@ -190,6 +191,12 @@ impl NodeMetrics {
                 SIZE_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
+            block_transactions: register_histogram_with_registry!(
+                "block_transaction",
+                "# of transactions contained in proposed blocks",
+                SIZE_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             block_ancestors: register_histogram_with_registry!(
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
@@ -236,7 +243,7 @@ impl NodeMetrics {
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
-                NUM_BLOCKS_BUCKETS.to_vec(),
+                NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
@@ -248,7 +255,7 @@ impl NodeMetrics {
             core_add_blocks_batch_size: register_histogram_with_registry!(
                 "core_add_blocks_batch_size",
                 "The number of blocks received from Core for processing on a single batch",
-                NUM_BLOCKS_BUCKETS.to_vec(),
+                NUM_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             core_lock_dequeued: register_int_counter_with_registry!(

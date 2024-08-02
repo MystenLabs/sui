@@ -390,7 +390,6 @@ impl Core {
                     .saturating_duration_since(self.threshold_clock.get_quorum_ts())
                     .as_millis() as u64,
             );
-
         self.context
             .metrics
             .node_metrics
@@ -435,6 +434,11 @@ impl Core {
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
         let (transactions, ack_transactions) = self.transaction_consumer.next();
+        self.context
+            .metrics
+            .node_metrics
+            .block_transactions
+            .observe(transactions.len() as f64);
 
         // Consume the commit votes to be included.
         let commit_votes = self
