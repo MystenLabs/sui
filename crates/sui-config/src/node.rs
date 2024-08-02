@@ -423,8 +423,7 @@ pub struct ConsensusConfig {
 
     /// Maximum number of pending transactions to submit to consensus, including those
     /// in submission wait.
-    /// Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
-    /// Default to 100_000.
+    /// Default to 20_000 inflight limit, assuming 20_000 txn tps * 1 sec consensus latency.
     pub max_pending_transactions: Option<usize>,
 
     /// When defined caps the calculated submission position to the max_submit_position. Even if the
@@ -453,7 +452,7 @@ impl ConsensusConfig {
     }
 
     pub fn max_pending_transactions(&self) -> usize {
-        self.max_pending_transactions.unwrap_or(100_000)
+        self.max_pending_transactions.unwrap_or(20_000)
     }
 
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
