@@ -4145,14 +4145,6 @@ fn parse_use_decl(
                 match context.tokens.peek() {
                     Tok::LBrace => {
                         let lbrace_loc = context.tokens.current_token_loc();
-                        // if next token after `{` is not `}` then it means that there are module
-                        // uses that could potentially be parsed
-                        let module_uses_to_parse_exist = !context
-                            .tokens
-                            .lookahead()
-                            .map(|tok| tok == Tok::RBrace)
-                            .unwrap_or_default();
-
                         let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
                             let (name, _, use_) = parse_use_module(ctxt)?;
                             Ok((name, use_))
@@ -4168,8 +4160,10 @@ fn parse_use_decl(
                             parse_inner,
                             "a module use clause",
                         );
-                        let use_ = if use_decls.is_empty() && module_uses_to_parse_exist {
-                            // we failed to parse a non-empty list
+                        let use_ = if use_decls.is_empty() {
+                            // empty list does not make much sense as it contains no alias
+                            // information and it actually helps IDE to treat this case as a partial
+                            // use
                             Use::Partial {
                                 package: address,
                                 colon_colon: Some(colon_colon_loc),
@@ -4253,14 +4247,6 @@ fn parse_use_module(
                 match context.tokens.peek() {
                     Tok::LBrace => {
                         let lbrace_loc = context.tokens.current_token_loc();
-                        // if next token after `{` is not `}` then it means that there are sub uses that
-                        // could potentially be parsed
-                        let sub_uses_to_parse_exist = !context
-                            .tokens
-                            .lookahead()
-                            .map(|tok| tok == Tok::RBrace)
-                            .unwrap_or_default();
-
                         let sub_uses = parse_comma_list(
                             context,
                             Tok::LBrace,
@@ -4269,8 +4255,10 @@ fn parse_use_module(
                             parse_use_member,
                             "a module member alias",
                         );
-                        if sub_uses.is_empty() && sub_uses_to_parse_exist {
-                            // we failed to parse a non-empty list
+                        if sub_uses.is_empty() {
+                            // empty list does not make much sense as it contains no alias
+                            // information and it actually helps IDE to treat this case as a partial
+                            // module use
                             ModuleUse::Partial {
                                 colon_colon: Some(colon_colon_loc),
                                 opening_brace: Some(lbrace_loc),
