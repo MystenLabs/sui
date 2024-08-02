@@ -28,113 +28,113 @@ pub struct CodeUnitVerifier<'a> {
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
 }
 
-impl<'a> CodeUnitVerifier<'a> {
-    pub fn verify_module(
-        verifier_config: &VerifierConfig,
-        module: &'a CompiledModule,
-        ability_cache: &mut AbilityCache,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> VMResult<()> {
-        Self::verify_module_impl(verifier_config, module, ability_cache, meter)
-            .map_err(|e| e.finish(Location::Module(module.self_id())))
+pub fn verify_module(
+    verifier_config: &VerifierConfig,
+    module: &CompiledModule,
+    ability_cache: &mut AbilityCache,
+    meter: &mut (impl Meter + ?Sized),
+) -> VMResult<()> {
+    verify_module_impl(verifier_config, module, ability_cache, meter)
+        .map_err(|e| e.finish(Location::Module(module.self_id())))
+}
+
+fn verify_module_impl<'a>(
+    verifier_config: &VerifierConfig,
+    module: &CompiledModule,
+    ability_cache: &mut AbilityCache,
+    meter: &mut (impl Meter + ?Sized),
+) -> PartialVMResult<()> {
+    let mut name_def_map = HashMap::new();
+    for (idx, func_def) in module.function_defs().iter().enumerate() {
+        let fh = module.function_handle_at(func_def.function);
+        name_def_map.insert(fh.name, FunctionDefinitionIndex(idx as u16));
     }
-
-    fn verify_module_impl(
-        verifier_config: &VerifierConfig,
-        module: &CompiledModule,
-        ability_cache: &mut AbilityCache,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<()> {
-        let mut name_def_map = HashMap::new();
-        for (idx, func_def) in module.function_defs().iter().enumerate() {
-            let fh = module.function_handle_at(func_def.function);
-            name_def_map.insert(fh.name, FunctionDefinitionIndex(idx as u16));
-        }
-        let mut total_back_edges = 0;
-        for (idx, function_definition) in module.function_defs().iter().enumerate() {
-            let index = FunctionDefinitionIndex(idx as TableIndex);
-            let num_back_edges = Self::verify_function(
-                verifier_config,
-                index,
-                function_definition,
-                module,
-                ability_cache,
-                &name_def_map,
-                meter,
-            )
-            .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
-            total_back_edges += num_back_edges;
-        }
-        if let Some(limit) = verifier_config.max_back_edges_per_module {
-            if total_back_edges > limit {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES));
-            }
-        }
-        Ok(())
-    }
-
-    fn verify_function(
-        verifier_config: &VerifierConfig,
-        index: FunctionDefinitionIndex,
-        function_definition: &FunctionDefinition,
-        module: &CompiledModule,
-        ability_cache: &mut AbilityCache,
-        name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<usize> {
-        meter.enter_scope(
-            module
-                .identifier_at(module.function_handle_at(function_definition.function).name)
-                .as_str(),
-            Scope::Function,
-        );
-        // nothing to verify for native function
-        let code = match &function_definition.code {
-            Some(code) => code,
-            None => return Ok(0),
-        };
-
-        // create `FunctionContext` and `BinaryIndexedView`
-        let function_context = control_flow::verify_function(
+    let mut total_back_edges = 0;
+    for (idx, function_definition) in module.function_defs().iter().enumerate() {
+        let index = FunctionDefinitionIndex(idx as TableIndex);
+        let num_back_edges = verify_function(
             verifier_config,
-            module,
             index,
             function_definition,
-            code,
-            meter,
-        )?;
-
-        if let Some(limit) = verifier_config.max_basic_blocks {
-            if function_context.cfg().blocks().len() > limit {
-                return Err(
-                    PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0)
-                );
-            }
-        }
-
-        let num_back_edges = function_context.cfg().num_back_edges();
-        if let Some(limit) = verifier_config.max_back_edges_per_function {
-            if num_back_edges > limit {
-                return Err(
-                    PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES).at_code_offset(index, 0)
-                );
-            }
-        }
-
-        // verify
-        let code_unit_verifier = CodeUnitVerifier {
             module,
-            function_context,
-            name_def_map,
-        };
-        code_unit_verifier.verify_common(verifier_config, ability_cache, meter)?;
-        AcquiresVerifier::verify(module, index, function_definition, meter)?;
+            ability_cache,
+            &name_def_map,
+            meter,
+        )
+        .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
+        total_back_edges += num_back_edges;
+    }
+    if let Some(limit) = verifier_config.max_back_edges_per_module {
+        if total_back_edges > limit {
+            return Err(PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES));
+        }
+    }
+    Ok(())
+}
 
-        meter.transfer(Scope::Function, Scope::Module, 1.0)?;
+fn verify_function(
+    verifier_config: &VerifierConfig,
+    index: FunctionDefinitionIndex,
+    function_definition: &FunctionDefinition,
+    module: &CompiledModule,
+    ability_cache: &mut AbilityCache,
+    name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
+    meter: &mut (impl Meter + ?Sized),
+) -> PartialVMResult<usize> {
+    meter.enter_scope(
+        module
+            .identifier_at(module.function_handle_at(function_definition.function).name)
+            .as_str(),
+        Scope::Function,
+    );
+    // nothing to verify for native function
+    let code = match &function_definition.code {
+        Some(code) => code,
+        None => return Ok(0),
+    };
 
-        Ok(num_back_edges)
+    // create `FunctionContext` and `BinaryIndexedView`
+    let function_context = control_flow::verify_function(
+        verifier_config,
+        module,
+        index,
+        function_definition,
+        code,
+        meter,
+    )?;
+
+    if let Some(limit) = verifier_config.max_basic_blocks {
+        if function_context.cfg().blocks().len() > limit {
+            return Err(
+                PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0)
+            );
+        }
     }
 
+    let num_back_edges = function_context.cfg().num_back_edges();
+    if let Some(limit) = verifier_config.max_back_edges_per_function {
+        if num_back_edges > limit {
+            return Err(
+                PartialVMError::new(StatusCode::TOO_MANY_BACK_EDGES).at_code_offset(index, 0)
+            );
+        }
+    }
+
+    // verify
+    let code_unit_verifier = CodeUnitVerifier {
+        module,
+        function_context,
+        name_def_map,
+    };
+    code_unit_verifier.verify_common(verifier_config, ability_cache, meter)?;
+    AcquiresVerifier::verify(module, index, function_definition, meter)?;
+
+    meter.transfer(Scope::Function, Scope::Module, 1.0)?;
+
+    Ok(num_back_edges)
+}
+
+impl<'a> CodeUnitVerifier<'a> {
     fn verify_common(
         &self,
         verifier_config: &VerifierConfig,

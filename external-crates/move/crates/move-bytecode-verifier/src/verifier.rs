@@ -7,7 +7,7 @@ use crate::{
     ability_cache::AbilityCache,
     ability_field_requirements,
     check_duplication::DuplicationChecker,
-    code_unit_verifier::CodeUnitVerifier,
+    code_unit_verifier::{self, CodeUnitVerifier},
     constants,
     data_defs::RecursiveDataDefChecker,
     friends,
@@ -98,7 +98,7 @@ pub fn verify_module_with_config_metered(
     ability_field_requirements::verify_module(module)?;
     RecursiveDataDefChecker::verify_module(module)?;
     InstantiationLoopChecker::verify_module(module)?;
-    CodeUnitVerifier::verify_module(config, module, ability_cache, meter)?;
+    code_unit_verifier::verify_module(config, module, ability_cache, meter)?;
 
     script_signature::verify_module(module, no_additional_script_signature_checks)
 }

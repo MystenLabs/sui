@@ -147,13 +147,14 @@ fn charge_tys(meter: &mut (impl Meter + ?Sized), tys: &[SignatureToken]) -> Part
     Ok(())
 }
 
-pub(crate) fn verify<'a>(
-    module: &'a CompiledModule,
-    function_context: &'a FunctionContext<'a>,
-    ability_cache: &'a mut AbilityCache<'a>,
+pub(crate) fn verify(
+    module: &CompiledModule,
+    function_context: &FunctionContext,
+    ability_cache: &mut AbilityCache,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let verifier = &mut TypeSafetyChecker::new(module, function_context, ability_cache);
+    let mut checker = TypeSafetyChecker::new(module, function_context, ability_cache);
+    let verifier = &mut checker;
 
     for block_id in function_context.cfg().blocks() {
         for offset in function_context.cfg().instr_indexes(block_id) {
