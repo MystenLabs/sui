@@ -42,8 +42,7 @@ pub struct Context<'a> {
     env: &'a mut CompilationEnv,
 }
 
-static REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r".*((Cap[A-Z0-9_]+)|Capability|(Cap$)).*").unwrap());
+static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
 
 impl TypingVisitorConstructor for WarnFreezeCapability {
     type Context<'a> = Context<'a>;
@@ -103,13 +102,15 @@ fn check_type_arguments(context: &mut Context, fun: &T::ModuleCall, loc: Loc) {
         };
         if REGEX.is_match(struct_name.value().as_str()) {
             let msg = format!(
-                "The type {} is potentially a capability based on its name. Freezing a capability might lock out critical operations or otherwise open access to operations that otherwise should be restricted.",
+                "The type {} is potentially a capability based on its name",
                 core::error_format_(type_arg, &core::Subst::empty()),
             );
-            let diag = diag!(FREEZE_CAPABILITY_DIAG, (loc, msg));
+            let mut diag = diag!(FREEZE_CAPABILITY_DIAG, (loc, msg));
+            diag.add_note(
+                "Freezing a capability might lock out critical operations \
+                or otherwise open access to operations that otherwise should be restricted",
+            );
             context.env.add_diag(diag);
         };
     }
 }
-
-impl<'a> Context<'a> {}
