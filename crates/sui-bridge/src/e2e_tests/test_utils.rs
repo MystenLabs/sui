@@ -80,7 +80,8 @@ pub struct BridgeTestCluster {
     pub test_cluster: TestCluster,
     bridge_client: SuiBridgeClient,
     eth_environment: EthBridgeEnvironment,
-    bridge_node_handles: Option<Vec<JoinHandle<()>>>,
+    // bridge_node_handles: Option<Vec<JoinHandle<()>>>,
+    bridge_node_handles: Option<Vec<std::thread::JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
     bridge_tx_cursor: Option<TransactionDigest>,
     eth_chain_id: BridgeChainId,
@@ -706,11 +707,104 @@ impl Drop for EthBridgeEnvironment {
     }
 }
 
+// pub(crate) async fn start_bridge_cluster(
+//     test_cluster: &TestCluster,
+//     eth_environment: &EthBridgeEnvironment,
+//     approved_governance_actions: Vec<Vec<BridgeAction>>,
+// ) -> Vec<std::thread::JoinHandle<()>> {
+//     let bridge_authority_keys = test_cluster
+//         .bridge_authority_keys
+//         .as_ref()
+//         .unwrap()
+//         .iter()
+//         .map(|k| k.copy())
+//         .collect::<Vec<_>>();
+//     let bridge_server_ports = test_cluster.bridge_server_ports.as_ref().unwrap();
+//     assert_eq!(bridge_authority_keys.len(), bridge_server_ports.len());
+//     assert_eq!(
+//         bridge_authority_keys.len(),
+//         approved_governance_actions.len()
+//     );
+
+//     let eth_bridge_contract_address = eth_environment
+//         .contracts
+//         .as_ref()
+//         .unwrap()
+//         .sui_bridge_addrress_hex();
+
+//     let mut handles = vec![];
+//     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
+//         .iter()
+//         .zip(bridge_server_ports.iter())
+//         .zip(approved_governance_actions.into_iter())
+//         .enumerate()
+//     {
+//         // prepare node config (server + client)
+//         let tmp_dir = tempdir().unwrap().into_path().join(i.to_string());
+//         std::fs::create_dir_all(tmp_dir.clone()).unwrap();
+//         let db_path = tmp_dir.join("client_db");
+//         // write authority key to file
+//         let authority_key_path = tmp_dir.join("bridge_authority_key");
+//         let base64_encoded = kp.encode_base64();
+//         std::fs::write(authority_key_path.clone(), base64_encoded).unwrap();
+
+//         let config = BridgeNodeConfig {
+//             server_listen_port: *server_listen_port,
+//             metrics_port: get_available_port("127.0.0.1"),
+//             bridge_authority_key_path: authority_key_path,
+//             approved_governance_actions,
+//             run_client: true,
+//             db_path: Some(db_path),
+//             eth: EthConfig {
+//                 eth_rpc_url: eth_environment.rpc_url.clone(),
+//                 eth_bridge_proxy_address: eth_bridge_contract_address.clone(),
+//                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
+//                 eth_contracts_start_block_fallback: Some(0),
+//                 eth_contracts_start_block_override: None,
+//             },
+//             sui: SuiConfig {
+//                 sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),
+//                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
+//                 bridge_client_key_path: None,
+//                 bridge_client_gas_object: None,
+//                 sui_bridge_module_last_processed_event_id_override: None,
+//             },
+//         };
+//         // Spawn bridge node in memory
+//         let config_clone = config.clone();
+//         // handles.extend(
+//         //     run_bridge_node(
+//         //         config_clone,
+//         //         BridgeNodePublicMetadata::empty_for_testing(),
+//         //         Registry::new(),
+//         //     )
+//         //     .await
+//         //     .unwrap(),
+//         // );
+
+//         handles.push(std::thread::spawn(|| {
+//             let runtime = tokio::runtime::Runtime::new().unwrap();
+//             runtime.block_on(async move {
+//                 let handles = run_bridge_node(
+//                     config_clone,
+//                     BridgeNodePublicMetadata::empty_for_testing(),
+//                     Registry::new(),
+//                 )
+//                 .await
+//                 .unwrap();
+//                 futures::future::join_all(handles).await;
+//             });
+//         }));
+//     }
+//     handles
+// }
+
 pub(crate) async fn start_bridge_cluster(
     test_cluster: &TestCluster,
     eth_environment: &EthBridgeEnvironment,
     approved_governance_actions: Vec<Vec<BridgeAction>>,
-) -> Vec<JoinHandle<()>> {
+    // ) -> Vec<JoinHandle<()>> {
+) -> Vec<std::thread::JoinHandle<()>> {
     let bridge_authority_keys = test_cluster
         .bridge_authority_keys
         .as_ref()
@@ -771,15 +865,74 @@ pub(crate) async fn start_bridge_cluster(
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        handles.push(
-            run_bridge_node(
-                config_clone,
-                BridgeNodePublicMetadata::empty_for_testing(),
-                Registry::new(),
-            )
-            .await
-            .unwrap(),
-        );
+        let thread = std::thread::Builder::new()
+            // .name(name)
+            .name(String::from("bridge_node_thread"))
+            .spawn(move || {
+                let span = if telemetry_subscribers::get_global_telemetry_config()
+                    .map(|c| c.enable_otlp_tracing)
+                    .unwrap_or(false)
+                {
+                    // we cannot have long-lived root spans when exporting trace data to otlp
+                    None
+                } else {
+                    Some(tracing::span!(
+                        tracing::Level::INFO,
+                        "node",
+                        // name =% AuthorityPublicKeyBytes::from(config.protocol_key_pair().public()).concise(),
+                        name =% "bridge_node",
+                    ))
+                };
+
+                let _guard = span.as_ref().map(|span| span.enter());
+
+                // let mut builder =
+                // match runtime {
+                //     RuntimeType::SingleThreaded => tokio::runtime::Builder::new_current_thread(),
+                //     RuntimeType::MultiThreaded => {
+                thread_local! {
+                    static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
+                        std::cell::RefCell::new(None);
+                }
+                let mut builder = tokio::runtime::Builder::new_multi_thread();
+                let span = span.clone();
+                builder
+                    .on_thread_start(move || {
+                        SPAN.with(|maybe_entered_span| {
+                            if let Some(span) = &span {
+                                *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
+                            }
+                        });
+                    })
+                    .on_thread_stop(|| {
+                        SPAN.with(|maybe_entered_span| {
+                            maybe_entered_span.borrow_mut().take();
+                        });
+                    });
+
+                //         builder
+                //     }
+                // };
+                let runtime = builder.enable_all().build().unwrap();
+                // run_bridge_node(
+                //     config_clone,
+                //     BridgeNodePublicMetadata::empty_for_testing(),
+                //     Registry::new(),
+                // )
+                // .await
+                // .unwrap(),
+                runtime.block_on(async move {
+                    let handles = run_bridge_node(
+                        config_clone,
+                        BridgeNodePublicMetadata::empty_for_testing(),
+                        Registry::new(),
+                    )
+                    .await.unwrap();
+                    futures::future::join_all(handles).await;
+                });
+            })
+            .unwrap();
+        handles.push(thread);
     }
     handles
 }

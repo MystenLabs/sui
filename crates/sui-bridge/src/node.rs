@@ -14,7 +14,9 @@ use crate::{
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
+use anyhow::Ok;
 use arc_swap::ArcSwap;
+use axum::handler;
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
@@ -38,13 +40,13 @@ pub async fn run_bridge_node(
     config: BridgeNodeConfig,
     metadata: BridgeNodePublicMetadata,
     prometheus_registry: prometheus::Registry,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<Vec<JoinHandle<()>>> {
     init_all_struct_tags();
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
     let (server_config, client_config) = config.validate(metrics.clone()).await?;
 
     // Start Client
-    let _handles = if let Some(client_config) = client_config {
+    let mut handles = if let Some(client_config) = client_config {
         start_client_components(client_config, metrics.clone()).await
     } else {
         Ok(vec![])
@@ -55,7 +57,8 @@ pub async fn run_bridge_node(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         server_config.server_listen_port,
     );
-    Ok(run_server(
+
+    handles.push(run_server(
         &socket_address,
         BridgeRequestHandler::new(
             server_config.key,
@@ -66,7 +69,8 @@ pub async fn run_bridge_node(
         ),
         metrics,
         Arc::new(metadata),
-    ))
+    ));
+    Ok(handles)
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
