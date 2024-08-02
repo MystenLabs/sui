@@ -95,7 +95,7 @@ pub fn verify_module_with_config_metered(
     InstructionConsistency::verify_module(module)?;
     constants::verify_module(module)?;
     friends::verify_module(module)?;
-    ability_field_requirements::verify_module(module)?;
+    ability_field_requirements::verify_module(module, ability_cache, meter)?;
     RecursiveDataDefChecker::verify_module(module)?;
     InstantiationLoopChecker::verify_module(module)?;
     code_unit_verifier::verify_module(config, module, ability_cache, meter)?;

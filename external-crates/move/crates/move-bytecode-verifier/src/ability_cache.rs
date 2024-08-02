@@ -30,7 +30,7 @@ impl<'a> AbilityCache<'a> {
         &mut self,
         scope: Scope,
         meter: &mut (impl Meter + ?Sized),
-        type_parameter_constraints: &[AbilitySet],
+        type_parameter_abilities: &[AbilitySet],
         ty: &SignatureToken,
     ) -> PartialVMResult<AbilitySet> {
         use SignatureToken as S;
@@ -42,14 +42,14 @@ impl<'a> AbilityCache<'a> {
 
             S::Reference(_) | S::MutableReference(_) => AbilitySet::REFERENCES,
             S::Signer => AbilitySet::SIGNER,
-            S::TypeParameter(idx) => *safe_unwrap!(type_parameter_constraints.get(*idx as usize)),
+            S::TypeParameter(idx) => *safe_unwrap!(type_parameter_abilities.get(*idx as usize)),
             S::Datatype(idx) => {
                 let sh = self.module.datatype_handle_at(*idx);
                 sh.abilities
             }
             S::Vector(inner) => {
                 let inner_abilities =
-                    self.abilities(scope, meter, type_parameter_constraints, inner)?;
+                    self.abilities(scope, meter, type_parameter_abilities, inner)?;
                 let entry = self.vector_results.entry(inner_abilities);
                 match entry {
                     Entry::Occupied(entry) => *entry.get(),
@@ -69,7 +69,7 @@ impl<'a> AbilityCache<'a> {
                 let (idx, type_args) = &**inst;
                 let type_arg_abilities = type_args
                     .iter()
-                    .map(|arg| self.abilities(scope, meter, type_parameter_constraints, arg))
+                    .map(|arg| self.abilities(scope, meter, type_parameter_abilities, arg))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let entry = self
                     .datatype_results
