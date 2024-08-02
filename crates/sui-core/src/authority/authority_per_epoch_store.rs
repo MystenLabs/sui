@@ -251,6 +251,10 @@ pub struct ExecutionComponents {
     metrics: Arc<ResolverMetrics>,
 }
 
+#[cfg(test)]
+#[path = "../unit_tests/authority_per_epoch_store_tests.rs"]
+pub mod authority_per_epoch_store_tests;
+
 pub struct AuthorityPerEpochStore {
     /// The name of this authority.
     pub(crate) name: AuthorityName,
@@ -1983,8 +1987,8 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    /// Get notified when a transaction gets executed as part of a checkpoint execution.
-    pub async fn transaction_executed_in_checkpoint_notify(
+    /// Get notified when transactions get executed as part of a checkpoint execution.
+    pub async fn transactions_executed_in_checkpoint_notify(
         &self,
         digests: Vec<TransactionDigest>,
     ) -> Result<(), SuiError> {

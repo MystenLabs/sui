@@ -929,7 +929,7 @@ impl ConsensusAdapter {
                 processed.expect("Storage error when waiting for consensus message processed");
                 self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
             },
-            processed = epoch_store.transaction_executed_in_checkpoint_notify(transaction_digests) => {
+            processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests) => {
                 processed.expect("Storage error when waiting for transaction executed in checkpoint");
                 self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
             }
