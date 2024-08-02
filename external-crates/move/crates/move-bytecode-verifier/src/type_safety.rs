@@ -18,7 +18,7 @@ use move_binary_format::{
         SignatureToken, SignatureToken as ST, StructDefinition, StructDefinitionIndex,
         StructFieldInformation, VariantDefinition, VariantJumpTable,
     },
-    safe_unwrap_err, CompiledModule,
+    safe_unwrap, safe_unwrap_err, CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -33,7 +33,6 @@ struct Locals {
 }
 
 const TYPE_PUSH_COST: u128 = 1;
-const TYPE_LOAD_COST_PER_NODE: u128 = 5;
 
 impl Locals {
     fn new(parameters: Vec<TypeIndex>, locals: Vec<TypeIndex>) -> Self {
@@ -147,30 +146,29 @@ impl<'a> TypeSafetyChecker<'a> {
     }
 
     fn abilities(
-        &self,
+        &mut self,
         meter: &mut (impl Meter + ?Sized),
         t: &SignatureToken,
     ) -> PartialVMResult<AbilitySet> {
         if !self.types.contains_key(t) {
             self.load_type(meter, t)?;
         }
-        self.abilities_loaded(
-            meter,
-            TypeIndex(safe_unwrap_err!(self.types.get_index_of(t))),
-        )
+        self.abilities_loaded(meter, TypeIndex(safe_unwrap!(self.types.get_index_of(t))))
     }
 
     fn abilities_loaded(
-        &self,
+        &mut self,
         meter: &mut (impl Meter + ?Sized),
         t: TypeIndex,
     ) -> PartialVMResult<AbilitySet> {
-        let (sig, abilities_opt) = safe_unwrap_err!(self.types.get_index(t.0));
+        let (sig, abilities_opt) = safe_unwrap!(self.types.get_index(t.0));
         match abilities_opt {
             Some(abilities) => Ok(*abilities),
             None => {
-                let abilities = self.compute_abilities(meter, sig)?;
-                safe_unwrap_err!(self.types.get_index_mut(t.0)).1 = Some(abilities);
+                let abilities = self.compute_abilities(meter, &sig.clone())?;
+                safe_unwrap!(self.types.get_index_mut(t.0))
+                    .1
+                    .insert(abilities);
                 Ok(abilities)
             }
         }
@@ -190,7 +188,8 @@ impl<'a> TypeSafetyChecker<'a> {
         meter: &mut (impl Meter + ?Sized),
         ty: impl Borrow<SignatureToken>,
     ) -> PartialVMResult<()> {
-        self.push_loaded(meter, self.load_type(meter, ty)?)
+        let t = self.load_type(meter, ty)?;
+        self.push_loaded(meter, t)
     }
 
     fn push_n(
@@ -199,7 +198,8 @@ impl<'a> TypeSafetyChecker<'a> {
         ty: impl Borrow<SignatureToken>,
         n: u64,
     ) -> PartialVMResult<()> {
-        self.push_loaded_n(meter, self.load_type(meter, ty)?, n)
+        let t = self.load_type(meter, ty)?;
+        self.push_loaded_n(meter, t, n)
     }
 
     fn push_loaded(
@@ -468,6 +468,7 @@ fn call(
             return Err(verifier.error(StatusCode::CALL_TYPE_MISMATCH_ERROR, offset));
         }
     }
+    // type actual constraints against formals have already beeh checked in signature checker
     for return_type in &verifier.module.signature_at(function_handle.return_).0 {
         verifier.push(meter, instantiate(return_type, type_actuals))?
     }
