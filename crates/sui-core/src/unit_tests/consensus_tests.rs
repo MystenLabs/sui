@@ -105,12 +105,17 @@ pub async fn test_certificates(
 
 pub fn make_consensus_adapter_for_test(
     state: Arc<AuthorityState>,
+    process_via_checkpoint: bool,
     execute: bool,
 ) -> Arc<ConsensusAdapter> {
     let metrics = ConsensusAdapterMetrics::new_test();
 
     #[derive(Clone)]
-    struct SubmitDirectly(Arc<AuthorityState>, bool);
+    struct SubmitDirectly {
+        state: Arc<AuthorityState>,
+        process_via_checkpoint: bool,
+        execute: bool,
+    }
 
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
@@ -119,23 +124,45 @@ pub fn make_consensus_adapter_for_test(
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
-            let sequenced_transactions = transactions
+            let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
                 .collect();
-            let transactions = epoch_store
-                .process_consensus_transactions_for_tests(
-                    sequenced_transactions,
-                    &Arc::new(CheckpointServiceNoop {}),
-                    self.0.get_object_cache_reader().as_ref(),
-                    &self.0.metrics,
-                    true,
-                )
-                .await?;
-            if self.1 {
-                self.0
-                    .transaction_manager()
-                    .enqueue(transactions, epoch_store);
+
+            if self.process_via_checkpoint {
+                let checkpoint_service = Arc::new(CheckpointServiceNoop {});
+                for tx in sequenced_transactions {
+                    if let Some(tx) = tx.transaction.executable_transaction_digest() {
+                        epoch_store
+                            .insert_finalized_transactions(vec![tx].as_slice(), 10)
+                            .expect("Should not fail");
+                    } else {
+                        epoch_store
+                            .process_consensus_transactions_for_tests(
+                                vec![tx],
+                                &checkpoint_service,
+                                self.state.get_object_cache_reader().as_ref(),
+                                &self.state.metrics,
+                                true,
+                            )
+                            .await?;
+                    }
+                }
+            } else {
+                let transactions = epoch_store
+                    .process_consensus_transactions_for_tests(
+                        sequenced_transactions,
+                        &Arc::new(CheckpointServiceNoop {}),
+                        self.state.get_object_cache_reader().as_ref(),
+                        &self.state.metrics,
+                        true,
+                    )
+                    .await?;
+                if self.execute {
+                    self.state
+                        .transaction_manager()
+                        .enqueue(transactions, epoch_store);
+                }
             }
             Ok(())
         }
@@ -143,7 +170,11 @@ pub fn make_consensus_adapter_for_test(
     let epoch_store = state.epoch_store_for_testing();
     // Make a new consensus adapter instance.
     Arc::new(ConsensusAdapter::new(
-        Arc::new(SubmitDirectly(state.clone(), execute)),
+        Arc::new(SubmitDirectly {
+            state: state.clone(),
+            process_via_checkpoint,
+            execute,
+        }),
         state.name,
         Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
@@ -172,7 +203,7 @@ async fn submit_transaction_to_consensus_adapter() {
     let epoch_store = state.epoch_store_for_testing();
 
     // Make a new consensus adapter instance.
-    let adapter = make_consensus_adapter_for_test(state.clone(), false);
+    let adapter = make_consensus_adapter_for_test(state.clone(), true, false);
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
