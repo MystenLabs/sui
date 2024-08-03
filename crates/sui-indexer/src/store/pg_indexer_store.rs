@@ -74,7 +74,7 @@ macro_rules! chunk {
     }};
 }
 
-macro_rules! prune_tx_indice_table {
+macro_rules! prune_tx_or_event_indice_table {
     ($table:ident, $conn:expr, $min_tx:expr, $max_tx:expr, $context_msg:expr) => {
         diesel::delete($table::table.filter($table::tx_sequence_number.between($min_tx, $max_tx)))
             .execute($conn)
@@ -1419,61 +1419,121 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         )
     }
 
+    fn prune_event_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                prune_tx_or_event_indice_table!(
+                    event_emit_module,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_emit_module table"
+                );
+                prune_tx_or_event_indice_table!(
+                    event_emit_package,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_emit_package table"
+                );
+                prune_tx_or_event_indice_table![
+                    event_senders,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_senders table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_instantiation,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_instantiation table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_module,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_module table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_name,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_name table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_package,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_package table"
+                ];
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
     fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                prune_tx_indice_table!(
+                prune_tx_or_event_indice_table!(
                     tx_senders,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_senders table"
                 );
-                prune_tx_indice_table!(
+                prune_tx_or_event_indice_table!(
                     tx_recipients,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_recipients table"
                 );
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_input_objects,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_input_objects table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_changed_objects,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_changed_objects table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_calls_pkg,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_calls_pkg table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_calls_mod,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_calls_mod table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_calls_fun,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_calls_fun table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_digests,
                     conn,
                     min_tx,
@@ -2040,6 +2100,21 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             });
             info!(
                 "Pruned transactions for checkpoint {} from tx {} to tx {}",
+                cp, min_tx, max_tx
+            );
+            self.execute_in_blocking_worker(move |this| {
+                this.prune_event_indices_table(min_tx, max_tx)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "Failed to prune events of transactions for cp {}: {}",
+                    cp,
+                    e
+                );
+            });
+            info!(
+                "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
                 cp, min_tx, max_tx
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);
