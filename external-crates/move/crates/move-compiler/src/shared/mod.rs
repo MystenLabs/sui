@@ -12,10 +12,7 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
         Diagnostic, Diagnostics, DiagnosticsFormat, WarningFilters,
     },
-    editions::{
-        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
-        FeatureGate, Flavor,
-    },
+    editions::{check_feature_or_error, feature_edition_error_msg, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     hlir::ast as H,
     naming::ast as N,
@@ -588,7 +585,7 @@ impl CompilationEnv {
         feature: FeatureGate,
         loc: Loc,
     ) -> bool {
-        edition_check_feature(self, self.package_config(package).edition, feature, loc)
+        check_feature_or_error(self, self.package_config(package).edition, feature, loc)
     }
 
     // Returns an error string if if the feature isn't supported, or None otherwise.
