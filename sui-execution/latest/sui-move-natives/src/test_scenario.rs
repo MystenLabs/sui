@@ -25,8 +25,9 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::{
     borrow::Borrow,
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::RwLock,
+    thread::LocalKey,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -54,7 +55,7 @@ type Set<K> = IndexSet<K>;
 /// allows this to be used by both the object runtime (for reading) and the test scenario (for
 /// writing) while hiding mutability.
 #[derive(Tid)]
-pub struct InMemoryTestStore(pub &'static RwLock<InMemoryStorage>);
+pub struct InMemoryTestStore(pub &'static LocalKey<RefCell<InMemoryStorage>>);
 
 impl ChildObjectResolver for InMemoryTestStore {
     fn read_child_object(
@@ -63,10 +64,8 @@ impl ChildObjectResolver for InMemoryTestStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0
-            .read()
-            .unwrap()
-            .read_child_object(parent, child, child_version_upper_bound)
+        let l: &'static LocalKey<RefCell<InMemoryStorage>> = self.0;
+        l.with_borrow(|store| store.read_child_object(parent, child, child_version_upper_bound))
     }
 
     fn get_object_received_at_version(
@@ -76,12 +75,14 @@ impl ChildObjectResolver for InMemoryTestStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0.read().unwrap().get_object_received_at_version(
-            owner,
-            receiving_object_id,
-            receive_object_at_version,
-            epoch_id,
-        )
+        self.0.with_borrow(|store| {
+            store.get_object_received_at_version(
+                owner,
+                receiving_object_id,
+                receive_object_at_version,
+                epoch_id,
+            )
+        })
     }
 }
 
@@ -109,12 +110,29 @@ pub fn end_transaction(
     // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
 
-    let received = object_runtime_ref
-        .test_inventories
-        .allocated_tickets
-        .iter()
-        .map(|(k, (metadata, _))| (*k, metadata.clone()))
-        .collect();
+    // Handle the allocated tickets:
+    // * Remove all allocated_tickets in the test inventories.
+    // * For each allocated ticket, if the ticket's object ID is loaded, move it to `received`.
+    // * Otherwise re-insert the allocated ticket into the objects inventory, and mark it to be
+    //   removed from the backing storage (deferred due to needing to have acces to `context` which
+    //   has outstanding references at this point).
+    let allocated_tickets =
+        std::mem::take(&mut object_runtime_ref.test_inventories.allocated_tickets);
+    let mut received = BTreeMap::new();
+    let mut unreceived = BTreeSet::new();
+    let loaded_runtime_objects = object_runtime_ref.loaded_runtime_objects();
+    for (id, (metadata, value)) in allocated_tickets {
+        if loaded_runtime_objects.contains_key(&id) {
+            received.insert(id, metadata);
+        } else {
+            unreceived.insert(id);
+            // This must be untouched since the allocated ticket is still live, so ok to re-insert.
+            object_runtime_ref
+                .test_inventories
+                .objects
+                .insert(id, value);
+        }
+    }
 
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
@@ -168,6 +186,7 @@ pub fn end_transaction(
         }
         inventories.taken.remove(id);
     }
+
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
@@ -212,6 +231,21 @@ pub fn end_transaction(
             }
         }
     }
+
+    // For any unused allocated tickets, remove them from the store.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    for id in unreceived {
+        if store
+            .0
+            .with_borrow_mut(|store| store.remove_object(id).is_none())
+        {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+            ));
+        }
+    }
+
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
     for id in deleted_object_ids {
@@ -587,6 +621,7 @@ pub fn allocate_receiving_ticket_for_object(
     let ty = get_specified_ty(ty_args);
     let id = pop_id(&mut args)?;
 
+    let abilities = context.type_to_abilities(&ty)?;
     let Some((tag, layout, _)) = get_tag_and_layouts(context, &ty)? else {
         return Ok(NativeResult::err(
             context.gas_used(),
@@ -610,10 +645,11 @@ pub fn allocate_receiving_ticket_for_object(
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
         ));
     };
+    let has_public_transfer = abilities.has_store();
     let move_object = unsafe {
         MoveObject::new_from_execution_with_limit(
             tag.into(),
-            false,
+            has_public_transfer,
             object_version,
             bytes,
             250 * 1024,
@@ -654,7 +690,7 @@ pub fn allocate_receiving_ticket_for_object(
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
     let store: &&InMemoryTestStore = context.extensions().get();
-    store.0.write().unwrap().insert_object(object);
+    store.0.with_borrow_mut(|store| store.insert_object(object));
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -685,7 +721,10 @@ pub fn deallocate_receiving_ticket_for_object(
 
     // Remove the object from storage. We should never hit this scenario either.
     let store: &&InMemoryTestStore = context.extensions().get();
-    if store.0.write().unwrap().remove_object(id).is_none() {
+    if store
+        .0
+        .with_borrow_mut(|store| store.remove_object(id).is_none())
+    {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
