@@ -99,6 +99,7 @@ members = [
   "crates/sui-cost",
   "crates/sui-data-ingestion",
   "crates/sui-data-ingestion-core",
+  "crates/sui-deepbook-indexer",
   "crates/sui-e2e-tests",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
