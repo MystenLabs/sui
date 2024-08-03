@@ -1,0 +1,32 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:anyhow_1_0_81",
+  "//buck/third-party:ref-cast_1_0_14",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:variant_count_1_1_0",
+  "//external-crates/move/crates/enum-compat-util:enum-compat-util",
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//external-crates/move/crates/move-proc-macros:move-proc-macros"
+]
+# buckify!
+
+rust_library(
+    name = "move-binary-format",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_DESCRIPTION": "Move Binary Format",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "move-binary-format",
+        "CARGO_PKG_VERSION": "0.0.3",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

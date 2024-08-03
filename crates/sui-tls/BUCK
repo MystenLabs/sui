@@ -1,0 +1,41 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:anyhow_1_0_81",
+  "//buck/third-party:axum-server_0_6_1",
+  "//buck/third-party:axum_0_7_5",
+  "//buck/third-party:ed25519_1_5_3",
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:pkcs8_0_9_0",
+  "//buck/third-party:rcgen_0_13_1",
+  "//buck/third-party:reqwest_0_12_5",
+  "//buck/third-party:rustls_0_23_12",
+  "//buck/third-party:tokio-rustls_0_26_0",
+  "//buck/third-party:tokio_1_36_0",
+  "//buck/third-party:tower-layer_0_3_2",
+  "//buck/third-party:x509-parser_0_14_0"
+]
+# buckify!
+
+rust_library(
+    name = "sui-tls",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "webpki": "//buck/third-party:rustls-webpki_0_102_6",
+    },
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.0",
+        "CARGO_PKG_NAME": "sui-tls",
+        "CARGO_PKG_AUTHORS": "[Brandon Williams <brandon@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "tools for rustls-based certificate generation and verification",
+        "CARGO_MANIFEST_DIR": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

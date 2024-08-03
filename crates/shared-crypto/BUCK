@@ -1,0 +1,30 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:bcs_0_1_6",
+  "//buck/third-party:eyre_0_6_8",
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:serde_repr_0_1_10"
+]
+# buckify!
+
+rust_library(
+    name = "shared-crypto",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.0",
+        "CARGO_PKG_NAME": "shared-crypto",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

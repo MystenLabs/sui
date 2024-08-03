@@ -1,0 +1,94 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:anemo_0_0_0",
+  "//buck/third-party:anyhow_1_0_81",
+  "//buck/third-party:base64_0_21_7",
+  "//buck/third-party:bcs_0_1_6",
+  "//buck/third-party:bytes_1_5_0",
+  "//buck/third-party:derive_builder_0_12_0",
+  "//buck/third-party:enum_dispatch_0_3_9",
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:futures_0_3_29",
+  "//buck/third-party:indexmap_2_2_6",
+  "//buck/third-party:mockall_0_11_4",
+  "//buck/third-party:once_cell_1_19_0",
+  "//buck/third-party:prometheus_0_13_3",
+  "//buck/third-party:proptest-derive_0_3_0",
+  "//buck/third-party:proptest_1_1_0",
+  "//buck/third-party:prost_0_13_1",
+  "//buck/third-party:rand_0_8_5",
+  "//buck/third-party:roaring_0_10_3",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:serde_with_3_8_1",
+  "//buck/third-party:thiserror_1_0_56",
+  "//buck/third-party:tokio_1_36_0",
+  "//buck/third-party:tonic_0_12_1",
+  "//buck/third-party:tracing_0_1_40",
+  "//crates/mysten-common:mysten-common",
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/mysten-network:mysten-network",
+  "//crates/mysten-util-mem:mysten-util-mem",
+  "//crates/sui-protocol-config:sui-protocol-config"
+]
+build_deps = [
+  "//buck/third-party:anemo-build_0_0_0",
+  "//buck/third-party:prost-build_0_13_1",
+  "//buck/third-party:protobuf-src_1_1_0",
+  "//buck/third-party:rustversion_1_0_11",
+  "//buck/third-party:tonic-build_0_12_1"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-types",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "store": "//crates/typed-store:typed-store",
+    },
+    env = {
+        "OUT_DIR": "$(location :narwhal-types-build-script-run[out_dir])",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_MANIFEST_DIR": ".",
+        "CARGO_PKG_NAME": "narwhal-types",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+load("@prelude//rust:cargo_buildscript.bzl", "buildscript_run")
+
+rust_binary(
+    name = "narwhal-types-build-script-build",
+    srcs = glob(["**/*"]),
+    deps = deps + build_deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "store": "//crates/typed-store:typed-store",
+    },
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+    },
+    crate_root = "build.rs",
+    crate = "build_script_build",
+    edition = "2021",
+)
+
+buildscript_run(
+    name = "narwhal-types-build-script-run",
+    buildscript_rule = ":narwhal-types-build-script-build",
+    package_name = "narwhal-types",
+    version = "0.1.0",
+)
+

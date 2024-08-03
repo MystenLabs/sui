@@ -1,0 +1,26 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:serde_yaml_0_8_26"
+]
+# buckify!
+
+rust_library(
+    name = "enum-compat-util",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "enum-compat-util",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

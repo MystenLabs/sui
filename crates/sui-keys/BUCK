@@ -1,0 +1,37 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:anyhow_1_0_81",
+  "//buck/third-party:bip32_0_4_0",
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:rand_0_8_5",
+  "//buck/third-party:regex_1_8_4",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:serde_json_1_0_120",
+  "//buck/third-party:signature_1_6_4",
+  "//buck/third-party:slip10_ed25519_0_1_3",
+  "//buck/third-party:tiny-bip39_1_0_0",
+  "//crates/shared-crypto:shared-crypto",
+  "//crates/sui-types:sui-types"
+]
+# buckify!
+
+rust_library(
+    name = "sui-keys",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "sui-keys",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.0",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

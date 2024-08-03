@@ -1,0 +1,19 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+
+rust_library(
+    name = "move-abstract-stack",
+    srcs = glob(["**/*"]),
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "CARGO_PKG_AUTHORS": "[The Move Contributors]",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_NAME": "move-abstract-stack",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

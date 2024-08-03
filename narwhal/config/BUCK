@@ -1,0 +1,37 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:match_opt_0_1_2",
+  "//buck/third-party:rand_0_8_5",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:serde_json_1_0_120",
+  "//buck/third-party:thiserror_1_0_56",
+  "//buck/third-party:tracing_0_1_40",
+  "//crates/mysten-network:mysten-network",
+  "//crates/mysten-util-mem:mysten-util-mem"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-config",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+    },
+    env = {
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_NAME": "narwhal-config",
+        "CARGO_PKG_DESCRIPTION": "",
+        "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

@@ -1,0 +1,30 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:fastcrypto_0_1_8",
+  "//buck/third-party:rand_0_8_5",
+  "//buck/third-party:serde_1_0_202",
+  "//crates/mysten-network:mysten-network",
+  "//crates/shared-crypto:shared-crypto"
+]
+# buckify!
+
+rust_library(
+    name = "consensus-config",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_NAME": "consensus-config",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

@@ -1,0 +1,97 @@
+
+# Generated on Mon, 29 Jul 2024 21:00:34 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//buck/third-party:anyhow_1_0_81",
+  "//buck/third-party:bcs_0_1_6",
+  "//buck/third-party:clap_4_5_4",
+  "//buck/third-party:codespan-reporting_0_11_1",
+  "//buck/third-party:dunce_1_0_4",
+  "//buck/third-party:hex_0_4_3",
+  "//buck/third-party:lsp-types_0_95_1",
+  "//buck/third-party:once_cell_1_19_0",
+  "//buck/third-party:petgraph_0_5_1",
+  "//buck/third-party:regex_1_8_4",
+  "//buck/third-party:serde_1_0_202",
+  "//buck/third-party:serde_json_1_0_120",
+  "//buck/third-party:similar_2_4_0",
+  "//buck/third-party:stacker_0_1_15",
+  "//buck/third-party:tempfile_3_8_0",
+  "//buck/third-party:vfs_0_10_0",
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//external-crates/move/crates/move-borrow-graph:move-borrow-graph",
+  "//external-crates/move/crates/move-bytecode-source-map:move-bytecode-source-map",
+  "//external-crates/move/crates/move-bytecode-verifier:move-bytecode-verifier",
+  "//external-crates/move/crates/move-command-line-common:move-command-line-common",
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//external-crates/move/crates/move-ir-to-bytecode:move-ir-to-bytecode",
+  "//external-crates/move/crates/move-ir-types:move-ir-types",
+  "//external-crates/move/crates/move-proc-macros:move-proc-macros",
+  "//external-crates/move/crates/move-symbol-pool:move-symbol-pool"
+]
+# buckify!
+
+rust_library(
+    name = "move-compiler",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "move-compiler",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_DESCRIPTION": "The definition of the Move source language, and its compiler",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+rust_binary(
+    name = "move-build",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "move-build": ":move-build",
+    },
+    env = {
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_BIN_NAME": "move-compiler",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "CARGO_PKG_BIN": "move-compiler",
+        "CARGO_PKG_NAME": "move-compiler",
+        "CARGO_PKG_DESCRIPTION": "The definition of the Move source language, and its compiler",
+        "CARGO_MANIFEST_DIR": "",
+    },
+    crate_root = "src/bin/move-build.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+rust_binary(
+    name = "move-check",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "move-check": ":move-check",
+    },
+    env = {
+        "CARGO_PKG_BIN": "move-compiler",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_NAME": "move-compiler",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.0.1",
+        "CARGO_BIN_NAME": "move-compiler",
+        "CARGO_PKG_DESCRIPTION": "The definition of the Move source language, and its compiler",
+        "OUT_DIR": "",
+    },
+    crate_root = "src/bin/move-check.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
