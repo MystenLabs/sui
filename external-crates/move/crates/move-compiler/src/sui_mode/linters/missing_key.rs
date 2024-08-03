@@ -26,7 +26,7 @@ const MISSING_KEY_ABILITY_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::MissingKey as u8,
-    "The struct's first field is 'id' of type 'sui::object::UID' but is missing the 'key' ability.",
+    "struct with id but missing key ability",
 );
 
 pub struct MissingKeyVisitor;
@@ -51,8 +51,6 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    const VISIT_TYPES: bool = true;
-
     fn visit_struct_custom(
         &mut self,
         _module: ModuleIdent,
@@ -70,9 +68,12 @@ impl TypingVisitorContext for Context<'_> {
 }
 
 fn first_field_has_id_field_of_type_uid(sdef: &StructDefinition) -> bool {
-    matches!(&sdef.fields, StructFields::Defined(_, fields) if fields.iter().any(|(_, symbol, ftype)| {
-        ftype.0 == 0 && symbol == &symbol!("id") && ftype.1.value.is("sui", "object", "UID")
-    }))
+    match &sdef.fields {
+        StructFields::Defined(_, fields) => fields.iter().any(|(_, symbol, (idx, ty))| {
+            *idx == 0 && symbol == &symbol!("id") && ty.value.is("sui", "object", "UID")
+        }),
+        StructFields::Native(_) => false,
+    }
 }
 
 fn lacks_key_ability(sdef: &StructDefinition) -> bool {

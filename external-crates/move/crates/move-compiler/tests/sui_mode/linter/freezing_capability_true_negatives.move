@@ -17,6 +17,22 @@ module a::test_true_negatives {
        id: UID
     }
 
+    struct Capture has key {
+       id: UID
+    }
+
+    struct Handicap has key {
+       id: UID
+    }
+
+    struct Recap has key {
+       id: UID
+    }
+
+    struct MyCapybara has key {
+       id: UID
+    }
+
     public fun freeze_normal(w: NormalStruct) {
         transfer::public_freeze_object(w);
     }
@@ -26,6 +42,22 @@ module a::test_true_negatives {
     }
 
     public fun freeze_token(w: Token) {
+        transfer::public_freeze_object(w);
+    }
+
+    public fun freeze_capture(w: Capture) {
+        transfer::public_freeze_object(w);
+    }
+
+    public fun freeze_handicap(w: Handicap) {
+        transfer::public_freeze_object(w);
+    }
+
+    public fun freeze_recap(w: Recap) {
+        transfer::public_freeze_object(w);
+    }
+
+    public fun freeze_capybara(w: MyCapybara) {
         transfer::public_freeze_object(w);
     }
 }

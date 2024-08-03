@@ -84,13 +84,11 @@ pub trait TypingVisitorContext {
             self.pop_warning_filter_scope();
             return;
         }
-        if Self::VISIT_TYPES {
-            for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
-                self.visit_struct(ident, struct_name, sdef)
-            }
-            for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
-                self.visit_enum(ident, enum_name, edef)
-            }
+        for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
+            self.visit_struct(ident, struct_name, sdef)
+        }
+        for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
+            self.visit_enum(ident, enum_name, edef)
         }
         for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
             self.visit_constant(ident, constant_name, cdef)
