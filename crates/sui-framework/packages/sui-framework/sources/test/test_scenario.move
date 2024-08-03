@@ -46,10 +46,11 @@ module sui::test_scenario {
     /// transaction sender access to objects in (only) their inventory.
     /// Example usage:
     /// ```
-    /// let addr1: address = 0;
-    /// let addr2: address = 1;
+    /// let addr1: address = @0x0;
+    /// let addr2: address = @0x1;
     /// // begin a test scenario in a context where addr1 is the sender
-    /// let scenario = &mut test_scenario::begin(addr1);
+    /// let mut scenario_val = test_scenario::begin(addr1);
+    /// let scenario = &mut scenario_val;
     /// // addr1 sends an object to addr2
     /// {
     ///     let some_object: SomeObject = ... // construct an object
@@ -67,7 +68,7 @@ module sui::test_scenario {
     ///     SomeObject::some_function(obj)
     /// };
     /// ... // more txes
-    /// test_scenario::end(scenario);
+    /// test_scenario::end(scenario_val);
     /// ```
     public struct Scenario {
         txn_number: u64,
