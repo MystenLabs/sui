@@ -26,7 +26,7 @@ use std::time::{Duration, Instant, SystemTime};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 pub const METRICS_INTERVAL_SECS: u64 = 2;
 pub const DEFAULT_DRAIN_TIMEOUT_SECS: u64 = 300;
@@ -324,42 +324,50 @@ async fn run_tally_loop(
 
         // every N seconds, we update metrics and logging that would be too
         // spammy to be handled while processing each tally
+        let n = 3;
         if metric_timer.elapsed() > Duration::from_secs(METRICS_INTERVAL_SECS) {
             if let TrafficControlPolicy::FreqThreshold(spam_policy) = &spam_policy {
-                if let Some(highest_direct_rate) = spam_policy.highest_direct_rate() {
+                let highest_n_direct = spam_policy.highest_direct_rates(n);
+                debug!(
+                    "Recent highest {} direct spam rates: {:?}",
+                    n, highest_n_direct
+                );
+                if !highest_n_direct.is_empty() {
                     metrics
                         .highest_direct_spam_rate
-                        .set(highest_direct_rate.0 as i64);
-                    trace!("Recent highest direct spam rate: {:?}", highest_direct_rate);
+                        .set(highest_n_direct.first().unwrap().0 as i64);
                 }
-                if let Some(highest_proxied_rate) = spam_policy.highest_proxied_rate() {
+                let highest_n_proxied = spam_policy.highest_proxied_rates(n);
+                debug!(
+                    "Recent highest {} proxied spam rates: {:?}",
+                    n, highest_n_proxied
+                );
+                if !highest_n_proxied.is_empty() {
                     metrics
                         .highest_proxied_spam_rate
-                        .set(highest_proxied_rate.0 as i64);
-                    trace!(
-                        "Recent highest proxied spam rate: {:?}",
-                        highest_proxied_rate
-                    );
+                        .set(highest_n_proxied.first().unwrap().0 as i64);
                 }
             }
             if let TrafficControlPolicy::FreqThreshold(error_policy) = &error_policy {
-                if let Some(highest_direct_rate) = error_policy.highest_direct_rate() {
+                let highest_n_direct = error_policy.highest_direct_rates(n);
+                debug!(
+                    "Recent highest {} direct error rates: {:?}",
+                    n, highest_n_direct
+                );
+                if !highest_n_direct.is_empty() {
                     metrics
                         .highest_direct_error_rate
-                        .set(highest_direct_rate.0 as i64);
-                    trace!(
-                        "Recent highest direct error rate: {:?}",
-                        highest_direct_rate
-                    );
+                        .set(highest_n_direct.first().unwrap().0 as i64);
                 }
-                if let Some(highest_proxied_rate) = error_policy.highest_proxied_rate() {
+                let highest_n_proxied = error_policy.highest_proxied_rates(n);
+                debug!(
+                    "Recent highest {} proxied error rates: {:?}",
+                    n, highest_n_proxied
+                );
+                if !highest_n_proxied.is_empty() {
                     metrics
                         .highest_proxied_error_rate
-                        .set(highest_proxied_rate.0 as i64);
-                    trace!(
-                        "Recent highest proxied error rate: {:?}",
-                        highest_proxied_rate
-                    );
+                        .set(highest_n_proxied.first().unwrap().0 as i64);
                 }
             }
             metric_timer = Instant::now();
