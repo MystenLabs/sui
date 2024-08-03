@@ -702,6 +702,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier.clone(),
             dag_state.clone(),
+            false,
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -760,6 +761,7 @@ mod tests {
             commit_vote_monitor,
             block_verifier.clone(),
             dag_state.clone(),
+            true,
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),

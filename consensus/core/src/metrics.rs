@@ -134,6 +134,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) last_committed_leader_round: IntGauge,
     pub(crate) last_commit_index: IntGauge,
     pub(crate) last_known_own_block_round: IntGauge,
+    pub(crate) sync_last_known_own_block_retries: IntCounter,
     pub(crate) commit_round_advancement_interval: Histogram,
     pub(crate) last_decided_leader_round: IntGauge,
     pub(crate) leader_timeout_total: IntCounterVec,
@@ -332,6 +333,11 @@ impl NodeMetrics {
             last_known_own_block_round: register_int_gauge_with_registry!(
                 "last_known_own_block_round",
                 "The highest round of our own block as this has been synced from peers during an amnesia recovery",
+                registry,
+            ).unwrap(),
+            sync_last_known_own_block_retries: register_int_counter_with_registry!(
+                "sync_last_known_own_block_retries",
+                "Number of times this node tried to fetch the last own block from peers",
                 registry,
             ).unwrap(),
             // TODO: add a short status label.

@@ -292,6 +292,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state,
+            false,
         );
 
         let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
