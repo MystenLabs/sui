@@ -40,6 +40,7 @@ pub mod indexer;
 pub mod indexer_reader;
 pub mod metrics;
 pub mod models;
+pub mod restorer;
 pub mod schema;
 pub mod store;
 pub mod system_package_task;
@@ -91,6 +92,10 @@ pub struct IndexerConfig {
     pub name_service_registry_id: Option<ObjectID>,
     #[clap(long)]
     pub name_service_reverse_registry_id: Option<ObjectID>,
+    #[clap(long, default_value = "mysten-mainnet-archives", global = true)]
+    pub archive_bucket: String,
+    #[clap(long, default_value = "mysten-mainnet-formal", global = true)]
+    pub formal_snapshot_bucket: String,
 }
 
 impl IndexerConfig {
@@ -147,6 +152,8 @@ impl Default for IndexerConfig {
             name_service_package_address: None,
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
+            archive_bucket: "mysten-mainnet-archives".to_string(),
+            formal_snapshot_bucket: "mysten-mainnet-formal".to_string(),
         }
     }
 }
