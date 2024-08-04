@@ -1,47 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::{AggregateError, Error};
 use anyhow::{anyhow, bail, ensure};
 use colored::Colorize;
-use core::fmt;
 use futures::future;
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
-use move_compiler::editions::{Edition, Flavor};
-use move_compiler::shared::NumericalAddress;
-use move_package::compilation::package_layout::CompiledPackageLayout;
-use move_package::lock_file::schema::{Header, ToolchainVersion};
-use move_package::source_package::layout::SourcePackageLayout;
-use move_package::source_package::parsed_manifest::{FileName, PackageName};
-use std::ffi::OsStr;
-use std::fs::File;
-use std::io::{self, Seek};
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::{collections::HashMap, fmt::Debug};
-use sui_move_build::CompiledPackage;
-use sui_types::error::SuiObjectResponseError;
-use tar::Archive;
-use tempfile::TempDir;
-use thiserror::Error;
-use tracing::{debug, info};
-
 use move_command_line_common::env::MOVE_HOME;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_compiler::compiled_unit::NamedCompiledModule;
+use move_compiler::editions::{Edition, Flavor};
+use move_compiler::shared::NumericalAddress;
 use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::{
     CompiledPackage as MoveCompiledPackage, CompiledUnitWithSource,
 };
+use move_package::compilation::package_layout::CompiledPackageLayout;
+use move_package::lock_file::schema::{Header, ToolchainVersion};
+use move_package::source_package::layout::SourcePackageLayout;
+use move_package::source_package::parsed_manifest::{FileName, PackageName};
 use move_symbol_pool::Symbol;
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{self, Seek};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use sui_move_build::CompiledPackage;
 use sui_sdk::apis::ReadApi;
-use sui_sdk::error::Error;
-
-use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
+use sui_sdk::error::Error as SdkError;
+use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiRawData, SuiRawMovePackage};
 use sui_types::base_types::ObjectID;
+use tar::Archive;
+use tempfile::TempDir;
+use tracing::{debug, info};
+
+pub mod error;
 
 #[cfg(test)]
 mod tests;
@@ -51,78 +49,6 @@ const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; // TODO: update 
 const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u64 = 0; // Used to detect lockfiles pre-toolchain versioning support
 const CANONICAL_UNIX_BINARY_NAME: &str = "sui";
 const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
-
-#[derive(Debug, Error)]
-pub enum SourceVerificationError {
-    #[error("Could not read a dependency's on-chain object: {0:?}")]
-    DependencyObjectReadFailure(Error),
-
-    #[error("Dependency object does not exist or was deleted: {0:?}")]
-    SuiObjectRefFailure(SuiObjectResponseError),
-
-    #[error("Dependency ID contains a Sui object, not a Move package: {0}")]
-    ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),
-
-    #[error("On-chain version of dependency {package}::{module} was not found.")]
-    OnChainDependencyNotFound { package: Symbol, module: Symbol },
-
-    #[error("Could not deserialize on-chain dependency {address}::{module}.")]
-    OnChainDependencyDeserializationError {
-        address: AccountAddress,
-        module: Symbol,
-    },
-
-    #[error("Local version of dependency {address}::{module} was not found.")]
-    LocalDependencyNotFound {
-        address: AccountAddress,
-        module: Symbol,
-    },
-
-    #[error(
-        "Local dependency did not match its on-chain version at {address}::{package}::{module}"
-    )]
-    ModuleBytecodeMismatch {
-        address: AccountAddress,
-        package: Symbol,
-        module: Symbol,
-    },
-
-    #[error("Cannot check local module for {package}: {message}")]
-    CannotCheckLocalModules { package: Symbol, message: String },
-
-    #[error("On-chain address cannot be zero")]
-    ZeroOnChainAddresSpecifiedFailure,
-
-    #[error("Invalid module {name} with error: {message}")]
-    InvalidModuleFailure { name: String, message: String },
-}
-
-#[derive(Debug, Error)]
-pub struct AggregateSourceVerificationError(Vec<SourceVerificationError>);
-
-impl From<SourceVerificationError> for AggregateSourceVerificationError {
-    fn from(error: SourceVerificationError) -> Self {
-        AggregateSourceVerificationError(vec![error])
-    }
-}
-
-impl fmt::Display for AggregateSourceVerificationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let AggregateSourceVerificationError(errors) = self;
-        match &errors[..] {
-            [] => unreachable!("Aggregate error with no errors"),
-            [error] => write!(f, "{}", error)?,
-            errors => {
-                writeln!(f, "Multiple source verification errors found:")?;
-                for error in errors {
-                    write!(f, "\n- {}", error)?;
-                }
-                return Ok(());
-            }
-        };
-        Ok(())
-    }
-}
 
 /// How to handle package source during bytecode verification.
 #[derive(PartialEq, Eq)]
@@ -158,7 +84,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         compiled_package: &CompiledPackage,
         root_on_chain_address: AccountAddress,
-    ) -> Result<(), AggregateSourceVerificationError> {
+    ) -> Result<(), AggregateError> {
         self.verify_package(
             compiled_package,
             /* verify_deps */ true,
@@ -173,7 +99,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         compiled_package: &CompiledPackage,
         root_on_chain_address: AccountAddress,
-    ) -> Result<(), AggregateSourceVerificationError> {
+    ) -> Result<(), AggregateError> {
         self.verify_package(
             compiled_package,
             /* verify_deps */ false,
@@ -187,7 +113,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     pub async fn verify_package_deps(
         &self,
         compiled_package: &CompiledPackage,
-    ) -> Result<(), AggregateSourceVerificationError> {
+    ) -> Result<(), AggregateError> {
         self.verify_package(
             compiled_package,
             /* verify_deps */ true,
@@ -205,13 +131,13 @@ impl<'a> BytecodeSourceVerifier<'a> {
         compiled_package: &CompiledPackage,
         verify_deps: bool,
         source_mode: SourceMode,
-    ) -> Result<(), AggregateSourceVerificationError> {
+    ) -> Result<(), AggregateError> {
         let mut on_chain_pkgs = vec![];
         match &source_mode {
             SourceMode::Skip => (),
             // On-chain address for matching root package cannot be zero
             SourceMode::VerifyAt(AccountAddress::ZERO) => {
-                return Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure.into())
+                return Err(Error::ZeroOnChainAddresSpecifiedFailure.into())
             }
             SourceMode::VerifyAt(root_address) => on_chain_pkgs.push(*root_address),
             SourceMode::Verify => {
@@ -235,14 +161,14 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let mut errors = Vec::new();
         for ((address, module), (package, local_module)) in local_modules {
             let Some(on_chain_module) = on_chain_modules.remove(&(address, module)) else {
-                errors.push(SourceVerificationError::OnChainDependencyNotFound { package, module });
+                errors.push(Error::OnChainDependencyNotFound { package, module });
                 continue;
             };
 
             // compare local bytecode to on-chain bytecode to ensure integrity of our
             // dependencies
             if local_module != on_chain_module {
-                errors.push(SourceVerificationError::ModuleBytecodeMismatch {
+                errors.push(Error::ModuleBytecodeMismatch {
                     address,
                     package,
                     module,
@@ -251,20 +177,17 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
 
         if let Some(((address, module), _)) = on_chain_modules.into_iter().next() {
-            errors.push(SourceVerificationError::LocalDependencyNotFound { address, module });
+            errors.push(Error::LocalDependencyNotFound { address, module });
         }
 
         if !errors.is_empty() {
-            return Err(AggregateSourceVerificationError(errors));
+            return Err(AggregateError(errors));
         }
 
         Ok(())
     }
 
-    async fn pkg_for_address(
-        &self,
-        addr: AccountAddress,
-    ) -> Result<SuiRawMovePackage, SourceVerificationError> {
+    async fn pkg_for_address(&self, addr: AccountAddress) -> Result<SuiRawMovePackage, Error> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
         let obj_id = ObjectID::from(addr);
@@ -276,30 +199,30 @@ impl<'a> BytecodeSourceVerifier<'a> {
             .rpc_client
             .get_object_with_options(obj_id, SuiObjectDataOptions::new().with_bcs())
             .await
-            .map_err(SourceVerificationError::DependencyObjectReadFailure)?;
+            .map_err(Error::DependencyObjectReadFailure)?;
 
         let obj = obj_read
             .into_object()
-            .map_err(SourceVerificationError::SuiObjectRefFailure)?
+            .map_err(Error::SuiObjectRefFailure)?
             .bcs
             .ok_or_else(|| {
-                SourceVerificationError::DependencyObjectReadFailure(Error::DataError(
+                Error::DependencyObjectReadFailure(SdkError::DataError(
                     "Bcs field is not found".to_string(),
                 ))
             })?;
 
         match obj {
             SuiRawData::Package(pkg) => Ok(pkg),
-            SuiRawData::MoveObject(move_obj) => Err(
-                SourceVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
-            ),
+            SuiRawData::MoveObject(move_obj) => {
+                Err(Error::ObjectFoundWhenPackageExpected(obj_id, move_obj))
+            }
         }
     }
 
     async fn on_chain_modules(
         &self,
         addresses: impl Iterator<Item = AccountAddress> + Clone,
-    ) -> Result<OnChainModules, AggregateSourceVerificationError> {
+    ) -> Result<OnChainModules, AggregateError> {
         let resp = future::join_all(addresses.clone().map(|addr| self.pkg_for_address(addr))).await;
         let mut map = OnChainModules::new();
         let mut err = vec![];
@@ -308,12 +231,10 @@ impl<'a> BytecodeSourceVerifier<'a> {
             let SuiRawMovePackage { module_map, .. } = pkg?;
             for (name, bytes) in module_map {
                 let Ok(module) = CompiledModule::deserialize_with_defaults(&bytes) else {
-                    err.push(
-                        SourceVerificationError::OnChainDependencyDeserializationError {
-                            address: storage_id,
-                            module: name.into(),
-                        },
-                    );
+                    err.push(Error::OnChainDependencyDeserializationError {
+                        address: storage_id,
+                        module: name.into(),
+                    });
                     continue;
                 };
 
@@ -323,7 +244,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
 
         if !err.is_empty() {
-            return Err(AggregateSourceVerificationError(err));
+            return Err(AggregateError(err));
         }
 
         Ok(map)
@@ -333,19 +254,19 @@ impl<'a> BytecodeSourceVerifier<'a> {
 fn substitute_root_address(
     named_module: &NamedCompiledModule,
     root: AccountAddress,
-) -> Result<CompiledModule, SourceVerificationError> {
+) -> Result<CompiledModule, Error> {
     let mut module = named_module.module.clone();
     let address_idx = module.self_handle().address;
 
     let Some(addr) = module.address_identifiers.get_mut(address_idx.0 as usize) else {
-        return Err(SourceVerificationError::InvalidModuleFailure {
+        return Err(Error::InvalidModuleFailure {
             name: named_module.name.to_string(),
             message: "Self address field missing".into(),
         });
     };
 
     if *addr != AccountAddress::ZERO {
-        return Err(SourceVerificationError::InvalidModuleFailure {
+        return Err(Error::InvalidModuleFailure {
             name: named_module.name.to_string(),
             message: "Self address already populated".to_string(),
         });
@@ -359,13 +280,13 @@ fn local_modules(
     compiled_package: &MoveCompiledPackage,
     include_deps: bool,
     source_mode: SourceMode,
-) -> Result<LocalModules, SourceVerificationError> {
+) -> Result<LocalModules, Error> {
     let mut map = LocalModules::new();
 
     if include_deps {
         // Compile dependencies with prior compilers if needed.
         let deps_compiled_units = units_for_toolchain(&compiled_package.deps_compiled_units)
-            .map_err(|e| SourceVerificationError::CannotCheckLocalModules {
+            .map_err(|e| Error::CannotCheckLocalModules {
                 package: compiled_package.compiled_package_info.package_name,
                 message: e.to_string(),
             })?;
@@ -397,7 +318,7 @@ fn local_modules(
                     .collect::<Vec<_>>();
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
-                    SourceVerificationError::CannotCheckLocalModules {
+                    Error::CannotCheckLocalModules {
                         package: compiled_package.compiled_package_info.package_name,
                         message: e.to_string(),
                     }
@@ -410,7 +331,7 @@ fn local_modules(
                 let module = m.name;
                 let address = m.address.into_inner();
                 if address == AccountAddress::ZERO {
-                    return Err(SourceVerificationError::InvalidModuleFailure {
+                    return Err(Error::InvalidModuleFailure {
                         name: module.to_string(),
                         message: "Can't verify unpublished source".to_string(),
                     });
@@ -432,7 +353,7 @@ fn local_modules(
                     .collect::<Vec<_>>();
 
                 units_for_toolchain(&root_compiled_units).map_err(|e| {
-                    SourceVerificationError::CannotCheckLocalModules {
+                    Error::CannotCheckLocalModules {
                         package: compiled_package.compiled_package_info.package_name,
                         message: e.to_string(),
                     }
