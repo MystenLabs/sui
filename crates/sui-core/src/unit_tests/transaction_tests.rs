@@ -2149,7 +2149,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         assert_matches!(
             response.unwrap_err(),
             SuiError::UserInputError {
-                error: UserInputError::CeritificateAlreadyProcessed { .. },
+                error: UserInputError::CertificateAlreadyProcessed { .. },
             }
         );
     }
