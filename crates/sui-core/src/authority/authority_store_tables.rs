@@ -136,7 +136,7 @@ impl AuthorityPerpetualTables {
         Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::new("perpetual")
-                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+                .with_sampling(SamplingInterval::new(Duration::ZERO, 1)),
             db_options,
             None,
         )
