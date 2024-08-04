@@ -5,7 +5,7 @@
 //! migrating legacy transactions
 
 use anyhow::Context;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
@@ -18,16 +18,15 @@ use crate::{
     SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-#[derive(PartialEq, Eq, Hash)]
-enum BuilderArg {
-    Object(ObjectID),
-    Pure(Vec<u8>),
-    ForcedNonUniquePure(usize),
-}
-
+// #[derive(PartialEq, Eq, Hash)]
+// enum BuilderArg {
+//     Object(ObjectID),
+//     Pure(Vec<u8>),
+//     ForcedNonUniquePure(usize),
+// }
 #[derive(Default)]
 pub struct ProgrammableTransactionBuilder {
-    inputs: IndexMap<BuilderArg, CallArg>,
+    inputs: IndexSet<CallArg>,
     commands: Vec<Command>,
 }
 
@@ -38,17 +37,17 @@ impl ProgrammableTransactionBuilder {
 
     pub fn finish(self) -> ProgrammableTransaction {
         let Self { inputs, commands } = self;
-        let inputs = inputs.into_values().collect();
+        let inputs = inputs.into_iter().collect();
         ProgrammableTransaction { inputs, commands }
     }
 
-    pub fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
-        let arg = if force_separate {
-            BuilderArg::ForcedNonUniquePure(self.inputs.len())
-        } else {
-            BuilderArg::Pure(bytes.clone())
-        };
-        let (i, _) = self.inputs.insert_full(arg, CallArg::Pure(bytes));
+    pub fn pure_bytes(&mut self, bytes: Vec<u8>, _force_separate: bool) -> Argument {
+        // let arg = if force_separate {
+        //     BuilderArg::ForcedNonUniquePure(self.inputs.len())
+        // } else {
+        //     BuilderArg::Pure(bytes.clone())
+        // };
+        let (i, _) = self.inputs.insert_full(CallArg::Pure(bytes));
         Argument::Input(i as u16)
     }
 
@@ -69,7 +68,7 @@ impl ProgrammableTransactionBuilder {
 
     pub fn obj(&mut self, obj_arg: ObjectArg) -> anyhow::Result<Argument> {
         let id = obj_arg.id();
-        let obj_arg = if let Some(old_value) = self.inputs.get(&BuilderArg::Object(id)) {
+        let obj_arg = if let Some(old_value) = self.inputs.get(&CallArg::Object(obj_arg)) {
             let old_obj_arg = match old_value {
                 CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
                 CallArg::Object(arg) => arg,
@@ -109,9 +108,7 @@ impl ProgrammableTransactionBuilder {
         } else {
             obj_arg
         };
-        let (i, _) = self
-            .inputs
-            .insert_full(BuilderArg::Object(id), CallArg::Object(obj_arg));
+        let (i, _) = self.inputs.insert_full(CallArg::Object(obj_arg));
         Ok(Argument::Input(i as u16))
     }
 
