@@ -21,7 +21,8 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
-use crate::{BytecodeSourceVerifier, SourceMode, CURRENT_COMPILER_VERSION};
+use crate::toolchain::CURRENT_COMPILER_VERSION;
+use crate::{BytecodeSourceVerifier, SourceMode};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
