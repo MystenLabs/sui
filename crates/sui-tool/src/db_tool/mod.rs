@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
+use self::db_dump::{
+    dump_table, duplicate_objects_summary, fix_index, list_tables, table_summary, StoreName,
+};
 use self::index_search::{search_index, SearchRange};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::{anyhow, bail};
@@ -42,6 +44,7 @@ pub enum DbToolCommand {
     PruneObjects,
     PruneCheckpoints,
     SetCheckpointWatermark(SetCheckpointWatermarkOptions),
+    FixIndex,
 }
 
 #[derive(Parser)]
@@ -234,6 +237,7 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
             Ok(())
         }
         DbToolCommand::SetCheckpointWatermark(d) => set_checkpoint_watermark(&db_path, d),
+        DbToolCommand::FixIndex => fix_index(db_path),
     }
 }
 
