@@ -41,7 +41,7 @@ use sui_types::TypeTag;
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
-pub const USD_MULTIPLIER: u64 = 10000; // decimal places = 4
+pub const USD_MULTIPLIER: u64 = 100000000; // decimal places = 8
 
 pub type IsBridgePaused = bool;
 pub const BRIDGE_PAUSED: bool = true;
