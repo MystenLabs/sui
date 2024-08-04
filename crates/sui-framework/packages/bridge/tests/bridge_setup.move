@@ -4,14 +4,23 @@
 #[test_only]
 module bridge::bridge_setup {
     use bridge::bridge::{
-        assert_not_paused, assert_paused, create_bridge_for_testing, inner_token_transfer_records,
-        test_execute_add_tokens_on_sui, test_execute_emergency_op, test_init_bridge_committee,
-        test_load_inner_mut, Bridge,
+        assert_not_paused,
+        assert_paused,
+        create_bridge_for_testing,
+        inner_token_transfer_records,
+        test_init_bridge_committee,
+        test_load_inner_mut,
+        Bridge,
     };
     use bridge::btc::{Self, BTC};
+    use bridge::chain_ids;
     use bridge::eth::{Self, ETH};
     use bridge::message::{
-        Self, create_add_tokens_on_sui_message, create_blocklist_message, emergency_op_pause,
+        Self,
+        BridgeMessage,
+        create_add_tokens_on_sui_message,
+        create_blocklist_message,
+        emergency_op_pause,
         emergency_op_unpause,
     };
     use bridge::message_types;
@@ -19,8 +28,10 @@ module bridge::bridge_setup {
     use bridge::usdc::{Self, USDC};
     use bridge::usdt::{Self, USDT};
     use std::{ascii::String, type_name};
+    use sui::address;
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
-    use sui::hex;
+    use sui::ecdsa_k1::{KeyPair, secp256k1_keypair_from_seed, secp256k1_sign};
     use sui::package::UpgradeCap;
     use sui::test_scenario::{Self, Scenario};
     use sui::test_utils::destroy;
@@ -30,10 +41,7 @@ module bridge::bridge_setup {
             create_sui_system_state_for_testing,
             create_validator_for_testing,
         },
-        sui_system::{
-            validator_voting_powers_for_testing,
-            SuiSystemState,
-        },
+        sui_system::{validator_voting_powers_for_testing, SuiSystemState},
     };
 
     //
@@ -69,18 +77,39 @@ module bridge::bridge_setup {
     // Validators setup and info
     //
 
-    const VALIDATOR1_PUBKEY: vector<u8> = b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964";
-    const VALIDATOR2_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62";
-    const VALIDATOR3_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a63";
+    // Validator info
+    public struct ValidatorInfo has drop {
+        validator: address,
+        key_pair: KeyPair,
+        stake_amount: u64,
+    }
+
+    public fun addr(validator: &ValidatorInfo): address {
+        validator.validator
+    }
+
+    public fun public_key(validator: &ValidatorInfo): &vector<u8> {
+        validator.key_pair.public_key()
+    }
+
+    public fun create_validator(
+        validator: address,
+        stake_amount: u64,
+        seed: &vector<u8>,
+    ): ValidatorInfo {
+        ValidatorInfo { validator, key_pair: secp256k1_keypair_from_seed(seed), stake_amount }
+    }
 
     // Bridge environemnt
     public struct BridgeEnv {
         scenario: Scenario,
+        validators: vector<ValidatorInfo>,
         chain_id: u8,
-        seq_num: u64,
         vault: Vault,
+        clock: Clock,
     }
 
+    //
     public struct Vault {
         btc_coins: Coin<BTC>,
         eth_coins: Coin<ETH>,
@@ -89,15 +118,29 @@ module bridge::bridge_setup {
         test_coins: Coin<TEST_TOKEN>,
     }
 
-    // Info to set up a validator
-    public struct ValidatorInfo has copy, drop {
-        validator: address,
-        stake_amount: u64,
-    }
-
-    // HotPotato to access the Bridge
+    // HotPotato to access shared state
     public struct BridgeWrapper {
         bridge: Bridge,
+    }
+
+    public fun bridge(env: &mut BridgeEnv, sender: address): BridgeWrapper {
+        let scenario = &mut env.scenario;
+        scenario.next_tx(sender);
+        let bridge = scenario.take_shared<Bridge>();
+        BridgeWrapper { bridge }
+    }
+
+    public fun bridge_ref(wrapper: &BridgeWrapper): &Bridge {
+        &wrapper.bridge
+    }
+
+    public fun bridge_ref_mut(wrapper: &mut BridgeWrapper): &mut Bridge {
+        &mut wrapper.bridge
+    }
+
+    public fun return_bridge(bridge: BridgeWrapper) {
+        let BridgeWrapper { bridge } = bridge;
+        test_scenario::return_shared(bridge);
     }
 
     //
@@ -108,63 +151,50 @@ module bridge::bridge_setup {
     // Environment creation and destruction
     //
 
-    public fun create_env(chain_id: u8, start_addr: address): BridgeEnv {
-        let mut scenario = test_scenario::begin(start_addr);
+    public fun create_env(chain_id: u8): BridgeEnv {
+        let mut scenario = test_scenario::begin(@0x0);
         let ctx = scenario.ctx();
+        let mut clock = sui::clock::create_for_testing(ctx);
+        clock.set_for_testing(1_000_000_000);
         let btc_coins = coin::zero<BTC>(ctx);
         let eth_coins = coin::zero<ETH>(ctx);
         let usdc_coins = coin::zero<USDC>(ctx);
         let usdt_coins = coin::zero<USDT>(ctx);
         let test_coins = coin::zero<TEST_TOKEN>(ctx);
-        let vault = Vault {
-            btc_coins,
-            eth_coins,
-            usdc_coins,
-            usdt_coins,
-            test_coins,
-        };
-        BridgeEnv {
-            scenario,
-            chain_id,
-            seq_num: 0,
-            vault,
-        }
+        let vault = Vault { btc_coins, eth_coins, usdc_coins, usdt_coins, test_coins };
+        BridgeEnv { scenario, chain_id, vault, validators: vector::empty(), clock }
     }
 
     public fun destroy_env(env: BridgeEnv) {
-        let BridgeEnv {scenario, chain_id: _, seq_num: _, vault} = env;
+        let BridgeEnv {
+            scenario,
+            chain_id: _,
+            vault,
+            validators: _,
+            clock,
+        } = env;
         destroy_valut(vault);
+        clock.destroy_for_testing();
         scenario.end();
-    }
-
-    public fun create_validator_info(validator: address, stake_amount: u64): ValidatorInfo {
-        ValidatorInfo {
-            validator,
-            stake_amount,
-        }
     }
 
     //
     // Add a set of validators to the chain.
     // Call only once in a test scenario.
-    public fun setup_validators(
-        env: &mut BridgeEnv,
-        validators_info: vector<ValidatorInfo>,
-        sender: address,
-    ) {
+    public fun setup_validators(env: &mut BridgeEnv, validators_info: vector<ValidatorInfo>) {
         let scenario = &mut env.scenario;
-        scenario.next_tx(sender);
+        scenario.next_tx(@0x0);
         let ctx = scenario.ctx();
-        let mut validators = vector::empty();
-        let mut count = validators_info.length();
-        while (count > 0) {
-            count = count - 1;
-            validators.push_back(create_validator_for_testing(
-                validators_info[count].validator,
-                validators_info[count].stake_amount,
-                ctx,
-            ));
-        };
+        let validators = validators_info.map_ref!(
+            |validator| {
+                create_validator_for_testing(
+                    validator.validator,
+                    validator.stake_amount,
+                    ctx,
+                )
+            },
+        );
+        env.validators = validators_info;
         create_sui_system_state_for_testing(validators, 0, 0, ctx);
         advance_epoch_with_reward_amounts(0, 0, scenario);
     }
@@ -179,15 +209,17 @@ module bridge::bridge_setup {
     // Save the Bridge as a shared object.
     public fun create_bridge_default(env: &mut BridgeEnv) {
         let validators = vector[
-            ValidatorInfo { validator: @0xA, stake_amount: 100 },
-            ValidatorInfo { validator: @0xB, stake_amount: 100 },
-            ValidatorInfo { validator: @0xC, stake_amount: 100 },
+            create_validator(@0xAAAA, 100, &b"1234567890_1234567890_1234567890"),
+            create_validator(@0xBBBB, 100, &b"234567890_1234567890_1234567890_"),
+            create_validator(@0xCCCC, 100, &b"34567890_1234567890_1234567890_1"),
         ];
+        env.setup_validators(validators);
+
         let sender = @0x0;
-        env.setup_validators(validators, sender);
         env.create_bridge(sender);
         env.register_committee();
         env.init_committee(sender);
+        env.setup_treasury(sender);
     }
 
     // Create a bridge and set up a treasury.
@@ -198,7 +230,6 @@ module bridge::bridge_setup {
         env.scenario.next_tx(sender);
         let ctx = env.scenario.ctx();
         create_bridge_for_testing(object::new(ctx), env.chain_id, ctx);
-        env.setup_treasury(sender);
     }
 
     // Register 3 committee members (validators `@0xA`, `@0xB`, `@0xC`)
@@ -208,32 +239,19 @@ module bridge::bridge_setup {
         let mut bridge = scenario.take_shared<Bridge>();
         let mut system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
-        // register committee member `@0xA`
-        scenario.next_tx(@0xA);
-        bridge.committee_registration(
-            &mut system_state,
-            hex::decode(VALIDATOR1_PUBKEY),
-            b"",
-            scenario.ctx(),
-        );
-
-        // register committee member `@0xB`
-        scenario.next_tx(@0xB);
-        bridge.committee_registration(
-            &mut system_state,
-            hex::decode(VALIDATOR2_PUBKEY),
-            b"",
-            scenario.ctx(),
-        );
-
-        // register committee member `@0xC`
-        scenario.next_tx(@0xC);
-        bridge.committee_registration(
-            &mut system_state,
-            hex::decode(VALIDATOR3_PUBKEY),
-            b"",
-            scenario.ctx(),
-        );
+        env
+            .validators
+            .do_ref!(
+                |validator| {
+                    scenario.next_tx(validator.validator);
+                    bridge.committee_registration(
+                        &mut system_state,
+                        *validator.key_pair.public_key(),
+                        b"",
+                        scenario.ctx(),
+                    );
+                },
+            );
 
         test_scenario::return_shared(bridge);
         test_scenario::return_shared(system_state);
@@ -268,8 +286,7 @@ module bridge::bridge_setup {
         let mut bridge = env.scenario.take_shared<Bridge>();
 
         // BTC
-        let (upgrade_cap, treasury_cap, metadata) =
-            btc::create_bridge_token(env.scenario.ctx());
+        let (upgrade_cap, treasury_cap, metadata) = btc::create_bridge_token(env.scenario.ctx());
         bridge.register_foreign_token<BTC>(
             treasury_cap,
             upgrade_cap,
@@ -277,8 +294,7 @@ module bridge::bridge_setup {
         );
         destroy(metadata);
         // ETH
-        let (upgrade_cap, treasury_cap, metadata) =
-            eth::create_bridge_token(env.scenario.ctx());
+        let (upgrade_cap, treasury_cap, metadata) = eth::create_bridge_token(env.scenario.ctx());
         bridge.register_foreign_token<ETH>(
             treasury_cap,
             upgrade_cap,
@@ -286,8 +302,7 @@ module bridge::bridge_setup {
         );
         destroy(metadata);
         // USDC
-        let (upgrade_cap, treasury_cap, metadata) =
-            usdc::create_bridge_token(env.scenario.ctx());
+        let (upgrade_cap, treasury_cap, metadata) = usdc::create_bridge_token(env.scenario.ctx());
         bridge.register_foreign_token<USDC>(
             treasury_cap,
             upgrade_cap,
@@ -295,8 +310,7 @@ module bridge::bridge_setup {
         );
         destroy(metadata);
         // USDT
-        let (upgrade_cap, treasury_cap, metadata) =
-            usdt::create_bridge_token(env.scenario.ctx());
+        let (upgrade_cap, treasury_cap, metadata) = usdt::create_bridge_token(env.scenario.ctx());
         bridge.register_foreign_token<USDT>(
             treasury_cap,
             upgrade_cap,
@@ -315,8 +329,8 @@ module bridge::bridge_setup {
 
         let add_token_message = create_add_tokens_on_sui_message(
             env.chain_id,
-            env.seq_num(),
-            false, // native_token
+            bridge.get_seq_num_for(message_types::add_tokens_on_sui()),
+            false,
             vector[BTC_ID, ETH_ID, USDC_ID, USDT_ID],
             vector[
                 type_name::get<BTC>().into_string(),
@@ -326,15 +340,15 @@ module bridge::bridge_setup {
             ],
             vector[1000, 100, 1, 1],
         );
-        let payload = add_token_message.extract_add_tokens_on_sui();
-        bridge.test_execute_add_tokens_on_sui(payload);
+        let signatures = env.sign_message(add_token_message);
+        bridge.execute_system_message(add_token_message, signatures);
 
         test_scenario::return_shared(bridge);
     }
 
     // Add the 4 tokens previously registered: ETH, BTC, USDT, USDC.
     public fun add_tokens(
-        env: &mut BridgeEnv, 
+        env: &mut BridgeEnv,
         sender: address,
         native_token: bool,
         token_ids: vector<u8>,
@@ -345,39 +359,298 @@ module bridge::bridge_setup {
         scenario.next_tx(sender);
         let mut bridge = scenario.take_shared<Bridge>();
 
-        let add_token_message = create_add_tokens_on_sui_message(
+        let message = create_add_tokens_on_sui_message(
             env.chain_id,
-            env.seq_num(),
+            bridge.get_seq_num_for(message_types::add_tokens_on_sui()),
             native_token,
             token_ids,
             type_names,
             token_prices,
         );
-        let payload = add_token_message.extract_add_tokens_on_sui();
-        bridge.test_execute_add_tokens_on_sui(payload);
+        let signatures = env.sign_message(message);
+        bridge.execute_system_message(message, signatures);
 
         test_scenario::return_shared(bridge);
     }
 
-    public fun update_asset_price(
-        env: &mut BridgeEnv, 
-        sender: address,
-        token_id: u8,
-        value:u64,
-    ) {
+    public fun update_asset_price(env: &mut BridgeEnv, sender: address, token_id: u8, value: u64) {
         let scenario = &mut env.scenario;
         scenario.next_tx(sender);
         let mut bridge = scenario.take_shared<Bridge>();
-        let inner = bridge.test_load_inner_mut();
 
-        let msg = message::create_update_asset_price_message(
+        let message = message::create_update_asset_price_message(
             token_id,
             env.chain_id,
-            env.seq_num(),
+            bridge.get_seq_num_for(message_types::update_asset_price()),
             value,
         );
-        let payload = msg.extract_update_asset_price();
-        inner.test_execute_update_asset_price(payload);
+        let signatures = env.sign_message(message);
+        bridge.execute_system_message(message, signatures);
+
+        test_scenario::return_shared(bridge);
+    }
+
+    const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
+
+    fun sign_message(env: &BridgeEnv, message: BridgeMessage): vector<vector<u8>> {
+        let mut message_bytes = SUI_MESSAGE_PREFIX;
+        message_bytes.append(message.serialize_message());
+        let mut message_bytes = SUI_MESSAGE_PREFIX;
+        message_bytes.append(message.serialize_message());
+        env
+            .validators
+            .map_ref!(
+                |validator| {
+                    secp256k1_sign(
+                        validator.key_pair.private_key(),
+                        &message_bytes,
+                        0,
+                        true,
+                    )
+                },
+            )
+    }
+
+    public fun sign_message_with(
+        env: &BridgeEnv,
+        message: BridgeMessage,
+        validator_idxs: vector<u64>,
+    ): vector<vector<u8>> {
+        let mut message_bytes = SUI_MESSAGE_PREFIX;
+        message_bytes.append(message.serialize_message());
+        validator_idxs.map!(
+            |idx| {
+                secp256k1_sign(
+                    env.validators[idx].key_pair.private_key(),
+                    &message_bytes,
+                    0,
+                    true,
+                )
+            },
+        )
+    }
+
+    public fun token_type<T>(env: &mut BridgeEnv): u8 {
+        env.scenario.next_tx(@0x0);
+        let bridge = env.scenario.take_shared<Bridge>();
+        let inner = bridge.test_load_inner();
+        let token_id = inner.inner_treasury().token_id<T>();
+        test_scenario::return_shared(bridge);
+        token_id
+    }
+
+    public fun bridge_in_message<Token>(
+        env: &mut BridgeEnv,
+        source_chain: u8,
+        source_address: vector<u8>,
+        target_address: address,
+        amount: u64,
+    ): BridgeMessage {
+        let token_type = env.token_type<Token>();
+
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let mut bridge = scenario.take_shared<Bridge>();
+
+        let message = message::create_token_bridge_message(
+            source_chain,
+            bridge.get_seq_num_inc_for(message_types::token()),
+            source_address,
+            env.chain_id,
+            address::to_bytes(target_address),
+            token_type,
+            amount,
+        );
+        test_scenario::return_shared(bridge);
+        message
+    }
+
+    public fun bridge_out_message<Token>(
+        env: &mut BridgeEnv,
+        target_chain: u8,
+        target_address: vector<u8>,
+        source_address: address,
+        amount: u64,
+        transfer_id: u64,
+    ): BridgeMessage {
+        let token_type = env.token_type<Token>();
+
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let bridge = scenario.take_shared<Bridge>();
+
+        let message = message::create_token_bridge_message(
+            env.chain_id,
+            transfer_id,
+            address::to_bytes(source_address),
+            target_chain,
+            target_address,
+            token_type,
+            amount,
+        );
+        test_scenario::return_shared(bridge);
+        message
+    }
+
+    public fun bridge_to_sui<Token>(
+        env: &mut BridgeEnv,
+        source_chain: u8,
+        source_address: vector<u8>,
+        target_address: address,
+        amount: u64,
+    ): u64 {
+        let token_type = env.token_type<Token>();
+
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let mut bridge = scenario.take_shared<Bridge>();
+
+        let seq_num = bridge.get_seq_num_inc_for(message_types::token());
+        let message = message::create_token_bridge_message(
+            source_chain,
+            seq_num,
+            source_address,
+            env.chain_id,
+            address::to_bytes(target_address),
+            token_type,
+            amount,
+        );
+        let signatures = env.sign_message(message);
+        bridge.approve_token_transfer(message, signatures);
+
+        test_scenario::return_shared(bridge);
+        seq_num
+    }
+
+    public fun bridge_token<Token>(
+        env: &mut BridgeEnv,
+        source_chain: u8,
+        source_address: vector<u8>,
+        target_address: address,
+        amount: u64,
+    ): (BridgeMessage, vector<vector<u8>>) {
+        let token_type = env.token_type<Token>();
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let mut bridge = scenario.take_shared<Bridge>();
+        let seq_num = bridge.get_seq_num_inc_for(message_types::token());
+        test_scenario::return_shared(bridge);
+        let message = message::create_token_bridge_message(
+            source_chain,
+            seq_num,
+            source_address,
+            env.chain_id,
+            address::to_bytes(target_address),
+            token_type,
+            amount,
+        );
+        let signatures = env.sign_message(message);
+        (message, signatures)
+    }
+
+    public fun approve_token_transfer(
+        env: &mut BridgeEnv,
+        message: BridgeMessage,
+        signatures: vector<vector<u8>>,
+    ) {
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let mut bridge = scenario.take_shared<Bridge>();
+        bridge.approve_token_transfer(message, signatures);
+        test_scenario::return_shared(bridge);
+    }
+
+    public fun claim_token<T>(
+        env: &mut BridgeEnv,
+        sender: address,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Coin<T> {
+        let scenario = &mut env.scenario;
+        scenario.next_tx(sender);
+
+        let clock = &env.clock;
+        let mut bridge = scenario.take_shared<Bridge>();
+        let ctx = scenario.ctx();
+        let total_supply_before = get_total_supply<T>(&bridge);
+        let token = bridge.claim_token<T>(clock, source_chain, bridge_seq_num, ctx);
+        let token_value = token.value();
+        assert!(total_supply_before + token_value == get_total_supply<T>(&bridge));
+
+        test_scenario::return_shared(bridge);
+        token
+    }
+
+    public fun claim_and_transfer_token<T>(
+        env: &mut BridgeEnv,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): bool {
+        let sender = @0xA1B2C3;
+        let scenario = &mut env.scenario;
+        scenario.next_tx(sender);
+        let clock = &env.clock;
+        let mut bridge = scenario.take_shared<Bridge>();
+        let ctx = scenario.ctx();
+        let total_supply_before = get_total_supply<T>(&bridge);
+        bridge.claim_and_transfer_token<T>(clock, source_chain, bridge_seq_num, ctx);
+        let effects = scenario.next_tx(@0xABCDEF);
+        let created = effects.created();
+        if (!created.is_empty()) {
+            let token_id = effects.created()[0];
+            let token = scenario.take_from_sender_by_id<Coin<T>>(token_id);
+            let token_value = token.value();
+            assert!(total_supply_before + token_value == get_total_supply<T>(&bridge));
+            scenario.return_to_sender(token);
+        };
+
+        test_scenario::return_shared(bridge);
+        // this condition checkes if the token was created which implies the transaction performed the transfer.
+        // If the token was claimed already the function will return false.
+        !created.is_empty()
+    }
+
+    public fun send_token<T>(
+        env: &mut BridgeEnv,
+        sender: address,
+        target_chain_id: u8,
+        eth_address: vector<u8>,
+        coin: Coin<T>,
+    ): u64 {
+        let chain_id = env.chain_id;
+        let scenario = env.scenario();
+        scenario.next_tx(sender);
+        let mut bridge = scenario.take_shared<Bridge>();
+
+        let coin_value = coin.value();
+        let total_supply_before = get_total_supply<T>(&bridge);
+        let seq_num = bridge.get_seq_num_for(message_types::token());
+        bridge.send_token(target_chain_id, eth_address, coin, scenario.ctx());
+        assert!(total_supply_before - coin_value == get_total_supply<T>(&bridge));
+
+        assert_key(chain_id, &bridge);
+        test_scenario::return_shared(bridge);
+        seq_num
+    }
+
+    public fun update_bridge_limit(
+        env: &mut BridgeEnv,
+        sender: address,
+        receiving_chain: u8,
+        sending_chain: u8,
+        limit: u64,
+    ) {
+        let scenario = env.scenario();
+        scenario.next_tx(sender);
+        let mut bridge = scenario.take_shared<Bridge>();
+        let msg = message::create_update_bridge_limit_message(
+            receiving_chain,
+            bridge.get_seq_num_for(message_types::update_bridge_limit()),
+            sending_chain,
+            limit,
+        );
+        let signatures = env.sign_message(msg);
+        bridge.execute_system_message(msg, signatures);
 
         test_scenario::return_shared(bridge);
     }
@@ -385,14 +658,6 @@ module bridge::bridge_setup {
     //
     // Getters
     //
-
-    public fun validator_pubkeys(): vector<vector<u8>> {
-        vector[
-            VALIDATOR1_PUBKEY,
-            VALIDATOR2_PUBKEY,
-            VALIDATOR3_PUBKEY,
-        ]
-    }
 
     public fun ctx(env: &mut BridgeEnv): &mut TxContext {
         env.scenario.ctx()
@@ -402,20 +667,12 @@ module bridge::bridge_setup {
         &mut env.scenario
     }
 
-    public fun bridge(env: &mut BridgeEnv, sender: address): BridgeWrapper {
-        let scenario = &mut env.scenario;
-        scenario.next_tx(sender);
-        let bridge = scenario.take_shared<Bridge>();
-        BridgeWrapper { bridge }
+    public fun chain_id(env: &mut BridgeEnv): u8 {
+        env.chain_id
     }
 
-    public fun bridge_ref(wrapper: &BridgeWrapper): &Bridge {
-        &wrapper.bridge
-    }
-
-    public fun return_bridge(bridge: BridgeWrapper) {
-        let BridgeWrapper { bridge } = bridge;
-        test_scenario::return_shared(bridge);
+    public fun validators(env: &BridgeEnv): &vector<ValidatorInfo> {
+        &env.validators
     }
 
     public fun get_btc(env: &mut BridgeEnv, amount: u64): Coin<BTC> {
@@ -445,6 +702,16 @@ module bridge::bridge_setup {
     //
     // Bridge commands
     //
+
+    public fun limits(env: &mut BridgeEnv, dest: u8): u64 {
+        let scenario = env.scenario();
+        scenario.next_tx(@0x0);
+        let bridge = scenario.take_shared<Bridge>();
+        let route = chain_ids::get_route(dest, env.chain_id);
+        let limits = bridge.test_load_inner().inner_limiter().get_route_limit(&route);
+        test_scenario::return_shared(bridge);
+        limits
+    }
 
     // Register new tokens
     public fun register_foreign_token<T>(
@@ -476,11 +743,18 @@ module bridge::bridge_setup {
     public fun freeze_bridge(env: &mut BridgeEnv, sender: address, error: u64) {
         let scenario = env.scenario();
         scenario.next_tx(sender);
+
         let mut bridge = scenario.take_shared<Bridge>();
+        let seq_num = bridge.get_seq_num_for(message_types::emergency_op());
+        let msg = message::create_emergency_op_message(
+            env.chain_id,
+            seq_num,
+            emergency_op_pause(),
+        );
+        let signatures = env.sign_message(msg);
+        bridge.execute_system_message(msg, signatures);
+
         let inner = bridge.test_load_inner_mut();
-        let msg = message::create_emergency_op_message(env.chain_id, 0, emergency_op_pause());
-        let payload = msg.extract_emergency_op_payload();
-        inner.test_execute_emergency_op(payload);
         inner.assert_paused(error);
         test_scenario::return_shared(bridge);
     }
@@ -489,38 +763,28 @@ module bridge::bridge_setup {
     public fun unfreeze_bridge(env: &mut BridgeEnv, sender: address, error: u64) {
         let scenario = env.scenario();
         scenario.next_tx(sender);
+
         let mut bridge = scenario.take_shared<Bridge>();
+        let seq_num = bridge.get_seq_num_for(message_types::emergency_op());
+        let msg = message::create_emergency_op_message(
+            env.chain_id,
+            seq_num,
+            emergency_op_unpause(),
+        );
+        let signatures = env.sign_message(msg);
+        bridge.execute_system_message(msg, signatures);
+
         let inner = bridge.test_load_inner_mut();
-        let msg = message::create_emergency_op_message(env.chain_id, 1, emergency_op_unpause());
-        let payload = msg.extract_emergency_op_payload();
-        inner.test_execute_emergency_op(payload);
         inner.assert_not_paused(error);
         test_scenario::return_shared(bridge);
     }
 
-    public fun send_token<T>(
-        env: &mut BridgeEnv,
-        target_chain_id: u8,
-        eth_address: vector<u8>,
-        coin: Coin<T>,
-    ) {
-        let scenario = env.scenario();
-        scenario.next_tx(@0xAAAA);
-        let mut bridge = scenario.take_shared<Bridge>();
-        let coin_value = coin.value();
-        let total_supply_before = get_total_supply<T>(&bridge);
-
-        bridge.send_token(target_chain_id, eth_address, coin, scenario.ctx());
-
-        assert!(total_supply_before - coin_value == get_total_supply<T>(&bridge));
-
+    fun assert_key(chain_id: u8, bridge: &Bridge) {
         let inner = bridge.test_load_inner();
         let transfer_record = inner.inner_token_transfer_records();
-        let seq_num = inner.sequence_nums()[&message_types::token()] - 1; 
-        let key = message::create_key(env.chain_id, message_types::token(), seq_num);
+        let seq_num = inner.sequence_nums()[&message_types::token()] - 1;
+        let key = message::create_key(chain_id, message_types::token(), seq_num);
         assert!(transfer_record.contains(key));
-
-        test_scenario::return_shared(bridge);
     }
 
     public fun execute_blocklist(
@@ -529,51 +793,24 @@ module bridge::bridge_setup {
         chain_id: u8,
         blocklist_type: u8,
         validator_ecdsa_addresses: vector<vector<u8>>,
-        signatures: vector<vector<u8>>,
     ) {
         let scenario = env.scenario();
         scenario.next_tx(sender);
         let mut bridge = scenario.take_shared<Bridge>();
         let blocklist = create_blocklist_message(
             chain_id,
-            env.seq_num(),
+            bridge.get_seq_num_for(message_types::committee_blocklist()),
             blocklist_type,
             validator_ecdsa_addresses,
         );
+        let signatures = env.sign_message(blocklist);
         bridge.execute_system_message(blocklist, signatures);
-        test_scenario::return_shared(bridge);
-    }
-
-    public fun update_bridge_limit(
-        env: &mut BridgeEnv,
-        sender: address,
-        receiving_chain: u8,
-        sending_chain: u8,
-        limit: u64,
-    ) {
-        let scenario = env.scenario();
-        scenario.next_tx(sender);
-        let mut bridge = scenario.take_shared<Bridge>();
-        let msg = message::create_update_bridge_limit_message(
-            receiving_chain,
-            env.seq_num(),
-            sending_chain,
-            limit,
-        );
-        let payload = msg.extract_update_bridge_limit();
-        bridge.test_load_inner_mut().test_execute_update_bridge_limit(payload);
         test_scenario::return_shared(bridge);
     }
 
     //
     // Internal functions
     //
-
-    fun seq_num(env: &mut BridgeEnv): u64 {
-        let seq_num = env.seq_num;
-        env.seq_num = seq_num + 1;
-        seq_num
-    }
 
     // Destroy the vault
     fun destroy_valut(vault: Vault) {
@@ -633,7 +870,6 @@ module bridge::test_token {
     use sui::package::{UpgradeCap, test_publish};
     use sui::test_utils::create_one_time_witness;
 
-
     public struct TEST_TOKEN has drop {}
 
     public fun create_bridge_token(
@@ -667,7 +903,6 @@ module bridge::btc {
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
     use sui::test_utils::create_one_time_witness;
-
 
     public struct BTC has drop {}
 
@@ -703,7 +938,6 @@ module bridge::eth {
     use sui::package::{UpgradeCap, test_publish};
     use sui::test_utils::create_one_time_witness;
 
-
     public struct ETH has drop {}
 
     public fun create_bridge_token(
@@ -738,7 +972,6 @@ module bridge::usdc {
     use sui::package::{UpgradeCap, test_publish};
     use sui::test_utils::create_one_time_witness;
 
-
     public struct USDC has drop {}
 
     public fun create_bridge_token(
@@ -772,7 +1005,6 @@ module bridge::usdt {
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
     use sui::test_utils::create_one_time_witness;
-
 
     public struct USDT has drop {}
 

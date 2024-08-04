@@ -843,4 +843,22 @@ module bridge::bridge {
         let inner = load_inner_mut(bridge);
         inner.execute_add_tokens_on_sui(payload);
     }
+
+    #[test_only]
+    public fun get_seq_num_for(bridge: &mut Bridge, message_type: u8): u64 {
+        let inner = load_inner_mut(bridge);
+        let seq_num = if (inner.sequence_nums.contains(&message_type)) {
+            inner.sequence_nums[&message_type]
+        } else {
+            inner.sequence_nums.insert(message_type, 0);
+            0
+        };
+        seq_num
+    }
+
+    #[test_only]
+    public fun get_seq_num_inc_for(bridge: &mut Bridge, message_type: u8): u64 {
+        let inner = load_inner_mut(bridge);
+        inner.get_current_seq_num_and_increment(message_type)
+    }
 }

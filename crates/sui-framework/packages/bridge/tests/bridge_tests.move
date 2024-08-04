@@ -4,16 +4,36 @@
 #[test_only]
 module bridge::bridge_tests {
     use bridge::bridge::{
-        inner_limiter, inner_paused, inner_treasury, inner_token_transfer_records_mut,
-        new_bridge_record_for_testing, new_for_testing, test_get_current_seq_num_and_increment,
-        test_execute_update_asset_price, test_get_token_transfer_action_signatures,
-        test_load_inner, test_load_inner_mut, test_get_token_transfer_action_status,
-        transfer_status_approved, transfer_status_claimed, transfer_status_not_found,
-        transfer_status_pending, Bridge,
+        inner_limiter,
+        inner_paused,
+        inner_treasury,
+        inner_token_transfer_records_mut,
+        new_bridge_record_for_testing,
+        new_for_testing,
+        test_get_current_seq_num_and_increment,
+        test_execute_update_asset_price,
+        test_get_token_transfer_action_signatures,
+        test_load_inner,
+        test_load_inner_mut,
+        test_get_token_transfer_action_status,
+        transfer_status_approved,
+        transfer_status_claimed,
+        transfer_status_not_found,
+        transfer_status_pending,
+        Bridge,
     };
     use bridge::bridge_setup::{
-        btc_id, create_bridge, create_bridge_default, create_env, create_validator_info,
-        eth_id, freeze_bridge, init_committee, register_committee, unfreeze_bridge, test_token_id,
+        btc_id,
+        create_bridge,
+        create_bridge_default,
+        create_env,
+        create_validator,
+        eth_id,
+        freeze_bridge,
+        init_committee,
+        register_committee,
+        unfreeze_bridge,
+        test_token_id,
     };
     use bridge::btc::BTC;
     use bridge::chain_ids;
@@ -40,7 +60,7 @@ module bridge::bridge_tests {
 
     #[test]
     fun test_bridge_create() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge(@0x0);
 
         let bridge = env.bridge(@0x0);
@@ -55,22 +75,22 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::bridge::ENotSystemAddress)]
     fun test_bridge_create_non_system_addr() {
-        let mut env = create_env(chain_ids::sui_mainnet(), @0x1);
+        let mut env = create_env(chain_ids::sui_mainnet());
         env.create_bridge(@0x1);
 
         abort TEST_DONE
     }
 
     #[test]
-    fun test_init_committee() {
-        let mut env = create_env(chain_ids::sui_custom(), @0x0);
+    fun test_create_bridge_default() {
+        let mut env = create_env(chain_ids::sui_custom());
         env.create_bridge_default();
         env.destroy_env();
     }
 
     #[test]
     fun test_init_committee_twice() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.init_committee(@0x0); // second time is a no-op
 
@@ -80,16 +100,10 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::bridge::ENotSystemAddress)]
     fun test_init_committee_non_system_addr() {
-        let mut env = create_env(chain_ids::sui_mainnet(), @0x0);
-        // TODO: this is too brittle, fix it
-        env.setup_validators(
-            vector[
-                create_validator_info(@0xA, 100),
-                create_validator_info(@0xB, 100),
-                create_validator_info(@0xC, 100),
-            ],
-            @0x0,
-        );
+        let mut env = create_env(chain_ids::sui_mainnet());
+        env.setup_validators(vector[
+            create_validator(@0xA, 100, &b"12345678901234567890123456789012"),
+        ]);
         env.create_bridge(@0x0);
         env.register_committee();
         env.init_committee(@0xA);
@@ -100,7 +114,7 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::committee::ECommitteeAlreadyInitiated)]
     fun test_register_committee_after_init() {
-        let mut env = create_env(chain_ids::sui_custom(), @0x0);
+        let mut env = create_env(chain_ids::sui_custom());
         env.create_bridge_default();
         env.register_committee();
 
@@ -110,7 +124,7 @@ module bridge::bridge_tests {
     #[test]
     fun test_register_foreign_token() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let (upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         env.register_foreign_token<TEST_TOKEN>(treasury_cap, upgrade_cap, metadata, addr);
@@ -121,7 +135,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::ETokenSupplyNonZero)]
     fun test_register_foreign_token_non_zero_supply() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let (upgrade_cap, mut treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         let _coin = treasury_cap.mint(1, env.scenario().ctx());
@@ -134,7 +148,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::EInvalidNotionalValue)]
     fun test_add_token_price_zero_value() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -151,7 +165,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_1() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -168,7 +182,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_2() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -185,7 +199,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EMalformedMessageError)]
     fun test_add_token_malformed_3() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -202,7 +216,7 @@ module bridge::bridge_tests {
     fun test_add_native_token_nop() {
         // adding a native token is simply a NO-OP at the moment
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.add_tokens(
             addr,
@@ -218,7 +232,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::EInvalidUpgradeCap)]
     fun test_register_foreign_token_bad_upgrade_cap() {
         let addr = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), addr);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let (_upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
         let upgrade_cap = test_publish(@0x42.to_id(), env.scenario().ctx());
@@ -229,22 +243,22 @@ module bridge::bridge_tests {
 
     #[test]
     fun test_execute_send_token() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let btc: Coin<BTC> = env.get_btc(1);
         let eth_address = x"0000000000000000000000000000000000000000";
-        env.send_token(chain_ids::eth_sepolia(), eth_address, btc);
+        env.send_token(@0xABCD, chain_ids::eth_sepolia(), eth_address, btc);
         env.destroy_env();
     }
 
     #[test]
     #[expected_failure(abort_code = bridge::bridge::ETokenValueIsZero)]
     fun test_execute_send_token_zero_value() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let btc: Coin<BTC> = env.get_btc(0);
         let eth_address = x"0000000000000000000000000000000000000000";
-        env.send_token(chain_ids::eth_sepolia(), eth_address, btc);
+        env.send_token(@0x0, chain_ids::eth_sepolia(), eth_address, btc);
 
         abort TEST_DONE
     }
@@ -252,11 +266,12 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::bridge::EInvalidEvmAddress)]
     fun test_execute_send_token_invalid_evem_address() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let btc: Coin<BTC> = env.get_btc(1);
         let eth_address = x"1234";
-        env.send_token(chain_ids::eth_sepolia(), eth_address, btc);
+        let val_addr = env.validators()[0].addr();
+        env.send_token(val_addr, chain_ids::eth_sepolia(), eth_address, btc);
 
         abort TEST_DONE
     }
@@ -265,12 +280,12 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EBridgeUnavailable)]
     fun test_execute_send_token_frozen() {
         let chain_id = chain_ids::sui_testnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
         let eth: Coin<ETH> = env.get_eth(1);
         let eth_address = x"0000000000000000000000000000000000000000";
         env.freeze_bridge(@0x0, UNEXPECTED_ERROR);
-        env.send_token(chain_ids::eth_sepolia(), eth_address, eth);
+        env.send_token(@0xAAAA, chain_ids::eth_sepolia(), eth_address, eth);
 
         abort TEST_DONE
     }
@@ -278,11 +293,11 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::bridge::EInvalidBridgeRoute)]
     fun test_execute_send_token_invalid_route() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let usdc: Coin<USDC> = env.get_usdc(100);
         let eth_address = x"0000000000000000000000000000000000000000";
-        env.send_token(chain_ids::eth_mainnet(), eth_address, usdc);
+        env.send_token(@0xABCDEF, chain_ids::eth_mainnet(), eth_address, usdc);
 
         abort TEST_DONE
     }
@@ -291,9 +306,9 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EUnexpectedChainID)]
     fun test_system_msg_incorrect_chain_id() {
         let sender = @0x0;
-        let mut env = create_env(chain_ids::sui_testnet(), sender);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
-        env.execute_blocklist(sender, chain_ids::sui_mainnet(), 0, vector[], vector[]);
+        env.execute_blocklist(sender, chain_ids::sui_mainnet(), 0, vector[]);
 
         abort TEST_DONE
     }
@@ -309,7 +324,8 @@ module bridge::bridge_tests {
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::committee_blocklist(),
-            ) == 0,
+            ) ==
+            0,
         );
         assert!(
             inner.sequence_nums()[&message_types::committee_blocklist()] == 1,
@@ -317,7 +333,8 @@ module bridge::bridge_tests {
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::committee_blocklist(),
-            ) == 1,
+            ) ==
+            1,
         );
         // other message type nonce does not change
         assert!(
@@ -338,17 +355,20 @@ module bridge::bridge_tests {
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::emergency_op(),
-            ) == 0,
+            ) ==
+            0,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::update_bridge_limit(),
-            ) == 0,
+            ) ==
+            0,
         );
         assert!(
             inner.test_get_current_seq_num_and_increment(
                 message_types::update_asset_price(),
-            ) == 0,
+            ) ==
+            0,
         );
 
         destroy(bridge);
@@ -358,19 +378,22 @@ module bridge::bridge_tests {
     #[test]
     fun test_update_limit() {
         let chain_id = chain_ids::sui_mainnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
 
         let bridge = env.bridge(@0x0);
         let inner = bridge.bridge_ref().test_load_inner();
         // Assert the starting limit is a different value
         assert!(
-            inner.inner_limiter().get_route_limit(
-                &chain_ids::get_route(
-                    chain_ids::eth_mainnet(),
-                    chain_ids::sui_mainnet(),
-                ),
-            ) != 1,
+            inner
+                .inner_limiter()
+                .get_route_limit(
+                    &chain_ids::get_route(
+                        chain_ids::eth_mainnet(),
+                        chain_ids::sui_mainnet(),
+                    ),
+                ) !=
+            1,
         );
         bridge.return_bridge();
 
@@ -386,21 +409,27 @@ module bridge::bridge_tests {
         let inner = bridge.bridge_ref().test_load_inner();
         // Assert the starting limit is a different value
         assert!(
-            inner.inner_limiter().get_route_limit(
-                &chain_ids::get_route(
-                    chain_ids::eth_mainnet(),
-                    chain_ids::sui_mainnet(),
-                ),
-            ) == 1,
+            inner
+                .inner_limiter()
+                .get_route_limit(
+                    &chain_ids::get_route(
+                        chain_ids::eth_mainnet(),
+                        chain_ids::sui_mainnet(),
+                    ),
+                ) ==
+            1,
         );
         // other routes are not impacted
         assert!(
-            inner.inner_limiter().get_route_limit(
-                &chain_ids::get_route(
-                    chain_ids::eth_sepolia(),
-                    chain_ids::sui_testnet(),
-                ),
-            ) != 1,
+            inner
+                .inner_limiter()
+                .get_route_limit(
+                    &chain_ids::get_route(
+                        chain_ids::eth_sepolia(),
+                        chain_ids::sui_testnet(),
+                    ),
+                ) !=
+            1,
         );
         bridge.return_bridge();
 
@@ -410,7 +439,7 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::bridge::EUnexpectedChainID)]
     fun test_execute_update_bridge_limit_abort_with_unexpected_chain_id() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
 
         // This abort because the receiving_chain (sui_mainnet) is not the same as
@@ -427,7 +456,7 @@ module bridge::bridge_tests {
 
     #[test]
     fun test_update_asset_price() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         let scenario = env.scenario();
         scenario.next_tx(@0x0);
@@ -460,7 +489,7 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::treasury::EInvalidNotionalValue)]
     fun test_invalid_price_update() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.update_asset_price(@0x0, btc_id(), 0);
 
@@ -470,7 +499,7 @@ module bridge::bridge_tests {
     #[test]
     #[expected_failure(abort_code = bridge::treasury::EUnsupportedTokenType)]
     fun test_unsupported_token_type() {
-        let mut env = create_env(chain_ids::sui_testnet(), @0x0);
+        let mut env = create_env(chain_ids::sui_testnet());
         env.create_bridge_default();
         env.update_asset_price(@0x0, 42, 100);
 
@@ -480,7 +509,7 @@ module bridge::bridge_tests {
     #[test]
     fun test_execute_freeze_unfreeze() {
         let chain_id = chain_ids::sui_testnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
         env.freeze_bridge(@0x0, UNEXPECTED_ERROR + 1);
         let bridge = env.bridge(@0x0);
@@ -497,7 +526,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EBridgeNotPaused)]
     fun test_execute_unfreeze_err() {
         let chain_id = chain_ids::sui_testnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
         let bridge = env.bridge(@0x0);
         assert!(!bridge.bridge_ref().test_load_inner().inner_paused());
@@ -511,7 +540,7 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::bridge::EBridgeAlreadyPaused)]
     fun test_execute_emergency_op_abort_when_already_frozen() {
         let chain_id = chain_ids::sui_testnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
 
         // initially it's unfrozen
@@ -549,13 +578,15 @@ module bridge::bridge_tests {
         );
 
         let key = message.key();
-        bridge.test_load_inner_mut().inner_token_transfer_records_mut().push_back(
-            key,
-            new_bridge_record_for_testing(message, option::none(), false),
-        );
+        bridge
+            .test_load_inner_mut()
+            .inner_token_transfer_records_mut()
+            .push_back(
+                key,
+                new_bridge_record_for_testing(message, option::none(), false),
+            );
         assert!(
-            bridge.test_get_token_transfer_action_status(chain_id, 10)
-                == transfer_status_pending(),
+            bridge.test_get_token_transfer_action_status(chain_id, 10) == transfer_status_pending(),
         );
         assert!(bridge.test_get_token_transfer_action_signatures(chain_id, 10) == option::none());
 
@@ -567,25 +598,28 @@ module bridge::bridge_tests {
             chain_ids::eth_sepolia(), // target_chain
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
-            balance::value(coin::balance(&coin))
+            balance::value(coin::balance(&coin)),
         );
         let key = message.key();
-        bridge.test_load_inner_mut().inner_token_transfer_records_mut().push_back(
-            key,
-            new_bridge_record_for_testing(message, option::some(vector[]), false),
+        bridge
+            .test_load_inner_mut()
+            .inner_token_transfer_records_mut()
+            .push_back(
+                key,
+                new_bridge_record_for_testing(message, option::some(vector[]), false),
+            );
+        assert!(
+            bridge.test_get_token_transfer_action_status(chain_id, 11) ==
+            transfer_status_approved(),
         );
         assert!(
-            bridge.test_get_token_transfer_action_status(chain_id, 11)
-                == transfer_status_approved(),
+            bridge.test_get_token_transfer_action_signatures(chain_id, 11) ==
+            option::some(vector[]),
         );
         assert!(
-            bridge.test_get_token_transfer_action_signatures(chain_id, 11)
-                == option::some(vector[]),
-        );
-        assert!(
-            bridge.test_get_parsed_token_transfer_message(chain_id, 11)
-                == option::some(
-                to_parsed_token_transfer_message(&message)
+            bridge.test_get_parsed_token_transfer_message(chain_id, 11) ==
+            option::some(
+                to_parsed_token_transfer_message(&message),
             ),
         );
 
@@ -597,40 +631,40 @@ module bridge::bridge_tests {
             chain_ids::eth_sepolia(), // target_chain
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
-            balance::value(coin::balance(&coin))
+            balance::value(coin::balance(&coin)),
         );
         let key = message.key();
-        bridge.test_load_inner_mut().inner_token_transfer_records_mut().push_back(
-            key,
-            new_bridge_record_for_testing(message, option::some(vector[b"1234"]), true),
+        bridge
+            .test_load_inner_mut()
+            .inner_token_transfer_records_mut()
+            .push_back(
+                key,
+                new_bridge_record_for_testing(message, option::some(vector[b"1234"]), true),
+            );
+        assert!(
+            bridge.test_get_token_transfer_action_status(chain_id, 12) == transfer_status_claimed(),
         );
         assert!(
-            bridge.test_get_token_transfer_action_status(chain_id, 12)
-                == transfer_status_claimed(),
+            bridge.test_get_token_transfer_action_signatures(chain_id, 12) ==
+            option::some(vector[b"1234"]),
         );
         assert!(
-            bridge.test_get_token_transfer_action_signatures(chain_id, 12)
-                == option::some(vector[b"1234"]),
-        );
-        assert!(
-            bridge.test_get_parsed_token_transfer_message(chain_id, 12)
-                == option::some(
-                to_parsed_token_transfer_message(&message)
+            bridge.test_get_parsed_token_transfer_message(chain_id, 12) ==
+            option::some(
+                to_parsed_token_transfer_message(&message),
             ),
         );
 
         // Test when message not found
         assert!(
-            bridge.test_get_token_transfer_action_status(chain_id, 13)
-                == transfer_status_not_found(),
+            bridge.test_get_token_transfer_action_status(chain_id, 13) ==
+            transfer_status_not_found(),
         );
         assert!(
-            bridge.test_get_token_transfer_action_signatures(chain_id, 13)
-                == option::none(),
+            bridge.test_get_token_transfer_action_signatures(chain_id, 13) == option::none(),
         );
         assert!(
-            bridge.test_get_parsed_token_transfer_message(chain_id, 13)
-                == option::none(),
+            bridge.test_get_parsed_token_transfer_message(chain_id, 13) == option::none(),
         );
 
         destroy(bridge);
@@ -642,12 +676,34 @@ module bridge::bridge_tests {
     #[expected_failure(abort_code = bridge::treasury::EUnsupportedTokenType)]
     fun test_get_metadata_no_token() {
         let chain_id = chain_ids::sui_testnet();
-        let mut env = create_env(chain_id, @0x0);
+        let mut env = create_env(chain_id);
         env.create_bridge_default();
         let bridge = env.bridge(@0x0);
         let treasury = bridge.bridge_ref().test_load_inner().inner_treasury();
         treasury.notional_value<TEST_TOKEN>();
 
+        abort 0
+    }
+
+    #[test]
+    fun change_url() {
+        let chain_id = chain_ids::sui_testnet();
+        let mut env = create_env(chain_id);
+        env.create_bridge_default();
+        let mut bridge = env.bridge(@0xAAAA);
+        bridge.bridge_ref_mut().update_node_url(b"<url_here>", env.scenario().ctx());
+        bridge.return_bridge();
+        env.destroy_env();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::ESenderIsNotInBridgeCommittee)]
+    fun change_url_bad_sender() {
+        let chain_id = chain_ids::sui_testnet();
+        let mut env = create_env(chain_id);
+        env.create_bridge_default();
+        let mut bridge = env.bridge(@0x0);
+        bridge.bridge_ref_mut().update_node_url(b"<url_here>", env.scenario().ctx());
         abort 0
     }
 }
