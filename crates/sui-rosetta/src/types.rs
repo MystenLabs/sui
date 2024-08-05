@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use indexmap::IndexMap;
 use std::fmt::Debug;
 use std::str::FromStr;
 
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fastcrypto::encoding::Hex;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
@@ -26,7 +23,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -102,7 +99,7 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
@@ -110,7 +107,7 @@ pub struct Currency {
     pub metadata: CurrencyMetadata,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CurrencyMetadata {
     pub coin_type: String,
 }
@@ -669,7 +666,7 @@ pub struct ConstructionMetadata {
     pub total_coin_value: u64,
     pub gas_price: u64,
     pub budget: u64,
-    pub coin_type: Option<String>,
+    pub currency: Option<Currency>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -965,55 +962,9 @@ impl InternalOperation {
                 ..
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-
-                let mut coins = metadata.objects.clone().into_iter();
-                let Some(coin) = coins.next() else {
-                    return Err(Error::InvalidInput("coins vector is empty".to_string()));
-                };
-                let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin))?;
-                let merge_args: Vec<_> = coins
-                    .map(|c| builder.obj(ObjectArg::ImmOrOwnedObject(c)))
-                    .collect::<Result<_, _>>()?;
-                if !merge_args.is_empty() {
-                    builder.command(Command::MergeCoins(coin_arg, merge_args));
-                }
-                if recipients.len() != amounts.len() {
-                    return Err(Error::InvalidInput(
-                "Recipients and amounts mismatch. Got {recipients.len()} recipients but {amounts.len()} amounts".to_string()));
-                }
-
-                // collect recipients in the case where they are non-unique in order
-                // to minimize the number of transfers that must be performed
-                let mut recipient_map: IndexMap<SuiAddress, Vec<usize>> = IndexMap::new();
-                let mut amt_args = Vec::with_capacity(recipients.len());
-                for (i, (recipient, amount)) in recipients.into_iter().zip(amounts).enumerate() {
-                    recipient_map.entry(recipient).or_default().push(i);
-                    amt_args.push(builder.pure(amount)?);
-                }
-                let Argument::Result(split_primary) =
-                    builder.command(Command::SplitCoins(coin_arg, amt_args))
-                else {
-                    panic!("self.command should always give a Argument::Result")
-                };
-                let type_arg = TypeTag::from_str(&metadata.coin_type.clone().unwrap()).unwrap();
-                let _ts = type_arg.to_canonical_string(true);
-                for (recipient, split_secondaries) in recipient_map {
-                    let rec_arg = builder.pure(recipient).unwrap();
-                    split_secondaries
-                        .into_iter()
-                        .map(|j| Argument::NestedResult(split_primary, j as u16))
-                        .for_each(|coin| {
-                            _ = builder.command(Command::move_call(
-                                SUI_FRAMEWORK_PACKAGE_ID,
-                                Identifier::from_str("transfer").unwrap(),
-                                Identifier::from_str("public_transfer").unwrap(),
-                                vec![type_arg.clone()],
-                                vec![coin, rec_arg],
-                            ))
-                        });
-                }
-
-                // builder.pay(metadata.objects.clone(), recipients, amounts)?;
+                builder.pay(metadata.objects.clone(), recipients, amounts)?;
+                let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
+                builder.pure(currency_str)?;
                 builder.finish()
             }
             InternalOperation::Stake {

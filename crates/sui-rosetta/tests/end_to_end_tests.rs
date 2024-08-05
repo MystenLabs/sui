@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use serde_json::json;
+use std::time::Duration;
 
 use rosetta_client::start_rosetta_test_server;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -163,7 +162,8 @@ async fn test_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events(),
+                .with_events()
+                .with_raw_input(),
         )
         .await
         .unwrap();
@@ -223,7 +223,8 @@ async fn test_stake_all() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events(),
+                .with_events()
+                .with_raw_input(),
         )
         .await
         .unwrap();
@@ -409,7 +410,8 @@ async fn test_pay_sui() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events(),
+                .with_events()
+                .with_raw_input(),
         )
         .await
         .unwrap();
@@ -469,7 +471,8 @@ async fn test_pay_sui_multiple_times() {
                     .with_input()
                     .with_effects()
                     .with_balance_changes()
-                    .with_events(),
+                    .with_events()
+                    .with_raw_input(),
             )
             .await
             .unwrap();
