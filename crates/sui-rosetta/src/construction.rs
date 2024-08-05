@@ -238,10 +238,11 @@ pub async fn metadata(
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let budget = option.budget;
     let sender = option.internal_operation.sender();
-    let coin_type = match &option.internal_operation {
-        InternalOperation::PayCoin { currency, .. } => Some(currency.clone().metadata.coin_type),
+    let currency = match &option.internal_operation {
+        InternalOperation::PayCoin { currency, .. } => Some(currency.clone()),
         _ => None,
     };
+    let coin_type = currency.clone().map(|c| c.metadata.coin_type);
 
     let mut gas_price = context
         .client
@@ -271,8 +272,6 @@ pub async fn metadata(
                 .iter()
                 .map(|coin| coin.object_ref())
                 .collect();
-            let obj_id = coin_objs.first().unwrap().0.to_hex_literal();
-            println!("OBJ ID {}", obj_id);
             gas_coin = context
                 .client
                 .coin_read_api()
@@ -346,7 +345,7 @@ pub async fn metadata(
                     gas_price,
                     // MAX BUDGET
                     budget: 50_000_000_000,
-                    coin_type: coin_type.clone(),
+                    currency: currency.clone(),
                 })?;
 
             let dry_run = context
@@ -403,7 +402,7 @@ pub async fn metadata(
             total_coin_value,
             gas_price,
             budget,
-            coin_type,
+            currency: currency.clone(),
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })

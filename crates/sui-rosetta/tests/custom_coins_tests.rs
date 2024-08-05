@@ -7,7 +7,9 @@ mod rosetta_client;
 mod test_coin_utils;
 
 use serde_json::json;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+};
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
@@ -117,9 +119,9 @@ async fn test_custom_coin_transfer() {
         [{
             "operation_identifier":{"index":0},
             "type":"PayCoin",
-            "account": { "address" : sender.to_string() },
+            "account": { "address" : recipient.to_string() },
             "amount" : {
-                "value": "-50000000",
+                "value": "30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
                     "decimals": 6,
@@ -128,12 +130,13 @@ async fn test_custom_coin_transfer() {
                     }
                 }
             },
-        },{
+        },
+        {
             "operation_identifier":{"index":1},
             "type":"PayCoin",
-            "account": { "address" : recipient.to_string() },
+            "account": { "address" : sender.to_string() },
             "amount" : {
-                "value": "50000000",
+                "value": "-30000000",
                 "currency": {
                     "symbol": "TEST_COIN",
                     "decimals": 6,
@@ -162,10 +165,10 @@ async fn test_custom_coin_transfer() {
         .await
         .unwrap();
 
-    // assert_eq!(
-    //     &SuiExecutionStatus::Success,
-    //     tx.effects.as_ref().unwrap().status()
-    // );
+    assert_eq!(
+        &SuiExecutionStatus::Success,
+        tx.effects.as_ref().unwrap().status()
+    );
     println!("Sui TX: {tx:?}");
 
     let ops2 = Operations::try_from(tx).unwrap();
