@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use hyper::header::HeaderValue;
-use hyper::HeaderMap;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::RpcModule;

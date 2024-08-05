@@ -3,7 +3,7 @@
 The `sui-execution` crate is responsible for abstracting access to the
 execution layer.  It allows us to isolate big changes to the execution
 layer that need to be gated behind protocol config changes, to
-minimise the risk of inadvertantly changing behaviour that is relevant
+minimise the risk of inadvertently changing behaviour that is relevant
 for state sync (which would cause a fork).
 
 The Execution Layer include:

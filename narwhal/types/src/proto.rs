@@ -1,8 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 mod narwhal {
-    #![allow(clippy::derive_partial_eq_without_eq)]
-    tonic::include_proto!("narwhal");
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Transaction {
+        #[prost(bytes = "bytes", repeated, tag = "1")]
+        pub transactions: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
+    }
+    /// Empty message for when we don't have anything to return
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+    pub struct Empty {}
+
+    include!(concat!(env!("OUT_DIR"), "/narwhal.Transactions.rs"));
 
     include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToPrimary.rs"));
     include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToWorker.rs"));

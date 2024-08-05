@@ -17,11 +17,11 @@ Failures in 0x1::M:
 
 ┌── single_signer_fail ──────
 │ error[E11001]: test failure
-│   ┌─ signer_args.move:9:9
+│   ┌─ signer_args.move:8:9
 │   │
-│ 8 │     fun single_signer_fail(_a: signer) {
+│ 7 │     fun single_signer_fail(_a: signer) {
 │   │         ------------------ In this function in 0x1::M
-│ 9 │         abort 0
+│ 8 │         abort 0
 │   │         ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0x1::M rooted here
 │ 
 │ 

@@ -112,13 +112,6 @@ jobs:
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         uses: taiki-e/install-action@33022ba120c3f523d134bbbee12278fc11a3df1a # pin@nextest
 
-      - name: Setup protoc (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
-        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install postgres (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash

@@ -39,7 +39,7 @@ use typed_store::rocks::{
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
-use typed_store_derive::DBMapUtils;
+use typed_store::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type CoinIndexKey = (SuiAddress, String, ObjectID);

@@ -1,0 +1,24 @@
+warning[Lint W99008]: Freezing a capability-like type can lead to design issues.
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:21:9
+   │
+21 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Freezing a capability-like type can lead to design issues.
+   │
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99008]: Freezing a capability-like type can lead to design issues.
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:25:9
+   │
+25 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Freezing a capability-like type can lead to design issues.
+   │
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99008]: Freezing a capability-like type can lead to design issues.
+   ┌─ tests/sui_mode/linter/freezing_capability_true_positives.move:29:9
+   │
+29 │         transfer::public_freeze_object(w);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Freezing a capability-like type can lead to design issues.
+   │
+   = This warning can be suppressed with '#[allow(lint(freezing_capability))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

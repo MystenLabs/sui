@@ -303,7 +303,11 @@ async fn test_passkey_fails_to_verify_sig() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let response = create_credential_and_sign_test_tx(&test_cluster, None, false, false).await;
     let mut modified_sig = response.user_sig_bytes.clone();
-    modified_sig[1] = 0x00;
+    if modified_sig[1] == 0x00 {
+        modified_sig[1] = 0x01;
+    } else {
+        modified_sig[1] = 0x00;
+    }
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,

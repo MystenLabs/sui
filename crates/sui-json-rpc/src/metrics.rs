@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use hyper::body::HttpBody;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
+use http_body::Body;
 use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
 use jsonrpsee::types::Params;
 use prometheus::{

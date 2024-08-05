@@ -10,7 +10,7 @@ module Completion::dot {
         s
     }
 
-    public fun simple() {
+    fun simple() {
         let s = SomeStruct { some_field: 42 };
         s.;
     }
@@ -21,7 +21,7 @@ module Completion::dot {
         s.;
     }
 
-    public fun shadowed() {
+    public(package) fun shadowed() {
         use fun bar as SomeStruct.foo;
         let s = SomeStruct { some_field: 42 };
         s.;

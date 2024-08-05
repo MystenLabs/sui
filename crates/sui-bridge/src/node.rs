@@ -8,6 +8,7 @@ use crate::{
     eth_syncer::EthSyncer,
     events::init_all_struct_tags,
     metrics::BridgeMetrics,
+    monitor::BridgeMonitor,
     orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
     storage::BridgeOrchestratorTables,
@@ -15,6 +16,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use ethers::types::Address as EthAddress;
+use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -108,27 +110,48 @@ async fn start_client_components(
     let bridge_auth_agg = Arc::new(ArcSwap::from(Arc::new(BridgeAuthorityAggregator::new(
         committee,
     ))));
+    // TODO: should we use one query instead of two?
     let sui_token_type_tags = sui_client.get_token_id_map().await.unwrap();
-    let (token_type_tags_tx, token_type_tags_rx) = tokio::sync::watch::channel(sui_token_type_tags);
+    let is_bridge_paused = sui_client.is_bridge_paused().await.unwrap();
 
+    let (bridge_pause_tx, bridge_pause_rx) = tokio::sync::watch::channel(is_bridge_paused);
+
+    let (monitor_tx, monitor_rx) = mysten_metrics::metered_channel::channel(
+        10000,
+        &mysten_metrics::get_metrics()
+            .unwrap()
+            .channel_inflight
+            .with_label_values(&["monitor_queue"]),
+    );
+    let sui_token_type_tags = Arc::new(ArcSwap::from(Arc::new(sui_token_type_tags)));
     let bridge_action_executor = BridgeActionExecutor::new(
         sui_client.clone(),
-        bridge_auth_agg,
+        bridge_auth_agg.clone(),
         store.clone(),
         client_config.key,
         client_config.sui_address,
         client_config.gas_object_ref.0,
-        token_type_tags_rx,
+        sui_token_type_tags.clone(),
+        bridge_pause_rx,
         metrics.clone(),
     )
     .await;
+
+    let monitor = BridgeMonitor::new(
+        sui_client.clone(),
+        monitor_rx,
+        bridge_auth_agg.clone(),
+        bridge_pause_tx,
+        sui_token_type_tags,
+    );
+    all_handles.push(spawn_logged_monitored_task!(monitor.run()));
 
     let orchestrator = BridgeOrchestrator::new(
         sui_client,
         sui_events_rx,
         eth_events_rx,
         store.clone(),
-        token_type_tags_tx,
+        monitor_tx,
         metrics,
     );
 
@@ -553,6 +576,7 @@ mod tests {
         BridgeTestClusterBuilder::new()
             .with_eth_env(true)
             .with_bridge_cluster(false)
+            .with_num_validators(2)
             .build()
             .await
     }

@@ -12,9 +12,9 @@ module bar::b {
 
 module bar::c {
     #[allow(unused_field)]
-    struct B { x: u64 }
+    public struct B { x: u64 }
     #[allow(unused_field)]
-    struct A { b: vector<B> }
+    public struct A { b: vector<B> }
 
     public fun g(): u64 {
         foo::a::f() +
@@ -35,8 +35,8 @@ module baz::d {
 }
 
 module qux::e {
-    struct B has drop { x: u64 }
-    struct A has drop { x: u64 }
+    public struct B has drop { x: u64 }
+    public struct A has drop { x: u64 }
 
     public fun a(): A {
         A { x: 46 }

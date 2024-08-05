@@ -1,5 +1,4 @@
-address 0x2 {
-module M {
+module 0x2::M {
     use std::debug;
 
     public fun sum(n: u64): u64 {
@@ -10,5 +9,4 @@ module M {
             n + sum(n - 1)
         }
     }
-}
 }

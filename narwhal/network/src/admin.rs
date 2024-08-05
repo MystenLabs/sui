@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
-use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use mysten_metrics::spawn_logged_monitored_task;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
+use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::{error, info};
@@ -27,15 +28,7 @@ pub fn start_admin_server(
         "starting admin server"
     );
 
-    let handle = axum_server::Handle::new();
-    let shutdown_handle = handle.clone();
-
     let mut handles = Vec::new();
-    // Spawn a task to shutdown server.
-    handles.push(spawn_monitored_task!(async move {
-        _ = tr_shutdown.receiver.recv().await;
-        handle.clone().shutdown();
-    }));
 
     handles.push(spawn_logged_monitored_task!(
         async move {
@@ -45,11 +38,12 @@ pub fn start_admin_server(
             loop {
                 total_retries -= 1;
 
-                match TcpListener::bind(socket_address) {
+                match TcpListener::bind(socket_address).await {
                     Ok(listener) => {
-                        axum_server::from_tcp(listener)
-                            .handle(shutdown_handle)
-                            .serve(router.into_make_service())
+                        axum::serve(listener, router)
+                            .with_graceful_shutdown(async move {
+                                _ = tr_shutdown.receiver.recv().await;
+                            })
                             .await
                             .unwrap_or_else(|err| {
                                 panic!("Failed to boot admin {}: {err}", socket_address)

@@ -9,8 +9,14 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 
 use crate::errors::IndexerError;
-use crate::schema::{checkpoints, pruner_cp_watermark};
+use crate::schema::{chain_identifier, checkpoints, pruner_cp_watermark};
 use crate::types::IndexedCheckpoint;
+
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[diesel(table_name = chain_identifier)]
+pub struct StoredChainIdentifier {
+    pub checkpoint_digest: Vec<u8>,
+}
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]

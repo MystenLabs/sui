@@ -18,7 +18,9 @@ use crate::{
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
-const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
+/// Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
+/// Using a higher limit that is 250 * 2 = 500, to account for bursty traffic and system transactions.
+const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 500;
 
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
 /// When its last transaction is included to a block then `included_in_block_ack` will be signalled.

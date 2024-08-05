@@ -44,7 +44,7 @@ export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 					<div className="group">
 						<div className="w-full h-full justify-center z-10 absolute pointer-events-auto text-gray-60 transition-colors duration-200 p-0">
 							{!isKioskOwnerToken(kioskClient.network, object) &&
-							!bnl.some((item) => item?.objectType !== object.type) ? (
+							!bnl.some((item) => item?.objectType === object.type) ? (
 								<div className="absolute top-2 right-3 rounded-md h-8 w-8 opacity-0 group-hover:opacity-100">
 									<Button
 										variant="hidden"

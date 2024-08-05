@@ -19,6 +19,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -97,11 +99,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -156,6 +160,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -234,11 +240,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -293,6 +301,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -371,11 +381,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -430,6 +442,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -508,11 +522,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -567,6 +583,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -645,11 +663,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -704,6 +724,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -782,11 +804,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -841,6 +865,8 @@ validator_configs:
     admin-interface-port: 8888
     consensus-config:
       db-path: /tmp/foo/
+      db-retention-epochs: ~
+      db-pruner-period-secs: ~
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
@@ -919,11 +945,13 @@ validator_configs:
     zklogin-oauth-providers:
       Mainnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
       Testnet:
         - Apple
+        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Facebook
         - Google
         - Twitch
@@ -969,4 +997,3 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
-

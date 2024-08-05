@@ -28,7 +28,6 @@ anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
 axum.workspace = true
-axum-server.workspace = true
 tower.workspace = true
 
 [dev-dependencies]

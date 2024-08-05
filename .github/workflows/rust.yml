@@ -43,8 +43,6 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
-  RUST_LOG: error
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 
@@ -202,10 +200,6 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
-      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install postgres (Windows)
         shell: bash
@@ -262,7 +256,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
-          cargo nextest run -p sui-framework-tests -- unit_tests::
+          cargo nextest run -p sui-framework-tests --test move_tests
 
   # # Disabled
   # rosetta-validation:
@@ -345,10 +339,6 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
-      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build

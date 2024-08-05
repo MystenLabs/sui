@@ -96,7 +96,7 @@ use move_compiler::{
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::ast::{self as P, NameAccessChain, NameAccessChain_},
+    parser::ast as P,
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
@@ -153,9 +153,9 @@ pub enum FunType {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantInfo {
-    name: Symbol,
-    empty: bool,
-    positional: bool,
+    pub name: Name,
+    pub empty: bool,
+    pub positional: bool,
 }
 /// Information about a definition of some identifier
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -394,6 +394,13 @@ pub struct CursorContext {
     pub loc: Loc,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub enum ChainCompletionKind {
+    Type,
+    Function,
+    All,
+}
+
 impl CursorContext {
     fn new(loc: Loc) -> Self {
         CursorContext {
@@ -402,6 +409,50 @@ impl CursorContext {
             position: CursorPosition::Unknown,
             loc,
         }
+    }
+
+    /// Returns access chain at cursor position (if any) along with the information of what the chain's
+    /// auto-completed target kind should be
+    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionKind)> {
+        // TODO: handle access chains in uses and attributes
+        use ChainCompletionKind as CT;
+        use CursorPosition as CP;
+        let chain_info = match &self.position {
+            CP::Exp(sp!(_, exp)) => match exp {
+                P::Exp_::Name(chain) => Some((chain.clone(), CT::All)),
+                P::Exp_::Call(chain, _) => Some((chain.clone(), CT::Function)),
+                P::Exp_::Pack(chain, _) => Some((chain.clone(), CT::Type)),
+                _ => None,
+            },
+            CP::Binding(sp!(_, bind)) => {
+                if let P::Bind_::Unpack(chain, _) = bind {
+                    Some((*(chain.clone()), CT::Type))
+                } else {
+                    None
+                }
+            }
+            CP::Type(sp!(_, ty)) => {
+                if let P::Type_::Apply(chain) = ty {
+                    Some((*(chain.clone()), CT::Type))
+                } else {
+                    None
+                }
+            }
+            CP::Attribute(attr_val) => {
+                if let P::AttributeValue_::ModuleAccess(chain) = &attr_val.value {
+                    Some((chain.clone(), CT::All))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some((c, _)) = &chain_info {
+            if c.loc.contains(&self.loc) {
+                return chain_info;
+            }
+        }
+        None
     }
 }
 
@@ -414,6 +465,7 @@ pub enum CursorPosition {
     FieldDefn(P::Field),
     Parameter(P::Var),
     DefName,
+    Attribute(P::AttributeValue),
     Unknown,
     // FIXME: These two are currently unused because these forms don't have enough location
     // recorded on them during parsing.
@@ -746,6 +798,10 @@ impl fmt::Display for CursorContext {
         }?;
         write!(f, "- position: ")?;
         match position {
+            CursorPosition::Attribute(value) => {
+                writeln!(f, "attribute value")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
             CursorPosition::DefName => {
                 writeln!(f, "defn name")?;
             }
@@ -2157,7 +2213,7 @@ fn get_mod_outer_defs(
             };
             let field_names = field_defs.iter().map(|f| sp(f.loc, f.name)).collect();
             def_info_variants.push(VariantInfo {
-                name: *vname,
+                name: sp(vname_loc, *vname),
                 empty: field_defs.is_empty(),
                 positional,
             });
@@ -2374,6 +2430,19 @@ impl<'a> ParsingSymbolicator<'a> {
         }
     }
 
+    fn attr_symbols(&mut self, sp!(_, attr): P::Attribute) {
+        use P::Attribute_ as A;
+        match attr {
+            A::Name(_) => (),
+            A::Assigned(_, v) => {
+                update_cursor!(self.cursor, *v, Attribute);
+            }
+            A::Parameterized(_, sp!(_, attributes)) => {
+                attributes.iter().for_each(|a| self.attr_symbols(a.clone()))
+            }
+        }
+    }
+
     /// Get symbols for the whole module
     fn mod_symbols(
         &mut self,
@@ -2392,6 +2461,11 @@ impl<'a> ParsingSymbolicator<'a> {
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
         let alias_lengths: BTreeMap<Position, usize> = BTreeMap::new();
         let old_alias_lengths = std::mem::replace(&mut self.alias_lengths, alias_lengths);
+
+        mod_def
+            .attributes
+            .iter()
+            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
 
         for m in &mod_def.members {
             use P::ModuleMember as MM;
@@ -2416,6 +2490,10 @@ impl<'a> ParsingSymbolicator<'a> {
                             cursor.defn_name = Some(CursorDefinition::Function(fun.name));
                         }
                     };
+
+                    fun.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                    });
 
                     for (_, x, t) in fun.signature.parameters.iter() {
                         update_cursor!(IDENT, self.cursor, x, Parameter);
@@ -2444,6 +2522,11 @@ impl<'a> ParsingSymbolicator<'a> {
                             cursor.defn_name = Some(CursorDefinition::Struct(sdef.name));
                         }
                     };
+
+                    sdef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                    });
+
                     match &sdef.fields {
                         P::StructFields::Named(v) => v.iter().for_each(|(x, t)| {
                             self.field_defn(x);
@@ -2467,6 +2550,10 @@ impl<'a> ParsingSymbolicator<'a> {
                             cursor.defn_name = Some(CursorDefinition::Enum(edef.name));
                         }
                     };
+
+                    edef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                    });
 
                     let P::EnumDefinition { variants, .. } = edef;
                     for variant in variants {
@@ -2497,6 +2584,11 @@ impl<'a> ParsingSymbolicator<'a> {
                             cursor.defn_name = Some(CursorDefinition::Constant(c.name));
                         }
                     };
+
+                    c.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                    });
+
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
@@ -2565,8 +2657,8 @@ impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for an expression
     fn exp_symbols(&mut self, exp: &P::Exp) {
         use P::Exp_ as E;
-        fn last_chain_symbol_loc(sp!(_, chain): &NameAccessChain) -> Loc {
-            use NameAccessChain_ as NA;
+        fn last_chain_symbol_loc(sp!(_, chain): &P::NameAccessChain) -> Loc {
+            use P::NameAccessChain_ as NA;
             match chain {
                 NA::Single(entry) => entry.name.loc,
                 NA::Path(path) => {
@@ -2765,6 +2857,10 @@ impl<'a> ParsingSymbolicator<'a> {
 
     /// Get symbols for a use declaration
     fn use_decl_symbols(&mut self, use_decl: &P::UseDecl) {
+        use_decl
+            .attributes
+            .iter()
+            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =

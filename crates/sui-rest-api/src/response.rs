@@ -52,17 +52,17 @@ where
 }
 
 #[axum::async_trait]
-impl<T, S, B> axum::extract::FromRequest<S, B> for Bcs<T>
+impl<T, S> axum::extract::FromRequest<S> for Bcs<T>
 where
     T: serde::de::DeserializeOwned,
     S: Send + Sync,
-    B: axum::body::HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<axum::BoxError>,
 {
     type Rejection = BcsRejection;
 
-    async fn from_request(req: axum::http::Request<B>, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        req: axum::http::Request<axum::body::Body>,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         if bcs_content_type(req.headers()) {
             let bytes = axum::body::Bytes::from_request(req, state)
                 .await

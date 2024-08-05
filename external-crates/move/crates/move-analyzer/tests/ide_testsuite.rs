@@ -204,7 +204,9 @@ impl CompletionTest {
         )?;
         for i in items {
             writeln!(output, "{:?} '{}'", i.kind.unwrap(), i.label)?;
-            writeln!(output, "    INSERT TEXT: '{}'", i.insert_text.unwrap())?;
+            if let Some(insert_text) = i.insert_text {
+                writeln!(output, "    INSERT TEXT: '{}'", insert_text)?;
+            }
             if let Some(label_details) = i.label_details {
                 if let Some(detail) = label_details.detail {
                     writeln!(output, "    TARGET     : '{}'", detail.trim())?;

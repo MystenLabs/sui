@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
-use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
@@ -16,6 +15,7 @@ use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_op
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
+use typed_store::rocksdb::Options;
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
@@ -23,7 +23,7 @@ use crate::authority::authority_store_types::{
     StoreMoveObjectWrapper, StoreObject, StoreObjectPair, StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use typed_store_derive::DBMapUtils;
+use typed_store::DBMapUtils;
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";

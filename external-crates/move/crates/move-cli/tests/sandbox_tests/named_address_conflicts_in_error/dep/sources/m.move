@@ -1,6 +1,6 @@
 module a::m {
-    struct X {}
-    struct Y {}
+    public struct X {}
+    public struct Y {}
     public fun x(): X {
         X {}
     }

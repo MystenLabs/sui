@@ -25,6 +25,7 @@ move-compiler.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
+once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
