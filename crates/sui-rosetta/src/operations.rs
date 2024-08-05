@@ -458,23 +458,30 @@ impl Operations {
         if !needs_generic && !aggregated_recipients.is_empty() {
             let total_paid: u64 = aggregated_recipients.values().copied().sum();
             operations.extend(
-                aggregated_recipients.into_iter().map(|(recipient, amount)| {
-                    currency = input_args.as_ref().and_then(|args| {
-                        args.iter().last().and_then(|arg| {
-                            if let CallArg::Pure(value) = arg {
-                                bcs::from_bytes::<String>(value).ok().and_then(|bcs_str| {
-                                    serde_json::from_str(&bcs_str).ok()
-                                })
-                            } else {
-                                None
-                            }
-                        })
-                    });
-                    match currency {
-                        Some(_) => Operation::pay_coin(status, recipient, amount.into(), currency.clone()),
-                        None => Operation::pay_sui(status, recipient, amount.into()),
-                    }
-                }),
+                aggregated_recipients
+                    .into_iter()
+                    .map(|(recipient, amount)| {
+                        currency = input_args.as_ref().and_then(|args| {
+                            args.iter().last().and_then(|arg| {
+                                if let CallArg::Pure(value) = arg {
+                                    bcs::from_bytes::<String>(value)
+                                        .ok()
+                                        .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                        match currency {
+                            Some(_) => Operation::pay_coin(
+                                status,
+                                recipient,
+                                amount.into(),
+                                currency.clone(),
+                            ),
+                            None => Operation::pay_sui(status, recipient, amount.into()),
+                        }
+                    }),
             );
             match currency {
                 Some(_) => operations.push(Operation::pay_coin(
