@@ -1027,16 +1027,11 @@ impl GlobalEnv {
         def_idx: EnumDefinitionIndex,
         name: Symbol,
         loc: Loc,
+        source_map: Option<&SourceMap>,
         attributes: Vec<Attribute>,
     ) -> EnumData {
         let enum_def = module.enum_def_at(def_idx);
-        let enum_smap = self
-            .find_module_by_language_storage_id(&module.self_id())
-            .unwrap()
-            .data
-            .source_map
-            .get_enum_source_map(def_idx)
-            .unwrap();
+        let enum_smap = source_map.map(|smap| smap.get_enum_source_map(def_idx).unwrap());
         let handle_idx = enum_def.enum_handle;
         let mut variant_data = BTreeMap::new();
         for (tag, variant) in enum_def.variants.iter().enumerate() {
@@ -1051,7 +1046,10 @@ impl GlobalEnv {
             let variant_name = self
                 .symbol_pool
                 .make(module.identifier_at(variant.variant_name).as_str());
-            let loc = self.to_loc(&enum_smap.variants[tag].0 .1);
+            let loc = match enum_smap {
+                None => Loc::default(),
+                Some(smap) => self.to_loc(&smap.variants[tag].0 .1),
+            };
             variant_data.insert(
                 VariantId(variant_name),
                 VariantData {
