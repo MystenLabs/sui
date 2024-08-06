@@ -49,7 +49,7 @@ futures.workspace = true
 rand.workspace = true
 
 [features]
-default = ["serde-arbitrary-precision"]
+default = []
 serde-arbitrary-precision = ["serde_json/arbitrary_precision"]
 
 [[example]]
