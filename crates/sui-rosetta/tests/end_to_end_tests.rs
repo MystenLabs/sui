@@ -291,7 +291,8 @@ async fn test_withdraw_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events(),
+                .with_events()
+                .with_raw_input(),
         )
         .await
         .unwrap();
@@ -341,7 +342,8 @@ async fn test_withdraw_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events(),
+                .with_events()
+                .with_raw_input(),
         )
         .await
         .unwrap();
