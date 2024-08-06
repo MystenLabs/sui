@@ -2303,6 +2303,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
             | Tok::Break
             | Tok::Continue
             | Tok::If
+            | Tok::Match
             | Tok::Loop
             | Tok::Return
             | Tok::While
