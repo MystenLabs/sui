@@ -252,8 +252,6 @@ pub async fn metadata(
     // make sure it works over epoch changes
     gas_price += 100;
 
-    let mut gas_coin = None;
-
     // Get amount, objects, for the operation
     let (total_required_amount, objects) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
@@ -272,13 +270,6 @@ pub async fn metadata(
                 .iter()
                 .map(|coin| coin.object_ref())
                 .collect();
-            gas_coin = context
-                .client
-                .coin_read_api()
-                .select_coins(sender, None, 5_000_000_u128, vec![])
-                .await
-                .ok();
-
             (Some(0), coin_objs) // amount is 0 for gas coin
         }
         InternalOperation::Stake { amount, .. } => (*amount, vec![]),
@@ -334,11 +325,7 @@ pub async fn metadata(
                 .internal_operation
                 .try_into_data(ConstructionMetadata {
                     sender,
-                    coins: gas_coin
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|coin| coin.object_ref())
-                        .collect(),
+                    coins: vec![],
                     objects: objects.clone(),
                     // Mock coin have 1B SUI
                     total_coin_value: 1_000_000_000 * 1_000_000_000,

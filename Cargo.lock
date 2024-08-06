@@ -14043,7 +14043,6 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper 1.4.1",
- "indexmap 2.2.6",
  "move-cli",
  "move-core-types",
  "mysten-metrics",
