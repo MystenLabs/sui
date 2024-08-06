@@ -86,7 +86,7 @@ pub struct Indexer<P, D, M> {
 impl<P, D, M> Indexer<P, D, M> {
     pub async fn start<T, R>(mut self) -> Result<(), Error>
     where
-        D: Datasource<T, P, R> + 'static + Send + Sync,
+        D: Datasource<T> + 'static + Send + Sync,
         M: DataMapper<T, R> + 'static + Clone,
         P: Persistent<R> + 'static,
         T: Send,
@@ -237,8 +237,8 @@ pub trait IndexerProgressStore: Send {
 }
 
 #[async_trait]
-pub trait Datasource<T: Send, P, R> {
-    async fn start_ingestion_task<M>(
+pub trait Datasource<T: Send> {
+    async fn start_ingestion_task<M, P, R>(
         &self,
         task_name: String,
         starting_checkpoint: u64,
@@ -302,11 +302,7 @@ impl SuiCheckpointDatasource {
 }
 
 #[async_trait]
-impl<P, R> Datasource<CheckpointTxnData, P, R> for SuiCheckpointDatasource
-where
-    P: Persistent<R> + 'static,
-    R: Sync + Send + 'static,
-{
+impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     async fn start_data_retrieval(
         &self,
         task_name: String,
