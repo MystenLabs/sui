@@ -20,10 +20,10 @@ use crate::{
     },
     commit::{
         load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
-        CommitRef, CommitVote, CommittedSubDag, TrustedCommit, GENESIS_COMMIT_INDEX,
+        CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
     },
     context::Context,
-    leader_scoring::ReputationScores,
+    leader_scoring::{ReputationScores, ScoringSubdag},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
 };
@@ -61,10 +61,9 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
-    /// The list of committed subdags that have been sequenced by the universal
-    /// committer but have yet to be used to calculate reputation scores for the
-    /// next leader schedule. Until then we consider it as "unscored" subdags.
-    unscored_committed_subdags: Vec<CommittedSubDag>,
+    /// The committed subdags that have been scored but scores have not been used
+    /// for leader schedule yet.
+    scoring_subdag: ScoringSubdag,
 
     // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
@@ -101,8 +100,6 @@ impl DagState {
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
 
-        let mut unscored_committed_subdags = Vec::new();
-
         let commit_info = store
             .read_last_commit_info()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
@@ -114,6 +111,9 @@ impl DagState {
                 tracing::info!("Found no stored CommitInfo to recover from");
                 (vec![0; num_authorities], GENESIS_COMMIT_INDEX + 1)
             };
+
+        let mut unscored_committed_subdags = Vec::new();
+        let mut scoring_subdag = ScoringSubdag::new(context.clone());
 
         if let Some(last_commit) = last_commit.as_ref() {
             store
@@ -141,9 +141,11 @@ impl DagState {
 
         tracing::info!(
             "DagState was initialized with the following state: \
-            {last_commit:?}; {last_committed_rounds:?}; {} unscored_committed_subdags;",
+            {last_commit:?}; {last_committed_rounds:?}; {} unscored committed subdags;",
             unscored_committed_subdags.len()
         );
+
+        scoring_subdag.add_unscored_committed_subdags(unscored_committed_subdags);
 
         let mut state = Self {
             context,
@@ -158,7 +160,7 @@ impl DagState {
             blocks_to_write: vec![],
             commits_to_write: vec![],
             commit_info_to_write: vec![],
-            unscored_committed_subdags,
+            scoring_subdag,
             store,
             cached_rounds,
         };
@@ -634,8 +636,8 @@ impl DagState {
     }
 
     pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
-        // We empty the unscored committed subdags to calculate reputation scores.
-        assert!(self.unscored_committed_subdags.is_empty());
+        // We create an empty scoring subdag once reputation scores are calculated.
+        assert!(self.scoring_subdag.is_empty());
 
         let commit_info = CommitInfo {
             committed_rounds: self.last_committed_rounds.clone(),
@@ -820,24 +822,18 @@ impl DagState {
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
     }
 
-    pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
-        self.unscored_committed_subdags.len() as u64
+    pub(crate) fn update_scoring_subdag<F>(&mut self, update_fn: F)
+    where
+        F: FnOnce(&mut ScoringSubdag),
+    {
+        update_fn(&mut self.scoring_subdag);
     }
 
-    #[cfg(test)]
-    pub(crate) fn unscored_committed_subdags(&self) -> Vec<CommittedSubDag> {
-        self.unscored_committed_subdags.clone()
-    }
-
-    pub(crate) fn add_unscored_committed_subdags(
-        &mut self,
-        committed_subdags: Vec<CommittedSubDag>,
-    ) {
-        self.unscored_committed_subdags.extend(committed_subdags);
-    }
-
-    pub(crate) fn take_unscored_committed_subdags(&mut self) -> Vec<CommittedSubDag> {
-        std::mem::take(&mut self.unscored_committed_subdags)
+    pub(crate) fn read_scoring_subdag<F, R>(&self, read_fn: F) -> R
+    where
+        F: FnOnce(&ScoringSubdag) -> R,
+    {
+        read_fn(&self.scoring_subdag)
     }
 
     pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
@@ -1472,7 +1468,12 @@ mod test {
             expected_last_committed_rounds
         );
         // Unscored subdags will be recoverd based on the flushed commits and no commit info
-        assert_eq!(dag_state.unscored_committed_subdags_count(), 5);
+        assert_eq!(
+            dag_state.read_scoring_subdag(
+                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
+            ),
+            5
+        );
     }
 
     #[tokio::test]

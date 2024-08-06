@@ -18,7 +18,6 @@ mod dag_state;
 mod error;
 mod leader_schedule;
 mod leader_scoring;
-mod leader_scoring_strategy;
 mod leader_timeout;
 mod linearizer;
 mod metrics;

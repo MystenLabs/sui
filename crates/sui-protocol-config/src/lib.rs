@@ -164,6 +164,7 @@ const MAX_PROTOCOL_VERSION: u64 = 54;
 // Version 53: Add feature flag to decide whether to attempt to finalize bridge committee
 //             Enable consensus commit prologue V3 on testnet.
 //             Turn on shared object congestion control in testnet.
+//             Switch to certified vote scoring in consensus
 //             Update stdlib natives costs
 // Version 54: Enable random beacon on mainnet.
 
@@ -504,6 +505,10 @@ struct FeatureFlags {
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
     authority_capabilities_v2: bool,
+
+    // Use certified vote leader scoring strategy in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_certified_vote_scoring_strategy: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1526,6 +1531,10 @@ impl ProtocolConfig {
 
     pub fn authority_capabilities_v2(&self) -> bool {
         self.feature_flags.authority_capabilities_v2
+    }
+
+    pub fn consensus_certified_vote_scoring_strategy(&self) -> bool {
+        self.feature_flags.consensus_certified_vote_scoring_strategy
     }
 }
 
@@ -2595,12 +2604,15 @@ impl ProtocolConfig {
                         cfg.feature_flags.authority_capabilities_v2 = true;
                     }
 
-                    // Turns on shared object congestion control on testnet.
                     if chain != Chain::Mainnet {
+                        // Turns on shared object congestion control on testnet.
                         cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::TotalTxCount;
+
+                        // Enable certified vote scoring
+                        cfg.feature_flags.consensus_certified_vote_scoring_strategy = true;
                     }
 
                     // Adjust stdlib gas costs
@@ -2804,6 +2816,10 @@ impl ProtocolConfig {
 
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
+    }
+
+    pub fn set_consensus_certified_vote_scoring_strategy_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_certified_vote_scoring_strategy = val;
     }
 }
 
