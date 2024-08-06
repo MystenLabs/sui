@@ -178,6 +178,8 @@ const UnchangedSharedKind = bcs.enum('UnchangedSharedKind', {
 	ReadOnlyRoot: VersionDigest,
 	MutateDeleted: bcs.u64(),
 	ReadDeleted: bcs.u64(),
+	Cancelled: bcs.u64(),
+	PerEpochConfig: null,
 });
 
 const TransactionEffectsV2 = bcs.struct('TransactionEffectsV2', {
