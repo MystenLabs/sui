@@ -86,8 +86,8 @@ pub struct Indexer<P, D, M> {
 impl<P, D, M> Indexer<P, D, M> {
     pub async fn start<T, R>(mut self) -> Result<(), Error>
     where
-        D: Datasource<T> + 'static + Send + Sync,
-        M: DataMapper<T, R> + 'static + Clone,
+        D: Datasource<T> + 'static,
+        M: DataMapper<T, R> + 'static,
         P: Persistent<R> + 'static,
         T: Send,
     {
@@ -186,7 +186,7 @@ impl<P, D, M> Indexer<P, D, M> {
     // Create backfill tasks according to backfill strategy
     fn create_backfill_tasks<R>(&mut self, mut current_cp: u64) -> Result<(), Error>
     where
-        P: Persistent<R> + 'static,
+        P: Persistent<R>,
     {
         match self.backfill_strategy {
             BackfillStrategy::Simple => self.storage.register_task(
@@ -237,7 +237,7 @@ pub trait IndexerProgressStore: Send {
 }
 
 #[async_trait]
-pub trait Datasource<T: Send> {
+pub trait Datasource<T: Send>: Sync + Send {
     async fn start_ingestion_task<M, P, R>(
         &self,
         task_name: String,
@@ -247,8 +247,8 @@ pub trait Datasource<T: Send> {
         data_mapper: M,
     ) -> Result<(), Error>
     where
-        M: DataMapper<T, R> + 'static,
-        P: Persistent<R> + 'static,
+        M: DataMapper<T, R>,
+        P: Persistent<R>,
     {
         // todo: add metrics for number of tasks
         let (join_handle, mut data_channel) = self
@@ -356,7 +356,7 @@ pub enum BackfillStrategy {
     Disabled,
 }
 
-pub trait DataMapper<T, R>: Sync + Send {
+pub trait DataMapper<T, R>: Sync + Send + Clone {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
 }
 
