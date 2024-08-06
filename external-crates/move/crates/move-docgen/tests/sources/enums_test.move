@@ -7,13 +7,12 @@ module 0x42::m {
         A,
         B(),
         C(u64),
-        D { x: u64 },
+        /// Another doc comment
+        D { 
+            /// Doc text on variant field
+            x: u64 
+        },
         E { x: u64, y: u64 },
-    }
-
-    public struct X {
-        /// foo
-        foo: u64,
     }
 }
 
