@@ -105,3 +105,4 @@ gas-profiler = [
     "move-vm-test-utils/gas-profiler",
 ]
 fuzzing = ["move-core-types/fuzzing"]
+serde-arbitrary-precision = ["serde_json/arbitrary-precision"]

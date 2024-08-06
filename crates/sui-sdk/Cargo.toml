@@ -48,6 +48,10 @@ futures-core.workspace = true
 futures.workspace = true
 rand.workspace = true
 
+[features]
+default = []
+serde-arbitrary-precision = ["serde_json/arbitrary-precision"]
+
 [[example]]
 name = "coin_read_api"
 path = "examples/coin_read_api.rs"

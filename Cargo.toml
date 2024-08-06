@@ -443,9 +443,15 @@ serial_test = "2.0.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
+# The `arbitrary-precision` feature for `serde_json` shouldn't be enabled on
+# workspace-level because of the known bugs
+# - https://github.com/serde-rs/json/issues/505
+# - https://github.com/paupino/rust-decimal/issues/602
+# - https://github.com/paupino/rust-decimal/issues/602 
+# which could lead to issues downstream. Instead, it should be feature-gated on
+# crate-level.
 serde_json = { version = "1.0.95", features = [
   "preserve_order",
-  "arbitrary_precision",
 ] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
