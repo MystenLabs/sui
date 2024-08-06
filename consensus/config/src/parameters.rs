@@ -129,7 +129,7 @@ impl Parameters {
     }
 
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
-        200
+        80
     }
 
     pub(crate) fn default_sync_last_proposed_block_timeout() -> Duration {
