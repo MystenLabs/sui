@@ -49,8 +49,8 @@ futures.workspace = true
 rand.workspace = true
 
 [features]
-default = []
-serde-arbitrary-precision = ["serde_json/arbitrary-precision"]
+default = ["serde-arbitrary-precision"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]
 
 [[example]]
 name = "coin_read_api"

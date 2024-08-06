@@ -445,6 +445,7 @@ serde-name = "0.2.1"
 serde-reflection = "0.3.6"
 # The `arbitrary-precision` feature for `serde_json` shouldn't be enabled on
 # workspace-level because of the known bugs
+# - https://github.com/serde-rs/serde/issues/1183
 # - https://github.com/serde-rs/json/issues/505
 # - https://github.com/paupino/rust-decimal/issues/602
 # - https://github.com/paupino/rust-decimal/issues/602 

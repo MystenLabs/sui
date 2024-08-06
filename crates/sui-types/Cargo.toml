@@ -97,7 +97,7 @@ name = "accumulator_bench"
 harness = false
 
 [features]
-default = []
+default = ["serde-arbitrary-precision"]
 test-utils = []
 gas-profiler = [
     "move-vm-profiler/gas-profiler",
@@ -105,4 +105,4 @@ gas-profiler = [
     "move-vm-test-utils/gas-profiler",
 ]
 fuzzing = ["move-core-types/fuzzing"]
-serde-arbitrary-precision = ["serde_json/arbitrary-precision"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]
