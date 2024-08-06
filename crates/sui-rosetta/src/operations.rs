@@ -23,7 +23,7 @@ use sui_sdk::rpc_types::{
     SuiTransactionBlockKind, SuiTransactionBlockResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::gas_coin::GasCoin;
+use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -541,13 +541,17 @@ impl Operations {
             .fold(balances, |mut balances, balance_change| {
                 // Rosetta only care about address owner
                 if let Owner::AddressOwner(owner) = balance_change.owner {
-                    for (key, _) in balances.iter() {
-                        if TypeTag::from_str(&key.1.metadata.coin_type).ok()
-                            == Some(balance_change.coin_type.clone())
-                        {
-                            *balances.entry((owner, key.1.clone())).or_default() +=
-                                balance_change.amount;
-                            break;
+                    if balances.is_empty() && balance_change.coin_type == GAS::type_tag() {
+                        *balances.entry((owner, SUI.clone())).or_default() += balance_change.amount;
+                    } else {
+                        for (key, _) in balances.iter() {
+                            if TypeTag::from_str(&key.1.metadata.coin_type).ok()
+                                == Some(balance_change.coin_type.clone())
+                            {
+                                *balances.entry((owner, key.1.clone())).or_default() +=
+                                    balance_change.amount;
+                                break;
+                            }
                         }
                     }
                 }
