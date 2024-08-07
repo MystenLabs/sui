@@ -206,7 +206,6 @@ impl BridgeTestClusterBuilder {
         test_cluster
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
-        info!("Bridge committee is finalized");
         test_cluster
     }
 
@@ -518,7 +517,7 @@ pub(crate) async fn deploy_sol_contract(
     };
 
     let serialized_config = serde_json::to_string_pretty(&deploy_config).unwrap();
-    tracing::debug!(
+    tracing::info!(
         "Serialized config written to {:?}: {:?}",
         deploy_config_path,
         serialized_config
@@ -657,7 +656,7 @@ impl EthBridgeEnvironment {
             .arg("--block-time")
             .arg("1") // 1 second block time
             .arg("--slots-in-an-epoch")
-            .arg("3") // 3 slots in an epoch
+            .arg("1") // 1 slots in an epoch
             .spawn()
             .expect("Failed to start anvil");
 
@@ -752,7 +751,7 @@ pub(crate) async fn start_bridge_cluster(
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path: authority_key_path,
             approved_governance_actions,
-            run_client: true,
+            run_client: i == 0,
             db_path: Some(db_path),
             eth: EthConfig {
                 eth_rpc_url: eth_environment.rpc_url.clone(),
