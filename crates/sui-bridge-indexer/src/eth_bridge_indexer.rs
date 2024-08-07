@@ -113,23 +113,23 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSubscri
                 let block = if let Some(cached_block) = cached_blocks.get(&block_number) {
                     cached_block.clone()
                 } else {
-                    let block = retry_with_max_elapsed_time!(
+                    let Ok(Ok(Some(block))) = retry_with_max_elapsed_time!(
                         eth_ws_client.get_block(block_number),
                         Duration::from_secs(30000)
-                    )?
-                    .unwrap()
-                    .unwrap();
+                    ) else {
+                        panic!("Unable to get block from provider");
+                    };
 
                     cached_blocks.insert(block_number, block.clone());
                     block
                 };
 
-                let transaction = retry_with_max_elapsed_time!(
+                let Ok(Ok(Some(transaction))) = retry_with_max_elapsed_time!(
                     eth_ws_client.get_transaction(raw_log.tx_hash),
                     Duration::from_secs(30000)
-                )?
-                .unwrap()
-                .unwrap();
+                ) else {
+                    panic!("Unable to get transaction from provider");
+                };
 
                 data_sender
                     .send((block_number, vec![(raw_log, block, transaction)]))
@@ -213,16 +213,16 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
         let handle = spawn_monitored_task!(async move {
             let mut cached_blocks: HashMap<u64, Block<H256>> = HashMap::new();
 
-            let logs = retry_with_max_elapsed_time!(
+            let Ok(Ok(logs)) = retry_with_max_elapsed_time!(
                 client.get_raw_events_in_range(
                     bridge_address,
                     starting_checkpoint,
                     target_checkpoint
                 ),
                 Duration::from_secs(30000)
-            )
-            .unwrap()
-            .unwrap();
+            ) else {
+                panic!("Unable to get logs from provider");
+            };
 
             let mut data = Vec::new();
             let mut first_block = 0;
@@ -231,12 +231,12 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
                 let block = if let Some(cached_block) = cached_blocks.get(&log.block_number) {
                     cached_block.clone()
                 } else {
-                    let block = retry_with_max_elapsed_time!(
+                    let Ok(Ok(Some(block))) = retry_with_max_elapsed_time!(
                         provider.get_block(log.block_number),
                         Duration::from_secs(30000)
-                    )?
-                    .unwrap()
-                    .unwrap();
+                    ) else {
+                        panic!("Unable to get block from provider");
+                    };
 
                     cached_blocks.insert(log.block_number, block.clone());
                     block
@@ -246,12 +246,12 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
                     first_block = log.block_number;
                 }
 
-                let transaction = retry_with_max_elapsed_time!(
+                let Ok(Ok(Some(transaction))) = retry_with_max_elapsed_time!(
                     provider.get_transaction(log.tx_hash),
                     Duration::from_secs(30000)
-                )?
-                .unwrap()
-                .unwrap();
+                ) else {
+                    panic!("Unable to get transaction from provider");
+                };
 
                 data.push((log, block, transaction));
             }
