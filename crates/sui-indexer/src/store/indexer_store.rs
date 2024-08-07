@@ -32,7 +32,12 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         &self,
     ) -> Result<Option<u64>, IndexerError>;
 
-    async fn persist_protocol_configs_and_feature_flags(&self) -> Result<(), IndexerError>;
+    async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError>;
+
+    fn persist_protocol_configs_and_feature_flags(
+        &self,
+        chain_id: Vec<u8>,
+    ) -> Result<(), IndexerError>;
 
     async fn persist_objects(
         &self,

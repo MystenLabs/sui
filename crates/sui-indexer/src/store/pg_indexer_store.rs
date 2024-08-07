@@ -221,9 +221,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 
     pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
-            checkpoints::dsl::checkpoints
-                .select(checkpoints::checkpoint_digest)
-                .filter(checkpoints::sequence_number.eq(0))
+            chain_identifier::dsl::chain_identifier
+                .select(chain_identifier::checkpoint_digest)
                 .first::<Vec<u8>>(conn)
                 .optional()
         })
@@ -662,6 +661,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         // If the first checkpoint has sequence number 0, we need to persist the digest as
         // chain identifier.
         if first_checkpoint.sequence_number == 0 {
+            let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
+            self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())?;
             transactional_blocking_with_retry!(
                 &self.blocking_cp,
                 |conn| {
@@ -1664,6 +1665,11 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
     }
 
+    async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_chain_identifier())
+            .await
+    }
+
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
@@ -2181,16 +2187,12 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch
     /// we have stored in the db, inclusive.
-    async fn persist_protocol_configs_and_feature_flags(&self) -> Result<(), IndexerError> {
-        // Fetch the chain id from db. We need a while loop here because it's possible that
-        // the first checkpoint has not beed indexed yet, so we need to wait for it.
-        let mut chain_id_opt;
-        while {
-            chain_id_opt = self.get_chain_identifier()?;
-            chain_id_opt.is_none()
-        } {}
+    fn persist_protocol_configs_and_feature_flags(
+        &self,
+        chain_id: Vec<u8>,
+    ) -> Result<(), IndexerError> {
         let chain_id = ChainIdentifier::from(
-            CheckpointDigest::try_from(chain_id_opt.unwrap()).expect("Unable to convert chain id"),
+            CheckpointDigest::try_from(chain_id).expect("Unable to convert chain id"),
         );
 
         // We only store protocol configs until the version for the latest epoch, because config
@@ -2242,18 +2244,15 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
 
         // Now insert all of them into the db.
         // TODO: right now the size of these updates is manageable but later we may consider batching.
-        self.spawn_blocking_task(move |this| {
-            transactional_blocking_with_retry!(
-                &this.blocking_cp,
-                |conn| {
-                    insert_or_ignore_into!(protocol_configs::table, all_configs.clone(), conn);
-                    insert_or_ignore_into!(feature_flags::table, all_flags.clone(), conn);
-                    Ok::<(), IndexerError>(())
-                },
-                PG_DB_COMMIT_SLEEP_DURATION
-            )
-        })
-        .await??;
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                insert_or_ignore_into!(protocol_configs::table, all_configs.clone(), conn);
+                insert_or_ignore_into!(feature_flags::table, all_flags.clone(), conn);
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )?;
         Ok(())
     }
 }

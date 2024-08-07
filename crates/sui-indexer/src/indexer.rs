@@ -121,9 +121,14 @@ impl Indexer {
             let pruner: Pruner<S, T> = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
             spawn_monitored_task!(pruner.start(CancellationToken::new()));
         }
-        // Index protocol configs for protocol versions not yet in the db
-        let store_clone = store.clone();
-        spawn_monitored_task!(store_clone.persist_protocol_configs_and_feature_flags());
+
+        // If we already have chain identifier indexed (i.e. the first checkpoint has been indexed),
+        // then we persist protocol configs for protocol versions not yet in the db.
+        // Otherwise, we would do the persisting in `commit_checkpoint` while the first cp is
+        // being indexed.
+        if let Some(chain_id) = store.get_chain_identifier().await? {
+            store.persist_protocol_configs_and_feature_flags(chain_id)?;
+        }
 
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();

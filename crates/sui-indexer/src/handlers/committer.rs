@@ -162,6 +162,8 @@ async fn commit_checkpoints<S>(
             .expect("Persisting data into DB should not fail.");
     }
 
+    let is_epoch_end = epoch.is_some();
+
     // handle partitioning on epoch boundary
     if let Some(epoch_data) = epoch {
         state
@@ -172,8 +174,6 @@ async fn commit_checkpoints<S>(
             })
             .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
-        // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
-        let _ = state.persist_protocol_configs_and_feature_flags().await;
     }
 
     state
@@ -186,6 +186,17 @@ async fn commit_checkpoints<S>(
             );
         })
         .expect("Persisting data into DB should not fail.");
+
+    if is_epoch_end {
+        // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
+        let chain_id = state
+            .get_chain_identifier()
+            .await
+            .expect("Failed to get chain identifier")
+            .expect("Chain identifier should have been indexed at this point");
+        let _ = state.persist_protocol_configs_and_feature_flags(chain_id);
+    }
+
     let elapsed = guard.stop_and_record();
 
     commit_notifier
