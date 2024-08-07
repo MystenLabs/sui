@@ -33,7 +33,8 @@
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"codegen:openapi": "openapi-ts && eslint --fix ./src/generated-client/"
 	},
 	"repository": {
 		"type": "git",
@@ -44,6 +45,7 @@
 	},
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
+		"@hey-api/openapi-ts": "^0.52.1",
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.14.10",
 		"@types/react": "^18.3.3",
@@ -55,6 +57,7 @@
 		"vite": "^5.3.3"
 	},
 	"dependencies": {
+		"@hey-api/client-fetch": "^0.2.1",
 		"@mysten/sui": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.2",
