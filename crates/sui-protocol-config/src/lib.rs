@@ -2640,6 +2640,12 @@ impl ProtocolConfig {
                     cfg.random_beacon_reduction_lower_bound = Some(1000);
                     cfg.random_beacon_dkg_timeout_round = Some(3000);
                     cfg.random_beacon_min_round_interval_ms = Some(500);
+
+                    // Turns on shared object congestion control on mainnet.
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
                 }
                 // Use this template when making changes:
                 //
