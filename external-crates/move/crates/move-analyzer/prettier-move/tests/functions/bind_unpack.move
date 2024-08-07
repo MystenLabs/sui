@@ -11,5 +11,13 @@ module kek::kek {
     public fun destroy(k1: Kek, k2: Kek) {
         let Kek { a, .. } = k1;
         let Kek { .. } = k2;
+
+        let Slice {
+            mut kek,
+            prev: lprev,
+            next: lnext,
+            keys: mut lkeys,
+            vals: mut lvals,
+        } = left;
     }
 }

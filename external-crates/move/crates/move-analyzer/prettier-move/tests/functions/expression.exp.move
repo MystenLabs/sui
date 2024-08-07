@@ -222,15 +222,6 @@ module prettier::expression {
                 },
             },
         };
-
-        // bind unpack
-        let Slice {
-            mut kek,
-            prev: lprev,
-            next: lnext,
-            keys: mut mut lkeys,
-            vals: mut mut lvals,
-        } = left;
     }
 
     fun vector_expression() {

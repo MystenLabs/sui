@@ -14,5 +14,13 @@ module kek::kek {
     ) {
         let Kek { a, .. } = k1;
         let Kek { .. } = k2;
+
+        let Slice {
+            mut kek,
+            prev: lprev,
+            next: lnext,
+            keys: mut lkeys,
+            vals: mut lvals,
+        } = left;
     }
 }

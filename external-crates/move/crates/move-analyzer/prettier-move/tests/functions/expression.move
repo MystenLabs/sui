@@ -137,15 +137,6 @@ module prettier::expression {
                 param3: Positional(b"very-very-very-long-argument-1", b"very-very-very-long-argument-2", b"very-very-very-long-argument-3")
             } },
         };
-
-        // bind unpack
-        let Slice {
-            mut kek,
-            prev: lprev,
-            next: lnext,
-            keys: mut lkeys,
-            vals: mut lvals,
-        } = left;
     }
 
     fun vector_expression() {

@@ -312,11 +312,10 @@ function printBindField(path: AstPath<Node>, options: ParserOptions, print: prin
 	// if there're two, they will be joined
 	return join(
 		': ',
-		path.map(
-			(path) =>
-				path.node.previousSibling?.type == 'mut' ? ['mut ', path.call(print)] : print(path),
-			'nonFormattingChildren',
-		),
+		path.map((path) => {
+			if (path.node.type == Common.BindVar) return print(path);
+			return path.node.previousSibling?.type == 'mut' ? ['mut ', print(path)] : print(path);
+		}, 'nonFormattingChildren'),
 	);
 }
 
