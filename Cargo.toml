@@ -448,7 +448,6 @@ serde-reflection = "0.3.6"
 # - https://github.com/serde-rs/serde/issues/1183
 # - https://github.com/serde-rs/json/issues/505
 # - https://github.com/paupino/rust-decimal/issues/602
-# - https://github.com/paupino/rust-decimal/issues/602 
 # which could lead to issues downstream. Instead, it should be feature-gated on
 # crate-level.
 serde_json = { version = "1.0.95", features = [
