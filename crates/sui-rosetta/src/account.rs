@@ -35,10 +35,10 @@ pub async fn balance(
     let mut retry_attempts = 5;
     while retry_attempts > 0 {
         let balances_first = get_balances(&ctx, &request, address, currencies.clone()).await?;
-        let checkpoint1 = get_checkpoint(&ctx).await.unwrap();
-        let mut checkpoint2 = get_checkpoint(&ctx).await.unwrap();
+        let checkpoint1 = get_checkpoint(&ctx).await?;
+        let mut checkpoint2 = get_checkpoint(&ctx).await?;
         while checkpoint2 <= checkpoint1 {
-            checkpoint2 = get_checkpoint(&ctx).await.unwrap();
+            checkpoint2 = get_checkpoint(&ctx).await?;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
         let balances_second = get_balances(&ctx, &request, address, currencies.clone()).await?;

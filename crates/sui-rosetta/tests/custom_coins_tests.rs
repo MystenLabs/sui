@@ -6,6 +6,11 @@ mod rosetta_client;
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
 
+use serde_json::json;
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+};
+use sui_rosetta::operations::Operations;
 use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
@@ -88,5 +93,88 @@ async fn test_custom_coin_balance() {
     assert_eq!(
         response.balances[1].currency.clone().metadata.coin_type,
         coin_type
+    );
+}
+
+#[tokio::test]
+async fn test_custom_coin_transfer() {
+    const COIN1_BALANCE: u64 = 100_000_000_000_000_000;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    // TEST_COIN setup and mint
+    let init_ret = init_package(&client, keystore, sender).await.unwrap();
+    let balances_to = vec![(COIN1_BALANCE, sender)];
+    let coin_type = init_ret.coin_tag.to_canonical_string(true);
+    let _mint_res = mint(&client, keystore, init_ret, balances_to)
+        .await
+        .unwrap();
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let ops = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"PayCoin",
+            "account": { "address" : recipient.to_string() },
+            "amount" : {
+                "value": "30000000",
+                "currency": {
+                    "symbol": "TEST_COIN",
+                    "decimals": 6,
+                    "metadata": {
+                        "coin_type": coin_type.clone(),
+                    }
+                }
+            },
+        },
+        {
+            "operation_identifier":{"index":1},
+            "type":"PayCoin",
+            "account": { "address" : sender.to_string() },
+            "amount" : {
+                "value": "-30000000",
+                "currency": {
+                    "symbol": "TEST_COIN",
+                    "decimals": 6,
+                    "metadata": {
+                        "coin_type": coin_type.clone(),
+                    }
+                }
+            },
+        }]
+    ))
+    .unwrap();
+
+    let response = rosetta_client.rosetta_flow(&ops, keystore).await;
+
+    let tx = client
+        .read_api()
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_balance_changes()
+                .with_events(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        &SuiExecutionStatus::Success,
+        tx.effects.as_ref().unwrap().status()
+    );
+    println!("Sui TX: {tx:?}");
+
+    let ops2 = Operations::try_from(tx).unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string(&ops).unwrap(),
+        serde_json::to_string(&ops2).unwrap()
     );
 }

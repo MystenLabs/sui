@@ -8,7 +8,7 @@ use std::vec;
 
 use anyhow::anyhow;
 use move_core_types::ident_str;
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
 use serde::Deserialize;
 use serde::Serialize;
@@ -30,10 +30,10 @@ use sui_types::transaction::TransactionData;
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
-    OperationIdentifier, OperationStatus, OperationType,
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
+    InternalOperation, OperationIdentifier, OperationStatus, OperationType,
 };
-use crate::Error;
+use crate::{Error, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/operations_tests.rs"]
@@ -101,6 +101,7 @@ impl Operations {
             .ok_or_else(|| Error::MissingInput("Operation type".into()))?;
         match type_ {
             OperationType::PaySui => self.pay_sui_ops_to_internal(),
+            OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
             op => Err(Error::UnsupportedOperation(op)),
@@ -132,6 +133,38 @@ impl Operations {
             sender,
             recipients,
             amounts,
+        })
+    }
+
+    fn pay_coin_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut recipients = vec![];
+        let mut amounts = vec![];
+        let mut sender = None;
+        let mut currency = None;
+        for op in self {
+            if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
+                currency = currency.or(Some(amount.currency));
+                if amount.value.is_negative() {
+                    sender = Some(account.address)
+                } else {
+                    recipients.push(account.address);
+                    let amount = amount.value.abs();
+                    if amount > u64::MAX as i128 {
+                        return Err(Error::InvalidInput(
+                            "Input amount exceed u64::MAX".to_string(),
+                        ));
+                    }
+                    amounts.push(amount as u64)
+                }
+            }
+        }
+        let sender = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
+        let currency = currency.ok_or_else(|| Error::MissingInput("Currency".to_string()))?;
+        Ok(InternalOperation::PayCoin {
+            sender,
+            recipients,
+            amounts,
+            currency,
         })
     }
 
@@ -259,7 +292,7 @@ impl Operations {
                 }
                 SuiArgument::GasCoin => (),
                 // Might not be a SUI coin
-                SuiArgument::Input(_) => return None,
+                SuiArgument::Input(_) => (),
             };
             let amounts = amounts
                 .iter()
@@ -366,6 +399,7 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
+        let mut currency: Option<Currency> = None;
         for command in commands {
             let result = match command {
                 SuiCommand::SplitCoins(coin, amounts) => {
@@ -414,10 +448,43 @@ impl Operations {
                 aggregated_recipients
                     .into_iter()
                     .map(|(recipient, amount)| {
-                        Operation::pay_sui(status, recipient, amount.into())
+                        currency = inputs.iter().last().and_then(|arg| {
+                            if let SuiCallArg::Pure(value) = arg {
+                                let bytes = value
+                                    .value()
+                                    .to_json_value()
+                                    .as_array()?
+                                    .clone()
+                                    .into_iter()
+                                    .map(|v| v.as_u64().map(|n| n as u8))
+                                    .collect::<Option<Vec<u8>>>()?;
+                                bcs::from_bytes::<String>(&bytes)
+                                    .ok()
+                                    .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
+                            } else {
+                                None
+                            }
+                        });
+                        match currency {
+                            Some(_) => Operation::pay_coin(
+                                status,
+                                recipient,
+                                amount.into(),
+                                currency.clone(),
+                            ),
+                            None => Operation::pay_sui(status, recipient, amount.into()),
+                        }
                     }),
             );
-            operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
+            match currency {
+                Some(_) => operations.push(Operation::pay_coin(
+                    status,
+                    sender,
+                    -(total_paid as i128),
+                    currency.clone(),
+                )),
+                _ => operations.push(Operation::pay_sui(status, sender, -(total_paid as i128))),
+            }
         } else if !stake_ids.is_empty() {
             let stake_ids = stake_ids.into_iter().flatten().collect::<Vec<_>>();
             let metadata = stake_ids
@@ -460,26 +527,37 @@ impl Operations {
         gas_used: i128,
         balance_changes: &[BalanceChange],
         status: Option<OperationStatus>,
-        balances: HashMap<SuiAddress, i128>,
+        balances: HashMap<(SuiAddress, Currency), i128>,
     ) -> impl Iterator<Item = Operation> {
         let mut balances = balance_changes
             .iter()
             .fold(balances, |mut balances, balance_change| {
                 // Rosetta only care about address owner
                 if let Owner::AddressOwner(owner) = balance_change.owner {
-                    if balance_change.coin_type == GAS::type_tag() {
-                        *balances.entry(owner).or_default() += balance_change.amount;
+                    if balances.is_empty() && balance_change.coin_type == GAS::type_tag() {
+                        *balances.entry((owner, SUI.clone())).or_default() += balance_change.amount;
+                    } else {
+                        for (key, _) in balances.iter() {
+                            if TypeTag::from_str(&key.1.metadata.coin_type).ok()
+                                == Some(balance_change.coin_type.clone())
+                            {
+                                *balances.entry((owner, key.1.clone())).or_default() +=
+                                    balance_change.amount;
+                                break;
+                            }
+                        }
                     }
                 }
                 balances
             });
         // separate gas from balances
-        *balances.entry(gas_owner).or_default() -= gas_used;
+        *balances.entry((gas_owner, SUI.clone())).or_default() -= gas_used;
 
-        let balance_change = balances
-            .into_iter()
-            .filter(|(_, amount)| *amount != 0)
-            .map(move |(addr, amount)| Operation::balance_change(status, addr, amount));
+        let balance_change = balances.into_iter().filter(|(_, amount)| *amount != 0).map(
+            move |((addr, currency), amount)| {
+                Operation::balance_change(status, addr, amount, currency)
+            },
+        );
 
         let gas = if gas_used != 0 {
             vec![Operation::gas(gas_owner, gas_used)]
@@ -532,7 +610,9 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
                     if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
                         (&op.account, &op.amount, &op.status)
                     {
-                        *balances.entry(acc.address).or_default() -= amount.value;
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() -= amount.value;
                     }
                     balances
                 });
@@ -564,8 +644,8 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
             }
         }
         let staking_balance = if principal_amounts != 0 {
-            *accounted_balances.entry(sender).or_default() -= principal_amounts;
-            *accounted_balances.entry(sender).or_default() -= reward_amounts;
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= principal_amounts;
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= reward_amounts;
             vec![
                 Operation::stake_principle(status, sender, principal_amounts),
                 Operation::stake_reward(status, sender, reward_amounts),
@@ -698,13 +778,35 @@ impl Operation {
         }
     }
 
-    fn balance_change(status: Option<OperationStatus>, addr: SuiAddress, amount: i128) -> Self {
+    fn pay_coin(
+        status: Option<OperationStatus>,
+        address: SuiAddress,
+        amount: i128,
+        currency: Option<Currency>,
+    ) -> Self {
+        Operation {
+            operation_identifier: Default::default(),
+            type_: OperationType::PayCoin,
+            status,
+            account: Some(address.into()),
+            amount: Some(Amount::new(amount, currency)),
+            coin_change: None,
+            metadata: None,
+        }
+    }
+
+    fn balance_change(
+        status: Option<OperationStatus>,
+        addr: SuiAddress,
+        amount: i128,
+        currency: Currency,
+    ) -> Self {
         Self {
             operation_identifier: Default::default(),
             type_: OperationType::SuiBalanceChange,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount, None)),
+            amount: Some(Amount::new(amount, Some(currency))),
             coin_change: None,
             metadata: None,
         }

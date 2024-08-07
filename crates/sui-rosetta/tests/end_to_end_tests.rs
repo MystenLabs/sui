@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use serde_json::json;
+use std::time::Duration;
 
 use rosetta_client::start_rosetta_test_server;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;

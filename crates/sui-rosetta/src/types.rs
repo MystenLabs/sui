@@ -99,7 +99,7 @@ impl From<SuiAddress> for AccountIdentifier {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
@@ -107,7 +107,7 @@ pub struct Currency {
     pub metadata: CurrencyMetadata,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CurrencyMetadata {
     pub coin_type: String,
 }
@@ -457,6 +457,7 @@ pub enum OperationType {
     StakePrinciple,
     // sui-rosetta supported operation type
     PaySui,
+    PayCoin,
     Stake,
     WithdrawStake,
     // All other Sui transaction types, readonly
@@ -665,6 +666,7 @@ pub struct ConstructionMetadata {
     pub total_coin_value: u64,
     pub gas_price: u64,
     pub budget: u64,
+    pub currency: Option<Currency>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -915,6 +917,12 @@ pub enum InternalOperation {
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
     },
+    PayCoin {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        currency: Currency,
+    },
     Stake {
         sender: SuiAddress,
         validator: SuiAddress,
@@ -931,6 +939,7 @@ impl InternalOperation {
     pub fn sender(&self) -> SuiAddress {
         match self {
             InternalOperation::PaySui { sender, .. }
+            | InternalOperation::PayCoin { sender, .. }
             | InternalOperation::Stake { sender, .. }
             | InternalOperation::WithdrawStake { sender, .. } => *sender,
         }
@@ -945,6 +954,24 @@ impl InternalOperation {
             } => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 builder.pay_sui(recipients, amounts)?;
+                builder.finish()
+            }
+            Self::PayCoin {
+                recipients,
+                amounts,
+                ..
+            } => {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay(metadata.objects.clone(), recipients, amounts)?;
+                let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
+                // This is a workaround in order to have the currency info available during the process
+                // of constructing back the Operations object from the transaction data. A process that
+                // takes place upon the request to the construction's /parse endpoint. The pure value is
+                // not actually being used in any on-chain transaction execution and its sole purpose
+                // is to act as a bearer of the currency info between the various steps of the flow.
+                // See also the value is being later accessed within the operations.rs file's
+                // parse_programmable_transaction function.
+                builder.pure(currency_str)?;
                 builder.finish()
             }
             InternalOperation::Stake {
