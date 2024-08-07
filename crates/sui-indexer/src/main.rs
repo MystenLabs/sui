@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use tracing::info;
+use tracing::{info, warn};
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::start_prometheus_server;
@@ -10,6 +10,7 @@ use sui_indexer::IndexerConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
+    warn!("WARNING: Sui indexer is still experimental and we expect occasional breaking changes that require backfills.");
     // NOTE: this is to print out tracing like info, warn & error.
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
