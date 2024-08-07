@@ -7,6 +7,12 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use clap::*;
+use ethers::providers::Http;
+use ethers::providers::Middleware;
+use ethers::providers::Provider;
+use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
+use sui_bridge_indexer::eth_bridge_indexer::EthSyncDatasource;
+use sui_bridge_indexer::indexer_builder::BackfillStrategy;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -15,9 +21,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
-use sui_bridge_indexer::eth_bridge_indexer::{
-    EthDataMapper, EthFinalizedDatasource, EthUnfinalizedDatasource,
-};
+use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
 use sui_bridge_indexer::indexer_builder::{IndexerBuilder, SuiCheckpointDatasource};
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
@@ -72,41 +76,52 @@ async fn main() -> Result<()> {
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     let db_url = config.db_url.clone();
-
     let datastore = PgBridgePersistent::new(get_connection_pool(db_url.clone()));
-    let eth_checkpoint_datasource = EthFinalizedDatasource::new(
-        config.eth_sui_bridge_contract_address.clone(),
-        config.eth_rpc_url.clone(),
-        bridge_metrics.clone(),
-        indexer_meterics.clone(),
-    )?;
-    let eth_finalized_indexer = IndexerBuilder::new(
-        "FinalizedEthBridgeIndexer",
-        eth_checkpoint_datasource,
-        EthDataMapper {
-            finalized: true,
-            metrics: indexer_meterics.clone(),
-        },
-    )
-    .build(config.start_block, config.start_block, datastore.clone());
-    let finalized_indexer_fut = spawn_logged_monitored_task!(eth_finalized_indexer.start());
 
-    let eth_unfinalized_datasource = EthUnfinalizedDatasource::new(
+    let provider = Arc::new(
+        Provider::<Http>::try_from(config.eth_rpc_url.clone())?
+            .interval(std::time::Duration::from_millis(2000)),
+    );
+
+    let current_block = provider.get_block_number().await?.as_u64();
+    let subscription_end_block = u64::MAX;
+
+    // Start the eth subscription indexer
+
+    let eth_subscription_datasource = EthSubscriptionDatasource::new(
         config.eth_sui_bridge_contract_address.clone(),
-        config.eth_rpc_url.clone(),
-        bridge_metrics.clone(),
+        config.eth_ws_url.clone(),
         indexer_meterics.clone(),
     )?;
-    let eth_unfinalized_indexer = IndexerBuilder::new(
-        "UnFinalizedEthBridgeIndexer",
-        eth_unfinalized_datasource,
+    let eth_subscription_indexer = IndexerBuilder::new(
+        "EthBridgeSubscriptionIndexer",
+        eth_subscription_datasource,
         EthDataMapper {
-            finalized: false,
             metrics: indexer_meterics.clone(),
         },
     )
-    .build(config.start_block, config.start_block, datastore.clone());
-    let unfinalized_indexer_fut = spawn_logged_monitored_task!(eth_unfinalized_indexer.start());
+    .with_backfill_strategy(BackfillStrategy::Disabled)
+    .build(current_block, subscription_end_block, datastore.clone());
+    let subscription_indexer_fut = spawn_logged_monitored_task!(eth_subscription_indexer.start());
+
+    // Start the eth sync indexer
+    let eth_sync_datasource = EthSyncDatasource::new(
+        config.eth_sui_bridge_contract_address.clone(),
+        config.eth_rpc_url.clone(),
+        indexer_meterics.clone(),
+        bridge_metrics.clone(),
+    )?;
+    let eth_sync_indexer = IndexerBuilder::new(
+        "EthBridgeSyncIndexer",
+        eth_sync_datasource,
+        EthDataMapper {
+            metrics: indexer_meterics.clone(),
+        },
+    )
+    .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
+    .disable_live_task()
+    .build(current_block, config.start_block, datastore.clone());
+    let sync_indexer_fut = spawn_logged_monitored_task!(eth_sync_indexer.start());
 
     if let Some(sui_rpc_url) = config.sui_rpc_url.clone() {
         // Todo: impl datasource for sui RPC datasource
@@ -141,7 +156,7 @@ async fn main() -> Result<()> {
         indexer.start().await?;
     }
     // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(vec![finalized_indexer_fut, unfinalized_indexer_fut]).await;
+    futures::future::join_all(vec![subscription_indexer_fut, sync_indexer_fut]).await;
 
     Ok(())
 }

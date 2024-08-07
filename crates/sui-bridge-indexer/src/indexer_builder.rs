@@ -27,6 +27,7 @@ pub struct IndexerBuilder<D, M> {
     datasource: D,
     data_mapper: M,
     backfill_strategy: BackfillStrategy,
+    disable_live_task: bool,
 }
 
 impl<D, M> IndexerBuilder<D, M> {
@@ -36,6 +37,7 @@ impl<D, M> IndexerBuilder<D, M> {
             datasource,
             data_mapper,
             backfill_strategy: BackfillStrategy::Simple,
+            disable_live_task: false,
         }
     }
     pub fn build<R, P>(
@@ -52,6 +54,7 @@ impl<D, M> IndexerBuilder<D, M> {
             storage: persistent,
             datasource: self.datasource.into(),
             backfill_strategy: self.backfill_strategy,
+            disable_live_task: self.disable_live_task,
             start_from_checkpoint,
             data_mapper: self.data_mapper,
             genesis_checkpoint,
@@ -62,6 +65,11 @@ impl<D, M> IndexerBuilder<D, M> {
         self.backfill_strategy = backfill;
         self
     }
+
+    pub fn disable_live_task(mut self) -> Self {
+        self.disable_live_task = true;
+        self
+    }
 }
 
 pub struct Indexer<P, D, M> {
@@ -70,6 +78,7 @@ pub struct Indexer<P, D, M> {
     datasource: Arc<D>,
     data_mapper: M,
     backfill_strategy: BackfillStrategy,
+    disable_live_task: bool,
     start_from_checkpoint: u64,
     genesis_checkpoint: u64,
 }
@@ -87,19 +96,26 @@ impl<P, D, M> Indexer<P, D, M> {
         // create checkpoint workers base on backfill config and existing tasks in the db
         match tasks.live_task() {
             None => {
-                // Scenario 1: No task in database, start live task and backfill tasks
-                self.storage.register_task(
-                    format!("{} - Live", self.name),
-                    self.start_from_checkpoint,
-                    i64::MAX,
-                )?;
+                // if diable_live_task is set, we should not have any live task in the db
+                if !self.disable_live_task {
+                    // Scenario 1: No task in database, start live task and backfill tasks
+                    self.storage.register_task(
+                        format!("{} - Live", self.name),
+                        self.start_from_checkpoint,
+                        i64::MAX,
+                    )?;
+                }
+
                 // Create backfill tasks
                 if self.start_from_checkpoint != self.genesis_checkpoint {
                     self.create_backfill_tasks(self.genesis_checkpoint)?
                 }
             }
             Some(mut live_task) => {
-                if self.start_from_checkpoint > live_task.checkpoint {
+                if self.disable_live_task {
+                    // TODO: delete task
+                    // self.storage.delete_task(live_task.task_name.clone())?;
+                } else if self.start_from_checkpoint > live_task.checkpoint {
                     // Scenario 2: there are existing tasks in DB and start_from_checkpoint > current checkpoint
                     // create backfill task to finish at start_from_checkpoint
                     // update live task to start from start_from_checkpoint and finish at u64::MAX
@@ -118,15 +134,24 @@ impl<P, D, M> Indexer<P, D, M> {
         // Start latest checkpoint worker
         // Tasks are ordered in checkpoint descending order, realtime update task always come first
         // tasks won't be empty here, ok to unwrap.
-        let (live_task, backfill_tasks) = updated_tasks.split_first().unwrap();
+        let backfill_tasks;
+        let live_task_future = if self.disable_live_task {
+            backfill_tasks = updated_tasks;
+            None
+        } else {
+            let (_live_task, _backfill_tasks) = updated_tasks.split_first().unwrap();
 
-        let live_task_future = self.datasource.start_ingestion_task(
-            live_task.task_name.clone(),
-            live_task.checkpoint,
-            live_task.target_checkpoint,
-            self.storage.clone(),
-            self.data_mapper.clone(),
-        );
+            backfill_tasks = _backfill_tasks.to_vec();
+            let live_task = _live_task;
+
+            Some(self.datasource.start_ingestion_task(
+                live_task.task_name.clone(),
+                live_task.checkpoint,
+                live_task.target_checkpoint,
+                self.storage.clone(),
+                self.data_mapper.clone(),
+            ))
+        };
 
         let backfill_tasks = backfill_tasks.to_vec();
         let storage_clone = self.storage.clone();
@@ -148,7 +173,11 @@ impl<P, D, M> Indexer<P, D, M> {
                     .expect("Backfill task failed");
             }
         });
-        live_task_future.await?;
+
+        if let Some(live_task_future) = live_task_future {
+            live_task_future.await?;
+        }
+
         tokio::try_join!(handle)?;
 
         Ok(())
