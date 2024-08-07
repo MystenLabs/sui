@@ -940,15 +940,6 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    pub fn state_accumulator_v2_enabled(&self) -> bool {
-        let flag = match self.get_chain_identifier().chain() {
-            Chain::Unknown | Chain::Testnet => EpochFlag::StateAccumulatorV2EnabledTestnet,
-            Chain::Mainnet => EpochFlag::StateAccumulatorV2EnabledMainnet,
-        };
-
-        self.epoch_start_configuration.flags().contains(&flag)
-    }
-
     pub fn executed_in_epoch_table_enabled(&self) -> bool {
         *self.executed_in_epoch_table_enabled.get_or_init(|| {
             self.epoch_start_configuration

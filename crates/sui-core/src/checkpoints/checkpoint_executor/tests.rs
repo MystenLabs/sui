@@ -391,11 +391,10 @@ async fn init_executor_test(
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
-    let epoch_store = state.epoch_store_for_testing();
 
-    let accumulator =
-        StateAccumulator::new_for_tests(state.get_accumulator_store().clone(), &epoch_store);
-    let accumulator = Arc::new(accumulator);
+    let accumulator = Arc::new(StateAccumulator::new_for_tests(
+        state.get_accumulator_store().clone(),
+    ));
 
     let executor = CheckpointExecutor::new_for_tests(
         checkpoint_sender.subscribe(),

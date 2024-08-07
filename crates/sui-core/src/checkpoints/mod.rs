@@ -1452,9 +1452,7 @@ impl CheckpointBuilder {
                     state_acc
                         .accumulate_running_root(&self.epoch_store, sequence_number, Some(acc))
                         .await?;
-                    state_acc
-                        .digest_epoch(self.epoch_store.clone(), sequence_number)
-                        .await?
+                    state_acc.digest_epoch(self.epoch_store.clone(), sequence_number)?
                 };
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
@@ -2520,7 +2518,6 @@ mod tests {
 
         let accumulator = Arc::new(StateAccumulator::new_for_tests(
             state.get_accumulator_store().clone(),
-            &epoch_store,
         ));
 
         let (checkpoint_service, _exit) = CheckpointService::spawn(
