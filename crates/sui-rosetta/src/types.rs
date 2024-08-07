@@ -964,6 +964,13 @@ impl InternalOperation {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 builder.pay(metadata.objects.clone(), recipients, amounts)?;
                 let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
+                // This is a workaround in order to have the currency info available during the process
+                // of constructing back the Operations object from the transaction data. A process that
+                // takes place upon the request to the construction's /parse endpoint. The pure value is
+                // not actually being used in any on-chain transaction execution and its sole purpose
+                // is to act as a bearer of the currency info between the various steps of the flow.
+                // See also the value is being later accessed within the operations.rs file's
+                // parse_programmable_transaction function.
                 builder.pure(currency_str)?;
                 builder.finish()
             }

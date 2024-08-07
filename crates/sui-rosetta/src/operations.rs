@@ -461,6 +461,18 @@ impl Operations {
                 aggregated_recipients
                     .into_iter()
                     .map(|(recipient, amount)| {
+                        // The 'currency' field is currently needed for the pay_coin operation only, in which
+                        // coin transfers between accounts for coin types different from 0x2::sui::SUI take place.
+                        // For that purpose we have introduced an extra pure value parameter on the transaction block
+                        // of this operation that acts as the bearer of the currency information, and not being actually used
+                        // in any individual transaction execution of the block.
+                        // The fact that the value is not being used on-chain has as a result its data value becoming unavailable
+                        // within the inputs field of the SuiProgrammableTransactionBlock object, note that the field is present
+                        // but the value is empty. In order to work around this, we introduced the input_args input parameter
+                        // which is extracted by the deserialization of the raw transaction bytes and hence it contains the
+                        // otherwise missing currency value. So if the last parameter of the input_args can successfully deserialized to
+                        // a Currency object we safely assume a pay_coin operation.
+                        // See also: https://github.com/MystenLabs/sui/pull/18873#discussion_r1706843674
                         currency = input_args.as_ref().and_then(|args| {
                             args.iter().last().and_then(|arg| {
                                 if let CallArg::Pure(value) = arg {
