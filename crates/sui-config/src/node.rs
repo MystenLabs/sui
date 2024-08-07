@@ -228,6 +228,8 @@ fn default_jwk_fetch_interval_seconds() -> u64 {
 
 pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
     let mut map = BTreeMap::new();
+
+    // providers that are available on devnet only.
     let experimental_providers = BTreeSet::from([
         "Google".to_string(),
         "Facebook".to_string(),
@@ -239,15 +241,19 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Microsoft".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
+        "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // ambrus, external partner
     ]);
+
+    // providers that are available for mainnet and testnet.
     let providers = BTreeSet::from([
         "Google".to_string(),
         "Facebook".to_string(),
         "Twitch".to_string(),
         "Apple".to_string(),
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(),
+        "KarrierOne".to_string(),
+        "Credenza3".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
