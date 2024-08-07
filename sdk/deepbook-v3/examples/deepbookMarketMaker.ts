@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { DeepBookClient } from '@mysten/deepbook-v3';
+import type { BalanceManager } from '@mysten/deepbook-v3';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import type { Keypair } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { Transaction } from '@mysten/sui/transactions';
-
-import { DeepBookClient } from '../src/index.js'; // Adjust path according to new structure
-import type { BalanceManager } from '../src/types/index.js';
 
 export class DeepBookMarketMaker extends DeepBookClient {
 	keypair: Keypair;
