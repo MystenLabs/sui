@@ -657,11 +657,14 @@ impl SuiNode {
         }
 
         let authority_name = config.protocol_public_key();
-        let enable_validator_tx_finalizer =
-            config.enable_validator_tx_finalizer && chain_identifier.chain() != Chain::Mainnet;
-        let validator_tx_finalizer = enable_validator_tx_finalizer.then_some(Arc::new(
-            ValidatorTxFinalizer::new(auth_agg.clone(), authority_name, &prometheus_registry),
-        ));
+        let validator_tx_finalizer =
+            config
+                .enable_validator_tx_finalizer
+                .then_some(Arc::new(ValidatorTxFinalizer::new(
+                    auth_agg.clone(),
+                    authority_name,
+                    &prometheus_registry,
+                )));
 
         info!("create authority state");
         let state = AuthorityState::new(
