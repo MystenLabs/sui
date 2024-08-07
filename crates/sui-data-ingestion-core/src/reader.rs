@@ -11,6 +11,7 @@ use notify::RecursiveMode;
 use notify::Watcher;
 use object_store::path::Path;
 use object_store::ObjectStore;
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
@@ -292,6 +293,7 @@ impl CheckpointReader {
         info!("cleaning processed files, watermark is {}", watermark);
         self.data_limiter.gc(watermark);
         self.last_pruned_watermark = watermark;
+        self.current_checkpoint_number = max(self.current_checkpoint_number, watermark);
         for entry in fs::read_dir(self.path.clone())? {
             let entry = entry?;
             let filename = entry.file_name();
