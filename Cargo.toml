@@ -443,10 +443,7 @@ serial_test = "2.0.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
-serde_json = { version = "1.0.95", features = [
-  "preserve_order",
-  "arbitrary_precision",
-] }
+serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
 serde_with = "3.8"
