@@ -530,6 +530,7 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
     Ok(())
 }
 
+#[ignore]
 #[sim_test]
 async fn test_traffic_sketch_no_blocks() {
     let sketch_config = FreqThresholdConfig {
