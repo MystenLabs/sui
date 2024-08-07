@@ -14841,7 +14841,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "0.2.5"
+version = "1.31.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
