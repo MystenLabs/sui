@@ -4,7 +4,6 @@
 import { Node } from '..';
 import { printFn, treeFn } from '../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-const { hardline } = doc.builders;
 
 /**
  * Creates a callback function to print commments and comment-related nodes.

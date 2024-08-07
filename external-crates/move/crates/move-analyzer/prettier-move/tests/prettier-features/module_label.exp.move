@@ -3,8 +3,8 @@
 // useModuleLabel: true
 
 module prettier::module_label;
-use std::string::String;
 
+use std::string::String;
 /// Hey there, this is the first time we meet.
 public struct Hey {}
 

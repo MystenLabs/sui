@@ -1,9 +1,9 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 import { AstPath, Doc, ParserOptions } from 'prettier';
 import { Node } from '..';
 import { printFn, treeFn } from '../printer';
-import { shouldBreakFirstChild } from '../utilities';
-import { doc } from 'prettier';
-const { softline, group, indent, join, line, ifBreak } = doc.builders;
 
 /**
  * Node: `_literal_value` in the grammar.json.

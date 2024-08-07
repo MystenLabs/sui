@@ -9,7 +9,7 @@
 /// - address - sequence of X bytes
 /// - bool - byte with 0 or 1
 /// - u8 - a single u8 byte
-/// - u64 / u128 / u256 - LE bytes
+/// - u16 / u32 / u64 / u128 / u256 - LE bytes
 /// - vector - ULEB128 length + LEN elements
 /// - option - first byte bool: None (0) or Some (1), then value
 ///
@@ -85,13 +85,9 @@ module sui::bcs {
     /// Read a `bool` value from bcs-serialized bytes.
     public fun peel_bool(bcs: &mut BCS): bool {
         let value = bcs.peel_u8();
-        if (value == 0) {
-            false
-        } else if (value == 1) {
-            true
-        } else {
-            abort ENotBool
-        }
+        if (value == 0) false
+        else if (value == 1) true
+        else abort ENotBool
     }
 
     /// Read `u8` value from bcs-serialized bytes.
@@ -100,46 +96,45 @@ module sui::bcs {
         bcs.bytes.pop_back()
     }
 
-    /// Read `u64` value from bcs-serialized bytes.
-    public fun peel_u64(bcs: &mut BCS): u64 {
-        assert!(bcs.bytes.length() >= 8, EOutOfRange);
+    macro fun peel_num<$I, $T>($bcs: &mut BCS, $len: u64, $bits: $I): $T {
+        let bcs = $bcs;
+        assert!(bcs.bytes.length() >= $len, EOutOfRange);
 
-        let (mut value, mut i) = (0u64, 0u8);
-        while (i < 64) {
-            let byte = bcs.bytes.pop_back() as u64;
-            value = value + (byte << i);
-            i = i + 8;
-        };
-
-        value
-    }
-
-    /// Read `u128` value from bcs-serialized bytes.
-    public fun peel_u128(bcs: &mut BCS): u128 {
-        assert!(bcs.bytes.length() >= 16, EOutOfRange);
-
-        let (mut value, mut i) = (0u128, 0u8);
-        while (i < 128) {
-            let byte = bcs.bytes.pop_back() as u128;
-            value = value + (byte << i);
-            i = i + 8;
-        };
-
-        value
-    }
-
-    /// Read `u256` value from bcs-serialized bytes.
-    public fun peel_u256(bcs: &mut BCS): u256 {
-        assert!(bcs.bytes.length() >= 32, EOutOfRange);
-
-        let (mut value, mut i) = (0u256, 0u16);
-        while (i < 256) {
-            let byte = bcs.bytes.pop_back() as u256;
+        let mut value: $T = 0;
+        let mut i: $I = 0;
+        let bits = $bits;
+        while (i < bits) {
+            let byte = bcs.bytes.pop_back() as $T;
             value = value + (byte << (i as u8));
             i = i + 8;
         };
 
         value
+    }
+
+    /// Read `u16` value from bcs-serialized bytes.
+    public fun peel_u16(bcs: &mut BCS): u16 {
+        bcs.peel_num!(2, 16u8)
+    }
+
+    /// Read `u32` value from bcs-serialized bytes.
+    public fun peel_u32(bcs: &mut BCS): u32 {
+        bcs.peel_num!(4, 32u8)
+    }
+
+    /// Read `u64` value from bcs-serialized bytes.
+    public fun peel_u64(bcs: &mut BCS): u64 {
+        bcs.peel_num!(8, 64u8)
+    }
+
+    /// Read `u128` value from bcs-serialized bytes.
+    public fun peel_u128(bcs: &mut BCS): u128 {
+        bcs.peel_num!(16, 128u8)
+    }
+
+    /// Read `u256` value from bcs-serialized bytes.
+    public fun peel_u256(bcs: &mut BCS): u256 {
+        bcs.peel_num!(32, 256u16)
     }
 
     // === Vector<T> ===
@@ -151,310 +146,123 @@ module sui::bcs {
     /// See more here: https://en.wikipedia.org/wiki/LEB128
     public fun peel_vec_length(bcs: &mut BCS): u64 {
         let (mut total, mut shift, mut len) = (0u64, 0, 0);
-        while (true) {
+        loop {
             assert!(len <= 4, ELenOutOfRange);
             let byte = bcs.bytes.pop_back() as u64;
             len = len + 1;
             total = total | ((byte & 0x7f) << shift);
-            if ((byte & 0x80) == 0) {
-                break
-            };
+            if ((byte & 0x80) == 0) break;
             shift = shift + 7;
         };
         total
     }
 
-    /// Peel a vector of `address` from serialized bytes.
-    public fun peel_vec_address(bcs: &mut BCS): vector<address> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
+    /// Peel `vector<$T>` from serialized bytes, where `$peel: |&mut BCS| -> $T` gives the
+    /// functionality of peeling each value.
+    public macro fun peel_vec<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): vector<$T> {
+        let bcs = $bcs;
+        let len = bcs.peel_vec_length();
+        let mut i = 0;
+        let mut res = vector[];
         while (i < len) {
-            res.push_back(bcs.peel_address());
+            res.push_back($peel(bcs));
             i = i + 1;
         };
         res
+    }
+
+    /// Peel a vector of `address` from serialized bytes.
+    public fun peel_vec_address(bcs: &mut BCS): vector<address> {
+        bcs.peel_vec!(|bcs| bcs.peel_address())
     }
 
     /// Peel a vector of `address` from serialized bytes.
     public fun peel_vec_bool(bcs: &mut BCS): vector<bool> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
-        while (i < len) {
-            res.push_back(bcs.peel_bool());
-            i = i + 1;
-        };
-        res
+        bcs.peel_vec!(|bcs| bcs.peel_bool())
     }
 
     /// Peel a vector of `u8` (eg string) from serialized bytes.
     public fun peel_vec_u8(bcs: &mut BCS): vector<u8> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
-        while (i < len) {
-            res.push_back(bcs.peel_u8());
-            i = i + 1;
-        };
-        res
+        bcs.peel_vec!(|bcs| bcs.peel_u8())
     }
 
     /// Peel a `vector<vector<u8>>` (eg vec of string) from serialized bytes.
     public fun peel_vec_vec_u8(bcs: &mut BCS): vector<vector<u8>> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
-        while (i < len) {
-            res.push_back(bcs.peel_vec_u8());
-            i = i + 1;
-        };
-        res
+        bcs.peel_vec!(|bcs| bcs.peel_vec_u8())
+    }
+
+    /// Peel a vector of `u16` from serialized bytes.
+    public fun peel_vec_u16(bcs: &mut BCS): vector<u16> {
+        bcs.peel_vec!(|bcs| bcs.peel_u16())
+    }
+
+    /// Peel a vector of `u32` from serialized bytes.
+    public fun peel_vec_u32(bcs: &mut BCS): vector<u32> {
+        bcs.peel_vec!(|bcs| bcs.peel_u32())
     }
 
     /// Peel a vector of `u64` from serialized bytes.
     public fun peel_vec_u64(bcs: &mut BCS): vector<u64> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
-        while (i < len) {
-            res.push_back(bcs.peel_u64());
-            i = i + 1;
-        };
-        res
+        bcs.peel_vec!(|bcs| bcs.peel_u64())
     }
 
     /// Peel a vector of `u128` from serialized bytes.
     public fun peel_vec_u128(bcs: &mut BCS): vector<u128> {
-        let (len, mut i, mut res) = (bcs.peel_vec_length(), 0, vector[]);
-        while (i < len) {
-            res.push_back(bcs.peel_u128());
-            i = i + 1;
-        };
-        res
+        bcs.peel_vec!(|bcs| bcs.peel_u128())
+    }
+
+    /// Peel a vector of `u256` from serialized bytes.
+    public fun peel_vec_u256(bcs: &mut BCS): vector<u256> {
+        bcs.peel_vec!(|bcs| bcs.peel_u256())
     }
 
     // === Option<T> ===
 
+    /// Peel `Option<$T>` from serialized bytes, where `$peel: |&mut BCS| -> $T` gives the
+    /// functionality of peeling the inner value.
+    public macro fun peel_option<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): Option<$T> {
+        let bcs = $bcs;
+        if (bcs.peel_bool())option::some($peel(bcs))
+        else option::none()
+    }
+
     /// Peel `Option<address>` from serialized bytes.
     public fun peel_option_address(bcs: &mut BCS): Option<address> {
-        if (bcs.peel_bool()) {
-            option::some(bcs.peel_address())
-        } else {
-            option::none()
-        }
+        bcs.peel_option!(|bcs| bcs.peel_address())
     }
 
     /// Peel `Option<bool>` from serialized bytes.
     public fun peel_option_bool(bcs: &mut BCS): Option<bool> {
-        if (bcs.peel_bool()) {
-            option::some(bcs.peel_bool())
-        } else {
-            option::none()
-        }
+        bcs.peel_option!(|bcs| bcs.peel_bool())
     }
 
     /// Peel `Option<u8>` from serialized bytes.
     public fun peel_option_u8(bcs: &mut BCS): Option<u8> {
-        if (bcs.peel_bool()) {
-            option::some(bcs.peel_u8())
-        } else {
-            option::none()
-        }
+        bcs.peel_option!(|bcs| bcs.peel_u8())
+    }
+
+    /// Peel `Option<u16>` from serialized bytes.
+    public fun peel_option_u16(bcs: &mut BCS): Option<u16> {
+        bcs.peel_option!(|bcs| bcs.peel_u16())
+    }
+
+    /// Peel `Option<u32>` from serialized bytes.
+    public fun peel_option_u32(bcs: &mut BCS): Option<u32> {
+        bcs.peel_option!(|bcs| bcs.peel_u32())
     }
 
     /// Peel `Option<u64>` from serialized bytes.
     public fun peel_option_u64(bcs: &mut BCS): Option<u64> {
-        if (bcs.peel_bool()) {
-            option::some(bcs.peel_u64())
-        } else {
-            option::none()
-        }
+        bcs.peel_option!(|bcs| bcs.peel_u64())
     }
 
     /// Peel `Option<u128>` from serialized bytes.
     public fun peel_option_u128(bcs: &mut BCS): Option<u128> {
-        if (bcs.peel_bool()) {
-            option::some(bcs.peel_u128())
-        } else {
-            option::none()
-        }
+        bcs.peel_option!(|bcs| bcs.peel_u128())
     }
 
-    // === Tests ===
-
-    #[test_only]
-    public struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool>, s: address }
-
-    #[test]
-    #[expected_failure(abort_code = ELenOutOfRange)]
-    fun test_uleb_len_fail() {
-        let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
-        let mut bytes = new(to_bytes(&value));
-        let _fail = bytes.peel_vec_length();
-        abort 2 // TODO: make this test fail
-    }
-
-    #[test]
-    #[expected_failure(abort_code = ENotBool)]
-    fun test_bool_fail() {
-        let mut bytes = new(to_bytes(&10u8));
-        let _fail = bytes.peel_bool();
-    }
-
-    #[test]
-    fun test_option() {
-        {
-            let value = option::some(true);
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_bool());
-        };
-
-        {
-            let value = option::some(10u8);
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_u8());
-        };
-
-        {
-            let value = option::some(10000u64);
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_u64());
-        };
-
-        {
-            let value = option::some(10000999999u128);
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_u128());
-        };
-
-        {
-            let value = option::some(@0xC0FFEE);
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_address());
-        };
-
-        {
-            let value: Option<bool> = option::none();
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_option_bool());
-        };
-    }
-
-    #[test]
-    fun test_bcs() {
-        {
-            let value = @0xC0FFEE;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_address());
-        };
-
-        { // boolean: true
-            let value = true;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_bool());
-        };
-
-        { // boolean: false
-            let value = false;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_bool());
-        };
-
-        { // u8
-            let value = 100u8;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_u8());
-        };
-
-        { // u64 (4 bytes)
-            let value = 1000100u64;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_u64());
-        };
-
-        { // u64 (8 bytes)
-            let value = 100000000000000u64;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_u64());
-        };
-
-        { // u128 (16 bytes)
-            let value = 100000000000000000000000000u128;
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_u128());
-        };
-
-        { // vector length
-            let value = vector[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value.length() == bytes.peel_vec_length());
-        };
-
-        { // vector length (more data)
-            let value = vector[
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-            ];
-
-            let mut bytes = new(to_bytes(&value));
-            assert!(value.length() == bytes.peel_vec_length());
-        };
-
-        { // full deserialization test (ordering)
-            let info = Info { a: true, b: 100, c: 9999, d: 112333, k: vector[true, false, true, false], s: @0xAAAAAAAAAAA };
-            let mut bytes = new(to_bytes(&info));
-
-            assert!(info.a == bytes.peel_bool());
-            assert!(info.b == bytes.peel_u8());
-            assert!(info.c == bytes.peel_u64());
-            assert!(info.d == bytes.peel_u128());
-
-            let len = bytes.peel_vec_length();
-
-            assert!(info.k.length() == len);
-
-            let mut i = 0;
-            while (i < info.k.length()) {
-                assert!(info.k[i] == bytes.peel_bool());
-                i = i + 1;
-            };
-
-            assert!(info.s == bytes.peel_address());
-        };
-
-        { // read vector of bytes directly
-            let value = vector[
-                vector[1,2,3,4,5],
-                vector[1,2,3,4,5],
-                vector[1,2,3,4,5]
-            ];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_vec_u8());
-        };
-
-        { // read vector of bytes directly
-            let value = vector[1,2,3,4,5];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_u8());
-        };
-
-        { // read vector of bytes directly
-            let value = vector[1,2,3,4,5];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_u64());
-        };
-
-        { // read vector of bytes directly
-            let value = vector[1,2,3,4,5];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_u128());
-        };
-
-        { // read vector of bytes directly
-            let value = vector[true, false, true, false];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_bool());
-        };
-
-        { // read vector of address directly
-            let value = vector[@0x0, @0x1, @0x2, @0x3];
-            let mut bytes = new(to_bytes(&value));
-            assert!(value == bytes.peel_vec_address());
-        };
+    /// Peel `Option<u256>` from serialized bytes.
+    public fun peel_option_u256(bcs: &mut BCS): Option<u256> {
+        bcs.peel_option!(|bcs| bcs.peel_u256())
     }
 }

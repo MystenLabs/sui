@@ -8,9 +8,8 @@
 // This module is not currently accessible from user contracts, and is used only to record the JWK
 // state to the chain for auditability + restore from snapshot purposes.
 module sui::authenticator_state {
-    use std::string;
+    use std::string::{Self, String, utf8};
     use sui::dynamic_field;
-    use std::string::{String, utf8};
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -97,8 +96,8 @@ module sui::authenticator_state {
     // ordering is not necessarily the same as the string ordering, but we just need some
     // canonical that is cheap to compute.
     fun string_bytes_lt(a: &String, b: &String): bool {
-        let a_bytes = a.bytes();
-        let b_bytes = b.bytes();
+        let a_bytes = a.as_bytes();
+        let b_bytes = b.as_bytes();
 
         if (a_bytes.length() < b_bytes.length()) {
             true

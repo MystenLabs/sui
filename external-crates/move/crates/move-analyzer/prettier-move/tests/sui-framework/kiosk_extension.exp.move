@@ -41,8 +41,8 @@
 module sui::kiosk_extension {
     use sui::bag::{Self, Bag};
     use sui::dynamic_field as df;
-    use sui::transfer_policy::TransferPolicy;
     use sui::kiosk::{Kiosk, KioskOwnerCap};
+    use sui::transfer_policy::TransferPolicy;
 
     /// Trying to add an extension while not being the owner of the Kiosk.
     const ENotOwner: u64 = 0;

@@ -13,10 +13,10 @@ import { AstPath, Doc, ParserOptions } from 'prettier';
 import { Node } from '.';
 import Common from './cst/Common';
 import Formatting from './cst/Formatting';
-import Module from './cst/module/Module';
-import UseDeclaration from './cst/use/UseDeclaration';
-import Constant from './cst/constant/Constant';
-import StructDefinition from './cst/struct/StructDefinition';
+import Module from './cst/Module';
+import UseDeclaration from './cst/UseDeclaration';
+import Constant from './cst/Constant';
+import StructDefinition from './cst/StructDefinition';
 import FunctionDefinition from './cst/function/FunctionDefinition';
 import BlockItem from './cst/function/BlockItem';
 import SourceFile from './cst/SourceFile';
@@ -32,6 +32,7 @@ export type MoveOptions = {
 	alwaysBreakConditionals: boolean;
 	alwaysBreakStructDefinition: boolean;
 	useModuleLabel: boolean;
+	autoGroupImports: 'package' | 'module';
 };
 
 export type printFn = (path: AstPath) => Doc;
@@ -69,9 +70,7 @@ export function print(path: AstPath<Node>, options: ParserOptions & MoveOptions,
 		printLeadingComment(path),
 		// if the node has a `skipFormattingNode` property, we just return
 		// the text without formatting it
-		path.node.skipFormattingNode
-			? path.node.text
-			: fn(path, options, print),
+		path.node.skipFormattingNode ? path.node.text : fn(path, options, print),
 		printTrailingComment(path),
 	];
 }

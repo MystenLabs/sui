@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
-    use std::ascii::{Self, String};
     use std::address;
+    use std::ascii::{Self, String};
 
     /// ASCII Character code for the `:` (colon) symbol.
     const ASCII_COLON: u8 = 58;
@@ -54,9 +53,9 @@ module std::type_name {
     /// u8, u16, u32, u64, u128, u256, bool, address, vector.
     public fun is_primitive(self: &TypeName): bool {
         let bytes = self.name.as_bytes();
-        bytes == &b"bool" ||
         bytes ==
-        &b"u8" || bytes == &b"u8" ||
+        &b"bool" ||
+        bytes == &b"u8" ||
         bytes == &b"u16" ||
         bytes == &b"u32" ||
         bytes == &b"u64" ||
@@ -107,10 +106,10 @@ module std::type_name {
         let mut i = address::length() * 2 + 2;
         let str_bytes = self.name.as_bytes();
         let mut module_name = vector[];
-
+        let colon = ASCII_COLON;
         loop {
             let char = &str_bytes[i];
-            if (char != &ASCII_COLON) {
+            if (char != &colon) {
                 module_name.push_back(*char);
                 i = i + 1;
             } else {

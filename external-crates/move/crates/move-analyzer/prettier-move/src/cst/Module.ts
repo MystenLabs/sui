@@ -1,14 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import { Node } from '../..';
-import { MoveOptions, printFn, treeFn } from '../../printer';
+import { Node } from '..';
+import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { FunctionDefinition } from '../function/FunctionDefinition';
-import { StructDefinition } from '../struct/StructDefinition';
-import { Constant } from '../constant/Constant';
-import { UseDeclaration } from '../use/UseDeclaration';
-import { EnumDefinition } from '../EnumDefinition';
+import { FunctionDefinition } from './function/FunctionDefinition';
+import { StructDefinition } from './StructDefinition';
+import { Constant } from './Constant';
+import { UseDeclaration } from './UseDeclaration';
+import { printImports, collectImports } from '../imports-grouping';
+import { EnumDefinition } from './EnumDefinition';
 const { join, hardline, indent } = doc.builders;
 
 /**
@@ -59,13 +60,10 @@ export function printModuleDefinition(
 		useLabel = modules.length == 1;
 	}
 
-	let result = [
-		'module ',
-		path.call(print, 'nonFormattingChildren', 0),
-	];
+	let result = ['module ', path.call(print, 'nonFormattingChildren', 0)];
 
 	if (useLabel) {
-		result.push(...[';', hardline, path.call(print, 'nonFormattingChildren', 1)]);
+		result.push(...[';', hardline, hardline, path.call(print, 'nonFormattingChildren', 1)]);
 	} else {
 		result.push(
 			...[
@@ -113,6 +111,8 @@ const separatedMembers = [
  *
  * We need to preserve spacing between members (functions, structs, constants, etc.).
  * We need to only allow a single empty line (if there are more than one, we should remove them).
+ * Additionally, if `groupImports` is set to `package` or `module`, we should group imports and
+ * print them at the top of the module.
  */
 function printModuleBody(
 	path: AstPath<Node>,
@@ -120,15 +120,26 @@ function printModuleBody(
 	print: printFn,
 ): Doc {
 	const nodes = path.node.namedAndEmptyLineChildren;
-	const printed = path.map((path, i) => {
+	let importsDoc = [] as Doc[];
+	const imports = collectImports(path.node);
+	if (Object.keys(imports).length > 0) {
+		importsDoc = printImports(imports, options.autoGroupImports as 'package' | 'module') as Doc[];
+	}
+
+	const bodyDoc = [] as Doc[];
+
+	path.each((path, i) => {
 		const next = nodes[i + 1];
+
+		if (path.node.isGroupedImport) return;
+		if (path.node.isEmptyLine && !path.node.previousNamedSibling) return;
 
 		if (
 			separatedMembers.includes(path.node.type) &&
 			separatedMembers.includes(next?.type || '') &&
 			path.node.type !== next?.type
 		) {
-			return [path.call(print), hardline];
+			return bodyDoc.push([path.call(print), hardline]);
 		}
 
 		// force add empty line after function definitions
@@ -136,11 +147,11 @@ function printModuleBody(
 			path.node.type === FunctionDefinition.FunctionDefinition &&
 			next?.type === FunctionDefinition.FunctionDefinition
 		) {
-			return [path.call(print), hardline];
+			return bodyDoc.push([path.call(print), hardline]);
 		}
 
-		return path.call(print);
+		return bodyDoc.push(path.call(print));
 	}, 'namedAndEmptyLineChildren');
 
-	return join(hardline, printed);
+	return join(hardline, importsDoc.concat(bodyDoc));
 }

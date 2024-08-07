@@ -141,4 +141,100 @@ module std::option {
         let Option { vec } = t;
         vec
     }
+
+    // === Macro Functions ===
+
+    /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
+    public macro fun destroy<$T>($o: Option<$T>, $f: |$T|) {
+        let o = $o;
+        o.do!($f);
+    }
+
+    /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
+    public macro fun do<$T>($o: Option<$T>, $f: |$T|) {
+        let o = $o;
+        if (o.is_some()) {
+            $f(o.destroy_some());
+        }
+    }
+
+    /// Execute a closure on the value inside `t` if it holds one.
+    public macro fun do_ref<$T>($o: &Option<$T>, $f: |&$T|) {
+        let o = $o;
+        if (o.is_some()) {
+            $f(o.borrow());
+        }
+    }
+
+    /// Execute a closure on the mutable reference to the value inside `t` if it holds one.
+    public macro fun do_mut<$T>($o: &mut Option<$T>, $f: |&mut $T|) {
+        let o = $o;
+        if (o.is_some()) $f(o.borrow_mut());
+    }
+
+    /// Select the first `Some` value from the two options, or `None` if both are `None`.
+    /// Equivalent to Rust's `a.or(b)`.
+    public macro fun or<$T>($o: Option<$T>, $default: Option<$T>): Option<$T> {
+        let o = $o;
+        if (o.is_some()) o
+        else $default
+    }
+
+    /// If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.
+    /// Equivalent to Rust's `t.and_then(f)`.
+    public macro fun and<$T, $U>($o: Option<$T>, $f: |$T| -> Option<$U>): Option<$U> {
+        let o = $o;
+        if (o.is_some()) $f(o.extract())
+        else none()
+    }
+
+    /// If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.
+    /// Equivalent to Rust's `t.and_then(f)`.
+    public macro fun and_ref<$T, $U>($o: &Option<$T>, $f: |&$T| -> Option<$U>): Option<$U> {
+        let o = $o;
+        if (o.is_some()) $f(o.borrow())
+        else none()
+    }
+
+    /// Map an `Option<T>` to `Option<U>` by applying a function to a contained value.
+    /// Equivalent to Rust's `t.map(f)`.
+    public macro fun map<$T, $U>($o: Option<$T>, $f: |$T| -> $U): Option<$U> {
+        let mut o = $o;
+        if (o.is_some()) some($f(o.extract()))
+        else none()
+    }
+
+    /// Map an `Option<T>` value to `Option<U>` by applying a function to a contained value by reference.
+    /// Original `Option<T>` is preserved.
+    /// Equivalent to Rust's `t.map(f)`.
+    public macro fun map_ref<$T, $U>($o: &Option<$T>, $f: |&$T| -> $U): Option<$U> {
+        let o = $o;
+        if (o.is_some()) some($f(o.borrow()))
+        else none()
+    }
+
+    /// Return `None` if the value is `None`, otherwise return `Option<T>` if the predicate `f` returns true.
+    public macro fun filter<$T: drop>($o: Option<$T>, $f: |&$T| -> bool): Option<$T> {
+        let o = $o;
+        if (o.is_some() && $f(o.borrow())) o
+        else none()
+    }
+
+    /// Return `false` if the value is `None`, otherwise return the result of the predicate `f`.
+    public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
+        let o = $o;
+        o.is_some() && $f(o.borrow())
+    }
+
+    /// Destroy `Option<T>` and return the value inside if it holds one, or `default` otherwise.
+    /// Equivalent to Rust's `t.unwrap_or(default)`.
+    ///
+    /// Note: this function is a more efficient version of `destroy_with_default`, as it does not
+    /// evaluate the default value unless necessary. The `destroy_with_default` function should be
+    /// deprecated in favor of this function.
+    public macro fun destroy_or<$T>($o: Option<$T>, $default: $T): $T {
+        let o = $o;
+        if (o.is_some()) o.destroy_some()
+        else $default
+    }
 }

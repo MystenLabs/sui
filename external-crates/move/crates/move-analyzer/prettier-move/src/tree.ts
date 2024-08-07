@@ -1,5 +1,6 @@
 import Parser = require('web-tree-sitter');
-import { isEmptyLine, isFormatting, isNewline } from './cst/Formatting';
+import { isFormatting } from './cst/Formatting';
+import { isUseImport } from './cst/UseDeclaration';
 
 export interface Comment {
 	type: 'line_comment' | 'block_comment';
@@ -103,12 +104,42 @@ export class Tree {
 	}
 
 	/**
+	 * Find the parent node of a specific type. Optionally, break on a specific type.
+	 */
+	findParentUntil(type: string, breakOn: string[]): Tree | null {
+		let parent = this.parent;
+		while (parent) {
+			if (parent.type === type) return parent;
+			if (breakOn.includes(parent.type)) return null;
+			parent = parent.parent;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Check if the previous sibling is an annotation node. Ignore formatting nodes.
+	 */
+	get hasAnnotation(): boolean {
+		let prev = this.previousNamedSibling;
+		while (prev) {
+			if (prev.type === 'annotation') return true;
+			if (!prev.isFormatting) return false;
+			prev = prev.previousNamedSibling;
+		}
+		return false;
+	}
+
+	/**
 	 * A flag to skip formatting for a specific node. A manual instruction from
 	 * the user is `prettier-ignore`. When placed above (leading comment) a node,
 	 * it will skip formatting for that node.
 	 */
 	get skipFormattingNode(): boolean {
-		return !!this.leadingComment.find((comment) => comment.text.includes('prettier-ignore')) || false;
+		return (
+			!!this.leadingComment.find((comment) => comment.text.includes('prettier-ignore')) ||
+			false
+		);
 	}
 
 	/**
@@ -155,6 +186,15 @@ export class Tree {
 			'abort_expression',
 			'return_expression',
 		].includes(this.type);
+	}
+
+	/**
+	 * Important part of the `imports-grouping` functionality. This flag is used to
+	 * determine whether a node is an `use_module`, `use_module_members` or
+	 * `use_module_member` node to skip their printing if they're printed as grouped.
+	 */
+	get isGroupedImport(): boolean {
+		return isUseImport(this) && !this.hasAnnotation;
 	}
 
 	/**
@@ -257,24 +297,6 @@ export class Tree {
 	}
 
 	/**
-	 * Find the parent node of a specific type. Optionally, ignore certain types
-	 * of nodes, if they are not relevant or should be skipped.
-	 */
-	findParent(type: string, ignoreTypes: string[] = []): Tree | null {
-		let parent = this.parent;
-		while (parent) {
-			if (parent.type === type) return parent;
-			if (ignoreTypes.includes(parent.type)) {
-				parent = parent.parent;
-				continue;
-			}
-			break;
-		}
-
-		return null;
-	}
-
-	/**
 	 * Print the Node as a JSON object. Remove the fields that are not necessary
 	 * for printing. May be extended shall one need to debug deeper.
 	 */
@@ -298,7 +320,7 @@ export class Tree {
 
 		this.trailingComment = {
 			type: this.nextNamedSibling.type as 'line_comment' | 'block_comment',
-			text: this.nextNamedSibling.text
+			text: this.nextNamedSibling.text,
 		};
 
 		this.nextNamedSibling.isUsedComment = true;
@@ -331,7 +353,7 @@ export class Tree {
 			if (prev.isComment) {
 				comments.unshift({
 					type: prev.type as 'line_comment' | 'block_comment',
-					text: prev.text
+					text: prev.text,
 				});
 				prev.isUsedComment = true;
 			}

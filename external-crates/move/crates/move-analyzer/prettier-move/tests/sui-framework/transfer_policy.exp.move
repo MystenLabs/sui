@@ -23,13 +23,13 @@
 /// of the type at once.
 module sui::transfer_policy {
     use std::type_name::{Self, TypeName};
-    use sui::package::{Self, Publisher};
-    use sui::vec_set::{Self, VecSet};
-    use sui::dynamic_field as df;
     use sui::balance::{Self, Balance};
-    use sui::sui::SUI;
     use sui::coin::{Self, Coin};
+    use sui::dynamic_field as df;
     use sui::event;
+    use sui::package::{Self, Publisher};
+    use sui::sui::SUI;
+    use sui::vec_set::{Self, VecSet};
 
     /// The number of receipts does not match the `TransferPolicy` requirement.
     const EPolicyNotSatisfied: u64 = 0;

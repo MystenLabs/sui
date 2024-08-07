@@ -205,10 +205,7 @@ export function printFieldIdentifier(
  * Print `annotation` node.
  */
 export function printAnnotation(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group([
-		'#',
-		list({ path, print, options, open: '[', close: ']' }),
-	]);
+	return group(['#', list({ path, print, options, open: '[', close: ']' })]);
 }
 
 /**
@@ -229,7 +226,7 @@ export function printAnnotationList(
 ): Doc {
 	return [
 		path.call(print, 'nonFormattingChildren', 0),
-		list({ path, print, options, open: '(', close: ')', skipChildren: 1 })
+		list({ path, print, options, open: '(', close: ')', skipChildren: 1 }),
 	];
 }
 
@@ -242,12 +239,15 @@ export function printAnnotationExpression(
 	print: printFn,
 ): Doc {
 	// allow `::module::Expression` in annotations
-	return join(' = ', path.map((path) => {
-		if (path.node.type === 'module_access' && path.node.previousSibling?.type == "::") {
-			return ['::', path.call(print)];
-		}
-		return path.call(print);
-	}, 'nonFormattingChildren'));
+	return join(
+		' = ',
+		path.map((path) => {
+			if (path.node.type === 'module_access' && path.node.previousSibling?.type == '::') {
+				return ['::', path.call(print)];
+			}
+			return path.call(print);
+		}, 'nonFormattingChildren'),
+	);
 }
 
 /**
@@ -293,7 +293,7 @@ function printBindUnpack(path: AstPath<Node>, options: ParserOptions, print: pri
 
 /**
  * Print `bind_fields` node.
- * Switch between `bind_named_fields` and `bind_positional_fields`.
+ * Choice node between `bind_named_fields` and `bind_positional_fields`.
  */
 function printBindFields(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	return path.call(print, 'nonFormattingChildren', 0);
@@ -308,36 +308,31 @@ function printBindField(path: AstPath<Node>, options: ParserOptions, print: prin
 		return '..';
 	}
 
-	const nonFormatting = path.node.nonFormattingChildren;
-	const isMut = !!path.node.children.find((c) => c.text === 'mut');
-
-	if (nonFormatting.length == 1) {
-		return [isMut ? 'mut ' : '', nonFormatting[0]!.text];
-	}
-
-	return [nonFormatting[0]!.text, isMut ? ': mut ' : ': ', nonFormatting[1]!.text];
+	// if there's only one child, we can just print it
+	// if there're two, they will be joined
+	return join(
+		': ',
+		path.map(
+			(path) =>
+				path.node.previousSibling?.type == 'mut' ? ['mut ', path.call(print)] : print(path),
+			'nonFormattingChildren',
+		),
+	);
 }
 
 /**
  * Print `bind_list` node.
+ * In the bind list we have two paths:
+ *
+ * - one is just `bind_var` with potential `mut`
+ * - another is a list, and we know it because the first member is `(`.
  */
 function printBindList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
 	if (path.node.nonFormattingChildren.length == 1) {
-		return join(' ', path.map(print, 'children'));
+		return join(' ', path.map(print, 'nonFormattingChildren'));
 	}
 
-	return indent(
-		group(
-			path.map((path) => {
-				if (path.node.type === '(') return ['(', ifBreak(builders.line, '')];
-				if (path.node.type === ')')
-					return builders.dedent([ifBreak([',', builders.line], ''), ')']);
-				if (path.node.type === ',') return [',', line];
-				if (path.node.type === 'mut') return ['mut '];
-				return indent(path.call(print));
-			}, 'children'),
-		),
-	);
+	return group(list({ path, print, options, open: '(', close: ')' }));
 }
 
 /**
@@ -367,9 +362,12 @@ function printBindPositionalFields(
 
 /**
  * Print `bind_var` node.
+ *
+ * If it has `mut` before the value, we print it. `mut` is not a named child.
  */
 function printBindVar(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return path.call(print, 'nonFormattingChildren', 0);
+	let isMut = path.node.previousSibling?.type == 'mut';
+	return [isMut ? ['mut '] : '', path.call(print, 'nonFormattingChildren', 0)];
 }
 
 /**
@@ -414,10 +412,19 @@ function printFieldInitializeList(
 ): Doc {
 	return [
 		' ',
-		group(list({
-			path, print, options, open: '{', close: '}', addWhitespace: true }), {
-			shouldBreak: shouldBreakFirstChild(path),
-		}),
+		group(
+			list({
+				path,
+				print,
+				options,
+				open: '{',
+				close: '}',
+				addWhitespace: true,
+			}),
+			{
+				shouldBreak: shouldBreakFirstChild(path),
+			},
+		),
 	];
 }
 

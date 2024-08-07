@@ -59,13 +59,28 @@ export const parsers: { [key: string]: PrettierParser } = {
 };
 
 export const printers: { [key: string]: Printer } = {
-	'move-format': {
-		print,
-		// preprocess,
-	},
+	'move-format': { print },
 };
 
 export const options: Record<string, SupportOption> = {
+	autoGroupImports: {
+		type: 'choice',
+		category: 'Global',
+		default: 'package',
+		description: "Group all use imports by 'package', 'module' or 'none'.",
+		choices: [
+			{
+				value: 'package',
+				description:
+					'Group imports by package, eg `use sui::{balance::Balance, coin::Coin}',
+			},
+			{
+				value: 'module',
+				description:
+					'Group imports by module eg\n`use sui::balance::Balance;\nuse sui::coin::Coin`',
+			},
+		],
+	},
 	wrapComments: {
 		type: 'boolean',
 		category: 'Global',
@@ -92,6 +107,7 @@ export const defaultOptions = {
 	useTabs: false,
 	printWidth: 100,
 	useModuleLabel: false,
+	groupImports: 'module',
 };
 
 export default {

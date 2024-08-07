@@ -17,7 +17,7 @@ module test::structs {
           u64
     }
 
-    struct WithAbilities has
+    public struct WithAbilities has
          key
      ,
        drop
@@ -26,7 +26,7 @@ module test::structs {
         f:   u64,
     }
 
-    struct WithPostfixAbilities
+    public struct WithPostfixAbilities
         {
         f:   u64,
       }
@@ -37,13 +37,13 @@ module test::structs {
 
 
 
-    struct TwoField {f1     :      u64,
+    public struct TwoField {f1     :      u64,
         f2
       :
           u64
     }
 
-    struct SimpleGeneric<T1  :    key,
+    public struct SimpleGeneric<T1  :    key,
        T2
     :
             store
@@ -53,7 +53,7 @@ module test::structs {
     {
     }
 
-    struct SimpleGenericWithAbilities
+    public struct SimpleGenericWithAbilities
                 <T1  :    key,
        T2
     :
@@ -66,15 +66,15 @@ module test::structs {
     {
     }
 
-    struct OneLongGeneric<TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT  :    key>
+    public struct OneLongGeneric<TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT  :    key>
     {
     }
 
-    struct ThreeLongGenerics<phantom TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1  :    key, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT2  :    store, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT3  :    drop>
+    public struct ThreeLongGenerics<phantom TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1  :    key, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT2  :    store, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT3  :    drop>
     {
     }
 
-    struct ThreeLongGenericsWithAbilitiesAndFields<TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1  :    key, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT2  :    store, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT3  :    drop>
+    public struct ThreeLongGenericsWithAbilitiesAndFields<TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT1  :    key, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT2  :    store, TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT3  :    drop>
  has
          key
      ,
@@ -86,12 +86,12 @@ module test::structs {
           u64
     }
 
-    native struct NativeShort<T
+    public native struct NativeShort<T
        :  key
     > has
            key;
 
-native struct NativeGenericWithAbilities
+public native struct NativeGenericWithAbilities
                 <T1  :    key,
        T2
     :
@@ -104,24 +104,24 @@ native struct NativeGenericWithAbilities
      ,
       drop;
 
-    struct PositionalEmpty
+    public struct PositionalEmpty
     (
 
         )
 
-    struct PositionalFields
+    public struct PositionalFields
     (    Empty,
     u64
            )
 
 
-    struct PositionalFieldsWithAbilities
+    public struct PositionalFieldsWithAbilities
     (    Empty,
     u64
            ) has key, store;
 
 
-    struct PositionalFieldsLong
+    public struct PositionalFieldsLong
     (    PositionalFieldsWithAbilities,
     PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities, PositionalFieldsWithAbilities
            )

@@ -1,5 +1,6 @@
 // options:
 // printWidth: 80
+// autoGroupImports: package
 
 /*
  * @title Timelock
@@ -10,8 +11,23 @@
  */
 module suitears::timelock {
 
+    use std::{string::String, type_name::{Self, TypeName}};
+    use sui::{
+        clock::Clock,
+        coin::Coin,
+        dynamic_field as df,
+        sui::SUI,
+        table::{Self, Table}
+    };
 
 
+    public fun macro_fail() {
+        core::create_deleverage_ticket!(
+            |pool: &mut cetus_pool::Pool<X,Y>,
+                lp_position: &mut CetusPosition,
+                delta_l: u128| say::hello()
+        )
+    }
 
     fun calculate_pending_rewards<StakeCoin, RewardCoin>(
         acc: &Account<StakeCoin, RewardCoin>,
@@ -132,8 +148,4 @@ module suitears::timelock {
         id.delete();
         data
     }
-
-
-
-
 }

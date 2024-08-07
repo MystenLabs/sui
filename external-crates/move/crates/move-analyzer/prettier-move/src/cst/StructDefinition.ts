@@ -1,11 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import { Node } from '../..';
-import { MoveOptions, printFn, treeFn } from '../../printer';
+import { Node } from '..';
+import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
-import { list, shouldBreakFirstChild } from '../../utilities';
-const { group, ifBreak, join, indent, line, softline } = doc.builders;
+import { list, shouldBreakFirstChild } from '../utilities';
+const { group, join } = doc.builders;
 
 export default function (path: AstPath<Node>): treeFn | null {
 	switch (path.node.type) {

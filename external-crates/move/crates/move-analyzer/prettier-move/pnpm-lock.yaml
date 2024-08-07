@@ -25,8 +25,8 @@ importers:
         specifier: ^5.2.0
         version: 5.2.0
       typescript:
-        specifier: ^5.3.3
-        version: 5.3.3
+        specifier: ^5.5.4
+        version: 5.5.4
       vitest:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@20.10.6)
@@ -506,8 +506,8 @@ packages:
     resolution: {integrity: sha512-0fr/mIH1dlO+x7TlcMy+bIDqKPsw/70tVyeHW787goQjhmqaZe10uwLujubK9q9Lg6Fiho1KUKDYz0Z7k7g5/g==}
     engines: {node: '>=4'}
 
-  typescript@5.3.3:
-    resolution: {integrity: sha512-pXWcraxM0uxAS+tN0AG/BF2TyqmHO014Z070UsJ+pFvYuRSq8KH8DmWpnbXe0pEPDHXZV3FcAbJkijJ5oNEnWw==}
+  typescript@5.5.4:
+    resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -983,7 +983,7 @@ snapshots:
 
   type-detect@4.0.8: {}
 
-  typescript@5.3.3: {}
+  typescript@5.5.4: {}
 
   ufo@1.5.3: {}
 

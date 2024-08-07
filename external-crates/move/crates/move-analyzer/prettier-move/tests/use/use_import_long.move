@@ -1,5 +1,6 @@
 // options:
 // printWidth: 100
+// autoGroupImports: module
 
 module prettier::use_declaration {
     use sui::transfer_policy::{Self as policy, TransferPolicy,

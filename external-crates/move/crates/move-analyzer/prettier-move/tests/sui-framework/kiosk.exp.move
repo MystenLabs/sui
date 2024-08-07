@@ -81,13 +81,13 @@
 ///
 /// See `transfer_policy` module for more details on how they function.
 module sui::kiosk {
-    use sui::dynamic_object_field as dof;
-    use sui::dynamic_field as df;
-    use sui::transfer_policy::{Self, TransferPolicy, TransferRequest};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
+    use sui::dynamic_field as df;
+    use sui::dynamic_object_field as dof;
     use sui::event;
+    use sui::sui::SUI;
+    use sui::transfer_policy::{Self, TransferPolicy, TransferRequest};
 
     /// Allows calling `cap.kiosk()` to retrieve `for` field from `KioskOwnerCap`.
     public use fun kiosk_owner_cap_for as KioskOwnerCap.kiosk;

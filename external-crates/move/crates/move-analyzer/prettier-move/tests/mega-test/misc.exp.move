@@ -1,5 +1,6 @@
 // options:
 // printWidth: 80
+// autoGroupImports: package
 
 /*
  * @title Timelock
@@ -9,6 +10,25 @@
  * @dev We do not provide a function to read the data inside the {Timelock<T>} to prevent capabilities from being used.
  */
 module suitears::timelock {
+    use std::{string::String, type_name::{Self, TypeName}};
+    use sui::{
+        clock::Clock,
+        coin::Coin,
+        dynamic_field as df,
+        sui::SUI,
+        table::{Self, Table}
+    };
+
+    public fun macro_fail() {
+        core::create_deleverage_ticket!(
+            ERROR,
+            &mut cetus_pool::Pool<X, Y>,
+            ERROR,
+            &mut CetusPosition,
+            delta_l ERROR |,
+        )
+    }
+
     fun calculate_pending_rewards<StakeCoin, RewardCoin>(
         acc: &Account<StakeCoin, RewardCoin>,
         stake_factor: u64,

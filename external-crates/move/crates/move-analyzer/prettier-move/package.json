@@ -1,6 +1,6 @@
 {
   "name": "prettier-plugin-move",
-  "version": "0.0.24",
+  "version": "0.0.33",
   "license": "Apache-2.0",
   "keywords": [
     "prettier",
@@ -22,7 +22,7 @@
     "@types/diff": "^5.2.1",
     "@types/node": "^20.10.6",
     "diff": "^5.2.0",
-    "typescript": "^5.3.3",
+    "typescript": "^5.5.4",
     "vitest": "^1.6.0"
   }
 }

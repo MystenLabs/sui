@@ -228,8 +228,8 @@ module prettier::expression {
             mut kek,
             prev: lprev,
             next: lnext,
-            keys: mut lkeys,
-            vals: mut lvals,
+            keys: mut mut lkeys,
+            vals: mut mut lvals,
         } = left;
     }
 

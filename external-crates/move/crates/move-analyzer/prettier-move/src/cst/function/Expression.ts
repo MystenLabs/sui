@@ -5,7 +5,7 @@ import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
 import { block, list, printLeadingComment, shouldBreakFirstChild } from '../../utilities';
-const { group, join, line, softline, ifBreak, hardline, indent } = doc.builders;
+const { group, join, line, softline, indent } = doc.builders;
 
 // + sign marks nodes that have tests
 /**
@@ -268,10 +268,9 @@ function printUnitExpression(path: AstPath<Node>, options: ParserOptions, print:
  * Print `expression_list` node.
  */
 function printExpressionList(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return group(
-		list({ path, print, options, open: '(', close: ')' }),
-		{ shouldBreak: shouldBreakFirstChild(path) },
-	);
+	return group(list({ path, print, options, open: '(', close: ')' }), {
+		shouldBreak: shouldBreakFirstChild(path),
+	});
 }
 
 /**

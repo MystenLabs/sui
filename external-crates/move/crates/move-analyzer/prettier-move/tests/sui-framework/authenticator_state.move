@@ -94,8 +94,8 @@ module sui::authenticator_state {
     // ordering is not necessarily the same as the string ordering, but we just need some
     // canonical that is cheap to compute.
     fun string_bytes_lt(a: &String, b: &String): bool {
-        let a_bytes = a.bytes();
-        let b_bytes = b.bytes();
+        let a_bytes = a.as_bytes();
+        let b_bytes = b.as_bytes();
 
         if (a_bytes.length() < b_bytes.length()) {
             true

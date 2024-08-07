@@ -11,3 +11,7 @@ module prettier::prettier_ignore {
         ];
     }
 }
+
+// prettier-ignore
+module prettier::another {
+    }

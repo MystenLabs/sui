@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as plugin from '../';
 import * as prettier from 'prettier';
 import { describe, it } from 'vitest';
-import { MoveOptions } from "../src/printer";
+import { MoveOptions } from '../src/printer';
 
 const UB = process.env['UB'];
 const OPTIONS_HEADER = '// options:';
@@ -46,6 +46,7 @@ function runSpec(dirname: string) {
 					printWidth: 80,
 					tabWidth: 4,
 					useModuleLabel: false,
+					autoGroupImports: 'module',
 				};
 
 				if (content.startsWith(OPTIONS_HEADER)) {
@@ -53,15 +54,23 @@ function runSpec(dirname: string) {
 					while (lines.length) {
 						let line = lines.shift();
 						if (line?.startsWith('// ')) {
-							let value = /(printWidth|tabWidth|useModuleLabel)\:\ (true|[0-9]+)/.exec(
-								line,
-							);
+							let value =
+								/(printWidth|tabWidth|useModuleLabel|autoGroupImports)\:\ (true|module|package|[0-9]+)/.exec(
+									line,
+								);
 							if (value) {
 								let [_, key, val] = value || [];
-								if (key == 'useModuleLabel') {
-									config[key] = val == 'true';
-								} else {
-									config[key] = parseInt(val);
+								switch (key) {
+									case 'useModuleLabel':
+										config[key] = val == 'true';
+										break;
+									case 'autoGroupImports':
+										config[key] = val;
+										break;
+									case 'printWidth':
+									case 'tabWidth':
+										config[key] = parseInt(val);
+										break;
 								}
 							}
 						}
@@ -69,21 +78,13 @@ function runSpec(dirname: string) {
 				}
 
 				const result = await prettier.format(content, {
-					plugins: [
-						{
-							languages: plugin.languages,
-							parsers: plugin.parsers,
-							// @ts-ignore
-							printers: plugin.printers,
-							defaultOptions: plugin.defaultOptions,
-							// @ts-ignore
-							options: plugin.options,
-						},
-					],
+					// @ts-ignore
+					plugins: [plugin],
 					parser: 'move-parse',
 					printWidth: config.printWidth,
 					tabWidth: config.tabWidth,
 					useModuleLabel: config.useModuleLabel,
+					autoGroupImports: config.autoGroupImports as MoveOptions['autoGroupImports'],
 				});
 
 				// user asked to regenerate output

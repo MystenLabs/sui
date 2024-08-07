@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-import { Node } from '../..';
-import { printFn, treeFn } from '../../printer';
+import { Node } from '..';
+import { printFn, treeFn } from '../printer';
 import { AstPath, Doc, ParserOptions, doc } from 'prettier';
 const { line, group, indent } = doc.builders;
 

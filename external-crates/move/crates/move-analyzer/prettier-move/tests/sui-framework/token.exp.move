@@ -22,12 +22,12 @@
 module sui::token {
     use std::string::String;
     use std::type_name::{Self, TypeName};
-    use sui::coin::{Coin, TreasuryCap};
     use sui::balance::{Self, Balance};
-    use sui::vec_map::{Self, VecMap};
-    use sui::vec_set::{Self, VecSet};
+    use sui::coin::{Coin, TreasuryCap};
     use sui::dynamic_field as df;
     use sui::event;
+    use sui::vec_map::{Self, VecMap};
+    use sui::vec_set::{Self, VecSet};
 
     /// The action is not allowed (defined) in the policy.
     const EUnknownAction: u64 = 0;

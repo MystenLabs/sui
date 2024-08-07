@@ -3,10 +3,10 @@
 
 #[defines_primitive(address)]
 module sui::address {
-    use sui::hex;
     use std::ascii;
     use std::bcs;
     use std::string;
+    use sui::hex;
 
     /// Allows calling `.to_id()` on an address to get its `ID`.
     public use fun sui::object::id_from_address as address.to_id;
