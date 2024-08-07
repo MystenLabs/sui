@@ -4142,16 +4142,15 @@ fn parse_use_decl(
                     opening_brace: None,
                 }
             } else {
+                // add `;` to stop set to limit number of eaten tokens if the list is parsed
+                // incorrectly
+                context.stop_set.add(Tok::Semicolon);
                 match context.tokens.peek() {
                     Tok::LBrace => {
                         let lbrace_loc = context.tokens.current_token_loc();
                         let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
-                            let (name, _, use_) = parse_use_module(ctxt)?;
-                            Ok((name, use_))
+                            parse_use_module(ctxt).map(|(name, _, use_)| (name, use_))
                         };
-                        // add `;` to stop set to limit number of eaten tokens if the list is parsed
-                        // incorrectly
-                        context.stop_set.add(Tok::Semicolon);
                         let use_decls = parse_comma_list(
                             context,
                             Tok::LBrace,
@@ -4176,9 +4175,6 @@ fn parse_use_decl(
                         use_
                     }
                     _ => {
-                        // add `;` to stop set to limit number of eaten tokens if the module use is
-                        // parsed incorrectly
-                        context.stop_set.add(Tok::Semicolon);
                         let use_ = match parse_use_module(context) {
                             Ok((name, end_loc, use_)) => {
                                 let loc = make_loc(
