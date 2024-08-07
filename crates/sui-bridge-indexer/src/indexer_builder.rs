@@ -135,24 +135,23 @@ impl<P, D, M> Indexer<P, D, M> {
         // Tasks are ordered in checkpoint descending order, realtime update task always come first
         // tasks won't be empty here, ok to unwrap.
         let backfill_tasks;
-        if self.disable_live_task {
+        let live_task_future = if self.disable_live_task {
             backfill_tasks = updated_tasks;
+            None
         } else {
             let (_live_task, _backfill_tasks) = updated_tasks.split_first().unwrap();
 
             backfill_tasks = _backfill_tasks.to_vec();
             let live_task = _live_task;
 
-            let live_task_future = self.datasource.start_ingestion_task(
+            Some(self.datasource.start_ingestion_task(
                 live_task.task_name.clone(),
                 live_task.checkpoint,
                 live_task.target_checkpoint,
                 self.storage.clone(),
                 self.data_mapper.clone(),
-            );
-
-            live_task_future.await?;
-        }
+            ))
+        };
 
         let backfill_tasks = backfill_tasks.to_vec();
         let storage_clone = self.storage.clone();
@@ -174,6 +173,10 @@ impl<P, D, M> Indexer<P, D, M> {
                     .expect("Backfill task failed");
             }
         });
+
+        if let Some(live_task_future) = live_task_future {
+            live_task_future.await?;
+        }
 
         tokio::try_join!(handle)?;
 

@@ -90,38 +90,49 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSubscri
             let mut cached_blocks: HashMap<u64, Block<H256>> = HashMap::new();
 
             let mut stream = eth_ws_client.subscribe_logs(&filter).await?;
-            while let Some(_log) = stream.next().await {
-                let log = RawEthLog {
-                    block_number: _log
+            while let Some(log) = stream.next().await {
+                let raw_log = RawEthLog {
+                    block_number: log
                         .block_number
                         .ok_or(BridgeError::ProviderError(
                             "Provider returns log without block_number".into(),
                         ))
                         .unwrap()
                         .as_u64(),
-                    tx_hash: _log
+                    tx_hash: log
                         .transaction_hash
                         .ok_or(BridgeError::ProviderError(
                             "Provider returns log without transaction_hash".into(),
                         ))
                         .unwrap(),
-                    log: _log,
+                    log,
                 };
 
-                let block_number = log.block_number();
+                let block_number = raw_log.block_number();
 
                 let block = if let Some(cached_block) = cached_blocks.get(&block_number) {
                     cached_block.clone()
                 } else {
-                    let block = eth_ws_client.get_block(block_number).await?.unwrap();
+                    let block = retry_with_max_elapsed_time!(
+                        eth_ws_client.get_block(block_number),
+                        Duration::from_secs(30000)
+                    )?
+                    .unwrap()
+                    .unwrap();
+
                     cached_blocks.insert(block_number, block.clone());
                     block
                 };
 
-                let transaction = eth_ws_client.get_transaction(log.tx_hash).await?.unwrap();
+                let transaction = retry_with_max_elapsed_time!(
+                    eth_ws_client.get_transaction(raw_log.tx_hash),
+                    Duration::from_secs(30000)
+                )?
+                .unwrap()
+                .unwrap();
 
                 data_sender
-                    .send((block_number, vec![(log, block, transaction)]))
+                    .send((block_number, vec![(raw_log, block, transaction)]))
                     .await?;
 
                 indexer_metrics
@@ -210,7 +221,7 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
                 ),
                 Duration::from_secs(30000)
             )
-            .and_then(|events_result| events_result)
+            .unwrap()
             .unwrap();
 
             let mut data = Vec::new();
@@ -220,7 +231,13 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
                 let block = if let Some(cached_block) = cached_blocks.get(&log.block_number) {
                     cached_block.clone()
                 } else {
-                    let block = provider.get_block(log.block_number).await?.unwrap();
+                    let block = retry_with_max_elapsed_time!(
+                        provider.get_block(log.block_number),
+                        Duration::from_secs(30000)
+                    )?
+                    .unwrap()
+                    .unwrap();
+
                     cached_blocks.insert(log.block_number, block.clone());
                     block
                 };
@@ -229,7 +246,12 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
                     first_block = log.block_number;
                 }
 
-                let transaction = provider.get_transaction(log.tx_hash).await?.unwrap();
+                let transaction = retry_with_max_elapsed_time!(
+                    provider.get_transaction(log.tx_hash),
+                    Duration::from_secs(30000)
+                )?
+                .unwrap()
+                .unwrap();
 
                 data.push((log, block, transaction));
             }
