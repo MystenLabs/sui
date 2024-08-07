@@ -3428,6 +3428,7 @@ fn parse_enum_variant_decls(
 // Parse an enum variant definition:
 //      VariantDecl = <Identifier> ("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")")
 fn parse_enum_variant_decl(context: &mut Context) -> Result<VariantDefinition, Box<Diagnostic>> {
+    context.tokens.match_doc_comments();
     let start_loc = context.tokens.start_loc();
     let name = parse_identifier(context)?;
     let fields = parse_enum_variant_fields(context)?;
