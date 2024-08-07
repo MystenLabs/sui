@@ -54,3 +54,6 @@ sui-types = { workspace = true, features = ["test-utils"] }
 
 [build-dependencies]
 prost-build.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

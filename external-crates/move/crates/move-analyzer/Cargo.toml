@@ -40,3 +40,5 @@ datatest-stable.workspace = true
 name = "ide_testsuite"
 harness = false
 
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

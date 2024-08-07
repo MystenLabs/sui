@@ -44,3 +44,6 @@ datatest-stable.workspace = true
 [[test]]
 name = "move_check_testsuite"
 harness = false
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

@@ -25,3 +25,6 @@ uuid.workspace = true
 lexical-util = "0.8.5"
 reqwest = { workspace = true, features = ["json"] }
 env_logger = "0.11.3"
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

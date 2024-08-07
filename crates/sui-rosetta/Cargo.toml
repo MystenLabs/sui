@@ -49,3 +49,6 @@ test-cluster.workspace = true
 tempfile.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

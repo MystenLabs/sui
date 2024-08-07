@@ -51,3 +51,6 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
 bin-version.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

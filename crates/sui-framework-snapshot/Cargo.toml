@@ -20,3 +20,6 @@ sui-types.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

@@ -27,3 +27,6 @@ serde_json.workspace = true
 telemetry-subscribers.workspace = true
 reqwest.workspace = true
 futures.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

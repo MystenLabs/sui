@@ -33,3 +33,6 @@ move-core-types.workspace = true
 name = "generate-json-rpc-spec"
 path = "src/generate_json_rpc_spec.rs"
 test = false
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

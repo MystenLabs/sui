@@ -51,3 +51,6 @@ sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-transaction-checks.workspace = true
 sui-types.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

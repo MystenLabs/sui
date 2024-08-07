@@ -68,3 +68,6 @@ passkey-authenticator.workspace = true
 coset.workspace = true
 url.workspace = true
 p256.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

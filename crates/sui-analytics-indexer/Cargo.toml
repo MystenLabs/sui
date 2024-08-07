@@ -60,3 +60,6 @@ tap.workspace = true
 [[bin]]
 name = "sui-analytics-indexer"
 path = "src/main.rs"
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

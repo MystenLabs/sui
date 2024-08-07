@@ -146,3 +146,4 @@ harness = false
 
 [features]
 test-utils = []
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

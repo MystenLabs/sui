@@ -25,3 +25,6 @@ rand.workspace = true
 tempfile.workspace = true
 
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

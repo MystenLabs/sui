@@ -58,3 +58,4 @@ typed-store.workspace = true
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

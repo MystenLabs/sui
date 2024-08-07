@@ -26,3 +26,5 @@ move-binary-format.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
 
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

@@ -56,3 +56,6 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
 maplit = "1.0.2"
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

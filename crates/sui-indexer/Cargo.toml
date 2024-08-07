@@ -63,6 +63,7 @@ pg_integration = []
 default = ["postgres-feature"]
 postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]
 mysql-feature = ["diesel/mysql", "diesel/mysql_backend", "diesel-derive-enum/mysql"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]
 
 [dev-dependencies]
 sui-keys.workspace = true

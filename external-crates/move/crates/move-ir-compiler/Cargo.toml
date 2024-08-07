@@ -25,3 +25,4 @@ bcs.workspace = true
 
 [features]
 default = []
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

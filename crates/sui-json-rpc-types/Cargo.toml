@@ -38,3 +38,4 @@ sui-types = { workspace = true, features = ["test-utils"] }
 
 [features]
 test-utils = []
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

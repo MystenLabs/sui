@@ -39,3 +39,6 @@ tempfile = "3.6.0"
 [[bin]]
 name = "sui-aws-orchestrator"
 path = "src/main.rs"
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

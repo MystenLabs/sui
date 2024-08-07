@@ -32,3 +32,6 @@ move-compiler.workspace = true
 serde_json.workspace = true
 sui-move-build.workspace = true
 tower.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

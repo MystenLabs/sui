@@ -40,3 +40,4 @@ arbitrary = { workspace = true, features = ["derive_arbitrary"] }
 [features]
 default = []
 fuzzing = ["proptest", "proptest-derive", "arbitrary"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

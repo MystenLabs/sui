@@ -22,3 +22,6 @@ regex.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

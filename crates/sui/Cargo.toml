@@ -132,3 +132,4 @@ gas-profiler = [
     "sui-execution/gas-profiler",
 ]
 indexer = ["dep:sui-indexer", "dep:sui-graphql-rpc"]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

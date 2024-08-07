@@ -39,3 +39,6 @@ test-cluster.workspace = true
 [[bin]]
 name = "sui-rpc-loadgen"
 path = "src/main.rs"
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

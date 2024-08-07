@@ -61,3 +61,6 @@ mockall.workspace = true
 expect-test.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 telemetry-subscribers.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]

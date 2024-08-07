@@ -54,3 +54,6 @@ typed-store.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
+
+[features]
+serde-arbitrary-precision = ["serde_json/arbitrary_precision"]
