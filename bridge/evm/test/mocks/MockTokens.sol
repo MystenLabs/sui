@@ -57,6 +57,24 @@ contract MockUSDT is ERC20 {
     function testSkip() public {}
 }
 
+contract MockKA is ERC20 {
+    constructor() ERC20("Ka Coin", "KA") {}
+
+    function mint(address to, uint256 amount) public virtual {
+        _mint(to, amount);
+    }
+
+    function burn(address form, uint256 amount) public virtual {
+        _burn(form, amount);
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return 9;
+    }
+
+    function testSkip() public {}
+}
+
 contract WETH {
     string public name = "Wrapped Ether";
     string public symbol = "WETH";

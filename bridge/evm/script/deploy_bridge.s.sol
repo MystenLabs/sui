@@ -44,6 +44,8 @@ contract DeployBridge is Script {
             MockWBTC wBTC = new MockWBTC();
             MockUSDC USDC = new MockUSDC();
             MockUSDT USDT = new MockUSDT();
+            MockKA KA = new MockKA();
+            console.log("[Deployed] KA:", address(KA));
 
             // update deployConfig with mock addresses
             deployConfig.supportedTokens = new address[](5);

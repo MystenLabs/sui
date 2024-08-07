@@ -34,6 +34,8 @@ pub type BridgeRecordDyanmicField = Field<
 >;
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
+pub const BRIDGE_TREASURY_MODULE_NAME: &IdentStr = ident_str!("treasury");
+pub const BRIDGE_LIMITER_MODULE_NAME: &IdentStr = ident_str!("limiter");
 pub const BRIDGE_COMMITTEE_MODULE_NAME: &IdentStr = ident_str!("committee");
 pub const BRIDGE_MESSAGE_MODULE_NAME: &IdentStr = ident_str!("message");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
