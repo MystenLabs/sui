@@ -1,0 +1,10 @@
+[package]
+name = "risk_management"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+risk_management =  "0x0"
+sui =  "0000000000000000000000000000000000000002"
