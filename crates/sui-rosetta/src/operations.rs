@@ -7,7 +7,6 @@ use std::str::FromStr;
 use std::vec;
 
 use anyhow::anyhow;
-use fastcrypto::encoding::Hex;
 use move_core_types::ident_str;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
@@ -27,9 +26,7 @@ use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{
-    CallArg, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
-};
+use sui_types::transaction::TransactionData;
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
@@ -249,25 +246,16 @@ impl Operations {
         Ok(InternalOperation::WithdrawStake { sender, stake_ids })
     }
 
-    fn from_transaction_block_data(
-        data: SuiTransactionBlockData,
-        input_args: Option<Vec<CallArg>>,
-    ) -> Result<Operations, Error> {
-        let sender = *data.sender();
-        Self::from_transaction(data.transaction().clone(), sender, None, input_args)
-    }
-
     fn from_transaction(
         tx: SuiTransactionBlockKind,
         sender: SuiAddress,
         status: Option<OperationStatus>,
-        input_args: Option<Vec<CallArg>>,
-    ) -> Result<Operations, Error> {
+    ) -> Result<Vec<Operation>, Error> {
         Ok(match tx {
-            SuiTransactionBlockKind::ProgrammableTransaction(pt) => Self::new(
-                Self::parse_programmable_transaction(sender, status, pt, input_args)?,
-            ),
-            _ => Self::new(vec![Operation::generic_op(status, sender, tx)]),
+            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
+                Self::parse_programmable_transaction(sender, status, pt)?
+            }
+            _ => vec![Operation::generic_op(status, sender, tx)],
         })
     }
 
@@ -275,7 +263,6 @@ impl Operations {
         sender: SuiAddress,
         status: Option<OperationStatus>,
         pt: SuiProgrammableTransactionBlock,
-        input_args: Option<Vec<CallArg>>,
     ) -> Result<Vec<Operation>, Error> {
         #[derive(Debug)]
         enum KnownValue {
@@ -461,28 +448,22 @@ impl Operations {
                 aggregated_recipients
                     .into_iter()
                     .map(|(recipient, amount)| {
-                        // The 'currency' field is currently needed for the pay_coin operation only, in which
-                        // coin transfers between accounts for coin types different from 0x2::sui::SUI take place.
-                        // For that purpose we have introduced an extra pure value parameter on the transaction block
-                        // of this operation that acts as the bearer of the currency information, and not being actually used
-                        // in any individual transaction execution of the block.
-                        // The fact that the value is not being used on-chain has as a result its data value becoming unavailable
-                        // within the inputs field of the SuiProgrammableTransactionBlock object, note that the field is present
-                        // but the value is empty. In order to work around this, we introduced the input_args input parameter
-                        // which is extracted by the deserialization of the raw transaction bytes and hence it contains the
-                        // otherwise missing currency value. So if the last parameter of the input_args can successfully deserialized to
-                        // a Currency object we safely assume a pay_coin operation.
-                        // See also: https://github.com/MystenLabs/sui/pull/18873#discussion_r1706843674
-                        currency = input_args.as_ref().and_then(|args| {
-                            args.iter().last().and_then(|arg| {
-                                if let CallArg::Pure(value) = arg {
-                                    bcs::from_bytes::<String>(value)
-                                        .ok()
-                                        .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
-                                } else {
-                                    None
-                                }
-                            })
+                        currency = inputs.iter().last().and_then(|arg| {
+                            if let SuiCallArg::Pure(value) = arg {
+                                let bytes = value
+                                    .value()
+                                    .to_json_value()
+                                    .as_array()?
+                                    .clone()
+                                    .into_iter()
+                                    .map(|v| v.as_u64().map(|n| n as u8))
+                                    .collect::<Option<Vec<u8>>>()?;
+                                bcs::from_bytes::<String>(&bytes)
+                                    .ok()
+                                    .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
+                            } else {
+                                None
+                            }
                         });
                         match currency {
                             Some(_) => Operation::pay_coin(
@@ -588,6 +569,18 @@ impl Operations {
     }
 }
 
+impl TryFrom<SuiTransactionBlockData> for Operations {
+    type Error = Error;
+    fn try_from(data: SuiTransactionBlockData) -> Result<Self, Self::Error> {
+        let sender = *data.sender();
+        Ok(Self::new(Self::from_transaction(
+            data.transaction().clone(),
+            sender,
+            None,
+        )?))
+    }
+}
+
 impl TryFrom<SuiTransactionBlockResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
@@ -605,14 +598,7 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
             - gas_summary.computation_cost as i128;
 
         let status = Some(effect.into_status().into());
-        let hex = Hex::from_bytes(&response.raw_transaction);
-        let tx_obj: Transaction = bcs::from_bytes(&hex.to_vec().unwrap()).unwrap();
-        let tx_data = tx_obj.into_data().intent_message().value.clone();
-        let input_args = match tx_data.kind() {
-            TransactionKind::ProgrammableTransaction(pt) => Some(pt.clone().inputs),
-            _ => None,
-        };
-        let ops: Operations = Self::from_transaction_block_data(tx.data, input_args)?;
+        let ops: Operations = tx.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -703,13 +689,8 @@ impl TryFrom<TransactionData> for Operations {
                 Ok(None)
             }
         }
-        let transaction_block_data =
-            SuiTransactionBlockData::try_from(data.clone(), &&mut NoOpsModuleResolver)?;
-        let input_args = match data.kind() {
-            TransactionKind::ProgrammableTransaction(pt) => Some(pt.clone().inputs),
-            _ => None,
-        };
-        Self::from_transaction_block_data(transaction_block_data, input_args)
+        // Rosetta don't need the call args to be parsed into readable format
+        SuiTransactionBlockData::try_from(data, &&mut NoOpsModuleResolver)?.try_into()
     }
 }
 

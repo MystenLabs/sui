@@ -52,8 +52,7 @@ pub async fn transaction(
                 .with_input()
                 .with_events()
                 .with_effects()
-                .with_balance_changes()
-                .with_raw_input(),
+                .with_balance_changes(),
         )
         .await?;
     let hash = response.digest;

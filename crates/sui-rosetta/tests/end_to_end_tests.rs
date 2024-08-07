@@ -162,8 +162,7 @@ async fn test_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
@@ -223,8 +222,7 @@ async fn test_stake_all() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
@@ -291,8 +289,7 @@ async fn test_withdraw_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
@@ -342,8 +339,7 @@ async fn test_withdraw_stake() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
@@ -412,8 +408,7 @@ async fn test_pay_sui() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
@@ -473,8 +468,7 @@ async fn test_pay_sui_multiple_times() {
                     .with_input()
                     .with_effects()
                     .with_balance_changes()
-                    .with_events()
-                    .with_raw_input(),
+                    .with_events(),
             )
             .await
             .unwrap();

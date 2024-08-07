@@ -189,10 +189,6 @@ pub async fn init_package(
         } = change
         {
             if object_type.to_string().contains("2::coin::TreasuryCap") {
-                // let TypeTag::Struct(coin_tag) = object_type.type_params.into_iter().next().unwrap()
-                // else {
-                //     return None;
-                // };
                 let Owner::AddressOwner(owner) = owner else {
                     return None;
                 };

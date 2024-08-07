@@ -242,7 +242,7 @@ pub async fn metadata(
         InternalOperation::PayCoin { currency, .. } => Some(currency.clone()),
         _ => None,
     };
-    let coin_type = currency.clone().map(|c| c.metadata.coin_type);
+    let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
 
     let mut gas_price = context
         .client
@@ -263,7 +263,7 @@ pub async fn metadata(
             let coin_objs: Vec<ObjectRef> = context
                 .client
                 .coin_read_api()
-                .select_coins(sender, coin_type.clone(), amount.into(), vec![])
+                .select_coins(sender, coin_type, amount.into(), vec![])
                 .await
                 .ok()
                 .unwrap_or_default()
@@ -389,7 +389,7 @@ pub async fn metadata(
             total_coin_value,
             gas_price,
             budget,
-            currency: currency.clone(),
+            currency,
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })

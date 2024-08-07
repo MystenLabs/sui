@@ -121,8 +121,7 @@ impl CheckpointBlockProvider {
                         .with_input()
                         .with_effects()
                         .with_balance_changes()
-                        .with_events()
-                        .with_raw_input(),
+                        .with_events(),
                 )
                 .await?;
             for tx in transaction_responses.into_iter() {

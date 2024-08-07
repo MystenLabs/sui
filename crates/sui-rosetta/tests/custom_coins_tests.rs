@@ -159,8 +159,7 @@ async fn test_custom_coin_transfer() {
                 .with_input()
                 .with_effects()
                 .with_balance_changes()
-                .with_events()
-                .with_raw_input(),
+                .with_events(),
         )
         .await
         .unwrap();
