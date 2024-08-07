@@ -530,7 +530,6 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
     Ok(())
 }
 
-#[ignore]
 #[sim_test]
 async fn test_traffic_sketch_no_blocks() {
     let sketch_config = FreqThresholdConfig {
@@ -570,6 +569,7 @@ async fn test_traffic_sketch_no_blocks() {
     assert!(metrics.total_time_blocked < Duration::from_secs(10));
 }
 
+#[ignore]
 #[sim_test]
 async fn test_traffic_sketch_with_slow_blocks() {
     let sketch_config = FreqThresholdConfig {
