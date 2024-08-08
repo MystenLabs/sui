@@ -268,32 +268,6 @@ impl TypeFilter {
 }
 
 impl FqNameFilter {
-    /// Modify `query` to apply this filter, treating `package` as the column containing the package
-    /// address, `module` as the module containing the module name, and `name` as the column
-    /// containing the module member name.
-    pub(crate) fn apply<P, M, N, QS, ST, GB>(
-        &self,
-        query: Query<ST, QS, GB>,
-        package: P,
-        module: M,
-        name: N,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        P: Field<Binary, QS>,
-        M: Field<Text, QS>,
-        N: Field<Text, QS>,
-        QS: QuerySource,
-    {
-        match self {
-            FqNameFilter::ByModule(filter) => filter.apply(query, package, module),
-            FqNameFilter::ByFqName(p, m, n) => query
-                .filter(package.eq(p.into_vec()))
-                .filter(module.eq(m.clone()))
-                .filter(name.eq(n.clone())),
-        }
-    }
-
     /// Try to create a filter whose results are the intersection of the results of the input
     /// filters (`self` and `other`). This may not be possible if the resulting filter is
     /// inconsistent (e.g. a filter that requires the module member's package to be at two different

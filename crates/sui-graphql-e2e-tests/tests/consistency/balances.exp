@@ -59,7 +59,7 @@ task 15, line 76:
 Checkpoint created: 7
 
 task 16, lines 78-99:
-//# run-graphql --cursors {"c":2,"t":1,"tc":1}
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -95,7 +95,7 @@ Response: {
 }
 
 task 17, lines 101-122:
-//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -131,7 +131,7 @@ Response: {
 }
 
 task 18, lines 124-145:
-//# run-graphql --cursors {"c":4,"t":1,"tc":1}
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -175,7 +175,7 @@ task 20, line 149:
 Checkpoint created: 8
 
 task 21, lines 151-172:
-//# run-graphql --cursors {"c":2,"t":1,"tc":1}
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -211,7 +211,7 @@ Response: {
 }
 
 task 22, lines 174-195:
-//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -247,7 +247,7 @@ Response: {
 }
 
 task 23, lines 197-218:
-//# run-graphql --cursors {"c":4,"t":1,"tc":1}
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -291,7 +291,7 @@ task 25, line 222:
 Checkpoint created: 9
 
 task 26, lines 224-245:
-//# run-graphql --cursors {"c":2,"t":1,"tc":1}
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -326,7 +326,7 @@ Response: {
 }
 
 task 27, lines 247-268:
-//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -362,7 +362,7 @@ Response: {
 }
 
 task 28, lines 270-291:
-//# run-graphql --cursors {"c":4,"t":1,"tc":1}
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -406,7 +406,7 @@ task 30, line 296:
 Checkpoint created: 10
 
 task 31, lines 298-319:
-//# run-graphql --cursors {"c":2,"t":1,"tc":1}
+//# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -441,7 +441,7 @@ Response: {
 }
 
 task 32, lines 321-342:
-//# run-graphql --cursors {"c":3,"t":1,"tc":1}
+//# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {
@@ -476,7 +476,7 @@ Response: {
 }
 
 task 33, lines 344-365:
-//# run-graphql --cursors {"c":4,"t":1,"tc":1}
+//# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
     "transactionBlocks": {

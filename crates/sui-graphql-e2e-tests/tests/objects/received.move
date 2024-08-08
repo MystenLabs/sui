@@ -6,7 +6,7 @@
 //# run-graphql
 {
     object(address: "0x2") {
-        receivedTransactionBlocks {
+        receivedTransactionBlocks(scanLimit: 50) {
             nodes {
                 digest
             }
@@ -31,7 +31,7 @@ module P0::m {
 //# run-graphql
 {
     object(address: "0x2") {
-        receivedTransactionBlocks {
+        receivedTransactionBlocks(scanLimit: 50) {
             nodes {
                 digest
             }

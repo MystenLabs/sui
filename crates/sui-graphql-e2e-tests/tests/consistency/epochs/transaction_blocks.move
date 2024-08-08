@@ -90,7 +90,7 @@ module Test::M1 {
 
 //# advance-epoch
 
-//# run-graphql --cursors {"t":3,"tc":3,"c":4} {"t":7,"tc":7,"c":8} {"t":11,"tc":11,"c":12}
+//# run-graphql --cursors {"t":3,"i":false,"c":4} {"t":7,"i":false,"c":8} {"t":11,"i":false,"c":12}
 # View transactions before the last transaction in each epoch, from the perspective of the first
 # checkpoint in the next epoch.
 {
@@ -156,7 +156,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"t":0,"tc":0,"c":7} {"t":4,"tc":4,"c":11} {"t":8,"tc":8,"c":12}
+//# run-graphql --cursors {"t":0,"i":false,"c":7} {"t":4,"i":false,"c":11} {"t":8,"i":false,"c":12}
 # View transactions after the first transaction in each epoch, from the perspective of the last
 # checkpoint in the next epoch.
 {
@@ -198,7 +198,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"t":1,"tc":1,"c":2} {"t":5,"tc":5,"c":6} {"t":9,"tc":9,"c":10}
+//# run-graphql --cursors {"t":1,"i":false,"c":2} {"t":5,"i":false,"c":6} {"t":9,"i":false,"c":10}
 # View transactions after the second transaction in each epoch, from the perspective of a checkpoint
 # around the middle of each epoch.
 {
@@ -240,7 +240,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"t":5,"tc":5,"c":6}
+//# run-graphql --cursors {"t":5,"i":false,"c":6}
 # Verify that with a cursor, we are locked into a view as if we were at the checkpoint stored in
 # the cursor. Compare against `without_cursor`, which should show the latest state at the actual
 # latest checkpoint. There should only be 1 transaction block in the `with_cursor` query, but

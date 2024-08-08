@@ -98,8 +98,27 @@ type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
 	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type AddressConnection {
@@ -409,8 +428,27 @@ type Checkpoint {
 	epoch: Epoch
 	"""
 	Transactions in this checkpoint.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type CheckpointConnection {
@@ -517,8 +555,27 @@ type Coin implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -676,8 +733,27 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1093,8 +1169,27 @@ type Epoch {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type Event {
@@ -1429,7 +1524,7 @@ interface IObject {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1972,8 +2067,27 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -2161,8 +2275,27 @@ type MovePackage implements IObject & IOwner {
 	The transaction blocks that sent objects to this package.
 	
 	Note that objects that have been sent to a package become inaccessible.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the package's content.
 	"""
@@ -2492,8 +2625,27 @@ type Object implements IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3074,8 +3226,27 @@ type Query {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The transaction blocks that exist in the network.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The events that exist in the network.
 	"""
@@ -3279,6 +3450,14 @@ type ServiceConfig {
 	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
 	"""
 	maxMoveValueDepth: Int!
+	"""
+	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+	"""
+	maxTransactionIds: Int!
+	"""
+	Maximum number of candidates to scan when gathering a page of results.
+	"""
+	maxScanLimit: Int!
 }
 
 """
@@ -3496,8 +3675,27 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3698,8 +3896,27 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""

@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use super::cursor::{self, Page, Paginated, Target};
+use super::cursor::{self, Page, Paginated, ScanLimited, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
@@ -376,3 +376,5 @@ impl Checkpointed for Cursor {
         self.checkpoint_viewed_at
     }
 }
+
+impl ScanLimited for Cursor {}

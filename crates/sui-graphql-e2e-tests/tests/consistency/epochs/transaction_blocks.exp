@@ -39,25 +39,25 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjozLCJ0IjowLCJ0YyI6MH0",
+            "cursor": "eyJjIjozLCJ0IjowLCJpIjpmYWxzZX0",
             "node": {
               "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
             }
           },
           {
-            "cursor": "eyJjIjozLCJ0IjoxLCJ0YyI6MX0",
+            "cursor": "eyJjIjozLCJ0IjoxLCJpIjpmYWxzZX0",
             "node": {
               "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
             }
           },
           {
-            "cursor": "eyJjIjozLCJ0IjoyLCJ0YyI6Mn0",
+            "cursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
             "node": {
               "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
             }
           },
           {
-            "cursor": "eyJjIjozLCJ0IjozLCJ0YyI6M30",
+            "cursor": "eyJjIjozLCJ0IjozLCJpIjpmYWxzZX0",
             "node": {
               "digest": "Bym7b7ELP77KxVHtgj6F4FB7H6n5LYQuBQYmdvvFxEmM"
             }
@@ -141,7 +141,7 @@ task 21, line 91:
 Epoch advanced: 3
 
 task 22, lines 93-157:
-//# run-graphql --cursors {"t":3,"tc":3,"c":4} {"t":7,"tc":7,"c":8} {"t":11,"tc":11,"c":12}
+//# run-graphql --cursors {"t":3,"i":false,"c":4} {"t":7,"i":false,"c":8} {"t":11,"i":false,"c":12}
 Response: {
   "data": {
     "checkpoint": {
@@ -152,25 +152,25 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMiwidCI6MCwidGMiOjB9",
+            "cursor": "eyJjIjoxMiwidCI6MCwiaSI6ZmFsc2V9",
             "node": {
               "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MSwidGMiOjF9",
+            "cursor": "eyJjIjoxMiwidCI6MSwiaSI6ZmFsc2V9",
             "node": {
               "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MiwidGMiOjJ9",
+            "cursor": "eyJjIjoxMiwidCI6MiwiaSI6ZmFsc2V9",
             "node": {
               "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MywidGMiOjN9",
+            "cursor": "eyJjIjoxMiwidCI6MywiaSI6ZmFsc2V9",
             "node": {
               "digest": "Bym7b7ELP77KxVHtgj6F4FB7H6n5LYQuBQYmdvvFxEmM"
             }
@@ -181,19 +181,19 @@ Response: {
     "txs_epoch_0": {
       "edges": [
         {
-          "cursor": "eyJjIjo0LCJ0IjowLCJ0YyI6MH0",
+          "cursor": "eyJjIjo0LCJ0IjowLCJpIjpmYWxzZX0",
           "node": {
             "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
           }
         },
         {
-          "cursor": "eyJjIjo0LCJ0IjoxLCJ0YyI6MX0",
+          "cursor": "eyJjIjo0LCJ0IjoxLCJpIjpmYWxzZX0",
           "node": {
             "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
           }
         },
         {
-          "cursor": "eyJjIjo0LCJ0IjoyLCJ0YyI6Mn0",
+          "cursor": "eyJjIjo0LCJ0IjoyLCJpIjpmYWxzZX0",
           "node": {
             "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
           }
@@ -205,25 +205,25 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMiwidCI6NCwidGMiOjR9",
+            "cursor": "eyJjIjoxMiwidCI6NCwiaSI6ZmFsc2V9",
             "node": {
               "digest": "H1WU8uXMGaENQs54EpoHGpV1iMYdH8P5scd1d16s9ECB"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6NSwidGMiOjV9",
+            "cursor": "eyJjIjoxMiwidCI6NSwiaSI6ZmFsc2V9",
             "node": {
               "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6NiwidGMiOjZ9",
+            "cursor": "eyJjIjoxMiwidCI6NiwiaSI6ZmFsc2V9",
             "node": {
               "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6NywidGMiOjd9",
+            "cursor": "eyJjIjoxMiwidCI6NywiaSI6ZmFsc2V9",
             "node": {
               "digest": "D251V1BnvyRKNFZmiFxaf7gSZLGdLo8fYbbVDb5vJWfd"
             }
@@ -234,43 +234,43 @@ Response: {
     "txs_epoch_1": {
       "edges": [
         {
-          "cursor": "eyJjIjo4LCJ0IjowLCJ0YyI6MH0",
+          "cursor": "eyJjIjo4LCJ0IjowLCJpIjpmYWxzZX0",
           "node": {
             "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0IjoxLCJ0YyI6MX0",
+          "cursor": "eyJjIjo4LCJ0IjoxLCJpIjpmYWxzZX0",
           "node": {
             "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0IjoyLCJ0YyI6Mn0",
+          "cursor": "eyJjIjo4LCJ0IjoyLCJpIjpmYWxzZX0",
           "node": {
             "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0IjozLCJ0YyI6M30",
+          "cursor": "eyJjIjo4LCJ0IjozLCJpIjpmYWxzZX0",
           "node": {
             "digest": "Bym7b7ELP77KxVHtgj6F4FB7H6n5LYQuBQYmdvvFxEmM"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0Ijo0LCJ0YyI6NH0",
+          "cursor": "eyJjIjo4LCJ0Ijo0LCJpIjpmYWxzZX0",
           "node": {
             "digest": "H1WU8uXMGaENQs54EpoHGpV1iMYdH8P5scd1d16s9ECB"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0Ijo1LCJ0YyI6NX0",
+          "cursor": "eyJjIjo4LCJ0Ijo1LCJpIjpmYWxzZX0",
           "node": {
             "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9"
           }
         },
         {
-          "cursor": "eyJjIjo4LCJ0Ijo2LCJ0YyI6Nn0",
+          "cursor": "eyJjIjo4LCJ0Ijo2LCJpIjpmYWxzZX0",
           "node": {
             "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB"
           }
@@ -282,25 +282,25 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMiwidCI6OCwidGMiOjh9",
+            "cursor": "eyJjIjoxMiwidCI6OCwiaSI6ZmFsc2V9",
             "node": {
               "digest": "JLAF7P6DumC8rgzT1Ygp2QgTwpHE2FUqQbVXL6cGEEQ"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6OSwidGMiOjl9",
+            "cursor": "eyJjIjoxMiwidCI6OSwiaSI6ZmFsc2V9",
             "node": {
               "digest": "BVMVdn7DDpTbCjtYwWFekcFA9sNeMgDh1wTNWRrngZxh"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MTAsInRjIjoxMH0",
+            "cursor": "eyJjIjoxMiwidCI6MTAsImkiOmZhbHNlfQ",
             "node": {
               "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MTEsInRjIjoxMX0",
+            "cursor": "eyJjIjoxMiwidCI6MTEsImkiOmZhbHNlfQ",
             "node": {
               "digest": "GngPX2ztACkKE96VUfoujZ3vA11MMDhPSwwgKhK7hVa"
             }
@@ -311,67 +311,67 @@ Response: {
     "txs_epoch_2": {
       "edges": [
         {
-          "cursor": "eyJjIjoxMiwidCI6MCwidGMiOjB9",
+          "cursor": "eyJjIjoxMiwidCI6MCwiaSI6ZmFsc2V9",
           "node": {
             "digest": "J7mHXcoa7LXwyjzZUWsk8zvYZjek359TM4d2hQK4LGHo"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6MSwidGMiOjF9",
+          "cursor": "eyJjIjoxMiwidCI6MSwiaSI6ZmFsc2V9",
           "node": {
             "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6MiwidGMiOjJ9",
+          "cursor": "eyJjIjoxMiwidCI6MiwiaSI6ZmFsc2V9",
           "node": {
             "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6MywidGMiOjN9",
+          "cursor": "eyJjIjoxMiwidCI6MywiaSI6ZmFsc2V9",
           "node": {
             "digest": "Bym7b7ELP77KxVHtgj6F4FB7H6n5LYQuBQYmdvvFxEmM"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NCwidGMiOjR9",
+          "cursor": "eyJjIjoxMiwidCI6NCwiaSI6ZmFsc2V9",
           "node": {
             "digest": "H1WU8uXMGaENQs54EpoHGpV1iMYdH8P5scd1d16s9ECB"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NSwidGMiOjV9",
+          "cursor": "eyJjIjoxMiwidCI6NSwiaSI6ZmFsc2V9",
           "node": {
             "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NiwidGMiOjZ9",
+          "cursor": "eyJjIjoxMiwidCI6NiwiaSI6ZmFsc2V9",
           "node": {
             "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NywidGMiOjd9",
+          "cursor": "eyJjIjoxMiwidCI6NywiaSI6ZmFsc2V9",
           "node": {
             "digest": "D251V1BnvyRKNFZmiFxaf7gSZLGdLo8fYbbVDb5vJWfd"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6OCwidGMiOjh9",
+          "cursor": "eyJjIjoxMiwidCI6OCwiaSI6ZmFsc2V9",
           "node": {
             "digest": "JLAF7P6DumC8rgzT1Ygp2QgTwpHE2FUqQbVXL6cGEEQ"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6OSwidGMiOjl9",
+          "cursor": "eyJjIjoxMiwidCI6OSwiaSI6ZmFsc2V9",
           "node": {
             "digest": "BVMVdn7DDpTbCjtYwWFekcFA9sNeMgDh1wTNWRrngZxh"
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6MTAsInRjIjoxMH0",
+          "cursor": "eyJjIjoxMiwidCI6MTAsImkiOmZhbHNlfQ",
           "node": {
             "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5"
           }
@@ -382,7 +382,7 @@ Response: {
 }
 
 task 23, lines 159-199:
-//# run-graphql --cursors {"t":0,"tc":0,"c":7} {"t":4,"tc":4,"c":11} {"t":8,"tc":8,"c":12}
+//# run-graphql --cursors {"t":0,"i":false,"c":7} {"t":4,"i":false,"c":11} {"t":8,"i":false,"c":12}
 Response: {
   "data": {
     "checkpoint": {
@@ -393,19 +393,19 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjo3LCJ0IjoxLCJ0YyI6MX0",
+            "cursor": "eyJjIjo3LCJ0IjoxLCJpIjpmYWxzZX0",
             "node": {
               "digest": "J1pYPDrTgsKgzB8XWtW8jLJ8RPsbJcC1SQ4Mv2T1hAWt"
             }
           },
           {
-            "cursor": "eyJjIjo3LCJ0IjoyLCJ0YyI6Mn0",
+            "cursor": "eyJjIjo3LCJ0IjoyLCJpIjpmYWxzZX0",
             "node": {
               "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
             }
           },
           {
-            "cursor": "eyJjIjo3LCJ0IjozLCJ0YyI6M30",
+            "cursor": "eyJjIjo3LCJ0IjozLCJpIjpmYWxzZX0",
             "node": {
               "digest": "Bym7b7ELP77KxVHtgj6F4FB7H6n5LYQuBQYmdvvFxEmM"
             }
@@ -418,19 +418,19 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMSwidCI6NSwidGMiOjV9",
+            "cursor": "eyJjIjoxMSwidCI6NSwiaSI6ZmFsc2V9",
             "node": {
               "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9"
             }
           },
           {
-            "cursor": "eyJjIjoxMSwidCI6NiwidGMiOjZ9",
+            "cursor": "eyJjIjoxMSwidCI6NiwiaSI6ZmFsc2V9",
             "node": {
               "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB"
             }
           },
           {
-            "cursor": "eyJjIjoxMSwidCI6NywidGMiOjd9",
+            "cursor": "eyJjIjoxMSwidCI6NywiaSI6ZmFsc2V9",
             "node": {
               "digest": "D251V1BnvyRKNFZmiFxaf7gSZLGdLo8fYbbVDb5vJWfd"
             }
@@ -443,19 +443,19 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMiwidCI6OSwidGMiOjl9",
+            "cursor": "eyJjIjoxMiwidCI6OSwiaSI6ZmFsc2V9",
             "node": {
               "digest": "BVMVdn7DDpTbCjtYwWFekcFA9sNeMgDh1wTNWRrngZxh"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MTAsInRjIjoxMH0",
+            "cursor": "eyJjIjoxMiwidCI6MTAsImkiOmZhbHNlfQ",
             "node": {
               "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5"
             }
           },
           {
-            "cursor": "eyJjIjoxMiwidCI6MTEsInRjIjoxMX0",
+            "cursor": "eyJjIjoxMiwidCI6MTEsImkiOmZhbHNlfQ",
             "node": {
               "digest": "GngPX2ztACkKE96VUfoujZ3vA11MMDhPSwwgKhK7hVa"
             }
@@ -467,7 +467,7 @@ Response: {
 }
 
 task 24, lines 201-241:
-//# run-graphql --cursors {"t":1,"tc":1,"c":2} {"t":5,"tc":5,"c":6} {"t":9,"tc":9,"c":10}
+//# run-graphql --cursors {"t":1,"i":false,"c":2} {"t":5,"i":false,"c":6} {"t":9,"i":false,"c":10}
 Response: {
   "data": {
     "checkpoint": {
@@ -478,7 +478,7 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoyLCJ0IjoyLCJ0YyI6Mn0",
+            "cursor": "eyJjIjoyLCJ0IjoyLCJpIjpmYWxzZX0",
             "node": {
               "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs"
             }
@@ -491,7 +491,7 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjo2LCJ0Ijo2LCJ0YyI6Nn0",
+            "cursor": "eyJjIjo2LCJ0Ijo2LCJpIjpmYWxzZX0",
             "node": {
               "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB"
             }
@@ -504,7 +504,7 @@ Response: {
       "transactionBlocks": {
         "edges": [
           {
-            "cursor": "eyJjIjoxMCwidCI6MTAsInRjIjoxMH0",
+            "cursor": "eyJjIjoxMCwidCI6MTAsImkiOmZhbHNlfQ",
             "node": {
               "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5"
             }
@@ -516,7 +516,7 @@ Response: {
 }
 
 task 25, lines 243-282:
-//# run-graphql --cursors {"t":5,"tc":5,"c":6}
+//# run-graphql --cursors {"t":5,"i":false,"c":6}
 Response: {
   "data": {
     "checkpoint": {
@@ -525,7 +525,7 @@ Response: {
     "with_cursor": {
       "edges": [
         {
-          "cursor": "eyJjIjo2LCJ0Ijo2LCJ0YyI6Nn0",
+          "cursor": "eyJjIjo2LCJ0Ijo2LCJpIjpmYWxzZX0",
           "node": {
             "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB",
             "sender": {
@@ -556,7 +556,7 @@ Response: {
     "without_cursor": {
       "edges": [
         {
-          "cursor": "eyJjIjoxMiwidCI6MiwidGMiOjJ9",
+          "cursor": "eyJjIjoxMiwidCI6MiwiaSI6ZmFsc2V9",
           "node": {
             "digest": "Cwqr9jTgQjajoYaqcjzAaQGcQEyCg8XxoN7smGCLiBrs",
             "sender": {
@@ -592,7 +592,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NCwidGMiOjR9",
+          "cursor": "eyJjIjoxMiwidCI6NCwiaSI6ZmFsc2V9",
           "node": {
             "digest": "H1WU8uXMGaENQs54EpoHGpV1iMYdH8P5scd1d16s9ECB",
             "sender": {
@@ -628,7 +628,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NSwidGMiOjV9",
+          "cursor": "eyJjIjoxMiwidCI6NSwiaSI6ZmFsc2V9",
           "node": {
             "digest": "4vJbSYKwEJb5sYU2jiayqsZNRnBywD8y6sd3RQoMppF9",
             "sender": {
@@ -664,7 +664,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6NiwidGMiOjZ9",
+          "cursor": "eyJjIjoxMiwidCI6NiwiaSI6ZmFsc2V9",
           "node": {
             "digest": "4W23PZz7dHVxoZ2VMCWU9j38Jxy7tLkqcFBcJUB3aCSB",
             "sender": {
@@ -700,7 +700,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6OCwidGMiOjh9",
+          "cursor": "eyJjIjoxMiwidCI6OCwiaSI6ZmFsc2V9",
           "node": {
             "digest": "JLAF7P6DumC8rgzT1Ygp2QgTwpHE2FUqQbVXL6cGEEQ",
             "sender": {
@@ -736,7 +736,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6OSwidGMiOjl9",
+          "cursor": "eyJjIjoxMiwidCI6OSwiaSI6ZmFsc2V9",
           "node": {
             "digest": "BVMVdn7DDpTbCjtYwWFekcFA9sNeMgDh1wTNWRrngZxh",
             "sender": {
@@ -772,7 +772,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJjIjoxMiwidCI6MTAsInRjIjoxMH0",
+          "cursor": "eyJjIjoxMiwidCI6MTAsImkiOmZhbHNlfQ",
           "node": {
             "digest": "4J5tno4AoU4NPS2NgEseAZK7cpLDh6KJduVtbtwzmHk5",
             "sender": {

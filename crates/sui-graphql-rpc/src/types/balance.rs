@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::available_range::AvailableRange;
-use super::cursor::{self, Page, RawPaginated, Target};
+use super::cursor::{self, Page, RawPaginated, ScanLimited, Target};
 use super::uint53::UInt53;
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 use crate::consistency::Checkpointed;
@@ -160,6 +160,8 @@ impl Checkpointed for Cursor {
         self.checkpoint_viewed_at
     }
 }
+
+impl ScanLimited for Cursor {}
 
 impl TryFrom<StoredBalance> for Balance {
     type Error = Error;

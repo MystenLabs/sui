@@ -36,6 +36,7 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
+use crate::connection::ScanConnection;
 use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
@@ -331,6 +332,25 @@ impl Query {
     }
 
     /// The transaction blocks that exist in the network.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -339,15 +359,19 @@ impl Query {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
+            .with_scan_limit(scan_limit);
+
         TransactionBlock::paginate(
-            ctx.data_unchecked(),
+            ctx,
             page,
             filter.unwrap_or_default(),
             checkpoint,
+            scan_limit,
         )
         .await
         .extend()
