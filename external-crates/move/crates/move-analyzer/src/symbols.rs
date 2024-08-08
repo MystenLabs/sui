@@ -464,20 +464,22 @@ impl CursorContext {
                 }
                 _ => (),
             },
-            CP::Use(sp!(_, use_)) => {
-                if let P::Use::Fun {
-                    visibility: _,
-                    function,
-                    ty,
-                    method: _,
-                } = &use_
-                {
-                    if function.loc.contains(&self.loc) {
-                        return Some(ChainInfo::new(*(function.clone()), CT::Function, true));
+            CP::Use(
+                sp!(
+                    _,
+                    P::Use::Fun {
+                        visibility: _,
+                        function,
+                        ty,
+                        method: _,
                     }
-                    if ty.loc.contains(&self.loc) {
-                        return Some(ChainInfo::new(*(ty.clone()), CT::Type, true));
-                    }
+                ),
+            ) => {
+                if function.loc.contains(&self.loc) {
+                    return Some(ChainInfo::new(*(function.clone()), CT::Function, true));
+                }
+                if ty.loc.contains(&self.loc) {
+                    return Some(ChainInfo::new(*(ty.clone()), CT::Type, true));
                 }
             }
             _ => (),

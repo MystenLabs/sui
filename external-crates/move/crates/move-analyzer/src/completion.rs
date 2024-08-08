@@ -201,34 +201,31 @@ fn context_specific_lbrace(
 ) -> (Vec<CompletionItem>, bool) {
     let mut completions = vec![];
     let mut only_custom_items = false;
-    match &cursor.defn_name {
-        // look for a struct definition on the line that contains `{`, check its abilities,
-        // and do auto-completion if `key` ability is present
-        Some(CursorDefinition::Struct(sname)) => {
-            only_custom_items = true;
-            let Some(mident) = cursor.module else {
-                return (completions, only_custom_items);
+    // look for a struct definition on the line that contains `{`, check its abilities,
+    // and do auto-completion if `key` ability is present
+    if let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name {
+        only_custom_items = true;
+        let Some(mident) = cursor.module else {
+            return (completions, only_custom_items);
+        };
+        let Some(typed_ast) = symbols.typed_ast.as_ref() else {
+            return (completions, only_custom_items);
+        };
+        let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
+            return (completions, only_custom_items);
+        };
+        if struct_def.abilities.has_ability_(Ability_::Key) {
+            let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+            let init_completion = CompletionItem {
+                label: "id: UID".to_string(),
+                kind: Some(CompletionItemKind::SNIPPET),
+                documentation: Some(Documentation::String("Object snippet".to_string())),
+                insert_text: Some(obj_snippet),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
             };
-            let Some(typed_ast) = symbols.typed_ast.as_ref() else {
-                return (completions, only_custom_items);
-            };
-            let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
-                return (completions, only_custom_items);
-            };
-            if struct_def.abilities.has_ability_(Ability_::Key) {
-                let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
-                let init_completion = CompletionItem {
-                    label: "id: UID".to_string(),
-                    kind: Some(CompletionItemKind::SNIPPET),
-                    documentation: Some(Documentation::String("Object snippet".to_string())),
-                    insert_text: Some(obj_snippet),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
-                };
-                completions.push(init_completion);
-            }
+            completions.push(init_completion);
         }
-        _ => (),
     }
     (completions, only_custom_items)
 }
@@ -758,7 +755,7 @@ fn name_chain_entry_completions(
 ) {
     match prev_kind {
         ChainComponentKind::Package(leading_name) => {
-            for mod_ident in pkg_mod_identifiers(symbols, &info, &leading_name) {
+            for mod_ident in pkg_mod_identifiers(symbols, info, &leading_name) {
                 completions.push(completion_item(
                     mod_ident.value.module.value().as_str(),
                     CompletionItemKind::MODULE,
@@ -786,7 +783,7 @@ fn next_name_chain_component_kind(
 ) -> Option<ChainComponentKind> {
     match prev_kind {
         ChainComponentKind::Package(leading_name) => {
-            pkg_mod_identifiers(symbols, &info, &leading_name)
+            pkg_mod_identifiers(symbols, info, &leading_name)
                 .into_iter()
                 .find(|mod_ident| mod_ident.value.module.value() == component_name.value)
                 .map(ChainComponentKind::Module)
@@ -1099,7 +1096,7 @@ fn module_use_completions(
     use P::ModuleUse as MU;
     let mut completions = vec![];
 
-    let Some(mod_ident) = pkg_mod_identifiers(symbols, &info, &package)
+    let Some(mod_ident) = pkg_mod_identifiers(symbols, info, package)
         .into_iter()
         .find(|mod_ident| &mod_ident.value.module == mod_name)
     else {
