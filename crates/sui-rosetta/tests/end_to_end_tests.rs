@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use serde_json::json;
+use std::time::Duration;
 
 use rosetta_client::start_rosetta_test_server;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
+use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
-    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, NetworkIdentifier,
+    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SubAccount, SubAccountType, SuiEnv,
 };
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
@@ -46,7 +46,7 @@ async fn test_get_staked_sui() {
             sub_account: None,
         },
         block_identifier: Default::default(),
-        currencies: vec![],
+        currencies: Currencies(vec![Currency::default()]),
     };
 
     let response: AccountBalanceResponse = rosetta_client
@@ -67,7 +67,7 @@ async fn test_get_staked_sui() {
             }),
         },
         block_identifier: Default::default(),
-        currencies: vec![],
+        currencies: Currencies(vec![Currency::default()]),
     };
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
@@ -146,7 +146,7 @@ async fn test_stake() {
             "operation_identifier":{"index":0},
             "type":"Stake",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "amount" : { "value": "-1000000000" },
             "metadata": { "Stake" : {"validator": validator.to_string()} }
         }]
     ))
@@ -273,7 +273,7 @@ async fn test_withdraw_stake() {
             "operation_identifier":{"index":0},
             "type":"Stake",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "amount" : { "value": "-1000000000" },
             "metadata": { "Stake" : {"validator": validator.to_string()} }
         }]
     ))
@@ -388,12 +388,12 @@ async fn test_pay_sui() {
             "operation_identifier":{"index":0},
             "type":"PaySui",
             "account": { "address" : recipient.to_string() },
-            "amount" : { "value": "1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+            "amount" : { "value": "1000000000" }
         },{
             "operation_identifier":{"index":1},
             "type":"PaySui",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+            "amount" : { "value": "-1000000000" }
         }]
     ))
     .unwrap();
@@ -448,12 +448,12 @@ async fn test_pay_sui_multiple_times() {
                 "operation_identifier":{"index":0},
                 "type":"PaySui",
                 "account": { "address" : recipient.to_string() },
-                "amount" : { "value": "1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+                "amount" : { "value": "1000000000" }
             },{
                 "operation_identifier":{"index":1},
                 "type":"PaySui",
                 "account": { "address" : sender.to_string() },
-                "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+                "amount" : { "value": "-1000000000" }
             }]
         ))
         .unwrap();

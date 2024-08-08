@@ -20,8 +20,8 @@ use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, ConstructionCombineRequest,
     ConstructionCombineResponse, ConstructionMetadataRequest, ConstructionMetadataResponse,
     ConstructionPayloadsRequest, ConstructionPayloadsResponse, ConstructionPreprocessRequest,
-    ConstructionPreprocessResponse, ConstructionSubmitRequest, NetworkIdentifier, Signature,
-    SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
+    ConstructionPreprocessResponse, ConstructionSubmitRequest, Currencies, NetworkIdentifier,
+    Signature, SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_sdk::SuiClient;
@@ -192,7 +192,7 @@ impl RosettaClient {
                 sub_account,
             },
             block_identifier: Default::default(),
-            currencies: vec![],
+            currencies: Currencies(vec![]),
         };
         self.call(RosettaEndpoint::Balance, &request).await
     }
