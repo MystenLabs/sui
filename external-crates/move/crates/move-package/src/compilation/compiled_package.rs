@@ -15,7 +15,7 @@ use anyhow::{ensure, Result};
 use colored::Colorize;
 use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
-use move_bytecode_source_map::utils::source_map_from_file;
+use move_bytecode_source_map::utils::{serialize_to_json, source_map_from_file};
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
     extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
@@ -320,6 +320,13 @@ impl OnDiskCompiledPackage {
                 .join(&file_path)
                 .with_extension(SOURCE_MAP_EXTENSION),
             compiled_unit.unit.serialize_source_map().as_slice(),
+        )?;
+        self.save_under(
+            CompiledPackageLayout::SourceMaps
+                .path()
+                .join(&file_path)
+                .with_extension("json"),
+            &serialize_to_json(&compiled_unit.unit.source_map)?,
         )?;
         self.save_under(
             CompiledPackageLayout::Sources
