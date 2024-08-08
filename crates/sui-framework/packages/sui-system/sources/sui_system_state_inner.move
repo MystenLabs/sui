@@ -4,7 +4,7 @@
 module sui_system::sui_system_state_inner {
     use sui::balance::{Self, Balance};
     use sui::coin::Coin;
-    use sui_system::staking_pool::StakedSui;
+    use sui_system::staking_pool::{StakedSui, FungibleStakedSui};
     use sui::sui::SUI;
     use sui_system::validator::{Self, Validator};
     use sui_system::validator_set::{Self, ValidatorSet};
@@ -516,6 +516,22 @@ module sui_system::sui_system_state_inner {
         ctx: &TxContext,
     ) : Balance<SUI> {
         self.validators.request_withdraw_stake(staked_sui, ctx)
+    }
+
+    public(package) fun convert_to_fungible_staked_sui(
+        self: &mut SuiSystemStateInnerV2,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : FungibleStakedSui {
+        self.validators.convert_to_fungible_staked_sui(staked_sui, ctx)
+    }
+
+    public(package) fun redeem_fungible_staked_sui(
+        self: &mut SuiSystemStateInnerV2,
+        fungible_staked_sui: FungibleStakedSui,
+        ctx: &TxContext,
+    ) : Balance<SUI> {
+        self.validators.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
     }
 
     /// Report a validator as a bad or non-performant actor in the system.

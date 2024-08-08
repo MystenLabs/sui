@@ -8,7 +8,7 @@ module sui_system::validator {
     use sui::balance::Balance;
     use sui::sui::SUI;
     use sui_system::validator_cap::{Self, ValidatorOperationCap};
-    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
+    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool, FungibleStakedSui};
     use std::string::String;
     use sui::url::Url;
     use sui::url;
@@ -304,6 +304,22 @@ module sui_system::validator {
             }
         );
         staked_sui
+    }
+
+    public(package) fun convert_to_fungible_staked_sui(
+        self: &mut Validator,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) : FungibleStakedSui {
+        self.staking_pool.convert_to_fungible_staked_sui(staked_sui, ctx)
+    }
+
+    public(package) fun redeem_fungible_staked_sui(
+        self: &mut Validator,
+        fungible_staked_sui: FungibleStakedSui,
+        ctx: &TxContext,
+    ) : Balance<SUI> {
+        self.staking_pool.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
     }
 
     /// Request to add stake to the validator's staking pool at genesis

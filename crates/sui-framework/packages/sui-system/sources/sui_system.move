@@ -42,7 +42,7 @@ module sui_system::sui_system {
     use sui::balance::Balance;
 
     use sui::coin::Coin;
-    use sui_system::staking_pool::StakedSui;
+    use sui_system::staking_pool::{StakedSui, FungibleStakedSui};
     use sui::sui::SUI;
     use sui::table::Table;
     use sui_system::validator::Validator;
@@ -263,6 +263,26 @@ module sui_system::sui_system {
     ) {
         let withdrawn_stake = request_withdraw_stake_non_entry(wrapper, staked_sui, ctx);
         transfer::public_transfer(withdrawn_stake.into_coin(ctx), ctx.sender());
+    }
+
+    /// Convert StakedSui into a FungibleStakedSui object.
+    public fun convert_to_fungible_staked_sui(
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ): FungibleStakedSui {
+        let self = load_system_state_mut(wrapper);
+        self.convert_to_fungible_staked_sui(staked_sui, ctx)
+    }
+
+    /// Convert FungibleStakedSui into a StakedSui object.
+    public fun redeem_fungible_staked_sui(
+        wrapper: &mut SuiSystemState,
+        fungible_staked_sui: FungibleStakedSui,
+        ctx: &TxContext,
+    ): Balance<SUI> {
+        let self = load_system_state_mut(wrapper);
+        self.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
     }
 
     /// Non-entry version of `request_withdraw_stake` that returns the withdrawn SUI instead of transferring it to the sender.
