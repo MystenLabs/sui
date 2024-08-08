@@ -186,6 +186,10 @@ impl TransactionExecutionApi {
             let mut layout_resolver = epoch_store
                 .executor()
                 .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+            // TODO: This will not work well if the transaction emitted events during package init
+            // and the type of the events depend on new types defined in the package.
+            // To handle that we need to obtain the output packages and somehow pass
+            // that to the layout_resolver's backing package store.
             Some(SuiTransactionBlockEvents::try_from(
                 response.events.unwrap_or_default(),
                 digest,
