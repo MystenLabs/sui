@@ -2152,6 +2152,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-trace-format"
+version = "0.0.3"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "enum-compat-util",
+ "getrandom 0.2.15",
+ "move-binary-format",
+ "move-core-types",
+ "move-proc-macros",
+ "proptest",
+ "proptest-derive",
+ "ref-cast",
+ "serde",
+ "serde_json",
+ "variant_count",
+]
+
+[[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -2270,6 +2289,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
+ "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-types",

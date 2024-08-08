@@ -1,0 +1,34 @@
+[package]
+name = "move-trace-format"
+version = "0.0.3"
+authors = ["Move Core Contributors"]
+description = "Move Trace Format"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+ref-cast.workspace = true
+variant_count.workspace = true
+move-core-types.workspace = true
+serde.workspace = true
+arbitrary = { workspace = true, optional = true, features = ["derive"] }
+enum-compat-util.workspace = true
+move-proc-macros.workspace = true
+move-binary-format.workspace = true
+
+# wasm support (requires js feature of getrandom)
+getrandom = { workspace = true, features = ["js"], optional = true }
+serde_json.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+proptest-derive.workspace = true
+move-core-types = { workspace = true, features = ["fuzzing" ] }
+
+[features]
+default = []
+fuzzing = ["proptest", "proptest-derive", "arbitrary", "move-core-types/fuzzing"]
+wasm = ["getrandom"]
