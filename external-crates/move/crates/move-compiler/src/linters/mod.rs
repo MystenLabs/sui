@@ -3,11 +3,14 @@
 
 use move_symbol_pool::Symbol;
 
+use crate::linters::public_mut_tx_context::RequireMutableTxContext;
 use crate::{
     command_line::compiler::Visitor, diagnostics::codes::WarningFilter,
     linters::constant_naming::ConstantNamingVisitor, typing::visitor::TypingVisitor,
 };
+
 pub mod constant_naming;
+mod public_mut_tx_context;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -34,16 +37,26 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
 pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
+pub const REQUIRE_MUTABLE_TX_CONTEXT_FILTER_NAME: &str = "require_mutable_tx_context";
+pub const REQUIRE_MUTABLE_TX_CONTEXT_DIAG_CODE: u8 = 6;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-        vec![WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Style as u8,
-            CONSTANT_NAMING_DIAG_CODE,
-            Some(CONSTANT_NAMING_FILTER_NAME),
-        )],
+        vec![
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Style as u8,
+                CONSTANT_NAMING_DIAG_CODE,
+                Some(CONSTANT_NAMING_FILTER_NAME),
+            ),
+            WarningFilter::code(
+                Some(LINT_WARNING_PREFIX),
+                LinterDiagnosticCategory::Suspicious as u8,
+                REQUIRE_MUTABLE_TX_CONTEXT_DIAG_CODE,
+                Some(REQUIRE_MUTABLE_TX_CONTEXT_FILTER_NAME),
+            ),
+        ],
     )
 }
 
@@ -51,9 +64,10 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None | LintLevel::Default => vec![],
         LintLevel::All => {
-            vec![constant_naming::ConstantNamingVisitor::visitor(
-                ConstantNamingVisitor,
-            )]
+            vec![
+                constant_naming::ConstantNamingVisitor::visitor(ConstantNamingVisitor),
+                public_mut_tx_context::RequireMutableTxContext::visitor(RequireMutableTxContext),
+            ]
         }
     }
 }

@@ -1,0 +1,8 @@
+warning[Lint W02006]: 
+  ┌─ tests/linter/suppress_public_mut_tx_context.move:5:45
+  │
+5 │     public fun unsuppressed_function(_ctx: &TxContext) {
+  │                                             ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
+  │
+  = This warning can be suppressed with '#[allow(lint(require_mutable_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
