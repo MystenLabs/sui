@@ -98,12 +98,38 @@ export function isTransaction(obj: unknown): obj is Transaction {
 
 export type TransactionObjectInput = string | CallArg | TransactionObjectArgument;
 
+const TRANSACTION_REGISTRY_KEY = Symbol.for('@mysten/transaction/registry');
+function getGlobalPluginRegistry() {
+	try {
+		const target = globalThis as {
+			[TRANSACTION_REGISTRY_KEY]?: {
+				buildPlugins: TransactionPlugin[];
+				serializationPlugins: TransactionPlugin[];
+			};
+		};
+
+		if (!target[TRANSACTION_REGISTRY_KEY]) {
+			target[TRANSACTION_REGISTRY_KEY] = {
+				buildPlugins: [],
+				serializationPlugins: [],
+			};
+		}
+
+		return target[TRANSACTION_REGISTRY_KEY];
+	} catch (e) {
+		return {
+			buildPlugins: [],
+			serializationPlugins: [],
+		};
+	}
+}
+
 /**
  * Transaction Builder
  */
 export class Transaction {
-	#serializationPlugins: TransactionPlugin[] = [];
-	#buildPlugins: TransactionPlugin[] = [];
+	#serializationPlugins: TransactionPlugin[];
+	#buildPlugins: TransactionPlugin[];
 	#intentResolvers = new Map<string, TransactionPlugin>();
 
 	/**
@@ -140,6 +166,14 @@ export class Transaction {
 		}
 
 		return newTransaction;
+	}
+
+	static registerGlobalSerializationPlugin(step: TransactionPlugin) {
+		getGlobalPluginRegistry().serializationPlugins.push(step);
+	}
+
+	static registerGlobalBuildPlugin(step: TransactionPlugin) {
+		getGlobalPluginRegistry().buildPlugins.push(step);
 	}
 
 	addSerializationPlugin(step: TransactionPlugin) {
@@ -241,7 +275,10 @@ export class Transaction {
 	}
 
 	constructor() {
+		const globalPlugins = getGlobalPluginRegistry();
 		this.#data = new TransactionDataBuilder();
+		this.#buildPlugins = [...globalPlugins.buildPlugins];
+		this.#serializationPlugins = [...globalPlugins.serializationPlugins];
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
