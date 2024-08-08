@@ -74,6 +74,11 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     80.0, 100.0, 200.0,
 ];
 
+const DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0,
+    10000.0,
+];
+
 const DB_COMMIT_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0,
     5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
@@ -170,9 +175,13 @@ pub struct IndexerMetrics {
     // indexer state metrics
     pub db_conn_pool_size: IntGauge,
     pub idle_db_conn: IntGauge,
-
     pub address_processor_failure: IntCounter,
     pub checkpoint_metrics_processor_failure: IntCounter,
+    // pruner metrics
+    pub last_pruned_epoch: IntGauge,
+    pub last_pruned_checkpoint: IntGauge,
+    pub last_pruned_transaction: IntGauge,
+    pub epoch_pruning_latency: Histogram,
 }
 
 impl IndexerMetrics {
@@ -703,6 +712,29 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            last_pruned_epoch: register_int_gauge_with_registry!(
+                "last_pruned_epoch",
+                "Last pruned epoch number",
+                registry,
+            )
+            .unwrap(),
+            last_pruned_checkpoint: register_int_gauge_with_registry!(
+                "last_pruned_checkpoint",
+                "Last pruned checkpoint sequence number",
+                registry,
+            )
+            .unwrap(),
+            last_pruned_transaction: register_int_gauge_with_registry!(
+                "last_pruned_transaction",
+                "Last pruned transaction sequence number",
+                registry,
+            ).unwrap(),
+            epoch_pruning_latency: register_histogram_with_registry!(
+                "epoch_pruning_latency",
+                "Time spent in pruning one epoch",
+                DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
         }
     }
 }
