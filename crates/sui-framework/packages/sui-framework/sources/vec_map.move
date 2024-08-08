@@ -49,6 +49,23 @@ module sui::vec_map {
         self.contents.push_back(Entry { key, value })
     }
 
+    /// Insert the entry while the `key` is not exist, but Update the value of the entry while the `key` is exist,
+    /// and return the old entry
+    public fun insert_or_update<K: copy, V>(self: &mut VecMap<K,V>, key: K, value: V): Option<Entry<K, V>> {
+        let existsOpt = self.get_idx_opt(&key);
+        let len = self.size();
+        if (len > 0 && existsOpt.is_some()) {
+            let idx = existsOpt.destroy_some();
+            self.contents.push_back(Entry { key, value });
+            let oldEntry = self.contents.swap_remove(idx);
+            option::some(oldEntry)
+        } else {
+            self.contents.push_back(Entry { key, value });
+            option::none()
+        }
+    }
+
+
     /// Remove the entry `key` |-> `value` from self. Aborts if `key` is not bound in `self`.
     public fun remove<K: copy, V>(self: &mut VecMap<K,V>, key: &K): (K, V) {
         let idx = self.get_idx(key);
