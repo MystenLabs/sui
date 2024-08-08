@@ -32,6 +32,7 @@ const DEFAULT_RAND_ITERS: u64 = 10;
 
 const RAND_NUM_ITERS_FLAG: &str = "rand-num-iters";
 const SEED_FLAG: &str = "seed";
+const TRACE_FLAG: &str = "trace-execution";
 
 #[derive(Debug, Parser, Clone)]
 #[clap(author, version, about)]
@@ -111,6 +112,10 @@ pub struct UnitTestingConfig {
     // WARNING: You should only use this flag for debugging and meta-testing purposes!
     #[clap(skip)]
     pub deterministic_generation: bool,
+
+    // Enable tracing for tests
+    #[clap(long = TRACE_FLAG, value_name = "PATH")]
+    pub trace_execution: Option<Option<String>>,
 }
 
 fn format_module_id(
@@ -141,6 +146,7 @@ impl UnitTestingConfig {
             rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
+            trace_execution: None,
         }
     }
 
@@ -237,6 +243,11 @@ impl UnitTestingConfig {
         }
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
+        let trace_location = match &self.trace_execution {
+            Some(None) => Some("traces".to_string()),
+            Some(Some(path)) => Some(path.clone()),
+            None => None,
+        };
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
@@ -244,6 +255,7 @@ impl UnitTestingConfig {
             self.seed,
             rand_num_iters,
             self.deterministic_generation,
+            trace_location,
             test_plan,
             native_function_table,
             cost_table,

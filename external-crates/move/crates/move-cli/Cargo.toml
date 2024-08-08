@@ -58,5 +58,10 @@ harness = false
 name = "build_testsuite"
 harness = false
 
+[[test]]
+name = "tracing_testsuite"
+harness = false
+
 [features]
 tiered-gas = ["move-vm-test-utils/tiered-gas"]
+gas-profiler = ["move-vm-runtime/gas-profiler"]
