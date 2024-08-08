@@ -464,17 +464,7 @@ impl CursorContext {
                 }
                 _ => (),
             },
-            CP::Use(
-                sp!(
-                    _,
-                    P::Use::Fun {
-                        visibility: _,
-                        function,
-                        ty,
-                        method: _,
-                    }
-                ),
-            ) => {
+            CP::Use(sp!(_, P::Use::Fun { function, ty, .. })) => {
                 if function.loc.contains(&self.loc) {
                     return Some(ChainInfo::new(*(function.clone()), CT::Function, true));
                 }

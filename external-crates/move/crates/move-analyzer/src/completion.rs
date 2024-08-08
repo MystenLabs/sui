@@ -203,29 +203,30 @@ fn context_specific_lbrace(
     let mut only_custom_items = false;
     // look for a struct definition on the line that contains `{`, check its abilities,
     // and do auto-completion if `key` ability is present
-    if let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name {
-        only_custom_items = true;
-        let Some(mident) = cursor.module else {
-            return (completions, only_custom_items);
+    let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name else {
+        return (completions, only_custom_items);
+    };
+    only_custom_items = true;
+    let Some(mident) = cursor.module else {
+        return (completions, only_custom_items);
+    };
+    let Some(typed_ast) = symbols.typed_ast.as_ref() else {
+        return (completions, only_custom_items);
+    };
+    let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
+        return (completions, only_custom_items);
+    };
+    if struct_def.abilities.has_ability_(Ability_::Key) {
+        let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+        let init_completion = CompletionItem {
+            label: "id: UID".to_string(),
+            kind: Some(CompletionItemKind::SNIPPET),
+            documentation: Some(Documentation::String("Object snippet".to_string())),
+            insert_text: Some(obj_snippet),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..Default::default()
         };
-        let Some(typed_ast) = symbols.typed_ast.as_ref() else {
-            return (completions, only_custom_items);
-        };
-        let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
-            return (completions, only_custom_items);
-        };
-        if struct_def.abilities.has_ability_(Ability_::Key) {
-            let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
-            let init_completion = CompletionItem {
-                label: "id: UID".to_string(),
-                kind: Some(CompletionItemKind::SNIPPET),
-                documentation: Some(Documentation::String("Object snippet".to_string())),
-                insert_text: Some(obj_snippet),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..Default::default()
-            };
-            completions.push(init_completion);
-        }
+        completions.push(init_completion);
     }
     (completions, only_custom_items)
 }
