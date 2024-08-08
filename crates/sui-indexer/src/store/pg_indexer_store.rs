@@ -198,25 +198,26 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         .context("Failed reading latest epoch id from PostgresDB")
     }
 
-    /// Get the protocol version of the latest epoch stored in the database
-    pub fn get_latest_epoch_protocol_version(&self) -> Result<Option<i64>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            epochs::dsl::epochs
-                .select(max(epochs::protocol_version))
-                .first::<Option<i64>>(conn)
-        })
-        .context("Failed reading latest epoch protocol version from PostgresDB")
-    }
-
-    /// Get the latest protocol version stored in the protocol_configs table, not to be confused with the
-    /// function above.
-    pub fn get_latest_protocol_config_version(&self) -> Result<Option<i64>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
+    /// Get the range of the protocol versions that need to be indexed.
+    pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
+        // We start indexing from the next protocol version after the latest one stored in the db.
+        let start = read_only_blocking!(&self.blocking_cp, |conn| {
             protocol_configs::dsl::protocol_configs
                 .select(max(protocol_configs::protocol_version))
                 .first::<Option<i64>>(conn)
         })
-        .context("Failed reading latest protocol version from PostgresDB")
+        .context("Failed reading latest protocol version from PostgresDB")?
+        .map_or(1, |v| v + 1);
+
+        // We end indexing at the protocol version of the latest epoch stored in the db.
+        let end = read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select(max(epochs::protocol_version))
+                .first::<Option<i64>>(conn)
+        })
+        .context("Failed reading latest epoch protocol version from PostgresDB")?
+        .unwrap_or(1);
+        Ok((start, end))
     }
 
     pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
@@ -2195,14 +2196,10 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             CheckpointDigest::try_from(chain_id).expect("Unable to convert chain id"),
         );
 
-        // We only store protocol configs until the version for the latest epoch, because config
-        // values for future epochs, even when they already exist, are subject to change.
-        let end_version = self.get_latest_epoch_protocol_version()?.unwrap_or(1);
         let mut all_configs = vec![];
         let mut all_flags = vec![];
 
-        // Protocol version starts from 1.
-        let start_version = self.get_latest_protocol_config_version()?.unwrap_or(0) + 1;
+        let (start_version, end_version) = self.get_protocol_version_index_range()?;
         info!(
             "Persisting protocol configs with start_version: {}, end_version: {}",
             start_version, end_version
