@@ -581,6 +581,49 @@ module std::vector_tests {
         assert!(b"hello_world".try_to_ascii_string().is_some());
     }
 
+    #[test, expected_failure]
+    fun take_mut_fail() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        v.take_mut(6);
+    }
+
+    #[test]
+    fun take_mut() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        assert!(v.take_mut(0) == vector[]);
+        assert!(v.take_mut(3) == vector[1, 2, 3]); // vec length is now 2
+        assert!(v == vector[4, 5]);
+        assert!(v.take_mut(1) == vector[4]);
+        assert!(v == vector[5]);
+        assert!(v.take_mut(1) == vector[5]);
+        assert!(v.length() == 0);
+    }
+
+    #[test]
+    fun take() {
+        assert!(vector[1, 2, 3, 4, 5].take(2) == vector[1, 2]);
+        assert!(vector[1, 2, 3, 4, 5].take(0) == vector[]);
+    }
+
+    #[test]
+    fun skip_mut() {
+        let mut v = vector[1u64, 2, 3, 4, 5];
+        assert!(v.skip_mut(4) == vector[5]);
+        assert!(v == vector[1, 2, 3, 4]);
+        assert!(v.skip_mut(2) == vector[3, 4]);
+        assert!(v == vector[1, 2]);
+        assert!(v.skip_mut(2) == vector[]);
+        assert!(v == vector[1, 2]);
+        assert!(v.skip_mut(0) == vector[1, 2]);
+    }
+
+    #[test]
+    fun skip() {
+        assert!(vector[1, 2, 3, 4, 5].skip(2) == vector[3, 4, 5]);
+        assert!(vector[1, 2, 3, 4, 5].skip(0) == vector[1, 2, 3, 4, 5]);
+        assert!(vector[1, 2, 3, 4, 5].skip(5) == vector[]);
+    }
+
     // === Macros ===
 
     #[test]
@@ -790,5 +833,46 @@ module std::vector_tests {
         let v1 = vector[1u64, 2, 3];
         let v2 = vector[4u64, 5, 6];
         assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
+    }
+
+    #[test]
+    fun find_indices_macro() {
+        let v = vector[1u64, 2, 3, 2, 1];
+        assert!(v.find_indices!(|e| *e == 2) == vector[1, 3]);
+        assert!(v.find_indices!(|e| *e == 4) == vector[]);
+        assert!(v.find_indices!(|e| *e == 1) == vector[0, 4]);
+    }
+
+    #[test]
+    fun take_mut_while_macro() {
+        let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+        assert!(v.take_mut_while!(|e| *e == 1) == vector[1, 1, 1]);
+        assert!(v == vector[2, 2, 2, 3, 3, 3]);
+        assert!(v.take_mut_while!(|e| *e == 2) == vector[2, 2, 2]);
+        assert!(v == vector[3, 3, 3]);
+        assert!(v.take_mut_while!(|e| *e == 3) == vector[3, 3, 3]);
+        assert!(v.length() == 0);
+    }
+
+    #[test]
+    fun take_while_macro() {
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while!(|e| *e == 1) == vector[1, 1, 1]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while!(|e| *e == 2) == vector[]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].take_while!(|e| *e == 3) == vector[]);
+    }
+
+    #[test]
+    fun skip_mut_while_macro() {
+        let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+        assert!(v.skip_mut_while!(|e| *e == 1) == vector[2, 2, 2, 3, 3, 3]);
+        assert!(v.skip_mut_while!(|e| *e == 2) == vector[1, 1, 1]);
+        assert!(v.skip_mut_while!(|e| *e == 3) == vector[]); // v = vector[]
+    }
+
+    #[test]
+    fun skip_while_macro() {
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while!(|e| *e == 1) == vector[2, 2, 2, 3, 3, 3]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while!(|e| *e == 2) == vector[1, 1, 1, 2, 2, 2, 3, 3, 3]);
+        assert!(vector[1, 1, 1, 2, 2, 2, 3, 3, 3].skip_while!(|e| *e == 3) == vector[1, 1, 1, 2, 2, 2, 3, 3, 3]);
     }
 }

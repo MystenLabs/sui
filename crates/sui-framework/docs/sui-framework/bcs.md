@@ -240,11 +240,8 @@ Read address from the bcs-serialized bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <b>address</b> {
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.length() &gt;= <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>(), <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
-    <b>let</b> (<b>mut</b> addr_bytes, <b>mut</b> i) = (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], 0);
-    <b>while</b> (i &lt; <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>()) {
-        addr_bytes.push_back(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back());
-        i = i + 1;
-    };
+    <b>let</b> <b>mut</b> addr_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>().do!(|_| addr_bytes.push_back(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.bytes.pop_back()));
     address::from_bytes(addr_bytes)
 }
 </code></pre>

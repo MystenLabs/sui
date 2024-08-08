@@ -47,7 +47,7 @@ module sui::bcs {
     /// vector performance, it stores reversed bytes of the BCS and
     /// enables use of `vector::pop_back`.
     public struct BCS has store, copy, drop {
-        bytes: vector<u8>
+        bytes: vector<u8>,
     }
 
     /// Get BCS serialized bytes for any value.
@@ -74,11 +74,8 @@ module sui::bcs {
     /// Read address from the bcs-serialized bytes.
     public fun peel_address(bcs: &mut BCS): address {
         assert!(bcs.bytes.length() >= address::length(), EOutOfRange);
-        let (mut addr_bytes, mut i) = (vector[], 0);
-        while (i < address::length()) {
-            addr_bytes.push_back(bcs.bytes.pop_back());
-            i = i + 1;
-        };
+        let mut addr_bytes = vector[];
+        address::length().do!(|_| addr_bytes.push_back(bcs.bytes.pop_back()));
         address::from_bytes(addr_bytes)
     }
 
@@ -161,13 +158,8 @@ module sui::bcs {
     /// functionality of peeling each value.
     public macro fun peel_vec<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): vector<$T> {
         let bcs = $bcs;
-        let len = bcs.peel_vec_length();
-        let mut i = 0;
         let mut res = vector[];
-        while (i < len) {
-            res.push_back($peel(bcs));
-            i = i + 1;
-        };
+        bcs.peel_vec_length().do!(|_| res.push_back($peel(bcs)));
         res
     }
 
@@ -222,7 +214,7 @@ module sui::bcs {
     /// functionality of peeling the inner value.
     public macro fun peel_option<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): Option<$T> {
         let bcs = $bcs;
-        if (bcs.peel_bool())option::some($peel(bcs))
+        if (bcs.peel_bool()) option::some($peel(bcs))
         else option::none()
     }
 
