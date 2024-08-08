@@ -146,6 +146,106 @@
           "use_line": 55,
           "use_col": 38
         }
+      ],
+      "uses.move": [
+        // complete uses
+        {
+          "use_line": 2,
+          "use_col": 9
+        },
+        {
+          "use_line": 2,
+          "use_col": 20
+        },
+        {
+          "use_line": 2,
+          "use_col": 21
+        },
+        {
+          "use_line": 2,
+          "use_col": 25
+        },
+        {
+          "use_line": 2,
+          "use_col": 26
+        },
+        {
+          "use_line": 3,
+          "use_col": 9
+        },
+        {
+          "use_line": 3,
+          "use_col": 22
+        },
+        {
+          "use_line": 3,
+          "use_col": 28
+        },
+        {
+          "use_line": 3,
+          "use_col": 33
+        },
+        {
+          "use_line": 3,
+          "use_col": 39
+        },
+        {
+          "use_line": 3,
+          "use_col": 51
+        },
+        {
+          "use_line": 3,
+          "use_col": 52
+        },
+        // partial uses
+        {
+          "use_line": 15,
+          "use_col": 13
+        },
+        {
+          "use_line": 19,
+          "use_col": 24
+        },
+        {
+          "use_line": 23,
+          "use_col": 29
+        },
+        {
+          "use_line": 27,
+          "use_col": 30
+        },
+        {
+          "use_line": 31,
+          "use_col": 30
+        },
+        {
+          "use_line": 37,
+          "use_col": 31
+        },
+        {
+          "use_line": 43,
+          "use_col": 25
+        },
+        {
+          "use_line": 49,
+          "use_col": 26
+        },
+        {
+          "use_line": 55,
+          "use_col": 30
+        },
+        {
+          "use_line": 61,
+          "use_col": 31
+        },
+        {
+          "use_line": 67,
+          "use_col": 37
+        },
+        {
+          "use_line": 73,
+          "use_col": 43
+        }
       ]
     }
   }
