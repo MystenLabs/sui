@@ -1574,6 +1574,7 @@ fn use_(
             };
             use_funs.explicit.push(explicit);
         }
+        P::Use::Partial { .. } => (), // no actual module to process
     }
 }
 
@@ -1702,6 +1703,14 @@ fn module_use(
                     use_funs.implicit.add(alias, implicit).unwrap();
                 }
             }
+        }
+        P::ModuleUse::Partial { .. } => {
+            let mident = module_ident(&mut context.defn_context, in_mident);
+            if !context.defn_context.module_members.contains_key(&mident) {
+                context.env().add_diag(unbound_module(&mident));
+                return;
+            };
+            add_module_alias!(mident, mident.value.module.0)
         }
     }
 }
