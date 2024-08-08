@@ -401,6 +401,23 @@ pub enum ChainCompletionKind {
     All,
 }
 
+#[derive(Clone, Debug)]
+pub struct ChainInfo {
+    pub chain: P::NameAccessChain,
+    pub kind: ChainCompletionKind,
+    pub inside_use: bool,
+}
+
+impl ChainInfo {
+    pub fn new(chain: P::NameAccessChain, kind: ChainCompletionKind, inside_use: bool) -> Self {
+        Self {
+            chain,
+            kind,
+            inside_use,
+        }
+    }
+}
+
 impl CursorContext {
     fn new(loc: Loc) -> Self {
         CursorContext {
@@ -412,45 +429,58 @@ impl CursorContext {
     }
 
     /// Returns access chain at cursor position (if any) along with the information of what the chain's
-    /// auto-completed target kind should be
-    pub fn find_access_chain(&self) -> Option<(P::NameAccessChain, ChainCompletionKind)> {
-        // TODO: handle access chains in uses and attributes
+    /// auto-completed target kind should be, and weather it is part of the use statement.
+    pub fn find_access_chain(&self) -> Option<ChainInfo> {
         use ChainCompletionKind as CT;
         use CursorPosition as CP;
-        let chain_info = match &self.position {
+        match &self.position {
             CP::Exp(sp!(_, exp)) => match exp {
-                P::Exp_::Name(chain) => Some((chain.clone(), CT::All)),
-                P::Exp_::Call(chain, _) => Some((chain.clone(), CT::Function)),
-                P::Exp_::Pack(chain, _) => Some((chain.clone(), CT::Type)),
-                _ => None,
+                P::Exp_::Name(chain) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(chain.clone(), CT::All, false))
+                }
+                P::Exp_::Call(chain, _) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(chain.clone(), CT::Function, false))
+                }
+                P::Exp_::Pack(chain, _) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(chain.clone(), CT::Type, false))
+                }
+                _ => (),
             },
-            CP::Binding(sp!(_, bind)) => {
-                if let P::Bind_::Unpack(chain, _) = bind {
-                    Some((*(chain.clone()), CT::Type))
-                } else {
-                    None
+            CP::Binding(sp!(_, bind)) => match bind {
+                P::Bind_::Unpack(chain, _) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false))
+                }
+                _ => (),
+            },
+            CP::Type(sp!(_, ty)) => match ty {
+                P::Type_::Apply(chain) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false))
+                }
+                _ => (),
+            },
+            CP::Attribute(attr_val) => match &attr_val.value {
+                P::AttributeValue_::ModuleAccess(chain) if chain.loc.contains(&self.loc) => {
+                    return Some(ChainInfo::new(chain.clone(), CT::All, false))
+                }
+                _ => (),
+            },
+            CP::Use(sp!(_, P::Use::Fun { function, ty, .. })) => {
+                if function.loc.contains(&self.loc) {
+                    return Some(ChainInfo::new(*(function.clone()), CT::Function, true));
+                }
+                if ty.loc.contains(&self.loc) {
+                    return Some(ChainInfo::new(*(ty.clone()), CT::Type, true));
                 }
             }
-            CP::Type(sp!(_, ty)) => {
-                if let P::Type_::Apply(chain) = ty {
-                    Some((*(chain.clone()), CT::Type))
-                } else {
-                    None
-                }
-            }
-            CP::Attribute(attr_val) => {
-                if let P::AttributeValue_::ModuleAccess(chain) = &attr_val.value {
-                    Some((chain.clone(), CT::All))
-                } else {
-                    None
-                }
-            }
-            _ => None,
+            _ => (),
         };
-        if let Some((c, _)) = &chain_info {
-            if c.loc.contains(&self.loc) {
-                return chain_info;
-            }
+        None
+    }
+
+    /// Returns use declaration at cursor position (if any).
+    pub fn find_use_decl(&self) -> Option<P::Use> {
+        if let CursorPosition::Use(use_) = &self.position {
+            return Some(use_.value.clone());
         }
         None
     }
@@ -466,6 +496,7 @@ pub enum CursorPosition {
     Parameter(P::Var),
     DefName,
     Attribute(P::AttributeValue),
+    Use(Spanned<P::Use>),
     Unknown,
     // FIXME: These two are currently unused because these forms don't have enough location
     // recorded on them during parsing.
@@ -800,6 +831,10 @@ impl fmt::Display for CursorContext {
         match position {
             CursorPosition::Attribute(value) => {
                 writeln!(f, "attribute value")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Use(value) => {
+                writeln!(f, "use value")?;
                 writeln!(f, "- value: {:#?}", value)?;
             }
             CursorPosition::DefName => {
@@ -2861,6 +2896,9 @@ impl<'a> ParsingSymbolicator<'a> {
             .attributes
             .iter()
             .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
+
+        update_cursor!(self.cursor, sp(use_decl.loc, use_decl.use_.clone()), Use);
+
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
