@@ -534,7 +534,7 @@ impl Operations {
             .fold(balances, |mut balances, balance_change| {
                 // Rosetta only care about address owner
                 if let Owner::AddressOwner(owner) = balance_change.owner {
-                    if balances.is_empty() && balance_change.coin_type == GAS::type_tag() {
+                    if balances.is_empty() || balance_change.coin_type == GAS::type_tag() {
                         *balances.entry((owner, SUI.clone())).or_default() += balance_change.amount;
                     } else {
                         for (key, _) in balances.iter() {
