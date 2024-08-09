@@ -12,15 +12,19 @@ use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::digests::TransactionDigest;
+use sui_types::full_checkpoint_content::{
+    CheckpointData as SuiCheckpointData, CheckpointTransaction,
+};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::sui_checkpoint_ingestion::{Task, Tasks};
+
+pub type CheckpointData<T> = (u64, Vec<T>);
 
 pub struct IndexerBuilder<D, M> {
     name: String,
@@ -86,8 +90,8 @@ pub struct Indexer<P, D, M> {
 impl<P, D, M> Indexer<P, D, M> {
     pub async fn start<T, R>(mut self) -> Result<(), Error>
     where
-        D: Datasource<T, P, R> + 'static + Send + Sync,
-        M: DataMapper<T, R> + 'static + Clone,
+        D: Datasource<T> + 'static,
+        M: DataMapper<T, R> + 'static,
         P: Persistent<R> + 'static,
         T: Send,
     {
@@ -186,7 +190,7 @@ impl<P, D, M> Indexer<P, D, M> {
     // Create backfill tasks according to backfill strategy
     fn create_backfill_tasks<R>(&mut self, mut current_cp: u64) -> Result<(), Error>
     where
-        P: Persistent<R> + 'static,
+        P: Persistent<R>,
     {
         match self.backfill_strategy {
             BackfillStrategy::Simple => self.storage.register_task(
@@ -237,8 +241,8 @@ pub trait IndexerProgressStore: Send {
 }
 
 #[async_trait]
-pub trait Datasource<T: Send, P, R> {
-    async fn start_ingestion_task<M>(
+pub trait Datasource<T: Send>: Sync + Send {
+    async fn start_ingestion_task<M, P, R>(
         &self,
         task_name: String,
         starting_checkpoint: u64,
@@ -247,13 +251,21 @@ pub trait Datasource<T: Send, P, R> {
         data_mapper: M,
     ) -> Result<(), Error>
     where
-        M: DataMapper<T, R> + 'static,
-        P: Persistent<R> + 'static,
+        M: DataMapper<T, R>,
+        P: Persistent<R>,
     {
         // todo: add metrics for number of tasks
-        let (join_handle, mut data_channel) = self
-            .start_data_retrieval(task_name.clone(), starting_checkpoint, target_checkpoint)
+        let (data_sender, mut data_channel) = metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&[&task_name]),
+        );
+        let join_handle = self
+            .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
             .await?;
+
         while let Some((block_number, data)) = data_channel.recv().await {
             if !data.is_empty() {
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
@@ -273,10 +285,10 @@ pub trait Datasource<T: Send, P, R> {
 
     async fn start_data_retrieval(
         &self,
-        task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<(JoinHandle<Result<(), Error>>, Receiver<(u64, Vec<T>)>), Error>;
+        data_sender: metered_channel::Sender<CheckpointData<T>>,
+    ) -> Result<JoinHandle<Result<(), Error>>, Error>;
 }
 
 pub struct SuiCheckpointDatasource {
@@ -302,23 +314,13 @@ impl SuiCheckpointDatasource {
 }
 
 #[async_trait]
-impl<P, R> Datasource<CheckpointTxnData, P, R> for SuiCheckpointDatasource
-where
-    P: Persistent<R> + 'static,
-    R: Sync + Send + 'static,
-{
+impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     async fn start_data_retrieval(
         &self,
-        task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<
-        (
-            JoinHandle<Result<(), Error>>,
-            Receiver<(u64, Vec<CheckpointTxnData>)>,
-        ),
-        Error,
-    > {
+        data_sender: metered_channel::Sender<CheckpointData<CheckpointTxnData>>,
+    ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let progress_store = PerTaskInMemProgressStore {
             current_checkpoint: starting_checkpoint,
@@ -326,19 +328,16 @@ where
             exit_sender: Some(exit_sender),
         };
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
-        let (data_sender, data_receiver) = metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&[&task_name]),
-        );
         let worker = IndexerWorker::new(data_sender);
-        let worker_pool = WorkerPool::new(worker, task_name, self.concurrency);
+        let worker_pool = WorkerPool::new(
+            worker,
+            TransactionDigest::random().to_string(),
+            self.concurrency,
+        );
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
         let remote_store_url = self.remote_store_url.clone();
-        let join_handle = spawn_monitored_task!(async {
+        Ok(spawn_monitored_task!(async {
             executor
                 .run(
                     checkpoint_path,
@@ -349,8 +348,7 @@ where
                 )
                 .await?;
             Ok(())
-        });
-        Ok((join_handle, data_receiver))
+        }))
     }
 }
 
@@ -360,7 +358,7 @@ pub enum BackfillStrategy {
     Disabled,
 }
 
-pub trait DataMapper<T, R>: Sync + Send {
+pub trait DataMapper<T, R>: Sync + Send + Clone {
     fn map(&self, data: T) -> Result<Vec<R>, anyhow::Error>;
 }
 
@@ -408,7 +406,7 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: SuiCheckpointData) -> anyhow::Result<()> {
         info!(
             "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
