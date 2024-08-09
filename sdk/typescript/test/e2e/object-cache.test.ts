@@ -10,7 +10,7 @@ import { CachingTransactionExecutor } from '../../src/transactions/executor/cach
 import { normalizeSuiAddress } from '../../src/utils';
 import { setup, TestToolbox } from './utils/setup';
 
-describe('CachingTransactionExecutor', async () => {
+describe('CachingTransactionExecutor', { retry: 3 }, async () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
 	let rawPackageId: string;
