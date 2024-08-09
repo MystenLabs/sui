@@ -25,7 +25,7 @@ use crate::{
     extensions::{
         feature_gate::FeatureGate,
         logger::Logger,
-        query_limits_checker::{QueryLimitsChecker, ShowUsage},
+        query_limits_checker::{PayloadSize, QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
     server::version::{check_version_middleware, set_version_middleware},
@@ -45,6 +45,8 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post, MethodRouter, Route};
 use axum::Extension;
 use axum::Router;
+use axum_extra::headers::ContentLength;
+use axum_extra::TypedHeader;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use mysten_metrics::spawn_monitored_task;
@@ -517,20 +519,23 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    TypedHeader(content_length): TypedHeader<ContentLength>,
     schema: Extension<SuiGraphQLSchema>,
     Extension(watermark_lock): Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
+
+    req.data.insert(PayloadSize(content_length.0));
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
+
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-
     req.data.insert(Watermark::new(watermark_lock).await);
 
     let result = schema.execute(req).await;
@@ -869,6 +874,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
@@ -921,6 +927,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
@@ -1032,7 +1039,7 @@ pub mod tests {
     }
 
     pub async fn test_query_complexity_metrics_impl() {
-        let server_builder = prep_schema(None, None);
+        let server_builder = prep_schema(None, None).context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1080,5 +1087,84 @@ pub mod tests {
         let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
         let resp = reqwest::get(&url_with_param).await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
+    }
+
+    pub async fn test_query_mutation_payload_impl() {
+        async fn execute_request(
+            max_tx_payload_size: u32,
+            max_query_payload_size: u32,
+            query: &str,
+        ) -> Response {
+            let service_config = ServiceConfig {
+                limits: Limits {
+                    max_tx_payload_size,
+                    max_query_payload_size,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+
+            let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(115))
+                .extension(QueryLimitsChecker)
+                .build_schema();
+            schema.execute(query).await
+        }
+
+        // Should fail: read part of query is too big
+        let err: Vec<_> = execute_request(200, 10, "mutation { executeTransactionBlock(txBytes: \"AAA\", signatures: \"BBB\") { effects { status } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["Query payload is too large. The maximum allowed is 10 bytes".to_string()]
+        );
+
+        // Should fail: tx_bytes part of query is too big
+        let err: Vec<_> = execute_request(10, 200, "mutation { executeTransactionBlock(txBytes: \"AAABGKHSA\", signatures: \"BBB\") { effects { status } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+        );
+
+        // dryRunTransactionBlock check, should fail
+        let err: Vec<_> = execute_request(
+            10,
+            200,
+            "query { dryRunTransactionBlock(txBytes: \"AAASFSKGASNBU8sa\") { error transaction { digest } } }",
+        )
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(
+            err,
+            vec!["The txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
+        );
+
+        // Should fail: query size too big
+        let err: Vec<_> = execute_request(10, 10, "query { dryRunTransactionBlock(txBytes: \"AAAABAS\") { error transaction { digest } } }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            err,
+            vec!["Query payload is too large. Max allowed is 20".to_string()]
+        );
     }
 }

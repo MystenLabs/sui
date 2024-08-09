@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::ConnectionConfig;
+use crate::config::Limits;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::config::Version;
@@ -59,6 +60,7 @@ pub struct Cluster {
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
+    limits: Option<Limits>,
 ) -> Cluster {
     let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
     let db_url = graphql_connection_config.db_url.clone();
@@ -85,6 +87,7 @@ pub async fn start_cluster(
         graphql_connection_config.clone(),
         Some(fn_rpc_url),
         Some(cancellation_token.clone()),
+        limits,
     )
     .await;
 
@@ -173,16 +176,23 @@ pub async fn start_graphql_server(
     graphql_connection_config: ConnectionConfig,
     cancellation_token: CancellationToken,
 ) -> JoinHandle<()> {
-    start_graphql_server_with_fn_rpc(graphql_connection_config, None, Some(cancellation_token))
-        .await
+    start_graphql_server_with_fn_rpc(
+        graphql_connection_config,
+        None,
+        Some(cancellation_token),
+        None,
+    )
+    .await
 }
 
 pub async fn start_graphql_server_with_fn_rpc(
     graphql_connection_config: ConnectionConfig,
     fn_rpc_url: Option<String>,
     cancellation_token: Option<CancellationToken>,
+    limits: Option<Limits>,
 ) -> JoinHandle<()> {
     let cancellation_token = cancellation_token.unwrap_or_default();
+
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
         service: ServiceConfig::test_defaults(),
@@ -191,6 +201,10 @@ pub async fn start_graphql_server_with_fn_rpc(
     if let Some(fn_rpc_url) = fn_rpc_url {
         server_config.tx_exec_full_node.node_rpc_url = Some(fn_rpc_url);
     };
+
+    if let Some(limits) = limits {
+        server_config.service.limits = limits;
+    }
 
     // Starts graphql server
     tokio::spawn(async move {
