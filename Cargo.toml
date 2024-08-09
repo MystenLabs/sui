@@ -199,7 +199,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.31.0"
+version = "1.32.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
