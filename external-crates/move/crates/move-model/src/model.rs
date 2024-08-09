@@ -2030,10 +2030,13 @@ impl<'env> ModuleEnv<'env> {
                     .env
                     .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
-                let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(sname))
-                    .expect("undefined struct");
-                Type::Datatype(declaring_module_env.data.id, struct_env.get_id(), vec![])
+                let name = self.env.symbol_pool.make(sname);
+                let datatype_id = declaring_module_env
+                    .find_struct(name)
+                    .map(|env| env.get_id())
+                    .or_else(|| declaring_module_env.find_enum(name).map(|env| env.get_id()))
+                    .expect("undefined datatype");
+                Type::Datatype(declaring_module_env.data.id, datatype_id, vec![])
             }
             SignatureToken::DatatypeInstantiation(inst) => {
                 let (handle_idx, args) = &**inst;
@@ -2046,12 +2049,15 @@ impl<'env> ModuleEnv<'env> {
                     .env
                     .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
-                let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(sname))
-                    .expect("undefined struct");
+                let name = self.env.symbol_pool.make(sname);
+                let datatype_id = declaring_module_env
+                    .find_struct(name)
+                    .map(|env| env.get_id())
+                    .or_else(|| declaring_module_env.find_enum(name).map(|env| env.get_id()))
+                    .expect("undefined datatype");
                 Type::Datatype(
                     declaring_module_env.data.id,
-                    struct_env.get_id(),
+                    datatype_id,
                     self.globalize_signatures(args),
                 )
             }
