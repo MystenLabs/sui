@@ -92,7 +92,7 @@ jobs:
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
-          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+          forge soldeer update
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E 'package(sui-bridge)'
@@ -114,7 +114,7 @@ jobs:
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
-          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+          forge soldeer update
       - name: Check Bridge EVM Unit Tests
         shell: bash
         working-directory: bridge/evm
