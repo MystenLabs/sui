@@ -773,6 +773,83 @@ impl fmt::Display for DefInfo {
     }
 }
 
+impl fmt::Display for CursorContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CursorContext {
+            module,
+            defn_name,
+            position,
+            loc: _,
+        } = self;
+        writeln!(f, "cursor info:")?;
+        write!(f, "- module: ")?;
+        match module {
+            Some(mident) => writeln!(f, "{mident}"),
+            None => writeln!(f, "None"),
+        }?;
+        write!(f, "- definition: ")?;
+        match defn_name {
+            Some(defn) => match defn {
+                CursorDefinition::Function(name) => writeln!(f, "function {name}"),
+                CursorDefinition::Constant(name) => writeln!(f, "constant {name}"),
+                CursorDefinition::Struct(name) => writeln!(f, "struct {name}"),
+                CursorDefinition::Enum(name) => writeln!(f, "enum {name}"),
+            },
+            None => writeln!(f, "None"),
+        }?;
+        write!(f, "- position: ")?;
+        match position {
+            CursorPosition::Attribute(value) => {
+                writeln!(f, "attribute value")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Use(value) => {
+                writeln!(f, "use value")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::DefName => {
+                writeln!(f, "defn name")?;
+            }
+            CursorPosition::Unknown => {
+                writeln!(f, "unknown")?;
+            }
+            CursorPosition::Exp(value) => {
+                writeln!(f, "exp")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::SeqItem(value) => {
+                writeln!(f, "seq item")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Binding(value) => {
+                writeln!(f, "binder")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Type(value) => {
+                writeln!(f, "type")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::FieldDefn(value) => {
+                writeln!(f, "field")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::Parameter(value) => {
+                writeln!(f, "parameter")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::DatatypeTypeParameter(value) => {
+                writeln!(f, "datatype type param")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+            CursorPosition::FunctionTypeParameter(value) => {
+                writeln!(f, "fun type param")?;
+                writeln!(f, "- value: {:#?}", value)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 fn visibility_to_ide_string(visibility: &Visibility) -> String {
     let mut visibility_str = "".to_string();
 
