@@ -30,14 +30,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    pruner_cp_watermark (checkpoint_sequence_number) {
-        checkpoint_sequence_number -> Int8,
-        min_tx_sequence_number -> Int8,
-        max_tx_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     display (object_type) {
         object_type -> Text,
         id -> Bytea,
@@ -103,6 +95,14 @@ diesel::table! {
         event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+    }
+}
+
+diesel::table! {
+    feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
     }
 }
 
@@ -205,6 +205,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -292,14 +308,14 @@ macro_rules! for_all_tables {
         $action!(
             chain_identifier,
             checkpoints,
-            pruner_cp_watermark,
             display,
             epochs,
             events,
-            objects,
+            feature_flags,
             objects_history,
             objects_snapshot,
-            packages,
+            protocol_configs,
+            pruner_cp_watermark,
             transactions,
             tx_calls,
             tx_changed_objects,
