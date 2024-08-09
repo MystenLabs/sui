@@ -90,11 +90,11 @@ jobs:
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
 
-      - name: Check if archive have already been published
-        continue-on-error: true
-        shell: bash
-        run: |
-          echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+      # - name: Check if archive have already been published
+      #   continue-on-error: true
+      #   shell: bash
+      #   run: |
+      #     echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
 
       - name: Download archive, if it exists
         if: ${{ env.s3_archive_exist != '' }}
