@@ -1,0 +1,40 @@
+warning[Lint W01002]: 
+   ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:22:20
+   │
+22 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
+   │                    ^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01002]: 
+   ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:22:23
+   │
+22 │         let _ref = &*(&*(&resource));  // Triple nested borrow-dereference, might be missed
+   │                       ^^^^^^^^^^^^^ Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04010]: cannot infer type
+   ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:33:13
+   │
+33 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │             ^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:33:22
+   │
+ 3 │         value: u64,
+   │                --- Given: 'u64'
+   ·
+33 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │                      ^^^^^^^^^^^^^^^^^^^^
+   │                      │
+   │                      Invalid dereference.
+   │                      Expected: '&_'
+
+error[E04010]: cannot infer type
+   ┌─ tests/linter/false_positive_negative_case_redundant_ref_deref.move:33:22
+   │
+33 │         let _value = *((&resource).value);  // Complex expression, might be missed
+   │                      ^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
