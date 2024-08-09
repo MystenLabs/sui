@@ -26,6 +26,8 @@ diesel::table! {
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
+        min_tx_sequence_number -> Nullable<Int8>,
+        max_tx_sequence_number -> Nullable<Int8>
     }
 }
 
@@ -71,7 +73,75 @@ diesel::table! {
 }
 
 diesel::table! {
-    events (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+    event_emit_module (package, module, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_emit_package (package, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_senders (sender, tx_sequence_number, event_sequence_number) {
+        sender -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    event_struct_instantiation (package, module, type_instantiation, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        type_instantiation -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_module (package, module, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_name (package, module, type_name, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        module -> Text,
+        type_name -> Text,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    event_struct_package (package, tx_sequence_number, event_sequence_number) {
+        package -> Bytea,
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    events (tx_sequence_number, event_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -89,7 +159,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    events_partition_0 (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+    events_partition_0 (tx_sequence_number, event_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -198,89 +268,122 @@ diesel::table! {
 }
 
 diesel::table! {
-    packages (package_id) {
-        package_id -> Bytea,
-        move_package -> Bytea,
-    }
-}
-
-diesel::table! {
-    transactions (tx_sequence_number, checkpoint_sequence_number) {
-        tx_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        raw_transaction -> Bytea,
-        raw_effects -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
-        object_changes -> Array<Nullable<Bytea>>,
-        balance_changes -> Array<Nullable<Bytea>>,
-        events -> Array<Nullable<Bytea>>,
-        transaction_kind -> Int2,
-        success_command_count -> Int2,
-    }
-}
-
-diesel::table! {
-    transactions_partition_0 (tx_sequence_number, checkpoint_sequence_number) {
-        tx_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        raw_transaction -> Bytea,
-        raw_effects -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
-        object_changes -> Array<Nullable<Bytea>>,
-        balance_changes -> Array<Nullable<Bytea>>,
-        events -> Array<Nullable<Bytea>>,
-        transaction_kind -> Int2,
-        success_command_count -> Int2,
-    }
-}
-
-diesel::table! {
-    tx_calls (package, tx_sequence_number, cp_sequence_number) {
+    objects_version (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
         cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    packages (package_id, original_id, package_version) {
+        package_id -> Bytea,
+        original_id -> Bytea,
+        package_version -> Int8,
+        move_package -> Bytea,
+        checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    transactions (tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        raw_transaction -> Bytea,
+        raw_effects -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        timestamp_ms -> Int8,
+        object_changes -> Array<Nullable<Bytea>>,
+        balance_changes -> Array<Nullable<Bytea>>,
+        events -> Array<Nullable<Bytea>>,
+        transaction_kind -> Int2,
+        success_command_count -> Int2,
+    }
+}
+
+diesel::table! {
+    transactions_partition_0 (tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        raw_transaction -> Bytea,
+        raw_effects -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        timestamp_ms -> Int8,
+        object_changes -> Array<Nullable<Bytea>>,
+        balance_changes -> Array<Nullable<Bytea>>,
+        events -> Array<Nullable<Bytea>>,
+        transaction_kind -> Int2,
+        success_command_count -> Int2,
+    }
+}
+
+diesel::table! {
+    tx_calls_fun (package, module, func, tx_sequence_number) {
         tx_sequence_number -> Int8,
         package -> Bytea,
         module -> Text,
         func -> Text,
+        sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_changed_objects (object_id, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
+    tx_calls_mod (package, module, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        module -> Text,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_calls_pkg (package, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_changed_objects (object_id, tx_sequence_number) {
         tx_sequence_number -> Int8,
         object_id -> Bytea,
+        sender -> Bytea,
     }
 }
 
 diesel::table! {
     tx_digests (tx_digest) {
         tx_digest -> Bytea,
-        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
     }
 }
 
 diesel::table! {
-    tx_input_objects (object_id, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
+    tx_input_objects (object_id, tx_sequence_number) {
         tx_sequence_number -> Int8,
         object_id -> Bytea,
+        sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_recipients (recipient, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
+    tx_kinds (tx_kind, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        tx_kind -> Int2,
+    }
+}
+
+diesel::table! {
+    tx_recipients (recipient, tx_sequence_number) {
         tx_sequence_number -> Int8,
         recipient -> Bytea,
+        sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_senders (sender, tx_sequence_number, cp_sequence_number) {
-        cp_sequence_number -> Int8,
+    tx_senders (sender, tx_sequence_number) {
         tx_sequence_number -> Int8,
         sender -> Bytea,
     }
@@ -295,21 +398,33 @@ macro_rules! for_all_tables {
             pruner_cp_watermark,
             display,
             epochs,
+            event_emit_module,
+            event_emit_package,
+            event_senders,
+            event_struct_instantiation,
+            event_struct_module,
+            event_struct_name,
+            event_struct_package,
             events,
             objects,
             objects_history,
             objects_snapshot,
+            objects_version,
             packages,
             transactions,
-            tx_calls,
+            tx_calls_fun,
+            tx_calls_mod,
+            tx_calls_pkg,
             tx_changed_objects,
             tx_digests,
             tx_input_objects,
+            tx_kinds,
             tx_recipients,
             tx_senders
         );
     };
 }
+
 pub use for_all_tables;
 
 for_all_tables!(diesel::allow_tables_to_appear_in_same_query);

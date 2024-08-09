@@ -312,6 +312,36 @@ pub mod diesel_macro {
         }};
     }
 
+    #[macro_export]
+    macro_rules! persist_chunk_into_table {
+        ($table:expr, $chunk:expr, $pool:expr) => {{
+            let now = std::time::Instant::now();
+            let chunk_len = $chunk.len();
+            transactional_blocking_with_retry!(
+                $pool,
+                |conn| {
+                    for chunk in $chunk.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!($table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(
+                    elapsed,
+                    "Persisted {} rows to {}",
+                    chunk_len,
+                    stringify!($table),
+                );
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist {} with error: {}", stringify!($table), e);
+            })
+        }};
+    }
+
     pub use blocking_call_is_ok_or_panic;
     pub use read_only_blocking;
     pub use read_only_repeatable_blocking;

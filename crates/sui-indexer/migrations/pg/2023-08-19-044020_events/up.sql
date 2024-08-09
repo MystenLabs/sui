@@ -1,3 +1,4 @@
+-- TODO: modify queries in indexer reader to take advantage of the new indices
 CREATE TABLE events
 (
     tx_sequence_number          BIGINT       NOT NULL,
@@ -23,8 +24,8 @@ CREATE TABLE events
     timestamp_ms                BIGINT       NOT NULL,
     -- bcs of the Event contents (Event.contents)
     bcs                         BYTEA        NOT NULL,
-    PRIMARY KEY(tx_sequence_number, event_sequence_number, checkpoint_sequence_number)
-) PARTITION BY RANGE (checkpoint_sequence_number);
+    PRIMARY KEY(tx_sequence_number, event_sequence_number)
+) PARTITION BY RANGE (tx_sequence_number);
 CREATE TABLE events_partition_0 PARTITION OF events FOR VALUES FROM (0) TO (MAXVALUE);
 CREATE INDEX events_package ON events (package, tx_sequence_number, event_sequence_number);
 CREATE INDEX events_package_module ON events (package, module, tx_sequence_number, event_sequence_number);
