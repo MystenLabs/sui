@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_pool_connection","new_connection_pool","new_connection_pool_with_config","reset_database"],"mod":["setup_postgres"],"struct":["ConnectionConfig","ConnectionPoolConfig"],"type":["ConnectionPool","PoolConnection"]};

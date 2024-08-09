@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cp_sequence_number","object_id","tx_changed_objects","tx_sequence_number"]};

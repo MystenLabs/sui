@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["all_columns"],"mod":["columns","dsl"],"struct":["move_package","package_id","star","table"],"type":["BoxedQuery","SqlType"]};

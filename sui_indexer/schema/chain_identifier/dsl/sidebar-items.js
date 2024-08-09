@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["chain_identifier","checkpoint_digest"]};

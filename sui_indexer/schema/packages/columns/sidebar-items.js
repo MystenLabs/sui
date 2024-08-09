@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["move_package","package_id","star"]};

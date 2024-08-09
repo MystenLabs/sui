@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcessedTxnData"],"mod":["config","eth_bridge_indexer","indexer_builder","metrics","models","postgres_manager","schema","sui_bridge_indexer","sui_checkpoint_ingestion","sui_transaction_handler","sui_transaction_queries","types"],"struct":["SuiTxnError","TokenTransfer","TokenTransferData"]};

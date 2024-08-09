@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["all_columns"],"mod":["columns","dsl"],"struct":["checkpoint_sequence_number","max_tx_sequence_number","min_tx_sequence_number","star","table"],"type":["BoxedQuery","SqlType"]};

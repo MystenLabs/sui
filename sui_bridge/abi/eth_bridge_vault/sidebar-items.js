@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EthBridgeVaultCalls","EthBridgeVaultErrors"],"static":["ETHBRIDGEVAULT_ABI"],"struct":["EthBridgeVault","OwnableInvalidOwner","OwnableUnauthorizedAccount","OwnerCall","OwnerReturn","OwnershipTransferredFilter","RenounceOwnershipCall","TransferERC20Call","TransferETHCall","TransferOwnershipCall","WethCall","WethReturn"]};

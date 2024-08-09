@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["reset_database","setup"]};

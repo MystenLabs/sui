@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"sui_core":[["impl&lt;W&gt; <a class=\"trait\" href=\"sui_types/crypto/trait.Signable.html\" title=\"trait sui_types::crypto::Signable\">Signable</a>&lt;W&gt; for <a class=\"type\" href=\"sui_core/authority/authority_store_types/type.StoreMoveObject.html\" title=\"type sui_core::authority::authority_store_types::StoreMoveObject\">StoreMoveObject</a><span class=\"where fmt-newline\">where\n    W: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.75.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a>,</span>"]],
+"sui_types":[]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
