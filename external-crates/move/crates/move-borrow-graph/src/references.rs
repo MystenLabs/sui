@@ -126,6 +126,10 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowEdgeSet<Loc, Lbl> {
         self.edges.len()
     }
 
+    pub(crate) fn total_extensions(&self) -> usize {
+        self.edges.iter().map(|edge| edge.path.len()).sum()
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.edges.is_empty()
     }
