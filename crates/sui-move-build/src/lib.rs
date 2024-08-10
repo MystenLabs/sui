@@ -347,6 +347,12 @@ impl CompiledPackage {
     }
 
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
+    /// storage package IDs (where to load those packages on-chain).
+    pub fn get_dependency_storage_package_ids(&self) -> Vec<ObjectID> {
+        self.dependency_ids.published.values().cloned().collect()
+    }
+
+    /// Return the set of Object IDs corresponding to this package's transitive dependencies'
     /// original package IDs.
     pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
         let mut ids: BTreeSet<_> = self

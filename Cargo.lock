@@ -14406,6 +14406,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "move-symbol-pool",
  "once_cell",
  "prometheus",
  "serde",

@@ -5,8 +5,9 @@ use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
 use move_package::source_package::manifest_parser::parse_move_manifest_from_file;
+use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use sui_move_build::{BuildConfig, CompiledPackage};
@@ -27,13 +28,14 @@ impl PackagePublishTxGenerator {
             dependencies,
             root_package,
         } = manifest;
-        let mut dep_map = HashMap::new();
+        let mut dep_map = BTreeMap::new();
         for dependency in dependencies {
             let Package {
                 name,
                 path,
                 is_source_code,
             } = dependency;
+
             info!("Publishing dependent package {}", name);
             let target_path = dir.join(&path);
             let module_bytes = if is_source_code {
@@ -68,23 +70,32 @@ impl PackagePublishTxGenerator {
                 .await
                 .0;
             info!("Published dependent package {}", package_id);
-            dep_map.insert(name, package_id);
+            dep_map.insert(Symbol::from(name), package_id);
         }
+
         let Package {
             name,
             path,
             is_source_code,
         } = root_package;
+
         info!("Compiling root package {}", name);
         assert!(
             is_source_code,
             "Only support building root package from source code"
         );
+
         let target_path = dir.join(path);
-        dep_map.insert(name, ObjectID::ZERO);
-        let compiled_package = BuildConfig::new_for_testing_replace_addresses(dep_map)
-            .build(&target_path)
-            .unwrap();
+        let published_deps = dep_map.clone();
+
+        dep_map.insert(Symbol::from(name), ObjectID::ZERO);
+        let mut compiled_package = BuildConfig::new_for_testing_replace_addresses(
+            dep_map.into_iter().map(|(k, v)| (k.to_string(), v)),
+        )
+        .build(&target_path)
+        .unwrap();
+
+        compiled_package.dependency_ids.published = published_deps;
         Self { compiled_package }
     }
 }
