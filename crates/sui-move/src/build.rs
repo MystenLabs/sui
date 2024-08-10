@@ -75,12 +75,11 @@ impl Build {
                 check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
             }
 
-            let package_dependencies = pkg.get_package_dependencies_hex();
             println!(
                 "{}",
                 json!({
                     "modules": pkg.get_package_base64(with_unpublished_deps),
-                    "dependencies": json!(package_dependencies),
+                    "dependencies": pkg.get_dependency_storage_package_ids(),
                     "digest": pkg.get_package_digest(with_unpublished_deps),
                 })
             )
