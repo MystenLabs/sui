@@ -72,10 +72,22 @@ impl ProgressStore for DynamoDBProgressStore {
         let backoff = backoff::ExponentialBackoff::default();
         backoff::future::retry(backoff, || async {
             self.client
-                .put_item()
+                .update_item()
                 .table_name(self.table_name.clone())
-                .item("task_name", AttributeValue::S(task_name.clone()))
-                .item("state", AttributeValue::S(checkpoint_number.to_string()))
+                .key("task_name", AttributeValue::S(task_name.clone()))
+                .update_expression("SET #state = :newState")
+                .condition_expression(
+                    "attribute_not_exists(#state) OR (cast(#state as N) < :newStateNum)",
+                )
+                .expression_attribute_names("#state", "state")
+                .expression_attribute_values(
+                    ":newState",
+                    AttributeValue::S(checkpoint_number.to_string()),
+                )
+                .expression_attribute_values(
+                    ":newStateNum",
+                    AttributeValue::N(checkpoint_number.to_string()),
+                )
                 .send()
                 .await
                 .map_err(backoff::Error::transient)
