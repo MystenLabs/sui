@@ -1,0 +1,72 @@
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/integer_shift_overflow.move:4:18
+  │
+4 │         let _b = x << 8;  // True positive: should raise an issue
+  │                  ^^^^^^ The 8 of bits being shifted exceeds the 8 bit width of the variable being shifted.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/integer_shift_overflow.move:5:18
+  │
+5 │         let _c = x << 9;  // True positive: should raise an issue
+  │                  ^^^^^^ The 9 of bits being shifted exceeds the 8 bit width of the variable being shifted.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/integer_shift_overflow.move:7:18
+  │
+7 │         let _e = x >> 8;  // True positive: should raise an issue
+  │                  ^^^^^^ The 8 of bits being shifted exceeds the 8 bit width of the variable being shifted.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:12:18
+   │
+12 │         let _b = x << 64; // True positive: should raise an issue
+   │                  ^^^^^^^ The 64 of bits being shifted exceeds the 64 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:13:18
+   │
+13 │         let _c = x << 65; // True positive: should raise an issue
+   │                  ^^^^^^^ The 65 of bits being shifted exceeds the 64 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:15:18
+   │
+15 │         let _e = x >> 64; // True positive: should raise an issue
+   │                  ^^^^^^^ The 64 of bits being shifted exceeds the 64 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:20:18
+   │
+20 │         let _b = x << 128; // True positive: should raise an issue
+   │                  ^^^^^^^^ The 128 of bits being shifted exceeds the 128 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:21:18
+   │
+21 │         let _c = x << 129; // True positive: should raise an issue
+   │                  ^^^^^^^^ The 129 of bits being shifted exceeds the 128 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+   ┌─ tests/linter/integer_shift_overflow.move:23:18
+   │
+23 │         let _e = x >> 128; // True positive: should raise an issue
+   │                  ^^^^^^^^ The 128 of bits being shifted exceeds the 128 bit width of the variable being shifted.
+   │
+   = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

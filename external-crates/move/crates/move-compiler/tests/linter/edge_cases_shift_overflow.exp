@@ -1,0 +1,8 @@
+warning[Lint W00005]: Potential overflow detected. The number of bits being shifted exceeds the bit width of the variable being shifted.
+  ┌─ tests/linter/edge_cases_shift_overflow.move:7:18
+  │
+7 │         let _f = 1u128 << 128;    // True positive: should raise an issue
+  │                  ^^^^^^^^^^^^ The 128 of bits being shifted exceeds the 128 bit width of the variable being shifted.
+  │
+  = This warning can be suppressed with '#[allow(lint(shift_overflow))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
