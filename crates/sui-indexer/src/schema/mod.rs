@@ -49,6 +49,13 @@ mod inner {
     pub use crate::schema::mysql::checkpoints;
     pub use crate::schema::mysql::display;
     pub use crate::schema::mysql::epochs;
+    pub use crate::schema::mysql::event_emit_module;
+    pub use crate::schema::mysql::event_emit_package;
+    pub use crate::schema::mysql::event_senders;
+    pub use crate::schema::mysql::event_struct_instantiation;
+    pub use crate::schema::mysql::event_struct_module;
+    pub use crate::schema::mysql::event_struct_name;
+    pub use crate::schema::mysql::event_struct_package;
     pub use crate::schema::mysql::events;
     pub use crate::schema::mysql::objects;
     pub use crate::schema::mysql::objects_history;
@@ -57,10 +64,13 @@ mod inner {
     pub use crate::schema::mysql::packages;
     pub use crate::schema::mysql::pruner_cp_watermark;
     pub use crate::schema::mysql::transactions;
-    pub use crate::schema::mysql::tx_calls;
+    pub use crate::schema::mysql::tx_calls_fun;
+    pub use crate::schema::mysql::tx_calls_mod;
+    pub use crate::schema::mysql::tx_calls_pkg;
     pub use crate::schema::mysql::tx_changed_objects;
     pub use crate::schema::mysql::tx_digests;
     pub use crate::schema::mysql::tx_input_objects;
+    pub use crate::schema::mysql::tx_kinds;
     pub use crate::schema::mysql::tx_recipients;
     pub use crate::schema::mysql::tx_senders;
 }

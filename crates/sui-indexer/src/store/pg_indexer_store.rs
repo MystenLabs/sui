@@ -40,13 +40,12 @@ use crate::models::objects::{
 };
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
-use crate::schema::tx_kinds;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
     event_struct_package, events, objects, objects_history, objects_snapshot, objects_version,
     packages, pruner_cp_watermark, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_recipients, tx_senders,
+    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -1174,12 +1173,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_digests::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_digests chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_digests::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -1201,12 +1195,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_kinds::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_digests chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_kinds::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
