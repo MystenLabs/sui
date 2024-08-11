@@ -10,5 +10,4 @@ out*/
 lcov.info
 broadcast/**/31337
 
-lib/*
-
+dependencies

@@ -44,6 +44,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
+  per_object_congestion_control_mode: TotalTxCount
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
@@ -55,6 +56,7 @@ feature_flags:
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
+  soft_bundle: true
   enable_coin_deny_list_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
@@ -309,8 +311,10 @@ random_beacon_min_round_interval_ms: 500
 random_beacon_dkg_version: 1
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
+max_accumulated_txn_cost_per_object_in_narwhal_commit: 100
 max_deferral_rounds_for_congestion_control: 10
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
+max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: false
-
+max_accumulated_txn_cost_per_object_in_mysticeti_commit: 10

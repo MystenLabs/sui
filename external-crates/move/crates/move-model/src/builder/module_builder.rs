@@ -22,7 +22,7 @@ use crate::{
     ast::{Attribute, AttributeValue, ModuleName, QualifiedSymbol, Value},
     builder::{
         exp_translator::ExpTranslator,
-        model_builder::{ConstEntry, ModelBuilder},
+        model_builder::{ConstEntry, DatatypeData, ModelBuilder},
     },
     model::{
         DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
@@ -257,6 +257,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         for (name, struct_def) in module_def.structs.key_cloned_iter() {
             self.decl_ana_struct(&name, struct_def);
         }
+        for (name, enum_def) in module_def.enums.key_cloned_iter() {
+            self.decl_ana_enum(&name, enum_def);
+        }
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
             if fun_def.macro_.is_none() {
                 self.decl_ana_fun(&name, fun_def);
@@ -311,6 +314,24 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         );
     }
 
+    fn decl_ana_enum(&mut self, name: &PA::DatatypeName, def: &EA::EnumDefinition) {
+        let qsym = self.qualified_by_module_from_name(&name.0);
+        let struct_id = DatatypeId::new(qsym.symbol);
+        let attrs = self.translate_attributes(&def.attributes);
+        let mut et = ExpTranslator::new(self);
+        let type_params =
+            et.analyze_and_add_type_params(def.type_parameters.iter().map(|param| &param.name));
+        et.parent.parent.define_enum(
+            et.to_loc(&def.loc),
+            attrs,
+            qsym,
+            et.parent.module_id,
+            struct_id,
+            type_params,
+            BTreeMap::new(), // will be filled in during definition analysis
+        );
+    }
+
     fn decl_ana_fun(&mut self, name: &PA::FunctionName, def: &EA::Function) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let attrs = self.translate_attributes(&def.attributes);
@@ -342,6 +363,11 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             self.def_ana_struct(&name, def);
         }
 
+        // Analyze all enums.
+        for (name, def) in module_def.enums.key_cloned_iter() {
+            self.def_ana_enum(&name, def);
+        }
+
         // Analyze all functions.
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
             if fun_def.macro_.is_none() {
@@ -359,14 +385,14 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     }
 }
 
-/// ## Struct Definition Analysis
+/// ## Struct and Enum Definition Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     fn def_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let type_params = self
             .parent
-            .struct_table
+            .datatype_table
             .get(&qsym)
             .expect("struct invalid")
             .type_params
@@ -399,10 +425,61 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             EA::StructFields::Native(_) => None,
         };
         self.parent
-            .struct_table
+            .datatype_table
             .get_mut(&qsym)
             .expect("struct invalid")
-            .fields = fields;
+            .data = DatatypeData::Struct { fields };
+    }
+
+    fn def_ana_enum(&mut self, name: &PA::DatatypeName, def: &EA::EnumDefinition) {
+        let qsym = self.qualified_by_module_from_name(&name.0);
+        let type_params = self
+            .parent
+            .datatype_table
+            .get(&qsym)
+            .expect("enum invalid")
+            .type_params
+            .clone();
+        let mut et = ExpTranslator::new(self);
+        let loc = et.to_loc(&name.0.loc);
+        for (name, ty) in type_params {
+            et.define_type_param(&loc, name, ty);
+        }
+        let variants: BTreeMap<_, _> = def
+            .variants
+            .key_cloned_iter()
+            .map(|(key, variant)| {
+                let variant_name = et.symbol_pool().make(&key.0.value);
+                let variant_fields = match &variant.fields {
+                    EA::VariantFields::Named(fields) => {
+                        let mut field_map = BTreeMap::new();
+                        for (_name_loc, field_name_, (idx, ty)) in fields {
+                            let field_sym = et.symbol_pool().make(field_name_);
+                            let field_ty = et.translate_type(ty);
+                            field_map.insert(field_sym, (*idx, field_ty));
+                        }
+                        Some(field_map)
+                    }
+                    EA::VariantFields::Positional(tys) => {
+                        let mut field_map = BTreeMap::new();
+                        for (idx, ty) in tys.iter().enumerate() {
+                            let field_name_ = format!("{idx}");
+                            let field_sym = et.symbol_pool().make(&field_name_);
+                            let field_ty = et.translate_type(ty);
+                            field_map.insert(field_sym, (idx, field_ty));
+                        }
+                        Some(field_map)
+                    }
+                    EA::VariantFields::Empty => None,
+                };
+                (variant_name, variant_fields)
+            })
+            .collect();
+        self.parent
+            .datatype_table
+            .get_mut(&qsym)
+            .expect("enum invalid")
+            .data = DatatypeData::Enum { variants };
     }
 }
 
@@ -453,7 +530,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
-                    .struct_table
+                    .datatype_table
                     .get(&self.qualified_by_module(name))
                 {
                     Some((
@@ -482,7 +559,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
-                    .struct_table
+                    .datatype_table
                     .get(&self.qualified_by_module(name))
                 {
                     Some((
@@ -492,6 +569,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                             def_idx,
                             name,
                             entry.loc.clone(),
+                            Some(&source_map),
                             entry.attributes.clone(),
                         ),
                     ))

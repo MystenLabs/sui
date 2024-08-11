@@ -481,10 +481,17 @@ export const bcs = {
 			name,
 			read: (reader) => {
 				const index = reader.readULEB();
-				const [name, type] = canonicalOrder[index];
+
+				const enumEntry = canonicalOrder[index];
+				if (!enumEntry) {
+					throw new TypeError(`Unknown value ${index} for enum ${name}`);
+				}
+
+				const [kind, type] = enumEntry;
+
 				return {
-					[name]: type?.read(reader) ?? true,
-					$kind: name,
+					[kind]: type?.read(reader) ?? true,
+					$kind: kind,
 				} as never;
 			},
 			write: (value, writer) => {

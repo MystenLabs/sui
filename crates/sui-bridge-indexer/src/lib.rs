@@ -9,7 +9,6 @@ use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 
 pub mod config;
-pub mod latest_eth_syncer;
 pub mod metrics;
 pub mod models;
 pub mod postgres_manager;
@@ -107,7 +106,6 @@ impl SuiTxnError {
 
 #[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
-    DepositedUnfinalized,
     Deposited,
     Approved,
     Claimed,
@@ -116,7 +114,6 @@ pub(crate) enum TokenTransferStatus {
 impl Display for TokenTransferStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            TokenTransferStatus::DepositedUnfinalized => "DepositedUnfinalized",
             TokenTransferStatus::Deposited => "Deposited",
             TokenTransferStatus::Approved => "Approved",
             TokenTransferStatus::Claimed => "Claimed",

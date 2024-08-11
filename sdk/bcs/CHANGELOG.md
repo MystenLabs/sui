@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.0.4
+
+### Patch Changes
+
+- f37b3c2: Improve error message when bcs enum contains unknown value
+
 ## 1.0.3
 
 ### Patch Changes

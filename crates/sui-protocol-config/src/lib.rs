@@ -166,6 +166,7 @@ const MAX_PROTOCOL_VERSION: u64 = 54;
 //             Turn on shared object congestion control in testnet.
 //             Update stdlib natives costs
 // Version 54: Enable random beacon on mainnet.
+//             Enable soft bundle on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2640,6 +2641,16 @@ impl ProtocolConfig {
                     cfg.random_beacon_reduction_lower_bound = Some(1000);
                     cfg.random_beacon_dkg_timeout_round = Some(3000);
                     cfg.random_beacon_min_round_interval_ms = Some(500);
+
+                    // Turns on shared object congestion control on mainnet.
+                    cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
+                    cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::TotalTxCount;
+
+                    // Enable soft bundle on mainnet.
+                    cfg.feature_flags.soft_bundle = true;
+                    cfg.max_soft_bundle_size = Some(5);
                 }
                 // Use this template when making changes:
                 //
