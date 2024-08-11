@@ -13,11 +13,17 @@ use crate::{
         self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
         ENTRY_MODIFIER,
     },
-    shared::{ast_debug::*, unique_map::UniqueMap, Name, NumericalAddress, TName},
+    shared::{
+        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name,
+        NumericalAddress, TName,
+    },
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::Arc,
+};
 
 // High Level IR
 
@@ -27,6 +33,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub info: Arc<TypingProgramInfo>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -888,7 +895,7 @@ impl std::fmt::Display for Label {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules } = self;
+        let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));

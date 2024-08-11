@@ -204,7 +204,7 @@ fn mnemonic_test() {
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
     let imported_address = keystore2
-        .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None)
+        .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
@@ -222,7 +222,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
 
     keystore
-        .import_from_mnemonic(phrase, SignatureScheme::ED25519, None)
+        .import_from_mnemonic(phrase, SignatureScheme::ED25519, None, None)
         .unwrap();
 
     let pubkey = keystore.keys()[0].clone();

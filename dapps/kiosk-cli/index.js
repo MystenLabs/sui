@@ -30,13 +30,13 @@ import {
   isValidSuiAddress,
   isValidSuiObjectId,
   MIST_PER_SUI,
-} from '@mysten/sui.js/utils';
-import { bcs } from '@mysten/sui.js/bcs';
+} from '@mysten/sui/utils';
+import { bcs } from '@mysten/sui/bcs';
 import { program } from 'commander';
 import { KIOSK_LISTING, KioskClient, KioskTransaction, Network } from '@mysten/kiosk';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 
 /**
  * List of known types for shorthand search in the `search` command.
@@ -172,14 +172,14 @@ async function newKiosk() {
     throw new Error(`Kiosk already exists for ${sender}`);
   }
 
-  const txb = new TransactionBlock();
+  const tx = new Transaction();
 
-  new KioskTransaction({ transactionBlock: txb, kioskClient })
+  new KioskTransaction({ transaction: tx, kioskClient })
     .create()
     .shareAndTransferCap(sender)
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -325,17 +325,17 @@ async function placeItem(itemId) {
     throw new Error(`Item ${itemId} is not owned by ${owner}; use \`inventory\` to see your items`);
   }
 
-  const txb = new TransactionBlock();
-  const itemArg = txb.objectRef({ ...item.data });
+  const tx = new Transaction();
+  const itemArg = tx.objectRef({ ...item.data });
 
-  new KioskTransaction({ txb, kioskClient, cap: kioskCap })
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap })
     .place({
       type: item.data.type,
       item: itemArg,
     })
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -373,10 +373,10 @@ async function lockItem(itemId) {
     throw new Error(`Item ${itemId} with type ${item.data.type} does not have a TransferPolicy`);
   }
 
-  const txb = new TransactionBlock();
-  const itemArg = txb.objectRef({ ...item.data });
+  const tx = new Transaction();
+  const itemArg = tx.objectRef({ ...item.data });
 
-  new KioskTransaction({ txb, kioskClient, cap })
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap })
     .lock({
       itemType: item.data.type,
       itemId: itemArg,
@@ -384,7 +384,7 @@ async function lockItem(itemId) {
     })
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -414,9 +414,9 @@ async function takeItem(itemId, { address }) {
     throw new Error(`Item ${itemId} not found; error: ` + item.error);
   }
 
-  const txb = new TransactionBlock();
+  const tx = new Transaction();
 
-  new KioskTransaction({ txb, kioskClient, cap })
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap })
     .transfer({
       itemType: item.data.type,
       itemId,
@@ -424,7 +424,7 @@ async function takeItem(itemId, { address }) {
     })
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -448,9 +448,9 @@ async function listItem(itemId, price) {
     throw new Error(`Item ${itemId} not found; error: ` + item.error);
   }
 
-  const txb = new TransactionBlock();
+  const tx = new Transaction();
 
-  new KioskTransaction({ txb, kioskClient, cap })
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap })
     .list({
       itemType: item.data.type,
       itemId,
@@ -458,7 +458,7 @@ async function listItem(itemId, price) {
     })
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -482,16 +482,16 @@ async function delistItem(itemId) {
     throw new Error(`Item ${itemId} not found; error: ` + item.error);
   }
 
-  const txb = new TransactionBlock();
+  const tx = new Transaction();
 
-  new KioskTransaction({ txb, kioskClient, cap })
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap })
     .delist({
       itemType: item.data.type,
       itemId,
     })
     .finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -563,8 +563,8 @@ async function purchaseItem(itemId, opts) {
   }
 
   const price = listing.data.content.fields.value;
-  const txb = new TransactionBlock();
-  const fromKioskArg = txb.object(kiosk.data.objectId);
+  const tx = new Transaction();
+  const fromKioskArg = tx.object(kiosk.data.objectId);
   const cap = await findKioskCap().catch(() => null);
 
   if (cap === null) {
@@ -572,7 +572,7 @@ async function purchaseItem(itemId, opts) {
       'No Kiosk found for sender; use `new` to create one; cannot place item to Kiosk',
     );
   }
-  const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+  const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap });
 
   (
     await kioskTx.purchaseAndResolve({
@@ -583,7 +583,7 @@ async function purchaseItem(itemId, opts) {
     })
   ).finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -666,11 +666,11 @@ async function withdrawAll() {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
-  const txb = new TransactionBlock();
+  const tx = new Transaction();
 
-  new KioskTransaction({ txb, kioskClient, cap }).withdraw(sender).finalize();
+  new KioskTransaction({ transaction: tx, kioskClient, kioskCap: cap }).withdraw(sender).finalize();
 
-  return sendTx(txb);
+  return sendTx(tx);
 }
 
 /**
@@ -732,11 +732,11 @@ async function findKioskCap(address) {
  * Send the transaction and print the `object changes: created` result.
  * If there are errors, print them.
  */
-async function sendTx(txb) {
+async function sendTx(tx) {
   return client
-    .signAndExecuteTransactionBlock({
+    .signAndExecuteTransaction({
       signer: keypair,
-      transactionBlock: txb,
+      transaction: tx,
       options: {
         showEffects: true,
         showObjectChanges: true,

@@ -13,7 +13,7 @@ use crate::{
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     expansion::ast::Visibility,
     naming::ast as N,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::ast as T,
 };
 
@@ -38,11 +38,7 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for PublicRandomVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        _program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context { env }
     }
 }

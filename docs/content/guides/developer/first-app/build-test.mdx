@@ -47,23 +47,7 @@ Test result: OK. Total tests: 0; passed: 0; failed: 0
 
 To actually test your code, you need to add test functions. Start with adding a basic test function to the `my_module.move` file, inside the module definition:
 
-```move
-#[test]
-fun test_sword_create() {
-    // Create a dummy TxContext for testing
-    let mut ctx = tx_context::dummy();
-
-    // Create a sword
-    let sword = Sword {
-        id: object::new(&mut ctx),
-        magic: 42,
-        strength: 7,
-    };
-
-    // Check if accessor functions return correct values
-    assert!(sword.magic() == 42 && sword.strength() == 7, 1);
-}
-```
+{@inject: examples/move/first_package/sources/example.move#first-test}
 
 As the code shows, the unit test function (`test_sword_create()`) creates a dummy instance of the `TxContext` struct and assigns it to `ctx`. The function then creates a sword object using `ctx` to create a unique identifier and assigns `42` to the `magic` parameter and `7` to `strength`. Finally, the test calls the `magic` and `strength` accessor functions to verify that they return correct values.
 
@@ -105,11 +89,7 @@ One of the solutions (as suggested in the error message), is to add the `drop` a
 
 To get the test to work, we will need to use the `transfer` module, which is imported by default. Add the following lines to the end of the test function (after the `assert!` call) to transfer ownership of the `sword` to a freshly created dummy address:
 
-```move
-// Create a dummy address and transfer the sword
-let dummy_address = @0xCAFE;
-transfer::public_transfer(sword, dummy_address);
-```
+{@inject: examples/move/first_package/sources/example.move#test-dummy noComments}
 
 Run the test command again. Now the output shows a single successful test has run:
 
@@ -154,60 +134,13 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Update your `my_module.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
 
-```move
-public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
-    // Create a sword
-    Sword {
-        id: object::new(ctx),
-        magic: magic,
-        strength: strength,
-    }
-}
-```
+{@inject: examples/move/first_package/sources/example.move#fun=sword_create noComments}
 
 The code of the new functions uses struct creation and Sui-internal modules (`tx_context`) in a way similar to what you have seen in the previous sections. The important part is for the function to have correct signatures.
 
 With the new function included, add another test function to make sure it behaves as expected.
 
-```move
-#[test]
-fun test_sword_transactions() {
-    use sui::test_scenario;
-
-    // Create test addresses representing users
-    let initial_owner = @0xCAFE;
-    let final_owner = @0xFACE;
-
-    // First transaction executed by initial owner to create the sword
-    let mut scenario = test_scenario::begin(initial_owner);
-    {
-        // Create the sword and transfer it to the initial owner
-        let sword = sword_create(42, 7, scenario.ctx());
-        transfer::public_transfer(sword, initial_owner);
-    };
-
-    // Second transaction executed by the initial sword owner
-    scenario.next_tx(initial_owner);
-    {
-        // Extract the sword owned by the initial owner
-        let sword = scenario.take_from_sender<Sword>();
-        // Transfer the sword to the final owner
-        transfer::public_transfer(sword, final_owner);
-    };
-
-    // Third transaction executed by the final sword owner
-    scenario.next_tx(final_owner);
-    {
-        // Extract the sword owned by the final owner
-        let sword = scenario.take_from_sender<Sword>();
-        // Verify that the sword has expected properties
-        assert!(sword.magic() == 42 && sword.strength() == 7, 1);
-        // Return the sword to the object pool (it cannot be simply "dropped")
-        scenario.return_to_sender(sword)
-    };
-    scenario.end();
-}
-```
+{@inject: examples/move/first_package/sources/example.move#fun=test_sword_transactions}
 
 There are some details of the new testing function to pay attention to. The first thing the code does is create some addresses that represent users participating in the testing scenario. The test then creates a scenario by starting the first transaction on behalf of the initial sword owner.
 
@@ -256,83 +189,28 @@ While the `sui move` command does not support publishing explicitly, you can sti
 
 The `init` function for the module in the running example creates a `Forge` object.
 
-```move
-/// Module initializer to be executed when this module is published
-fun init(ctx: &mut TxContext) {
-    let admin = Forge {
-        id: object::new(ctx),
-        swords_created: 0,
-    };
-
-    // Transfer the forge object to the module/package publisher
-    transfer::transfer(admin, ctx.sender());
-}
-```
+{@inject: examples/move/first_package/sources/example.move#fun=init noComments}
 
 The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `sword_create` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
 
-```move
-/// Constructor for creating swords
-public fun new_sword(
-    forge: &mut Forge,
-    magic: u64,
-    strength: u64,
-    ctx: &mut TxContext,
-): Sword {
-    forge.swords_created = forge.swords_created + 1;
-    Sword {
-        id: object::new(ctx),
-        magic: magic,
-        strength: strength,
-    }
-}
-```
+{@inject: examples/move/first_package/sources/example.move#fun=new_sword noComments}
 
 Now, create a function to test the module initialization:
 
-```move
-#[test]
-fun test_module_init() {
-    use sui::test_scenario;
-
-    // Create test addresses representing users
-    let admin = @0xAD;
-    let initial_owner = @0xCAFE;
-
-    // First transaction to emulate module initialization
-    let mut scenario = test_scenario::begin(admin);
-    {
-        init(scenario.ctx());
-    };
-
-    // Second transaction to check if the forge has been created
-    // and has initial value of zero swords created
-    scenario.next_tx(admin);
-    {
-        // Extract the Forge object
-        let forge = scenario.take_from_sender<Forge>();
-        // Verify number of created swords
-        assert!(forge.swords_created() == 0, 1);
-        // Return the Forge object to the object pool
-        scenario.return_to_sender(forge);
-    };
-
-    // Third transaction executed by admin to create the sword
-    scenario.next_tx(admin);
-    {
-        let mut forge = scenario.take_from_sender<Forge>();
-        // Create the sword and transfer it to the initial owner
-        let sword = forge.new_sword(42, 7, scenario.ctx());
-        transfer::public_transfer(sword, initial_owner);
-        scenario.return_to_sender(forge);
-    };
-    scenario.end();
-}
-```
+{@inject: examples/move/first_package/sources/example.move#fun=test_module_init}
 
 As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized. Finally, the admin uses the `Forge` to create a sword and transfer it to the initial owner.
 
-You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory.
+You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory. You can also use the following toggle to review the complete code.
+
+<details>
+<summary>
+Toggle complete source code 
+</summary>
+
+{@inject: examples/move/first_package/sources/example.move}
+
+</details>
 
 ## Related links
 

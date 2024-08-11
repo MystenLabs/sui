@@ -61,12 +61,12 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) env: &'env mut CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
     pub(super) current_package: Option<Symbol>,
+    pub(super) is_source_definition: bool,
 }
 
 struct Context<'env, 'map> {
     defn_context: DefnContext<'env, 'map>,
     address: Option<Address>,
-    is_source_definition: bool,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFilters,
@@ -91,11 +91,11 @@ impl<'env, 'map> Context<'env, 'map> {
             address_conflicts,
             module_members,
             current_package: None,
+            is_source_definition: false,
         };
         Context {
             defn_context,
             address: None,
-            is_source_definition: false,
             all_filter_alls,
             path_expander: None,
         }
@@ -219,6 +219,18 @@ impl<'env, 'map> Context<'env, 'map> {
             .as_mut()
             .unwrap()
             .name_access_chain_to_module_ident(inner_context, chain)
+    }
+
+    fn error_ide_autocomplete_suggestion(&mut self, loc: Loc) {
+        let Context {
+            path_expander,
+            defn_context: inner_context,
+            ..
+        } = self;
+        path_expander
+            .as_mut()
+            .unwrap()
+            .ide_autocomplete_suggestion(inner_context, loc)
     }
 
     pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
@@ -424,6 +436,7 @@ pub fn program(
         module_members: UniqueMap::new(),
         address_conflicts,
         current_package: None,
+        is_source_definition: false,
     };
 
     let module_members = {
@@ -467,7 +480,7 @@ pub fn program(
 
     let mut context = Context::new(compilation_env, module_members, address_conflicts);
 
-    context.is_source_definition = true;
+    context.defn_context.is_source_definition = true;
     for P::PackageDefinition {
         package,
         named_address_map,
@@ -502,7 +515,7 @@ pub fn program(
         }
     }
 
-    context.is_source_definition = false;
+    context.defn_context.is_source_definition = false;
     for P::PackageDefinition {
         package,
         named_address_map,
@@ -821,6 +834,7 @@ fn module_(
         is_spec_module: _,
         name,
         members,
+        definition_mode: _,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
     let mut warning_filter = module_warning_filter(context, &attributes);
@@ -874,7 +888,7 @@ fn module_(
             P::ModuleMember::Use(_) => unreachable!(),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
-                if !context.is_source_definition && f.macro_.is_none() {
+                if !context.defn_context.is_source_definition && f.macro_.is_none() {
                     f.body.value = P::FunctionBody_::Native
                 }
                 function(
@@ -895,7 +909,7 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
-    let target_kind = if !context.is_source_definition {
+    let target_kind = if !context.defn_context.is_source_definition {
         TargetKind::External
     } else {
         let is_root_package = !context.env().package_config(package_name).is_dependency;
@@ -1087,7 +1101,8 @@ fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute)
         | KnownAttribute::Diagnostic(_)
         | KnownAttribute::DefinesPrimitive(_)
         | KnownAttribute::External(_)
-        | KnownAttribute::Syntax(_) => (),
+        | KnownAttribute::Syntax(_)
+        | KnownAttribute::Deprecation(_) => (),
         KnownAttribute::Error(_) => {
             let pkg = context.current_package();
             context
@@ -1115,7 +1130,9 @@ fn unique_attributes(
             Some(known) => {
                 debug_assert!(known.name() == sym.as_str());
                 if is_nested {
-                    let msg = "Known attribute '{}' is not expected in a nested attribute position";
+                    let msg = format!(
+                        "Known attribute '{known}' is not expected in a nested attribute position"
+                    );
                     context
                         .env()
                         .add_diag(diag!(Declarations::InvalidAttribute, (nloc, msg)));
@@ -1193,7 +1210,7 @@ fn attribute(
 /// dependency packages)
 fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let filters = warning_filter(context, attributes);
-    let is_dep = !context.is_source_definition || {
+    let is_dep = !context.defn_context.is_source_definition || {
         let pkg = context.current_package();
         context.env().package_config(pkg).is_dependency
     };
@@ -1777,7 +1794,7 @@ fn duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
 }
 
 fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
-    if !context.is_source_definition {
+    if !context.defn_context.is_source_definition {
         return;
     }
     let mut diag = diag!(
@@ -2323,7 +2340,11 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             let result = type_(context, *result);
             ET::Fun(args, Box::new(result))
         }
-        PT::UnresolvedError => ET::UnresolvedError,
+        PT::UnresolvedError => {
+            // Treat an unresolved error as a leading access
+            context.error_ide_autocomplete_suggestion(loc);
+            ET::UnresolvedError
+        }
     };
     sp(loc, t_)
 }

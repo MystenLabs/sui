@@ -1,0 +1,96 @@
+//# publish
+module 0x1.Tester {
+    import 0x1.signer;
+
+    enum Initializer { V { x: u64, y: u64 } }
+    enum Point { V { x: u64, y: u64 } } 
+
+    // the key struct is here to just give a feeling why the computation might not be reorderable
+    set_and_pick(init: &mut Self.Initializer, p: &mut Self.Point): &mut u64 {
+    let ix: &mut u64;
+    let iy: &mut u64;
+    let px: &mut u64;
+    let py: &mut u64;
+
+    label b0:
+        &mut Initializer.V { x: ix, y: iy } = move(init);
+        &mut Point.V { x: px, y: py } = copy(p);
+        *move(px) = *move(ix);
+        *move(py) = *move(iy);
+        &mut Point.V { x: px, y: py } = copy(p);
+        jump_if (*copy(px) >= *copy(py)) b2;
+    label b1:
+        return move(py);
+    label b2:
+        return move(px);
+    }
+
+    bump_and_give(u: &mut u64): &u64 {
+    label b0:
+        *copy(u) = *copy(u) + 1;
+        return freeze(move(u));
+    }
+
+    larger_field_1(init: &mut Self.Initializer, point_ref: &mut Self.Point): &u64 {
+        let field_ref: &mut u64;
+        let returned_ref: &u64;
+        let x_val: u64;
+        let px: &mut u64;
+        let py: &mut u64;
+        let _t: &mut u64;
+    label b0:
+        field_ref = Self.set_and_pick(move(init), copy(point_ref));
+        // this borrow is invalid because of field_ref
+        &mut Point.V { x: px, y: py } = move(point_ref);
+        abort 0;
+    }
+}
+
+//# publish
+module 0x1.Tester {
+    import 0x1.signer;
+
+    enum Initializer { V { x: u64, y: u64 } }
+    enum Point { V { x: u64, y: u64 } } 
+
+    // the key struct is here to just give a feeling why the computation might not be reorderable
+    set_and_pick(init: &mut Self.Initializer, p: &mut Self.Point): &mut u64 {
+    let ix: &mut u64;
+    let iy: &mut u64;
+    let px: &mut u64;
+    let py: &mut u64;
+
+    label b0:
+        &mut Initializer.V { x: ix, y: iy } = move(init);
+        &mut Point.V { x: px, y: py } = copy(p);
+        *move(px) = *move(ix);
+        *move(py) = *move(iy);
+        &mut Point.V { x: px, y: py } = copy(p);
+        jump_if (*copy(px) >= *copy(py)) b2;
+    label b1:
+        return move(py);
+    label b2:
+        return move(px);
+    }
+
+    bump_and_give(u: &mut u64): &u64 {
+    label b0:
+        *copy(u) = *copy(u) + 1;
+        return freeze(move(u));
+    }
+
+    larger_field_1(init: &mut Self.Initializer, point_ref: &mut Self.Point): &u64 {
+        let field_ref: &mut u64;
+        let returned_ref: &u64;
+        let x_val: u64;
+        let px: &mut u64;
+        let py: &mut u64;
+        let pxi: &u64;
+        let pyi: &u64;
+    label b0:
+        field_ref = Self.set_and_pick(move(init), copy(point_ref));
+        // this freeze is invalid because of field_ref
+        &Point.V { x: pxi, y: pyi } = freeze(move(point_ref));
+        abort 0;
+    }
+}

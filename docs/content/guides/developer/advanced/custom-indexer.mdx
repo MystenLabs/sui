@@ -20,6 +20,11 @@ trait Worker: Send + Sync {
 
 In this example, the `CheckpointData` struct represents full checkpoint content. The struct contains checkpoint summary and contents, as well as detailed information about each individual transaction. The individual transaction data includes events and input/output objects. The full definition for this content is in the [full_checkpoint_content.rs](https://github.com/MystenLabs/sui/blob/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-types/src/full_checkpoint_content.rs) file of the `sui-types` crate.
 
+:::tip
+
+See the [Source code for an implementation](#source-code) section for a complete code example.
+
+:::
 
 ## Checkpoint stream sources
 
@@ -157,7 +162,24 @@ The data ingestion executor can run multiple workflows simultaneously. For each 
 
 The concurrency parameter specifies how many threads the workflow uses. Having a concurrency value greater than 1 is helpful when tasks are idempotent and can be processed in parallel and out of order. The executor only updates the progress/watermark to a certain checkpoint when all preceding checkpoints are processed.
 
-Find more examples of custom ingestion pipelines in the Sui repository:
-* Sui data ingestion daemon that runs internal [pipelines](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/).
-* Sui Name Service's custom [indexer](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src).
+## Source code for an implementation {#source-code}
+
+Find the following source code in the [Sui repo](https://github.com/mystenlabs/sui/tree/main/examples/custom-indexer/rust). 
+
+### Manifest 
+
+Code for the cargo.toml manifest file for the custom indexer.
+
+{@inject: examples/custom-indexer/rust/cargo.toml}
+
+### Rust source
+
+Code for the main.rs file that creates the custom indexer.
+
+{@inject: examples/custom-indexer/rust/main.rs}
+
+## Related links
+
+- [Sui internal example](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/): Sui data ingestion daemon that runs internal pipelines.
+- [Production example](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src): Sui Name Service custom indexer.
 

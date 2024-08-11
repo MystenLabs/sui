@@ -35,7 +35,6 @@ use errors::IndexerError;
 pub mod apis;
 pub mod db;
 pub mod errors;
-pub mod framework;
 pub mod handlers;
 pub mod indexer;
 pub mod indexer_reader;
@@ -203,7 +202,7 @@ pub async fn build_json_rpc_server<T: R2D2Connection>(
         .start(
             default_socket_addr,
             custom_runtime,
-            Some(ServerType::Http),
+            ServerType::Http,
             Some(cancel),
         )
         .await?)

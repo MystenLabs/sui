@@ -5,11 +5,10 @@
 //! This module contains the public APIs supported by the bytecode verifier.
 use crate::{
     ability_field_requirements, check_duplication::DuplicationChecker,
-    code_unit_verifier::CodeUnitVerifier, constants, friends,
+    code_unit_verifier::CodeUnitVerifier, constants, data_defs::RecursiveDataDefChecker, friends,
     instantiation_loops::InstantiationLoopChecker, instruction_consistency::InstructionConsistency,
     limits::LimitsVerifier, script_signature,
     script_signature::no_additional_script_signature_checks, signature::SignatureChecker,
-    struct_defs::RecursiveStructDefChecker,
 };
 use move_binary_format::{
     check_bounds::BoundsChecker,
@@ -89,7 +88,7 @@ pub fn verify_module_with_config_metered(
     constants::verify_module(module)?;
     friends::verify_module(module)?;
     ability_field_requirements::verify_module(module)?;
-    RecursiveStructDefChecker::verify_module(module)?;
+    RecursiveDataDefChecker::verify_module(module)?;
     InstantiationLoopChecker::verify_module(module)?;
     CodeUnitVerifier::verify_module(config, module, meter)?;
 

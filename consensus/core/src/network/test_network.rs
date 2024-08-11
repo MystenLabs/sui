@@ -9,17 +9,17 @@ use parking_lot::Mutex;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
-    commit::TrustedCommit,
+    commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{BlockStream, NetworkService},
-    CommitIndex, Round,
+    Round,
 };
 
 pub(crate) struct TestService {
     pub(crate) handle_send_block: Vec<(AuthorityIndex, Bytes)>,
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
-    pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitIndex, CommitIndex)>,
+    pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
     pub(crate) own_blocks: Vec<Bytes>,
 }
 
@@ -34,6 +34,7 @@ impl TestService {
         }
     }
 
+    #[cfg_attr(msim, allow(dead_code))]
     pub(crate) fn add_own_blocks(&mut self, blocks: Vec<Bytes>) {
         self.own_blocks.extend(blocks);
     }
@@ -77,10 +78,17 @@ impl NetworkService for Mutex<TestService> {
     async fn handle_fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        self.lock().handle_fetch_commits.push((peer, start, end));
+        self.lock().handle_fetch_commits.push((peer, commit_range));
         Ok((vec![], vec![]))
+    }
+
+    async fn handle_fetch_latest_blocks(
+        &self,
+        _peer: AuthorityIndex,
+        _authorities: Vec<AuthorityIndex>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        unimplemented!("Unimplemented")
     }
 }

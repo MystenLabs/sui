@@ -15,10 +15,9 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
+    expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
-    parser::ast::DatatypeName,
-    shared::{unique_map::UniqueMap, CompilationEnv, Name},
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name},
 };
 use cfg::*;
 use move_ir_types::location::Loc;
@@ -27,11 +26,10 @@ use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
+    pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,
     pub module: ModuleIdent,
     pub member: MemberName,
-    pub datatype_declared_abilities:
-        &'a UniqueMap<ModuleIdent, UniqueMap<DatatypeName, AbilitySet>>,
     pub attributes: &'a Attributes,
     pub entry: Option<Loc>,
     pub visibility: Visibility,

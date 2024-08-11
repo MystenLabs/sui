@@ -17,4 +17,7 @@ module 0x8675309::M {
     public fun escaped_backslash_before_quote(): vector<u8> {
         b"\\"
     }
+    public fun utf8(): vector<u8> {
+        b"😏👉🕶️😎"
+    }
 }

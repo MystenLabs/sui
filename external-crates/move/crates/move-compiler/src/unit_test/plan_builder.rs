@@ -9,24 +9,28 @@ use crate::{
         self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
         ModuleIdent_,
     },
-    hlir::translate::display_var,
+    hlir::{ast as HA, translate::display_var},
+    naming::ast as NA,
     parser::ast::ConstantName,
     shared::{
         known_attributes::{self, TestingAttribute},
         unique_map::UniqueMap,
         CompilationEnv, Identifier, NumericalAddress,
     },
-    unit_test::{ExpectedFailure, ExpectedMoveError, ModuleTestPlan, TestCase},
+    unit_test::{
+        ExpectedFailure, ExpectedMoveError, ModuleTestPlan, MoveErrorType, TestArgument, TestCase,
+    },
 };
 use move_core_types::{
-    account_address::AccountAddress as MoveAddress, language_storage::ModuleId,
-    runtime_value::MoveValue, u256::U256, vm_status::StatusCode,
+    account_address::AccountAddress as MoveAddress,
+    language_storage::{ModuleId, TypeTag},
+    runtime_value::MoveValue,
+    u256::U256,
+    vm_status::StatusCode,
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
-
-use super::MoveErrorType;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -128,11 +132,12 @@ fn build_test_info<'func>(
     const IN_THIS_TEST_MSG: &str = "Error found in this test";
 
     let test_attribute_opt = get_attrs(TestingAttribute::Test);
+    let random_test_attribute_opt = get_attrs(TestingAttribute::RandTest);
     let abort_attribute_opt = get_attrs(TestingAttribute::ExpectedFailure);
     let test_only_attribute_opt = get_attrs(TestingAttribute::TestOnly);
 
-    let test_attribute = match test_attribute_opt {
-        None => {
+    let (test_attribute, is_random_test) = match (test_attribute_opt, random_test_attribute_opt) {
+        (None, None) => {
             // expected failures cannot be annotated on non-#[test] functions
             if let Some(abort_attribute) = abort_attribute_opt {
                 let fn_msg = "Only functions defined as a test with #[test] can also have an \
@@ -146,12 +151,24 @@ fn build_test_info<'func>(
             }
             return None;
         }
-        Some(test_attribute) => test_attribute,
+        (Some(test_attribute), Some(random_test_attribute)) => {
+            let msg = "Function annotated as both #[test] and #[random_test]. You need to declare \
+                       it as either one or the other";
+            context.env.add_diag(diag!(
+                Attributes::InvalidUsage,
+                (random_test_attribute.loc, msg),
+                (test_attribute.loc, PREVIOUSLY_ANNOTATED_MSG),
+                (fn_loc, IN_THIS_TEST_MSG),
+            ));
+            return None;
+        }
+        (None, Some(test_attribute)) => (test_attribute, true),
+        (Some(test_attribute), None) => (test_attribute, false),
     };
 
     // A #[test] function cannot also be annotated #[test_only]
     if let Some(test_only_attribute) = test_only_attribute_opt {
-        let msg = "Function annotated as both #[test(...)] and #[test_only]. You need to declare \
+        let msg = "Function annotated as both #[test] and #[test_only]. You need to declare \
                    it as either one or the other";
         context.env.add_diag(diag!(
             Attributes::InvalidUsage,
@@ -163,7 +180,7 @@ fn build_test_info<'func>(
 
     let test_annotation_params = parse_test_attribute(context, test_attribute, 0);
     let mut arguments = Vec::new();
-    for (_mut, var, _) in &function.signature.parameters {
+    for (_mut, var, s_type) in &function.signature.parameters {
         let sp!(vloc, var_) = var.0;
         let var_ = match display_var(var_) {
             crate::hlir::translate::DisplayVar::Orig(s) => s.into(),
@@ -171,7 +188,29 @@ fn build_test_info<'func>(
             crate::hlir::translate::DisplayVar::Tmp => panic!("ICE temp as parameter"),
         };
         match test_annotation_params.get(&var_) {
-            Some(value) => arguments.push(value.clone()),
+            Some(value) => arguments.push(TestArgument::Value(value.clone())),
+            None if is_random_test => {
+                let generated_type = match convert_builtin_type_to_typetag(&s_type.value) {
+                    Some(generated_type) => generated_type,
+                    None => {
+                        let msg =
+                            "Unsupported type for generated input for test. Only built-in types \
+                            are supported for generated test inputs";
+                        let mut diag = diag!(
+                            Attributes::InvalidTest,
+                            (s_type.loc, msg),
+                            (fn_loc, IN_THIS_TEST_MSG),
+                        );
+                        diag.add_note(
+                            "Supported builti-in types are: bool, u8, u16, u32, u64, \
+                            u128, u256, address, and vector<T> where T is a built-in type",
+                        );
+                        context.env.add_diag(diag);
+                        return None;
+                    }
+                };
+                arguments.push(TestArgument::Generate { generated_type })
+            }
             None => {
                 let missing_param_msg = "Missing test parameter assignment in test. Expected a \
                                          parameter to be assigned in this attribute";
@@ -183,6 +222,17 @@ fn build_test_info<'func>(
                 ))
             }
         }
+    }
+
+    if is_random_test && arguments.is_empty() {
+        let msg = "No parameters to generate for random test. A #[random_test] function must \
+                   have at least one parameter to generate.";
+        context.env.add_diag(diag!(
+            Attributes::InvalidTest,
+            (test_attribute.loc, msg),
+            (fn_loc, IN_THIS_TEST_MSG),
+        ));
+        return None;
     }
 
     let expected_failure = match abort_attribute_opt {
@@ -208,6 +258,12 @@ fn parse_test_attribute(
 ) -> BTreeMap<Symbol, MoveValue> {
     use E::Attribute_ as EA;
 
+    let check_attribute_name = |name: &str| {
+        let is_test = name == TestingAttribute::Test.name();
+        let is_random_test = name == TestingAttribute::RandTest.name();
+        depth == 0 && (is_test || is_random_test)
+    };
+
     match test_attribute {
         EA::Name(_) | EA::Parameterized(_, _) if depth > 0 => {
             context.env.add_diag(diag!(
@@ -218,7 +274,7 @@ fn parse_test_attribute(
         }
         EA::Name(nm) => {
             assert!(
-                nm.value.as_str() == TestingAttribute::Test.name() && depth == 0,
+                check_attribute_name(nm.value.as_str()),
                 "ICE: We should only be parsing a raw test attribute"
             );
             BTreeMap::new()
@@ -250,7 +306,7 @@ fn parse_test_attribute(
         }
         EA::Parameterized(nm, attributes) => {
             assert!(
-                nm.value.as_str() == TestingAttribute::Test.name() && depth == 0,
+                check_attribute_name(nm.value.as_str()),
                 "ICE: We should only be parsing a raw test attribute"
             );
             attributes
@@ -714,4 +770,43 @@ fn check_location<T>(
             .add_diag(diag!(Attributes::InvalidUsage, (loc, msg)));
     }
     location
+}
+
+fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> {
+    fn get_builtin_type_inner(bt: &HA::BaseType) -> Option<TypeTag> {
+        match &bt.value {
+            HA::BaseType_::Apply(_, sp!(_, HA::TypeName_::Builtin(b)), bts) => {
+                let mut tts = bts
+                    .iter()
+                    .map(get_builtin_type_inner)
+                    .collect::<Option<Vec<_>>>()?;
+                let tag = match b.value {
+                    NA::BuiltinTypeName_::Bool => TypeTag::Bool,
+                    NA::BuiltinTypeName_::Address => TypeTag::Address,
+                    NA::BuiltinTypeName_::U8 => TypeTag::U8,
+                    NA::BuiltinTypeName_::U64 => TypeTag::U64,
+                    NA::BuiltinTypeName_::U128 => TypeTag::U128,
+                    NA::BuiltinTypeName_::U256 => TypeTag::U256,
+                    NA::BuiltinTypeName_::U16 => TypeTag::U16,
+                    NA::BuiltinTypeName_::U32 => TypeTag::U32,
+                    NA::BuiltinTypeName_::Vector => {
+                        if tts.len() != 1 {
+                            return None;
+                        }
+                        TypeTag::Vector(Box::new(tts.remove(0)))
+                    }
+                    NA::BuiltinTypeName_::Signer => TypeTag::Signer,
+                };
+                Some(tag)
+            }
+            HA::BaseType_::Apply(_, _, _) => None,
+            HA::BaseType_::Param(_)
+            | HA::BaseType_::Unreachable
+            | HA::BaseType_::UnresolvedError => None,
+        }
+    }
+    match s_type {
+        HA::SingleType_::Base(bt) => get_builtin_type_inner(bt),
+        _ => None,
+    }
 }

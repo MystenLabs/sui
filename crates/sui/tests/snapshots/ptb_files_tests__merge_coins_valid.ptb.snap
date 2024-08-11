@@ -8,14 +8,14 @@ expression: "results.join(\"\\n\")"
 ├─────────────┬────────────────────────────┤
 │ command     │ values                     │
 ├─────────────┼────────────────────────────┤
-│ split-coins │ gas [1u64, 2u64, 3u64]     │
+│ split-coins │ gas [1, 2, 3]              │
 │ assign      │ coins                      │
 │ assign      │ c0 coins.0                 │
 │ assign      │ c1 coins.1                 │
 │ assign      │ c2 coins.2                 │
 │ merge-coins │ c0 [c1, c2]                │
 │ merge-coins │ gas [c0]                   │
-│ split-coins │ gas [1u64, 2u64, 3u64]     │
+│ split-coins │ gas [1, 2, 3]              │
 │ assign      │ coins                      │
 │ merge-coins │ coins.0 [coins.1, coins.2] │
 │ merge-coins │ gas [coins.0]              │

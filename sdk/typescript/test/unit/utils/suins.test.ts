@@ -33,6 +33,20 @@ describe('isValidSuiNSName', () => {
 		expect(isValidSuiNSName('test.#.sui')).toBe(false);
 		expect(isValidSuiNSName('#.sui')).toBe(false);
 		expect(isValidSuiNSName('@.test.sue')).toBe(false);
+
+		expect(isValidSuiNSName('hello-.sui')).toBe(false);
+		expect(isValidSuiNSName('hello--.sui')).toBe(false);
+		expect(isValidSuiNSName('hello.-sui')).toBe(false);
+		expect(isValidSuiNSName('hello.--sui')).toBe(false);
+		expect(isValidSuiNSName('hello.sui-')).toBe(false);
+		expect(isValidSuiNSName('hello.sui--')).toBe(false);
+		expect(isValidSuiNSName('hello-@sui')).toBe(false);
+		expect(isValidSuiNSName('hello--@sui')).toBe(false);
+		expect(isValidSuiNSName('hello@-sui')).toBe(false);
+		expect(isValidSuiNSName('hello@--sui')).toBe(false);
+		expect(isValidSuiNSName('hello@sui-')).toBe(false);
+		expect(isValidSuiNSName('hello@sui--')).toBe(false);
+		expect(isValidSuiNSName('hello--world@sui')).toBe(false);
 	});
 });
 

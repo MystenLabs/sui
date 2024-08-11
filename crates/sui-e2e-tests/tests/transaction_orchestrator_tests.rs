@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -15,8 +13,8 @@ use sui_test_transaction_builder::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
-    ExecuteTransactionResponse, FinalizedEffects, QuorumDriverError,
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverError,
 };
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
@@ -32,20 +30,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
@@ -69,8 +54,8 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Wait for data sync to catch up
     handle
         .state()
-        .get_effects_notify_read()
-        .notify_read_executed_effects(vec![digest])
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
 
@@ -78,7 +63,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
 
-    let res = execute_with_orchestrator(
+    let (_, executed_locally) = execute_with_orchestrator(
         &orchestrator,
         txn,
         ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -86,8 +71,6 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     .await
     .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    let ExecuteTransactionResponse::EffectsCert(result) = res;
-    let (_, _, executed_locally) = *result;
     assert!(executed_locally);
 
     let metrics = KeyValueStoreMetrics::new_for_tests();
@@ -112,8 +95,8 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     {
         use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
         init_checkpoint_timeout_config(CheckpointTimeoutConfig {
-            timeout: Duration::from_secs(2),
-            panic_on_timeout: false,
+            warning_timeout: Duration::from_secs(2),
+            panic_timeout: None,
         });
     }
     telemetry_subscribers::init_for_testing();
@@ -123,21 +106,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         .await;
 
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    tokio::task::yield_now().await;
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 2;
     let context = &mut test_cluster.wallet;
@@ -279,18 +248,15 @@ async fn test_tx_across_epoch_boundaries() {
     tokio::task::spawn(async move {
         match to
             .execute_transaction_block(
-                ExecuteTransactionRequest {
-                    transaction: tx.clone(),
-                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-                },
-                Some(make_socket_addr()),
+                ExecuteTransactionRequestV3::new_v2(tx.clone()),
+                ExecuteTransactionRequestType::WaitForEffectsCert,
+                None,
             )
             .await
         {
-            Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
+            Ok((response, _)) => {
                 info!(?tx_digest, "tx result: ok");
-                let (effects_cert, _, _) = *res;
-                result_tx.send(effects_cert).await.unwrap();
+                result_tx.send(response.effects).await.unwrap();
             }
             Err(QuorumDriverError::TimeoutBeforeFinality) => {
                 info!(?tx_digest, "tx result: timeout and will retry")
@@ -323,15 +289,9 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
     txn: Transaction,
     request_type: ExecuteTransactionRequestType,
-) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
+) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {
     orchestrator
-        .execute_transaction_block(
-            ExecuteTransactionRequest {
-                transaction: txn,
-                request_type,
-            },
-            Some(make_socket_addr()),
-        )
+        .execute_transaction_block(ExecuteTransactionRequestV3::new_v2(txn), request_type, None)
         .await
 }
 
@@ -340,20 +300,7 @@ async fn execute_transaction_v3() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let txn_count = 1;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
@@ -385,23 +332,23 @@ async fn execute_transaction_v3() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
     expected_output_objects.sort_by_key(|&(id, _version, _digest)| id);
 
-    let mut actual_input_objects_recieved = response
+    let mut actual_input_objects_received = response
         .input_objects
         .unwrap()
         .iter()
         .map(|object| (object.id(), object.version()))
         .collect::<Vec<_>>();
-    actual_input_objects_recieved.sort_by_key(|&(id, _version)| id);
-    assert_eq!(expected_input_objects, actual_input_objects_recieved);
+    actual_input_objects_received.sort_by_key(|&(id, _version)| id);
+    assert_eq!(expected_input_objects, actual_input_objects_received);
 
-    let mut actual_output_objects_recieved = response
+    let mut actual_output_objects_received = response
         .output_objects
         .unwrap()
         .iter()
         .map(|object| (object.id(), object.version(), object.digest()))
         .collect::<Vec<_>>();
-    actual_output_objects_recieved.sort_by_key(|&(id, _version, _digest)| id);
-    assert_eq!(expected_output_objects, actual_output_objects_recieved);
+    actual_output_objects_received.sort_by_key(|&(id, _version, _digest)| id);
+    assert_eq!(expected_output_objects, actual_output_objects_received);
 
     Ok(())
 }
@@ -411,20 +358,7 @@ async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Erro
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let handle = &test_cluster.fullnode_handle.sui_node;
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let registry = Registry::new();
-    // Start orchestrator inside container so that it will be properly shutdown.
-    let orchestrator = handle
-        .with(|node| {
-            TransactiondOrchestrator::new_with_network_clients(
-                node.state(),
-                node.subscribe_to_epoch_change(),
-                temp_dir.path(),
-                &registry,
-            )
-        })
-        .unwrap();
+    let orchestrator = handle.with(|n| n.transaction_orchestrator().as_ref().unwrap().clone());
 
     let validator_address = context
         .get_client()
@@ -457,23 +391,23 @@ async fn execute_transaction_v3_staking_transaction() -> Result<(), anyhow::Erro
         .collect::<Vec<_>>();
     expected_output_objects.sort_by_key(|&(id, _version, _digest)| id);
 
-    let mut actual_input_objects_recieved = response
+    let mut actual_input_objects_received = response
         .input_objects
         .unwrap()
         .iter()
         .map(|object| (object.id(), object.version()))
         .collect::<Vec<_>>();
-    actual_input_objects_recieved.sort_by_key(|&(id, _version)| id);
-    assert_eq!(expected_input_objects, actual_input_objects_recieved);
+    actual_input_objects_received.sort_by_key(|&(id, _version)| id);
+    assert_eq!(expected_input_objects, actual_input_objects_received);
 
-    let mut actual_output_objects_recieved = response
+    let mut actual_output_objects_received = response
         .output_objects
         .unwrap()
         .iter()
         .map(|object| (object.id(), object.version(), object.digest()))
         .collect::<Vec<_>>();
-    actual_output_objects_recieved.sort_by_key(|&(id, _version, _digest)| id);
-    assert_eq!(expected_output_objects, actual_output_objects_recieved);
+    actual_output_objects_received.sort_by_key(|&(id, _version, _digest)| id);
+    assert_eq!(expected_output_objects, actual_output_objects_received);
 
     Ok(())
 }

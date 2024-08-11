@@ -176,8 +176,8 @@ module axelar::validators {
         let mut data = vector[];
         vector::append(&mut data, address::to_bytes(cmd_id));
         vector::append(&mut data, address::to_bytes(target_id));
-        vector::append(&mut data, *string::bytes(&source_chain));
-        vector::append(&mut data, *string::bytes(&source_address));
+        vector::append(&mut data, *string::as_bytes(&source_chain));
+        vector::append(&mut data, *string::as_bytes(&source_address));
         vector::append(&mut data, payload_hash);
 
         table::add(&mut axelar.approvals, cmd_id, Approval {
@@ -205,8 +205,8 @@ module axelar::validators {
         let mut data = vector[];
         vector::append(&mut data, address::to_bytes(cmd_id));
         vector::append(&mut data, address::to_bytes(target_id));
-        vector::append(&mut data, *string::bytes(&source_chain));
-        vector::append(&mut data, *string::bytes(&source_address));
+        vector::append(&mut data, *string::as_bytes(&source_chain));
+        vector::append(&mut data, *string::as_bytes(&source_address));
         vector::append(&mut data, hash::keccak256(&payload));
 
         assert!(hash::keccak256(&data) == approval_hash, EPayloadHashMismatch);

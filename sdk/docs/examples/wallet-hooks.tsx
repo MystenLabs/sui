@@ -10,15 +10,15 @@ import {
 	useCurrentAccount,
 	useCurrentWallet,
 	useDisconnectWallet,
-	useSignAndExecuteTransactionBlock,
+	useSignAndExecuteTransaction,
 	useSignPersonalMessage,
-	useSignTransactionBlock,
+	useSignTransaction,
 	useSwitchAccount,
 	useWallets,
 	WalletProvider,
 } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { getFullnodeUrl } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
@@ -226,8 +226,8 @@ export const UseSignPersonalMessageExample = withProviders(() => {
 	);
 });
 
-export const UseSignTransactionBlockExample = withProviders(() => {
-	const { mutate: signTransactionBlock } = useSignTransactionBlock();
+export const UseSignTransactionExample = withProviders(() => {
+	const { mutate: signTransaction } = useSignTransaction();
 	const [signature, setSignature] = useState('');
 	const currentAccount = useCurrentAccount();
 
@@ -239,9 +239,9 @@ export const UseSignTransactionBlockExample = withProviders(() => {
 					<div>
 						<button
 							onClick={() => {
-								signTransactionBlock(
+								signTransaction(
 									{
-										transactionBlock: new TransactionBlock(),
+										transaction: new Transaction(),
 										chain: 'sui:devnet',
 									},
 									{
@@ -253,7 +253,7 @@ export const UseSignTransactionBlockExample = withProviders(() => {
 								);
 							}}
 						>
-							Sign empty transaction block
+							Sign empty transaction
 						</button>
 					</div>
 					<div>Signature: {signature}</div>
@@ -263,8 +263,8 @@ export const UseSignTransactionBlockExample = withProviders(() => {
 	);
 });
 
-export const UseSignAndExecuteTransactionBlockExample = withProviders(() => {
-	const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
+export const UseSignAndExecuteTransactionExample = withProviders(() => {
+	const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 	const [digest, setDigest] = useState('');
 	const currentAccount = useCurrentAccount();
 
@@ -276,21 +276,21 @@ export const UseSignAndExecuteTransactionBlockExample = withProviders(() => {
 					<div>
 						<button
 							onClick={() => {
-								signAndExecuteTransactionBlock(
+								signAndExecuteTransaction(
 									{
-										transactionBlock: new TransactionBlock(),
+										transaction: new Transaction(),
 										chain: 'sui:devnet',
 									},
 									{
 										onSuccess: (result) => {
-											console.log('executed transaction block', result);
+											console.log('executed transaction', result);
 											setDigest(result.digest);
 										},
 									},
 								);
 							}}
 						>
-							Sign and execute transaction block
+							Sign and execute transaction
 						</button>
 					</div>
 					<div>Digest: {digest}</div>

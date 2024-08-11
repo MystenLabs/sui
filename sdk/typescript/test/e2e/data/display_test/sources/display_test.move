@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module display_test::boars {
-    use sui::object::{Self, UID};
-    use std::option::{Self, Option};
-    use sui::tx_context::{TxContext, sender};
+    use sui::tx_context::{sender};
     use sui::transfer;
     use sui::package;
     use sui::url::{Self, Url};

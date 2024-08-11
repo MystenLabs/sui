@@ -4,7 +4,7 @@
 use async_graphql::*;
 use sui_types::base_types::ObjectRef as NativeObjectRef;
 
-use super::{object::Object, sui_address::SuiAddress};
+use super::{object::Object, sui_address::SuiAddress, uint53::UInt53};
 
 // A helper type representing the read of a specific version of an object. Intended to be
 // "flattened" into other GraphQL types.
@@ -23,8 +23,8 @@ impl ObjectRead {
     }
 
     /// Version of the object being read.
-    async fn version(&self) -> u64 {
-        self.version_impl()
+    async fn version(&self) -> UInt53 {
+        self.version_impl().into()
     }
 
     /// 32-byte hash that identifies the object's contents at this version, encoded as a Base58

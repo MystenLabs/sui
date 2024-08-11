@@ -53,7 +53,15 @@ type MoveTypeLayout =
         type: string,
         fields: [{ name: string, layout: MoveTypeLayout }],
       }
-    }"
+    }
+  | { enum: [{
+          type: string,
+          variants: [{ 
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }] 
+  }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -91,6 +99,7 @@ pub(crate) enum MoveTypeLayout {
     U256,
     Vector(Box<MoveTypeLayout>),
     Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -98,6 +107,17 @@ pub(crate) struct MoveStructLayout {
     #[serde(rename = "type")]
     type_: String,
     fields: Vec<MoveFieldLayout>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MoveEnumLayout {
+    variants: Vec<MoveVariantLayout>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MoveVariantLayout {
+    name: String,
+    layout: Vec<MoveFieldLayout>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -240,6 +260,30 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
             TL::Struct(s) => Self::Struct(s.try_into()?),
+            TL::Enum(e) => Self::Enum(e.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<A::MoveEnumLayout> for MoveEnumLayout {
+    type Error = Error;
+
+    fn try_from(layout: A::MoveEnumLayout) -> Result<Self, Error> {
+        let A::MoveEnumLayout { variants, .. } = layout;
+        let mut variant_layouts = Vec::new();
+        for ((name, _), variant_fields) in variants {
+            let mut field_layouts = Vec::new();
+            for field in variant_fields {
+                field_layouts.push(MoveFieldLayout::try_from(field)?);
+            }
+            variant_layouts.push(MoveVariantLayout {
+                name: name.to_string(),
+                layout: field_layouts,
+            });
+        }
+
+        Ok(MoveEnumLayout {
+            variants: variant_layouts,
         })
     }
 }

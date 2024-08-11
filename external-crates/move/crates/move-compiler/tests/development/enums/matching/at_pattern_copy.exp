@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/matching/at_pattern_copy.move:3:17
-  │
-3 │     public enum Maybe<T> has copy, drop {
-  │                 ^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

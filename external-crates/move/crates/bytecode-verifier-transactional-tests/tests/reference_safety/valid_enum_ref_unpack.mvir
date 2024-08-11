@@ -1,0 +1,64 @@
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            &mut X.One { x: x } = move(e);
+            *move(y) = 3;
+            *move(x) = 2;
+            return;
+    }
+
+    f(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 1;
+            &mut X.Two { x: x, y: y} = move(e);
+            *move(x) = 2;
+            return;
+    }
+
+    g(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            &mut X.One { x: x } = move(e);
+            *move(x) = 2;
+            return;
+    }
+
+    k(e: &mut Self.X) {
+        let x: &u64;
+        let y: &u64;
+        label b0:
+            &X.Two { x: x, y: y} = freeze(copy(e));
+            _ = move(x);
+            _ = move(y);
+            *move(e) = X.One { x: 0 }; 
+            return;
+    }
+
+    k1(e: &mut Self.X) {
+        let x: &u64;
+        let y: &u64;
+        let t: u64;
+        label b0:
+            &X.Two { x: x, y: y} = freeze(copy(e));
+            _ = move(x);
+            t = *move(y);
+            *move(e) = X.One { x: 0 }; // Fine since z's value is copied out first
+            abort move(t);
+    }
+ }

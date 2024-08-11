@@ -21,8 +21,8 @@ use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store_derive::DBMapUtils;
-use typed_store_derive::SallyDB;
+use typed_store::DBMapUtils;
+use typed_store::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -194,6 +194,37 @@ async fn rename_test() {
         let renamed_db =
             RenameTables2::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
         assert_eq!(renamed_db.renamed_table.get(&key), Ok(Some(value)));
+    }
+}
+
+#[derive(DBMapUtils)]
+struct DeprecatedTables {
+    table1: DBMap<String, String>,
+    #[deprecated]
+    table2: DBMap<i32, String>,
+}
+
+#[tokio::test]
+async fn deprecate_test() {
+    let dbdir = temp_dir();
+    let key = "key".to_string();
+    let value = "value".to_string();
+    {
+        let original_db =
+            Tables::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
+        original_db.table1.insert(&key, &value).unwrap();
+        original_db.table2.insert(&0, &value).unwrap();
+    }
+    for _ in 0..2 {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let db = DeprecatedTables::open_tables_read_write_with_deprecation_option(
+            dbdir.clone(),
+            MetricConf::default(),
+            None,
+            None,
+            true,
+        );
+        assert_eq!(db.table1.get(&key), Ok(Some(value.clone())));
     }
 }
 

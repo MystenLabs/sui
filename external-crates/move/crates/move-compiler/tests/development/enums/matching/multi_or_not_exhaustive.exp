@@ -1,9 +1,0 @@
-error[E04036]: non-exhaustive pattern
-   ┌─ tests/development/enums/matching/multi_or_not_exhaustive.move:12:16
-   │
-12 │         match (subject) {
-   │                ^^^^^^^ Pattern 'ABC::B(_1, _0)' not covered
-   │
-   = When '_1' is not 5
-   = When '_0' is not 5
-

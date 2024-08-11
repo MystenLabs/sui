@@ -8,9 +8,12 @@ use move_command_line_common::{
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
 use move_core_types::runtime_value::MoveValue;
-use sui_types::{base_types::ObjectID, Identifier};
+use sui_types::{
+    base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    Identifier, TypeTag,
+};
 
-use crate::{error, sp};
+use crate::{err, error, sp};
 
 use super::error::{PTBResult, Span, Spanned};
 
@@ -148,6 +151,7 @@ pub enum Argument {
     U64(u64),
     U128(u128),
     U256(move_core_types::u256::U256),
+    InferredNum(move_core_types::u256::U256),
     Gas,
     Identifier(String),
     VariableAccess(Spanned<String>, Vec<Spanned<String>>),
@@ -159,6 +163,72 @@ pub enum Argument {
 
 impl Argument {
     /// Resolve an `Argument` into a `MoveValue` if possible. Errors if the `Argument` is not
+    /// convertible to a `MoveValue` of the provided `tag`.
+    pub fn checked_to_pure_move_value(&self, loc: Span, tag: &TypeTag) -> PTBResult<MoveValue> {
+        Ok(match (self, tag) {
+            (Argument::Bool(b), TypeTag::Bool) => MoveValue::Bool(*b),
+            (Argument::U8(u), TypeTag::U8) => MoveValue::U8(*u),
+            (Argument::U16(u), TypeTag::U16) => MoveValue::U16(*u),
+            (Argument::U32(u), TypeTag::U32) => MoveValue::U32(*u),
+            (Argument::U64(u), TypeTag::U64) => MoveValue::U64(*u),
+            (Argument::U128(u), TypeTag::U128) => MoveValue::U128(*u),
+            (Argument::U256(u), TypeTag::U256) => MoveValue::U256(*u),
+            // Inferred numbers, unless they need to be used as a specific type default to u64.
+            (Argument::InferredNum(u), tag) => Self::cast_inferrred_num(*u, tag, loc)?,
+            (Argument::Address(a), TypeTag::Address) => MoveValue::Address(a.into_inner()),
+            (Argument::Vector(vs), TypeTag::Vector(ty)) => MoveValue::Vector(
+                vs.iter()
+                    .map(|sp!(loc, v)| v.checked_to_pure_move_value(*loc, ty))
+                    .collect::<PTBResult<Vec<_>>>()
+                    .map_err(|e| {
+                        e.with_help("Literal vectors cannot contain object values.".to_string())
+                    })?,
+            ),
+            (Argument::String(s), TypeTag::Vector(ty)) if **ty == TypeTag::U8 => {
+                MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            (Argument::String(s), TypeTag::Struct(stag))
+                if {
+                    let resolved = (
+                        &stag.address,
+                        stag.module.as_ident_str(),
+                        stag.name.as_ident_str(),
+                    );
+                    resolved == RESOLVED_ASCII_STR || resolved == RESOLVED_UTF8_STR
+                } =>
+            {
+                MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            (Argument::Option(sp!(loc, o)), TypeTag::Struct(stag))
+                if (
+                    &stag.address,
+                    stag.module.as_ident_str(),
+                    stag.name.as_ident_str(),
+                ) == RESOLVED_STD_OPTION
+                    && stag.type_params.len() == 1 =>
+            {
+                if let Some(v) = o {
+                    let v = v
+                        .as_ref()
+                        .checked_to_pure_move_value(*loc, &stag.type_params[0])
+                        .map_err(|e| {
+                            e.with_help(
+                                "Literal option values cannot contain object values.".to_string(),
+                            )
+                        })?;
+                    MoveValue::Vector(vec![v])
+                } else {
+                    MoveValue::Vector(vec![])
+                }
+            }
+            (Argument::Identifier(_) | Argument::VariableAccess(_, _) | Argument::Gas, _) => {
+                error!(loc, "Unable to convert '{self}' to non-object value.")
+            }
+            (arg, tag) => error!(loc, "Unable to serialize '{arg}' as a {tag} value"),
+        })
+    }
+
+    /// Resolve an `Argument` into a `MoveValue` if possible. Errors if the `Argument` is not
     /// convertible to a `MoveValue`.
     pub fn to_pure_move_value(&self, loc: Span) -> PTBResult<MoveValue> {
         Ok(match self {
@@ -169,6 +239,8 @@ impl Argument {
             Argument::U64(u) => MoveValue::U64(*u),
             Argument::U128(u) => MoveValue::U128(*u),
             Argument::U256(u) => MoveValue::U256(*u),
+            // Inferred numbers, unless they need to be used as a specific type default to u64.
+            Argument::InferredNum(u) => Self::cast_inferrred_num(*u, &TypeTag::U64, loc)?,
             Argument::Address(a) => MoveValue::Address(a.into_inner()),
             Argument::Vector(vs) => MoveValue::Vector(
                 vs.iter()
@@ -198,6 +270,32 @@ impl Argument {
             }
         })
     }
+
+    fn cast_inferrred_num(
+        val: move_core_types::u256::U256,
+        tag: &TypeTag,
+        loc: Span,
+    ) -> PTBResult<MoveValue> {
+        match tag {
+            TypeTag::U8 => u8::try_from(val)
+                .map(MoveValue::U8)
+                .map_err(|_| err!(loc, "Value {val} is too large to be a u8 value")),
+            TypeTag::U16 => u16::try_from(val)
+                .map(MoveValue::U16)
+                .map_err(|_| err!(loc, "Value {val} is too large to be a u16 value")),
+            TypeTag::U32 => u32::try_from(val)
+                .map(MoveValue::U32)
+                .map_err(|_| err!(loc, "Value {val} is too large to be a u32 value")),
+            TypeTag::U64 => u64::try_from(val)
+                .map(MoveValue::U64)
+                .map_err(|_| err!(loc, "Value {val} is too large to be a u64 value")),
+            TypeTag::U128 => u128::try_from(val)
+                .map(MoveValue::U128)
+                .map_err(|_| err!(loc, "Value {val} is too large to be a u128 value")),
+            TypeTag::U256 => Ok(MoveValue::U256(val)),
+            _ => error!(loc, "Expected an integer type but got {tag} for '{val}'"),
+        }
+    }
 }
 
 impl fmt::Display for Argument {
@@ -210,6 +308,7 @@ impl fmt::Display for Argument {
             Argument::U64(u) => write!(f, "{u}u64"),
             Argument::U128(u) => write!(f, "{u}u128"),
             Argument::U256(u) => write!(f, "{u}u256"),
+            Argument::InferredNum(u) => write!(f, "{u}"),
             Argument::Gas => write!(f, "gas"),
             Argument::Identifier(i) => write!(f, "{i}"),
             Argument::VariableAccess(sp!(_, head), accesses) => {

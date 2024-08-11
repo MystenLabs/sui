@@ -9,7 +9,6 @@ edition = "2021"
 
 [dependencies]
 move-binary-format.workspace = true
-move-bytecode-verifier-meter.workspace = true
 
 [features]
 default = []

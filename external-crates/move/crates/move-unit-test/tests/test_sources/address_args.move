@@ -1,5 +1,4 @@
-address 0x1 {
-module M {
+module 0x1::M {
     const ErrorCode: u64 = 100;
 
     #[test(a = @0x42)]
@@ -18,5 +17,4 @@ module M {
     fun wrong_address(a: address) {
         assert!(a == @0x43, 100);
     }
-}
 }

@@ -1,7 +1,0 @@
-Running Move unit tests
-[ PASS    ] 0x2::A::simple_number_min_range_failure
-[ PASS    ] 0x2::A::simple_number_range_failure
-[ PASS    ] 0x2::A::vector_choose_min_unsatisfied_predicate
-[ PASS    ] 0x2::A::vector_choose_success
-[ PASS    ] 0x2::A::vector_choose_unsatisfied_predicate
-Test result: OK. Total tests: 5; passed: 5; failed: 0

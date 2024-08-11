@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/matching/nested_either_borrow.move:3:17
-  │
-3 │     public enum Either<T,U> {
-  │                 ^^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

@@ -1,0 +1,51 @@
+//# publish
+module 0x1.PolymorphicEnums {
+    enum EnumWithTwoVariants<T> {
+        One { },
+        Two { x: T }
+    }
+
+    public f<T>(t: T, e: T): T {
+        let x: Self.EnumWithTwoVariants<T>;
+        let y: T;
+        label b0:
+            x = EnumWithTwoVariants.Two<T> { x: move(t) };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One<T> { } = move(x);
+            return move(e);
+        label b2:
+            EnumWithTwoVariants.Two<T> { x: y } = move(x);
+            // `e` is not handled here so, unused value without drop error should be reported
+            return move(y);
+    }
+}
+
+//# publish
+module 0x2.MonomorphicEnums {
+    enum EnumWithTwoVariants {
+        One { },
+        Two { x: u64 }
+    }
+
+    public f(): u64 {
+        let x: Self.EnumWithTwoVariants;
+        let y: u64;
+        label b0:
+            x = EnumWithTwoVariants.Two { x: 42 };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b2,
+                Two : b1,
+            };
+        label b1:
+            EnumWithTwoVariants.Two { x: y } = move(x);
+            return move(y);
+        label b2:
+            EnumWithTwoVariants.One { } = move(x);
+            // `y` is not assigned in this branch so we should report a move loc unavailable error
+            return move(y);
+    }
+}

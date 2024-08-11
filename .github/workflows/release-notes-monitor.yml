@@ -83,12 +83,12 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        export author=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".user.login")
+        export author=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".user.login")
         export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
 
         # if we don't have the slack id or the author is not part of Mysten org, get the reviewer instead
         if [ -z "$slack_id" ]; then
-          export reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/17148/reviews --jq ".[0].user.login")
+          export reviewer=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}/reviews --jq ".[0].user.login")
           export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${reviewer}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
         fi
 

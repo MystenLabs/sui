@@ -28,3 +28,11 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/expansion/macro_identifier_missing.move:3:9
+  │
+3 │         f(x)
+  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$f', may be invoked as functions.
+

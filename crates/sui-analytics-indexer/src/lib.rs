@@ -18,7 +18,7 @@ use strum_macros::EnumIter;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
-use sui_indexer::framework::Handler;
+use sui_data_ingestion_core::Worker;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
@@ -111,6 +111,12 @@ pub struct AnalyticsIndexerConfig {
     // Type of data to write i.e. checkpoint, object, transaction, etc
     #[clap(long, value_enum, long, global = true)]
     pub file_type: FileType,
+    #[clap(
+        long,
+        default_value = "https://checkpoints.mainnet.sui.io",
+        global = true
+    )]
+    pub remote_store_url: String,
     // Directory to contain the package cache for pipelines
     #[clap(
         long,
@@ -481,19 +487,14 @@ impl FileMetadata {
 }
 
 pub struct Processor {
-    pub processor: Box<dyn Handler>,
+    pub processor: Box<dyn Worker>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
 #[async_trait::async_trait]
-impl Handler for Processor {
+impl Worker for Processor {
     #[inline]
-    fn name(&self) -> &str {
-        self.processor.name()
-    }
-
-    #[inline]
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         self.processor.process_checkpoint(checkpoint_data).await
     }
 }

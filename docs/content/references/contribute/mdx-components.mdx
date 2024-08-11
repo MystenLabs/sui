@@ -112,7 +112,7 @@ You do not need to `import` a component to use snippets.
 1. Create an .mdx file in the `docs/content/snippets` folder with the content you want to use in different locations. Do not include frontmatter in the file, just markdown content. Frontmatter is the content between `---` at the top of doc source pages.  
 1. In the document where you want to include the content from the snippet, add the `{@include}` directive with a relative location of the file. 
 
-    &#123;`@include: ../../snippets/reusable.mdx}`
+    `{@include: ../../snippets/reusable.mdx}`
 
 1. Repeat the previous step for all locations the content should appear. Be sure to update the relative location of the snippet based on where the file containing the directive exists in the repo.
 1. Check each page in the Vercel preview of your PR (`sui-core` preview link in Vercel comment) to make sure the content displays. If the relative link you provide does not resolve correctly, the page displays error text instead of the expected content.
@@ -139,18 +139,33 @@ When including sections of code, understand that the code might change from what
 
 ### How to use
 
-To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write &#123;`@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
+To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write `{@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
 
 #### Include part of code
 
-To include only sections of code, add an ID to identify the section. The ID is used in the directive syntax and in source code comments. The following sections provide examples of different uses and how to format them.
+To include only sections of code, add an ID to identify the section, function, struct, or module. The ID is used in the directive syntax and in source code comments. The following sections provide examples of different uses and how to format them.
+
+#### Include a Move section
+
+:::info
+
+This approach is a work in progress and there are certain formatting situations that prevents their use. In those cases, use the `docs://#id` approach instead.
+
+:::
+
+You can include specific sections of Move code using the following constructs appended to the end of the code directory. You can uses a comma delimited list for functions and structs to include each in the same codeblock:
+- Module: #module=MODULE::NAME
+- Function: #fun=FUNCTION_NAME,ANOTHER_FUNCTION
+- Struct: #struct=STRUCT_NAME,ANOTHER_STRUCT
+
+For example, `{@inject: examples/move/example.source#fun=buy_sword}`
 
 #### Include linear parts of code
 
 If you want to include a complete section of code, use a descriptive ID in the document and source file. 
 
 1. In your document, add the directive to the file with the ID appended. The build process replaces this line with the referenced code, so place where the code should appear.
-    &#123;`@inject: examples/foo/bar.move#IDstring`
+    `{@inject: examples/foo/bar.move#IDstring}`
 1. In the source file, add a comment where the section should begin in the form `// docs::#ID`.
     ```ts
     // docs::#IDstring
@@ -259,6 +274,14 @@ import lib from "library";
 
 return book;
 ```
+
+#### Options
+
+You can include a space-limited list of options after the @inject call. The following options are supported:
+- `noComments`: Remove comments from Move code.
+- `noTests`: Remove tests from captured section of code.
+
+For example, `{@inject: examples/move/example.source#module=example::example noComments noTests}`
 
 
 ## Mermaid graphs

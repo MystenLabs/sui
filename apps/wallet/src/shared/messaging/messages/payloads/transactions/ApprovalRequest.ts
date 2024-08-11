@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SignedTransaction } from '_src/ui/app/WalletSigner';
-import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import type { SuiTransactionBlockResponse } from '@mysten/sui/client';
 import {
 	type SuiSignAndExecuteTransactionBlockInput,
 	type SuiSignMessageOutput,

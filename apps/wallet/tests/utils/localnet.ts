@@ -3,8 +3,8 @@
 
 import 'tsconfig-paths/register';
 
-import { requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 

@@ -8,7 +8,7 @@ to send queries to RPC nodes, build and sign transactions, and interact with a S
 ## Installation
 
 ```sh npm2yarn
-npm i @mysten/sui.js
+npm i @mysten/sui
 ```
 
 ## Network locations
@@ -56,31 +56,31 @@ The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
 - `SignerWithProver` and `RawSigner` - Key pairs now directly support signing transactions and
   messages without the need of a `Signer` class. See the
   [Key pairs](typescript/cryptography/keypairs) topic for more information.
-- `signAndExecuteTransactionBlock` - This method was not deprecated, but is now part of `SuiClient`.
+- `signAndExecuteTransaction` - This method was not deprecated, but is now part of `SuiClient`.
 - `Connection` classes - The `Connection` classes (`Connection`, `devnetConnection`, and so on) have
   been deprecated in favor of using `suiClient` for establishing the connection. See
   [Network Interactions with SuiClient](typescript/sui-client) for more information.
 - The `superstruct` type definitions for `JsonRPCProvider` types are replaced with generated types
-  exported from `@mysten/sui.js/client`. The new type definitions are pure TypeScript types that you
+  exported from `@mysten/sui/client`. The new type definitions are pure TypeScript types that you
   can't use for runtime validation.
 - A more stable JSON-RPC API has reduced the need for many of the SDK "getter" methods, which are
   now deprecated.
 
-### Signing transaction blocks
+### Signing transactions
 
-Signing and sending transaction blocks changes slightly with the deprecation of the `Signer`
-pattern. For an example of transaction signing, see the
+Signing and sending transactions changes slightly with the deprecation of the `Signer` pattern. For
+an example of transaction signing, see the
 [Sui Programmable Transaction Blocks Basics](typescript/transaction-building/basics) topic.
 
 ### Faucet requests
 
 The ability to request SUI from a faucet is not part of `SuiClient` as it was with
 `JsonRpcProvider`. Instead, you must use the `requestSuiFromFaucetV0` method from
-`@mysten/sui.js/faucet`. The `@mysten/sui.js/faucet` import also provides a `getFaucetHost` method
-to retrieve the faucet URL for `localnet`, `testnet`, or `devnet` networks.
+`@mysten/sui/faucet`. The `@mysten/sui/faucet` import also provides a `getFaucetHost` method to
+retrieve the faucet URL for `localnet`, `testnet`, or `devnet` networks.
 
 ```ts
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 
 await requestSuiFromFaucetV0({
 	host: getFaucetHost('devnet'),
@@ -93,20 +93,19 @@ await requestSuiFromFaucetV0({
 The SDK contains a set of modular packages that you can use independently or together. Import just
 what you need to keep your code light and compact.
 
-- [`@mysten/sui.js/client`](/typescript/sui-client) - A client for interacting with Sui RPC nodes.
-- [`@mysten/sui.js/bcs`](/typescript/bcs) - A BCS builder with pre-defined types for Sui.
-- [`@mysten/sui.js/transaction`](/typescript/transaction-building/basics) - Utilities for building
-  and interacting with transactions.
-- [`@mysten/sui.js/keypairs/*`](/typescript/cryptography/keypairs) - Modular exports for specific
+- [`@mysten/sui/client`](/typescript/sui-client) - A client for interacting with Sui RPC nodes.
+- [`@mysten/sui/bcs`](/typescript/bcs) - A BCS builder with pre-defined types for Sui.
+- [`@mysten/sui/transaction`](/typescript/transaction-building/basics) - Utilities for building and
+  interacting with transactions.
+- [`@mysten/sui/keypairs/*`](/typescript/cryptography/keypairs) - Modular exports for specific
   KeyPair implementations.
-- [`@mysten/sui.js/verify`](/typescript/cryptography/keypairs#verifying-signatures-without-a-key-pair) -
+- [`@mysten/sui/verify`](/typescript/cryptography/keypairs#verifying-signatures-without-a-key-pair) -
   Methods for verifying transactions and messages.
-- [`@mysten/sui.js/cryptography`](/typescript/cryptography/keypairs) - Shared types and classes for
+- [`@mysten/sui/cryptography`](/typescript/cryptography/keypairs) - Shared types and classes for
   cryptography.
-- [`@mysten/sui.js/multisig`](/typescript/cryptography/multisig) - Utilities for working with
-  multisig signatures.
-- [`@mysten/sui.js/utils`](/typescript/utils) - Utilities for formatting and parsing various Sui
-  types.
-- [`@mysten/sui.js/faucet`](/typescript/faucet) - Methods for requesting SUI from a faucet.
-- [`@mysten/sui.js/zklogin`](/typescript/zklogin) - Utilities for working with zkLogin. (Note
+- [`@mysten/sui/multisig`](/typescript/cryptography/multisig) - Utilities for working with multisig
+  signatures.
+- [`@mysten/sui/utils`](/typescript/utils) - Utilities for formatting and parsing various Sui types.
+- [`@mysten/sui/faucet`](/typescript/faucet) - Methods for requesting SUI from a faucet.
+- [`@mysten/sui/zklogin`](/typescript/zklogin) - Utilities for working with zkLogin. (Note
   @mysten/zklogin package also contains zklogin related functionality)

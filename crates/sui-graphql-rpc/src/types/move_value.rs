@@ -53,7 +53,11 @@ type MoveData =
   | { String:  string }
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
-  | { Struct:  [{ name: string, value: MoveData }] }"
+  | { Struct:  [{ name: string , value: MoveData }] }
+  | { Variant: {
+      name: string,
+      fields: [{ name: string, value: MoveData }],
+  }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -69,6 +73,13 @@ pub(crate) enum MoveData {
     Vector(Vec<MoveData>),
     Option(Option<Box<MoveData>>),
     Struct(Vec<MoveField>),
+    Variant(MoveVariant),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct MoveVariant {
+    name: String,
+    fields: Vec<MoveField>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -192,6 +203,22 @@ impl TryFrom<A::MoveValue> for MoveData {
                 }
             }
 
+            V::Variant(A::MoveVariant {
+                type_: _,
+                variant_name,
+                tag: _,
+                fields,
+            }) => {
+                let fields = fields
+                    .into_iter()
+                    .map(MoveField::try_from)
+                    .collect::<Result<_, _>>()?;
+                Self::Variant(MoveVariant {
+                    name: variant_name.to_string(),
+                    fields,
+                })
+            }
+
             // Sui does not support `signer` as a type.
             V::Signer(_) => return Err(unexpected_signer_error()),
         })
@@ -264,6 +291,22 @@ fn try_to_json_value(value: A::MoveValue) -> Result<Value, Error> {
             }
         }
 
+        V::Variant(A::MoveVariant {
+            type_: _,
+            variant_name,
+            tag: _,
+            fields,
+        }) => {
+            let fields = fields
+                .into_iter()
+                .map(|(name, value)| Ok((Name::new(name.to_string()), try_to_json_value(value)?)))
+                .collect::<Result<_, Error>>()?;
+            Value::Object(
+                vec![(Name::new(variant_name.to_string()), Value::Object(fields))]
+                    .into_iter()
+                    .collect(),
+            )
+        }
         // Sui does not support `signer` as a type.
         V::Signer(_) => return Err(unexpected_signer_error()),
     })

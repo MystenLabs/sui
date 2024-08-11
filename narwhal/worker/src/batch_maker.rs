@@ -47,7 +47,7 @@ pub struct BatchMaker {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Channel to receive transactions from the network.
-    rx_batch_maker: Receiver<(Transaction, TxResponse)>,
+    rx_batch_maker: Receiver<(Vec<Transaction>, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// Metrics handler
@@ -69,7 +69,7 @@ impl BatchMaker {
         batch_size_limit: usize,
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_batch_maker: Receiver<(Transaction, TxResponse)>,
+        rx_batch_maker: Receiver<(Vec<Transaction>, TxResponse)>,
         tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
         client: NetworkClient,
@@ -115,26 +115,32 @@ impl BatchMaker {
                 // Note that transactions are only consumed when the number of batches
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
-                Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((transactions, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
                     let _scope = monitored_scope("BatchMaker::recv");
-                    current_batch_size += transaction.len();
-                    current_batch.transactions_mut().push(transaction);
+
+                    // If there are multiple transactions, we only send back the digest of the first Batch.
+                    // This currently poses no issue but needs to be fixed should a caller need to know the digest of all batches.
                     current_responses.push(response_sender);
-                    if current_batch_size >= self.batch_size_limit {
-                        if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push(seal);
+                    for transaction in transactions {
+                        current_batch_size += transaction.len();
+                        current_batch.transactions_mut().push(transaction);
+
+                        if current_batch_size >= self.batch_size_limit {
+                            if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
+                                batch_pipeline.push(seal);
+                            }
+                            self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
+                            current_batch = Batch::new(vec![], &self.protocol_config);
+                            current_responses = Vec::new();
+                            current_batch_size = 0;
+
+                            timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                            self.batch_start_timestamp = Instant::now();
+
+                            // Yield once per size threshold to allow other tasks to run.
+                            tokio::task::yield_now().await;
                         }
-                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
-
-                        current_batch = Batch::new(vec![], &self.protocol_config);
-                        current_responses = Vec::new();
-                        current_batch_size = 0;
-
-                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
-                        self.batch_start_timestamp = Instant::now();
-
-                        // Yield once per size threshold to allow other tasks to run.
-                        tokio::task::yield_now().await;
                     }
                 },
 

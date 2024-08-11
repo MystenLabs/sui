@@ -1,8 +1,11 @@
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13
    │
+ 4 │     public struct Bar<T> {
+   │                   --- 'Bar' is declared here
+   ·
 26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
-   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:13
@@ -19,8 +22,11 @@ error[E03010]: unbound field
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21
    │
+ 4 │     public struct Bar<T> {
+   │                   --- 'Bar' is declared here
+   ·
 26 │         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
-   │                     ^^^^^^^^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │                     ^^^^^^^^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
    ┌─ tests/move_2024/parser/invalid_positional_struct_unpack_deeply_nested.move:26:21

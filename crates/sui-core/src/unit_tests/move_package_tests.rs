@@ -20,7 +20,7 @@ macro_rules! type_origin_table {
     {$($module:ident :: $type:ident => $pkg:expr),* $(,)?} => {{
         vec![$(TypeOrigin {
             module_name: stringify!($module).to_string(),
-            struct_name: stringify!($type).to_string(),
+            datatype_name: stringify!($type).to_string(),
             package: $pkg,
         },)*]
     }}
@@ -474,7 +474,7 @@ fn test_fail_on_upgrade_missing_type() {
 pub fn build_test_package(test_dir: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    BuildConfig::new_for_testing().build(path).unwrap()
+    BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
 pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {

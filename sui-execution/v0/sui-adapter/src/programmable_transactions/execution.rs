@@ -12,6 +12,10 @@ mod checked {
         sync::Arc,
     };
 
+    use crate::execution_mode::ExecutionMode;
+    use crate::execution_value::{
+        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+    };
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
@@ -30,11 +34,12 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+    use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
@@ -43,9 +48,6 @@ mod checked {
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        execution::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-        },
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
         move_package::{
@@ -54,10 +56,6 @@ mod checked {
         },
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         Identifier, SUI_FRAMEWORK_ADDRESS,
-    };
-    use sui_types::{
-        execution_mode::ExecutionMode,
-        execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
@@ -625,7 +623,7 @@ mod checked {
         {
             for TypeOrigin {
                 module_name,
-                struct_name,
+                datatype_name,
                 package: origin,
             } in package.type_origin_table()
             {
@@ -637,7 +635,7 @@ mod checked {
                     continue;
                 };
 
-                let Ok(name) = Identifier::new(struct_name.as_str()) else {
+                let Ok(name) = Identifier::new(datatype_name.as_str()) else {
                     continue;
                 };
 
@@ -728,13 +726,14 @@ mod checked {
                     };
 
                 let compatibility = Compatibility {
-                    check_struct_and_pub_function_linking: true,
-                    check_struct_layout: true,
+                    check_datatype_and_pub_function_linking: true,
+                    check_datatype_layout: true,
                     check_friend_linking: false,
                     check_private_entry_linking: false,
                     disallowed_new_abilities,
-                    disallow_change_struct_type_params: protocol_config
+                    disallow_change_datatype_type_params: protocol_config
                         .disallow_change_struct_type_params_on_upgrade(),
+                    disallow_new_variants: true,
                 };
 
                 compatibility.check(cur_module, new_module)
@@ -1148,7 +1147,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_) if abilities.has_key() => {
+                    Type::Datatype(_) | Type::DatatypeInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .session
                             .get_type_tag(return_type)
@@ -1161,8 +1160,8 @@ mod checked {
                             has_public_transfer: abilities.has_store(),
                         }
                     }
-                    Type::Struct(_)
-                    | Type::StructInstantiation(_)
+                    Type::Datatype(_)
+                    | Type::DatatypeInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1382,7 +1381,7 @@ mod checked {
         }
     }
 
-    fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
         let module_id = &s.defining_id;
         let struct_name = &s.name;
         (
@@ -1404,13 +1403,13 @@ mod checked {
             Type::Reference(inner) => (false, inner),
             _ => return Ok(TxContextKind::None),
         };
-        let Type::Struct(idx) = &**inner else {
+        let Type::Datatype(idx) = &**inner else {
             return Ok(TxContextKind::None);
         };
         let Some(s) = context.session.get_struct_type(*idx) else {
             invariant_violation!("Loaded struct not found")
         };
-        let (module_addr, module_name, struct_name) = get_struct_ident(&s);
+        let (module_addr, module_name, struct_name) = get_datatype_ident(&s);
         let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
             && module_name == TX_CONTEXT_MODULE_NAME
             && struct_name == TX_CONTEXT_STRUCT_NAME;
@@ -1448,12 +1447,12 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(struct_inst) => {
-                let (idx, targs) = &**struct_inst;
+            Type::DatatypeInstantiation(inst) => {
+                let (idx, targs) = &**inst;
                 let Some(s) = context.session.get_struct_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };
-                let resolved_struct = get_struct_ident(&s);
+                let resolved_struct = get_datatype_ident(&s);
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                     let info_opt = primitive_serialization_layout(context, &targs[0])?;
@@ -1462,11 +1461,11 @@ mod checked {
                     None
                 }
             }
-            Type::Struct(idx) => {
+            Type::Datatype(idx) => {
                 let Some(s) = context.session.get_struct_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };
-                let resolved_struct = get_struct_ident(&s);
+                let resolved_struct = get_datatype_ident(&s);
                 if resolved_struct == RESOLVED_SUI_ID {
                     Some(PrimitiveArgumentLayout::Address)
                 } else if resolved_struct == RESOLVED_ASCII_STR {

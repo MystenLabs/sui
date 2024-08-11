@@ -47,7 +47,7 @@ Set up and configure several providers at the root of your React.js tree to ensu
 
 ```ts title='src/main.tsx'
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { Theme } from '@radix-ui/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
@@ -149,25 +149,25 @@ export type LockedListingQuery = {
 In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
 
 ```ts title='src/hooks/useTransactionExecution.ts'
-import { useSignTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
-import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
 import toast from 'react-hot-toast';
 
 export function useTransactionExecution() {
 	const client = useSuiClient();
-	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
+	const { mutateAsync: signTransaction } = useSignTransaction();
 
 	const executeTransaction = async (
-		txb: TransactionBlock,
+		txb: Transaction,
 	): Promise<SuiTransactionBlockResponse | void> => {
 		try {
-			const signature = await signTransactionBlock({
-				transactionBlock: txb,
+			const signature = await signTransaction({
+				transaction: txb,
 			});
 
 			const res = await client.executeTransactionBlock({
-				transactionBlock: signature.transactionBlockBytes,
+				transactionBlock: signature.bytes,
 				signature: signature.signature,
 				options: {
 					showEffects: true,
@@ -186,9 +186,9 @@ export function useTransactionExecution() {
 }
 ```
 
-The hook logic is straightforward. A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+The hook logic is straightforward. A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in the [**Set up providers**](#set-up-providers) step. The `useSignTransactionBlock()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in the [**Set up providers**](#set-up-providers) step. The `useSignTransaction()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
 ## Generate demo data
 
@@ -202,7 +202,7 @@ You need a utility function to create a dummy object representing a real world a
 
 ```ts title='src/mutations/demo.ts'
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { CONSTANTS } from '@/constants';
@@ -217,7 +217,7 @@ export function useGenerateDemoData() {
 	return useMutation({
 		mutationFn: async () => {
 			if (!account?.address) throw new Error('You need to connect your wallet!');
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			const bear = txb.moveCall({
 				target: `${CONSTANTS.demoContract.packageId}::demo_bear::new`,
@@ -241,7 +241,7 @@ As previously mentioned, the example uses `@tanstack/react-query` to query, cach
 
 When you execute a transaction call to mutate data on the Sui blockchain, use the `useMutation()` hook. The `useMutation()` hook accepts several inputs, however, you only need two of them for this example. The first parameter, `mutationFn`, accepts the function to execute the main mutating logic, while the second parameter, `onSuccess`, is a callback that runs when the mutating logic succeeds.
 
-The main mutating logic is fairly straightforward, executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfer it to the connected wallet account, all within the same `TransactionBlock`. The example reuses the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
+The main mutating logic is fairly straightforward, executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfer it to the connected wallet account, all within the same `Transaction`. The example reuses the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
 
 Another benefit of wrapping the main mutating logic inside `useMutation()` is that you can access and manipulate the cache storing server state. The example fetches the cache from remote servers by using query call in an appropriate callback. In this case, it is the `onSuccess` callback. When the transaction succeeds, invalidate the cache data at the cache key called `getOwnedObjects`, then `@tanstack/react-query` handles the re-fetching mechanism for the invalidated data automatically. Do this by using `invalidateQueries()` on the `@tanstack/react-query` configured client instance retrieved by `useQueryClient()` hook in the **Setup Providers** step.
 
@@ -286,7 +286,7 @@ export function useLockObjectMutation() {
 	return useMutation({
 		mutationFn: async ({ object }: { object: SuiObjectData }) => {
 			if (!account?.address) throw new Error('You need to connect your wallet!');
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			const [locked, key] = txb.moveCall({
 				target: `${CONSTANTS.escrowContract.packageId}::lock::lock`,
@@ -341,7 +341,7 @@ export function useUnlockMutation() {
 				return;
 			}
 
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			const item = txb.moveCall({
 				target: `${CONSTANTS.escrowContract.packageId}::lock::unlock`,
@@ -384,7 +384,7 @@ export function useCreateEscrowMutation() {
 		mutationFn: async ({ object, locked }: { object: SuiObjectData; locked: ApiLockedObject }) => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
 
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 			txb.moveCall({
 				target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
 				arguments: [
@@ -423,7 +423,7 @@ export function useAcceptEscrowMutation() {
 			locked: ApiLockedObject;
 		}) => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			const escrowObject = await client.multiGetObjects({
 				ids: [escrow.itemId, locked.itemId],
@@ -483,7 +483,7 @@ export function useCancelEscrowMutation() {
 			suiObject: SuiObjectData;
 		}) => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			const item = txb.moveCall({
 				target: `${CONSTANTS.escrowContract.packageId}::shared::return_to_sender`,
@@ -770,7 +770,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
 }
 ```
 
-As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons. 
+As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons.
 
 ### Browse locked objects
 

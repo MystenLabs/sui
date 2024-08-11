@@ -6,6 +6,7 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
+use crate::rest_index::RestIndexStore;
 use anyhow::Result;
 use bytes::Bytes;
 use futures::future::try_join_all;
@@ -251,6 +252,7 @@ impl DBCheckpointHandler {
             None,
             None,
         ));
+        let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
         let lock_table = Arc::new(RwLockTable::new(1));
         info!(
@@ -260,8 +262,9 @@ impl DBCheckpointHandler {
         AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &perpetual_db,
             &checkpoint_store,
+            Some(&rest_index),
             &lock_table,
-            self.pruning_config,
+            self.pruning_config.clone(),
             metrics,
             self.indirect_objects_threshold,
             epoch_duration_ms,

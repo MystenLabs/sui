@@ -5,7 +5,6 @@
 module sui_system::staking_pool {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::math;
     use sui::table::{Self, Table};
     use sui::bag::Bag;
     use sui::bag;
@@ -131,6 +130,14 @@ module sui_system::staking_pool {
         staked_sui: StakedSui,
         ctx: &TxContext
     ) : Balance<SUI> {
+        // stake is inactive
+        if (staked_sui.stake_activation_epoch > ctx.epoch()) {
+            let principal = unwrap_staked_sui(staked_sui);
+            pool.pending_stake = pool.pending_stake - principal.value();
+
+            return principal
+        };
+
         let (pool_token_withdraw_amount, mut principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
         let principal_withdraw_amount = principal_withdraw.value();
@@ -249,7 +256,7 @@ module sui_system::staking_pool {
         // This may happen when we are withdrawing everything from the pool and
         // the rewards pool balance may be less than reward_withdraw_amount.
         // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
-        reward_withdraw_amount = math::min(reward_withdraw_amount, pool.rewards_pool.value());
+        reward_withdraw_amount = reward_withdraw_amount.min(pool.rewards_pool.value());
         pool.rewards_pool.split(reward_withdraw_amount)
     }
 
@@ -362,7 +369,7 @@ module sui_system::staking_pool {
             return initial_exchange_rate()
         };
         let clamped_epoch = pool.deactivation_epoch.get_with_default(epoch);
-        let mut epoch = math::min(clamped_epoch, epoch);
+        let mut epoch = clamped_epoch.min(epoch);
         let activation_epoch = *pool.activation_epoch.borrow();
 
         // Find the latest epoch that's earlier than the given epoch with an entry in the table
@@ -462,7 +469,7 @@ module sui_system::staking_pool {
             if (total_sui_withdraw_amount >= staked_amount)
                 total_sui_withdraw_amount - staked_amount
             else 0;
-        reward_withdraw_amount = math::min(reward_withdraw_amount, pool.rewards_pool.value());
+        reward_withdraw_amount = reward_withdraw_amount.min(pool.rewards_pool.value());
 
         staked_amount + reward_withdraw_amount
     }

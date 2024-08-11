@@ -10,8 +10,8 @@ use crate::{
 };
 use config::{AuthorityIdentifier, WorkerId};
 use fastcrypto::groups;
-use fastcrypto_tbls::dkg;
 use fastcrypto_tbls::nodes::PartyId;
+use fastcrypto_tbls::{dkg, dkg_v0};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -141,8 +141,8 @@ impl NodeStorage {
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
             Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>,
-            Self::PROCESSED_MESSAGES_CF;<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
-            Self::USED_MESSAGES_CF;<u32, dkg::UsedProcessedMessages<PkG, EncG>>,
+            Self::PROCESSED_MESSAGES_CF;<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+            Self::USED_MESSAGES_CF;<u32, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
             Self::CONFIRMATIONS_CF;<PartyId, dkg::Confirmation<EncG>>,
             Self::DKG_OUTPUT_CF;<u32, dkg::Output<PkG, EncG>>,
             Self::RANDOMNESS_ROUND_CF;<u32, RandomnessRound>

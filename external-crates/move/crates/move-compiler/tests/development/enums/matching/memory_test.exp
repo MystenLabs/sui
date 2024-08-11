@@ -1,9 +1,0 @@
-error[E07003]: invalid operation, could create dangling a reference
-   ┌─ tests/development/enums/matching/memory_test.move:17:20
-   │
-15 │         match (o) {
-   │                - It is still being mutably borrowed by this reference
-16 │             E::A(u)  => *u,
-17 │             _ if ({*o = E::A(0); false}) => 1,
-   │                    ^^^^^^^^^^^^ Invalid mutation of reference.
-

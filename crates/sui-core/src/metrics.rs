@@ -29,13 +29,17 @@ impl LatencyObserver {
     }
 
     pub fn report(&self, latency: Duration) {
-        const MAX_SAMPLES: usize = 64;
+        const EXPECTED_SAMPLES: usize = 128;
         let mut data = self.data.lock();
         data.points.push_back(latency);
         data.sum += latency;
-        if data.points.len() >= MAX_SAMPLES {
+        if data.points.len() < EXPECTED_SAMPLES {
+            // Do not initialize average latency until there are enough samples.
+            return;
+        }
+        while data.points.len() > EXPECTED_SAMPLES {
             let pop = data.points.pop_front().expect("data vector is not empty");
-            data.sum -= pop; // This does not overflow because of how running sum is calculated
+            data.sum -= pop; // This does not underflow because of how running sum is calculated
         }
         let latency = data.sum.as_millis() as u64 / data.points.len() as u64;
         self.latency_ms.store(latency, Ordering::Relaxed);
@@ -44,7 +48,7 @@ impl LatencyObserver {
     pub fn latency(&self) -> Option<Duration> {
         let latency = self.latency_ms.load(Ordering::Relaxed);
         if latency == u64::MAX {
-            // Not initialized yet (0 data points)
+            // Not initialized yet (not enough data points)
             None
         } else {
             Some(Duration::from_millis(latency))

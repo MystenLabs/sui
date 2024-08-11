@@ -61,19 +61,22 @@ impl FilterContext for Context<'_> {
     }
 
     // A module member should be removed if:
-    // * It is annotated as a test function (test_only, test, abort) and test mode is not set; or
+    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is not set; or
     // * If it is a library and is annotated as #[test]
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
         use known_attributes::TestingAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-        let is_test_only = flattened_attrs
-            .iter()
-            .any(|attr| matches!(attr.1, TestingAttribute::Test | TestingAttribute::TestOnly));
+        let is_test_only = flattened_attrs.iter().any(|attr| {
+            matches!(
+                attr.1,
+                TestingAttribute::Test | TestingAttribute::TestOnly | TestingAttribute::RandTest
+            )
+        });
         is_test_only && !self.env.flags().keep_testing_functions()
             || (!self.is_source_def
-                && flattened_attrs
-                    .iter()
-                    .any(|attr| attr.1 == TestingAttribute::Test))
+                && flattened_attrs.iter().any(|attr| {
+                    matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest)
+                }))
     }
 }
 
@@ -83,6 +86,7 @@ impl FilterContext for Context<'_> {
 
 const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
 const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
+pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
 // in `compilation_env` is not set. If the test flag is set, no filtering is performed, and instead
@@ -193,6 +197,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
                 is_macro: None,
             },
         ],
+        is_incomplete: false,
     };
     let args_ = vec![sp(
         mloc,
@@ -211,7 +216,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         macro_: None,
         signature,
-        name: P::FunctionName(sp(mloc, "unit_test_poison".into())),
+        name: P::FunctionName(sp(mloc, UNIT_TEST_POISON_FUN_NAME)),
         body: sp(
             mloc,
             P::FunctionBody_::Defined((
@@ -241,7 +246,8 @@ fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::Testing
                 | KnownAttribute::DefinesPrimitive(_)
                 | KnownAttribute::External(_)
                 | KnownAttribute::Syntax(_)
-                | KnownAttribute::Error(_) => None,
+                | KnownAttribute::Error(_)
+                | KnownAttribute::Deprecation(_) => None,
             },
         )
         .collect()

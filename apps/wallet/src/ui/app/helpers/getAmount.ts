@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiEvent, SuiTransactionBlockKind, TransactionEffects } from '@mysten/sui.js/client';
+import type { SuiEvent, SuiTransactionBlockKind, TransactionEffects } from '@mysten/sui/client';
 
 type FormattedBalance = {
 	amount?: number | null;

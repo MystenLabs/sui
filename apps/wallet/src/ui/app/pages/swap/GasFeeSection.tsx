@@ -8,7 +8,7 @@ import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { FEATURES } from '_shared/experimentation/features';
 import { useFeatureValue } from '@growthbook/growthbook-react';
 import { useBalanceInUSD, useFormatCoin } from '@mysten/core';
-import { type BalanceChange } from '@mysten/sui.js/client';
+import { type BalanceChange } from '@mysten/sui/client';
 
 export function GasFeeSection({
 	activeCoinType,

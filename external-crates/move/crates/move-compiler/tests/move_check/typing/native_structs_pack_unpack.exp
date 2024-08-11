@@ -10,9 +10,11 @@ error[E04015]: invalid use of native item
 error[E04001]: restricted visibility
   ┌─ tests/move_check/typing/native_structs_pack_unpack.move:9:9
   │
+3 │     native struct T;
+  │                   - Struct defined in module '0x42::C'
+  ·
 9 │         C::T {}
-  │         ^^^^^^^ Invalid instantiation of '0x42::C::T'.
-All structs can only be constructed in the module in which they are declared
+  │         ^^^^^^^ Struct '0x42::C::T' can only be instantiated within its defining module '0x42::C'
 
 error[E04015]: invalid use of native item
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
@@ -26,9 +28,11 @@ error[E04015]: invalid use of native item
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:12:13
    │
+ 3 │     native struct T;
+   │                   - Struct defined in module '0x42::C'
+   ·
 12 │         let C::T {} = c;
-   │             ^^^^^^^ Invalid deconstruction binding of '0x42::C::T'.
- All structs can only be deconstructed in the module in which they are declared
+   │             ^^^^^^^ Struct '0x42::C::T' can only be used in deconstruction binding within its defining module '0x42::C'
 
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18

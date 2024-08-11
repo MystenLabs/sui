@@ -4,11 +4,7 @@
 use clap::Parser;
 use move_cli::base::new;
 use move_package::source_package::layout::SourcePackageLayout;
-use std::{
-    fs::create_dir_all,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{fs::create_dir_all, io::Write, path::Path};
 
 const SUI_PKG_NAME: &str = "Sui";
 
@@ -23,20 +19,12 @@ pub struct New {
 }
 
 impl New {
-    pub fn execute(self, path: Option<PathBuf>) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
         let name = &self.new.name.to_lowercase();
-        let p = match &path {
-            Some(path) => path,
-            None => Path::new(&name),
-        };
 
-        self.new.execute(
-            path.clone(),
-            [(SUI_PKG_NAME, SUI_PKG_PATH)],
-            [(name, "0x0")],
-            "",
-        )?;
-
+        self.new
+            .execute(path, [(SUI_PKG_NAME, SUI_PKG_PATH)], [(name, "0x0")], "")?;
+        let p = path.unwrap_or_else(|| Path::new(&name));
         let mut w = std::fs::File::create(
             p.join(SourcePackageLayout::Sources.path())
                 .join(format!("{name}.move")),

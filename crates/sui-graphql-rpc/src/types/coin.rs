@@ -23,6 +23,7 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
+use super::uint53::UInt53;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -150,7 +151,7 @@ impl Coin {
             .await
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_.super_).version().await
     }
 
@@ -244,7 +245,7 @@ impl Coin {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -261,7 +262,7 @@ impl Coin {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -284,7 +285,7 @@ impl Coin {
                 after,
                 last,
                 before,
-                Some(self.super_.super_.version_impl()),
+                Some(self.super_.root_version()),
             )
             .await
     }
@@ -336,7 +337,8 @@ impl Coin {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
+            let object =
+                Object::try_from_stored_history_object(stored, checkpoint_viewed_at, None)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(

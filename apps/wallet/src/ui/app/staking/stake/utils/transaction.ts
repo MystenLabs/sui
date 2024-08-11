@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { SUI_SYSTEM_STATE_OBJECT_ID } from '@mysten/sui.js/utils';
+import { Transaction } from '@mysten/sui/transactions';
+import { SUI_SYSTEM_STATE_OBJECT_ID } from '@mysten/sui/utils';
 
 export function createStakeTransaction(amount: bigint, validator: string) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const stakeCoin = tx.splitCoins(tx.gas, [amount]);
 	tx.moveCall({
 		target: '0x3::sui_system::request_add_stake',
@@ -23,7 +23,7 @@ export function createStakeTransaction(amount: bigint, validator: string) {
 }
 
 export function createUnstakeTransaction(stakedSuiId: string) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	tx.moveCall({
 		target: '0x3::sui_system::request_withdraw_stake',
 		arguments: [tx.object(SUI_SYSTEM_STATE_OBJECT_ID), tx.object(stakedSuiId)],

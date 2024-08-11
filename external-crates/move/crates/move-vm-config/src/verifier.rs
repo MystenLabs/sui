@@ -5,6 +5,7 @@ use move_binary_format::file_format_common::VERSION_MAX;
 
 pub const DEFAULT_MAX_CONSTANT_VECTOR_LEN: u64 = 1024 * 1024;
 pub const DEFAULT_MAX_IDENTIFIER_LENGTH: u64 = 128;
+pub const DEFAULT_MAX_VARIANTS: u64 = 127;
 
 #[derive(Debug, Clone)]
 pub struct VerifierConfig {
@@ -16,7 +17,7 @@ pub struct VerifierConfig {
     pub max_type_nodes: Option<usize>,
     pub max_push_size: Option<usize>,
     pub max_dependency_depth: Option<usize>,
-    pub max_struct_definitions: Option<usize>,
+    pub max_data_definitions: Option<usize>,
     pub max_fields_in_struct: Option<usize>,
     pub max_function_definitions: Option<usize>,
     pub max_constant_vector_len: Option<u64>,
@@ -27,6 +28,7 @@ pub struct VerifierConfig {
     pub allow_receiving_object_id: bool,
     pub reject_mutable_random_on_entry_functions: bool,
     pub bytecode_version: u32,
+    pub max_variants_in_enum: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +53,7 @@ impl Default for VerifierConfig {
             // Max depth in dependency tree for both direct and friend dependencies
             max_dependency_depth: None,
             // Max count of structs in a module
-            max_struct_definitions: None,
+            max_data_definitions: None,
             // Max count of fields in a struct
             max_fields_in_struct: None,
             // Max count of functions in a module
@@ -59,7 +61,7 @@ impl Default for VerifierConfig {
             // Max size set to 10000 to restrict number of pushes in one function
             // max_push_size: Some(10000),
             // max_dependency_depth: Some(100),
-            // max_struct_definitions: Some(200),
+            // max_data_definitions: Some(200),
             // max_fields_in_struct: Some(30),
             // max_function_definitions: Some(1000),
             max_back_edges_per_function: None,
@@ -70,6 +72,7 @@ impl Default for VerifierConfig {
             allow_receiving_object_id: true,
             reject_mutable_random_on_entry_functions: true,
             bytecode_version: VERSION_MAX,
+            max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
         }
     }
 }

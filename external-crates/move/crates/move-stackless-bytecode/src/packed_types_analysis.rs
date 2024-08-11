@@ -118,7 +118,7 @@ impl<'a> TransferFunctions for PackedTypesAnalysis<'a> {
                             // type is open
                             state
                                 .open_types
-                                .insert(Type::Struct(*mid, *sid, types.clone()));
+                                .insert(Type::Datatype(*mid, *sid, types.clone()));
                         }
                     }
                 }

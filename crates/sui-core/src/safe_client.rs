@@ -28,7 +28,7 @@ use sui_types::{
     transaction::*,
 };
 use tap::TapFallible;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
@@ -496,6 +496,7 @@ where
     }
 
     /// Handle Transaction information requests for a given digest.
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -582,6 +583,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
@@ -597,6 +599,7 @@ where
         Ok(resp)
     }
 
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_system_state_object(&self) -> Result<SuiSystemState, SuiError> {
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })

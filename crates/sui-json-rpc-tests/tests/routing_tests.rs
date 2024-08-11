@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use hyper::header::HeaderValue;
-use hyper::HeaderMap;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::RpcModule;
 use prometheus::Registry;
 use std::env;
 use sui_config::local_ip_utils;
-use sui_json_rpc::{JsonRpcServerBuilder, SuiRpcModule};
+use sui_json_rpc::{JsonRpcServerBuilder, ServerType, SuiRpcModule};
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -24,7 +23,10 @@ async fn test_rpc_backward_compatibility() {
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None, None, None).await.unwrap();
+    let _handle = builder
+        .start(address, None, ServerType::Http, None)
+        .await
+        .unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // Test with un-versioned client
@@ -103,7 +105,10 @@ async fn test_disable_routing() {
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None, None, None).await.unwrap();
+    let _handle = builder
+        .start(address, None, ServerType::Http, None)
+        .await
+        .unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // try to access old method directly should fail

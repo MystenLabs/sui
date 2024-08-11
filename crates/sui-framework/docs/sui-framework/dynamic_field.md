@@ -87,7 +87,7 @@ Internal object used for storing the field and value
 Failed to serialize the field's name
 
 
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -97,7 +97,7 @@ Failed to serialize the field's name
 The object added as a dynamic field was previously a shared object
 
 
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -107,7 +107,7 @@ The object added as a dynamic field was previously a shared object
 The object already has a dynamic field with this name (with the value and type specified)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -118,7 +118,7 @@ Cannot load dynamic field.
 The object does not have a dynamic field with this name (with the value and type specified)
 
 
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -128,7 +128,7 @@ The object does not have a dynamic field with this name (with the value and type
 The object has a field with that name, but the value type does not match
 
 
-<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 

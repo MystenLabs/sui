@@ -4,7 +4,10 @@
 
 use crate::{
     binary_config::BinaryConfig,
-    file_format::{basic_test_module, CompiledModule},
+    file_format::{
+        basic_test_module, basic_test_module_with_enum, Bytecode, CodeUnit, CompiledModule,
+        SignatureIndex, VariantJumpTableIndex,
+    },
     file_format_common::*,
 };
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
@@ -351,4 +354,102 @@ fn deserialize_below_min_version() {
     .unwrap_err()
     .major_status();
     assert_eq!(res, StatusCode::UNKNOWN_VERSION);
+}
+
+#[test]
+fn enum_version_lie() {
+    let test = |bytes, expected_status| {
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            &BinaryConfig::with_extraneous_bytes_check(true),
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, expected_status);
+    };
+
+    // With enums and an invalid version bytecode version
+    let module = basic_test_module_with_enum();
+    let mut test_mut = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+
+    // Manually manipulate the version in the binary to the wrong version
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        test_mut[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&test_mut, StatusCode::MALFORMED);
+
+    let mut module = basic_test_module();
+    module.function_defs[0].code = Some(CodeUnit {
+        locals: SignatureIndex::new(0),
+        code: vec![
+            Bytecode::VariantSwitch(VariantJumpTableIndex::new(0)),
+            Bytecode::Ret,
+        ],
+        jump_tables: vec![],
+    });
+    let mut m_bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        m_bytes[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&m_bytes, StatusCode::MALFORMED);
+}
+
+#[test]
+fn deserialize_empty_enum_fails() {
+    let mut module = basic_test_module_with_enum();
+    module.enum_defs[0].variants = vec![];
+    let mut bin = vec![];
+    module.serialize(&mut bin).unwrap();
+    CompiledModule::deserialize_with_config(&bin, &BinaryConfig::with_extraneous_bytes_check(true))
+        .unwrap_err();
+}
+
+#[test]
+fn serialize_deserialize_v6_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_6, &mut bin).unwrap();
+    let v6_bytes = VERSION_6.to_le_bytes();
+    let v6_flavor_bytes = BinaryFlavor::encode_version(VERSION_6).to_le_bytes();
+    // assert that no flavoring is added to v6
+    assert_eq!(v6_bytes, v6_flavor_bytes);
+    assert_eq!(
+        bin[BinaryConstants::MOVE_MAGIC_SIZE..BinaryConstants::MOVE_MAGIC_SIZE + v6_bytes.len()],
+        v6_bytes
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(module.version, VERSION_6);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_no_flavor() {
+    let module = basic_test_module();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let v7_bytes = VERSION_7.to_le_bytes();
+    // Override the version bytes to not have the flavor
+    for (i, b) in v7_bytes.iter().enumerate() {
+        bin[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    // Deserialization will now fail because the version is not encoded with the flavor and the
+    // version is >= 7.
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap_err();
+    assert_eq!(x.major_status(), StatusCode::UNKNOWN_VERSION);
+}
+
+#[test]
+fn serialize_deserialize_v7_with_flavor() {
+    let module = basic_test_module_with_enum();
+    let mut bin = vec![];
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
+    assert_eq!(x, module);
 }

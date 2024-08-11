@@ -24,6 +24,7 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::VersionNumber;
+use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
@@ -126,6 +127,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             Some(&self.fullnode),
             transaction,
             with_shared,
+            false,
         )
         .await?;
         Ok((effects.into_data(), execution_error))
@@ -217,7 +219,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     }
 
     async fn advance_epoch(&mut self, _create_random_state: bool) -> anyhow::Result<()> {
-        unimplemented!("advance_epoch not supported")
+        self.validator.reconfigure_for_testing().await;
+        self.fullnode.reconfigure_for_testing().await;
+        Ok(())
     }
 
     async fn request_gas(
@@ -252,6 +256,10 @@ impl ReadStore for ValidatorWithFullnode {
         _epoch: sui_types::committee::EpochId,
     ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
         todo!()
+    }
+
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        Ok(self.validator.epoch_store_for_testing().epoch())
     }
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
@@ -324,7 +332,7 @@ impl ReadStore for ValidatorWithFullnode {
     ) -> sui_types::storage::error::Result<Option<Arc<sui_types::transaction::VerifiedTransaction>>>
     {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_transaction_block(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -334,7 +342,7 @@ impl ReadStore for ValidatorWithFullnode {
         tx_digest: &TransactionDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_executed_effects(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -344,7 +352,7 @@ impl ReadStore for ValidatorWithFullnode {
         event_digest: &TransactionEventsDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_events(event_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }

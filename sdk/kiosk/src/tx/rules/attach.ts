@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionBlock } from '@mysten/sui.js/transactions';
+import type { Transaction } from '@mysten/sui/transactions';
 
 import type { ObjectArgument } from '../../types/index.js';
 
 export function attachKioskLockRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -20,7 +20,7 @@ export function attachKioskLockRuleTx(
 }
 
 export function attachRoyaltyRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -44,7 +44,7 @@ export function attachRoyaltyRuleTx(
 }
 
 export function attachPersonalKioskRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
@@ -58,7 +58,7 @@ export function attachPersonalKioskRuleTx(
 }
 
 export function attachFloorPriceRuleTx(
-	tx: TransactionBlock,
+	tx: Transaction,
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,

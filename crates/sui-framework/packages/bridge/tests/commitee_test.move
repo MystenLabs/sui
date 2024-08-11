@@ -9,8 +9,8 @@ module bridge::committee_test {
     use sui_system::sui_system::SuiSystemState;
 
     use bridge::committee::{
-        BridgeCommittee, CommitteeMember, blocklisted, bridge_pubkey_bytes, create, 
-        members, member_registrations, 
+        BridgeCommittee, CommitteeMember, blocklisted, bridge_pubkey_bytes, create,
+        members, member_registrations,
         register, try_create_next_committee, verify_signatures, voting_power,
     };
     use bridge::committee::execute_blocklist;
@@ -118,20 +118,20 @@ module bridge::committee_test {
 
         // validator registration
         committee.register(
-            &mut system_state, 
-            hex::decode(VALIDATOR1_PUBKEY), 
-            b"", 
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            b"",
             &tx(@0xA, 0),
         );
         committee.register(
-            &mut system_state, 
-            hex::decode(VALIDATOR2_PUBKEY), 
-            b"", 
+            &mut system_state,
+            hex::decode(VALIDATOR2_PUBKEY),
+            b"",
             &tx(@0xC, 0),
         );
 
         // Check committee before creation
-        assert!(committee.members().is_empty(), 0);
+        assert!(committee.members().is_empty());
 
         let ctx = test_scenario::ctx(&mut scenario);
         let voting_powers = system_state.validator_voting_powers_for_testing();
@@ -144,11 +144,96 @@ module bridge::committee_test {
         assert_eq(5000, member1.voting_power());
 
         let members = committee.members();
-        assert!(members.size() == 2, 0); // must succeed
+        assert!(members.size() == 2); // must succeed
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_update_node_url() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        let members = committee.members();
+        assert!(members.size() == 1);
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(member.http_rest_url(), b"test url 1");
+
+        // Update URL
+        committee.update_node_url(
+            b"test url 2",
+            &tx(@0xA, 0),
+        );
+
+        let members = committee.members();
+        let (_, member) = members.get_entry_by_idx(0);
+        assert_eq(member.http_rest_url(), b"test url 2");
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = bridge::committee::ESenderIsNotInBridgeCommittee)]
+    fun test_update_node_url_not_validator() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let mut committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        committee.register(
+            &mut system_state,
+            hex::decode(VALIDATOR1_PUBKEY),
+            b"test url 1",
+            &tx(@0xA, 0),
+        );
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let voting_powers = system_state.validator_voting_powers_for_testing();
+        committee.try_create_next_committee(voting_powers, 6000, ctx);
+
+        // Update URL should fail for validator @0xB
+        committee.update_node_url(
+            b"test url",
+            &tx(@0xB, 0),
+        );
+
+        // test should have failed, abort
+        abort 0
     }
 
     #[test]
@@ -251,7 +336,7 @@ module bridge::committee_test {
         let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
         try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
-        assert!(committee.members().is_empty(), 0);
+        assert!(committee.members().is_empty());
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -324,14 +409,14 @@ module bridge::committee_test {
         committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
 
         // Check committee before creation
-        assert!(committee.members().is_empty(), 0);
+        assert!(committee.members().is_empty());
 
         let ctx = test_scenario::ctx(&mut scenario);
         let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
         try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
         // committee should be empty because registration did not reach min stake threshold.
-        assert!(committee.members().is_empty(), 0);
+        assert!(committee.members().is_empty());
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -356,13 +441,13 @@ module bridge::committee_test {
         let mut system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
         committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
         committee.register(&mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
-        assert!(committee.members().is_empty(), 0);
+        assert!(committee.members().is_empty());
         let ctx = test_scenario::ctx(&mut scenario);
         let voting_powers = sui_system::validator_voting_powers_for_testing(&mut system_state);
         try_create_next_committee(&mut committee, voting_powers, 6000, ctx);
 
         test_scenario::next_tx(&mut scenario, @0x0);
-        assert!(committee.members().size() == 2, 1000); // must succeed
+        assert!(committee.members().size() == 2); // must succeed
         // this fails because committee is already initiated
         committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
 
@@ -413,7 +498,7 @@ module bridge::committee_test {
         );
 
         let (validator1, member) = committee.members().get_entry_by_idx(0);
-        assert!(!member.blocklisted(), 0);
+        assert!(!member.blocklisted());
 
         // Block a member
         let blocklist = message::create_blocklist_message(
@@ -426,7 +511,7 @@ module bridge::committee_test {
         execute_blocklist(&mut committee, blocklist);
 
         let (_, blocked_member) = committee.members().get_entry_by_idx(0);
-        assert!(blocked_member.blocklisted(), 0);
+        assert!(blocked_member.blocklisted());
 
         // Verify signature should fail now
         committee.verify_signatures(
@@ -449,9 +534,9 @@ module bridge::committee_test {
 
         // // val0 and val1 are not blocked yet
         let (validator0, _) = committee.members().get_entry_by_idx(0);
-        // assert!(!member0.blocklisted(), 0);
+        // assert!(!member0.blocklisted());
         // let (validator1, member1) = committee.members().get_entry_by_idx(1);
-        // assert!(!member1.blocklisted(), 0);
+        // assert!(!member1.blocklisted());
 
         let eth_address0 = crypto::ecdsa_pub_key_to_eth_address(validator0);
         let invalid_eth_address1 = x"0000000000000000000000000000000000000000";
@@ -476,9 +561,9 @@ module bridge::committee_test {
 
         // val0 and val1 are not blocked yet
         let (validator0, member0) = committee.members().get_entry_by_idx(0);
-        assert!(!member0.blocklisted(), 0);
+        assert!(!member0.blocklisted());
         let (validator1, member1) = committee.members().get_entry_by_idx(1);
-        assert!(!member1.blocklisted(), 0);
+        assert!(!member1.blocklisted());
 
         let eth_address0 = crypto::ecdsa_pub_key_to_eth_address(validator0);
         let eth_address1 = crypto::ecdsa_pub_key_to_eth_address(validator1);
@@ -505,10 +590,10 @@ module bridge::committee_test {
 
         // val 0 is blocklisted
         let (_, blocked_member) = committee.members().get_entry_by_idx(0);
-        assert!(blocked_member.blocklisted(), 0);
+        assert!(blocked_member.blocklisted());
         // val 1 is too
         let (_, blocked_member) = committee.members().get_entry_by_idx(1);
-        assert!(blocked_member.blocklisted(), 0);
+        assert!(blocked_member.blocklisted());
 
         // unblocklist val1
         let blocklist = message::create_blocklist_message(
@@ -522,10 +607,10 @@ module bridge::committee_test {
 
         // val 0 is still blocklisted
         let (_, blocked_member) = committee.members().get_entry_by_idx(0);
-        assert!(blocked_member.blocklisted(), 0);
+        assert!(blocked_member.blocklisted());
         // val 1 is not
         let (_, blocked_member) = committee.members().get_entry_by_idx(1);
-        assert!(!blocked_member.blocklisted(), 0);
+        assert!(!blocked_member.blocklisted());
 
         // Clean up
         test_utils::destroy(committee);
@@ -536,7 +621,7 @@ module bridge::committee_test {
 
         let bridge_pubkey_bytes = hex::decode(VALIDATOR1_PUBKEY);
         members.insert(
-            bridge_pubkey_bytes, 
+            bridge_pubkey_bytes,
             make_committee_member(
                 @0xA,
                 bridge_pubkey_bytes,
@@ -548,7 +633,7 @@ module bridge::committee_test {
 
         let bridge_pubkey_bytes = hex::decode(VALIDATOR2_PUBKEY);
         members.insert(
-            bridge_pubkey_bytes, 
+            bridge_pubkey_bytes,
             make_committee_member(
                 @0xC,
                 bridge_pubkey_bytes,
@@ -559,5 +644,5 @@ module bridge::committee_test {
         );
 
         make_bridge_committee(members, vec_map::empty(), 1)
-    }    
+    }
 }

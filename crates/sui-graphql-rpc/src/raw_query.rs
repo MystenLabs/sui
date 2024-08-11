@@ -189,7 +189,7 @@ macro_rules! query {
     // Matches the case where no subqueries are provided. A `RawQuery` is constructed from the given
     // select clause.
     ($select:expr) => {
-        RawQuery::new($select, vec![])
+        $crate::raw_query::RawQuery::new($select, vec![])
     };
 
     // Expects a select clause and one or more subqueries. The select clause should contain curly

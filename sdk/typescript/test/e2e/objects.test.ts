@@ -3,7 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { normalizeSuiAddress, SUI_TYPE_ARG } from '../../src/utils';
 import { setup, TestToolbox } from './utils/setup';
 
@@ -115,13 +115,13 @@ describe('Object Reading API', () => {
 			coinType: SUI_TYPE_ARG,
 		});
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		// Transfer the entire gas object:
-		tx.transferObjects([tx.gas], tx.pure(normalizeSuiAddress('0x2')));
+		tx.transferObjects([tx.gas], normalizeSuiAddress('0x2'));
 
-		await toolbox.client.signAndExecuteTransactionBlock({
+		await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
-			transactionBlock: tx,
+			transaction: tx,
 		});
 
 		const res = await toolbox.client.tryGetPastObject({

@@ -5,12 +5,13 @@ use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
 use std::path::Path;
+use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tap::tap::TapFallible;
+use tokio::sync::Mutex;
 use tracing::warn;
 
-use sui_indexer::framework::Handler;
 use sui_indexer::types::owner_to_owner_info;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::Resolver;
@@ -25,35 +26,39 @@ use crate::tables::DynamicFieldEntry;
 use crate::FileType;
 
 pub struct DynamicFieldHandler {
+    state: Mutex<State>,
+}
+
+struct State {
     dynamic_fields: Vec<DynamicFieldEntry>,
     package_store: LocalDBPackageStore,
     resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
-impl Handler for DynamicFieldHandler {
-    fn name(&self) -> &str {
-        "dynamic_field"
-    }
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+impl Worker for DynamicFieldHandler {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
+        let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.package_store.update(object)?;
+                state.package_store.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
+                &checkpoint_transaction,
+                &mut state,
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.resolver
+                state
+                    .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
             }
@@ -64,33 +69,42 @@ impl Handler for DynamicFieldHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
-    fn read(&mut self) -> Result<Vec<DynamicFieldEntry>> {
-        let cloned = self.dynamic_fields.clone();
-        self.dynamic_fields.clear();
+    async fn read(&self) -> Result<Vec<DynamicFieldEntry>> {
+        let mut state = self.state.lock().await;
+        let cloned = state.dynamic_fields.clone();
+        state.dynamic_fields.clear();
         Ok(cloned)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::DynamicField)
     }
+
+    fn name(&self) -> &str {
+        "dynamic_field"
+    }
 }
 
 impl DynamicFieldHandler {
     pub fn new(store_path: &Path, rest_uri: &str) -> Self {
         let package_store = LocalDBPackageStore::new(&store_path.join("dynamic_field"), rest_uri);
-        DynamicFieldHandler {
+        let state = State {
             dynamic_fields: vec![],
             package_store: package_store.clone(),
             resolver: Resolver::new(PackageCache::new(package_store)),
+        };
+        Self {
+            state: Mutex::new(state),
         }
     }
     async fn process_dynamic_field(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         object: &Object,
         all_written_objects: &HashMap<ObjectID, Object>,
+        state: &mut State,
     ) -> Result<()> {
         let move_obj_opt = object.data.try_as_move();
         // Skip if not a move object
@@ -104,7 +118,7 @@ impl DynamicFieldHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            let move_struct = get_move_struct(&tag, contents, &self.resolver).await?;
+            let move_struct = get_move_struct(&tag, contents, &state.resolver).await?;
             Some(move_struct)
         } else {
             None
@@ -174,16 +188,17 @@ impl DynamicFieldHandler {
                 }
             }
         };
-        self.dynamic_fields.push(entry);
+        state.dynamic_fields.push(entry);
         Ok(())
     }
 
     async fn process_transaction(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
+        state: &mut State,
     ) -> Result<()> {
         let all_objects: HashMap<_, _> = checkpoint_transaction
             .output_objects
@@ -191,8 +206,15 @@ impl DynamicFieldHandler {
             .map(|x| (x.id(), x.clone()))
             .collect();
         for object in checkpoint_transaction.output_objects.iter() {
-            self.process_dynamic_field(epoch, checkpoint, timestamp_ms, object, &all_objects)
-                .await?;
+            self.process_dynamic_field(
+                epoch,
+                checkpoint,
+                timestamp_ms,
+                object,
+                &all_objects,
+                state,
+            )
+            .await?;
         }
         Ok(())
     }

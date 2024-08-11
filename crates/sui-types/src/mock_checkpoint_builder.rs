@@ -7,8 +7,9 @@ use crate::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
-    FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+    CheckpointVersionSpecificData, EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint,
+    VerifiedCheckpointContents,
 };
 use crate::transaction::VerifiedTransaction;
 use fastcrypto::traits::Signer;
@@ -147,7 +148,8 @@ impl MockCheckpointBuilder {
             epoch_rolling_gas_cost_summary,
             end_of_epoch_data,
             timestamp_ms,
-            version_specific_data: Vec::new(),
+            version_specific_data: bcs::to_bytes(&CheckpointVersionSpecificData::empty_for_tests())
+                .unwrap(),
             checkpoint_commitments: Default::default(),
         };
 

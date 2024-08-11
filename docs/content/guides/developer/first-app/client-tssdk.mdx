@@ -10,7 +10,7 @@ This exercise diverges from the example built in the previous topics in this sec
 pnpm create @mysten/dapp --template react-client-dapp
 ```
 
-or 
+or
 
 ```bash
 yarn create @mysten/dapp --template react-client-dapp
@@ -18,7 +18,7 @@ yarn create @mysten/dapp --template react-client-dapp
 
 ## What is the Sui TypeScript SDK?
 
-The Sui TypeScript SDK (@mysten/sui.js) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
+The Sui TypeScript SDK (@mysten/sui) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
 
 For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript).
 
@@ -39,7 +39,7 @@ npm init vite
 Now that you have a React app, you can install the necessary dependencies to use dApp Kit:
 
 ```bash npm2yarn
-npm install @mysten/sui.js @mysten/dapp-kit @tanstack/react-query
+npm install @mysten/sui @mysten/dapp-kit @tanstack/react-query
 ```
 
 ## Setting up Provider components
@@ -64,11 +64,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 ```
 
-Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui.js` to all the hooks in dApp Kit. This provider manages which network dApp Kit connects to, and can accept configuration for multiple networks. This exercise connects to `devnet`.
+Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in dApp Kit. This provider manages which network dApp Kit connects to, and can accept configuration for multiple networks. This exercise connects to `devnet`.
 
 ```ts
 import { SuiClientProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
@@ -94,7 +94,7 @@ Finally, set up the `WalletProvider` from `@mysten/dapp-kit`, and import styles 
 import '@mysten/dapp-kit/dist/index.css';
 
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();

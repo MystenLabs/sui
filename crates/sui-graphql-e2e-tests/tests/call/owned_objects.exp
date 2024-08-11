@@ -1,11 +1,13 @@
 processed 11 tasks
 
-task 1 'publish'. lines 22-41:
+task 1, lines 22-41:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run-graphql'. lines 43-61:
+task 2, lines 43-61:
+//# run-graphql
 Response: {
   "data": {
     "address": {
@@ -16,12 +18,14 @@ Response: {
   }
 }
 
-task 3 'run'. lines 63-63:
+task 3, line 63:
+//# run Test::M1::create --args 0 @A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 65-65:
+task 4, line 65:
+//# view-object 3,0
 Owner: Account Address ( A )
 Version: 3
 Contents: Test::M1::Object {
@@ -33,10 +37,12 @@ Contents: Test::M1::Object {
     value: 0u64,
 }
 
-task 5 'create-checkpoint'. lines 67-67:
+task 5, line 67:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 69-87:
+task 6, lines 69-87:
+//# run-graphql
 Response: {
   "data": {
     "address": {
@@ -58,7 +64,8 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 89-107:
+task 7, lines 89-107:
+//# run-graphql
 Response: {
   "data": {
     "address": {
@@ -80,7 +87,8 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 109-127:
+task 8, lines 109-127:
+//# run-graphql
 Response: {
   "data": {
     "address": {
@@ -91,7 +99,8 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 129-147:
+task 9, lines 129-147:
+//# run-graphql
 Response: {
   "data": {
     "owner": {
@@ -113,7 +122,8 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 149-167:
+task 10, lines 149-167:
+//# run-graphql
 Response: {
   "data": {
     "object": null

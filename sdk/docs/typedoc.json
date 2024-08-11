@@ -8,7 +8,8 @@
 		"../kiosk",
 		"../typescript",
 		"../zklogin",
-		"../zksend"
+		"../zksend",
+		"../wallet-standard"
 	],
 	"excludeInternal": true,
 	"excludePrivate": true,

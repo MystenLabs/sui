@@ -11,8 +11,8 @@ use move_binary_format::CompiledModule;
 use move_binary_format::{binary_config::BinaryConfig, file_format::SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::annotated_value::MoveFieldLayout;
 pub use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::{MoveFieldLayout, MoveVariant};
 use move_core_types::identifier::IdentStr;
 use move_core_types::u256::U256;
 use move_core_types::{
@@ -445,6 +445,22 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
                 json!(fields)
             }
         },
+        // Don't return the type assuming type information is known at the client side.
+        MoveValue::Variant(MoveVariant {
+            type_: _,
+            tag: _,
+            variant_name,
+            fields,
+        }) => {
+            let fields = fields
+                .iter()
+                .map(|(key, value)| (key, move_value_to_json(value)))
+                .collect::<BTreeMap<_, _>>();
+            json!({
+                "variant": variant_name.to_string(),
+                "fields": fields,
+            })
+        }
     })
 }
 
@@ -548,7 +564,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
 /// for this type (if available). The reason we need to return both information about whether a
 /// SignatureToken represents a primitive and an Option representing MoveTypeLayout is that there
 /// can be signature tokens that represent primitives but that do not have corresponding
-/// MoveTypeLayout (e.g., SignatureToken::StructInstantiation).
+/// MoveTypeLayout (e.g., SignatureToken::DatatypeInstantiation).
 pub fn primitive_type(
     view: &CompiledModule,
     type_args: &[TypeTag],
@@ -573,7 +589,7 @@ pub fn primitive_type(
                 None => (is_primitive, None),
             }
         }
-        SignatureToken::Struct(struct_handle_idx) => {
+        SignatureToken::Datatype(struct_handle_idx) => {
             let resolved_struct = resolve_struct(view, *struct_handle_idx);
             if resolved_struct == RESOLVED_ASCII_STR {
                 (
@@ -613,7 +629,7 @@ pub fn primitive_type(
                 (false, None)
             }
         }
-        SignatureToken::StructInstantiation(struct_inst) => {
+        SignatureToken::DatatypeInstantiation(struct_inst) => {
             let (idx, targs) = &**struct_inst;
             let resolved_struct = resolve_struct(view, *idx);
             // is option of a primitive
@@ -746,8 +762,8 @@ fn resolve_call_arg(
     // in terms of non-primitives we only currently support objects and "flat" (depth == 1) vectors
     // of objects (but not, for example, vectors of references)
     match param {
-        SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_)
+        SignatureToken::Datatype(_)
+        | SignatureToken::DatatypeInstantiation(_)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => Ok(ResolvedCallArg::Object(resolve_object_arg(
@@ -755,7 +771,7 @@ fn resolve_call_arg(
             &arg.to_json_value(),
         )?)),
         SignatureToken::Vector(inner) => match &**inner {
-            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_) => {
+            SignatureToken::Datatype(_) | SignatureToken::DatatypeInstantiation(_) => {
                 Ok(ResolvedCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
             }
             _ => {
@@ -788,7 +804,7 @@ pub fn is_receiving_argument(view: &CompiledModule, arg_type: &SignatureToken) -
 
     matches!(
         token,
-        ST::StructInstantiation(struct_inst) if resolve_struct(view, struct_inst.0) == RESOLVED_RECEIVING_STRUCT && struct_inst.1.len() == 1
+        ST::DatatypeInstantiation(inst) if resolve_struct(view, inst.0) == RESOLVED_RECEIVING_STRUCT && inst.1.len() == 1
     )
 }
 

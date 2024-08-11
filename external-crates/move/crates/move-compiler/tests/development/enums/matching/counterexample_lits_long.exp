@@ -1,8 +1,0 @@
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/development/enums/matching/counterexample_lits_long.move:4:16
-  │
-4 │         match (x) {
-  │                ^ Pattern '_0' not covered
-  │
-  = When '_0' is not 0, 5, 10, or 2 other values
-

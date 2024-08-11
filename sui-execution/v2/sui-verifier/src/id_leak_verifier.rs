@@ -29,7 +29,7 @@ use move_core_types::{
 };
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
-use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
@@ -346,7 +346,7 @@ fn pack(
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
         .binary_view
-        .struct_handle_at(struct_def.struct_handle);
+        .datatype_handle_at(struct_def.struct_handle);
     let num_fields = num_fields(struct_def);
     verifier.stack_popn(num_fields - 1)?;
     let last_value = verifier.stack.pop().unwrap();
@@ -543,6 +543,15 @@ fn execute_inner(
             verifier.stack.pop().unwrap();
             verifier.stack.pop().unwrap();
         }
+         Bytecode::PackVariant(_)
+        | Bytecode::PackVariantGeneric(_)
+        | Bytecode::UnpackVariant(_)
+        | Bytecode::UnpackVariantImmRef(_)
+        | Bytecode::UnpackVariantMutRef(_)
+        | Bytecode::UnpackVariantGeneric(_)
+        | Bytecode::UnpackVariantGenericImmRef(_)
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::VariantSwitch(_) => unreachable!("variant bytecodes should never occur in v2")
     };
     Ok(())
 }

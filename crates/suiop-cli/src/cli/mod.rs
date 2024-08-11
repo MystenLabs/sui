@@ -5,7 +5,7 @@ mod ci;
 pub mod docker;
 mod iam;
 mod incidents;
-mod lib;
+pub mod lib;
 pub mod pulumi;
 pub mod service;
 

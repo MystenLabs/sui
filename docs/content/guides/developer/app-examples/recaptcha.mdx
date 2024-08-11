@@ -226,99 +226,97 @@ Here are the steps to create the backend:
 3. Create a file named `app.ts` and paste the following code.
 
 ```typescript title='app.ts'
-import * as ed from "@noble/ed25519";
-import axios from "axios";
-import cors from "cors";
-import express from "express";
-import helmet from "helmet";
-import morgan from "morgan";
+import * as ed from '@noble/ed25519';
+import axios from 'axios';
+import cors from 'cors';
+import express from 'express';
+import helmet from 'helmet';
+import morgan from 'morgan';
 
-import api from "./api";
-import MessageResponse from "./interfaces/MessageResponse";
-import * as middlewares from "./middlewares";
+import api from './api';
+import MessageResponse from './interfaces/MessageResponse';
+import * as middlewares from './middlewares';
 
-require("dotenv").config();
+require('dotenv').config();
 
 const app = express();
 
-app.use(morgan("dev"));
+app.use(morgan('dev'));
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-app.get<{}, MessageResponse>("/", (req, res) => {
-  res.json({
-    message: "Express + TypeScript Server",
-  });
+app.get<{}, MessageResponse>('/', (req, res) => {
+	res.json({
+		message: 'Express + TypeScript Server',
+	});
 });
 
 interface RecaptchaApiResponse {
-  success: boolean;
-  challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
-  hostname: string; // the hostname of the site where the reCAPTCHA was solved
-  signature?: Uint8Array;
-  pubKey?: Uint8Array;
-  message?: Uint8Array;
-  "error-codes"?: any[]; // optional
+	success: boolean;
+	challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
+	hostname: string; // the hostname of the site where the reCAPTCHA was solved
+	signature?: Uint8Array;
+	pubKey?: Uint8Array;
+	message?: Uint8Array;
+	'error-codes'?: any[]; // optional
 }
 
-app.post("/verify-token", async (req, res) => {
-  const now: number = Date.now();
-  const privKey = process.env.SK!;
+app.post('/verify-token', async (req, res) => {
+	const now: number = Date.now();
+	const privKey = process.env.SK!;
 
-  const pubKey = await ed.getPublicKey(privKey);
-  const { response, secret, userAddress } = req.body;
+	const pubKey = await ed.getPublicKey(privKey);
+	const { response, secret, userAddress } = req.body;
 
-  console.log("userAddress: " + userAddress);
-  console.log("secret: " + secret);
-  console.log("response: " + response);
-  console.log("now: " + now);
-  console.log("privKey: " + privKey);
+	console.log('userAddress: ' + userAddress);
+	console.log('secret: ' + secret);
+	console.log('response: ' + response);
+	console.log('now: ' + now);
+	console.log('privKey: ' + privKey);
 
-  const message: string = stringToHex(
-    userAddress.replace("0x", "").concat(now.toString())
-  );
+	const message: string = stringToHex(userAddress.replace('0x', '').concat(now.toString()));
 
-  console.log("message: " + message);
+	console.log('message: ' + message);
 
-  const signature = await ed.sign(message, privKey);
-  const isValid = await ed.verify(signature, message, pubKey);
+	const signature = await ed.sign(message, privKey);
+	const isValid = await ed.verify(signature, message, pubKey);
 
-  console.log({ message, pubKey, signature, isValid });
+	console.log({ message, pubKey, signature, isValid });
 
-    try {
-      let axiosResponse = await axios.post<RecaptchaApiResponse>(
-        `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`
-      );
-      console.log(axiosResponse.data);
-      return res.status(200).json({
-        success: axiosResponse.data.success,
-        verificationInfo: axiosResponse.data,
-        signature: Array.from(signature),
-        pubKey: Array.from(pubKey),
-        message: Array.from(Uint8Array.from(Buffer.from(message, "hex"))),
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({
-        success: false,
-      });
-    }
+	try {
+		let axiosResponse = await axios.post<RecaptchaApiResponse>(
+			`https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${response}`,
+		);
+		console.log(axiosResponse.data);
+		return res.status(200).json({
+			success: axiosResponse.data.success,
+			verificationInfo: axiosResponse.data,
+			signature: Array.from(signature),
+			pubKey: Array.from(pubKey),
+			message: Array.from(Uint8Array.from(Buffer.from(message, 'hex'))),
+		});
+	} catch (error) {
+		console.log(error);
+		return res.status(500).json({
+			success: false,
+		});
+	}
 });
 
 function stringToHex(str: string): string {
-  let hex = "";
-  for (let i = 0; i < str.length; i++) {
-    const charCode = str.charCodeAt(i);
-    const hexValue = charCode.toString(16);
+	let hex = '';
+	for (let i = 0; i < str.length; i++) {
+		const charCode = str.charCodeAt(i);
+		const hexValue = charCode.toString(16);
 
-    // Pad with zeros to ensure two-digit representation
-    hex += hexValue.padStart(2, "0");
-  }
-  return hex;
+		// Pad with zeros to ensure two-digit representation
+		hex += hexValue.padStart(2, '0');
+	}
+	return hex;
 }
 
-app.use("/api/v1", api);
+app.use('/api/v1', api);
 
 app.use(middlewares.notFound);
 app.use(middlewares.errorHandler);
@@ -358,161 +356,154 @@ That's it! You have implemented the backend for the reCAPTCHA. To run the app, y
 
 ## Frontend
 
-To implement the frontend for the reCAPTCHA, you need to create a react app that can render a user interface and interact with the backend and the smart contract. You also need to install some dependencies, such as `@mysten/dapp-kit`, `@mysten/sui.js`, `axios`, and `react-google-recaptcha`. These packages help you with wallet integration, transaction execution, HTTP requests, and reCAPTCHA rendering.
+To implement the frontend for the reCAPTCHA, you need to create a react app that can render a user interface and interact with the backend and the smart contract. You also need to install some dependencies, such as `@mysten/dapp-kit`, `@mysten/sui`, `axios`, and `react-google-recaptcha`. These packages help you with wallet integration, transaction execution, HTTP requests, and reCAPTCHA rendering.
 
 Here are the steps to create the frontend:
 
 1. Initialize a new project with `pnpm create vite recaptcha-app --template react-ts`.
-2. Install the dependencies with `pnpm install --save @mysten/dapp-kit @mysten/sui.js axios react-google-recaptcha`.
+2. Install the dependencies with `pnpm install --save @mysten/dapp-kit @mysten/sui axios react-google-recaptcha`.
 3. Create a file named `.env` and add the following environment variables:
-    - `VITE_reCAPTCHA_SITE_KEY`: the site key that you get from Google when you register your site for reCAPTCHA
-    - `VITE_reCAPTCHA_SECRET_KEY`: the secret key that you get from Google when you register your site for reCAPTCHA
-    - `VITE_PACKAGE_ID`: the package ID of the smart contract that you want to interact with
-    - `VITE_REGISTRY_ID`: the registry ID of the smart contract that you want to interact with
+   - `VITE_reCAPTCHA_SITE_KEY`: the site key that you get from Google when you register your site for reCAPTCHA
+   - `VITE_reCAPTCHA_SECRET_KEY`: the secret key that you get from Google when you register your site for reCAPTCHA
+   - `VITE_PACKAGE_ID`: the package ID of the smart contract that you want to interact with
+   - `VITE_REGISTRY_ID`: the registry ID of the smart contract that you want to interact with
 4. Create a file named `App.tsx` and paste the code you have provided.
 
 ```typescript title='App.tsx'
-import "./App.css";
-import Axios from "axios";
-import { ConnectButton, useCurrentWallet, useSignAndExecuteTransactionBlock, useCurrentAccount } from "@mysten/dapp-kit";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { useEffect, useState } from "react";
-import ReCAPTCHA from "react-google-recaptcha";
-import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui.js/utils";
+import './App.css';
+
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useCurrentWallet,
+	useSignAndExecuteTransaction,
+} from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
+import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
+import Axios from 'axios';
+import { useEffect, useState } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 interface RecaptchaApiResponse {
-  success: boolean;
-  challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
-  hostname: string; // the hostname of the site where the reCAPTCHA was solved
-  signature?: Uint8Array;
-  pubKey?: Uint8Array;
-  message?: Uint8Array;
-  "error-codes"?: any[]; // optional
+	success: boolean;
+	challenge_ts: string; // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
+	hostname: string; // the hostname of the site where the reCAPTCHA was solved
+	signature?: Uint8Array;
+	pubKey?: Uint8Array;
+	message?: Uint8Array;
+	'error-codes'?: any[]; // optional
 }
 
 function App() {
-  const { currentWallet } = useCurrentWallet();
-  const { mutateAsync: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
-  const currentAccount = useCurrentAccount();
+	const { currentWallet } = useCurrentWallet();
+	const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+	const currentAccount = useCurrentAccount();
 
-  const SITE_KEY = import.meta.env.VITE_reCAPTCHA_SITE_KEY!;
-  const SECRET_KEY = import.meta.env.VITE_reCAPTCHA_SECRET_KEY!;
-  const packageId = import.meta.env.VITE_PACKAGE_ID!;
-  const registryId = import.meta.env.VITE_REGISTRY_ID!;
-  const moduleId: string = "recaptcha";
+	const SITE_KEY = import.meta.env.VITE_reCAPTCHA_SITE_KEY!;
+	const SECRET_KEY = import.meta.env.VITE_reCAPTCHA_SECRET_KEY!;
+	const packageId = import.meta.env.VITE_PACKAGE_ID!;
+	const registryId = import.meta.env.VITE_REGISTRY_ID!;
+	const moduleId: string = 'recaptcha';
 
-  const [isRecaptchaValid, setRecaptchaValidation] = useState(false);
+	const [isRecaptchaValid, setRecaptchaValidation] = useState(false);
 
-  const [verificationPassedOneTime, setVerificationPassedOneTime] =
-    useState(false);
+	const [verificationPassedOneTime, setVerificationPassedOneTime] = useState(false);
 
-  const [message, setMessage] = useState(new Uint8Array());
-  const [pubKey, setPubKey] = useState(new Uint8Array());
-  const [signature, setSignature] = useState(new Uint8Array());
+	const [message, setMessage] = useState(new Uint8Array());
+	const [pubKey, setPubKey] = useState(new Uint8Array());
+	const [signature, setSignature] = useState(new Uint8Array());
 
-  const onChange = async (token: string | null) => {
-    if (token === null) {
-      setRecaptchaValidation(false);
-    } else {
-      const recaptchaApiResponse: RecaptchaApiResponse = await verifyToken(
-        token
-      );
+	const onChange = async (token: string | null) => {
+		if (token === null) {
+			setRecaptchaValidation(false);
+		} else {
+			const recaptchaApiResponse: RecaptchaApiResponse = await verifyToken(token);
 
-      setRecaptchaValidation(true);
+			setRecaptchaValidation(true);
 
-      if (!verificationPassedOneTime) setVerificationPassedOneTime(true);
+			if (!verificationPassedOneTime) setVerificationPassedOneTime(true);
 
-      if (recaptchaApiResponse.message !== undefined)
-        setMessage(recaptchaApiResponse.message);
-      if (recaptchaApiResponse.pubKey !== undefined)
-        setPubKey(recaptchaApiResponse.pubKey);
-      if (recaptchaApiResponse.signature !== undefined)
-        setSignature(recaptchaApiResponse.signature);
-    }
-  };
+			if (recaptchaApiResponse.message !== undefined) setMessage(recaptchaApiResponse.message);
+			if (recaptchaApiResponse.pubKey !== undefined) setPubKey(recaptchaApiResponse.pubKey);
+			if (recaptchaApiResponse.signature !== undefined)
+				setSignature(recaptchaApiResponse.signature);
+		}
+	};
 
-  async function verifyToken(token: string): Promise<RecaptchaApiResponse> {
-    try {
-      const response = await Axios.post(
-        `https://bot-prevention-api.vercel.app/verify-token`,
-        {
-          response: token,
-          secret: SECRET_KEY,
-          userAddress: currentAccount?.address,
-        }
-      );
-      return response["data"];
-    } catch (error) {
-      console.log(error);
-    }
-    return {} as RecaptchaApiResponse;
-  }
+	async function verifyToken(token: string): Promise<RecaptchaApiResponse> {
+		try {
+			const response = await Axios.post(`https://bot-prevention-api.vercel.app/verify-token`, {
+				response: token,
+				secret: SECRET_KEY,
+				userAddress: currentAccount?.address,
+			});
+			return response['data'];
+		} catch (error) {
+			console.log(error);
+		}
+		return {} as RecaptchaApiResponse;
+	}
 
-  useEffect(() => {
-    // You can do something with `currentWallet` here.
-  }, [currentWallet]);
+	useEffect(() => {
+		// You can do something with `currentWallet` here.
+	}, [currentWallet]);
 
-  return (
-    <div className="App">
-      <ConnectButton />
-      <div>
-        <button
-          disabled={!verificationPassedOneTime}
-          onClick={async () => {
-            const transactionBlock = new TransactionBlock();
+	return (
+		<div className="App">
+			<ConnectButton />
+			<div>
+				<button
+					disabled={!verificationPassedOneTime}
+					onClick={async () => {
+						const transaction = new Transaction();
 
-            transactionBlock.moveCall({
-              target: `${packageId}::${moduleId}::interact`,
-              arguments: [
-                transactionBlock.object(registryId),
-                transactionBlock.object(SUI_CLOCK_OBJECT_ID),
-              ],
-            });
+						transaction.moveCall({
+							target: `${packageId}::${moduleId}::interact`,
+							arguments: [transaction.object(registryId), transaction.object(SUI_CLOCK_OBJECT_ID)],
+						});
 
-            console.log(
-              await signAndExecuteTransactionBlock({
-                transactionBlock: transactionBlock,
-                options: { showEffects: true },
-              })
-            );
-          }}
-        >
-          Interact
-        </button>
-      </div>
+						console.log(
+							await signAndExecuteTransaction({
+								transaction: transaction,
+							}),
+						);
+					}}
+				>
+					Interact
+				</button>
+			</div>
 
-      <div>
-        <button
-          disabled={!isRecaptchaValid}
-          onClick={async () => {
-            const transactionBlock = new TransactionBlock();
+			<div>
+				<button
+					disabled={!isRecaptchaValid}
+					onClick={async () => {
+						const transaction = new Transaction();
 
-            transactionBlock.moveCall({
-              target: `${packageId}::${moduleId}::verify`,
-              arguments: [
-                transactionBlock.object(registryId),
-                transactionBlock.pure(signature),
-                transactionBlock.pure(pubKey),
-                transactionBlock.pure(message),
-              ],
-            });
+						transaction.moveCall({
+							target: `${packageId}::${moduleId}::verify`,
+							arguments: [
+								transaction.object(registryId),
+								transaction.pure(signature),
+								transaction.pure(pubKey),
+								transaction.pure(message),
+							],
+						});
 
-            console.log(
-              await signAndExecuteTransactionBlock({
-                transactionBlock,
-                options: { showEffects: true },
-              })
-            );
-          }}
-        >
-          Verify
-        </button>
-      </div>
+						console.log(
+							await signAndExecuteTransaction({
+								transaction,
+							}),
+						);
+					}}
+				>
+					Verify
+				</button>
+			</div>
 
-      <hr />
-      <ReCAPTCHA sitekey={SITE_KEY} onChange={onChange} />
-    </div>
-  );
+			<hr />
+			<ReCAPTCHA sitekey={SITE_KEY} onChange={onChange} />
+		</div>
+	);
 }
 
 export default App;
@@ -521,7 +512,7 @@ export default App;
 5. Examine the code to see what it does.
 
 - First, import the modules that you need for your app.
-- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransactionBlock` function. These help you connect to the wallet and execute transactions on the blockchain.
+- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransaction` function. These help you connect to the wallet and execute transactions on the blockchain.
 - Then, define some constants for the site key, the secret key, the package ID, the registry ID, and the module ID. These are the values that you use to interact with the reCAPTCHA API and the smart contract.
 - After that, define some state variables to store the status of the reCAPTCHA validation, the verification result, and the message, the public key, and the signature that you get from the backend. Use the `useState` hook from React to manage these state variables.
 - Next, define a function named `onChange` that takes a token as an input and handles the change of the reCAPTCHA component. This function is triggered when the user completes the reCAPTCHA challenge. Here are the steps that you follow in this function:
@@ -538,8 +529,8 @@ export default App;
 - Next, use the `useEffect` hook from React to run some code when the `currentWallet` state changes. In this case, you don't do anything, but you could add some logic here if you want to.
 - Finally, return a JSX element that renders the app. The app consists of the following components:
   - A `ConnectButton` component from `@mysten/dapp-kit` that allows the user to connect to their wallet.
-  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
-  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
   - A `ReCAPTCHA` component from `react-google-recaptcha` that renders the reCAPTCHA widget. You pass the site key and the `onChange` function as props to this component.
 
 That's it! You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.

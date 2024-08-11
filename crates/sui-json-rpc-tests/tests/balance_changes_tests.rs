@@ -20,7 +20,7 @@ async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "data", "dummy_modules_publish"]);
-    let compiled_package = BuildConfig::default().build(path)?;
+    let compiled_package = BuildConfig::default().build(&path)?;
     let compiled_modules_bytes = compiled_package
         .get_package_base64(false)
         .into_iter()

@@ -16,16 +16,16 @@ pub use sui_indexer::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
-use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_types::storage::ReadStore;
+use sui_types::storage::RestStateReader;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -52,6 +52,7 @@ pub struct Cluster {
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
+    pub cancellation_token: CancellationToken,
 }
 
 /// Starts a validator, fullnode, indexer, and graphql service for testing.
@@ -61,17 +62,20 @@ pub async fn start_cluster(
 ) -> Cluster {
     let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
     let db_url = graphql_connection_config.db_url.clone();
+    let cancellation_token = CancellationToken::new();
     // Starts validator+fullnode
     let val_fn =
         start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
             .await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer(
+    let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None),
-        data_ingestion_path,
+        /* reset_database */ true,
+        Some(data_ingestion_path),
+        cancellation_token.clone(),
     )
     .await;
 
@@ -80,7 +84,7 @@ pub async fn start_cluster(
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
         graphql_connection_config.clone(),
         Some(fn_rpc_url),
-        /* cancellation_token */ None,
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -99,6 +103,7 @@ pub async fn start_cluster(
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
+        cancellation_token,
     }
 }
 
@@ -107,7 +112,7 @@ pub async fn start_cluster(
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
-    executor: Arc<dyn ReadStore + Send + Sync>,
+    executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
@@ -121,14 +126,7 @@ pub async fn serve_executor(
         .unwrap();
 
     let executor_server_handle = tokio::spawn(async move {
-        let chain_id = (*executor
-            .get_checkpoint_by_sequence_number(0)
-            .unwrap()
-            .unwrap()
-            .digest())
-        .into();
-
-        sui_rest_api::RestService::new_without_version(executor, chain_id)
+        sui_rest_api::RestService::new_without_version(executor)
             .start_service(executor_server_url, Some("/rest".to_owned()))
             .await;
     });
@@ -137,7 +135,7 @@ pub async fn serve_executor(
         Some(db_url),
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
-        Some(graphql_connection_config.db_name()),
+        /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
@@ -243,6 +241,11 @@ async fn wait_for_graphql_checkpoint_catchup(
     checkpoint: u64,
     base_timeout: Duration,
 ) {
+    info!(
+        "Waiting for graphql to catchup to checkpoint {}, base time out is {}",
+        checkpoint,
+        base_timeout.as_secs()
+    );
     let query = r#"
     {
         availableRange {
@@ -263,7 +266,7 @@ async fn wait_for_graphql_checkpoint_catchup(
                 .response_body_json();
 
             let current_checkpoint = resp["data"]["availableRange"]["last"].get("sequenceNumber");
-
+            info!("Current checkpoint: {:?}", current_checkpoint);
             // Indexer has not picked up any checkpoints yet
             let Some(current_checkpoint) = current_checkpoint else {
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -288,6 +291,13 @@ impl Cluster {
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Sends a cancellation signal to the graphql and indexer services and waits for them to
+    /// shutdown.
+    pub async fn cleanup_resources(self) {
+        self.cancellation_token.cancel();
+        let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
     }
 }
 

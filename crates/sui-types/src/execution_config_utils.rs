@@ -19,7 +19,7 @@ pub fn to_binary_config(protocol_config: &ProtocolConfig) -> BinaryConfig {
             module_handles: protocol_config
                 .binary_module_handles_as_option()
                 .unwrap_or(u16::MAX),
-            struct_handles: protocol_config
+            datatype_handles: protocol_config
                 .binary_struct_handles_as_option()
                 .unwrap_or(u16::MAX),
             function_handles: protocol_config
@@ -57,6 +57,18 @@ pub fn to_binary_config(protocol_config: &ProtocolConfig) -> BinaryConfig {
                 .unwrap_or(u16::MAX),
             friend_decls: protocol_config
                 .binary_friend_decls_as_option()
+                .unwrap_or(u16::MAX),
+            enum_defs: protocol_config
+                .binary_enum_defs_as_option()
+                .unwrap_or(u16::MAX),
+            enum_def_instantiations: protocol_config
+                .binary_enum_def_instantiations_as_option()
+                .unwrap_or(u16::MAX),
+            variant_handles: protocol_config
+                .binary_variant_handles_as_option()
+                .unwrap_or(u16::MAX),
+            variant_instantiation_handles: protocol_config
+                .binary_variant_instantiation_handles_as_option()
                 .unwrap_or(u16::MAX),
         },
     )

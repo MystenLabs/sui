@@ -41,7 +41,7 @@ impl PackagePublishTxGenerator {
                     name.clone(),
                     ObjectID::ZERO,
                 )])
-                .build(target_path)
+                .build(&target_path)
                 .unwrap();
                 compiled_package.get_package_bytes(false)
             } else {
@@ -83,7 +83,7 @@ impl PackagePublishTxGenerator {
         let target_path = dir.join(path);
         dep_map.insert(name, ObjectID::ZERO);
         let compiled_package = BuildConfig::new_for_testing_replace_addresses(dep_map)
-            .build(target_path)
+            .build(&target_path)
             .unwrap();
         Self { compiled_package }
     }

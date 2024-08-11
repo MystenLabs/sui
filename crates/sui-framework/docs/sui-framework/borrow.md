@@ -103,7 +103,7 @@ A hot potato making sure the object is put back once borrowed.
 The <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></code> does not match the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code>.
 
 
-<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>: u64 = 0;
+<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -113,7 +113,7 @@ The <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></code> does not match
 An attempt to swap the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a>.value</code> with another object of the same type.
 
 
-<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>: u64 = 1;
+<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 

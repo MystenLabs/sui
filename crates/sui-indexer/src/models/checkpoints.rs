@@ -9,10 +9,16 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 
 use crate::errors::IndexerError;
-use crate::schema::checkpoints;
+use crate::schema::{chain_identifier, checkpoints, pruner_cp_watermark};
 use crate::types::IndexedCheckpoint;
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[diesel(table_name = chain_identifier)]
+pub struct StoredChainIdentifier {
+    pub checkpoint_digest: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]
 pub struct StoredCheckpoint {
     pub sequence_number: i64,
@@ -203,5 +209,23 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
             validator_signature,
             checkpoint_commitments,
         })
+    }
+}
+
+#[derive(Queryable, Insertable, Selectable, Debug, Clone, Default)]
+#[diesel(table_name = pruner_cp_watermark)]
+pub struct StoredCpTx {
+    pub checkpoint_sequence_number: i64,
+    pub min_tx_sequence_number: i64,
+    pub max_tx_sequence_number: i64,
+}
+
+impl From<&IndexedCheckpoint> for StoredCpTx {
+    fn from(c: &IndexedCheckpoint) -> Self {
+        Self {
+            checkpoint_sequence_number: c.sequence_number as i64,
+            min_tx_sequence_number: c.min_tx_sequence_number as i64,
+            max_tx_sequence_number: c.max_tx_sequence_number as i64,
+        }
     }
 }

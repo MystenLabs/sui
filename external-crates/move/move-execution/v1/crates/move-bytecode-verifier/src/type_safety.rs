@@ -13,12 +13,11 @@ use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, FieldHandleIndex,
+        AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, FieldHandleIndex,
         FunctionDefinitionIndex, FunctionHandle, LocalIndex, Signature, SignatureToken,
         SignatureToken as ST, StructDefinition, StructDefinitionIndex, StructFieldInformation,
-        StructHandleIndex,
     },
-    safe_unwrap_err,
+    safe_unwrap_err, CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -940,6 +939,20 @@ fn verify_instr(
             }
             verifier.push(meter, ST::U256)?;
         }
+        Bytecode::PackVariant(_)
+        | Bytecode::PackVariantGeneric(_)
+        | Bytecode::UnpackVariant(_)
+        | Bytecode::UnpackVariantGeneric(_)
+        | Bytecode::UnpackVariantImmRef(_)
+        | Bytecode::UnpackVariantGenericImmRef(_)
+        | Bytecode::UnpackVariantMutRef(_)
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        | Bytecode::VariantSwitch(_) => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Unexpected variant opcode in version 1".to_string()),
+            );
+        }
     };
     Ok(())
 }
@@ -948,11 +961,11 @@ fn verify_instr(
 // Helpers functions for types
 //
 
-fn materialize_type(struct_handle: StructHandleIndex, type_args: &Signature) -> SignatureToken {
+fn materialize_type(struct_handle: DatatypeHandleIndex, type_args: &Signature) -> SignatureToken {
     if type_args.is_empty() {
-        ST::Struct(struct_handle)
+        ST::Datatype(struct_handle)
     } else {
-        ST::StructInstantiation(Box::new((struct_handle, type_args.0.clone())))
+        ST::DatatypeInstantiation(Box::new((struct_handle, type_args.0.clone())))
     }
 }
 
@@ -974,10 +987,10 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
         Address => Address,
         Signer => Signer,
         Vector(ty) => Vector(Box::new(instantiate(ty, subst))),
-        Struct(idx) => Struct(*idx),
-        StructInstantiation(s) => {
+        Datatype(idx) => Datatype(*idx),
+        DatatypeInstantiation(s) => {
             let (idx, struct_type_args) = &**s;
-            StructInstantiation(Box::new((
+            DatatypeInstantiation(Box::new((
                 *idx,
                 struct_type_args
                     .iter()

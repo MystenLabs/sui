@@ -32,15 +32,15 @@ When you use a package manager to install the necessary packages, it downloads t
 doesn't already exist. For this example, you need only the Sui TypeScript SDK:
 
 ```sh npm2yarn
-npm i -D @mysten/sui.js
+npm i -D @mysten/sui
 ```
 
-Your `package.json` file now has a _dependencies_ section with `@mysten/sui.js` listed with the
-package version number.
+Your `package.json` file now has a _dependencies_ section with `@mysten/sui` listed with the package
+version number.
 
 ```json
 "dependencies": {
-    "@mysten/sui.js": "^<VERSION_NUMBER>"
+    "@mysten/sui": "^<VERSION_NUMBER>"
 }
 ```
 
@@ -52,9 +52,9 @@ address. You must be on Devnet, Testnet, or a local network to use a faucet for 
 Create a new `index.js` file in the root of your project with the following code.
 
 ```js
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { getFaucetHost, requestSuiFromFaucetV1 } from '@mysten/sui.js/faucet';
-import { MIST_PER_SUI } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { getFaucetHost, requestSuiFromFaucetV1 } from '@mysten/sui/faucet';
+import { MIST_PER_SUI } from '@mysten/sui/utils';
 
 // replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
 const MY_ADDRESS = '<YOUR_SUI_ADDRESS>';

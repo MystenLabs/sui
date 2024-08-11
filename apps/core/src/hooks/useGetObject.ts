@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 const defaultOptions = {

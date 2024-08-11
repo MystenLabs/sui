@@ -8,7 +8,6 @@ Commands:
   coverage     Inspect test coverage for this package. A previous test run with the `--coverage` flag must have previously been run
   disassemble  Disassemble the Move bytecode pointed to
   docgen       Generate javadoc style documentation for Move packages
-  errmap       Generate error map for the package and its dependencies at `path` for use by the Move explanation tool
   info         Print address information
   migrate      Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory
   new          Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`

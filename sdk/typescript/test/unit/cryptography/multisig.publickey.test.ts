@@ -7,7 +7,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope, messageWithIntent } from '../../../src/cryptography/intent';
+import { messageWithIntent } from '../../../src/cryptography/intent';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../../../src/cryptography/signature.js';
@@ -249,7 +249,7 @@ describe('Publickey', () => {
 		const maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
 		const tmp = new Uint8Array(maxLength);
 		tmp.set([0x03]);
-		tmp.set(bcs.ser('u16', 3).toBytes(), 1);
+		tmp.set(bcs.U16.serialize(3).toBytes(), 1);
 		let i = 3;
 		for (const { publicKey, weight } of multiSigPublicKey.getPublicKeys()) {
 			const bytes = publicKey.toSuiBytes();
@@ -299,8 +299,8 @@ describe('Publickey', () => {
 		let multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const intentMessage = messageWithIntent(
-			IntentScope.PersonalMessage,
-			bcs.ser(['vector', 'u8'], data).toBytes(),
+			'PersonalMessage',
+			bcs.vector(bcs.U8).serialize(data).toBytes(),
 		);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 
@@ -325,8 +325,8 @@ describe('Publickey', () => {
 		multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const intentMessage = messageWithIntent(
-			IntentScope.PersonalMessage,
-			bcs.ser(['vector', 'u8'], data).toBytes(),
+			'PersonalMessage',
+			bcs.vector(bcs.U8).serialize(data).toBytes(),
 		);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 
@@ -362,11 +362,13 @@ describe('Publickey', () => {
 			bitmap: 3,
 			sigs: [
 				{
+					$kind: 'ED25519',
 					ED25519: Array.from(
 						parseSerializedSignature((await k1.signPersonalMessage(data)).signature).signature!,
 					),
 				},
 				{
+					$kind: 'Secp256k1',
 					Secp256k1: Array.from(
 						parseSerializedSignature((await k2.signPersonalMessage(data)).signature).signature!,
 					),
@@ -424,7 +426,7 @@ describe('Publickey', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const bytes = fromB64(multisig);
-		const multiSigStruct: MultiSigStruct = bcs.de('MultiSig', bytes.slice(1));
+		const multiSigStruct: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
 
 		const parsedPartialSignatures = parsePartialSignatures(multiSigStruct);
 

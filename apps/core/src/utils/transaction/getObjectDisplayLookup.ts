@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { DisplayFieldsResponse, SuiObjectResponse } from '@mysten/sui.js/client';
+import { DisplayFieldsResponse, SuiObjectResponse } from '@mysten/sui/client';
 
 import { hasDisplayData } from '../hasDisplayData';
 

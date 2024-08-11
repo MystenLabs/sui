@@ -6,11 +6,11 @@ Transactions in Sui represent calls to specific functionality (like calling a sm
 
 Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](./building-ptb) (PTBs), the user signs the transaction and submits it to be executed on chain.
 
-The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address. 
+The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address.
 
-Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are `Ed25519 Pure`, `ECDSA Secp256k1`, `ECDSA Secp256r1`, `Multisig`, and `zkLogin`. 
+Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are `Ed25519 Pure`, `ECDSA Secp256k1`, `ECDSA Secp256r1`, `Multisig`, and `zkLogin`.
 
-You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, please refer to their own pages ([Multisig](/concepts/cryptography/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions. 
+You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, please refer to their own pages ([Multisig](/concepts/cryptography/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions.
 
 With a signature and the transaction bytes, a transaction can be submitted to be executed.
 
@@ -18,10 +18,10 @@ With a signature and the transaction bytes, a transaction can be submitted to be
 
 The following high-level process describes the overall workflow for constructing, signing and executing an on-chain transaction:
 
-* Construct the transaction data by creating a `TransactionBlock` where multiple transactions are chained. See [Building Programmable Transaction Blocks](./building-ptb.mdx) for more information. 
-* The SDK's built-in gas estimation and coin selection picks the gas coin.
-* Sign the transaction to generate a [signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
-* Submit the `TransactionBlock` and its signature for on-chain execution.
+- Construct the transaction data by creating a `Transaction` where multiple transactions are chained. See [Building Programmable Transaction Blocks](./building-ptb.mdx) for more information.
+- The SDK's built-in gas estimation and coin selection picks the gas coin.
+- Sign the transaction to generate a [signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
+- Submit the `Transaction` and its signature for on-chain execution.
 
 :::info
 
@@ -40,61 +40,68 @@ The following examples demonstrate how to sign and execute transactions using Ru
 There are various ways to instantiate a key pair and to derive its public key and Sui address using the Sui TypeScript SDK.
 
 ```tsx
-    import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-    import { TransactionBlock } from '@mysten/sui.js/transactions';
-    import { type Keypair } from '@mysten/sui.js/cryptography';
-    import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-    import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
-    import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
-    import { fromHEX } from '@mysten/bcs';
-    
-    const kp_rand_0 = new Ed25519Keypair();
-    const kp_rand_1 = new Secp256k1Keypair();
-    const kp_rand_2 = new Secp256r1Keypair();
+import { fromHEX } from '@mysten/bcs';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { type Keypair } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
+import { Secp256r1Keypair } from '@mysten/sui/keypairs/secp256r1';
+import { Transaction } from '@mysten/sui/transactions';
 
-    const kp_import_0 = Ed25519Keypair.fromSecretKey(fromHex("0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82"));
-    const kp_import_1 = Secp256k1Keypair.fromSecretKey(fromHex("0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82"));
-    const kp_import_2 = Secp256r1Keypair.fromSecretKey(fromHex("0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82"));
+const kp_rand_0 = new Ed25519Keypair();
+const kp_rand_1 = new Secp256k1Keypair();
+const kp_rand_2 = new Secp256r1Keypair();
 
-    // $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
-	const kp_derive_0 = Ed25519Keypair.deriveKeypair("$MNEMONICS");
-	const kp_derive_1 = Secp256k1Keypair.deriveKeypair("$MNEMONICS");
-	const kp_derive_2 = Secp256r1Keypair.deriveKeypair("$MNEMONICS");
+const kp_import_0 = Ed25519Keypair.fromSecretKey(
+	fromHex('0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82'),
+);
+const kp_import_1 = Secp256k1Keypair.fromSecretKey(
+	fromHex('0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82'),
+);
+const kp_import_2 = Secp256r1Keypair.fromSecretKey(
+	fromHex('0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82'),
+);
 
-	const kp_derive_with_path_0 = Ed25519Keypair.deriveKeypair("$MNEMONICS", "m/44'/784'/1'/0'/0'");
-	const kp_derive_with_path_1 = Secp256k1Keypair.deriveKeypair("$MNEMONICS", "m/54'/784'/1'/0/0");
-	const kp_derive_with_path_2 = Secp256r1Keypair.deriveKeypair("$MNEMONICS", "m/74'/784'/1'/0/0");
+// $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+const kp_derive_0 = Ed25519Keypair.deriveKeypair('$MNEMONICS');
+const kp_derive_1 = Secp256k1Keypair.deriveKeypair('$MNEMONICS');
+const kp_derive_2 = Secp256r1Keypair.deriveKeypair('$MNEMONICS');
 
-    // replace `kp_rand_0` with the variable names above.
-    const pk = kp_rand_0.getPublicKey();
-    const sender = pk.toSuiAddress();
+const kp_derive_with_path_0 = Ed25519Keypair.deriveKeypair('$MNEMONICS', "m/44'/784'/1'/0'/0'");
+const kp_derive_with_path_1 = Secp256k1Keypair.deriveKeypair('$MNEMONICS', "m/54'/784'/1'/0/0");
+const kp_derive_with_path_2 = Secp256r1Keypair.deriveKeypair('$MNEMONICS', "m/74'/784'/1'/0/0");
 
-    // create an example transaction block.
-    const txb = new TransactionBlock();
-	txb.setSender(sender);
-	txb.setGasPrice(5);
-	txb.setGasBudget(100);
-	const bytes = await txb.build();
-    const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+// replace `kp_rand_0` with the variable names above.
+const pk = kp_rand_0.getPublicKey();
+const sender = pk.toSuiAddress();
 
-    // verify the signature locally
-	expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(true);
+// create an example transaction block.
+const txb = new Transaction();
+txb.setSender(sender);
+txb.setGasPrice(5);
+txb.setGasBudget(100);
+const bytes = await txb.build();
+const serializedSignature = (await keypair.signTransaction(bytes)).signature;
 
-    // define sui client for the desired network. 
-    const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+// verify the signature locally
+expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(true);
 
-    // execute transaction. 
-    let res = client.executeTransactionBlock({
-	    transactionBlock: bytes,
-	    signature: serializedSignature,
-    });
-    console.log(res);
+// define sui client for the desired network.
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+
+// execute transaction.
+let res = client.executeTransactionBlock({
+	transactionBlock: bytes,
+	signature: serializedSignature,
+});
+console.log(res);
 ```
+
 </TabItem>
 
 <TabItem value="rust" label="Rust">
 
-The full code example below can be found under [crates/sui-sdk](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/sign_tx_guide.rs). 
+The full code example below can be found under [crates/sui-sdk](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/sign_tx_guide.rs).
 
 There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK.
 
@@ -142,7 +149,7 @@ There are various ways to instantiate a `SuiKeyPair` and to derive its public ke
     let sender = SuiAddress::from(&pk);
 ```
 
-Next, sign transaction data constructed using an example programmable transaction block with default gas coin, gas budget, and gas price. See [Building Programmable Transaction Blocks](./building-ptb.mdx) for more information. 
+Next, sign transaction data constructed using an example programmable transaction block with default gas coin, gas budget, and gas price. See [Building Programmable Transaction Blocks](./building-ptb.mdx) for more information.
 
 ```rust
     // construct an example programmable transaction.
@@ -165,7 +172,7 @@ Next, sign transaction data constructed using an example programmable transactio
     );
 ```
 
-Commit a signature to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). 
+Commit a signature to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`).
 
 ```rust
     // derive the digest that the keypair should sign on, i.e. the blake2b hash of `intent || tx_data`.
@@ -187,7 +194,7 @@ Commit a signature to the Blake2b hash digest of the intent message (`intent || 
     assert!(res.is_ok());
 ```
 
-Finally, submit the transaction with the signature. 
+Finally, submit the transaction with the signature.
 
 ```rust
     let transaction_response = sui_client
@@ -213,7 +220,7 @@ When using the [Sui CLI](/references/cli.mdx) for the first time, it creates a l
 There are three ways to initialize a key:
 
 ```shell
-# generate randomly. 
+# generate randomly.
 sui client new-address ed25519
 sui client new-address secp256k1
 sui client new-address secp256r1
@@ -223,7 +230,7 @@ sui keytool import "0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf
 sui keytool import "0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82" secp256k1
 sui keytool import "0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82" secp256r1
 
-# import the mnemonics (recovery phrase) with derivation path to keystore. 
+# import the mnemonics (recovery phrase) with derivation path to keystore.
 # $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 
 sui keytool import "$MNEMONICS" ed25519
@@ -246,8 +253,9 @@ sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIGNA
 </Tabs>
 
 ### Notes
+
 1. This guide demonstrates how to sign with a single private key. Refer to [Multisig](/concepts/cryptography/transaction-auth/multisig.mdx) when it is preferred to set up more complex signing policies.
-2. Similarly, native zkLogin does not follow the above steps, see [the docs](/concepts/cryptography/zklogin.mdx) to understand how to derive a zkLogin address, and produce a zkLogin signature with an ephemeral key pair. 
-3. If you decide to implement your own signing mechanisms instead of using the previous tools, see the [Signatures](/concepts/cryptography/transaction-auth/signatures.mdx) doc on the accepted signature specifications for each scheme. 
+2. Similarly, native zkLogin does not follow the above steps, see [the docs](/concepts/cryptography/zklogin.mdx) to understand how to derive a zkLogin address, and produce a zkLogin signature with an ephemeral key pair.
+3. If you decide to implement your own signing mechanisms instead of using the previous tools, see the [Signatures](/concepts/cryptography/transaction-auth/signatures.mdx) doc on the accepted signature specifications for each scheme.
 4. Flag is one byte that differentiates signature schemes. See supported schemes and its flag in [Signatures](/concepts/cryptography/transaction-auth/signatures.mdx).
-5. The `execute_transaction_block` endpoint takes a list of signatures, so it should contain exactly one user signature, unless you are using sponsored transaction that a second signature for the gas object can be provided. See [Sponsored Transactions](/concepts/transactions/sponsored-transactions.mdx) for more information. 
+5. The `execute_transaction_block` endpoint takes a list of signatures, so it should contain exactly one user signature, unless you are using sponsored transaction that a second signature for the gas object can be provided. See [Sponsored Transactions](/concepts/transactions/sponsored-transactions.mdx) for more information.

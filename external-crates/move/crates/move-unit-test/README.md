@@ -10,13 +10,6 @@ This crate defines the core logic for running and reporting Move unit
 tests. Move unit testing is made up of two main components; a test runner,
 and a test reporter.
 
-It's important to also note here that unit tests can be run using the
-[stackless bytecode interpreter](../../move-prover/interpreter). If the
-unit tests are run with the stackless bytecode interpreter and the test
-returns a value, then the result of executing the unit test with the Move
-VM and the result of the interpreter will be compared and an error will
-be raised if they are not equal.
-
 Detailed information on how to use unit tests as a user of Move can be
 found [here](https://move-language.github.io/move/unit-testing.html).
 
@@ -26,6 +19,7 @@ The test runner consumes a
 [`TestPlan`](../../move-compiler/src/unit_test/mod.rs): this is a
 datastructure that is built by the Move compiler, based on source `#[test]`
 attributes. At a high level, this test plan consists of:
+
 1. A list of `ModuleTestPlan`s for each non-dependency module. A
    `ModuleTestPlan` consists of a list of unit tests declared in a module,
    along with its arguments and whether the unit test is an expected
@@ -41,7 +35,7 @@ creates an initial test state consisting solely of the modules in bullet
 
 After constructing this initial state, a work queue of `ModuleTestPlan`s is
 passed to a [`rayon`](https://docs.rs/rayon/latest/rayon/) threadpool to
-execute.  After the execution of each test a `PASS`, `FAIL` or `TIMEOUT` is
+execute. After the execution of each test a `PASS`, `FAIL` or `TIMEOUT` is
 reported to the writer (usually `std::io::stdout`) as soon as the test's
 result is known. The result of running tests in a `ModuleTestPlan` is a
 mapping of failing and passing tests (where failing means that the tests

@@ -82,11 +82,11 @@ module sui::random_tests {
         test_scenario::return_shared(random_state);
         scenario.end();
 
-        assert!(gen1.generator_counter() == 0, 0);
-        assert!(gen1.generator_buffer().is_empty(), 0);
-        assert!(gen1.generator_seed() == gen2.generator_seed(), 0);
-        assert!(gen1.generator_seed() != gen3.generator_seed(), 0);
-        assert!(gen3.generator_seed() != gen4.generator_seed(), 0);
+        assert!(gen1.generator_counter() == 0);
+        assert!(gen1.generator_buffer().is_empty());
+        assert!(gen1.generator_seed() == gen2.generator_seed());
+        assert!(gen1.generator_seed() != gen3.generator_seed());
+        assert!(gen3.generator_seed() != gen4.generator_seed());
     }
 
     #[test]
@@ -106,31 +106,31 @@ module sui::random_tests {
         // Regression (not critical for security, but still an indication that something is wrong).
         let mut gen = random_state.new_generator(scenario.ctx());
         let o256 = gen.generate_u256();
-        assert!(o256 == 85985798878417437391783029796051418802193098452099584085821130568389745847195, 0);
+        assert!(o256 == 85985798878417437391783029796051418802193098452099584085821130568389745847195);
         let o128 = gen.generate_u128();
-        assert!(o128 == 332057125240408555349883177059479920214, 0);
+        assert!(o128 == 332057125240408555349883177059479920214);
         let o64 = gen.generate_u64();
-        assert!(o64 == 13202990749492462163, 0);
+        assert!(o64 == 13202990749492462163);
         let o32 = gen.generate_u32();
-        assert!(o32 == 3316307786, 0);
+        assert!(o32 == 3316307786);
         let o16 = gen.generate_u16();
-        assert!(o16 == 5961, 0);
+        assert!(o16 == 5961);
         let o8 = gen.generate_u8();
-        assert!(o8 == 222, 0);
+        assert!(o8 == 222);
         let output = gen.generate_u128_in_range(51, 123456789);
-        assert!(output == 99859235, 0);
+        assert!(output == 99859235);
         let output = gen.generate_u64_in_range(51, 123456789);
-        assert!(output == 87557915, 0);
+        assert!(output == 87557915);
         let output = gen.generate_u32_in_range(51, 123456789);
-        assert!(output == 57096277, 0);
+        assert!(output == 57096277);
         let output = gen.generate_u16_in_range(51, 1234);
-        assert!(output == 349, 0);
+        assert!(output == 349);
         let output = gen.generate_u8_in_range(51, 123);
-        assert!(output == 60, 0);
+        assert!(output == 60);
         let output = gen.generate_bytes(11);
-        assert!(output == x"252cfdbb59205fcc509c9e", 0);
+        assert!(output == x"252cfdbb59205fcc509c9e");
         let output = gen.generate_bool();
-        assert!(output == true, 0);
+        assert!(output == true);
 
         test_scenario::return_shared(random_state);
         scenario.end();
@@ -153,31 +153,31 @@ module sui::random_tests {
         let mut gen = random_state.new_generator(scenario.ctx());
 
         // Check the output size & internal generator state
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output = gen.generate_bytes(1);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 31, 0);
-        assert!(output.length() == 1, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 31);
+        assert!(output.length() == 1);
         let output = gen.generate_bytes(2);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 29, 0);
-        assert!(output.length() == 2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 29);
+        assert!(output.length() == 2);
         let output = gen.generate_bytes(29);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 0, 0);
-        assert!(output.length() == 29, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 0);
+        assert!(output.length() == 29);
         let output = gen.generate_bytes(11);
-        assert!(gen.generator_counter() == 2, 0);
-        assert!(gen.generator_buffer().length() == 21, 0);
-        assert!(output.length() == 11, 0);
+        assert!(gen.generator_counter() == 2);
+        assert!(gen.generator_buffer().length() == 21);
+        assert!(output.length() == 11);
         let output = gen.generate_bytes(32 * 2);
-        assert!(gen.generator_counter() == 4, 0);
-        assert!(gen.generator_buffer().length() == 21, 0);
-        assert!(output.length() == 32 * 2, 0);
+        assert!(gen.generator_counter() == 4);
+        assert!(gen.generator_buffer().length() == 21);
+        assert!(output.length() == 32 * 2);
         let output = gen.generate_bytes(32 * 5 + 5);
-        assert!(gen.generator_counter() == 9, 0);
-        assert!(gen.generator_buffer().length() == 16, 0);
-        assert!(output.length() == 32 * 5 + 5, 0);
+        assert!(gen.generator_counter() == 9);
+        assert!(gen.generator_buffer().length() == 16);
+        assert!(output.length() == 32 * 5 + 5);
 
         // Sanity check that the output is not all zeros.
         let output = gen.generate_bytes(10);
@@ -218,18 +218,18 @@ module sui::random_tests {
 
         // u256
         let mut gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u256();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 0, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 0);
         let output2 = gen.generate_u256();
-        assert!(gen.generator_counter() == 2, 0);
-        assert!(gen.generator_buffer().length() == 0, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 2);
+        assert!(gen.generator_buffer().length() == 0);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u8();
         let _output4 = gen.generate_u256();
-        assert!(gen.generator_counter() == 4, 0);
-        assert!(gen.generator_buffer().length() == 31, 0);
+        assert!(gen.generator_counter() == 4);
+        assert!(gen.generator_buffer().length() == 31);
         // Check that we indeed generate all bytes as random
         let mut i = 0;
         while (i < 32) {
@@ -240,18 +240,18 @@ module sui::random_tests {
 
         // u128
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u128();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 16, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 16);
         let output2 = gen.generate_u128();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 0, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 0);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u8();
         let _output4 = gen.generate_u128();
-        assert!(gen.generator_counter() == 2, 0);
-        assert!(gen.generator_buffer().length() == 15, 0);
+        assert!(gen.generator_counter() == 2);
+        assert!(gen.generator_buffer().length() == 15);
         let mut i = 0;
         while (i < 16) {
             let x = gen.generate_u128();
@@ -261,18 +261,18 @@ module sui::random_tests {
 
         // u64
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u64();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 24, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 24);
         let output2 = gen.generate_u64();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 16, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 16);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u8();
         let _output4 = gen.generate_u64();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 7, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 7);
         let mut i = 0;
         while (i < 8) {
             let x = gen.generate_u64();
@@ -282,18 +282,18 @@ module sui::random_tests {
 
         // u32
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u32();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 28, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 28);
         let output2 = gen.generate_u32();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 24, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 24);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u8();
         let _output4 = gen.generate_u32();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 19, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 19);
         let mut i = 0;
         while (i < 4) {
             let x = gen.generate_u32();
@@ -303,18 +303,18 @@ module sui::random_tests {
 
         // u16
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u16();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 30, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 30);
         let output2 = gen.generate_u16();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 28, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 28);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u8();
         let _output4 = gen.generate_u16();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 25, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 25);
         let mut i = 0;
         while (i < 2) {
             let x = gen.generate_u16();
@@ -324,18 +324,18 @@ module sui::random_tests {
 
         // u8
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_u8();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 31, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 31);
         let output2 = gen.generate_u8();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 30, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 30);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u128();
         let _output4 = gen.generate_u8();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 13, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 13);
         loop {
             let x = gen.generate_u8();
             if (x != 0u8) break
@@ -343,18 +343,18 @@ module sui::random_tests {
 
         // bool
         gen = random_state.new_generator(scenario.ctx());
-        assert!(gen.generator_buffer().is_empty(), 0);
+        assert!(gen.generator_buffer().is_empty());
         let output1 = gen.generate_bool();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 31, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 31);
         let output2 = gen.generate_bool();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 30, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 30);
+        assert!(output1 != output2);
         let _output3 = gen.generate_u128();
         let _output4 = gen.generate_u8();
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 13, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 13);
         let mut saw_false = false;
         loop {
             let x = gen.generate_bool();
@@ -383,10 +383,10 @@ module sui::random_tests {
         let mut gen = random_state.new_generator(scenario.ctx());
         let mut v: vector<u16> = vector[0, 1, 2, 3, 4];
         gen.shuffle(&mut v);
-        assert!(v.length() == 5, 0);
+        assert!(v.length() == 5);
         let mut i: u16 = 0;
         while (i < 5) {
-            assert!(v.contains(&i), 0);
+            assert!(v.contains(&i));
             i = i + 1;
         };
 
@@ -402,12 +402,12 @@ module sui::random_tests {
 
         let mut v: vector<u32> = vector[];
         gen.shuffle(&mut v);
-        assert!(v.length() == 0, 0);
+        assert!(v.length() == 0);
 
         let mut v: vector<u32> = vector[321];
         gen.shuffle(&mut v);
-        assert!(v.length() == 1, 0);
-        assert!(v[0] == 321u32, 0);
+        assert!(v.length() == 1);
+        assert!(v[0] == 321u32);
 
         test_scenario::return_shared(random_state);
         scenario.end();
@@ -430,14 +430,14 @@ module sui::random_tests {
         // generate_u128_in_range
         let mut gen = random_state.new_generator(scenario.ctx());
         let output1 = gen.generate_u128_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 8, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 8);
         let output2 = gen.generate_u128_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 2, 0);
-        assert!(gen.generator_buffer().length() == 16, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 2);
+        assert!(gen.generator_buffer().length() == 16);
+        assert!(output1 != output2);
         let output = gen.generate_u128_in_range(123454321, 123454321 + 1);
-        assert!((output == 123454321) || (output == 123454321 + 1), 0);
+        assert!((output == 123454321) || (output == 123454321 + 1));
         // test the edge case of u128_in_range (covers also the other in_range functions)
         let _output = gen.generate_u128_in_range(0, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
         let mut i = 0;
@@ -445,93 +445,93 @@ module sui::random_tests {
             let min = gen.generate_u128();
             let max = min + (gen.generate_u64() as u128);
             let output = gen.generate_u128_in_range(min, max);
-            assert!(output >= min, 0);
-            assert!(output <= max, 0);
+            assert!(output >= min);
+            assert!(output <= max);
             i = i + 1;
         };
 
         // generate_u64_in_range
         gen = random_state.new_generator(scenario.ctx());
         let output1 = gen.generate_u64_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 16, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 16);
         let output2 = gen.generate_u64_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 0, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 0);
+        assert!(output1 != output2);
         let output = gen.generate_u64_in_range(123454321, 123454321 + 1);
-        assert!((output == 123454321) || (output == 123454321 + 1), 0);
+        assert!((output == 123454321) || (output == 123454321 + 1));
         let mut i = 0;
         while (i < 50) {
             let min = gen.generate_u64();
             let max = min + (gen.generate_u32() as u64);
             let output = gen.generate_u64_in_range(min, max);
-            assert!(output >= min, 0);
-            assert!(output <= max, 0);
+            assert!(output >= min);
+            assert!(output <= max);
             i = i + 1;
         };
 
         // generate_u32_in_range
         gen = random_state.new_generator(scenario.ctx());
         let output1 = gen.generate_u32_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 20, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 20);
         let output2 = gen.generate_u32_in_range(11, 123454321);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 8, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 8);
+        assert!(output1 != output2);
         let output = gen.generate_u32_in_range(123454321, 123454321 + 1);
-        assert!((output == 123454321) || (output == 123454321 + 1), 0);
+        assert!((output == 123454321) || (output == 123454321 + 1));
         let mut i = 0;
         while (i < 50) {
             let min = gen.generate_u32();
             let max = min + (gen.generate_u16() as u32);
             let output = gen.generate_u32_in_range(min, max);
-            assert!(output >= min, 0);
-            assert!(output <= max, 0);
+            assert!(output >= min);
+            assert!(output <= max);
             i = i + 1;
         };
 
         // generate_u16_in_range
         gen = random_state.new_generator(scenario.ctx());
         let output1 = gen.generate_u16_in_range(11, 12345);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 22, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 22);
         let output2 = gen.generate_u16_in_range(11, 12345);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 12, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 12);
+        assert!(output1 != output2);
         let output = gen.generate_u16_in_range(12345, 12345 + 1);
-        assert!((output == 12345) || (output == 12345 + 1), 0);
+        assert!((output == 12345) || (output == 12345 + 1));
         let mut i = 0;
         while (i < 50) {
             let min = gen.generate_u16();
             let max = min + (gen.generate_u8() as u16);
             let output = gen.generate_u16_in_range(min, max);
-            assert!(output >= min, 0);
-            assert!(output <= max, 0);
+            assert!(output >= min);
+            assert!(output <= max);
             i = i + 1;
         };
 
         // generate_u8_in_range
         gen = random_state.new_generator(scenario.ctx());
         let output1 = gen.generate_u8_in_range(11, 123);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 23, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 23);
         let output2 = gen.generate_u8_in_range(11, 123);
-        assert!(gen.generator_counter() == 1, 0);
-        assert!(gen.generator_buffer().length() == 14, 0);
-        assert!(output1 != output2, 0);
+        assert!(gen.generator_counter() == 1);
+        assert!(gen.generator_buffer().length() == 14);
+        assert!(output1 != output2);
         let output = gen.generate_u8_in_range(123, 123 + 1);
-        assert!((output == 123) || (output == 123 + 1), 0);
+        assert!((output == 123) || (output == 123 + 1));
         let mut i = 0;
         while (i < 50) {
             let (min, max) = (gen.generate_u8(), gen.generate_u8());
             let (min, max) = if (min < max) (min, max) else (max, min);
             let (min, max) = if (min == max) (min, max + 1) else (min, max);
             let output = gen.generate_u8_in_range(min, max);
-            assert!(output >= min, 0);
-            assert!(output <= max, 0);
+            assert!(output >= min);
+            assert!(output <= max);
             i = i + 1;
         };
 

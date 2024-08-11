@@ -54,13 +54,13 @@ title: Module `0xdee9::order_query`
 
 </dd>
 <dt>
-<code>next_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;</code>
+<code>next_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>next_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;</code>
+<code>next_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
 
@@ -79,7 +79,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>const</b> <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>: u64 = 100;
+<pre><code><b>const</b> <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 100;
 </code></pre>
 
 
@@ -90,7 +90,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
 </code></pre>
 
 
@@ -102,15 +102,15 @@ title: Module `0xdee9::order_query`
 <pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(
     pool: &Pool&lt;T1, T2&gt;,
     // tick level <b>to</b> start from
-    start_tick_level: Option&lt;u64&gt;,
+    start_tick_level: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // order id within that tick level <b>to</b> start from
-    start_order_id: Option&lt;u64&gt;,
+    start_order_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> provided, do not <b>include</b> orders <b>with</b> an expire timestamp less than the provided value (expired order),
     // value is in microseconds
-    min_expire_timestamp: Option&lt;u64&gt;,
+    min_expire_timestamp: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
-    max_id: Option&lt;u64&gt;,
+    max_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
@@ -149,7 +149,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
 </code></pre>
 
 
@@ -161,15 +161,15 @@ title: Module `0xdee9::order_query`
 <pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(
     pool: &Pool&lt;T1, T2&gt;,
     // tick level <b>to</b> start from
-    start_tick_level: Option&lt;u64&gt;,
+    start_tick_level: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // order id within that tick level <b>to</b> start from
-    start_order_id: Option&lt;u64&gt;,
+    start_order_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> provided, do not <b>include</b> orders <b>with</b> an expire timestamp less than the provided value (expired order),
     // value is in microseconds
-    min_expire_timestamp: Option&lt;u64&gt;,
+    min_expire_timestamp: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
-    max_id: Option&lt;u64&gt;,
+    max_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
@@ -208,7 +208,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(ticks: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
+<pre><code><b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(ticks: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, start_tick_level: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, start_order_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, min_expire_timestamp: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, max_id: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ascending: bool): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
 </code></pre>
 
 
@@ -220,15 +220,15 @@ title: Module `0xdee9::order_query`
 <pre><code><b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
     ticks: &CritbitTree&lt;TickLevel&gt;,
     // tick level <b>to</b> start from
-    start_tick_level: Option&lt;u64&gt;,
+    start_tick_level: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // order id within that tick level <b>to</b> start from
-    <b>mut</b> start_order_id: Option&lt;u64&gt;,
+    <b>mut</b> start_order_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> provided, do not <b>include</b> orders <b>with</b> an expire timestamp less than the provided value (expired order),
     // value is in microseconds
-    min_expire_timestamp: Option&lt;u64&gt;,
+    min_expire_timestamp: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
-    max_id: Option&lt;u64&gt;,
+    max_id: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
     ascending: bool,
 ): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Order&gt; {
@@ -352,7 +352,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_tick_level">next_tick_level</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_tick_level">next_tick_level</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -361,7 +361,7 @@ title: Module `0xdee9::order_query`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_tick_level">next_tick_level</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a>): Option&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_tick_level">next_tick_level</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a>): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     page.next_tick_level
 }
 </code></pre>
@@ -376,7 +376,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_order_id">next_order_id</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_order_id">next_order_id</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -385,7 +385,7 @@ title: Module `0xdee9::order_query`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_order_id">next_order_id</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a>): Option&lt;u64&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_next_order_id">next_order_id</a>(page: &<a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a>): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     page.next_order_id
 }
 </code></pre>
@@ -400,7 +400,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -409,7 +409,7 @@ title: Module `0xdee9::order_query`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_order_id">order_id</a>(order: &Order): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_order_id">order_id</a>(order: &Order): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="clob_v2.md#0xdee9_clob_v2_order_id">clob_v2::order_id</a>(order)
 }
 </code></pre>
@@ -424,7 +424,7 @@ title: Module `0xdee9::order_query`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -433,7 +433,7 @@ title: Module `0xdee9::order_query`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_tick_level">tick_level</a>(order: &Order): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_tick_level">tick_level</a>(order: &Order): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="clob_v2.md#0xdee9_clob_v2_tick_level">clob_v2::tick_level</a>(order)
 }
 </code></pre>

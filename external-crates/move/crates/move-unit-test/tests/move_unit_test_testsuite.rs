@@ -46,6 +46,7 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
             .into_iter()
             .collect(),
         report_stacktrace_on_abort: true,
+        deterministic_generation: true,
 
         ..UnitTestingConfig::default_with_bound(None)
     };

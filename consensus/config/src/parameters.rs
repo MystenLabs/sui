@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 /// should not need to specify any field, except db_path.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// The database path.
-    /// Required.
-    pub db_path: Option<PathBuf>,
+    /// Path to consensus DB for this epoch. Required when initializing consensus.
+    /// This is calculated based on user configuration for base directory.
+    #[serde(skip)]
+    pub db_path: PathBuf,
 
     /// Time to wait for parent round leader before sealing a block.
     #[serde(default = "Parameters::default_leader_timeout")]
@@ -68,6 +69,12 @@ pub struct Parameters {
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
+
+    /// Time to wait during node start up until the node has synced the last proposed block via the
+    /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
+    /// used for amnesia recovery.
+    #[serde(default = "Parameters::default_sync_last_proposed_block_timeout")]
+    pub sync_last_proposed_block_timeout: Duration,
 }
 
 impl Parameters {
@@ -124,17 +131,27 @@ impl Parameters {
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         200
     }
+
+    pub(crate) fn default_sync_last_proposed_block_timeout() -> Duration {
+        Duration::ZERO
+    }
+
+    pub fn is_sync_last_proposed_block_enabled(&self) -> bool {
+        !self.sync_last_proposed_block_timeout.is_zero()
+    }
 }
 
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            db_path: None,
+            db_path: PathBuf::default(),
             leader_timeout: Parameters::default_leader_timeout(),
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
+            sync_last_proposed_block_timeout: Parameters::default_sync_last_proposed_block_timeout(
+            ),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
@@ -182,9 +199,17 @@ pub struct TonicParameters {
     #[serde(default = "TonicParameters::default_connection_buffer_size")]
     pub connection_buffer_size: usize,
 
-    /// Message size limits for both requests and responses.
+    /// Messages over this size threshold will increment a counter.
     ///
-    /// If unspecified, this will default to 8MiB.
+    /// If unspecified, this will default to 16MiB.
+    #[serde(default = "TonicParameters::default_excessive_message_size")]
+    pub excessive_message_size: usize,
+
+    /// Hard message size limit for both requests and responses.
+    /// This value is higher than strictly necessary, to allow overheads.
+    /// Message size targets and soft limits are computed based on this value.
+    ///
+    /// If unspecified, this will default to 1GiB.
     #[serde(default = "TonicParameters::default_message_size_limit")]
     pub message_size_limit: usize,
 }
@@ -198,8 +223,12 @@ impl TonicParameters {
         32 << 20
     }
 
+    fn default_excessive_message_size() -> usize {
+        16 << 20
+    }
+
     fn default_message_size_limit() -> usize {
-        8 << 20
+        64 << 20
     }
 }
 
@@ -208,6 +237,7 @@ impl Default for TonicParameters {
         Self {
             keepalive_interval: TonicParameters::default_keepalive_interval(),
             connection_buffer_size: TonicParameters::default_connection_buffer_size(),
+            excessive_message_size: TonicParameters::default_excessive_message_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
         }
     }

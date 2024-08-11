@@ -97,6 +97,7 @@ module bridge::bridge {
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
     const EInvalidEvmAddress: u64 = 18;
+    const ETokenValueIsZero: u64 = 19;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -180,6 +181,10 @@ module bridge::bridge {
             .register(system_state, bridge_pubkey_bytes, http_rest_url, ctx);
     }
 
+    public fun update_node_url(bridge: &mut Bridge, new_url: vector<u8>, ctx: &TxContext) {
+        load_inner_mut(bridge).committee.update_node_url(new_url, ctx);
+    }
+
     public fun register_foreign_token<T>(
         bridge: &mut Bridge,
         tc: TreasuryCap<T>,
@@ -205,11 +210,10 @@ module bridge::bridge {
         assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
 
-        let amount = token.balance().value();
-
         let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
         let token_id = inner.treasury.token_id<T>();
         let token_amount = token.balance().value();
+        assert!(token_amount > 0, ETokenValueIsZero);
 
         // create bridge message
         let message = message::create_token_bridge_message(
@@ -219,7 +223,7 @@ module bridge::bridge {
             target_chain,
             target_address,
             token_id,
-            amount,
+            token_amount,
         );
 
         // burn / escrow token, unsupported coins will fail in this step
@@ -519,13 +523,13 @@ module bridge::bridge {
         let amount = token_payload.token_amount();
         // Make sure transfer is within limit.
         if (!inner
-                .limiter
-                .check_and_record_sending_transfer<T>(
-                    &inner.treasury,
-                    clock,
-                    route,
-                    amount,
-                )
+            .limiter
+            .check_and_record_sending_transfer<T>(
+            &inner.treasury,
+            clock,
+            route,
+            amount,
+        )
         ) {
             emit(TokenTransferLimitExceed { message_key: key });
             return (option::none(), owner)
@@ -588,7 +592,7 @@ module bridge::bridge {
         assert!(token_ids.length() == token_type_names.length(), EMalformedMessageError);
         assert!(token_ids.length() == token_prices.length(), EMalformedMessageError);
 
-        while (vector::length(&token_ids) > 0) {
+        while (token_ids.length() > 0) {
             let token_id = token_ids.pop_back();
             let token_type_name = token_type_names.pop_back();
             let token_price = token_prices.pop_back();
@@ -714,7 +718,7 @@ module bridge::bridge {
     ): u8 {
         bridge.get_token_transfer_action_status(source_chain, bridge_seq_num)
     }
-        
+
     #[test_only]
     public fun test_get_token_transfer_action_signatures(
         bridge: &mut Bridge,
@@ -744,12 +748,24 @@ module bridge::bridge {
     }
 
     #[test_only]
+    public fun inner_treasury_mut(bridge_inner: &mut BridgeInner): &mut BridgeTreasury {
+        &mut bridge_inner.treasury
+    }
+
+    #[test_only]
     public fun inner_paused(bridge_inner: &BridgeInner): bool {
         bridge_inner.paused
     }
 
     #[test_only]
     public fun inner_token_transfer_records(
+        bridge_inner: &BridgeInner,
+    ): &LinkedTable<BridgeMessageKey, BridgeRecord> {
+        &bridge_inner.token_transfer_records
+    }
+
+    #[test_only]
+    public fun inner_token_transfer_records_mut(
         bridge_inner: &mut BridgeInner,
     ): &mut LinkedTable<BridgeMessageKey, BridgeRecord> {
         &mut bridge_inner.token_transfer_records
@@ -820,5 +836,11 @@ module bridge::bridge {
     #[test_only]
     public fun transfer_status_not_found(): u8 {
         TRANSFER_STATUS_NOT_FOUND
+    }
+
+    #[test_only]
+    public fun test_execute_add_tokens_on_sui(bridge: &mut Bridge, payload: AddTokenOnSui) {
+        let inner = load_inner_mut(bridge);
+        inner.execute_add_tokens_on_sui(payload);
     }
 }

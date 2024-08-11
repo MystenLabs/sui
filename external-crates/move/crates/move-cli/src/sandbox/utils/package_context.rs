@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{sandbox::utils::OnDiskStateView, DEFAULT_BUILD_DIR};
 use anyhow::Result;
-use move_command_line_common::env::get_bytecode_version_from_env;
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
 use std::path::{Path, PathBuf};
 
@@ -35,7 +34,6 @@ impl PackageContext {
     /// to be run before every command that needs a state view, i.e., `publish`, `run`,
     /// `view`, and `doctor`.
     pub fn prepare_state(&self, storage_dir: &Path) -> Result<OnDiskStateView> {
-        let bytecode_version = get_bytecode_version_from_env();
         let state = OnDiskStateView::create(self.build_dir.as_path(), storage_dir)?;
 
         // preload the storage with library modules (if such modules do not exist yet)
@@ -50,10 +48,7 @@ impl PackageContext {
         for module in new_modules {
             let self_id = module.self_id();
             let mut module_bytes = vec![];
-            module.serialize_with_version(
-                bytecode_version.unwrap_or(module.version),
-                &mut module_bytes,
-            )?;
+            module.serialize_with_version(module.version, &mut module_bytes)?;
             serialized_modules.push((self_id, module_bytes));
         }
         state.save_modules(&serialized_modules)?;

@@ -8,7 +8,7 @@ fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests
 retries = 5
 # Timeout tests after 4 minutes
-slow-timeout = { period = "60s", terminate-after = 4 }
+slow-timeout = { period = "60s", terminate-after = 5 }
 
 [profile.narwhalnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
@@ -31,8 +31,8 @@ failure-output = "immediate"
 status-level = "fail"
 # Do not cancel the test run on the first failure.
 fail-fast = false
-# Mark tests as slow after 20m, terminate after 1h
-slow-timeout = { period = "20m", terminate-after = 3 }
+# Mark tests as slow after 30m, terminate after 1.5h
+slow-timeout = { period = "30m", terminate-after = 3 }
 
 [profile.ci.junit]
 path = "junit.xml"

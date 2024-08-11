@@ -1,0 +1,128 @@
+import { UseSignAndExecuteTransactionExample } from '../../../examples/wallet-hooks';
+
+# useSignAndExecuteTransaction
+
+Use the `useSignAndExecuteTransaction` hook to prompt the user to sign and execute a transaction
+block with their wallet.
+
+```ts
+import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useState } from 'react';
+
+function MyComponent() {
+	const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+	const [digest, setDigest] = useState('');
+	const currentAccount = useCurrentAccount();
+
+	return (
+		<div style={{ padding: 20 }}>
+			<ConnectButton />
+			{currentAccount && (
+				<>
+					<div>
+						<button
+							onClick={() => {
+								signAndExecuteTransaction(
+									{
+										transaction: new Transaction(),
+										chain: 'sui:devnet',
+									},
+									{
+										onSuccess: (result) => {
+											console.log('executed transaction', result);
+											setDigest(result.digest);
+										},
+									},
+								);
+							}}
+						>
+							Sign and execute transaction
+						</button>
+					</div>
+					<div>Digest: {digest}</div>
+				</>
+			)}
+		</div>
+	);
+}
+```
+
+## Example
+
+<UseSignAndExecuteTransactionExample />
+
+## Return additional data, or executing through GraphQL
+
+To customize how transactions are executed, and what data is returned when executing a transaction,
+you can pass a custom `execute` function.
+
+```ts
+import {
+	ConnectButton,
+	useClient,
+	useCurrentAccount,
+	useSignAndExecuteTransaction,
+} from '@mysten/dapp-kit';
+import { useState } from 'react';
+
+function MyComponent() {
+	const client = useClient();
+	const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction({
+		execute: async ({ bytes, signature }) =>
+			await client.executeTransactionBlock({
+				transactionBlock: bytes,
+				signature,
+				options: {
+					// Raw effects are required so the effects can be reported back to the wallet
+					showRawEffects: true,
+					// Select additional data to return
+					showObjectChanges: true,
+				},
+			}),
+	});
+
+	const [digest, setDigest] = useState('');
+	const currentAccount = useCurrentAccount();
+
+	return (
+		<div style={{ padding: 20 }}>
+			<ConnectButton />
+			{currentAccount && (
+				<>
+					<div>
+						<button
+							onClick={() => {
+								signAndExecuteTransaction(
+									{
+										transaction: new Transaction(),
+										chain: 'sui:devnet',
+									},
+									{
+										onSuccess: (result) => {
+											console.log('object changes', result.objectChanges);
+											setDigest(result.digest);
+										},
+									},
+								);
+							}}
+						>
+							Sign and execute transaction
+						</button>
+					</div>
+					<div>Digest: {digest}</div>
+				</>
+			)}
+		</div>
+	);
+}
+```
+
+## Arguments
+
+- `transaction`: The transaction to sign and execute.
+- `chain`: (optional) The chain identifier the transaction should be signed for.
+- `execute`: (optional) A custom function to execute the transaction
+
+In addition to these options, you can also pass any options that the
+[SuiClient.signAndExecuteTransaction](/typedoc/classes/_mysten_sui.client.SuiClient.html#signAndExecuteTransactionBlock)
+method accepts.

@@ -1,0 +1,12 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_literal.move:8:16
+  │
+8 │         match (opt) {
+  │                ^^^ Pattern 'Option::Some(_)' not covered
+
+error[E01006]: invalid number literal
+  ┌─ tests/move_2024/matching/invalid_literal.move:9:26
+  │
+9 │             Option::Some(256u8) => (),
+  │                          ^^^^^ Invalid number literal. The given literal is too large to fit into 'u8'
+

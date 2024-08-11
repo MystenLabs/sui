@@ -63,6 +63,16 @@ module sui::vec_set {
         contents
     }
 
+    /// Construct a new `VecSet` from a vector of keys.
+    /// The keys are stored in insertion order (the original `keys` ordering)
+    /// and are *not* sorted.
+    public fun from_keys<K: copy + drop>(mut keys: vector<K>): VecSet<K> {
+        keys.reverse();
+        let mut set = empty();
+        while (!keys.is_empty()) set.insert(keys.pop_back());
+        set
+    }
+
     /// Borrow the `contents` of the `VecSet` to access content by index
     /// without unpacking. The contents are stored in insertion order,
     /// *not* sorted.

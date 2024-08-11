@@ -28,11 +28,7 @@ module sui::dynamic_object_field {
         name: Name,
         value: Value,
     ) {
-        let key = Wrapper { name };
-        let id = object::id(&value);
-        field::add(object, key, id);
-        let (field, _) = field::field_info<Wrapper<Name>>(object, key);
-        add_child_object(field.to_address(), value);
+        add_impl!(object, name, value)
     }
 
     /// Immutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -43,9 +39,7 @@ module sui::dynamic_object_field {
         object: &UID,
         name: Name,
     ): &Value {
-        let key = Wrapper { name };
-        let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
-        borrow_child_object<Value>(field, value_id)
+        borrow_impl!(object, name)
     }
 
     /// Mutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -56,9 +50,7 @@ module sui::dynamic_object_field {
         object: &mut UID,
         name: Name,
     ): &mut Value {
-        let key = Wrapper { name };
-        let (field, value_id) = field::field_info_mut<Wrapper<Name>>(object, key);
-        borrow_child_object_mut<Value>(field, value_id)
+        borrow_mut_impl!(object, name)
     }
 
     /// Removes the `object`s dynamic object field with the name specified by `name: Name` and returns
@@ -70,11 +62,7 @@ module sui::dynamic_object_field {
         object: &mut UID,
         name: Name,
     ): Value {
-        let key = Wrapper { name };
-        let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
-        let value = remove_child_object<Value>(field.to_address(), value_id);
-        field::remove<Wrapper<Name>, ID>(object, key);
-        value
+        remove_impl!(object, name)
     }
 
     /// Returns true if and only if the `object` has a dynamic object field with the name specified by
@@ -93,10 +81,7 @@ module sui::dynamic_object_field {
         object: &UID,
         name: Name,
     ): bool {
-        let key = Wrapper { name };
-        if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return false;
-        let (field, value_id) = field::field_info<Wrapper<Name>>(object, key);
-        field::has_child_object_with_ty<Value>(field.to_address(), value_id)
+        exists_with_type_impl!<_, Value>(object, name)
     }
 
     /// Returns the ID of the object associated with the dynamic object field
@@ -110,4 +95,105 @@ module sui::dynamic_object_field {
         let (_field, value_addr) = field::field_info<Wrapper<Name>>(object, key);
         option::some(value_addr.to_id())
     }
+
+    public(package) fun internal_add<Name: copy + drop + store, Value: key>(
+        // we use &mut UID in several spots for access control
+        object: &mut UID,
+        name: Name,
+        value: Value,
+    ) {
+        add_impl!(object, name, value)
+    }
+
+    public(package) fun internal_borrow<Name: copy + drop + store, Value: key>(
+        object: &UID,
+        name: Name,
+    ): &Value {
+        borrow_impl!(object, name)
+    }
+
+    public(package) fun internal_borrow_mut<Name: copy + drop + store, Value: key>(
+        object: &mut UID,
+        name: Name,
+    ): &mut Value {
+        borrow_mut_impl!(object, name)
+    }
+
+    public(package) fun internal_remove<Name: copy + drop + store, Value: key>(
+        object: &mut UID,
+        name: Name,
+    ): Value {
+        remove_impl!(object, name)
+    }
+
+    public(package) fun internal_exists_with_type<Name: copy + drop + store, Value: key>(
+        object: &UID,
+        name: Name,
+    ): bool {
+        exists_with_type_impl!<_, Value>(object, name)
+    }
+
+    macro fun add_impl<$Name: copy + drop + store, $Value: key>(
+        // we use &mut UID in several spots for access control
+        $object: &mut UID,
+        $name: $Name,
+        $value: $Value,
+    ) {
+        let object = $object;
+        let name = $name;
+        let value = $value;
+        let key = Wrapper { name };
+        let id = object::id(&value);
+        field::add(object, key, id);
+        let (field, _) = field::field_info<Wrapper<$Name>>(object, key);
+        add_child_object(field.to_address(), value);
+    }
+
+    macro fun borrow_impl<$Name: copy + drop + store, $Value: key>(
+        $object: &UID,
+        $name: $Name,
+    ): &$Value {
+        let object = $object;
+        let name = $name;
+        let key = Wrapper { name };
+        let (field, value_id) = field::field_info<Wrapper<$Name>>(object, key);
+        borrow_child_object<$Value>(field, value_id)
+    }
+
+    macro fun borrow_mut_impl<$Name: copy + drop + store, $Value: key>(
+        $object: &mut UID,
+        $name: $Name,
+    ): &mut $Value {
+        let object = $object;
+        let name = $name;
+        let key = Wrapper { name };
+        let (field, value_id) = field::field_info_mut<Wrapper<$Name>>(object, key);
+        borrow_child_object_mut<$Value>(field, value_id)
+    }
+
+    macro fun remove_impl<$Name: copy + drop + store, $Value: key>(
+        $object: &mut UID,
+        $name: $Name,
+    ): $Value {
+        let object = $object;
+        let name = $name;
+        let key = Wrapper { name };
+        let (field, value_id) = field::field_info<Wrapper<$Name>>(object, key);
+        let value = remove_child_object<$Value>(field.to_address(), value_id);
+        field::remove<Wrapper<$Name>, ID>(object, key);
+        value
+    }
+
+    macro fun exists_with_type_impl<$Name: copy + drop + store, $Value: key>(
+        $object: &UID,
+        $name: $Name,
+    ): bool {
+        let object = $object;
+        let name = $name;
+        let key = Wrapper { name };
+        if (!field::exists_with_type<Wrapper<$Name>, ID>(object, key)) return false;
+        let (field, value_id) = field::field_info<Wrapper<$Name>>(object, key);
+        field::has_child_object_with_ty<$Value>(field.to_address(), value_id)
+    }
+
 }

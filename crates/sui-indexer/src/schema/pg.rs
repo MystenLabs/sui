@@ -3,6 +3,12 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    chain_identifier (checkpoint_digest) {
+        checkpoint_digest -> Bytea,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Bytea,
@@ -20,6 +26,14 @@ diesel::table! {
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
     }
 }
 
@@ -272,23 +286,30 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    checkpoints,
-    display,
-    epochs,
-    events,
-    events_partition_0,
-    objects,
-    objects_history,
-    objects_history_partition_0,
-    objects_snapshot,
-    packages,
-    transactions,
-    transactions_partition_0,
-    tx_calls,
-    tx_changed_objects,
-    tx_digests,
-    tx_input_objects,
-    tx_recipients,
-    tx_senders,
-);
+#[macro_export]
+macro_rules! for_all_tables {
+    ($action:path) => {
+        $action!(
+            chain_identifier,
+            checkpoints,
+            pruner_cp_watermark,
+            display,
+            epochs,
+            events,
+            objects,
+            objects_history,
+            objects_snapshot,
+            packages,
+            transactions,
+            tx_calls,
+            tx_changed_objects,
+            tx_digests,
+            tx_input_objects,
+            tx_recipients,
+            tx_senders
+        );
+    };
+}
+pub use for_all_tables;
+
+for_all_tables!(diesel::allow_tables_to_appear_in_same_query);

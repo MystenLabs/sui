@@ -15,7 +15,7 @@ table::add(&mut table1, 1, true);
 table::add(&mut table2, 0, false);
 table::add(&mut table2, 1, true);
 // table1 does not equal table2, despite having the same entries
-assert!(&table1 != &table2, 0);
+assert!(&table1 != &table2);
 ```
 
 
@@ -63,7 +63,7 @@ assert!(&table1 != &table2, 0);
  the ID of this table
 </dd>
 <dt>
-<code>size: u64</code>
+<code>size: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  the number of key-value pairs in the table
@@ -82,7 +82,7 @@ assert!(&table1 != &table2, 0);
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/table.md#0x2_table_ETableNotEmpty">ETableNotEmpty</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/table.md#0x2_table_ETableNotEmpty">ETableNotEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -258,7 +258,7 @@ Returns true iff there is a value associated with the key <code>k: K</code> in t
 Returns the size of the table, the number of key-value pairs
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_length">length</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;K, V&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_length">length</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;K, V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -267,7 +267,7 @@ Returns the size of the table, the number of key-value pairs
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_length">length</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/table.md#0x2_table_Table">Table</a>&lt;K, V&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_length">length</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: &<a href="../sui-framework/table.md#0x2_table_Table">Table</a>&lt;K, V&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/table.md#0x2_table">table</a>.size
 }
 </code></pre>

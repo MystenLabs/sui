@@ -21,7 +21,7 @@ Should be converted to a native function.
 Current implementation only works for Sui.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/address.md#0x1_address_length">length</a>(): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/address.md#0x1_address_length">length</a>(): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -30,7 +30,7 @@ Current implementation only works for Sui.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/address.md#0x1_address_length">length</a>(): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/address.md#0x1_address_length">length</a>(): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     32
 }
 </code></pre>

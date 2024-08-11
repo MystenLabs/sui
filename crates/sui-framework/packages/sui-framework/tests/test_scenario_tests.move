@@ -38,8 +38,8 @@ module sui::test_scenario_tests {
         // wrapped object should no longer be removable, but wrapper should be
         scenario.next_tx(sender);
         {
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0);
-            assert!(scenario.has_most_recent_for_sender<Wrapper>(), 1);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
+            assert!(scenario.has_most_recent_for_sender<Wrapper>());
         };
         scenario.end();
     }
@@ -62,7 +62,7 @@ module sui::test_scenario_tests {
         // Object should remain accessible
         scenario.next_tx(sender);
         {
-            assert!(scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(scenario.has_most_recent_for_sender<Object>());
         };
         scenario.end();
     }
@@ -79,14 +79,14 @@ module sui::test_scenario_tests {
         scenario.next_tx(sender);
         {
             let mut obj = scenario.take_from_sender<Object>();
-            assert!(obj.value == 10, 0);
+            assert!(obj.value == 10);
             obj.value = 100;
             scenario.return_to_sender(obj);
         };
         scenario.next_tx(sender);
         {
             let obj = scenario.take_from_sender<Object>();
-            assert!(obj.value == 100, 1);
+            assert!(obj.value == 100);
             scenario.return_to_sender(obj);
         };
         scenario.end();
@@ -101,7 +101,7 @@ module sui::test_scenario_tests {
             let obj = Object { id, value: 10 };
             transfer::public_transfer(obj, copy sender);
             // an object transferred during the tx shouldn't be available in that tx
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0)
+            assert!(!scenario.has_most_recent_for_sender<Object>())
         };
         scenario.end();
     }
@@ -149,7 +149,7 @@ module sui::test_scenario_tests {
         // addr1 cannot access
         scenario.next_tx(addr1);
         {
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
         };
         // addr2 -> addr3
         scenario.next_tx(addr2);
@@ -160,17 +160,17 @@ module sui::test_scenario_tests {
         // addr1 cannot access
         scenario.next_tx(addr1);
         {
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
         };
         // addr2 cannot access
         scenario.next_tx(addr2);
         {
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
         };
         // addr3 *can* access
         scenario.next_tx(addr3);
         {
-            assert!(scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(scenario.has_most_recent_for_sender<Object>());
         };
         scenario.end();
     }
@@ -188,12 +188,12 @@ module sui::test_scenario_tests {
             let obj = Object { id, value: 100 };
             transfer::public_transfer(obj, copy tx2_sender);
             // sender cannot access the object
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 0);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
         };
         // check that tx2_sender can get the object, and it's the same one
         scenario.next_tx(tx2_sender);
         {
-            assert!(scenario.has_most_recent_for_sender<Object>(), 1);
+            assert!(scenario.has_most_recent_for_sender<Object>());
             let received_obj = scenario.take_from_sender<Object>();
             let Object { id: received_id, value } = received_obj;
             assert!(received_id.to_inner() == id_bytes, EIdBytesMismatch);
@@ -203,7 +203,7 @@ module sui::test_scenario_tests {
         // check that the object is no longer accessible after deletion
         scenario.next_tx(tx2_sender);
         {
-            assert!(!scenario.has_most_recent_for_sender<Object>(), 2);
+            assert!(!scenario.has_most_recent_for_sender<Object>());
         };
         scenario.end();
     }
@@ -275,7 +275,7 @@ module sui::test_scenario_tests {
             let obj = Object { id, value: 10 };
             transfer::public_transfer(obj, copy sender);
             let ctx = scenario.ctx();
-            assert!(id_addr == ctx.last_created_object_id(), 0);
+            assert!(id_addr == ctx.last_created_object_id());
         };
         scenario.end();
     }
@@ -324,7 +324,7 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            assert!(test_scenario::has_most_recent_shared<Object>(), 1);
+            assert!(test_scenario::has_most_recent_shared<Object>());
             let obj1 = scenario.take_shared<Object>();
             assert!(obj1.value == 10, EValueMismatch);
             test_scenario::return_shared(obj1);
@@ -343,7 +343,7 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            assert!(test_scenario::has_most_recent_shared<Object>(), 1);
+            assert!(test_scenario::has_most_recent_shared<Object>());
             let obj1 = scenario.take_shared<Object>();
             assert!(obj1.value == 10, EValueMismatch);
             let Object { id, value: _ } = obj1;
@@ -396,7 +396,7 @@ module sui::test_scenario_tests {
         };
         scenario.next_tx(sender);
         {
-            assert!(test_scenario::has_most_recent_immutable<Object>(), 1);
+            assert!(test_scenario::has_most_recent_immutable<Object>());
             let obj1 = scenario.take_immutable<Object>();
             assert!(obj1.value == 10, EValueMismatch);
             test_scenario::return_immutable(obj1);
@@ -473,7 +473,7 @@ module sui::test_scenario_tests {
     }
 
     // Try to receive an object that has been shared. We should be unable to
-    // allocate the receiving ticket for this object. 
+    // allocate the receiving ticket for this object.
     #[test]
     #[expected_failure(abort_code = test_scenario::EObjectNotFound)]
     fun test_receive_object_shared() {
@@ -626,7 +626,7 @@ module sui::test_scenario_tests {
         scenario.end();
     }
 
-    // Test that we can allocate a receiving ticket, and then drop it. 
+    // Test that we can allocate a receiving ticket, and then drop it.
     #[test]
     fun test_unused_receive_ticket() {
         let sender = @0x0;
@@ -690,27 +690,27 @@ module sui::test_scenario_tests {
         // epoch timestamp doesn't change between transactions
         scenario.next_tx(sender);
         let ts1 = scenario.ctx().epoch_timestamp_ms();
-        assert!(ts1 == ts0, 0);
+        assert!(ts1 == ts0);
 
         // ...or between epochs when `next_epoch` is used
         scenario.next_epoch(sender);
         let ts2 = scenario.ctx().epoch_timestamp_ms();
-        assert!(ts2 == ts1, 1);
+        assert!(ts2 == ts1);
 
         // ...but does change when `later_epoch` is used
         scenario.later_epoch(42, sender);
         let ts3 = scenario.ctx().epoch_timestamp_ms();
-        assert!(ts3 == ts2 + 42, 2);
+        assert!(ts3 == ts2 + 42);
 
         // ...and persists across further transactions
         scenario.next_tx(sender);
         let ts4 = scenario.ctx().epoch_timestamp_ms();
-        assert!(ts4 == ts3, 3);
+        assert!(ts4 == ts3);
 
         // ...and epochs
         scenario.next_epoch(sender);
         let ts5 = scenario.ctx().epoch_timestamp_ms();
-        assert!(ts5 == ts4, 4);
+        assert!(ts5 == ts4);
 
         scenario.end();
     }
@@ -907,7 +907,7 @@ module sui::test_scenario_tests {
         sui::dynamic_field::add(&mut parent, b"", 10);
         let r = sui::dynamic_field::borrow<vector<u8>, u64>(&parent, b"");
         scenario.end();
-        assert!(*r == 10, 0);
+        assert!(*r == 10);
         parent.delete();
     }
 
@@ -920,7 +920,7 @@ module sui::test_scenario_tests {
         sui::dynamic_object_field::add(&mut parent, b"", Object { id, value: 10});
         let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&parent, b"");
         scenario.end();
-        assert!(obj.value == 10, 0);
+        assert!(obj.value == 10);
         parent.delete();
     }
 
@@ -934,13 +934,13 @@ module sui::test_scenario_tests {
         let id = object::id(&obj);
         transfer::public_transfer(obj, sender);
         scenario.next_tx(sender);
-        assert!(test_scenario::has_most_recent_for_address<Object>(sender), 0);
+        assert!(test_scenario::has_most_recent_for_address<Object>(sender));
         let obj = scenario.take_from_sender<Object>();
-        assert!(object::id(&obj) == id, 0);
-        assert!(!test_scenario::has_most_recent_for_address<Object>(sender), 0);
+        assert!(object::id(&obj) == id);
+        assert!(!test_scenario::has_most_recent_for_address<Object>(sender));
         sui::dynamic_object_field::add(&mut parent, b"", obj);
         scenario.next_tx(sender);
-        assert!(!test_scenario::has_most_recent_for_address<Object>(sender), 0);
+        assert!(!test_scenario::has_most_recent_for_address<Object>(sender));
         scenario.end();
         parent.delete();
     }
@@ -957,7 +957,7 @@ module sui::test_scenario_tests {
         transfer::public_share_object(obj);
         scenario.next_tx(sender);
         let obj = scenario.take_shared<Object>();
-        assert!(object::id(&obj) == id, 0);
+        assert!(object::id(&obj) == id);
         // wraps the object
         sui::dynamic_field::add(&mut parent, b"", obj);
         scenario.next_tx(sender);
@@ -976,7 +976,7 @@ module sui::test_scenario_tests {
         transfer::public_freeze_object(obj);
         scenario.next_tx(sender);
         let obj = scenario.take_immutable<Object>();
-        assert!(object::id(&obj) == id, 0);
+        assert!(object::id(&obj) == id);
         // wraps the object
         sui::dynamic_field::add(&mut parent, b"", obj);
         scenario.next_tx(sender);
@@ -995,7 +995,7 @@ module sui::test_scenario_tests {
         transfer::public_share_object(obj);
         scenario.next_tx(sender);
         let obj = scenario.take_shared<Object>();
-        assert!(object::id(&obj) == id, 0);
+        assert!(object::id(&obj) == id);
         sui::dynamic_object_field::add(&mut parent, b"", obj);
         scenario.next_tx(sender);
         abort 42
@@ -1013,9 +1013,40 @@ module sui::test_scenario_tests {
         transfer::public_freeze_object(obj);
         scenario.next_tx(sender);
         let obj = scenario.take_immutable<Object>();
-        assert!(object::id(&obj) == id, 0);
+        assert!(object::id(&obj) == id);
         sui::dynamic_object_field::add(&mut parent, b"", obj);
         scenario.next_tx(sender);
         abort 42
+    }
+
+    public struct E1(u64) has copy, drop;
+
+    #[test]
+    fun test_events() {
+        use sui::event;
+        use sui::test_utils::assert_eq;
+
+        // calling test_scenario::end should dump events emitted during previous txes
+        let sender = @0x0;
+        let mut scenario = test_scenario::begin(sender);
+        let e0 = E1(0);
+        event::emit(e0);
+        event::emit(e0);
+        assert_eq(event::num_events(), 2);
+
+        // test scenario users should make assertions about events here, before calling
+        // next_tx
+        let effects = scenario.next_tx(sender);
+        assert_eq(effects.num_user_events(), 2);
+        assert_eq(event::num_events(), 0);
+
+        let e1 = E1(1);
+        event::emit(e1);
+        assert_eq(event::num_events(), 1);
+        assert_eq(event::events_by_type<E1>()[0], e1);
+        let effects = scenario.end();
+        // end should also dump events
+        assert_eq(effects.num_user_events(), 1);
+        assert_eq(event::num_events(), 0);
     }
 }

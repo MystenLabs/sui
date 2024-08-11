@@ -72,7 +72,7 @@ const concepts = [
 					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Package Upgrades',
+						label: 'Packages',
 						link: {
 							type: 'doc',
 							id: 'concepts/sui-move-concepts/packages',
@@ -80,6 +80,7 @@ const concepts = [
 						items: [
 							'concepts/sui-move-concepts/packages/upgrade',
 							'concepts/sui-move-concepts/packages/custom-policies',
+							'concepts/sui-move-concepts/packages/automated-address-management',
 						],
 					},
 					'concepts/sui-move-concepts/conventions',
@@ -149,6 +150,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
+			'concepts/sui-architecture/sui-storage',
 			'concepts/sui-architecture/sui-security',
 			'concepts/sui-architecture/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',

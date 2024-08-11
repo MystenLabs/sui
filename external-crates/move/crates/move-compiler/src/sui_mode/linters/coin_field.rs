@@ -8,7 +8,7 @@ use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast as N,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::{ast as T, visitor::TypingVisitor},
 };
 use move_ir_types::location::Loc;
@@ -30,12 +30,7 @@ const COIN_FIELD_DIAG: DiagnosticInfo = custom(
 pub struct CoinFieldVisitor;
 
 impl TypingVisitor for CoinFieldVisitor {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        _program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
         for (_, _, mdef) in program.modules.iter() {
             if mdef.attributes.is_test_or_test_only() {
                 continue;

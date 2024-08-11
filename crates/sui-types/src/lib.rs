@@ -35,8 +35,10 @@ pub mod clock;
 pub mod coin;
 pub mod collection_types;
 pub mod committee;
+pub mod config;
 pub mod crypto;
-pub mod deny_list;
+pub mod deny_list_v1;
+pub mod deny_list_v2;
 pub mod digests;
 pub mod display;
 pub mod dynamic_field;
@@ -46,7 +48,6 @@ pub mod event;
 pub mod executable_transaction;
 pub mod execution;
 pub mod execution_config_utils;
-pub mod execution_mode;
 pub mod execution_status;
 pub mod full_checkpoint_content;
 pub mod gas;
@@ -56,6 +57,7 @@ pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
 pub mod inner_temporary_store;
+pub mod layout_resolver;
 pub mod message_envelope;
 pub mod messages_checkpoint;
 pub mod messages_consensus;
@@ -67,18 +69,20 @@ pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;
 pub mod object;
+pub mod passkey_authenticator;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;
 pub mod randomness_state;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
+pub mod sui_sdk2_conversions;
 pub mod sui_serde;
 pub mod sui_system_state;
+pub mod supported_protocol_versions;
 pub mod traffic_control;
 pub mod transaction;
 pub mod transfer;
-pub mod type_resolver;
 pub mod versioned;
 pub mod zk_login_authenticator;
 pub mod zk_login_util;
@@ -245,11 +249,11 @@ pub fn is_primitive(
         // optimistic, but no primitive has key
         S::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
 
-        S::Struct(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+        S::Datatype(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
             .contains(&resolve_struct(view, *idx)),
 
-        S::StructInstantiation(s) => {
-            let (idx, targs) = &**s;
+        S::DatatypeInstantiation(inst) => {
+            let (idx, targs) = &**inst;
             let resolved_struct = resolve_struct(view, *idx);
             // option is a primitive
             resolved_struct == RESOLVED_STD_OPTION
@@ -311,7 +315,7 @@ fn is_object_struct(
             .get(*idx as usize)
             .map(|abs| abs.has_key())
             .unwrap_or(false)),
-        S::Struct(_) | S::StructInstantiation(_) => {
+        S::Datatype(_) | S::DatatypeInstantiation(_) => {
             let abilities = view
                 .abilities(s, function_type_args)
                 .map_err(|vm_err| vm_err.to_string())?;

@@ -18,13 +18,14 @@ One of the benefits of the transfer to object operation is the ability to have a
 Just like with normal object transfers, you must make sure that the object ID exists that you are transferring the object to. Additionally, make sure that the object that you are transferring to is not immutable. You can't access an object transferred to an immutable object.
 
 Be aware of both the type of the object you are transferring to and the object that is being transferred. The object that is transferred to (parent) can _always_:
+
 - Define predicates that can be dynamically checked to access the sent object.
 - Lack support for accessing objects that have been sent to it. Future versions of that package might support this functionality, but it's up to the package author to include it.
 
 If the object being transferred has the `key` ability only, then:
-- The module that defines the object that is being transferred must implement a custom receive function for it, similar to custom transfer functions. Just as with custom transfer functions, a custom receivership function might have arbitrary restrictions they can enforce and that you should be aware of, or they may not exist.
-- After sending, you can't access or use the object unless the parent object's (object being sent to) module has defined a function to receive objects _and_ the child object's (object you're sending) module has defined a function to receive the object, and the restrictions that _both_ functions define are met. 
 
+- The module that defines the object that is being transferred must implement a custom receive function for it, similar to custom transfer functions. Just as with custom transfer functions, a custom receivership function might have arbitrary restrictions they can enforce and that you should be aware of, or they may not exist.
+- After sending, you can't access or use the object unless the parent object's (object being sent to) module has defined a function to receive objects _and_ the child object's (object you're sending) module has defined a function to receive the object, and the restrictions that _both_ functions define are met.
 
 ```move
 // 0xADD is an address
@@ -64,7 +65,7 @@ Transferring an object to an object ID results in the same result as if you tran
 
 ## Receiving objects
 
-After an object `c` has been sent to another object `p`, `p` must then receive `c` to do anything with it. To receive the object `c`, a  `Receiving(o: ObjectRef)` argument type for programmable transaction blocks (PTBs) is used that takes an object reference containing the to-be-received object's `ObjectID`, `Version`, and `Digest` (just as owned object arguments for PTBs do). However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
+After an object `c` has been sent to another object `p`, `p` must then receive `c` to do anything with it. To receive the object `c`, a `Receiving(o: ObjectRef)` argument type for programmable transaction blocks (PTBs) is used that takes an object reference containing the to-be-received object's `ObjectID`, `Version`, and `Digest` (just as owned object arguments for PTBs do). However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
 
 To explain further, look at the core of the receiving interface in Move, which is defined in the `sui::transfer` module in the Sui framework:
 
@@ -111,10 +112,10 @@ Similarly for objects that also have the `store` ability, anyone can use the `su
 
 This coupled with the fact that the parent object can always define custom rules around receivership means that you must consider the following matrix of permissions around receiving objects and the abilities of the object being sent based on the child object's abilities:
 
-| Child abilities  | Parent can restrict access | Child can restrict access |
-| ---------------  | ------ | ----- |
-| `key`            | Yes      | Yes     |
-| `key` + `store`  | Yes      | No     |
+| Child abilities | Parent can restrict access | Child can restrict access |
+| --------------- | -------------------------- | ------------------------- |
+| `key`           | Yes                        | Yes                       |
+| `key` + `store` | Yes                        | No                        |
 
 Just like with custom transfer policies, you can use and couple these restrictions to create powerful expressions. For example, you can implement [soul-bound objects](#soul-bound-example) using both custom transfer and receivership rules.
 
@@ -128,13 +129,13 @@ When creating transactions, you interact with `Receiving` transaction inputs alm
 
 ```ts
 ... // Setup Typescript SDK as normal.
-const tx = new TransactionBlock();
+const tx = new Transaction();
 tx.moveCall({
   target: `${examplePackageId}::account::accept_payment`,
   arguments: [tx.object("0xcafe"), tx.object("0xc0ffee")]
 });
-const result = await client.signAndExecuteTransactionBlock({
-      transactionBlock: tx,
+const result = await client.signAndExecuteTransaction({
+      transaction: tx,
   });
 ...
 ```
@@ -172,7 +173,7 @@ The following examples demonstrate receiving previously sent objects.
 
 ### Receiving objects from shared objects {#receive-shared-example}
 
-Generally, if you want to allow receiving sent objects from shared objects that are defined in the module, add dynamic authorization checks; otherwise, anyone could receive sent objects. In this example, a shared object (`SharedObject`) holds a counter that anyone can increment, but only the address `0xB0B` can receive objects from the shared object. 
+Generally, if you want to allow receiving sent objects from shared objects that are defined in the module, add dynamic authorization checks; otherwise, anyone could receive sent objects. In this example, a shared object (`SharedObject`) holds a counter that anyone can increment, but only the address `0xB0B` can receive objects from the shared object.
 
 Because the `receive_object` function is generic over the object being received, it can only receive objects that are both `key` and `store`. `receive_object` must also use the `sui::transfer::public_receive` function to receive the object and not `sui::transfer::receive` because you can only use `receive` on objects defined in the current module.
 
@@ -190,7 +191,7 @@ module examples::shared_object_auth {
     }
 
     public fun create(ctx: &mut TxContext) {
-        let s = SharedObject { 
+        let s = SharedObject {
             id: object::new(ctx),
             counter: 0,
         };
@@ -282,7 +283,7 @@ module examples::account {
 
 The ability to control the rules about how and when an object can be received, and how and when it can be transferred allows us to define a type of "soul-bound" object that can be used by value in a transaction, but it must always stay in the same place, or be returned to the same object.
 
-You can implement a simple version of this with the following module where the `get_object` function receives the soul-bound object and creates a receipt that must be destroyed in the transaction in order for it to execute successfully. However, in order to destroy the receipt, the object that was received must be transferred back to the object it was received from in the transaction using the `return_object` function. 
+You can implement a simple version of this with the following module where the `get_object` function receives the soul-bound object and creates a receipt that must be destroyed in the transaction in order for it to execute successfully. However, in order to destroy the receipt, the object that was received must be transferred back to the object it was received from in the transaction using the `return_object` function.
 
 ```move
 module examples::soul_bound {
@@ -300,11 +301,11 @@ module examples::soul_bound {
     /// execute the transaction you need to destroy this `ReturnReceipt` and
     /// the only way to do that is to transfer it back to the same object you
     /// received it from in the transaction using the `return_object` function.
-    struct ReturnReceipt { 
+    struct ReturnReceipt {
         // The object ID of the object that needs to be returned.
         // This field is required to prevent swapping of soul bound objects if
         // multiple are present in the same transaction.
-        object_id: ID, 
+        object_id: ID,
         // The address (object ID) it needs to be returned to.
         return_to: address,
     }
@@ -317,7 +318,7 @@ module examples::soul_bound {
     /// `ReturnReceipt` that must be destroyed in the transaction by calling `return_object`.
     public fun get_object(parent: &mut UID, soul_bound_ticket: Receiving<SoulBound>): (SoulBound, ReturnReceipt) {
         let soul_bound = transfer::receive(parent, soul_bound_ticket);
-        let return_receipt = ReturnReceipt { 
+        let return_receipt = ReturnReceipt {
             return_to: object::uid_to_address(parent),
             object_id: object::id(&soul_bound),
         };

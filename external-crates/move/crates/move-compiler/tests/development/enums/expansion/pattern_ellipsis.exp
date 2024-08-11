@@ -1,8 +1,0 @@
-error[E13003]: feature is under active development
-  ┌─ tests/development/enums/expansion/pattern_ellipsis.move:2:17
-  │
-2 │     public enum X has drop {
-  │                 ^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-

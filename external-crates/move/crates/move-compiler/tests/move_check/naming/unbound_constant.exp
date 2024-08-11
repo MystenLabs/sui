@@ -8,7 +8,7 @@ error[E03003]: unbound module member
   ┌─ tests/move_check/naming/unbound_constant.move:5:17
   │
 5 │         let y = Self::CONSTANT; y;
-  │                 ^^^^^^^^^^^^^^ Invalid module access. Unbound constant 'CONSTANT' in module '0x42::M'
+  │                 ^^^^^^^^^^^^^^ Unbound module member 'CONSTANT' in current scope
 
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/unbound_constant.move:6:13
@@ -20,5 +20,5 @@ error[E03003]: unbound module member
   ┌─ tests/move_check/naming/unbound_constant.move:6:24
   │
 6 │         0 + CONSTANT + Self::CONSTANT;
-  │                        ^^^^^^^^^^^^^^ Invalid module access. Unbound constant 'CONSTANT' in module '0x42::M'
+  │                        ^^^^^^^^^^^^^^ Unbound module member 'CONSTANT' in current scope
 

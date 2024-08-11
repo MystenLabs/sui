@@ -176,7 +176,7 @@ pub enum StatusCode {
     UNKNOWN_VERIFICATION_ERROR = 1000,
     INDEX_OUT_OF_BOUNDS = 1001,
     INVALID_SIGNATURE_TOKEN = 1003,
-    RECURSIVE_STRUCT_DEFINITION = 1005,
+    RECURSIVE_DATATYPE_DEFINITION = 1005,
     FIELD_MISSING_TYPE_ABILITY = 1006,
     INVALID_FALL_THROUGH = 1007,
     NEGATIVE_STACK_SIZE_WITHIN_BLOCK = 1009,
@@ -199,7 +199,7 @@ pub enum StatusCode {
     FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR = 1033,
     BORROWFIELD_TYPE_MISMATCH_ERROR = 1034,
     BORROWFIELD_BAD_FIELD_ERROR = 1035,
-    BORROWFIELD_EXISTS_MUTABLE_BORROW_ERROR = 1036,
+    FIELD_EXISTS_MUTABLE_BORROW_ERROR = 1036,
     COPYLOC_UNAVAILABLE_ERROR = 1037,
     COPYLOC_WITHOUT_COPY_ABILITY = 1038,
     COPYLOC_EXISTS_BORROW_ERROR = 1039,
@@ -308,6 +308,12 @@ pub enum StatusCode {
     // or took too long to run based on metering policies
     PROGRAM_TOO_COMPLEX = 1130,
 
+    ENUM_SWITCH_BAD_OPERAND = 1131,
+    ENUM_TYPE_MISMATCH = 1132,
+    INVALID_ENUM_SWITCH = 1133,
+    ZERO_SIZED_ENUM = 1134,
+    MAX_VARIANTS_REACHED = 1135,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999
@@ -356,6 +362,8 @@ pub enum StatusCode {
     CODE_DESERIALIZATION_ERROR = 3024,
     INVALID_FLAG_BITS = 3025,
     TRAILING_BYTES = 3026,
+    UNKNOWN_ENUM_FLAG = 3027,
+    UNKNOWN_JUMP_TABLE_FLAG = 3028,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999
@@ -380,6 +388,7 @@ pub enum StatusCode {
     STORAGE_WRITE_LIMIT_REACHED = 4027,
     MEMORY_LIMIT_EXCEEDED = 4028,
     VM_MAX_TYPE_NODES_REACHED = 4029,
+    VARIANT_TAG_MISMATCH = 4030,
 
     // A reserved status to represent an unknown vm status.
     // this is std::u64::MAX, but we can't pattern match on that, so put the hardcoded value in

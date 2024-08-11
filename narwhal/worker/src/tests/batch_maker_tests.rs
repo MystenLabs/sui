@@ -33,7 +33,7 @@ async fn make_batch() {
     let id = 0;
     let _batch_maker_handle = BatchMaker::spawn(
         id,
-        /* max_batch_size */ 200,
+        /* max_batch_size */ 500,
         /* max_batch_delay */
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
         tx_shutdown.subscribe(),
@@ -47,13 +47,25 @@ async fn make_batch() {
 
     // Send enough transactions to seal a batch.
     let tx = transaction();
+    let txs = vec![transaction(), transaction(), transaction()];
     let (s0, r0) = tokio::sync::oneshot::channel();
     let (s1, r1) = tokio::sync::oneshot::channel();
-    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
-    tx_batch_maker.send((tx.clone(), s1)).await.unwrap();
+    let (s2, r2) = tokio::sync::oneshot::channel();
+    tx_batch_maker.send((vec![tx.clone()], s0)).await.unwrap();
+    tx_batch_maker.send((txs.clone(), s1)).await.unwrap();
+    tx_batch_maker.send((vec![tx.clone()], s2)).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = Batch::new(vec![tx.clone(), tx.clone()], &latest_protocol_version());
+    let expected_batch = Batch::new(
+        vec![
+            tx.clone(),
+            txs[0].clone(),
+            txs[1].clone(),
+            txs[2].clone(),
+            tx.clone(),
+        ],
+        &latest_protocol_version(),
+    );
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();
 
     assert_eq!(batch.transactions(), expected_batch.transactions());
@@ -64,6 +76,7 @@ async fn make_batch() {
     // Batch maker should finish creating the batch.
     assert!(r0.await.is_ok());
     assert!(r1.await.is_ok());
+    assert!(r2.await.is_ok());
 
     // Ensure the batch is stored
     assert!(store.get(&expected_batch.digest()).unwrap().is_some());
@@ -104,7 +117,7 @@ async fn batch_timeout() {
     // Do not send enough transactions to seal a batch.
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
-    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
+    tx_batch_maker.send((vec![tx.clone()], s0)).await.unwrap();
 
     // Ensure the batch is as expected.
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();

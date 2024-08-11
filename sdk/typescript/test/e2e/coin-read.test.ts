@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('CoinRead API', () => {
 	let toolbox: TestToolbox;
@@ -13,8 +14,7 @@ describe('CoinRead API', () => {
 
 	beforeAll(async () => {
 		[toolbox, publishToolbox] = await Promise.all([setup(), setup()]);
-		const packagePath = __dirname + '/./data/coin_metadata';
-		({ packageId } = await publishPackage(packagePath, publishToolbox));
+		packageId = await publishToolbox.getPackage(resolve(__dirname, './data/coin_metadata'));
 		testType = packageId + '::test::TEST';
 	});
 

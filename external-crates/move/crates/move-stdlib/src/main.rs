@@ -12,10 +12,13 @@ fn main() {
             //std::fs::create_dir_all(&move_stdlib::move_stdlib_docs_full_path()).unwrap();
             move_stdlib::build_stdlib_doc(&move_stdlib::move_stdlib_docs_full_path());
         });
+<<<<<<< HEAD
 
         time_it("Generating nursery documentation", || {
             std::fs::remove_dir_all(move_stdlib::move_nursery_docs_full_path()).unwrap_or(());
             move_stdlib::build_nursery_doc(&move_stdlib::move_nursery_docs_full_path());
         });
+=======
+>>>>>>> main
     }
 }

@@ -166,6 +166,13 @@ mod tests {
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
+
+        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+            todo!()
+        }
+        fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
+            todo!()
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

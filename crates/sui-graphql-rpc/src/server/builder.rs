@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::compatibility_check::check_all_tables;
+use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
@@ -9,8 +11,10 @@ use crate::config::{
 };
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
+use crate::extensions::directive_checker::DirectiveChecker;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::datatype::IMoveDatatype;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -32,24 +36,25 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::body::Body;
 use axum::extract::FromRef;
-use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
+use axum::extract::{ConnectInfo, Query as AxumQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
-use axum::routing::{post, MethodRouter, Route};
-use axum::{headers::Header, Router};
+use axum::routing::{get, post, MethodRouter, Route};
+use axum::Extension;
+use axum::Router;
+use chrono::Utc;
 use http::{HeaderValue, Method, Request};
-use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
-use hyper::Body;
-use hyper::Server as HyperServer;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
-use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -60,11 +65,18 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
+/// The default allowed maximum lag between the current timestamp and the checkpoint timestamp.
+const DEFAULT_MAX_CHECKPOINT_LAG: Duration = Duration::from_secs(300);
+
 pub(crate) struct Server {
-    pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    // pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    router: Router,
+    address: String,
     watermark_task: WatermarkTask,
     system_package_task: SystemPackageTask,
+    trigger_exchange_rates_task: TriggerExchangeRatesTask,
     state: AppState,
+    db_reader: Db,
 }
 
 impl Server {
@@ -72,6 +84,11 @@ impl Server {
     /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
+
+        // Compatibility check
+        info!("Starting compatibility check");
+        check_all_tables(&self.db_reader).await?;
+        info!("Compatibility check passed");
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -90,23 +107,40 @@ impl Server {
             })
         };
 
+        let trigger_exchange_rates_task = {
+            info!("Starting trigger exchange rates task");
+            spawn_monitored_task!(async move {
+                self.trigger_exchange_rates_task.run().await;
+            })
+        };
+
         let server_task = {
             info!("Starting graphql service");
             let cancellation_token = self.state.cancellation_token.clone();
             spawn_monitored_task!(async move {
-                self.server
-                    .with_graceful_shutdown(async {
-                        cancellation_token.cancelled().await;
-                        info!("Shutdown signal received, terminating graphql service");
-                    })
-                    .await
-                    .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
+                let listener = tokio::net::TcpListener::bind(&self.address).await.unwrap();
+                axum::serve(
+                    listener,
+                    self.router
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .with_graceful_shutdown(async move {
+                    cancellation_token.cancelled().await;
+                    info!("Shutdown signal received, terminating graphql service");
+                })
+                .await
+                .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
             })
         };
 
         // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
         // until all tasks and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, system_package_task, server_task);
+        let _ = join!(
+            watermark_task,
+            system_package_task,
+            trigger_exchange_rates_task,
+            server_task
+        );
 
         Ok(())
     }
@@ -226,7 +260,9 @@ impl ServerBuilder {
                 .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
-                .route("/health", axum::routing::get(health_checks))
+                .route("/health", get(health_check))
+                .route("/graphql/health", get(health_check))
+                .route("/graphql/:version/health", get(health_check))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
@@ -277,11 +313,7 @@ impl ServerBuilder {
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([
-                hyper::header::CONTENT_TYPE,
-                VERSION_HEADER.clone(),
-                LIMITS_HEADER.clone(),
-            ]);
+            .allow_headers([hyper::header::CONTENT_TYPE, LIMITS_HEADER.clone()]);
         Ok(cors)
     }
 
@@ -304,7 +336,13 @@ impl ServerBuilder {
             state.cancellation_token.clone(),
         );
 
-        let app = router
+        let trigger_exchange_rates_task = TriggerExchangeRatesTask::new(
+            db_reader.clone(),
+            watermark_task.epoch_receiver(),
+            state.cancellation_token.clone(),
+        );
+
+        let router = router
             .route_layer(middleware::from_fn_with_state(
                 state.version,
                 set_version_middleware,
@@ -318,15 +356,13 @@ impl ServerBuilder {
             .layer(Self::cors()?);
 
         Ok(Server {
-            server: axum::Server::bind(
-                &address
-                    .parse()
-                    .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
-            )
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+            router,
+            address,
             watermark_task,
             system_package_task,
+            trigger_exchange_rates_task,
             state,
+            db_reader,
         })
     }
 
@@ -380,12 +416,16 @@ impl ServerBuilder {
             // Bound each statement in a request with the overall request timeout, to bound DB
             // utilisation (in the worst case we will use 2x the request timeout time in DB wall
             // time).
-            config.service.limits.request_timeout_ms,
+            config.service.limits.request_timeout_ms.into(),
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
-        let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            config.service.limits.clone(),
+            metrics.clone(),
+        );
         let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore::new(loader.clone());
@@ -428,18 +468,27 @@ impl ServerBuilder {
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
         }
+
         if config.internal_features.logger {
             builder = builder.extension(Logger::default());
         }
+
         if config.internal_features.query_limits_checker {
-            builder = builder.extension(QueryLimitsChecker::default());
+            builder = builder.extension(QueryLimitsChecker);
         }
+
+        if config.internal_features.directive_checker {
+            builder = builder.extension(DirectiveChecker);
+        }
+
         if config.internal_features.query_timeout {
             builder = builder.extension(Timeout);
         }
+
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
         }
+
         if config.internal_features.apollo_tracing {
             builder = builder.extension(ApolloTracing);
         }
@@ -456,6 +505,7 @@ fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
         .register_output_type::<IOwner>()
+        .register_output_type::<IMoveDatatype>()
 }
 
 /// Return the string representation of the schema used by this server.
@@ -467,8 +517,8 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    schema: axum::Extension<SuiGraphQLSchema>,
-    axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
+    schema: Extension<SuiGraphQLSchema>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -544,7 +594,7 @@ impl Drop for MetricsCallbackHandler {
 struct GraphqlErrors(std::sync::Arc<Vec<async_graphql::ServerError>>);
 
 /// Connect via a TCPStream to the DB to check if it is alive
-async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
+async fn db_health_check(State(connection): State<ConnectionConfig>) -> StatusCode {
     let Ok(url) = reqwest::Url::parse(connection.db_url.as_str()) else {
         return StatusCode::INTERNAL_SERVER_ERROR;
     };
@@ -566,6 +616,48 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
     }
 }
 
+#[derive(serde::Deserialize)]
+struct HealthParam {
+    max_checkpoint_lag_ms: Option<u64>,
+}
+
+/// Endpoint for querying the health of the service.
+/// It returns 500 for any internal error, including not connecting to the DB,
+/// and 504 if the checkpoint timestamp is too far behind the current timestamp as per the
+/// max checkpoint timestamp lag query parameter, or the default value if not provided.
+async fn health_check(
+    State(connection): State<ConnectionConfig>,
+    Extension(watermark_lock): Extension<WatermarkLock>,
+    AxumQuery(query_params): AxumQuery<HealthParam>,
+) -> StatusCode {
+    let db_health_check = db_health_check(axum::extract::State(connection)).await;
+    if db_health_check != StatusCode::OK {
+        return db_health_check;
+    }
+
+    let max_checkpoint_lag_ms = query_params
+        .max_checkpoint_lag_ms
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
+
+    let checkpoint_timestamp =
+        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+
+    let now_millis = Utc::now().timestamp_millis();
+
+    // Check for negative timestamp or conversion failure
+    let now: Duration = match u64::try_from(now_millis) {
+        Ok(val) => Duration::from_millis(val),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    if (now - checkpoint_timestamp) > max_checkpoint_lag_ms {
+        return StatusCode::GATEWAY_TIMEOUT;
+    }
+
+    db_health_check
+}
+
 // One server per proc, so this is okay
 async fn get_or_init_server_start_time() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
@@ -577,8 +669,7 @@ pub mod tests {
     use crate::{
         config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
-        extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::Timeout,
+        extensions::{query_limits_checker::QueryLimitsChecker, timeout::Timeout},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -586,6 +677,8 @@ pub mod tests {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_sdk::{wallet_context::WalletContext, SuiClient};
+    use sui_types::transaction::TransactionData;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
@@ -594,19 +687,28 @@ pub mod tests {
         connection_config: Option<ConnectionConfig>,
         service_config: Option<ServiceConfig>,
     ) -> ServerBuilder {
-        let connection_config =
-            connection_config.unwrap_or_else(ConnectionConfig::ci_integration_test_cfg);
+        let connection_config = connection_config.unwrap_or_default();
         let service_config = service_config.unwrap_or_default();
 
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let reader = PgManager::reader_with_config(
+            connection_config.db_url.clone(),
+            connection_config.db_pool_size,
+            service_config.limits.request_timeout_ms.into(),
+        )
+        .expect("Failed to create pg connection pool");
+
         let version = Version::for_testing();
         let metrics = metrics();
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let db = Db::new(
+            reader.clone(),
+            service_config.limits.clone(),
+            metrics.clone(),
+        );
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
             checkpoint: 1,
+            checkpoint_timestamp_ms: 1,
             epoch: 0,
         };
         let state = AppState::new(
@@ -641,7 +743,7 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl() {
+    pub async fn test_timeout_impl(wallet: &WalletContext) {
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -667,37 +769,92 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            query: &str,
+            sui_client: &SuiClient,
+        ) -> Response {
             let mut cfg = ServiceConfig::default();
-            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u32;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(None, Some(cfg))
+                .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
                 .build_schema();
 
-            schema.execute("{ chainIdentifier }").await
+            schema.execute(query).await
         }
 
+        let query = "{ chainIdentifier }";
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
+        let sui_client = wallet.get_client().await.unwrap();
 
-        test_timeout(delay, timeout)
+        test_timeout(delay, timeout, query, &sui_client)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
             .await
             .into_result()
             .unwrap_err()
             .into_iter()
             .map(|e| e.message)
             .collect();
-        let exp = format!("Request timed out. Limit: {}s", delay.as_secs_f32());
+        let exp = format!("Query request timed out. Limit: {}s", delay.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
+
+        // Should timeout for mutation
+        // Create a transaction and sign it, and use the tx_bytes + signatures for the GraphQL
+        // executeTransactionBlock mutation call.
+        let addresses = wallet.get_addresses();
+        let gas = wallet
+            .get_one_gas_object_owned_by_address(addresses[0])
+            .await
+            .unwrap();
+        let tx_data = TransactionData::new_transfer_sui(
+            addresses[1],
+            addresses[0],
+            Some(1000),
+            gas.unwrap(),
+            1_000_000,
+            wallet.get_reference_gas_price().await.unwrap(),
+        );
+
+        let tx = wallet.sign_transaction(&tx_data);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        let signature_base64 = &signatures[0];
+        let query = format!(
+            r#"
+            mutation {{
+              executeTransactionBlock(txBytes: "{}", signatures: "{}") {{
+                effects {{
+                  status
+                }}
+              }}
+            }}"#,
+            tx_bytes.encoded(),
+            signature_base64.encoded()
+        );
+        let errs: Vec<_> = test_timeout(delay, delay, &query, &sui_client)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!(
+            "Mutation request timed out. Limit: {}s",
+            delay.as_secs_f32()
+        );
         assert_eq!(errs, vec![exp]);
     }
 
@@ -712,7 +869,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -739,10 +896,7 @@ pub mod tests {
             .map(|e| e.message)
             .collect();
 
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 0".to_string()]);
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
@@ -753,10 +907,7 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            errs,
-            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
-        );
+        assert_eq!(errs, vec!["Query nesting is over 2".to_string()]);
     }
 
     pub async fn test_query_node_limit_impl() {
@@ -770,7 +921,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .extension(QueryLimitsChecker::default())
+                .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
         }
@@ -796,10 +947,7 @@ pub mod tests {
             .into_iter()
             .map(|e| e.message)
             .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 0 nodes".to_string()]);
 
         let err: Vec<_> = exec_query_node_limit(
             4,
@@ -811,13 +959,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(
-            err,
-            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
-        );
+        assert_eq!(err, vec!["Query has over 4 nodes".to_string()]);
     }
 
-    pub async fn test_query_default_page_limit_impl() {
+    pub async fn test_query_default_page_limit_impl(connection_config: ConnectionConfig) {
         let service_config = ServiceConfig {
             limits: Limits {
                 default_page_size: 1,
@@ -825,7 +970,7 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(None, Some(service_config)).build_schema();
+        let schema = prep_schema(Some(connection_config), Some(service_config)).build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -890,7 +1035,7 @@ pub mod tests {
         let server_builder = prep_schema(None, None);
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
-            .extension(QueryLimitsChecker::default()) // QueryLimitsChecker is where we actually set the metrics
+            .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
             .build_schema();
 
         schema
@@ -919,5 +1064,21 @@ pub mod tests {
         assert_eq!(req_metrics.input_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.output_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(req_metrics.query_depth.get_sample_sum(), 1. + 3.);
+    }
+
+    pub async fn test_health_check_impl() {
+        let server_builder = prep_schema(None, None);
+        let url = format!(
+            "http://{}:{}/health",
+            server_builder.state.connection.host, server_builder.state.connection.port
+        );
+        server_builder.build_schema();
+
+        let resp = reqwest::get(&url).await.unwrap();
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+        let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
+        let resp = reqwest::get(&url_with_param).await.unwrap();
+        assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ObjectCacheRead;
 use itertools::izip;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
@@ -18,11 +18,11 @@ use sui_types::{
 use tracing::instrument;
 
 pub(crate) struct TransactionInputLoader {
-    cache: Arc<dyn ExecutionCacheRead>,
+    cache: Arc<dyn ObjectCacheRead>,
 }
 
 impl TransactionInputLoader {
-    pub fn new(cache: Arc<dyn ExecutionCacheRead>) -> Self {
+    pub fn new(cache: Arc<dyn ObjectCacheRead>) -> Self {
         Self { cache }
     }
 }

@@ -14,10 +14,7 @@ mod tests;
 pub mod utils;
 
 const MODULES_DIR: &str = "sources";
-const NURSERY_DIR: &str = "nursery";
 const DOCS_DIR: &str = "docs";
-const NURSERY_DOCS_DIR: &str = "nursery/docs";
-const ERRMAP_FILE: &str = "error_description.errmap";
 
 const REFERENCES_TEMPLATE: &str = "doc_templates/references.md";
 const OVERVIEW_TEMPLATE: &str = "doc_templates/overview.md";
@@ -46,21 +43,8 @@ pub fn move_stdlib_docs_full_path() -> String {
     format!("{}/{}", env!("CARGO_MANIFEST_DIR"), DOCS_DIR)
 }
 
-pub fn move_nursery_docs_full_path() -> String {
-    format!("{}/{}", env!("CARGO_MANIFEST_DIR"), NURSERY_DOCS_DIR)
-}
-
-pub fn move_stdlib_errmap_full_path() -> String {
-    format!("{}/{}", env!("CARGO_MANIFEST_DIR"), ERRMAP_FILE)
-}
-
 pub fn move_stdlib_files() -> Vec<String> {
     let path = path_in_crate(MODULES_DIR);
-    find_filenames(&[path], |p| extension_equals(p, MOVE_EXTENSION)).unwrap()
-}
-
-pub fn move_nursery_files() -> Vec<String> {
-    let path = path_in_crate(NURSERY_DIR);
     find_filenames(&[path], |p| extension_equals(p, MOVE_EXTENSION)).unwrap()
 }
 
@@ -122,6 +106,7 @@ pub fn build_stdlib_doc(output_path: &str) {
         move_stdlib_named_addresses(),
     )
 }
+<<<<<<< HEAD
 
 pub fn build_nursery_doc(output_path: &str) {
     build_doc(
@@ -135,3 +120,5 @@ pub fn build_nursery_doc(output_path: &str) {
         move_stdlib_named_addresses(),
     )
 }
+=======
+>>>>>>> main

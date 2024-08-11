@@ -61,6 +61,8 @@ pub enum BridgeError {
     ActionIsNotTokenTransferAction,
     // Sui transaction failure due to generic error
     SuiTxFailureGeneric(String),
+    // Zero value bridge transfer should not be allowed
+    ZeroValueBridgeTransfer(String),
     // Storage Error
     StorageError(String),
     // Rest API Error

@@ -1,6 +1,9 @@
-error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/unit_test/expected_failure_constants_shadowed_module_invalid.move:10:35
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/unit_test/expected_failure_constants_shadowed_module_invalid.move:10:24
    │
 10 │     #[expected_failure(abort_code=a::a::C)]
-   │                                   ^^^^ Expected a module or address in this position, not a module member
+   │                        ^^^^^^^^^^^^^^^^^^
+   │                        │          │
+   │                        │          Unsupported value in this assignment
+   │                        Invalid value in attribute assignment
 

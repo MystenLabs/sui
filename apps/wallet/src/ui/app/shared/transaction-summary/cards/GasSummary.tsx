@@ -5,7 +5,7 @@ import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerL
 import { useActiveAddress } from '_src/ui/app/hooks';
 import { GAS_TYPE_ARG } from '_src/ui/app/redux/slices/sui-objects/Coin';
 import { useFormatCoin, type GasSummaryType } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 
 import { Text } from '../../text';
 

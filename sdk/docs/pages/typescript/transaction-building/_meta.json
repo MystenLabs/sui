@@ -1,6 +1,7 @@
 {
-	"basics": "Sui Programmable Transaction Blocks Basics",
+	"basics": "Sui Programmable Transaction Basics",
 	"gas": "Paying for Sui Transactions with Gas Coins",
-	"sponsored-transactions": "Sponsored Transaction Blocks",
-	"offline": "Building Offline"
+	"sponsored-transactions": "Sponsored Transactions",
+	"offline": "Building Offline",
+	"intents": "Transaction Intents"
 }

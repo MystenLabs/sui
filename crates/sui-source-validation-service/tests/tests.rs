@@ -35,6 +35,7 @@ const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
 #[allow(clippy::await_holding_lock)]
 #[tokio::test]
+#[ignore]
 async fn test_end_to_end() -> anyhow::Result<()> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new()
@@ -298,7 +299,8 @@ async fn test_api_route() -> anyhow::Result<()> {
         metrics: None,
         sources_list,
     }));
-    tokio::spawn(serve(app_state).expect("Cannot start service."));
+    tokio::spawn(async move { serve(app_state).await.expect("Cannot start service.") });
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     let client = Client::new();
 

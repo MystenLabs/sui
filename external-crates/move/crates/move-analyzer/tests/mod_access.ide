@@ -1,0 +1,46 @@
+// Tests if symbolication information for module accesses has been constructed correctly.
+{
+  "UseDef": {
+    "project": "tests/symbols",
+    "file_tests": {
+      "M9.move": [
+        {
+          "use_line": 19,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 20,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 20,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 23,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 24,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 28,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 28,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 34,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 34,
+          "use_ndx": 3
+        }
+      ]
+    }
+  }
+}

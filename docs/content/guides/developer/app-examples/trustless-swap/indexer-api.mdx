@@ -28,7 +28,7 @@ Before getting started, make sure you:
 
 ## Indexing service
 
-The indexing service fetches `Escrow` objects by `sender` and `recipient`.  
+The indexing service fetches `Escrow` objects by `sender` and `recipient`.
 
 ### Data model
 
@@ -92,7 +92,7 @@ Let's first examine `event-indexer.ts`:
 #### Imports
 
 ```ts title='event-indexer.ts'
-import { EventId, SuiClient, SuiEvent, SuiEventFilter } from '@mysten/sui.js/client';
+import { EventId, SuiClient, SuiEvent, SuiEventFilter } from '@mysten/sui/client';
 
 import { CONFIG } from '../config';
 import { prisma } from '../db';
@@ -101,7 +101,7 @@ import { handleEscrowObjects } from './escrow-handler';
 import { handleLockObjects } from './locked-handler';
 ```
 
-These lines import the necessary modules and dependencies for the script. The `EventId`, `SuiClient`, `SuiEvent`, and `SuiEventFilter` types are imported from the `@mysten/sui.js/client` package. The `CONFIG` constant is imported from the local `config` module, `prisma` from the local `db` module, `getClient` from the local `sui-utils` module, and the `handleEscrowObjects` and `handleLockObjects` functions from the local `escrow-handler` and `locked-handler` modules respectively.
+These lines import the necessary modules and dependencies for the script. The `EventId`, `SuiClient`, `SuiEvent`, and `SuiEventFilter` types are imported from the `@mysten/sui/client` package. The `CONFIG` constant is imported from the local `config` module, `prisma` from the local `db` module, `getClient` from the local `sui-utils` module, and the `handleEscrowObjects` and `handleLockObjects` functions from the local `escrow-handler` and `locked-handler` modules respectively.
 
 #### Type definitions
 
@@ -261,13 +261,13 @@ Now let’s take a look at `escrow-handler.ts`:
 #### Imports
 
 ```ts title='escrow-handler.ts'
-import { SuiEvent } from '@mysten/sui.js/client';
+import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../db';
 ```
 
-These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
+These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
 
 #### Type definitions
 
@@ -356,13 +356,13 @@ This function handles all events emitted by the `escrow` module. It takes an arr
 #### Imports
 
 ```ts title='locked-handler.ts'
-import { SuiEvent } from '@mysten/sui.js/client';
+import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../db';
 ```
 
-These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
+These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
 
 #### Type definitions
 

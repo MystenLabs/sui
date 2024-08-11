@@ -8,10 +8,12 @@ use crate::{
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, FieldHandle,
-        FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex, FunctionHandle,
-        FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
-        StructDefInstantiation, StructDefinition, StructFieldInformation, StructHandle, TableIndex,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, DatatypeHandle,
+        EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
+        FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation, JumpTableInner, LocalIndex,
+        ModuleHandle, Signature, SignatureToken, StructDefInstantiation, StructDefinition,
+        StructFieldInformation, TableIndex, VariantDefinition, VariantHandle,
+        VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
     IndexKind,
@@ -46,7 +48,7 @@ impl<'a> BoundsChecker<'a> {
         self.check_constants()?;
         self.check_module_handles()?;
         self.check_self_module_handle()?;
-        self.check_struct_handles()?;
+        self.check_datatype_handles()?;
         self.check_function_handles()?;
         self.check_field_handles()?;
         self.check_friend_decls()?;
@@ -54,7 +56,14 @@ impl<'a> BoundsChecker<'a> {
         self.check_function_instantiations()?;
         self.check_field_instantiations()?;
         self.check_struct_defs()?;
-        self.check_function_defs()
+        self.check_enum_defs()?;
+        self.check_enum_instantiations()?;
+        // NB: the order of these checks is important and must occur after the enum checks, and
+        // before the function checks.
+        self.check_variant_handles()?;
+        self.check_variant_instantiation_handles()?;
+        self.check_function_defs()?;
+        Ok(())
     }
 
     fn check_signatures(&self) -> PartialVMResult<()> {
@@ -78,9 +87,9 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
-    fn check_struct_handles(&self) -> PartialVMResult<()> {
-        for struct_handle in self.module.struct_handles() {
-            self.check_struct_handle(struct_handle)?
+    fn check_datatype_handles(&self) -> PartialVMResult<()> {
+        for struct_handle in self.module.datatype_handles() {
+            self.check_datatype_handle(struct_handle)?
         }
         Ok(())
     }
@@ -113,6 +122,27 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
+    fn check_enum_instantiations(&self) -> PartialVMResult<()> {
+        for enum_instantiation in self.module.enum_instantiations() {
+            self.check_enum_instantiation(enum_instantiation)?
+        }
+        Ok(())
+    }
+
+    fn check_variant_handles(&self) -> PartialVMResult<()> {
+        for variant_handle in self.module.variant_handles() {
+            self.check_variant_handle(variant_handle)?
+        }
+        Ok(())
+    }
+
+    fn check_variant_instantiation_handles(&self) -> PartialVMResult<()> {
+        for variant_instantiation_handle in self.module.variant_instantiation_handles() {
+            self.check_variant_instantiation_handle(variant_instantiation_handle)?
+        }
+        Ok(())
+    }
+
     fn check_function_instantiations(&self) -> PartialVMResult<()> {
         for function_instantiation in self.module.function_instantiations() {
             self.check_function_instantiation(function_instantiation)?
@@ -134,6 +164,13 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
+    fn check_enum_defs(&self) -> PartialVMResult<()> {
+        for enum_def in self.module.enum_defs() {
+            self.check_enum_def(enum_def)?
+        }
+        Ok(())
+    }
+
     fn check_function_defs(&mut self) -> PartialVMResult<()> {
         for (function_def_idx, function_def) in self.module.function_defs().iter().enumerate() {
             self.check_function_def(function_def_idx, function_def)?
@@ -150,9 +187,9 @@ impl<'a> BoundsChecker<'a> {
         check_bounds_impl(self.module.module_handles(), self.module.self_handle_idx())
     }
 
-    fn check_struct_handle(&self, struct_handle: &StructHandle) -> PartialVMResult<()> {
-        check_bounds_impl(self.module.module_handles(), struct_handle.module)?;
-        check_bounds_impl(self.module.identifiers(), struct_handle.name)
+    fn check_datatype_handle(&self, datatype_handle: &DatatypeHandle) -> PartialVMResult<()> {
+        check_bounds_impl(self.module.module_handles(), datatype_handle.module)?;
+        check_bounds_impl(self.module.identifiers(), datatype_handle.name)
     }
 
     fn check_function_handle(&self, function_handle: &FunctionHandle) -> PartialVMResult<()> {
@@ -218,6 +255,57 @@ impl<'a> BoundsChecker<'a> {
         )
     }
 
+    fn check_enum_instantiation(
+        &self,
+        enum_instantiation: &EnumDefInstantiation,
+    ) -> PartialVMResult<()> {
+        check_bounds_impl(self.module.enum_defs(), enum_instantiation.def)?;
+        check_bounds_impl(self.module.signatures(), enum_instantiation.type_parameters)
+    }
+
+    fn check_variant_handle(&self, variant_handle: &VariantHandle) -> PartialVMResult<()> {
+        check_bounds_impl(self.module.enum_defs(), variant_handle.enum_def)?;
+        let enum_def = self.module.enum_def_at(variant_handle.enum_def);
+        if variant_handle.variant as usize >= enum_def.variants.len() {
+            return Err(bounds_error(
+                StatusCode::INDEX_OUT_OF_BOUNDS,
+                IndexKind::VariantTag,
+                variant_handle.variant,
+                enum_def.variants.len(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_variant_instantiation_handle(
+        &self,
+        variant_instantiation_handle: &VariantInstantiationHandle,
+    ) -> PartialVMResult<()> {
+        check_bounds_impl(
+            self.module.enum_instantiations(),
+            variant_instantiation_handle.enum_def,
+        )?;
+        let EnumDefInstantiation {
+            def,
+            type_parameters,
+        } = self
+            .module
+            .enum_instantiation_at(variant_instantiation_handle.enum_def);
+        // Invariant: enum instantiations have already been checked at this point.
+        debug_assert!(check_bounds_impl(self.module.enum_defs(), *def).is_ok());
+        debug_assert!(check_bounds_impl(self.module.signatures(), *type_parameters).is_ok());
+        let enum_def = self.module.enum_def_at(*def);
+        if variant_instantiation_handle.variant as usize >= enum_def.variants.len() {
+            return Err(bounds_error(
+                StatusCode::INDEX_OUT_OF_BOUNDS,
+                IndexKind::VariantTag,
+                variant_instantiation_handle.variant,
+                enum_def.variants.len(),
+            ));
+        }
+        Ok(())
+    }
+
     fn check_function_instantiation(
         &self,
         function_instantiation: &FunctionInstantiation,
@@ -255,15 +343,37 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_struct_def(&self, struct_def: &StructDefinition) -> PartialVMResult<()> {
-        check_bounds_impl(self.module.struct_handles(), struct_def.struct_handle)?;
+        check_bounds_impl(self.module.datatype_handles(), struct_def.struct_handle)?;
         // check signature (type) and type parameter for the field type
         if let StructFieldInformation::Declared(fields) = &struct_def.field_information {
             let type_param_count = self
                 .module
-                .struct_handles()
+                .datatype_handles()
                 .get(struct_def.struct_handle.into_index())
                 .map_or(0, |sh| sh.type_parameters.len());
             // field signatures are inlined
+            for field in fields {
+                check_bounds_impl(self.module.identifiers(), field.name)?;
+                self.check_type(&field.signature.0)?;
+                self.check_type_parameter(&field.signature.0, type_param_count)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_enum_def(&self, enum_def: &EnumDefinition) -> PartialVMResult<()> {
+        check_bounds_impl(self.module.datatype_handles(), enum_def.enum_handle)?;
+        let type_param_count = self
+            .module
+            .datatype_handles()
+            .get(enum_def.enum_handle.into_index())
+            .map_or(0, |eh| eh.type_parameters.len());
+        for VariantDefinition {
+            variant_name,
+            fields,
+        } in &enum_def.variants
+        {
+            check_bounds_impl(self.module.identifiers(), *variant_name)?;
             for field in fields {
                 check_bounds_impl(self.module.identifiers(), field.name)?;
                 self.check_type(&field.signature.0)?;
@@ -500,6 +610,74 @@ impl<'a> BoundsChecker<'a> {
                 | LdTrue | LdFalse | ReadRef | WriteRef | Add | Sub | Mul | Mod | Div | BitOr
                 | BitAnd | Xor | Shl | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge
                 | Abort | Nop => (),
+                PackVariant(v_handle)
+                | UnpackVariant(v_handle)
+                | UnpackVariantImmRef(v_handle)
+                | UnpackVariantMutRef(v_handle) => {
+                    self.check_code_unit_bounds_impl(
+                        self.module.variant_handles(),
+                        *v_handle,
+                        bytecode_offset,
+                    )?;
+                }
+                PackVariantGeneric(vi_handle)
+                | UnpackVariantGeneric(vi_handle)
+                | UnpackVariantGenericImmRef(vi_handle)
+                | UnpackVariantGenericMutRef(vi_handle) => {
+                    self.check_code_unit_bounds_impl(
+                        self.module.variant_instantiation_handles(),
+                        *vi_handle,
+                        bytecode_offset,
+                    )?;
+                    // Invariant: pool indices have already been checked at this point.
+                    let handle = self.module.variant_instantiation_handle_at(*vi_handle);
+                    let enum_inst = self.module.enum_instantiation_at(handle.enum_def);
+                    let sig = self.module.signature_at(enum_inst.type_parameters);
+                    for ty in &sig.0 {
+                        self.check_type_parameter(ty, type_param_count)?
+                    }
+                }
+                VariantSwitch(jti) => {
+                    self.check_code_unit_bounds_impl(
+                        &code_unit.jump_tables,
+                        *jti,
+                        bytecode_offset,
+                    )?;
+                }
+            }
+        }
+
+        for VariantJumpTable {
+            head_enum,
+            jump_table,
+        } in code_unit.jump_tables.iter()
+        {
+            check_bounds_impl(self.module.enum_defs(), *head_enum)?;
+            let enum_defs = self.module.enum_defs();
+            let num_variants = enum_defs[head_enum.into_index()].variants.len();
+            let code_len = code_unit.code.len();
+            let JumpTableInner::Full(jump_table) = jump_table;
+            let jt_len = jump_table.len();
+            if jt_len != num_variants {
+                return Err(verification_error(
+                    StatusCode::INVALID_ENUM_SWITCH,
+                    IndexKind::VariantTag,
+                    jt_len as TableIndex,
+                )
+                .with_message(format!(
+                    "Jump table length {} does not equal number of variants {}",
+                    jt_len, num_variants,
+                )));
+            }
+            for offset in jump_table {
+                if *offset as usize >= code_len {
+                    return Err(bounds_error(
+                        StatusCode::INDEX_OUT_OF_BOUNDS,
+                        IndexKind::CodeDefinition,
+                        *offset,
+                        code_len,
+                    ));
+                }
             }
         }
         Ok(())
@@ -512,9 +690,9 @@ impl<'a> BoundsChecker<'a> {
             match ty {
                 Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | TypeParameter(_)
                 | Reference(_) | MutableReference(_) | Vector(_) => (),
-                Struct(idx) => {
-                    check_bounds_impl(self.module.struct_handles(), *idx)?;
-                    if let Some(sh) = self.module.struct_handles().get(idx.into_index()) {
+                Datatype(idx) => {
+                    check_bounds_impl(self.module.datatype_handles(), *idx)?;
+                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index()) {
                         if !sh.type_parameters.is_empty() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -526,10 +704,10 @@ impl<'a> BoundsChecker<'a> {
                         }
                     }
                 }
-                StructInstantiation(struct_inst) => {
-                    let (idx, type_params) = &**struct_inst;
-                    check_bounds_impl(self.module.struct_handles(), *idx)?;
-                    if let Some(sh) = self.module.struct_handles().get(idx.into_index()) {
+                DatatypeInstantiation(inst) => {
+                    let (idx, type_params) = &**inst;
+                    check_bounds_impl(self.module.datatype_handles(), *idx)?;
+                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index()) {
                         if sh.type_parameters.len() != type_params.len() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -576,11 +754,11 @@ impl<'a> BoundsChecker<'a> {
                 | U256
                 | Address
                 | Signer
-                | Struct(_)
+                | Datatype(_)
                 | Reference(_)
                 | MutableReference(_)
                 | Vector(_)
-                | StructInstantiation(_) => (),
+                | DatatypeInstantiation(_) => (),
             }
         }
         Ok(())

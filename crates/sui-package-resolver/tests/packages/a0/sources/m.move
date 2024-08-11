@@ -17,4 +17,25 @@ module a::m {
     public struct T2 {
         x: u8,
     }
+
+    public enum E0 {
+        V {
+            b: bool,
+            v: vector<E1<T1<T2, u128>, u128>>,
+        }
+    }
+
+    public enum E1<P0, P1> {
+        V {
+            a: address,
+            p: P0,
+            q: vector<P1>,
+        }
+    }
+
+    public enum E2 {
+        V0 {
+            x: u8,
+        },
+    }
 }

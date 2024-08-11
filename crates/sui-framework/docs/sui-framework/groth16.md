@@ -165,7 +165,7 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
-<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidCurve">EInvalidCurve</a>: u64 = 1;
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidCurve">EInvalidCurve</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -174,7 +174,7 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
-<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a>: u64 = 0;
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -183,7 +183,7 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
-<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>: u64 = 2;
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 

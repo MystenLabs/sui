@@ -52,7 +52,7 @@ fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let with_unpublished_deps = false;
-    let package = BuildConfig::new_for_testing().build(path).unwrap();
+    let package = BuildConfig::new_for_testing().build(&path).unwrap();
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
@@ -66,7 +66,7 @@ pub fn build_upgrade_test_modules_with_dep_addr(
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
-    let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_ids);
+    let package = build_test_modules_with_dep_addr(&path, dep_original_addresses, dep_ids);
     let with_unpublished_deps = false;
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
@@ -265,7 +265,7 @@ async fn test_upgrade_package_happy_path() {
 
     let package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&runner.package.0)
         .unwrap()
         .unwrap();
@@ -834,7 +834,7 @@ async fn test_publish_override_happy_path() {
 
     let package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&new_package.0)
         .unwrap()
         .unwrap();
@@ -887,7 +887,7 @@ async fn test_publish_transitive_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
@@ -978,7 +978,7 @@ async fn test_publish_transitive_override_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();

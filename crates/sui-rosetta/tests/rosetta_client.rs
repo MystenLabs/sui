@@ -28,18 +28,24 @@ use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
 
-pub async fn start_rosetta_test_server(
-    client: SuiClient,
-) -> (RosettaClient, Vec<JoinHandle<hyper::Result<()>>>) {
+pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
     let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = local_ip_utils::localhost_for_testing();
     let port = local_ip_utils::get_available_port(&local_ip);
     let rosetta_address = format!("{}:{}", local_ip, port);
-    let online_handle = online_server.serve(SocketAddr::from_str(&rosetta_address).unwrap());
+    let online_handle = tokio::spawn(async move {
+        online_server
+            .serve(SocketAddr::from_str(&rosetta_address).unwrap())
+            .await
+    });
     let offline_port = local_ip_utils::get_available_port(&local_ip);
     let offline_address = format!("{}:{}", local_ip, offline_port);
-    let offline_handle = offline_server.serve(SocketAddr::from_str(&offline_address).unwrap());
+    let offline_handle = tokio::spawn(async move {
+        offline_server
+            .serve(SocketAddr::from_str(&offline_address).unwrap())
+            .await
+    });
 
     // allow rosetta to process the genesis block.
     tokio::task::yield_now().await;

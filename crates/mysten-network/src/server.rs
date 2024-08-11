@@ -22,7 +22,7 @@ use tonic::{
         BoxFuture,
     },
     server::NamedService,
-    transport::{server::Router, Body},
+    transport::server::Router,
 };
 use tower::{
     layer::util::{Identity, Stack},
@@ -41,7 +41,7 @@ pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProv
     health_reporter: tonic_health::server::HealthReporter,
 }
 
-type AddPathToHeaderFunction = fn(&Request<Body>) -> Option<HeaderValue>;
+type AddPathToHeaderFunction = fn(&Request<BoxBody>) -> Option<HeaderValue>;
 
 type WrapperService<M> = Stack<
     Stack<
@@ -103,7 +103,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             .global_concurrency_limit
             .map(tower::limit::GlobalConcurrencyLimitLayer::new);
 
-        fn add_path_to_request_header(request: &Request<Body>) -> Option<HeaderValue> {
+        fn add_path_to_request_header(request: &Request<BoxBody>) -> Option<HeaderValue> {
             let path = request.uri().path();
             Some(HeaderValue::from_str(path).unwrap())
         }
@@ -144,7 +144,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
     /// Add a new service to this Server.
     pub fn add_service<S>(mut self, svc: S) -> Self
     where
-        S: Service<Request<Body>, Response = Response<BoxBody>, Error = Infallible>
+        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
             + NamedService
             + Clone
             + Send
@@ -190,19 +190,6 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
                     let server = Box::pin(
                         self.router
                             .serve_with_incoming_shutdown(incoming, rx_cancellation),
-                    );
-                    (local_addr, server)
-                }
-                // Protocol::Memory(_) => todo!(),
-                #[cfg(unix)]
-                Protocol::Unix(_) => {
-                    let (path, _http_or_https) = crate::multiaddr::parse_unix(addr)?;
-                    let uds = tokio::net::UnixListener::bind(path.as_ref())?;
-                    let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
-                    let local_addr = addr.to_owned();
-                    let server = Box::pin(
-                        self.router
-                            .serve_with_incoming_shutdown(uds_stream, rx_cancellation),
                     );
                     (local_addr, server)
                 }
@@ -454,24 +441,6 @@ mod test {
     #[tokio::test]
     async fn ip6() {
         let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
-        test_multiaddr(address).await;
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn unix() {
-        // Note that this only works when constructing a multiaddr by hand and not via the
-        // human-readable format
-        let path = "unix-domain-socket";
-        let address = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
-        test_multiaddr(address).await;
-        std::fs::remove_file(path).unwrap();
-    }
-
-    #[should_panic]
-    #[tokio::test]
-    async fn missing_http_protocol() {
-        let address: Multiaddr = "/dns/localhost/tcp/0".parse().unwrap();
         test_multiaddr(address).await;
     }
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the control-flow graph uses for bytecode verification.
-use move_binary_format::file_format::{Bytecode, CodeOffset};
+use move_binary_format::file_format::{Bytecode, CodeOffset, VariantJumpTable};
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 // BTree/Hash agnostic type wrappers
@@ -80,14 +80,19 @@ impl BasicBlock {
 const ENTRY_BLOCK_ID: BlockId = 0;
 
 impl VMControlFlowGraph {
-    pub fn new(code: &[Bytecode]) -> Self {
+    pub fn new(code: &[Bytecode], jump_tables: &[VariantJumpTable]) -> Self {
         let code_len = code.len() as CodeOffset;
         // First go through and collect block ids, i.e., offsets that begin basic blocks.
         // Need to do this first in order to handle backwards edges.
         let mut block_ids = Set::new();
         block_ids.insert(ENTRY_BLOCK_ID);
         for pc in 0..code.len() {
-            VMControlFlowGraph::record_block_ids(pc as CodeOffset, code, &mut block_ids);
+            VMControlFlowGraph::record_block_ids(
+                pc as CodeOffset,
+                code,
+                jump_tables,
+                &mut block_ids,
+            );
         }
 
         // Create basic blocks
@@ -101,7 +106,7 @@ impl VMControlFlowGraph {
             if Self::is_end_of_block(co_pc, code, &block_ids) {
                 let exit = co_pc;
                 exit_to_entry.insert(exit, entry);
-                let successors = Bytecode::get_successors(co_pc, code);
+                let successors = Bytecode::get_successors(co_pc, code, jump_tables);
                 let bb = BasicBlock { exit, successors };
                 blocks.insert(entry, bb);
                 entry = co_pc + 1;
@@ -234,12 +239,15 @@ impl VMControlFlowGraph {
         pc + 1 == (code.len() as CodeOffset) || block_ids.contains(&(pc + 1))
     }
 
-    fn record_block_ids(pc: CodeOffset, code: &[Bytecode], block_ids: &mut Set<BlockId>) {
+    fn record_block_ids(
+        pc: CodeOffset,
+        code: &[Bytecode],
+        jump_tables: &[VariantJumpTable],
+        block_ids: &mut Set<BlockId>,
+    ) {
         let bytecode = &code[pc as usize];
 
-        if let Some(offset) = bytecode.offset() {
-            block_ids.insert(*offset);
-        }
+        block_ids.extend(bytecode.offsets(jump_tables));
 
         if bytecode.is_branch() && pc + 1 < (code.len() as CodeOffset) {
             block_ids.insert(pc + 1);

@@ -29,6 +29,13 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
+    registry
+        .register(mysten_metrics::uptime_metric(
+            "security-watchdog",
+            "v0",
+            "N/A",
+        ))
+        .unwrap();
     let service = SchedulerService::new(&config, &registry, pd_api_key, sf_password).await?;
     service.schedule().await?;
     service.start().await?;

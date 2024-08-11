@@ -24,7 +24,7 @@ title: Module `0x2::ecdsa_k1`
 Error if the public key cannot be recovered from the signature.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EFailToRecoverPubKey">EFailToRecoverPubKey</a>: u64 = 0;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EFailToRecoverPubKey">EFailToRecoverPubKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -34,7 +34,7 @@ Error if the public key cannot be recovered from the signature.
 Error if the public key is invalid.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: u64 = 2;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -44,7 +44,7 @@ Error if the public key is invalid.
 Error if the signature is invalid.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidSignature">EInvalidSignature</a>: u64 = 1;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidSignature">EInvalidSignature</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 

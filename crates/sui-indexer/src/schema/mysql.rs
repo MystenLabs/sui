@@ -3,6 +3,12 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    chain_identifier (checkpoint_digest) {
+        checkpoint_digest -> Blob,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Bigint,
         checkpoint_digest -> Blob,
@@ -150,6 +156,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Bigint,
+        min_tx_sequence_number -> Bigint,
+        max_tx_sequence_number -> Bigint,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Bigint,
         transaction_digest -> Blob,
@@ -215,20 +229,29 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    checkpoints,
-    display,
-    epochs,
-    events,
-    objects,
-    objects_history,
-    objects_snapshot,
-    packages,
-    transactions,
-    tx_calls,
-    tx_changed_objects,
-    tx_digests,
-    tx_input_objects,
-    tx_recipients,
-    tx_senders,
-);
+#[macro_export]
+macro_rules! for_all_tables {
+    ($action:path) => {
+        $action!(
+            chain_identifier,
+            checkpoints,
+            epochs,
+            events,
+            objects,
+            objects_history,
+            objects_snapshot,
+            packages,
+            pruner_cp_watermark,
+            transactions,
+            tx_calls,
+            tx_changed_objects,
+            tx_digests,
+            tx_input_objects,
+            tx_recipients,
+            tx_senders
+        );
+    };
+}
+pub use for_all_tables;
+
+for_all_tables!(diesel::allow_tables_to_appear_in_same_query);

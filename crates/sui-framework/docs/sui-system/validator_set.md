@@ -112,7 +112,7 @@ title: Module `0x3::validator_set`
 
 <dl>
 <dt>
-<code>total_stake: u64</code>
+<code>total_stake: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Total amount of stake from all active validators at the beginning of the epoch.
@@ -131,7 +131,7 @@ title: Module `0x3::validator_set`
  They will be processed at the end of the epoch.
 </dd>
 <dt>
-<code>pending_removals: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;</code>
+<code>pending_removals: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
  Removal requests from the validators. Each element is an index
@@ -162,7 +162,7 @@ title: Module `0x3::validator_set`
  officially add them to the active validator set <code>active_validators</code> next epoch.
 </dd>
 <dt>
-<code>at_risk_validators: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;</code>
+<code>at_risk_validators: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;</code>
 </dt>
 <dd>
  Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
@@ -197,7 +197,7 @@ each validator, emitted during epoch advancement.
 
 <dl>
 <dt>
-<code>epoch: u64</code>
+<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -209,31 +209,31 @@ each validator, emitted during epoch advancement.
 
 </dd>
 <dt>
-<code>reference_gas_survey_quote: u64</code>
+<code>reference_gas_survey_quote: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>stake: u64</code>
+<code>stake: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>commission_rate: u64</code>
+<code>commission_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>pool_staking_reward: u64</code>
+<code>pool_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>storage_fund_staking_reward: u64</code>
+<code>storage_fund_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -251,7 +251,7 @@ each validator, emitted during epoch advancement.
 
 </dd>
 <dt>
-<code>tallying_rule_global_score: u64</code>
+<code>tallying_rule_global_score: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -279,7 +279,7 @@ V2 of ValidatorEpochInfoEvent containing more information about the validator.
 
 <dl>
 <dt>
-<code>epoch: u64</code>
+<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -291,37 +291,37 @@ V2 of ValidatorEpochInfoEvent containing more information about the validator.
 
 </dd>
 <dt>
-<code>reference_gas_survey_quote: u64</code>
+<code>reference_gas_survey_quote: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>stake: u64</code>
+<code>stake: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code><a href="voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
+<code><a href="voting_power.md#0x3_voting_power">voting_power</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>commission_rate: u64</code>
+<code>commission_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>pool_staking_reward: u64</code>
+<code>pool_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>storage_fund_staking_reward: u64</code>
+<code>storage_fund_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -339,7 +339,7 @@ V2 of ValidatorEpochInfoEvent containing more information about the validator.
 
 </dd>
 <dt>
-<code>tallying_rule_global_score: u64</code>
+<code>tallying_rule_global_score: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -368,7 +368,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 <dl>
 <dt>
-<code>epoch: u64</code>
+<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -409,7 +409,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 <dl>
 <dt>
-<code>epoch: u64</code>
+<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -446,7 +446,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1000000000;
 </code></pre>
 
 
@@ -455,7 +455,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EInvalidCap">EInvalidCap</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 101;
 </code></pre>
 
 
@@ -464,7 +464,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 8;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 8;
 </code></pre>
 
 
@@ -509,7 +509,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>: u64 = 6;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 6;
 </code></pre>
 
 
@@ -518,7 +518,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EDuplicateValidator">EDuplicateValidator</a>: u64 = 2;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EDuplicateValidator">EDuplicateValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -527,7 +527,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EInvalidStakeAdjustmentAmount">EInvalidStakeAdjustmentAmount</a>: u64 = 1;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EInvalidStakeAdjustmentAmount">EInvalidStakeAdjustmentAmount</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -536,7 +536,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>: u64 = 5;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
@@ -545,7 +545,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENoPoolFound">ENoPoolFound</a>: u64 = 3;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENoPoolFound">ENoPoolFound</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -554,7 +554,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENonValidatorInReportRecords">ENonValidatorInReportRecords</a>: u64 = 0;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENonValidatorInReportRecords">ENonValidatorInReportRecords</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -563,7 +563,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>: u64 = 12;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 12;
 </code></pre>
 
 
@@ -572,7 +572,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>: u64 = 4;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -581,7 +581,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 9;
 </code></pre>
 
 
@@ -590,7 +590,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EStakingBelowThreshold">EStakingBelowThreshold</a>: u64 = 10;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EStakingBelowThreshold">EStakingBelowThreshold</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 10;
 </code></pre>
 
 
@@ -599,7 +599,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorAlreadyRemoved">EValidatorAlreadyRemoved</a>: u64 = 11;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorAlreadyRemoved">EValidatorAlreadyRemoved</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 11;
 </code></pre>
 
 
@@ -608,7 +608,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 7;
 </code></pre>
 
 
@@ -617,7 +617,7 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorSetEmpty">EValidatorSetEmpty</a>: u64 = 13;
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorSetEmpty">EValidatorSetEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 13;
 </code></pre>
 
 
@@ -769,7 +769,7 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> to 
 processed at the end of epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, min_joining_stake_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -778,7 +778,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &TxContext) {
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(
         self.validator_candidates.contains(validator_address),
@@ -956,7 +956,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_commission_rate: u64, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_commission_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -967,7 +967,7 @@ the stake and any rewards corresponding to it will be immediately processed.
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_set_commission_rate">request_set_commission_rate</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
-    new_commission_rate: u64,
+    new_commission_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     ctx: &TxContext,
 ) {
     <b>let</b> validator_address = ctx.sender();
@@ -993,7 +993,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, very_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, low_stake_grace_period: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1007,10 +1007,10 @@ It does the following things:
     computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
-    reward_slashing_rate: u64,
-    low_stake_threshold: u64,
-    very_low_stake_threshold: u64,
-    low_stake_grace_period: u64,
+    reward_slashing_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    very_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    low_stake_grace_period: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = ctx.epoch() + 1;
@@ -1112,7 +1112,7 @@ It does the following things:
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, validator_report_records: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, very_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, low_stake_grace_period: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, validator_report_records: &<b>mut</b> <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1123,9 +1123,9 @@ It does the following things:
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
-    low_stake_threshold: u64,
-    very_low_stake_threshold: u64,
-    low_stake_grace_period: u64,
+    low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    very_low_stake_threshold: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    low_stake_grace_period: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
@@ -1214,7 +1214,7 @@ The returned gas price should be greater than or equal to 2/3 of the validators 
 gas price, weighted by stake.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">derive_reference_gas_price</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">derive_reference_gas_price</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1223,7 +1223,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">derive_reference_gas_price</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">derive_reference_gas_price</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> vs = &self.active_validators;
     <b>let</b> num_validators = vs.length();
     <b>let</b> <b>mut</b> entries = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
@@ -1259,7 +1259,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_total_stake">total_stake</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_total_stake">total_stake</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1268,7 +1268,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_total_stake">total_stake</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_total_stake">total_stake</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.total_stake
 }
 </code></pre>
@@ -1283,7 +1283,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1292,7 +1292,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x3_validator">validator</a>.total_stake_amount()
 }
@@ -1308,7 +1308,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1317,7 +1317,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x3_validator">validator</a>.stake_amount()
 }
@@ -1333,7 +1333,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1342,7 +1342,7 @@ gas price, weighted by stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>()
 }
@@ -1407,7 +1407,7 @@ gas price, weighted by stake.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, pool_id: &<a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>): &<a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;
 </code></pre>
 
 
@@ -1418,7 +1418,7 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: &ID
-) : &Table&lt;u64, PoolTokenExchangeRate&gt; {
+) : &Table&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, PoolTokenExchangeRate&gt; {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> =
         // If the pool id is recorded in the mapping, then it must be either candidate or active.
         <b>if</b> (self.staking_pool_mappings.contains(*pool_id)) {
@@ -1443,7 +1443,7 @@ gas price, weighted by stake.
 Get the total number of validators in the next epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1452,7 +1452,7 @@ Get the total number of validators in the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">next_epoch_validator_count</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.active_validators.length() - self.pending_removals.length() + self.pending_active_validators.length()
 }
 </code></pre>
@@ -1546,7 +1546,7 @@ only the sui address but this function looks at more metadata.
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): u64
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1555,7 +1555,7 @@ only the sui address but this function looks at more metadata.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> len = validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> result = 0;
@@ -1605,7 +1605,7 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): u64
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -1614,7 +1614,7 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &TableVec&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &TableVec&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> len = validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> result = 0;
@@ -1671,7 +1671,7 @@ Returns (true, index) if the validator is found, and the index is its index in t
 If not found, returns (false, 0).
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -1680,7 +1680,7 @@ If not found, returns (false, 0).
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> length = validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
@@ -1707,7 +1707,7 @@ Returns (true, index) if the validator is found, and the index is its index in t
 If not found, returns (false, 0).
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -1716,7 +1716,7 @@ If not found, returns (false, 0).
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &TableVec&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(validators: &TableVec&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> length = validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
@@ -1742,7 +1742,7 @@ Given a vector of validator addresses, return their indices in the validator set
 Aborts if any address isn't in the given validator set.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_indices">get_validator_indices</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_indices">get_validator_indices</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -1751,7 +1751,7 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_indices">get_validator_indices</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_get_validator_indices">get_validator_indices</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt; {
     <b>let</b> length = validator_addresses.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
@@ -2241,7 +2241,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 Process the pending new validators. They are activated and inserted into <code>validators</code>.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_process_pending_validators">process_pending_validators</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_epoch: u64)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_process_pending_validators">process_pending_validators</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, new_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -2251,7 +2251,7 @@ Process the pending new validators. They are activated and inserted into <code>v
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_process_pending_validators">process_pending_validators</a>(
-    self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, new_epoch: u64,
+    self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, new_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>while</b> (!self.pending_active_validators.is_empty()) {
         <b>let</b> <b>mut</b> <a href="validator.md#0x3_validator">validator</a> = self.pending_active_validators.pop_back();
@@ -2279,7 +2279,7 @@ Process the pending new validators. They are activated and inserted into <code>v
 Sort all the pending removal indexes.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
 </code></pre>
 
 
@@ -2288,7 +2288,7 @@ Sort all the pending removal indexes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;) {
     <b>let</b> length = withdraw_list.length();
     <b>let</b> <b>mut</b> i = 1;
     <b>while</b> (i &lt; length) {
@@ -2351,7 +2351,7 @@ Process all active validators' pending stake deposits and withdraws.
 Calculate the total active validator stake.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;): u64
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -2360,7 +2360,7 @@ Calculate the total active validator stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;): u64 {
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <b>mut</b> stake = 0;
     <b>let</b> length = validators.length();
     <b>let</b> <b>mut</b> i = 0;
@@ -2416,7 +2416,7 @@ Compute both the individual reward adjustments and total reward adjustment for s
 as well as storage fund rewards.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_reward_adjustments">compute_reward_adjustments</a>(slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, reward_slashing_rate: u64, unadjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, unadjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;): (u64, <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;, u64, <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_reward_adjustments">compute_reward_adjustments</a>(slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, reward_slashing_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, unadjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, unadjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;): (<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
 </code></pre>
 
 
@@ -2426,15 +2426,15 @@ as well as storage fund rewards.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_reward_adjustments">compute_reward_adjustments</a>(
-    <b>mut</b> slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    reward_slashing_rate: u64,
-    unadjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    unadjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
+    <b>mut</b> slashed_validator_indices: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    reward_slashing_rate: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    unadjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    unadjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
 ): (
-    u64, // sum of staking reward adjustments
-    VecMap&lt;u64, u64&gt;, // mapping of individual <a href="validator.md#0x3_validator">validator</a>'s staking reward adjustment from index -&gt; amount
-    u64, // sum of storage fund reward adjustments
-    VecMap&lt;u64, u64&gt;, // mapping of individual <a href="validator.md#0x3_validator">validator</a>'s storage fund reward adjustment from index -&gt; amount
+    <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, // sum of staking reward adjustments
+    VecMap&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, // mapping of individual <a href="validator.md#0x3_validator">validator</a>'s staking reward adjustment from index -&gt; amount
+    <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, // sum of storage fund reward adjustments
+    VecMap&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, // mapping of individual <a href="validator.md#0x3_validator">validator</a>'s storage fund reward adjustment from index -&gt; amount
 ) {
     <b>let</b> <b>mut</b> total_staking_reward_adjustment = 0;
     <b>let</b> <b>mut</b> individual_staking_reward_adjustments = <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
@@ -2451,16 +2451,16 @@ as well as storage fund rewards.
             / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
 
         // Insert into individual mapping and record into the total adjustment sum.
-        individual_staking_reward_adjustments.insert(validator_index, staking_reward_adjustment_u128 <b>as</b> u64);
-        total_staking_reward_adjustment = total_staking_reward_adjustment + (staking_reward_adjustment_u128 <b>as</b> u64);
+        individual_staking_reward_adjustments.insert(validator_index, staking_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
+        total_staking_reward_adjustment = total_staking_reward_adjustment + (staking_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
 
         // Do the same thing for storage fund rewards.
         <b>let</b> unadjusted_storage_fund_reward = unadjusted_storage_fund_reward_amounts[validator_index];
         <b>let</b> storage_fund_reward_adjustment_u128 =
             unadjusted_storage_fund_reward <b>as</b> u128 * (reward_slashing_rate <b>as</b> u128)
             / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
-        individual_storage_fund_reward_adjustments.insert(validator_index, storage_fund_reward_adjustment_u128 <b>as</b> u64);
-        total_storage_fund_reward_adjustment = total_storage_fund_reward_adjustment + (storage_fund_reward_adjustment_u128 <b>as</b> u64);
+        individual_storage_fund_reward_adjustments.insert(validator_index, storage_fund_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
+        total_storage_fund_reward_adjustment = total_storage_fund_reward_adjustment + (storage_fund_reward_adjustment_u128 <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
     };
 
     (
@@ -2527,7 +2527,7 @@ account the tallying rule results.
 Returns the unadjusted amounts of staking reward and storage fund reward for each validator.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: u64, total_staking_reward: u64, total_storage_fund_reward: u64): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, total_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, total_storage_fund_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
 </code></pre>
 
 
@@ -2538,10 +2538,10 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(
     validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
-    total_voting_power: u64,
-    total_staking_reward: u64,
-    total_storage_fund_reward: u64,
-): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
+    total_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    total_staking_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    total_storage_fund_reward: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;) {
     <b>let</b> <b>mut</b> staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> length = validators.length();
@@ -2554,7 +2554,7 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
         // Use u128 <b>to</b> avoid multiplication overflow.
         <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a>: u128 = <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>() <b>as</b> u128;
         <b>let</b> reward_amount = <a href="voting_power.md#0x3_voting_power">voting_power</a> * (total_staking_reward <b>as</b> u128) / (total_voting_power <b>as</b> u128);
-        staking_reward_amounts.push_back(reward_amount <b>as</b> u64);
+        staking_reward_amounts.push_back(reward_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
         // Storage fund's share of the rewards are equally distributed among validators.
         storage_fund_reward_amounts.push_back(storage_fund_reward_per_validator);
         i = i + 1;
@@ -2576,7 +2576,7 @@ Returns the staking rewards each validator gets and the storage fund rewards eac
 The staking rewards are shared with the stakers while the storage fund ones are not.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: u64, total_slashed_validator_voting_power: u64, unadjusted_staking_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, unadjusted_storage_fund_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, total_staking_reward_adjustment: u64, individual_staking_reward_adjustments: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;, total_storage_fund_reward_adjustment: u64, individual_storage_fund_reward_adjustments: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, total_slashed_validator_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, unadjusted_staking_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, unadjusted_storage_fund_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, total_staking_reward_adjustment: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, individual_staking_reward_adjustments: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, total_storage_fund_reward_adjustment: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, individual_storage_fund_reward_adjustments: <a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;)
 </code></pre>
 
 
@@ -2587,15 +2587,15 @@ The staking rewards are shared with the stakers while the storage fund ones are 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(
     validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
-    total_voting_power: u64,
-    total_slashed_validator_voting_power: u64,
-    unadjusted_staking_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    unadjusted_storage_fund_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    total_staking_reward_adjustment: u64,
-    individual_staking_reward_adjustments: VecMap&lt;u64, u64&gt;,
-    total_storage_fund_reward_adjustment: u64,
-    individual_storage_fund_reward_adjustments: VecMap&lt;u64, u64&gt;,
-): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;) {
+    total_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    total_slashed_validator_voting_power: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    unadjusted_staking_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    unadjusted_storage_fund_reward_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    total_staking_reward_adjustment: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    individual_staking_reward_adjustments: VecMap&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    total_storage_fund_reward_adjustment: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
+    individual_storage_fund_reward_adjustments: VecMap&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+): (<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;) {
     <b>let</b> total_unslashed_validator_voting_power = total_voting_power - total_slashed_validator_voting_power;
     <b>let</b> <b>mut</b> adjusted_staking_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> adjusted_storage_fund_reward_amounts = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
@@ -2623,7 +2623,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
                 // validators so add the corresponding adjustment.
                 <b>let</b> adjustment = total_staking_reward_adjustment <b>as</b> u128 * <a href="voting_power.md#0x3_voting_power">voting_power</a>
                                / (total_unslashed_validator_voting_power <b>as</b> u128);
-                unadjusted_staking_reward_amount + (adjustment <b>as</b> u64)
+                unadjusted_staking_reward_amount + (adjustment <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
             };
         adjusted_staking_reward_amounts.push_back(adjusted_staking_reward_amount);
 
@@ -2658,7 +2658,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, adjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, adjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, staking_rewards: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, adjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, adjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, staking_rewards: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -2669,8 +2669,8 @@ The staking rewards are shared with the stakers while the storage fund ones are 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_distribute_reward">distribute_reward</a>(
     validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
-    adjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    adjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
+    adjusted_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    adjusted_storage_fund_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     staking_rewards: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext
@@ -2687,7 +2687,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
         <b>let</b> validator_commission_amount = (staking_reward_amount <b>as</b> u128) * (<a href="validator.md#0x3_validator">validator</a>.commission_rate() <b>as</b> u128) / <a href="validator_set.md#0x3_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
 
         // The <a href="validator.md#0x3_validator">validator</a> reward = storage_fund_reward + commission.
-        <b>let</b> <b>mut</b> validator_reward = staker_reward.split(validator_commission_amount <b>as</b> u64);
+        <b>let</b> <b>mut</b> validator_reward = staker_reward.split(validator_commission_amount <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
 
         // Add storage fund rewards <b>to</b> the <a href="validator.md#0x3_validator">validator</a>'s reward.
         validator_reward.join(
@@ -2722,7 +2722,7 @@ Emit events containing information of each validator for the epoch,
 including stakes, rewards, performance, etc.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch: u64, vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, pool_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, storage_fund_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, report_records: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, slashed_validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, pool_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, storage_fund_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, report_records: &<a href="../sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, slashed_validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -2732,10 +2732,10 @@ including stakes, rewards, performance, etc.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(
-    new_epoch: u64,
+    new_epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;,
-    pool_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
-    storage_fund_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;,
+    pool_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
+    storage_fund_staking_reward_amounts: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     slashed_validators: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;,
 ) {
@@ -2784,7 +2784,7 @@ including stakes, rewards, performance, etc.
 Sum up the total stake of a given list of validator addresses.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -2793,7 +2793,7 @@ Sum up the total stake of a given list of validator addresses.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, addresses: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <b>mut</b> sum = 0;
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> length = addresses.length();

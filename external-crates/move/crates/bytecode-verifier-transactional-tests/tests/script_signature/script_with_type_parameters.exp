@@ -1,6 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 20-28:
+task 1, lines 20-28:
+//# run --type-args u64 u8 0x1::Coin::Coin
 Error: Function execution failed with VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,

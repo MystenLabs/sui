@@ -26,12 +26,12 @@ title: Module `0xb::treasury`
 <pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
 <b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="../move-stdlib/u64.md#0x1_u64">0x1::u64</a>;
 <b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="../sui-framework/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="../sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="../sui-framework/hex.md#0x2_hex">0x2::hex</a>;
-<b>use</b> <a href="../sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/object_bag.md#0x2_object_bag">0x2::object_bag</a>;
 <b>use</b> <a href="../sui-framework/package.md#0x2_package">0x2::package</a>;
@@ -110,13 +110,13 @@ title: Module `0xb::treasury`
 
 </dd>
 <dt>
-<code>decimal_multiplier: u64</code>
+<code>decimal_multiplier: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>notional_value: u64</code>
+<code>notional_value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -194,7 +194,7 @@ title: Module `0xb::treasury`
 
 </dd>
 <dt>
-<code>new_price: u64</code>
+<code>new_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -239,13 +239,13 @@ title: Module `0xb::treasury`
 
 </dd>
 <dt>
-<code>decimal_multiplier: u64</code>
+<code>decimal_multiplier: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>notional_value: u64</code>
+<code>notional_value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -303,7 +303,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>: u64 = 4;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -312,7 +312,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>: u64 = 2;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -321,7 +321,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>: u64 = 3;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -330,7 +330,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: u64 = 1;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -366,7 +366,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -375,7 +375,7 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> metadata = self.<a href="treasury.md#0xb_treasury_get_token_metadata">get_token_metadata</a>&lt;T&gt;();
     metadata.decimal_multiplier
 }
@@ -391,7 +391,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_notional_value">notional_value</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_notional_value">notional_value</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -400,7 +400,7 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_notional_value">notional_value</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_notional_value">notional_value</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> metadata = self.<a href="treasury.md#0xb_treasury_get_token_metadata">get_token_metadata</a>&lt;T&gt;();
     metadata.notional_value
 }
@@ -468,7 +468,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, token_id: u8, native_token: bool, notional_value: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_name: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, token_id: u8, native_token: bool, notional_value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -480,9 +480,9 @@ title: Module `0xb::treasury`
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(
     self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
     token_name: String,
-    token_id:u8,
+    token_id: u8,
     native_token: bool,
-    notional_value: u64,
+    notional_value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>if</b> (!native_token){
         <b>assert</b>!(notional_value &gt; 0, <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>);
@@ -490,8 +490,8 @@ title: Module `0xb::treasury`
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             uc,
             decimal,
-        } = <a href="../sui-framework/bag.md#0x2_bag_remove">bag::remove</a>&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(&<b>mut</b> self.waiting_room, token_name);
-        <b>let</b> decimal_multiplier = <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal);
+        } = self.waiting_room.remove&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(token_name);
+        <b>let</b> decimal_multiplier = 10u64.pow(decimal);
         self.supported_tokens.insert(
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             <a href="treasury.md#0xb_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{
@@ -583,7 +583,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, amount: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -594,7 +594,7 @@ title: Module `0xb::treasury`
 
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(
     self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
-    amount: u64,
+    amount: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;T&gt; {
     <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = &<b>mut</b> self.treasuries[<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;()];
@@ -612,7 +612,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_update_asset_notional_price">update_asset_notional_price</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_id: u8, new_usd_price: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_update_asset_notional_price">update_asset_notional_price</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, token_id: u8, new_usd_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -624,7 +624,7 @@ title: Module `0xb::treasury`
 <pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_update_asset_notional_price">update_asset_notional_price</a>(
     self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
     token_id: u8,
-    new_usd_price: u64,
+    new_usd_price: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
 ) {
     <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = self.id_token_type_map.try_get(&token_id);
     <b>assert</b>!(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.is_some(), <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>);

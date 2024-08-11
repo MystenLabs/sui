@@ -8,7 +8,7 @@ import {
 	useDisconnectWallet,
 	useSwitchAccount,
 } from '@mysten/dapp-kit';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { useState } from 'react';
 

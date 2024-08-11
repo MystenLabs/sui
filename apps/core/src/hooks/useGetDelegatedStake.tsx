@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import type { DelegatedStake } from '@mysten/sui.js/client';
+import type { DelegatedStake } from '@mysten/sui/client';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 type UseGetDelegatedStakesOptions = {

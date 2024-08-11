@@ -8,7 +8,7 @@ use move_core_types::language_storage::TypeTag;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
-use sui_types::execution_mode::ExecutionResult;
+use sui_types::execution::ExecutionResult;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
@@ -302,7 +302,10 @@ fn resolve_to_layout(
         }
         TypeTag::Struct(inner) => {
             let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory));
-            MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(inner).unwrap())
+            layout_resolver
+                .get_annotated_layout(inner)
+                .unwrap()
+                .into_layout()
         }
         TypeTag::Bool => MoveTypeLayout::Bool,
         TypeTag::U8 => MoveTypeLayout::U8,

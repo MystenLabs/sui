@@ -16,3 +16,10 @@ fn duplicated_friend_decls() {
     m.friend_decls.push(handle);
     DuplicationChecker::verify_module(&m).unwrap_err();
 }
+
+#[test]
+fn duplicated_variant_handles() {
+    let mut m = basic_test_module_with_enum();
+    m.variant_handles.push(m.variant_handles[0].clone());
+    DuplicationChecker::verify_module(&m).unwrap_err();
+}

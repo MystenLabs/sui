@@ -228,3 +228,25 @@ impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {
         }
     }
 }
+
+/// Response type for the handle Soft Bundle certificates validator API.
+/// If `wait_for_effects` is true, it is guaranteed that:
+///  - Number of responses will be equal to the number of input transactions.
+///  - The order of the responses matches the order of the input transactions.
+/// Otherwise, `responses` will be empty.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleSoftBundleCertificatesResponseV3 {
+    pub responses: Vec<HandleCertificateResponseV3>,
+}
+
+/// Soft Bundle request.  See [SIP-19](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleSoftBundleCertificatesRequestV3 {
+    pub certificates: Vec<CertifiedTransaction>,
+
+    pub wait_for_effects: bool,
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}

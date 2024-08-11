@@ -117,7 +117,7 @@ impl DagState {
 
         if let Some(last_commit) = last_commit.as_ref() {
             store
-                .scan_commits((commit_recovery_start_index..last_commit.index() + 1).into())
+                .scan_commits((commit_recovery_start_index..=last_commit.index()).into())
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                 .iter()
                 .for_each(|commit| {
@@ -129,8 +129,11 @@ impl DagState {
                         .protocol_config
                         .mysticeti_leader_scoring_and_schedule()
                     {
-                        let committed_subdag =
-                            load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                        let committed_subdag = load_committed_subdag_from_store(
+                            store.as_ref(),
+                            commit.clone(),
+                            vec![],
+                        ); // We don't need to recover reputation scores for unscored_committed_subdags
                         unscored_committed_subdags.push(committed_subdag);
                     }
                 });
@@ -234,6 +237,18 @@ impl DagState {
             .node_metrics
             .highest_accepted_round
             .set(self.highest_accepted_round as i64);
+
+        let highest_accepted_round_for_author = self.recent_refs[block_ref.author]
+            .last()
+            .map(|block_ref| block_ref.round)
+            .expect("There should be by now at least one block ref");
+        let hostname = &self.context.committee.authority(block_ref.author).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .highest_accepted_authority_round
+            .with_label_values(&[hostname])
+            .set(highest_accepted_round_for_author as i64);
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
@@ -601,6 +616,17 @@ impl DagState {
                 self.last_committed_rounds[block_ref.author],
                 block_ref.round,
             );
+        }
+
+        for (i, round) in self.last_committed_rounds.iter().enumerate() {
+            let index = self.context.committee.to_authority_index(i).unwrap();
+            let hostname = &self.context.committee.authority(index).hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .last_committed_authority_round
+                .with_label_values(&[hostname])
+                .set((*round).into());
         }
 
         self.pending_commit_votes.push_back(commit.reference());
@@ -1359,23 +1385,15 @@ mod test {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
+            let (subdag, commit) = dag_builder.get_sub_dag_and_commit(
+                leader.clone(),
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            let commit = TrustedCommit::new_for_test(
-                commit_index,
-                CommitDigest::MIN,
-                leader.timestamp_ms(),
-                leader.reference(),
-                subdag
-                    .blocks
-                    .iter()
-                    .map(|block| block.reference())
-                    .collect::<Vec<_>>(),
-            );
             commits.push(commit);
         }
 

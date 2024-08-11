@@ -94,7 +94,7 @@ from the item type (<code>T</code>) owner on purchase attempt.
  with Objects.
 </dd>
 <dt>
-<code>paid: u64</code>
+<code>paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  Amount of SUI paid for the item. Can be used to
@@ -300,7 +300,7 @@ Key to store "Rule" configuration for a specific <code><a href="transfer_policy.
 Trying to <code>withdraw</code> more than there is.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotEnough">ENotEnough</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 5;
 </code></pre>
 
 
@@ -310,7 +310,7 @@ Trying to <code>withdraw</code> more than there is.
 Trying to <code>withdraw</code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -320,7 +320,7 @@ Trying to <code>withdraw</code> or <code>close_and_withdraw</code> with a wrong 
 A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -330,7 +330,7 @@ A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfe
 The number of receipts does not match the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -340,7 +340,7 @@ The number of receipts does not match the <code><a href="transfer_policy.md#0x2_
 Attempting to create a Rule that is already set.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>: u64 = 3;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -350,7 +350,7 @@ Attempting to create a Rule that is already set.
 A Rule is not set.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -365,7 +365,7 @@ created, it must be confirmed in the <code>confirm_request</code> call otherwise
 the transaction will fail.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(item: <a href="object.md#0x2_object_ID">object::ID</a>, paid: u64, from: <a href="object.md#0x2_object_ID">object::ID</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(item: <a href="object.md#0x2_object_ID">object::ID</a>, paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, from: <a href="object.md#0x2_object_ID">object::ID</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -375,7 +375,7 @@ the transaction will fail.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(
-    item: ID, paid: u64, from: ID
+    item: ID, paid: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, from: ID
 ): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt; {
     <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>() }
 }
@@ -461,7 +461,7 @@ Withdraw some amount of profits from the <code><a href="transfer_policy.md#0x2_t
 is not specified, all profits are withdrawn.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, amount: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -473,7 +473,7 @@ is not specified, all profits are withdrawn.
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(
     self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
     cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
-    amount: Option&lt;u64&gt;,
+    amount: Option&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>&gt;,
     ctx: &<b>mut</b> TxContext
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
@@ -542,7 +542,7 @@ Note: unless there's a policy for <code>T</code> to allow transfers,
 Kiosk trades will not be possible.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): (<a href="object.md#0x2_object_ID">object::ID</a>, u64, <a href="object.md#0x2_object_ID">object::ID</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): (<a href="object.md#0x2_object_ID">object::ID</a>, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, <a href="object.md#0x2_object_ID">object::ID</a>)
 </code></pre>
 
 
@@ -553,7 +553,7 @@ Kiosk trades will not be possible.
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(
     self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;
-): (ID, u64, ID) {
+): (ID, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ID) {
     <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts } = request;
     <b>let</b> <b>mut</b> completed = receipts.into_keys();
     <b>let</b> <b>mut</b> total = completed.length();
@@ -856,7 +856,7 @@ Get the <code>item</code> field of the <code><a href="transfer_policy.md#0x2_tra
 Get the <code>paid</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -865,7 +865,7 @@ Get the <code>paid</code> field of the <code><a href="transfer_policy.md#0x2_tra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): u64 { self.paid }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_paid">paid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> { self.paid }
 </code></pre>
 
 

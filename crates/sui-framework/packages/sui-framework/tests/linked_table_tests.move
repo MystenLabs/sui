@@ -20,18 +20,18 @@ module sui::linked_table_tests {
         check_ordering(&table, &vector[b"hello"]);
         table.push_back(b"goodbye", 1);
         // check they exist
-        assert!(table.contains(b"hello"), 0);
-        assert!(table.contains(b"goodbye"), 0);
-        assert!(!table.is_empty(), 0);
+        assert!(table.contains(b"hello"));
+        assert!(table.contains(b"goodbye"));
+        assert!(!table.is_empty());
         // check the values
-        assert!(table[b"hello"] == 0, 0);
-        assert!(table[b"goodbye"] == 1, 0);
+        assert!(table[b"hello"] == 0);
+        assert!(table[b"goodbye"] == 1);
         // mutate them
         *(&mut table[b"hello"]) = table[b"hello"] * 2;
         *(&mut table[b"goodbye"]) = table[b"goodbye"] * 2;
         // check the new value
-        assert!(table[b"hello"] == 0, 0);
-        assert!(table[b"goodbye"] == 2, 0);
+        assert!(table[b"hello"] == 0);
+        assert!(table[b"goodbye"] == 2);
         // check the ordering
         check_ordering(&table, &vector[b"hello", b"goodbye"]);
         // add to the front
@@ -42,26 +42,26 @@ module sui::linked_table_tests {
         check_ordering(&table, &vector[b"!!!", b"hello", b"goodbye", b"?"]);
         // pop front
         let (front_k, front_v) = table.pop_front();
-        assert!(front_k == b"!!!", 0);
-        assert!(front_v == 2, 0);
+        assert!(front_k == b"!!!");
+        assert!(front_v == 2);
         check_ordering(&table, &vector[b"hello", b"goodbye", b"?"]);
         // remove middle
-        assert!(table.remove(b"goodbye") == 2, 0);
+        assert!(table.remove(b"goodbye") == 2);
         check_ordering(&table, &vector[b"hello", b"?"]);
         // pop back
         let (back_k, back_v) = table.pop_back();
-        assert!(back_k == b"?", 0);
-        assert!(back_v == 3, 0);
+        assert!(back_k == b"?");
+        assert!(back_v == 3);
         check_ordering(&table, &vector[b"hello"]);
         // remove the value and check it
-        assert!(table.remove(b"hello") == 0, 0);
+        assert!(table.remove(b"hello") == 0);
         check_ordering(&table, &vector[]);
         // verify that they are not there
-        assert!(!table.contains(b"!!!"), 0);
-        assert!(!table.contains(b"goodbye"), 0);
-        assert!(!table.contains(b"hello"), 0);
-        assert!(!table.contains(b"?"), 0);
-        assert!(table.is_empty(), 0);
+        assert!(!table.contains(b"!!!"));
+        assert!(!table.contains(b"goodbye"));
+        assert!(!table.contains(b"hello"));
+        assert!(!table.contains(b"?"));
+        assert!(table.is_empty());
         scenario.end();
         table.destroy_empty();
     }
@@ -71,8 +71,8 @@ module sui::linked_table_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let table = linked_table::new<u64, u64>(scenario.ctx());
-        assert!(table.front().is_none(), 0);
-        assert!(table.back().is_none(), 0);
+        assert!(table.front().is_none());
+        assert!(table.back().is_none());
         scenario.end();
         table.drop()
     }
@@ -84,7 +84,7 @@ module sui::linked_table_tests {
         let mut table = linked_table::new(scenario.ctx());
         check_ordering(&table, &vector[]);
         table.push_front(b"hello", 0);
-        assert!(table.contains(b"hello"), 0);
+        assert!(table.contains(b"hello"));
         check_ordering(&table, &vector[b"hello"]);
         scenario.end();
         table.drop()
@@ -97,7 +97,7 @@ module sui::linked_table_tests {
         let mut table = linked_table::new(scenario.ctx());
         check_ordering(&table, &vector[]);
         table.push_back(b"hello", 0);
-        assert!(table.contains(b"hello"), 0);
+        assert!(table.contains(b"hello"));
         check_ordering(&table, &vector[b"hello"]);
         scenario.end();
         table.drop()
@@ -202,10 +202,10 @@ module sui::linked_table_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut table = linked_table::new(scenario.ctx());
-        assert!(!table.contains(0), 0);
+        assert!(!table.contains(0));
         table.push_back(0, 0);
-        assert!(table.contains<u64, u64>(0), 0);
-        assert!(!table.contains<u64, u64>(1), 0);
+        assert!(table.contains<u64, u64>(0));
+        assert!(!table.contains<u64, u64>(1));
         scenario.end();
         table.drop();
     }
@@ -216,7 +216,7 @@ module sui::linked_table_tests {
         let mut scenario = test_scenario::begin(sender);
         let mut table = linked_table::new(scenario.ctx());
         table.push_back(0, 0);
-        assert!(table.length() == 1, 0);
+        assert!(table.length() == 1);
         scenario.end();
         table.drop();
     }
@@ -226,14 +226,14 @@ module sui::linked_table_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut table = linked_table::new(scenario.ctx());
-        assert!(table.is_empty(), 0);
-        assert!(table.length() == 0, 0);
+        assert!(table.is_empty());
+        assert!(table.length() == 0);
         table.push_back(0, 0);
-        assert!(!table.is_empty(), 0);
-        assert!(table.length() == 1, 0);
+        assert!(!table.is_empty());
+        assert!(table.length() == 1);
         table.push_back(1, 0);
-        assert!(!table.is_empty(), 0);
-        assert!(table.length() == 2, 0);
+        assert!(!table.is_empty());
+        assert!(table.length() == 2);
         scenario.end();
         table.drop();
     }
@@ -283,9 +283,9 @@ module sui::linked_table_tests {
     ) {
         let mut table = linked_table::new(ctx);
         let n = keys.length();
-        assert!(values.length() == n, 0);
-        assert!(pushes.length() == n, 0);
-        assert!(pops.length() == n, 0);
+        assert!(values.length() == n);
+        assert!(pushes.length() == n);
+        assert!(pops.length() == n);
 
         let mut i = 0;
         let mut order = vector[];
@@ -312,7 +312,7 @@ module sui::linked_table_tests {
                 let (table_k, _) = table.pop_back();
                 (table_k, order.pop_back())
             };
-            assert!(table_k == order_k, 0);
+            assert!(table_k == order_k);
             check_ordering(&table, &order);
             i = i + 1;
         };
@@ -321,10 +321,10 @@ module sui::linked_table_tests {
 
     fun check_ordering<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, keys: &vector<K>) {
         let n = table.length();
-        assert!(n == keys.length(), 0);
+        assert!(n == keys.length());
         if (n == 0) {
-            assert!(table.front().is_none(), 0);
-            assert!(table.back().is_none(), 0);
+            assert!(table.front().is_none());
+            assert!(table.back().is_none());
             return
         };
 
@@ -332,16 +332,16 @@ module sui::linked_table_tests {
         while (i < n) {
             let cur = keys[i];
             if (i == 0) {
-                assert!(table.front().borrow() == &cur, 0);
-                assert!(table.prev(cur).is_none(), 0);
+                assert!(table.front().borrow() == &cur);
+                assert!(table.prev(cur).is_none());
             } else {
-                assert!(table.prev(cur).borrow() == &keys[i - 1], 0);
+                assert!(table.prev(cur).borrow() == &keys[i - 1]);
             };
             if (i + 1 == n) {
-                assert!(table.back().borrow() == &cur, 0);
-                assert!(table.next(cur).is_none(), 0);
+                assert!(table.back().borrow() == &cur);
+                assert!(table.next(cur).is_none());
             } else {
-                assert!(table.next(cur).borrow() == &keys[i + 1], 0);
+                assert!(table.next(cur).borrow() == &keys[i + 1]);
             };
 
             i = i + 1;

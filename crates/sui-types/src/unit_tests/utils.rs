@@ -7,15 +7,11 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::{SenderSignedData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
 use crate::SuiAddress;
 use crate::{
-    base_types::{dbg_addr, ExecutionDigests, ObjectID},
+    base_types::{dbg_addr, ObjectID},
     committee::Committee,
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, DefaultHash, Signature, SignatureScheme,
-    },
-    gas::GasCostSummary,
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
     },
     object::Object,
     signature::GenericSignature,
@@ -127,36 +123,6 @@ pub fn to_sender_signed_transaction_with_multi_signers(
     signers: Vec<&dyn Signer<Signature>>,
 ) -> Transaction {
     Transaction::from_data_and_signer(data, signers)
-}
-
-pub fn mock_certified_checkpoint<'a>(
-    keys: impl Iterator<Item = &'a AuthorityKeyPair>,
-    committee: Committee,
-    seq_num: u64,
-) -> CertifiedCheckpointSummary {
-    let contents =
-        CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
-
-    let summary = CheckpointSummary::new(
-        committee.epoch,
-        seq_num,
-        0,
-        &contents,
-        None,
-        GasCostSummary::default(),
-        None,
-        0,
-    );
-
-    let sign_infos: Vec<_> = keys
-        .map(|k| {
-            let name = k.public().into();
-
-            SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
-        })
-        .collect();
-
-    CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK")
 }
 
 mod zk_login {

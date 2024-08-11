@@ -1,7 +1,7 @@
 # `KioskTransaction`
 
 `KioskTransaction` is the client to build transactions that involve Kiosk. It's used similar to
-`TransactionBlock`, and helps in building a transaction.
+`Transaction`, and helps in building a transaction.
 
 You need to instatiate it once in every Programmable Transaction Block (PTB) that you're building.
 
@@ -20,8 +20,8 @@ If you have already retrieved a kiosk from `kioskClient.getOwnedKiosks()`, you c
 const kioskClient = new KioskClient({...});
 const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xMyAddress'});
 
-const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kioskOwnerCaps[0] });
+const tx = new Transaction();
+const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap: kioskOwnerCaps[0] });
 
 // Now you can do whatever you want with kioskTx.
 // For example, you could withdraw the profits from the kiosk.
@@ -42,8 +42,8 @@ kioskTx
 // Always called as our last kioskTx interaction.
 kioskTx.finalize();
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({tx: txb});
+// Sign and execute transaction.
+await signAndExecuteTransaction({tx: tx});
 ```
 
 ## Creating a new kiosk
@@ -55,8 +55,8 @@ use of the newly created kiosk to execute some functionality in the same PTB.
 // Initiliazed somewhere in the app.
 const kioskClient = new KioskClient({...});
 
-const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient });
+const tx = new Transaction();
+const kioskTx = new KioskTransaction({ transaction: tx, kioskClient });
 
 // Calls the creation function.
 kioskTx.create();
@@ -74,8 +74,8 @@ kioskTx.shareAndTransferCap('0xMyAddress');
 // Always called as our last kioskTx interaction.
 kioskTx.finalize();
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({tx: txb});
+// Sign and execute transaction.
+await signAndExecuteTransaction({tx: tx});
 ```
 
 ## Creating a new personal kiosk
@@ -86,8 +86,8 @@ await signAndExecuteTransactionBlock({tx: txb});
 // Initiliazed somewhere in the app.
 const kioskClient = new KioskClient({...});
 
-const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient });
+const tx = new Transaction();
+const kioskTx = new KioskTransaction({ transaction: tx, kioskClient });
 
 // An example that creates a personal kiosk, uses it to place an item, and shares it.
 // The `PersonalKioskCap` is automatically transferred to the sender when calling `.finalize()`.
@@ -100,6 +100,6 @@ kioskTx
     })
     .finalize(); // finalize is always our last call.
 
-// Sign and execute transaction block.
-await signAndExecuteTransactionBlock({tx: txb});
+// Sign and execute transaction.
+await signAndExecuteTransaction({tx: tx});
 ```

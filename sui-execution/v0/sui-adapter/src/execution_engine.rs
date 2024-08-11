@@ -5,6 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
@@ -23,7 +24,6 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -442,6 +442,19 @@ mod checked {
                 Ok(Mode::empty_results())
             }
             TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV3(prologue) => {
                 setup_consensus_commit(
                     prologue.commit_timestamp_ms,
                     temporary_store,

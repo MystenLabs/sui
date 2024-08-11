@@ -3,43 +3,30 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                         │
-├───────────────┬─────────────────────────────────────────────────────┤
-│ command       │ values                                              │
-├───────────────┼─────────────────────────────────────────────────────┤
-│ make-move-vec │ <u64> [1u64, 2u64, 3u64, 4u64]                      │
-│ make-move-vec │ <u64> []                                            │
-│ make-move-vec │ <0x1::a::b> [@0x1, @0x2]                            │
-│ make-move-vec │ <address> [@0x1, @0x2]                              │
-│ make-move-vec │ <vector<address>> [vector[@0x1], vector[@0x2]]      │
-│ make-move-vec │ <std::option::Option<u64>> [none, none]             │
-│ make-move-vec │ <std::option::Option<u64>> [none, none]             │
-│ make-move-vec │ <std::option::Option<u64>> [none, some(1u64)]       │
-│ make-move-vec │ <std::option::Option<u64>> [none, some(some(1u64))] │
-│ make-move-vec │ <sui::coin::Coin<sui::sui::SUI>> [gas]              │
-╰───────────────┴─────────────────────────────────────────────────────╯
- === BUILT PTB === 
-Input 0: Pure([1, 0, 0, 0, 0, 0, 0, 0])
-Input 1: Pure([2, 0, 0, 0, 0, 0, 0, 0])
-Input 2: Pure([3, 0, 0, 0, 0, 0, 0, 0])
-Input 3: Pure([4, 0, 0, 0, 0, 0, 0, 0])
-Input 4: ImmutableOrOwnedObject
-Input 5: ImmutableOrOwnedObject
-Input 6: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
-Input 7: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
-Input 8: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
-Input 9: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
-Input 10: Pure([0])
-Input 11: Pure([1, 1, 0, 0, 0, 0, 0, 0, 0])
-Input 12: Pure([1, 1, 1, 0, 0, 0, 0, 0, 0, 0])
-Command 0: MakeMoveVec(Someu64,[Input(0),Input(1),Input(2),Input(3)])
-Command 1: MakeMoveVec(Someu64,[])
-Command 2: MakeMoveVec(Some0x1::a::b,[Input(4),Input(5)])
-Command 3: MakeMoveVec(Someaddress,[Input(6),Input(7)])
-Command 4: MakeMoveVec(Somevector<address>,[Input(8),Input(9)])
-Command 5: MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(10)])
-Command 6: MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(10)])
-Command 7: MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(11)])
-Command 8: MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(12)])
-Command 9: MakeMoveVec(Some0x2::coin::Coin<0x2::sui::SUI>,[GasCoin])
+╭──────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                      │
+├───────────────┬──────────────────────────────────────────────────┤
+│ command       │ values                                           │
+├───────────────┼──────────────────────────────────────────────────┤
+│ make-move-vec │ <u64> [1, 2, 3, 4]                               │
+│ make-move-vec │ <u64> []                                         │
+│ make-move-vec │ <0x1::a::b> [@0x1, @0x2]                         │
+│ make-move-vec │ <address> [@0x1, @0x2]                           │
+│ make-move-vec │ <vector<address>> [vector[@0x1], vector[@0x2]]   │
+│ make-move-vec │ <std::option::Option<u64>> [none, none]          │
+│ make-move-vec │ <std::option::Option<u64>> [none, none]          │
+│ make-move-vec │ <std::option::Option<u64>> [none, some(1)]       │
+│ make-move-vec │ <std::option::Option<u64>> [none, some(some(1))] │
+│ make-move-vec │ <sui::coin::Coin<sui::sui::SUI>> [gas]           │
+╰───────────────┴──────────────────────────────────────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+    ╭─[9:55]
+  8 │ --make-move-vec <std::option::Option<u64>> [none,some(1)]
+  9 │ --make-move-vec <std::option::Option<u64>> [none,some(some(1))]
+    ·                                                       ───┬───
+    ·                                                          ╰── Unable to serialize 'some(1)' as a u64 value
+ 10 │ --make-move-vec <sui::coin::Coin<sui::sui::SUI>> [gas] 
+    ╰────
+  help: Literal option values cannot contain object values.
+

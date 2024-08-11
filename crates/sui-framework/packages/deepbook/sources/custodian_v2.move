@@ -201,9 +201,6 @@ module deepbook::custodian_v2 {
     use sui::test_utils::{assert_eq, destroy};
 
     #[test_only]
-    const ENull: u64 = 0;
-
-    #[test_only]
     public struct USD {}
 
     #[test_only]
@@ -214,8 +211,8 @@ module deepbook::custodian_v2 {
         locked_balance: u64,
     ) {
         let user_balance = borrow_account_balance<T>(custodian, owner);
-        assert!(balance::value(&user_balance.available_balance) == available_balance, ENull);
-        assert!(balance::value(&user_balance.locked_balance) == locked_balance, ENull)
+        assert!(balance::value(&user_balance.available_balance) == available_balance);
+        assert!(balance::value(&user_balance.locked_balance) == locked_balance)
     }
 
     #[test_only]
@@ -310,7 +307,7 @@ module deepbook::custodian_v2 {
         // check that we can duplicate child cap, and don't get another admin cap
         let child_cap = create_child_account_cap(&admin_cap, &mut ctx);
         assert_eq(child_cap.owner, admin_cap.owner);
-        assert!(&child_cap.id != &admin_cap.id, 0);
+        assert!(&child_cap.id != &admin_cap.id);
 
         // check that both child and admin cap can access the funds
         let mut custodian = new<USD>(&mut ctx);

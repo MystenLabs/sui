@@ -4,9 +4,10 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::path::Path;
+use sui_data_ingestion_core::Worker;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
+use tokio::sync::Mutex;
 
-use sui_indexer::framework::Handler;
 use sui_package_resolver::Resolver;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
@@ -18,35 +19,39 @@ use crate::tables::WrappedObjectEntry;
 use crate::FileType;
 
 pub struct WrappedObjectHandler {
+    state: Mutex<State>,
+}
+
+struct State {
     wrapped_objects: Vec<WrappedObjectEntry>,
     package_store: LocalDBPackageStore,
     resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
-impl Handler for WrappedObjectHandler {
-    fn name(&self) -> &str {
-        "wrapped_object"
-    }
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+impl Worker for WrappedObjectHandler {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
+        let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.package_store.update(object)?;
+                state.package_store.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
+                &checkpoint_transaction,
+                &mut state,
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.resolver
+                state
+                    .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
             }
@@ -57,52 +62,60 @@ impl Handler for WrappedObjectHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
-    fn read(&mut self) -> Result<Vec<WrappedObjectEntry>> {
-        let cloned = self.wrapped_objects.clone();
-        self.wrapped_objects.clear();
+    async fn read(&self) -> Result<Vec<WrappedObjectEntry>> {
+        let mut state = self.state.lock().await;
+        let cloned = state.wrapped_objects.clone();
+        state.wrapped_objects.clear();
         Ok(cloned)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::WrappedObject)
     }
+
+    fn name(&self) -> &str {
+        "wrapped_object"
+    }
 }
 
 impl WrappedObjectHandler {
     pub fn new(store_path: &Path, rest_uri: &str) -> Self {
         let package_store = LocalDBPackageStore::new(&store_path.join("wrapped_object"), rest_uri);
-        WrappedObjectHandler {
+        let state = Mutex::new(State {
             wrapped_objects: vec![],
             package_store: package_store.clone(),
             resolver: Resolver::new(PackageCache::new(package_store)),
-        }
+        });
+        WrappedObjectHandler { state }
     }
     async fn process_transaction(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
+        state: &mut State,
     ) -> Result<()> {
         for object in checkpoint_transaction.output_objects.iter() {
-            self.process_object(epoch, checkpoint, timestamp_ms, object)
+            self.process_object(epoch, checkpoint, timestamp_ms, object, state)
                 .await?;
         }
         Ok(())
     }
 
     async fn process_object(
-        &mut self,
+        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         object: &Object,
+        state: &mut State,
     ) -> Result<()> {
         let move_struct = if let Some((tag, contents)) = object
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            let move_struct = get_move_struct(&tag, contents, &self.resolver).await?;
+            let move_struct = get_move_struct(&tag, contents, &state.resolver).await?;
             Some(move_struct)
         } else {
             None
@@ -122,7 +135,7 @@ impl WrappedObjectHandler {
                 json_path: json_path.to_string(),
                 struct_tag: wrapped_struct.struct_tag.clone().map(|tag| tag.to_string()),
             };
-            self.wrapped_objects.push(entry);
+            state.wrapped_objects.push(entry);
         }
         Ok(())
     }

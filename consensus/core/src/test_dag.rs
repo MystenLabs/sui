@@ -5,11 +5,13 @@ use std::sync::Arc;
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
     block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
+    test_dag_builder::DagBuilder,
 };
 
 // todo: remove this once tests have been refactored to use DagBuilder/DagParser
@@ -87,4 +89,29 @@ pub(crate) fn build_dag_layer(
         dag_state.write().accept_block(block);
     }
     references
+}
+
+pub(crate) fn create_random_dag(
+    seed: u64,
+    include_leader_percentage: u64,
+    num_rounds: Round,
+    context: Arc<Context>,
+) -> DagBuilder {
+    assert!(
+        (0..=100).contains(&include_leader_percentage),
+        "include_leader_percentage must be in the range 0..100"
+    );
+
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut dag_builder = DagBuilder::new(context);
+
+    for r in 1..=num_rounds {
+        let random_num = rng.gen_range(0..100);
+        let include_leader = random_num <= include_leader_percentage;
+        dag_builder
+            .layer(r)
+            .min_ancestor_links(include_leader, Some(random_num));
+    }
+
+    dag_builder
 }

@@ -26,6 +26,8 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     IBridgeVault public vault;
     IBridgeLimiter public limiter;
 
+    uint8 constant SUI_ADDRESS_LENGTH = 32;
+
     /* ========== INITIALIZER ========== */
 
     /// @notice Initializes the SuiBridge contract with the provided parameters.
@@ -136,6 +138,11 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory recipientAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
+        require(
+            recipientAddress.length == SUI_ADDRESS_LENGTH,
+            "SuiBridge: Invalid recipient address length"
+        );
+
         IBridgeConfig config = committee.config();
 
         require(config.isTokenSupported(tokenID), "SuiBridge: Unsupported token");
@@ -148,12 +155,23 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             "SuiBridge: Insufficient allowance"
         );
 
+        // calculate old vault balance
+        uint256 oldBalance = IERC20(tokenAddress).balanceOf(address(vault));
+
         // Transfer the tokens from the contract to the vault
         SafeERC20.safeTransferFrom(IERC20(tokenAddress), msg.sender, address(vault), amount);
 
+        // calculate new vault balance
+        uint256 newBalance = IERC20(tokenAddress).balanceOf(address(vault));
+
+        // calculate the amount transferred
+        uint256 amountTransfered = newBalance - oldBalance;
+
         // Adjust the amount
         uint64 suiAdjustedAmount = BridgeUtils.convertERC20ToSuiDecimal(
-            IERC20Metadata(tokenAddress).decimals(), config.tokenSuiDecimalOf(tokenID), amount
+            IERC20Metadata(tokenAddress).decimals(),
+            config.tokenSuiDecimalOf(tokenID),
+            amountTransfered
         );
 
         emit TokensDeposited(
@@ -181,6 +199,11 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         nonReentrant
         onlySupportedChain(destinationChainID)
     {
+        require(
+            recipientAddress.length == SUI_ADDRESS_LENGTH,
+            "SuiBridge: Invalid recipient address length"
+        );
+
         uint256 amount = msg.value;
 
         // Transfer the unwrapped ETH to the target address

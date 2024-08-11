@@ -10,8 +10,8 @@ use sui_types::event::EventID;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
+use typed_store::DBMapUtils;
 use typed_store::Map;
-use typed_store_derive::DBMapUtils;
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{BridgeAction, BridgeActionDigest};
@@ -26,8 +26,6 @@ pub struct BridgeOrchestratorTables {
     pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
 }
 
-// TODO remove after wireup
-#[allow(dead_code)]
 impl BridgeOrchestratorTables {
     pub fn new(path: &Path) -> Arc<Self> {
         Arc::new(Self::open_tables_read_write(

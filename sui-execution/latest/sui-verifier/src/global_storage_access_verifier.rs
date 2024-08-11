@@ -98,7 +98,16 @@ fn verify_global_storage_access(module: &CompiledModule) -> Result<(), Execution
                 | Bytecode::VecPushBack(_)
                 | Bytecode::VecPopBack(_)
                 | Bytecode::VecUnpack(_, _)
-                | Bytecode::VecSwap(_) => {}
+                | Bytecode::VecSwap(_)
+                | Bytecode::PackVariant(_)
+                | Bytecode::PackVariantGeneric(_)
+                | Bytecode::UnpackVariant(_)
+                | Bytecode::UnpackVariantImmRef(_)
+                | Bytecode::UnpackVariantMutRef(_)
+                | Bytecode::UnpackVariantGeneric(_)
+                | Bytecode::UnpackVariantGenericImmRef(_)
+                | Bytecode::UnpackVariantGenericMutRef(_)
+                | Bytecode::VariantSwitch(_) => {}
             }
         }
         if !invalid_bytecode.is_empty() {

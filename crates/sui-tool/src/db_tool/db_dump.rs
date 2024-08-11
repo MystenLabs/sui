@@ -5,7 +5,6 @@ use anyhow::{anyhow, Ok};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
-use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str;
@@ -21,11 +20,13 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
+use sui_core::rest_index::RestIndexStore;
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::rocksdb::MultiThreaded;
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
@@ -42,20 +43,23 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
-        .map_err(|e| e.into())
-        .map(|q| {
-            q.iter()
-                .filter_map(|s| {
-                    // The `default` table is not used
-                    if s != "default" {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
+    typed_store::rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
+        &default_db_options().options,
+        path,
+    )
+    .map_err(|e| e.into())
+    .map(|q| {
+        q.iter()
+            .filter_map(|s| {
+                // The `default` table is not used
+                if s != "default" {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 pub fn table_summary(
@@ -200,6 +204,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
+    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
     let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
@@ -218,6 +223,7 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_objects_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
+        Some(&rest_index),
         &lock_table,
         pruning_config,
         metrics,
@@ -236,6 +242,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         None,
     ));
+    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
     let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
@@ -248,6 +255,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
+        Some(&rest_index),
         &lock_table,
         pruning_config,
         metrics,

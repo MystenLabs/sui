@@ -7,6 +7,6 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ --gas-budget 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF 
    ·              ─────────────────────────────────────┬────────────────────────────────────
-   ·                                                   ╰── number too large to fit in target type
+   ·                                                   ╰── Invalid integer literal
    ╰────
 

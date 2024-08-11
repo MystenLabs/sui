@@ -37,7 +37,7 @@ module sui::test_scenario {
     const EReceivingTicketAlreadyAllocated: u64 = 6;
 
     #[allow(unused_const)]
-    /// Unable to deallocate the receiving ticket 
+    /// Unable to deallocate the receiving ticket
     const EUnableToDeallocateReceivingTicket: u64 = 7;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
@@ -367,8 +367,8 @@ module sui::test_scenario {
         ids_for_address<T>(object::id_to_address(&object))
     }
 
-    /// Create a `Receiving<T>` receiving ticket for the most recent 
-    /// object of type `T` that is owned by the `owner` object ID. 
+    /// Create a `Receiving<T>` receiving ticket for the most recent
+    /// object of type `T` that is owned by the `owner` object ID.
     public fun most_recent_receiving_ticket<T: key>(
         owner: &ID
     ): sui::transfer::Receiving<T> {
@@ -410,7 +410,4 @@ module sui::test_scenario {
     // internal function that ends the transaction, realizing changes (may abort with
     // `ECouldNotGenerateEffects`)
     native fun end_transaction(): TransactionEffects;
-
-    // TODO: Add API's for inspecting user events, printing the user's inventory, ...
-
 }

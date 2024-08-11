@@ -69,6 +69,20 @@ impl Loc {
             end: self.end as usize,
         }
     }
+
+    pub fn size(&self) -> u32 {
+        self.end - self.start
+    }
+
+    /// Indicates this this location contains the provided location
+    pub fn contains(&self, other: &Loc) -> bool {
+        self.file_hash == other.file_hash && self.start <= other.start && other.end <= self.end
+    }
+
+    /// Indicates this this location overlaps the provided location
+    pub fn overlaps(&self, other: &Loc) -> bool {
+        self.file_hash == other.file_hash && !(self.end < other.start || other.end < self.start)
+    }
 }
 
 impl PartialOrd for Loc {

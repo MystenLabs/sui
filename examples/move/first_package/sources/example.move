@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module first_package::example {
+// docs::#first
+module my_first_package::example {
 
     // Part 1: These imports are provided by default
     // use sui::object::{Self, UID};
@@ -45,6 +46,7 @@ module first_package::example {
     }
 
     // Part 5: Public/entry functions (introduced later in the tutorial)
+    // docs::#first-pause
     public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
         // Create a sword
         Sword {
@@ -68,8 +70,10 @@ module first_package::example {
             strength: strength,
         }
     }
-
+    // docs::#first-resume
     // Part 6: Tests
+
+    // docs::#first-test
     #[test]
     fun test_sword_create() {
         // Create a dummy TxContext for testing
@@ -85,9 +89,13 @@ module first_package::example {
         // Check if accessor functions return correct values
         assert!(sword.magic() == 42 && sword.strength() == 7, 1);
 
+        // docs::/#first-test}
+
+        // docs::#test-dummy
         // Create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
         transfer::public_transfer(sword, dummy_address);
+        // docs::/#test-dummy
     }
 
     #[test]
@@ -165,4 +173,6 @@ module first_package::example {
         };
         scenario.end();
     }
+    
 }
+// docs::/#first

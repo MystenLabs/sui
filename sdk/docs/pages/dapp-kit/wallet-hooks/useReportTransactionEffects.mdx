@@ -1,0 +1,56 @@
+import { UseSignTransactionExample } from '../../../examples/wallet-hooks';
+
+# useReportTransactionEffects
+
+Use the `useReportTransactionEffects` hook can be used to report the effects of a transaction to the
+connected wallet. The `useSignAndExecuteTransaction` hook automatically reports effects, and the
+`useSignTransaction` hook provides a `reportTransactionEffects` callback to report effects manually,
+so this hook is only needed when using a non-standard flow for executing transactions.
+
+```ts
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useReportTransactionEffects,
+	useSuiClient,
+} from '@mysten/dapp-kit';
+import { toB64 } from '@mysten/sui/utils';
+import { useState } from 'react';
+
+function MyComponent() {
+	const { mutateAsync: reportTransactionEffects } = useReportTransactionEffects();
+	const [signature, setSignature] = useState('');
+	const client = useSuiClient();
+	const currentAccount = useCurrentAccount();
+
+	return (
+		<div style={{ padding: 20 }}>
+			<ConnectButton />
+			{currentAccount && (
+				<>
+					<div>
+						<button
+							onClick={async () => {
+								const { effects } = await executePreSignedTransaction();
+								reportTransactionEffects({ effects });
+							}}
+						>
+							Sign empty transaction
+						</button>
+					</div>
+					<div>Signature: {signature}</div>
+				</>
+			)}
+		</div>
+	);
+}
+```
+
+## Arguments
+
+- `effects`: The effects of an executed transaction. This can either be the `rawEffects` returned
+  from the JSON-RPC `executeTransactionBlock` method (returned when showRawEffects is set to true),
+  or the `effects.bcs` when executing with the GraphQL API.
+- `chain`: (optional) The chain identifier the transaction was executed on.
+- `account` (optional) the account that signed the transaction, defaults to the currently connected
+  account

@@ -15,7 +15,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{
     ast::QualifiedSymbol,
-    model::{GlobalEnv, ModuleId, QualifiedInstId, StructEnv, StructId},
+    model::{DatatypeId, GlobalEnv, ModuleId, QualifiedInstId, StructEnv},
     symbol::{Symbol, SymbolPool},
 };
 
@@ -25,7 +25,7 @@ pub enum Type {
     Primitive(PrimitiveType),
     Tuple(Vec<Type>),
     Vector(Box<Type>),
-    Struct(ModuleId, StructId, Vec<Type>),
+    Datatype(ModuleId, DatatypeId, Vec<Type>),
     TypeParameter(u16),
 
     // Types only appearing in programs.
@@ -34,7 +34,7 @@ pub enum Type {
     // Types only appearing in specifications
     Fun(Vec<Type>, Box<Type>),
     TypeDomain(Box<Type>),
-    ResourceDomain(ModuleId, StructId, Option<Vec<Type>>),
+    ResourceDomain(ModuleId, DatatypeId, Option<Vec<Type>>),
 
     // Temporary types used during type checking
     Error,
@@ -130,7 +130,7 @@ impl Type {
 
     /// Determines whether this type is a struct.
     pub fn is_struct(&self) -> bool {
-        matches!(self, Type::Struct(..))
+        matches!(self, Type::Datatype(..))
     }
 
     /// Determines whether this type is a vector
@@ -142,7 +142,7 @@ impl Type {
     /// those.
     pub fn is_struct_or_vector_of_struct(&self) -> bool {
         match self.skip_reference() {
-            Type::Struct(..) => true,
+            Type::Datatype(..) => true,
             Type::Vector(ety) => ety.is_struct_or_vector_of_struct(),
             _ => false,
         }
@@ -157,7 +157,7 @@ impl Type {
             Fun(..) | TypeDomain(..) | ResourceDomain(..) | Error => true,
             Var(..) | TypeParameter(..) => false,
             Tuple(ts) => ts.iter().any(|t| t.is_spec()),
-            Struct(_, _, ts) => ts.iter().any(|t| t.is_spec()),
+            Datatype(_, _, ts) => ts.iter().any(|t| t.is_spec()),
             Vector(et) => et.is_spec(),
             Reference(_, bt) => bt.is_spec(),
         }
@@ -211,7 +211,7 @@ impl Type {
             Type::Primitive(p) => !p.is_spec(),
             Type::Tuple(..) => false,
             Type::Vector(e) => e.can_be_type_argument(),
-            Type::Struct(_, _, insts) => insts.iter().all(|e| e.can_be_type_argument()),
+            Type::Datatype(_, _, insts) => insts.iter().all(|e| e.can_be_type_argument()),
             Type::TypeParameter(..) => true,
             // references cannot be a type argument
             Type::Reference(..) => false,
@@ -236,7 +236,7 @@ impl Type {
     /// If this is a struct type, replace the type instantiation.
     pub fn replace_struct_instantiation(&self, inst: &[Type]) -> Type {
         match self {
-            Type::Struct(mid, sid, _) => Type::Struct(*mid, *sid, inst.to_vec()),
+            Type::Datatype(mid, sid, _) => Type::Datatype(*mid, *sid, inst.to_vec()),
             _ => self.clone(),
         }
     }
@@ -246,7 +246,7 @@ impl Type {
         &'env self,
         env: &'env GlobalEnv,
     ) -> Option<(StructEnv<'env>, &'env [Type])> {
-        if let Type::Struct(module_idx, struct_idx, params) = self {
+        if let Type::Datatype(module_idx, struct_idx, params) = self {
             Some((env.get_module(*module_idx).into_struct(*struct_idx), params))
         } else {
             None
@@ -254,7 +254,7 @@ impl Type {
     }
 
     /// If this is a struct type, return the associated QualifiedInstId.
-    pub fn get_struct_id(&self, env: &GlobalEnv) -> Option<QualifiedInstId<StructId>> {
+    pub fn get_struct_id(&self, env: &GlobalEnv) -> Option<QualifiedInstId<DatatypeId>> {
         self.get_struct(env).map(|(se, inst)| {
             se.module_env
                 .get_id()
@@ -264,8 +264,8 @@ impl Type {
     }
 
     /// Require this to be a struct, if so extracts its content.
-    pub fn require_struct(&self) -> (ModuleId, StructId, &[Type]) {
-        if let Type::Struct(mid, sid, targs) = self {
+    pub fn require_struct(&self) -> (ModuleId, DatatypeId, &[Type]) {
+        if let Type::Datatype(mid, sid, targs) = self {
             (*mid, *sid, targs.as_slice())
         } else {
             panic!("expected `Type::Struct`, found: `{:?}`", self)
@@ -337,7 +337,7 @@ impl Type {
             Type::Reference(is_mut, bt) => {
                 Type::Reference(*is_mut, Box::new(bt.replace(params, subs)))
             }
-            Type::Struct(mid, sid, args) => Type::Struct(*mid, *sid, replace_vec(args)),
+            Type::Datatype(mid, sid, args) => Type::Datatype(*mid, *sid, replace_vec(args)),
             Type::Fun(args, result) => {
                 Type::Fun(replace_vec(args), Box::new(result.replace(params, subs)))
             }
@@ -362,7 +362,7 @@ impl Type {
             let contains_vec = |ts: &[Type]| ts.iter().any(p);
             match self {
                 Type::Reference(_, bt) => bt.contains(p),
-                Type::Struct(_, _, args) => contains_vec(args),
+                Type::Datatype(_, _, args) => contains_vec(args),
                 Type::Fun(args, result) => contains_vec(args) || result.contains(p),
                 Type::Tuple(args) => contains_vec(args),
                 Type::Vector(et) => et.contains(p),
@@ -378,7 +378,7 @@ impl Type {
             Var(_) => true,
             Tuple(ts) => ts.iter().any(|t| t.is_incomplete()),
             Fun(ts, r) => ts.iter().any(|t| t.is_incomplete()) || r.is_incomplete(),
-            Struct(_, _, ts) => ts.iter().any(|t| t.is_incomplete()),
+            Datatype(_, _, ts) => ts.iter().any(|t| t.is_incomplete()),
             Vector(et) => et.is_incomplete(),
             Reference(_, bt) => bt.is_incomplete(),
             TypeDomain(bt) => bt.is_incomplete(),
@@ -402,7 +402,7 @@ impl Type {
                 ts.iter().for_each(|t| t.module_usage(usage));
                 r.module_usage(usage);
             }
-            Struct(mid, _, ts) => {
+            Datatype(mid, _, ts) => {
                 usage.insert(*mid);
                 ts.iter().for_each(|t| t.module_usage(usage));
             }
@@ -417,7 +417,7 @@ impl Type {
     pub fn into_struct_type(self, env: &GlobalEnv) -> Option<MType> {
         use Type::*;
         match self {
-            Struct(mid, sid, ts) => env.get_struct_type(mid, sid, &ts),
+            Datatype(mid, sid, ts) => env.get_struct_type(mid, sid, &ts),
             _ => None,
         }
     }
@@ -427,7 +427,7 @@ impl Type {
         use Type::*;
         match self {
             Primitive(p) => Some(p.into_normalized_type().expect("Invariant violation: unexpected spec primitive")),
-            Struct(mid, sid, ts) =>
+            Datatype(mid, sid, ts) =>
                 env.get_struct_type(mid, sid, &ts),
             Vector(et) => Some(MType::Vector(
                 Box::new(et.into_normalized_type(env)
@@ -477,7 +477,7 @@ impl Type {
                     .iter()
                     .map(|arg| Self::from_type_tag(arg, env))
                     .collect();
-                Struct(qid.module_id, qid.id, type_args)
+                Datatype(qid.module_id, qid.id, type_args)
             }
             TypeTag::Vector(type_param) => Vector(Box::new(Self::from_type_tag(type_param, env))),
         }
@@ -501,7 +501,7 @@ impl Type {
                 r.internal_get_vars(vars);
                 ts.iter().for_each(|t| t.internal_get_vars(vars));
             }
-            Struct(_, _, ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
+            Datatype(_, _, ts) => ts.iter().for_each(|t| t.internal_get_vars(vars)),
             Vector(et) => et.internal_get_vars(vars),
             Reference(_, bt) => bt.internal_get_vars(vars),
             TypeDomain(bt) => bt.internal_get_vars(vars),
@@ -518,7 +518,7 @@ impl Type {
         match self {
             Type::Tuple(tys) => visit_slice(tys, visitor),
             Type::Vector(bt) => bt.visit(visitor),
-            Type::Struct(_, _, tys) => visit_slice(tys, visitor),
+            Type::Datatype(_, _, tys) => visit_slice(tys, visitor),
             Type::Reference(_, ty) => ty.visit(visitor),
             Type::Fun(tys, ty) => {
                 visit_slice(tys, visitor);
@@ -675,9 +675,9 @@ impl Substitution {
                     Box::new(self.unify(sub_variance, r1, r2)?),
                 ));
             }
-            (Type::Struct(m1, s1, ts1), Type::Struct(m2, s2, ts2)) => {
+            (Type::Datatype(m1, s1, ts1), Type::Datatype(m2, s2, ts2)) => {
                 if m1 == m2 && s1 == s2 {
-                    return Ok(Type::Struct(
+                    return Ok(Type::Datatype(
                         *m1,
                         *s1,
                         self.unify_vec(sub_variance, ts1, ts2, "structs")?,
@@ -1159,7 +1159,7 @@ impl TypeInstantiationDerivation {
 pub enum TypeDisplayContext<'a> {
     WithoutEnv {
         symbol_pool: &'a SymbolPool,
-        reverse_struct_table: &'a BTreeMap<(ModuleId, StructId), QualifiedSymbol>,
+        reverse_struct_table: &'a BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
     },
     WithEnv {
         env: &'a GlobalEnv,
@@ -1230,7 +1230,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 f.write_str("|")?;
                 write!(f, "{}", t.display(self.context))
             }
-            Struct(mid, sid, ts) => {
+            Datatype(mid, sid, ts) => {
                 write!(f, "{}", self.struct_str(*mid, *sid))?;
                 if !ts.is_empty() {
                     f.write_str("<")?;
@@ -1269,7 +1269,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
 }
 
 impl<'a> TypeDisplay<'a> {
-    fn struct_str(&self, mid: ModuleId, sid: StructId) -> String {
+    fn struct_str(&self, mid: ModuleId, sid: DatatypeId) -> String {
         match self.context {
             TypeDisplayContext::WithoutEnv {
                 symbol_pool,

@@ -7,7 +7,7 @@ pub mod layout;
 pub mod module_cache;
 
 use crate::dependency_graph::DependencyGraph;
-use move_binary_format::file_format::{CompiledModule, SignatureToken, StructHandleIndex};
+use move_binary_format::file_format::{CompiledModule, DatatypeHandleIndex, SignatureToken};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
@@ -99,9 +99,9 @@ impl<'a> Modules<'a> {
 
 pub fn resolve_struct(
     module: &CompiledModule,
-    sidx: StructHandleIndex,
+    sidx: DatatypeHandleIndex,
 ) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let shandle = module.struct_handle_at(sidx);
+    let shandle = module.datatype_handle_at(sidx);
     let mhandle = module.module_handle_at(shandle.module);
     let address = module.address_identifier_at(mhandle.address);
     let module_name = module.identifier_at(mhandle.name);
@@ -129,9 +129,9 @@ pub fn format_signature_token(module: &CompiledModule, t: &SignatureToken) -> St
         }
         SignatureToken::TypeParameter(i) => format!("T{}", i),
 
-        SignatureToken::Struct(idx) => format_signature_token_struct(module, *idx, &[]),
-        SignatureToken::StructInstantiation(struct_inst) => {
-            let (idx, ty_args) = &**struct_inst;
+        SignatureToken::Datatype(idx) => format_signature_token_struct(module, *idx, &[]),
+        SignatureToken::DatatypeInstantiation(inst) => {
+            let (idx, ty_args) = &**inst;
             format_signature_token_struct(module, *idx, ty_args)
         }
     }
@@ -139,7 +139,7 @@ pub fn format_signature_token(module: &CompiledModule, t: &SignatureToken) -> St
 
 pub fn format_signature_token_struct(
     module: &CompiledModule,
-    sidx: StructHandleIndex,
+    sidx: DatatypeHandleIndex,
     ty_args: &[SignatureToken],
 ) -> String {
     let (address, module_name, struct_name) = resolve_struct(module, sidx);

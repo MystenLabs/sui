@@ -3,8 +3,6 @@
 
 module sui_system::voting_power {
     use sui_system::validator::Validator;
-    use sui::math;
-    use sui::math::divide_and_round_up;
 
     #[allow(unused_field)]
     /// Deprecated. Use VotingPowerInfoV2 instead.
@@ -45,9 +43,8 @@ module sui_system::voting_power {
     public(package) fun set_voting_power(validators: &mut vector<Validator>) {
         // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
         // have 100%. So we bound the threshold_pct to be always enough to find a solution.
-        let threshold = math::min(
-            TOTAL_VOTING_POWER,
-            math::max(MAX_VOTING_POWER, divide_and_round_up(TOTAL_VOTING_POWER, validators.length())),
+        let threshold = TOTAL_VOTING_POWER.min(
+            MAX_VOTING_POWER.max(TOTAL_VOTING_POWER.divide_and_round_up(validators.length())),
         );
         let (mut info_list, remaining_power) = init_voting_power_info(validators, threshold);
         adjust_voting_power(&mut info_list, threshold, remaining_power);
@@ -72,7 +69,7 @@ module sui_system::voting_power {
             let validator = &validators[i];
             let stake = validator.total_stake();
             let adjusted_stake = stake as u128 * (TOTAL_VOTING_POWER as u128) / (total_stake as u128);
-            let voting_power = math::min(adjusted_stake as u64, threshold);
+            let voting_power = (adjusted_stake as u64).min(threshold);
             let info = VotingPowerInfoV2 {
                 validator_index: i,
                 voting_power,
@@ -115,11 +112,11 @@ module sui_system::voting_power {
         while (i < len && remaining_power > 0) {
             let v = &mut info_list[i];
             // planned is the amount of extra power we want to distribute to this validator.
-            let planned = divide_and_round_up(remaining_power, len - i);
+            let planned = remaining_power.divide_and_round_up(len - i);
             // target is the targeting power this validator will reach, capped by threshold.
-            let target = math::min(threshold, v.voting_power + planned);
+            let target = threshold.min(v.voting_power + planned);
             // actual is the actual amount of power we will be distributing to this validator.
-            let actual = math::min(remaining_power, target - v.voting_power);
+            let actual = remaining_power.min(target - v.voting_power);
             v.voting_power = v.voting_power + actual;
             assert!(v.voting_power <= threshold, EVotingPowerOverThreshold);
             remaining_power = remaining_power - actual;

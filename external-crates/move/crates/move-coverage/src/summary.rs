@@ -194,7 +194,8 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
                 None => None,
                 Some(code_unit) => {
                     // build control-flow graph
-                    let fn_cfg = VMControlFlowGraph::new(code_unit.code.as_slice());
+                    let fn_cfg =
+                        VMControlFlowGraph::new(code_unit.code.as_slice(), &code_unit.jump_tables);
 
                     // get function entry and return points
                     let fn_entry = fn_cfg.block_start(fn_cfg.entry_block_id());
@@ -249,9 +250,12 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
                         for node_idx in scc.iter() {
                             let block_id = *fn_dgraph.node_weight(*node_idx).unwrap();
                             let term_inst_id = fn_cfg.block_end(block_id);
-                            for dest in
-                                Bytecode::get_successors(term_inst_id, code_unit.code.as_slice())
-                                    .into_iter()
+                            for dest in Bytecode::get_successors(
+                                term_inst_id,
+                                code_unit.code.as_slice(),
+                                &code_unit.jump_tables,
+                            )
+                            .into_iter()
                             {
                                 if *inst_locs.get(&dest).unwrap() != scc_idx {
                                     assert!(exits.insert((term_inst_id, dest)));

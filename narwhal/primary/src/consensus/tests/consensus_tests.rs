@@ -45,7 +45,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let committee = fixture.committee();
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
+    config.set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
     // AND make certificates for rounds 1 to 7 (inclusive)
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();

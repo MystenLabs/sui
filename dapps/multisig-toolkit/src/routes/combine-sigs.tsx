@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SerializedSignature } from '@mysten/sui.js/cryptography';
-import { MultiSigPublicKey, publicKeyFromSuiBytes } from '@mysten/sui.js/multisig';
+import { PublicKey } from '@mysten/sui/cryptography';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
+import { publicKeyFromSuiBytes } from '@mysten/sui/verify';
 import { useEffect, useState } from 'react';
 import { FieldValues, useFieldArray, useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
@@ -78,7 +79,7 @@ export default function MultiSigCombineSignatureGenerator() {
 			setGeneratedUrl(''); // clear for better visibility.
 			// handle MultiSig Pubkeys, Weights, and Threshold
 			let pks: { publicKey: PublicKey; weight: number }[] = [];
-			let sigs: SerializedSignature[] = [];
+			let sigs: string[] = [];
 			data.pubKeys.forEach((item: any) => {
 				const pk = publicKeyFromSuiBytes(item.pubKey);
 				pks.push({ publicKey: pk, weight: Number(item.weight) });

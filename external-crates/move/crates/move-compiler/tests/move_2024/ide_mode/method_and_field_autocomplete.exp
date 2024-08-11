@@ -1,0 +1,6 @@
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/method_and_field_autocomplete.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+

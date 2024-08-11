@@ -15,7 +15,6 @@ move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-runtime = { path = "../move-vm-runtime", package = "move-vm-runtime-v2" }
-walkdir.workspace = true
 smallvec.workspace = true
 sha2.workspace = true
 sha3.workspace = true

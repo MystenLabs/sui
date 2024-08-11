@@ -5,6 +5,7 @@
 pub mod client_commands;
 #[macro_use]
 pub mod client_ptb;
+mod clever_error_rendering;
 pub mod console;
 pub mod displays;
 pub mod fire_drill;

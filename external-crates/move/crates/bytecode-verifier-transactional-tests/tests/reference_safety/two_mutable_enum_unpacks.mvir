@@ -1,0 +1,27 @@
+//# publish
+module 0x42.M {
+    enum Foo {
+        V { 
+            a: u64,
+            b: u64,
+        }
+    }
+
+    public create_mutable_field_addresses(addr: &mut Self.Foo) {
+        let a_ref: &mut u64;
+        let b_ref: &mut u64;
+        let aa_ref: &mut u64;
+        let bb_ref: &mut u64;
+    label b0:
+        // multiple mutable references to same ref valid
+        &mut Foo.V { a: a_ref, b: b_ref } = copy(addr);
+        &mut Foo.V { a: aa_ref, b: bb_ref } = copy(addr);
+        _ = move(a_ref);
+        _ = move(b_ref);
+        _ = move(aa_ref);
+        _ = move(bb_ref);
+        _ = move(addr);
+        return;
+    }
+}
+

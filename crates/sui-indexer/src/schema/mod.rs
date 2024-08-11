@@ -12,6 +12,7 @@ mod pg;
 
 #[cfg(feature = "postgres-feature")]
 mod inner {
+    pub use crate::schema::pg::chain_identifier;
     pub use crate::schema::pg::checkpoints;
     pub use crate::schema::pg::display;
     pub use crate::schema::pg::epochs;
@@ -20,6 +21,7 @@ mod inner {
     pub use crate::schema::pg::objects_history;
     pub use crate::schema::pg::objects_snapshot;
     pub use crate::schema::pg::packages;
+    pub use crate::schema::pg::pruner_cp_watermark;
     pub use crate::schema::pg::transactions;
     pub use crate::schema::pg::tx_calls;
     pub use crate::schema::pg::tx_changed_objects;
@@ -32,6 +34,7 @@ mod inner {
 #[cfg(feature = "mysql-feature")]
 #[cfg(not(feature = "postgres-feature"))]
 mod inner {
+    pub use crate::schema::mysql::chain_identifier;
     pub use crate::schema::mysql::checkpoints;
     pub use crate::schema::mysql::display;
     pub use crate::schema::mysql::epochs;
@@ -40,6 +43,7 @@ mod inner {
     pub use crate::schema::mysql::objects_history;
     pub use crate::schema::mysql::objects_snapshot;
     pub use crate::schema::mysql::packages;
+    pub use crate::schema::mysql::pruner_cp_watermark;
     pub use crate::schema::mysql::transactions;
     pub use crate::schema::mysql::tx_calls;
     pub use crate::schema::mysql::tx_changed_objects;
@@ -49,6 +53,7 @@ mod inner {
     pub use crate::schema::mysql::tx_senders;
 }
 
+pub use inner::chain_identifier;
 pub use inner::checkpoints;
 pub use inner::display;
 pub use inner::epochs;
@@ -57,6 +62,7 @@ pub use inner::objects;
 pub use inner::objects_history;
 pub use inner::objects_snapshot;
 pub use inner::packages;
+pub use inner::pruner_cp_watermark;
 pub use inner::transactions;
 pub use inner::tx_calls;
 pub use inner::tx_changed_objects;
@@ -64,3 +70,11 @@ pub use inner::tx_digests;
 pub use inner::tx_input_objects;
 pub use inner::tx_recipients;
 pub use inner::tx_senders;
+
+// Postgres only tables
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::events_partition_0;
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::objects_history_partition_0;
+#[cfg(feature = "postgres-feature")]
+pub use crate::schema::pg::transactions_partition_0;

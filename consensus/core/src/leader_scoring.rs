@@ -167,11 +167,11 @@ impl UnscoredSubdag {
                     subdag.blocks.iter()
                 } else {
                     let previous_subdag = &subdags[subdag_index - 1];
-                    let expected_next_subdag_index = previous_subdag.commit_index + 1;
+                    let expected_next_subdag_index = previous_subdag.commit_ref.index + 1;
                     assert_eq!(
-                        subdag.commit_index, expected_next_subdag_index,
+                        subdag.commit_ref.index, expected_next_subdag_index,
                         "Non-contiguous commit index (expected: {}, found: {})",
-                        expected_next_subdag_index, subdag.commit_index
+                        expected_next_subdag_index, subdag.commit_ref.index
                     );
                     subdag.blocks.iter()
                 }
@@ -181,7 +181,7 @@ impl UnscoredSubdag {
 
         // Guaranteed to have a contiguous list of commit indices
         let commit_range = CommitRange::new(
-            subdags.first().unwrap().commit_index..subdags.last().unwrap().commit_index + 1,
+            subdags.first().unwrap().commit_ref.index..=subdags.last().unwrap().commit_ref.index,
         );
 
         assert!(
@@ -313,12 +313,13 @@ mod tests {
     use std::cmp::max;
 
     use super::*;
+    use crate::commit::{CommitDigest, CommitRef};
     use crate::{leader_scoring_strategy::VoteScoringStrategy, test_dag_builder::DagBuilder};
 
     #[tokio::test]
     async fn test_reputation_scores_authorities_by_score() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new((1..300).into(), vec![4, 1, 1, 3]);
+        let scores = ReputationScores::new((1..=300).into(), vec![4, 1, 1, 3]);
         let authorities = scores.authorities_by_score(context);
         assert_eq!(
             authorities,
@@ -334,7 +335,7 @@ mod tests {
     #[tokio::test]
     async fn test_reputation_scores_update_metrics() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new((1..300).into(), vec![1, 2, 4, 3]);
+        let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
         scores.update_metrics(context.clone());
         let metrics = context.metrics.node_metrics.reputation_scores.clone();
         assert_eq!(
@@ -396,8 +397,11 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader, last_committed_rounds.clone(), commit_index);
+            let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
+                leader,
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
@@ -409,7 +413,7 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 
     #[tokio::test]
@@ -436,7 +440,8 @@ mod tests {
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             blocks,
             context.clock.timestamp_utc_ms(),
-            1,
+            CommitRef::new(1, CommitDigest::MIN),
+            vec![],
         )];
         let scoring_strategy = VoteScoringStrategy {};
         let mut calculator =
@@ -480,8 +485,11 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let subdag =
-                dag_builder.get_subdag(leader, last_committed_rounds.clone(), commit_index);
+            let (subdag, _commit) = dag_builder.get_sub_dag_and_commit(
+                leader,
+                last_committed_rounds.clone(),
+                commit_index,
+            );
             tracing::info!("{subdag:?}");
             for block in subdag.blocks.iter() {
                 last_committed_rounds[block.author().value()] =
@@ -495,6 +503,6 @@ mod tests {
             ReputationScoreCalculator::new(context.clone(), &unscored_subdags, &scoring_strategy);
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, (1..5).into());
+        assert_eq!(scores.commit_range, (1..=4).into());
     }
 }

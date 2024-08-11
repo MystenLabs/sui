@@ -42,13 +42,13 @@ registerStashedWallet('Your dApp Name');
 
 The Stashed wallet currently supports the following features:
 
-- `signTransactionBlock`
+- `signTransaction`
 - `signPersonalMessage`
 
-We intentionally do not support `signAndExecuteTransactionBlock`, and suggest that your dApp instead
-use `signTransactionBlock`, and submit the signed transaction within your dApp instead. This
-provides better control around execution, and avoids potential issues around data inconsistency. If
-you believe you have a strong reason for using `signAndExecuteTransactionBlock`, please
+We intentionally do not support `signAndExecuteTransaction`, and suggest that your dApp instead use
+`signTransaction`, and submit the signed transaction within your dApp instead. This provides better
+control around execution, and avoids potential issues around data inconsistency. If you believe you
+have a strong reason for using `signAndExecuteTransaction`, please
 [open an issue](https://github.com/MystenLabs/sui/issues/new/choose).
 
 ## Detecting the Stashed wallet
@@ -64,8 +64,8 @@ import { useCurrentWallet } from '@mysten/dapp-kit';
 import { STASHED_WALLET_NAME } from '@mysten/zksend';
 
 function StashedOnly() {
-	const { curentWallet } = useCurrentWallet();
-	const walletIsStashedWallet = curentWallet?.name === STASHED_WALLET_NAME;
+	const { currentWallet } = useCurrentWallet();
+	const walletIsStashedWallet = currentWallet?.name === STASHED_WALLET_NAME;
 
 	// rest of component logic...
 }

@@ -1,6 +1,7 @@
 processed 3 tasks
 
-task 0 'run'. lines 1-8:
+task 0, lines 1-8:
+//# run --signers 0x1
 Error: Function execution failed with VMError: {
     major_status: NUMBER_OF_ARGUMENTS_MISMATCH,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Function execution failed with VMError: {
     offsets: [],
 }
 
-task 1 'run'. lines 10-17:
+task 1, lines 10-17:
+//# run --signers 0x1 --args 0
 Error: Function execution failed with VMError: {
     major_status: NUMBER_OF_ARGUMENTS_MISMATCH,
     sub_status: None,

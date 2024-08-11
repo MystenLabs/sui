@@ -1,7 +1,7 @@
 //# publish
 
 // Test checking that type arguments used in phantom position (phantom arguments)
-// are not considered when deriving the abilities for a struct by checking against
+// are not considered when deriving the abilities for a struct/enum by checking against
 // abilities required for specific bytecode operatiosn.
 
 module 0x1.M {
@@ -41,5 +41,46 @@ module 0x1.M {
     f8(): Self.RequireStore<Self.HasStore<Self.NoAbilities, u64>> {
     label b0:
         return RequireStore<Self.HasStore<Self.NoAbilities, u64>> { a: true };
+    }
+}
+
+//# publish
+module 0x2.M {
+    enum NoAbilities { V{ a: bool } }
+    enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
+    enum HasCopy<phantom T1, T2> has copy { V{ a : bool }}
+    enum HasStore<phantom T1, T2> has store { V{ a: bool }}
+    enum HasKey<phantom T1, T2> has key { V{ a : bool } }
+    enum RequireStore<T: store> { V{ a: bool }}
+
+    // `WriteRef` requires drop
+    f1(ref: &mut Self.HasDrop<Self.NoAbilities, u64>) {
+    label b0:
+        *move(ref) = HasDrop.V<Self.NoAbilities, u64> { a: true };
+        return;
+    }
+
+    // `Pop` requires drop
+    f2() {
+    label b0:
+        _ = HasDrop.V<Self.NoAbilities, u64> { a: true };
+        return;
+    }
+
+    // Leaving value in local requires drop
+    f3(x: Self.HasDrop<Self.NoAbilities, u64>) {
+    label b0:
+        return;
+    }
+
+    // `CopyLoc` requires copy
+    f4(x: Self.HasCopy<Self.NoAbilities, u64>): Self.HasCopy<Self.NoAbilities, u64> * Self.HasCopy<Self.NoAbilities, u64> {
+    label b0:
+        return (copy(x), move(x));
+    }
+
+    f8(): Self.RequireStore<Self.HasStore<Self.NoAbilities, u64>> {
+    label b0:
+        return RequireStore.V<Self.HasStore<Self.NoAbilities, u64>> { a: true };
     }
 }

@@ -19,11 +19,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f # pin@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+        uses: taiki-e/install-action@nextest
 
       - name: Generate documentation
         uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3

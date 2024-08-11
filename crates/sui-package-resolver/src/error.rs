@@ -53,8 +53,8 @@ pub enum Error {
     #[error("Package not found: {0}")]
     PackageNotFound(AccountAddress),
 
-    #[error("Struct not found: {0}::{1}::{2}")]
-    StructNotFound(AccountAddress, String, String),
+    #[error("Datatype not found: {0}::{1}::{2}")]
+    DatatypeNotFound(AccountAddress, String, String),
 
     #[error("More than {0} struct definitions required to resolve type")]
     TooManyTypeNodes(usize, usize),

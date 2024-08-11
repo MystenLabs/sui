@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { SuiEvent } from '@mysten/sui.js/client';
+import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '../db';

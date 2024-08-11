@@ -25,8 +25,7 @@ use tokio::time::{sleep_until, Instant};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
-use tracing::Instrument;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, trace_span, warn};
 
 use crate::authority_aggregator::{
     AggregatorProcessCertificateError, AggregatorProcessTransactionError, AuthorityAggregator,
@@ -59,6 +58,7 @@ pub struct QuorumDriverTask {
     pub retry_times: u32,
     pub next_retry_after: Instant,
     pub client_addr: Option<SocketAddr>,
+    pub trace_span: Option<tracing::Span>,
 }
 
 impl Debug for QuorumDriverTask {
@@ -193,6 +193,7 @@ impl<A: Clone> QuorumDriver<A> {
             retry_times: old_retry_times + 1,
             next_retry_after,
             client_addr,
+            trace_span: Some(tracing::Span::current()),
         })
         .await
     }
@@ -237,6 +238,7 @@ impl<A> QuorumDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    #[instrument(level = "trace", skip_all)]
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -252,6 +254,7 @@ where
             retry_times: 0,
             next_retry_after: Instant::now(),
             client_addr: None,
+            trace_span: Some(tracing::Span::current()),
         })
         .await?;
         Ok(ticket)
@@ -259,6 +262,7 @@ where
 
     // Used when the it is called in a component holding the notifier, and a ticket is
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
+    #[instrument(level = "trace", skip_all)]
     pub async fn submit_transaction_no_ticket(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -277,10 +281,12 @@ where
             retry_times: 0,
             next_retry_after: Instant::now(),
             client_addr,
+            trace_span: Some(tracing::Span::current()),
         })
         .await
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub(crate) async fn process_transaction(
         &self,
         transaction: Transaction,
@@ -289,15 +295,13 @@ where
         let auth_agg = self.validators.load();
         let _tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let tx_digest = *transaction.digest();
-        let result = auth_agg
-            .process_transaction(transaction, client_addr)
-            .instrument(tracing::debug_span!("aggregator_process_tx", ?tx_digest))
-            .await;
+        let result = auth_agg.process_transaction(transaction, client_addr).await;
 
         self.process_transaction_result(result, tx_digest, client_addr)
             .await
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn process_transaction_result(
         &self,
         result: Result<ProcessTransactionResult, AggregatorProcessTransactionError>,
@@ -410,6 +414,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn process_conflicting_tx(
         &self,
         tx_digest: TransactionDigest,
@@ -470,6 +475,7 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.certificate.digest()))]
     pub(crate) async fn process_certificate(
         &self,
         request: HandleCertificateRequestV3,
@@ -480,7 +486,6 @@ where
         let tx_digest = *request.certificate.digest();
         let response = auth_agg
             .process_certificate(request.clone(), client_addr)
-            .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await
             .map_err(|agg_err| match agg_err {
                 AggregatorProcessCertificateError::FatalExecuteCertificate {
@@ -517,6 +522,7 @@ where
 
     /// Returns Some(true) if the conflicting transaction is executed successfully
     /// (or already executed), or Some(false) if it did not.
+    #[instrument(level = "trace", skip_all)]
     async fn attempt_conflicting_transaction(
         &self,
         tx_digest: &TransactionDigest,
@@ -630,7 +636,7 @@ where
         let (subscriber_tx, subscriber_rx) =
             tokio::sync::broadcast::channel::<_>(EFFECTS_QUEUE_SIZE);
         let quorum_driver = Arc::new(QuorumDriver::new(
-            ArcSwap::from(validators),
+            ArcSwap::new(validators),
             task_tx,
             subscriber_tx,
             notifier,
@@ -751,6 +757,7 @@ where
     /// Process a QuorumDriverTask.
     /// The function has no return value - the corresponding actions of task result
     /// are performed in this call.
+    #[instrument(level = "trace", parent = task.trace_span.as_ref().and_then(|s| s.id()), skip_all)]
     async fn process_task(quorum_driver: Arc<QuorumDriver<A>>, task: QuorumDriverTask) {
         debug!(?task, "Quorum Driver processing task");
         let QuorumDriverTask {
@@ -917,6 +924,10 @@ where
     ) {
         let limit = Arc::new(Semaphore::new(TASK_QUEUE_SIZE));
         while let Some(task) = task_receiver.recv().await {
+            let task_queue_span =
+                trace_span!(parent: task.trace_span.as_ref().and_then(|s| s.id()), "task_queue");
+            let task_span_guard = task_queue_span.enter();
+
             // hold semaphore permit until task completes. unwrap ok because we never close
             // the semaphore in this context.
             let limit = limit.clone();
@@ -935,6 +946,7 @@ where
             }
             metrics.current_requests_in_flight.dec();
             let qd = quorum_driver.clone();
+            drop(task_span_guard);
             spawn_monitored_task!(async move {
                 let _guard = permit;
                 QuorumDriverHandler::process_task(qd, task).await

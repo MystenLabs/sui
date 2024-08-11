@@ -65,7 +65,7 @@ module sui::zklogin_verified_issuer {
         address_seed: u256,
         issuer: &String,
     ): bool {
-        check_zklogin_issuer_internal(address, address_seed, issuer.bytes())
+        check_zklogin_issuer_internal(address, address_seed, issuer.as_bytes())
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.

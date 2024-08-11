@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 common = "0x0"

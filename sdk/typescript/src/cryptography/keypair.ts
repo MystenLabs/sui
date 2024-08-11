@@ -5,11 +5,11 @@ import { bcs, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bech32 } from 'bech32';
 
-import { IntentScope, messageWithIntent } from './intent.js';
+import type { IntentScope } from './intent.js';
+import { messageWithIntent } from './intent.js';
 import type { PublicKey } from './publickey.js';
 import { SIGNATURE_FLAG_TO_SCHEME, SIGNATURE_SCHEME_TO_FLAG } from './signature-scheme.js';
 import type { SignatureScheme } from './signature-scheme.js';
-import type { SerializedSignature } from './signature.js';
 import { toSerializedSignature } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;
@@ -21,15 +21,9 @@ export type ParsedKeypair = {
 	secretKey: Uint8Array;
 };
 
-/** @deprecated use string instead. See {@link Keypair.getSecretKey} */
-export type ExportedKeypair = {
-	schema: SignatureScheme;
-	privateKey: string;
-};
-
 export interface SignatureWithBytes {
 	bytes: string;
-	signature: SerializedSignature;
+	signature: string;
 }
 
 /**
@@ -57,30 +51,29 @@ export abstract class Signer {
 		};
 	}
 	/**
-	 * Signs provided transaction block by calling `signWithIntent()` with a `TransactionData` provided as intent scope
+	 * Signs provided transaction by calling `signWithIntent()` with a `TransactionData` provided as intent scope
 	 */
-	async signTransactionBlock(bytes: Uint8Array) {
-		return this.signWithIntent(bytes, IntentScope.TransactionData);
+	async signTransaction(bytes: Uint8Array) {
+		return this.signWithIntent(bytes, 'TransactionData');
 	}
 	/**
 	 * Signs provided personal message by calling `signWithIntent()` with a `PersonalMessage` provided as intent scope
 	 */
 	async signPersonalMessage(bytes: Uint8Array) {
-		return this.signWithIntent(
+		const { signature } = await this.signWithIntent(
 			bcs.vector(bcs.u8()).serialize(bytes).toBytes(),
-			IntentScope.PersonalMessage,
+			'PersonalMessage',
 		);
+
+		return {
+			bytes: toB64(bytes),
+			signature,
+		};
 	}
 
 	toSuiAddress(): string {
 		return this.getPublicKey().toSuiAddress();
 	}
-
-	/**
-	 * Return the signature for the data.
-	 * Prefer the async version {@link sign}, as this method will be deprecated in a future release.
-	 */
-	abstract signData(data: Uint8Array): Uint8Array;
 
 	/**
 	 * Get the key scheme of the keypair: Secp256k1 or ED25519
@@ -98,19 +91,6 @@ export abstract class Keypair extends Signer {
 	 * This returns the Bech32 secret key string for this keypair.
 	 */
 	abstract getSecretKey(): string;
-
-	/**
-	 * @deprecated use {@link Keypair.getSecretKey} instead
-	 * This returns an exported keypair object, schema is the signature
-	 * scheme name, and the private key field is a Bech32 encoded string
-	 * of 33-byte `flag || private_key` that starts with `suiprivkey`.
-	 */
-	export(): ExportedKeypair {
-		return {
-			schema: this.getKeyScheme(),
-			privateKey: this.getSecretKey(),
-		};
-	}
 }
 
 /**

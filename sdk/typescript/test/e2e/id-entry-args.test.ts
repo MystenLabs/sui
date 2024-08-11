@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { resolve } from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/transactions';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { Transaction } from '../../src/transactions';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
 	let toolbox: TestToolbox;
@@ -12,19 +13,18 @@ describe('Test ID as args to entry functions', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
-		const packagePath = __dirname + '/./data/id_entry_args';
-		({ packageId } = await publishPackage(packagePath));
+		packageId = await toolbox.getPackage(resolve(__dirname, './data/id_entry_args'));
 	});
 
 	it('Test ID as arg to entry functions', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::test::test_id`,
-			arguments: [tx.pure('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
+			arguments: [tx.pure.id('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
 		});
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
-			transactionBlock: tx,
+			transaction: tx,
 			options: {
 				showEffects: true,
 			},
@@ -33,14 +33,14 @@ describe('Test ID as args to entry functions', () => {
 	});
 
 	it('Test ID as arg to entry functions', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::test::test_id_non_mut`,
-			arguments: [tx.pure('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
+			arguments: [tx.pure.id('0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee')],
 		});
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
+		const result = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
-			transactionBlock: tx,
+			transaction: tx,
 			options: {
 				showEffects: true,
 			},

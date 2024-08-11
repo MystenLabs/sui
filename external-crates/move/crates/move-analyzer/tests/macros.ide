@@ -1,0 +1,153 @@
+// Tests macro definitions and invocations as well as if function types (`macro` or `entry`)
+// are displayed correctly
+{
+  "UseDef": {
+    "project": "tests/macros",
+    "file_tests": {
+      "fun_type.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 6,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 10,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 11,
+          "use_ndx": 0
+        }
+      ],
+      "macros.move": [
+        {
+          "use_line": 7,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 5
+        },
+        {
+          "use_line": 15,
+          "use_ndx": 6
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 19,
+          "use_ndx": 5
+        },
+        {
+          "use_line": 33,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 33,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 33,
+          "use_ndx": 2
+        },
+        {
+          "use_line": 33,
+          "use_ndx": 3
+        },
+        {
+          "use_line": 33,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 38,
+          "use_ndx": 5
+        },
+        {
+          "use_line": 38,
+          "use_ndx": 7
+        },
+        {
+          "use_line": 38,
+          "use_ndx": 8
+        },
+        {
+          "use_line": 38,
+          "use_ndx": 9
+        },
+        {
+          "use_line": 38,
+          "use_ndx": 10
+        },
+        {
+          "use_line": 44,
+          "use_ndx": 4
+        },
+        {
+          "use_line": 45,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 45,
+          "use_ndx": 1
+        },
+        {
+          "use_line": 52,
+          "use_ndx": 2
+        }
+      ]
+    }
+  }
+}

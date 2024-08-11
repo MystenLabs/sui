@@ -1,5 +1,5 @@
 module 0x42::TestLiveVars {
-    struct R has copy, drop {
+    public struct R has copy, drop {
         x: u64
     }
 
@@ -11,14 +11,14 @@ module 0x42::TestLiveVars {
     fun test2(b: bool) : u64 {
         let r1 = R {x: 3};
         let r2 = R {x: 4};
-        let r_ref = &r1;
+        let mut r_ref = &r1;
         if (b) {
             r_ref = &r2;
         };
         test1(r_ref)
     }
 
-    fun test3(n: u64, r_ref: &R) : u64 {
+    fun test3(mut n: u64, mut r_ref: &R) : u64 {
         let r1 = R {x: 3};
         let r2 = R {x: 4};
         while (0 < n) {

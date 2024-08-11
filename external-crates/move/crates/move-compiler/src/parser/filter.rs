@@ -193,6 +193,7 @@ fn filter_module<T: FilterContext>(
         name,
         is_spec_module,
         members,
+        definition_mode,
     } = module_def;
 
     let new_members: Vec<_> = members
@@ -207,6 +208,7 @@ fn filter_module<T: FilterContext>(
         name,
         is_spec_module,
         members: new_members,
+        definition_mode,
     })
 }
 

@@ -44,7 +44,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 
 <dl>
 <dt>
-<code>contents: <a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;u64, Element&gt;</code>
+<code>contents: <a href="../sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<a href="../move-stdlib/u64.md#0x1_u64">u64</a>, Element&gt;</code>
 </dt>
 <dd>
  The contents of the table vector.
@@ -63,7 +63,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -72,7 +72,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -138,7 +138,7 @@ Return a TableVec of size one containing element <code>e</code>.
 Return the length of the TableVec.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -147,7 +147,7 @@ Return the length of the TableVec.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     t.contents.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>()
 }
 </code></pre>
@@ -189,7 +189,7 @@ Acquire an immutable reference to the <code>i</code>th element of the TableVec <
 Aborts if <code>i</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): &Element
 </code></pre>
 
 
@@ -198,7 +198,7 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): &Element {
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     &t.contents[i]
 }
@@ -242,7 +242,7 @@ Return a mutable reference to the <code>i</code>th element in the TableVec <code
 Aborts if <code>i</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &<b>mut</b> Element
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): &<b>mut</b> Element
 </code></pre>
 
 
@@ -251,7 +251,7 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &<b>mut</b> Element {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): &<b>mut</b> Element {
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     &<b>mut</b> t.contents[i]
 }
@@ -352,7 +352,7 @@ Swaps the elements at the <code>i</code>th and <code>j</code>th indices in the T
 Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64, j: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -361,7 +361,7 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64, j: u64) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; j, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>if</b> (i == j) { <b>return</b> };
@@ -385,7 +385,7 @@ This is O(1), but does not preserve ordering of elements in the TableVec.
 Aborts if <code>i</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): Element
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): Element
 </code></pre>
 
 
@@ -394,7 +394,7 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): Element {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): Element {
     <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>let</b> last_idx = t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() - 1;
     t.<a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>(i, last_idx);

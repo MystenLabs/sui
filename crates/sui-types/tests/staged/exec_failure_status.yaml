@@ -33,3 +33,6 @@
 31: SharedObjectOperationNotAllowed
 32: InputObjectDeleted
 33: ExecutionCancelledDueToSharedObjectCongestion
+34: AddressDeniedForCoin
+35: CoinTypeGlobalPause
+36: ExecutionCancelledDueToRandomnessUnavailable

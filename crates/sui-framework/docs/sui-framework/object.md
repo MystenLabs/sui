@@ -117,7 +117,7 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 Sender is not @0x0 the system address.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 

@@ -164,7 +164,7 @@ The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is th
 
 The command has the form `MergeCoins(CoinArg, ToMergeArgs)` where the `CoinArg` is the target coin in which the `ToMergeArgs` coins are merged into. In other words, you merge multiple coins (`ToMergeArgs`) into a single coin (`CoinArg`).
 
-- When the transaction is signed, the network verifies that the AmountArgs is non-empty.
+- When the transaction is signed, the network verifies that the `ToMergeArgs` is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being merged. It can be any coin type and is not limited to `SUI` coins.
 - The coin arguments `ToMergeArgs: [Argument]` must be `sui::coin::Coin<T>` values where the `T` is the same type as the `CoinArg`.
 - The coin argument `CoinArg` is taken by mutable reference.

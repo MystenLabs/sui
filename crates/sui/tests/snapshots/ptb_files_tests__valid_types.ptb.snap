@@ -10,14 +10,14 @@ expression: "results.join(\"\\n\")"
 ├───────────────┼───────────────────────────────────────────────────────────────┤
 │ make-move-vec │ <address> [@0x1]                                              │
 │ make-move-vec │ <bool> [true, false]                                          │
-│ make-move-vec │ <u8> [0u64]                                                   │
-│ make-move-vec │ <u16> [0u64]                                                  │
-│ make-move-vec │ <u32> [0u64]                                                  │
-│ make-move-vec │ <u64> [0u64]                                                  │
-│ make-move-vec │ <u128> [0u64]                                                 │
-│ make-move-vec │ <u256> [0u64]                                                 │
-│ make-move-vec │ <vector<u8>> [vector[0u64]]                                   │
-│ make-move-vec │ <vector<u256>> [vector[0u64]]                                 │
+│ make-move-vec │ <u8> [0]                                                      │
+│ make-move-vec │ <u16> [0]                                                     │
+│ make-move-vec │ <u32> [0]                                                     │
+│ make-move-vec │ <u64> [0]                                                     │
+│ make-move-vec │ <u128> [0]                                                    │
+│ make-move-vec │ <u256> [0]                                                    │
+│ make-move-vec │ <vector<u8>> [vector[0]]                                      │
+│ make-move-vec │ <vector<u256>> [vector[0]]                                    │
 │ assign        │ a 0u8                                                         │
 │ assign        │ b 0u16                                                        │
 │ assign        │ c 0u32                                                        │
@@ -33,21 +33,12 @@ expression: "results.join(\"\\n\")"
 │ make-move-vec │ <std::option::Option<std::option::Option<vector<u8>>>> [none] │
 │ make-move-vec │ <std::option::Option<vector<u256>>> [vector[]]                │
 ╰───────────────┴───────────────────────────────────────────────────────────────╯
- === BUILT PTB === 
-Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
-Input 1: Pure([1])
-Input 2: Pure([0])
-Input 3: Pure([0, 0, 0, 0, 0, 0, 0, 0])
-Input 4: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0])
-Command 0: MakeMoveVec(Someaddress,[Input(0)])
-Command 1: MakeMoveVec(Somebool,[Input(1),Input(2)])
-Command 2: MakeMoveVec(Someu8,[Input(3)])
-Command 3: MakeMoveVec(Someu16,[Input(3)])
-Command 4: MakeMoveVec(Someu32,[Input(3)])
-Command 5: MakeMoveVec(Someu64,[Input(3)])
-Command 6: MakeMoveVec(Someu128,[Input(3)])
-Command 7: MakeMoveVec(Someu256,[Input(3)])
-Command 8: MakeMoveVec(Somevector<u8>,[Input(4)])
-Command 9: MakeMoveVec(Somevector<u256>,[Input(4)])
-Command 10: MakeMoveVec(Some0x1::option::Option<0x1::option::Option<vector<u8>>>,[Input(2)])
-Command 11: MakeMoveVec(Some0x1::option::Option<vector<u256>>,[Input(2)])
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+    ╭─[24:54]
+ 23 │ --make-move-vec <std::option::Option<std::option::Option<vector<u8>>>> [none]
+ 24 │ --make-move-vec <std::option::Option<vector<u256>>> [vector[]] 
+    ·                                                      ────┬───
+    ·                                                          ╰── Unable to serialize 'vector[]' as a 0x1::option::Option<vector<u256>> value
+    ╰────
+

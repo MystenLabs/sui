@@ -10,7 +10,7 @@ use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 use move_disassembler::disassembler::Disassembler;
@@ -259,53 +259,5 @@ impl Default for OnDiskStateView {
     fn default() -> Self {
         OnDiskStateView::create(Path::new(DEFAULT_BUILD_DIR), Path::new(DEFAULT_STORAGE_DIR))
             .expect("Failure creating OnDiskStateView")
-    }
-}
-
-// wrappers of TypeTag, StructTag, Vec<TypeTag> to allow us to implement the FromStr/ToString traits
-#[derive(Debug)]
-struct TypeID(TypeTag);
-#[derive(Debug)]
-struct StructID(StructTag);
-#[derive(Debug)]
-struct Generics(Vec<TypeTag>);
-
-impl ToString for TypeID {
-    fn to_string(&self) -> String {
-        match &self.0 {
-            TypeTag::Struct(s) => StructID(*s.clone()).to_string(),
-            TypeTag::Vector(t) => format!("vector<{}>", TypeID(*t.clone()).to_string()),
-            t => t.to_string(),
-        }
-    }
-}
-
-impl ToString for StructID {
-    fn to_string(&self) -> String {
-        let tag = &self.0;
-        // TODO: TypeTag parser insists on leading 0x for StructTag's, so we insert one here.
-        // Would be nice to expose a StructTag parser and get rid of the 0x here
-        format!(
-            "0x{}::{}::{}{}",
-            tag.address,
-            tag.module,
-            tag.name,
-            Generics(tag.type_params.clone()).to_string()
-        )
-    }
-}
-
-impl ToString for Generics {
-    fn to_string(&self) -> String {
-        if self.0.is_empty() {
-            "".to_string()
-        } else {
-            let generics: Vec<String> = self
-                .0
-                .iter()
-                .map(|t| TypeID(t.clone()).to_string())
-                .collect();
-            format!("<{}>", generics.join(","))
-        }
     }
 }

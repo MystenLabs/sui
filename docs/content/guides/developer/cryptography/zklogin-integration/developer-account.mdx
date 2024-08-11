@@ -180,6 +180,30 @@ _Go to Settings_
 
 </TabItem>
 
+<TabItem label="Microsoft" value="microsoft">
+
+1. Register and sign in to the [Microsoft Entra admin center](https://entra.microsoft.com/). 
+1. Select **Applications** > **App registrations** from the left nav.
+
+	![Nav menu](./images/microsoft1.png)
+1. Click the **New Registration** button in the top left to open the **Register an application** page.
+
+	![New Registration](./images/microsoft2.png)
+1. Type the application name in the **Name** field, select the appropriate **Supported account types** option, and set the **Redirect URI** value. When satisfied, click **Register**.
+
+	![Create application page](./images/microsoft3.png "Create application")
+1. After clicking the **Register** button, the admin center opens the application view. Select **Authentication** from the left nav of the application view.
+
+	![Select Authentication](./images/microsoft4.png "Select Authentication")
+1. In the **Implicit grant and hybrid flows** section, check the **ID tokens (used for implicit and hybrid flows)** box.
+
+	![Enable ID tokens](./images/microsoft5.png "Enable ID tokens")
+1. Click **Save**.
+1. Client ID is available in the **Essentials** section of the application's **Overview** tab.
+
+	![Find Client ID](./images/microsoft6.png "Find Client ID")
+</TabItem>
+
 </Tabs>
 
 ## Related links

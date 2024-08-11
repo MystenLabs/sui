@@ -1,9 +1,9 @@
 # Paying for Sui Transactions with Gas Coins
 
-With Programmable Transaction blocks, you can use the gas payment coin to construct coins with a set
+With Programmable Transactions, you can use the gas payment coin to construct coins with a set
 balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin
-selection. You can use `txb.gas` to access the gas coin in a transaction block, and it is valid as
-input for any arguments, as long as it is used
+selection. You can use `tx.gas` to access the gas coin in a transaction, and it is valid as input
+for any arguments, as long as it is used
 [by-reference](https://docs.sui.io/guides/developer/sui-101/simulating-refs). Practically speaking,
 this means you can also add to the gas coin with `mergeCoins` and borrow it for Move functions with
 `moveCall`.
@@ -20,37 +20,37 @@ customized.
 ### Gas price
 
 By default, the gas price is set to the reference gas price of the network. You can also explicitly
-set the gas price of the transaction block by calling `setGasPrice` on the transaction builder.
+set the gas price of the transaction by calling `setGasPrice` on the transaction builder.
 
 ```tsx
-txb.setGasPrice(gasPrice);
+tx.setGasPrice(gasPrice);
 ```
 
 ### Budget
 
-By default, the gas budget is automatically derived by executing a dry-run of the transaction block
+By default, the gas budget is automatically derived by executing a dry-run of the transaction
 beforehand. The dry run gas consumption is then used to determine a balance for the transaction. You
 can override this behavior by explicitly setting a gas budget for the transaction, by calling
 `setGasBudget` on the transaction builder.
 
 **Note:** The gas budget is represented in Sui, and should take the gas price of the transaction
-block into account.
+into account.
 
 ```tsx
-txb.setGasBudget(gasBudgetAmount);
+tx.setGasBudget(gasBudgetAmount);
 ```
 
 ### Gas payment
 
 By default, the gas payment is automatically determined by the SDK. The SDK selects all of the users
-coins that are not used as inputs in the transaction block.
+coins that are not used as inputs in the transaction.
 
 The list of coins used as gas payment will be merged down into a single gas coin before executing
-the transaction block, and all but one of the gas objects will be deleted. The gas coin at the
-0-index will be the coin that all others are merged into.
+the transaction, and all but one of the gas objects will be deleted. The gas coin at the 0-index
+will be the coin that all others are merged into.
 
 ```tsx
 // you need to ensure that the coins do not overlap with any
-// of the input objects for the transaction block
-txb.setGasPayment([coin1, coin2]);
+// of the input objects for the transaction
+tx.setGasPayment([coin1, coin2]);
 ```

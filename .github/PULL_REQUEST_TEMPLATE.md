@@ -20,4 +20,5 @@ For each box you select, include information after the relevant heading that des
 - [ ] JSON-RPC: 
 - [ ] GraphQL: 
 - [ ] CLI: 
-- [ ] Rust SDK: 
+- [ ] Rust SDK:
+- [ ] REST API:

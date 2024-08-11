@@ -9,8 +9,11 @@ error[E13001]: feature is not supported in specified edition
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
   │
+3 │     struct S { f: u64 }
+  │            - 'S' is declared here
+  ·
 6 │         S ( f ) = S { f: 0 };
-  │         ^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+  │         ^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:6:9
@@ -36,7 +39,7 @@ error[E03022]: invalid usage position
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:9
   │
 9 │         S f = S { f: 0 };
-  │         ^ Expected local or constant, found struct 'S' in module '0x42::M' instead.
+  │         ^ Expected a local or constant, but found struct 'S' in current scope
   │
   = Struct with named arguments must be written as 'S { ... }'
 
@@ -60,8 +63,11 @@ error[E13001]: feature is not supported in specified edition
 error[E03013]: positional call mismatch
    ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:11:9
    │
+ 2 │     struct G {}
+   │            - 'G' is declared here
+   ·
 11 │         G () = G {};
-   │         ^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │         ^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:12:12

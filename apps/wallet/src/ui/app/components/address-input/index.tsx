@@ -5,7 +5,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_src/ui/app/components/alert';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { QrCode, X12 } from '@mysten/icons';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
+import { isValidSuiAddress } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';

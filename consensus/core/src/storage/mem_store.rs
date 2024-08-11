@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    ops::Bound::{Excluded, Included},
+    ops::Bound::Included,
 };
 
 use consensus_config::AuthorityIndex;
@@ -184,7 +184,7 @@ impl Store for MemStore {
         let mut commits = vec![];
         for (_, commit) in inner.commits.range((
             Included((range.start(), CommitDigest::MIN)),
-            Excluded((range.end(), CommitDigest::MIN)),
+            Included((range.end(), CommitDigest::MAX)),
         )) {
             commits.push(commit.clone());
         }

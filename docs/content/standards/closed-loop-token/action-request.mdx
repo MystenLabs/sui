@@ -9,11 +9,11 @@ The main difference between tokens and coins is that tokens do not allow transfe
 Tokens have four protected actions that create an `ActionRequest`:
 
 | Function           | Action name | Description                     | Special fields in `ActionRequest` |
-| ------------------ | ----------- | ------------------------------- | ------------------------------- |
-| `token::from_coin` | `from_coin` | Convert a coin into a token     | -                               |
-| `token::to_coin`   | `to_coin`   | Convert a token into a coin     | -                               |
-| `token::transfer`  | `transfer`  | Transfer a token to a recipient | Contains `recipient` field      |
-| `token::spend`     | `spend`     | Spend a token                   | Contains `spent_balance` field  |
+| ------------------ | ----------- | ------------------------------- | --------------------------------- |
+| `token::from_coin` | `from_coin` | Convert a coin into a token     | -                                 |
+| `token::to_coin`   | `to_coin`   | Convert a token into a coin     | -                                 |
+| `token::transfer`  | `transfer`  | Transfer a token to a recipient | Contains `recipient` field        |
+| `token::spend`     | `spend`     | Spend a token                   | Contains `spent_balance` field    |
 
 ## ActionRequest structure
 
@@ -68,29 +68,29 @@ public fun confirm_with_treasury_cap<T>(
 An example of a transaction implemented in TypeScript with sui.js, confirming an action request with a `TreasuryCap`. Here the admin account owns the `TreasuryCap`, which is used to mint and confirm the transfer request for the token:
 
 ```js
-let tx = new TransactionBlock();
+let tx = new Transaction();
 let tokenType = '0x....::my_token::MY_TOKEN';
 let treasuryCapArg = tx.object('0x....');
 
 // mint 10 tokens using the `TreasuryCap`
 let token = tx.moveCall({
-    target: '0x2::token::mint',
-    arguments: [ treasuryCapArg, tx.pure.u64(10) ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::mint',
+	arguments: [treasuryCapArg, tx.pure.u64(10)],
+	typeArguments: [tokenType],
 });
 
 // transfer the token to a recipient; receive an `ActionRequest`
 let request = tx.moveCall({
-    target: '0x2::token::transfer',
-    arguments: [ token, tx.pure.address('0x...') ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::transfer',
+	arguments: [token, tx.pure.address('0x...')],
+	typeArguments: [tokenType],
 });
 
 // confirm the request with the `TreasuryCap`
 tx.moveCall({
-    target: '0x2::token::confirm_with_treasury_cap',
-    arguments: [ treasuryCapArg, request ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::confirm_with_treasury_cap',
+	arguments: [treasuryCapArg, request],
+	typeArguments: [tokenType],
 });
 
 // submit the transaction
@@ -121,23 +121,23 @@ If it's a `spend` request, use the `confirm_request_mut` function instead.
 An example of a client transfer request confirmation in JavaScript:
 
 ```js
-let tx = new TransactionBlock();
+let tx = new Transaction();
 let tokenType = '0x....::my_token::MY_TOKEN';
 let myTokenArg = tx.object('0x...token_object');
 let receiverArg = tx.pure.address('0x...receiver');
 let tokenPolicyArg = tx.object('0x...token_policy');
 
 let request = tx.moveCall({
-    target: '0x2::token::transfer',
-    arguments: [ myTokenArg, receiverArg ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::transfer',
+	arguments: [myTokenArg, receiverArg],
+	typeArguments: [tokenType],
 });
 
 // expecting the `TokenPolicy` to have the `transfer` operation allowed
 tx.moveCall({
-    target: '0x2::token::confirm_request',
-    arguments: [ tokenPolicyArg, request ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::confirm_request',
+	arguments: [tokenPolicyArg, request],
+	typeArguments: [tokenType],
 });
 
 // submit the transaction
@@ -167,23 +167,23 @@ public fun confirm_with_policy_cap<T>(
 An example of a client transfer request confirmation in JavaScript:
 
 ```js
-let tx = new TransactionBlock();
+let tx = new Transaction();
 let tokenType = '0x....::my_token::MY_TOKEN';
 let myTokenArg = tx.object('0x...token_object');
 let receiverArg = tx.pure.address('0x...receiver');
 let tokenPolicyCapArg = tx.object('0x...token_policy_cap');
 
 let request = tx.moveCall({
-    target: '0x2::token::transfer',
-    arguments: [ myTokenArg, receiverArg ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::transfer',
+	arguments: [myTokenArg, receiverArg],
+	typeArguments: [tokenType],
 });
 
 // confirming the request with the TokenPolicyCap
 tx.moveCall({
-    target: '0x2::token::confirm_with_policy_cap',
-    arguments: [ tokenPolicyCapArg, request ],
-    typeArguments: [ tokenType ],
+	target: '0x2::token::confirm_with_policy_cap',
+	arguments: [tokenPolicyCapArg, request],
+	typeArguments: [tokenType],
 });
 
 // submit the transaction

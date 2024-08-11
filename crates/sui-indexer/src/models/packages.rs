@@ -6,7 +6,7 @@ use crate::types::IndexedPackage;
 
 use diesel::prelude::*;
 
-#[derive(Queryable, Insertable, Clone, Debug, Identifiable)]
+#[derive(Queryable, Insertable, Selectable, Clone, Debug, Identifiable)]
 #[diesel(table_name = packages, primary_key(package_id))]
 pub struct StoredPackage {
     pub package_id: Vec<u8>,

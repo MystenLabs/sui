@@ -154,12 +154,12 @@ impl BridgeMessageEncoding for BlocklistCommitteeAction {
         bytes.push(self.blocklist_type as u8);
         // Add length of updated members.
         // Unwrap: It should not overflow given what we have today.
-        bytes.push(u8::try_from(self.blocklisted_members.len()).unwrap());
+        bytes.push(u8::try_from(self.members_to_update.len()).unwrap());
 
         // Add list of updated members
         // Members are represented as pubkey dervied evm addresses (20 bytes)
         let members_bytes = self
-            .blocklisted_members
+            .members_to_update
             .iter()
             .map(|m| m.to_eth_address().to_fixed_bytes().to_vec())
             .collect::<Vec<_>>();
@@ -554,7 +554,7 @@ mod tests {
             nonce: 129,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![pub_key_bytes.clone()],
+            members_to_update: vec![pub_key_bytes.clone()],
         });
         let bytes = blocklist_action.to_bytes();
         /*
@@ -581,7 +581,7 @@ mod tests {
             nonce: 68,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
+            members_to_update: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
         });
         let bytes = blocklist_action.to_bytes();
         /*
@@ -603,7 +603,7 @@ mod tests {
             nonce: 49,
             chain_id: BridgeChainId::EthCustom,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![pub_key_bytes.clone()],
+            members_to_update: vec![pub_key_bytes.clone()],
         });
         let bytes = blocklist_action.to_bytes();
         /*
@@ -624,7 +624,7 @@ mod tests {
             nonce: 94,
             chain_id: BridgeChainId::EthSepolia,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
+            members_to_update: vec![pub_key_bytes.clone(), pub_key_bytes_2.clone()],
         });
         let bytes = blocklist_action.to_bytes();
         /*

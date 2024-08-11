@@ -26,7 +26,7 @@ export type GraphQLQueryOptions<
 	? { variables?: Variables }
 	: {
 			variables: Variables;
-	  });
+		});
 
 export type GraphQLQueryResult<Result = Record<string, unknown>> = {
 	data?: Result;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from '@mysten/sui.js/src/client';
+import { ObjectOwner } from '@mysten/sui/client';
 import { ReactNode } from 'react';
 
 import { ObjectLink } from './ObjectLink';

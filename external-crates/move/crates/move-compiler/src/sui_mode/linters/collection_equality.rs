@@ -13,7 +13,7 @@ use crate::{
     },
     naming::ast as N,
     parser::ast as P,
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{CompilationEnv, Identifier},
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
@@ -63,11 +63,7 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for CollectionEqualityVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        _program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context { env }
     }
 }

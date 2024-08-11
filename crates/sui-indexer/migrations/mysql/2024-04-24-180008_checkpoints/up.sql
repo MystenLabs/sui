@@ -26,3 +26,9 @@ CREATE TABLE checkpoints
 
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch, sequence_number);
 CREATE INDEX checkpoints_digest ON checkpoints (checkpoint_digest(32));
+
+CREATE TABLE pruner_cp_watermark (
+    checkpoint_sequence_number  BIGINT       PRIMARY KEY,
+    min_tx_sequence_number      BIGINT       NOT NULL,
+    max_tx_sequence_number      BIGINT       NOT NULL
+)

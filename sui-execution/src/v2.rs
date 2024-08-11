@@ -13,13 +13,12 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::TypeLayoutStore,
-    execution_mode::{self, ExecutionResult},
+    execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
+    layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
-    type_resolver::LayoutResolver,
 };
 
 use move_bytecode_verifier_meter::Meter;
@@ -28,6 +27,7 @@ use sui_adapter_v2::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_v2::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
+use sui_adapter_v2::execution_mode;
 use sui_adapter_v2::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_v2::all_natives;
 use sui_types::storage::BackingStore;

@@ -26,6 +26,7 @@ move-clippy = [
 
 mysql-clippy = [
     "clippy",
+    "--all-targets",
     "--package",
     "sui-indexer",
     "--features",

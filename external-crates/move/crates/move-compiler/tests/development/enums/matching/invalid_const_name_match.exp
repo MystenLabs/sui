@@ -1,8 +1,0 @@
-error[E02010]: invalid name
-  ┌─ tests/development/enums/matching/invalid_const_name_match.move:9:20
-  │
-9 │             S { n: Z } => 0,
-  │                    ^ Invalid pattern variable name 'Z'. Pattern variable names must start with 'a'..'z' or '_'
-  │
-  = The compiler may have failed to resolve this constant's name
-

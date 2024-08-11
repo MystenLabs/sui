@@ -1,0 +1,95 @@
+//# publish
+module 0x1.M {
+    enum E has drop {
+        V { f0: u64 }
+    }
+
+    foo(b: bool, in: &mut Self.E, other: Self.E) {
+        let x: &mut u64;
+        let y: &Self.E;
+        let ye: &u64;
+    label start:
+        jump_if (move(b)) t;
+    label f:
+        // Borrow mut ref
+        &mut E.V { f0: x } = copy(in);
+        // fill y with a diffrent immut ref
+        y = &other;
+        jump end;
+    label t:
+        // Freeze the ref
+        y = freeze(move(in));
+    label end:
+        &E.V { f0: ye } = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x1.M1 {
+    enum E has drop {
+        V { f0: u64 }
+    }
+
+    foo(b: bool, in: &mut Self.E, other: Self.E) {
+        let x: &mut u64;
+        let y: &Self.E;
+        let ye: &u64;
+    label start:
+        jump_if (move(b)) t;
+    label f:
+        x = Self.bar(move(in));
+        y = &other;
+        jump end;
+    label t:
+        y = freeze(move(in));
+    label end:
+        &E.V { f0: ye } = move(y);
+        return;
+    }
+
+    bar(a: &mut Self.E): &mut u64 {
+        let x: &mut u64;
+    label b0:
+        &mut E.V { g: x } = move(a);
+        return move(x);
+    }
+}
+
+//# publish
+module 0x1.M2 {
+    enum E has drop {
+        V { f0: u64 }
+    }
+
+    foo(b: bool, in: &mut Self.E, other: Self.E, t: u64) {
+        let x: &mut u64;
+        let y: &Self.E;
+        let ye: &u64;
+    label start:
+        jump_if (move(b)) t;
+    label f:
+        x = Self.bar(move(in));
+        y = &other;
+        jump end;
+    label t:
+        x = &mut t;
+        y = freeze(move(in));
+    label end:
+        &E.V { f0: ye } = move(y);
+        Self.baz(move(x));
+        return;
+    }
+
+    bar(a: &mut Self.E): &mut u64 {
+        let x: &mut u64;
+    label b0:
+        &mut E.V { g: x } = move(a);
+        return move(x);
+    }
+
+    baz(x: &mut u64) { 
+        label b0:
+            return;
+    }
+}

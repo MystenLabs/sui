@@ -6,7 +6,7 @@ import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useCoinsReFetchingConfig } from '_hooks';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { Link } from 'react-router-dom';
 
 import { CoinItem } from './CoinItem';

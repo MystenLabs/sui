@@ -12,20 +12,20 @@ use crate::{
     },
     expansion::ast::ModuleIdent,
     parser::ast::ConstantName,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
 
-use super::{LinterDiagCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
+use super::{LinterDiagnosticCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
 
 /// Diagnostic information for constant naming violations.
 const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::Style as u8,
+    LinterDiagnosticCategory::Style as u8,
     CONSTANT_NAMING_DIAG_CODE,
     "constant should follow naming convention",
 );
@@ -37,11 +37,7 @@ pub struct Context<'a> {
 impl TypingVisitorConstructor for ConstantNamingVisitor {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        _program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
+    fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context { env }
     }
 }

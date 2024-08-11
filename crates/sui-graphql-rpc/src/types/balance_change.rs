@@ -25,6 +25,7 @@ impl BalanceChange {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
                 checkpoint_viewed_at: self.checkpoint_viewed_at,
+                root_version: None,
             }),
 
             O::Shared { .. } | O::Immutable => None,

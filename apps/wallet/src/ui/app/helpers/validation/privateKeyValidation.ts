@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography/keypair';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography/keypair';
 import { z } from 'zod';
 
 export const privateKeyValidation = z

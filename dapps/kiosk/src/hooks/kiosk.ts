@@ -11,7 +11,7 @@ import {
 	KioskListing,
 	KioskOwnerCap,
 } from '@mysten/kiosk';
-import { SuiObjectResponse } from '@mysten/sui.js/client';
+import { SuiObjectResponse } from '@mysten/sui/client';
 import { useQuery } from '@tanstack/react-query';
 
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';

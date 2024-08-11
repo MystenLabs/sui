@@ -8,11 +8,11 @@ expression: "results.join(\"\\n\")"
 ├──────────────┬────────┤
 │ command      │ values │
 ├──────────────┼────────┤
-│ assign       │ a 1u64 │
-│ assign       │ a 2u64 │
-│ assign       │ b 4u64 │
+│ assign       │ a 1    │
+│ assign       │ a 2    │
+│ assign       │ b 4    │
 │ assign       │ a a    │
-│ assign       │ a 4u64 │
+│ assign       │ a 4    │
 │ warn-shadows │ true   │
 ╰──────────────┴────────╯
  === WARNINGS === 

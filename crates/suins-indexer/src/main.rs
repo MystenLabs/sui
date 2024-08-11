@@ -4,12 +4,14 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel::{dsl::sql, BoolExpressionMethods, Connection, ExpressionMethods, RunQueryDsl};
+use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
 };
 use sui_types::full_checkpoint_content::CheckpointData;
+use tracing::info;
 
 use suins_indexer::{
     get_connection_pool,
@@ -102,6 +104,11 @@ impl Worker for SuinsIndexerWorker {
         let checkpoint_seq_number = checkpoint.checkpoint_summary.sequence_number;
         let (updates, removals) = self.indexer.process_checkpoint(&checkpoint);
 
+        // every 1000 checkpoints, we will print the checkpoint sequence number
+        // to the console to keep track of progress
+        if checkpoint_seq_number % 1000 == 0 {
+            info!("Checkpoint sequence number: {}", checkpoint_seq_number);
+        }
         self.commit_to_db(&updates, &removals, checkpoint_seq_number)?;
         Ok(())
     }
@@ -124,7 +131,10 @@ async fn main() -> Result<()> {
 
     let (_exit_sender, exit_receiver) = oneshot::channel();
     let progress_store = FileProgressStore::new(PathBuf::from(backfill_progress_file_path));
-    let metrics = DataIngestionMetrics::new(&Registry::new());
+
+    let registry: Registry = start_basic_prometheus_server();
+    mysten_metrics::init_metrics(&registry);
+    let metrics = DataIngestionMetrics::new(&registry);
     let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
 
     let indexer_setup =

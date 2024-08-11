@@ -115,7 +115,7 @@ pub fn run(
             txn_args,
         )
     } else {
-        let (_changeset, _events) = session.finish().0?;
+        let _changeset = session.finish().0?;
         Ok(())
     }
 }

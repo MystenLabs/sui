@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from typing import NamedTuple
+import urllib.request
 
 RE_NUM = re.compile("[0-9_]+")
 
@@ -58,11 +59,14 @@ NOTE_ORDER = [
     "GraphQL",
     "CLI",
     "Rust SDK",
+    "REST API",
 ]
+
 
 class Note(NamedTuple):
     checked: bool
     note: str
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -116,7 +120,23 @@ def git(*args):
     return subprocess.check_output(["git"] + list(args)).decode().strip()
 
 
-def extract_notes(commit):
+def extract_notes_from_rebase_commit(commit):
+    # we'll need to go one level deeper to find the PR number
+    url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+    }
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req) as response:
+        data = json.load(response)
+        if len(data) == 0:
+            return None, ""
+        pr_number = data[0]["number"]
+        pr_notes = data[0]["body"] if data[0]["body"] else ""
+        return pr_number, pr_notes
+
+
+def extract_notes(commit, seen):
     """Get release notes from a commit message.
 
     Find the 'Release notes' section in the commit message, and
@@ -130,19 +150,29 @@ def extract_notes(commit):
     """
     message = git("show", "-s", "--format=%B", commit)
 
-    # Extract PR number
+    # Extract PR number from squashed commits
     match = RE_PR.match(message)
     pr = match.group(1) if match else None
+
     result = {}
 
-    # Find the release notes section
-    match = RE_HEADING.search(message)
-    if not match:
+    notes = ""
+    if pr is None:
+        # Extract PR number from rebase commits if it's not a squashed commit
+        pr, notes = extract_notes_from_rebase_commit(commit)
+    else:
+        # Otherwise, find the release notes section from the squashed commit message
+        match = RE_HEADING.search(message)
+        if not match:
+            return pr, result
+        notes = match.group(1)
+
+    if pr in seen:
+        # a PR can be in multiple commits if it's from a rebase,
+        # so we only want to process it once
         return pr, result
 
     start = 0
-    notes = match.group(1)
-
     while True:
         # Find the next possible release note
         match = RE_NOTE.search(notes, start)
@@ -158,8 +188,8 @@ def extract_notes(commit):
         end = match.start() if match else len(notes)
 
         result[impacted] = Note(
-            checked = checked in 'xX',
-            note = notes[begin:end].strip(),
+            checked=checked in "xX",
+            note=notes[begin:end].strip(),
         )
         start = end
 
@@ -170,7 +200,9 @@ def extract_protocol_version(commit):
     """Find the max protocol version at this commit.
 
     Assumes that it is being called from the root of the sui repository."""
-    for line in git("show", f"{commit}:crates/sui-protocol-config/src/lib.rs").splitlines():
+    for line in git(
+        "show", f"{commit}:crates/sui-protocol-config/src/lib.rs"
+    ).splitlines():
         if "const MAX_PROTOCOL_VERSION" not in line:
             continue
 
@@ -200,7 +232,7 @@ def do_check(commit):
 
     """
 
-    _, notes = extract_notes(commit)
+    _, notes = extract_notes(commit, set())
     issues = []
     for impacted, note in notes.items():
         if impacted not in NOTE_ORDER:
@@ -210,7 +242,9 @@ def do_check(commit):
             issues.append(f" - '{impacted}' is checked but has no release note.")
 
         if not note.checked and note.note:
-            issues.append(f" - '{impacted}' has a release note but is not checked: {note.note}")
+            issues.append(
+                f" - '{impacted}' has a release note but is not checked: {note.note}"
+            )
 
     if not issues:
         return
@@ -243,16 +277,20 @@ def do_generate(from_, to):
     protocol_version = extract_protocol_version(to) or "XX"
 
     commits = git(
-        "log", "--pretty=format:%H",
+        "log",
+        "--pretty=format:%H",
         f"{from_}..{to}",
-        "--", *INTERESTING_DIRECTORIES,
-    ).strip();
+        "--",
+        *INTERESTING_DIRECTORIES,
+    ).strip()
 
     if not commits:
         return
 
+    seen_prs = set()
     for commit in commits.split("\n"):
-        pr, notes = extract_notes(commit)
+        pr, notes = extract_notes(commit, seen_prs)
+        seen_prs.add(pr)
         for impacted, note in notes.items():
             if note.checked:
                 results[impacted].append((pr, note.note))
@@ -282,7 +320,7 @@ def do_generate(from_, to):
 
 
 args = parse_args()
-if args["command"]== "generate":
+if args["command"] == "generate":
     do_generate(args["from"], args["to"])
 elif args["command"] == "check":
     do_check(args["commit"])
