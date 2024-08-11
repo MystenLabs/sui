@@ -15,12 +15,6 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BorrowGraph<Loc: Copy, Lbl: Clone + Ord>(BTreeMap<RefID, Ref<Loc, Lbl>>);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Metrics {
-    pub total_edges: usize,
-    pub total_extensions: usize,
-}
-
 //**************************************************************************************************
 // Impls
 //**************************************************************************************************
@@ -238,23 +232,19 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
     /// Remove reference `id` from the graph
     /// Fixes any transitive borrows, so if `parent` borrowed by `id` borrowed by `child`
     /// After the release, `parent` borrowed by `child`
-    pub fn release(&mut self, id: RefID) -> Metrics {
+    pub fn release(&mut self, id: RefID) {
         debug_assert!(self.check_invariant());
         let Ref {
             borrowed_by,
             borrows_from,
             ..
         } = self.0.remove(&id).unwrap();
-        let mut total_edges = 0;
-        let mut total_extensions = 0;
         for parent_ref_id in borrows_from.into_iter() {
             let parent = self.0.get_mut(&parent_ref_id).unwrap();
             let parent_edges = parent.borrowed_by.0.remove(&id).unwrap();
             for parent_edge in parent_edges {
                 for (child_ref_id, child_edges) in &borrowed_by.0 {
                     for child_edge in child_edges {
-                        total_edges += 1;
-                        total_extensions += child_edges.total_extensions();
                         self.splice_out_intermediate(
                             parent_ref_id,
                             &parent_edge,
@@ -270,10 +260,6 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
             child.borrows_from.remove(&id);
         }
         debug_assert!(self.check_invariant());
-        Metrics {
-            total_edges,
-            total_extensions,
-        }
     }
 
     fn splice_out_intermediate(
@@ -367,28 +353,22 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
     /// Joins other into self
     /// It adds only 'unmatched' edges from other into self, i.e. for any edge in other, if there
     /// is an edge in self that is <= than that edge, it is not added.
-    pub fn join(&self, other: &Self) -> (Self, Metrics) {
+    pub fn join(&self, other: &Self) -> Self {
         debug_assert!(self.check_invariant());
         debug_assert!(other.check_invariant());
         debug_assert!(self.0.keys().all(|id| other.0.contains_key(id)));
         debug_assert!(other.0.keys().all(|id| self.0.contains_key(id)));
 
         let mut joined = self.clone();
-        let mut metrics = Metrics {
-            total_edges: 0,
-            total_extensions: 0,
-        };
         for (parent_id, unmatched_borrowed_by) in self.unmatched_edges(other) {
             for (child_id, unmatched_edges) in unmatched_borrowed_by.0 {
                 for unmatched_edge in unmatched_edges {
-                    metrics.total_edges += 1;
-                    metrics.total_edges += unmatched_edge.path.len();
                     joined.add_edge(parent_id, unmatched_edge, child_id);
                 }
             }
         }
         debug_assert!(joined.check_invariant());
-        (joined, metrics)
+        joined
     }
 
     //**********************************************************************************************
@@ -491,23 +471,5 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
                 println!("{} <- {}", parent.0, id.0);
             }
         }
-    }
-}
-
-impl Metrics {
-    pub fn new() -> Self {
-        Self {
-            total_edges: 0,
-            total_extensions: 0,
-        }
-    }
-
-    pub fn add(&mut self, other: Self) {
-        let Self {
-            total_edges,
-            total_extensions,
-        } = other;
-        self.total_edges += total_edges;
-        self.total_extensions += total_extensions;
     }
 }

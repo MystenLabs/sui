@@ -13,7 +13,7 @@ use move_binary_format::{
     },
     safe_unwrap,
 };
-use move_borrow_graph::{graph::Metrics, references::RefID};
+use move_borrow_graph::references::RefID;
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, BTreeSet};
@@ -75,14 +75,13 @@ impl std::fmt::Display for Label {
 }
 
 pub(crate) const STEP_BASE_COST: u128 = 1;
-pub(crate) const STEP_PER_LOCAL_COST: u128 = 2;
 pub(crate) const JOIN_BASE_COST: u128 = 1;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 2;
-pub(crate) const JOIN_PER_GRAPH_ITEM_COST: u128 = 4;
+
+pub(crate) const PER_GRAPH_ITEM_COST: u128 = 2;
+pub(crate) const PER_GRAPH_ITEM_COST_GROWTH: f32 = 1.5;
 
 pub(crate) const ADD_BORROW_COST: u128 = 3;
-pub(crate) const METRIC_COST_PER_EDGE: u128 = 2;
-pub(crate) const METRIC_COST_PER_EXTENSION: u128 = 1;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -122,12 +121,17 @@ impl AbstractState {
         state
     }
 
-    pub(crate) fn local_count(&self) -> usize {
-        self.locals.len()
-    }
-
     pub(crate) fn graph_size(&self) -> usize {
         self.borrow_graph.graph_size()
+    }
+
+    fn charge_graph_size(&self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
+        meter.add_items_with_growth(
+            Scope::Function,
+            PER_GRAPH_ITEM_COST,
+            self.graph_size(),
+            PER_GRAPH_ITEM_COST_GROWTH,
+        )
     }
 
     /// returns the frame root id
@@ -241,9 +245,8 @@ impl AbstractState {
     }
 
     /// removes `id` from borrow graph
-    fn release(&mut self, id: RefID, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-        let metrics = self.borrow_graph.release(id);
-        charge_graph_metrics(meter, metrics)
+    fn release(&mut self, id: RefID) {
+        self.borrow_graph.release(id);
     }
 
     //**********************************************************************************************
@@ -294,25 +297,37 @@ impl AbstractState {
     /// checks if `id` is writable
     /// - Mutable references are writable if there are no consistent borrows
     /// - Immutable references are not writable by the typing rules
-    fn is_writable(&self, id: RefID) -> bool {
+    fn is_writable(&self, id: RefID, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
         assert!(self.borrow_graph.is_mutable(id));
-        !self.has_consistent_borrows(id, None)
+        self.charge_graph_size(meter)?;
+        Ok(!self.has_consistent_borrows(id, None))
     }
 
     /// checks if `id` is freezable
     /// - Mutable references are freezable if there are no consistent mutable borrows
     /// - Immutable references are not freezable by the typing rules
-    fn is_freezable(&self, id: RefID, at_field_opt: Option<FieldHandleIndex>) -> bool {
+    fn is_freezable(
+        &self,
+        id: RefID,
+        at_field_opt: Option<FieldHandleIndex>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<bool> {
         assert!(self.borrow_graph.is_mutable(id));
-        !self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::StructField))
+        self.charge_graph_size(meter)?;
+        Ok(!self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::StructField)))
     }
 
     /// checks if `id` is readable
     /// - Mutable references are readable if they are freezable
     /// - Immutable references are always readable
-    fn is_readable(&self, id: RefID, at_field_opt: Option<FieldHandleIndex>) -> bool {
+    fn is_readable(
+        &self,
+        id: RefID,
+        at_field_opt: Option<FieldHandleIndex>,
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<bool> {
         let is_mutable = self.borrow_graph.is_mutable(id);
-        !is_mutable || self.is_freezable(id, at_field_opt)
+        Ok(!is_mutable || self.is_freezable(id, at_field_opt, meter)?)
     }
 
     /// checks if local@idx is borrowed
@@ -347,14 +362,10 @@ impl AbstractState {
     //**********************************************************************************************
 
     /// destroys local@idx
-    pub fn release_value(
-        &mut self,
-        value: AbstractValue,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<()> {
+    pub fn release_value(&mut self, value: AbstractValue) -> () {
         match value {
-            AbstractValue::Reference(id) => self.release(id, meter),
-            AbstractValue::NonReference => Ok(()),
+            AbstractValue::Reference(id) => self.release(id),
+            AbstractValue::NonReference => (),
         }
     }
 
@@ -401,13 +412,12 @@ impl AbstractState {
         offset: CodeOffset,
         local: LocalIndex,
         new_value: AbstractValue,
-        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         let old_value =
             std::mem::replace(safe_unwrap!(self.locals.get_mut(local as usize)), new_value);
         match old_value {
             AbstractValue::Reference(id) => {
-                self.release(id, meter)?;
+                self.release(id);
                 Ok(())
             }
             AbstractValue::NonReference if self.is_local_borrowed(local) => {
@@ -423,13 +433,13 @@ impl AbstractState {
         id: RefID,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
-        if !self.is_freezable(id, None) {
+        if !self.is_freezable(id, None, meter)? {
             return Err(self.error(StatusCode::FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
         let frozen_id = self.new_ref(false);
         self.add_copy(id, frozen_id, meter)?;
-        self.release(id, meter)?;
+        self.release(id);
         Ok(AbstractValue::Reference(frozen_id))
     }
 
@@ -442,14 +452,15 @@ impl AbstractState {
     ) -> PartialVMResult<AbstractValue> {
         match (v1, v2) {
             (AbstractValue::Reference(id1), AbstractValue::Reference(id2))
-                if !self.is_readable(id1, None) || !self.is_readable(id2, None) =>
+                if !self.is_readable(id1, None, meter)?
+                    || !self.is_readable(id2, None, meter)? =>
             {
                 // TODO better error code
                 return Err(self.error(StatusCode::READREF_EXISTS_MUTABLE_BORROW_ERROR, offset));
             }
             (AbstractValue::Reference(id1), AbstractValue::Reference(id2)) => {
-                self.release(id1, meter)?;
-                self.release(id2, meter)?;
+                self.release(id1);
+                self.release(id2)
             }
             (v1, v2) => {
                 assert!(v1.is_value());
@@ -465,11 +476,11 @@ impl AbstractState {
         id: RefID,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
-        if !self.is_readable(id, None) {
+        if !self.is_readable(id, None, meter)? {
             return Err(self.error(StatusCode::READREF_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
-        self.release(id, meter)?;
+        self.release(id);
         Ok(AbstractValue::NonReference)
     }
 
@@ -479,11 +490,11 @@ impl AbstractState {
         id: RefID,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
-        if !self.is_writable(id) {
+        if !self.is_writable(id, meter)? {
             return Err(self.error(StatusCode::WRITEREF_EXISTS_BORROW_ERROR, offset));
         }
 
-        self.release(id, meter)?;
+        self.release(id);
         Ok(())
     }
 
@@ -514,19 +525,26 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
         // Any field borrows will be factored out, so don't check in the mutable case
-        let is_mut_borrow_with_full_borrows = || mut_ && self.has_full_borrows(id);
+        macro_rules! is_mut_borrow_with_full_borrows {
+            () => {
+                mut_ && self.has_full_borrows(id)
+            };
+        }
         // For new immutable borrow, the reference must be readable at that field
         // This means that there could exist a mutable borrow on some other field
-        let is_imm_borrow_with_mut_borrows = || !mut_ && !self.is_readable(id, Some(field));
-
-        if is_mut_borrow_with_full_borrows() || is_imm_borrow_with_mut_borrows() {
+        macro_rules! is_imm_borrow_with_mut_borrows {
+            () => {
+                !mut_ && !self.is_readable(id, Some(field), meter)?
+            };
+        }
+        if is_mut_borrow_with_full_borrows!() || is_imm_borrow_with_mut_borrows!() {
             // TODO improve error for mutable case
             return Err(self.error(StatusCode::FIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
         let field_borrow_id = self.new_ref(mut_);
         self.add_field_borrow(id, field, field_borrow_id, meter)?;
-        self.release(id, meter)?;
+        self.release(id);
         Ok(AbstractValue::Reference(field_borrow_id))
     }
 
@@ -541,12 +559,19 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
         // Any field borrows will be factored out, so don't check in the mutable case
-        let is_mut_borrow_with_full_borrows = || mut_ && self.has_full_borrows(id);
+        macro_rules! is_mut_borrow_with_full_borrows {
+            () => {
+                mut_ && self.has_full_borrows(id)
+            };
+        }
         // For new immutable borrow, the reference to the variant must be readable.
         // This means that there _does not_ exist a mutable borrow on some other field
-        let is_imm_borrow_with_mut_borrows = || !mut_ && !self.is_readable(id, None);
-
-        if is_mut_borrow_with_full_borrows() || is_imm_borrow_with_mut_borrows() {
+        macro_rules! is_imm_borrow_with_mut_borrows {
+            () => {
+                !mut_ && !self.is_readable(id, None, meter)?
+            };
+        }
+        if is_mut_borrow_with_full_borrows!() || is_imm_borrow_with_mut_borrows!() {
             return Err(self.error(StatusCode::FIELD_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
 
@@ -568,7 +593,7 @@ impl AbstractState {
             })
             .collect::<PartialVMResult<_>>()?;
 
-        self.release(id, meter)?;
+        self.release(id);
         Ok(field_borrows)
     }
 
@@ -609,10 +634,10 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         let id = safe_unwrap!(vector.ref_id());
-        if mut_ && !self.is_writable(id) {
+        if mut_ && !self.is_writable(id, meter)? {
             return Err(self.error(StatusCode::VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR, offset));
         }
-        self.release(id, meter)?;
+        self.release(id);
         Ok(())
     }
 
@@ -624,7 +649,7 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<AbstractValue> {
         let vec_id = safe_unwrap!(vector.ref_id());
-        if mut_ && !self.is_writable(vec_id) {
+        if mut_ && !self.is_writable(vec_id, meter)? {
             return Err(self.error(
                 StatusCode::VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR,
                 offset,
@@ -634,7 +659,7 @@ impl AbstractState {
         let elem_id = self.new_ref(mut_);
         self.add_borrow(vec_id, elem_id, meter)?;
 
-        self.release(vec_id, meter)?;
+        self.release(vec_id);
         Ok(AbstractValue::Reference(elem_id))
     }
 
@@ -658,7 +683,7 @@ impl AbstractState {
         let mut mutable_references_to_borrow_from = BTreeSet::new();
         for id in arguments.iter().filter_map(|v| v.ref_id()) {
             if self.borrow_graph.is_mutable(id) {
-                if !self.is_writable(id) {
+                if !self.is_writable(id, meter)? {
                     return Err(
                         self.error(StatusCode::CALL_BORROWED_MUTABLE_REFERENCE_ERROR, offset)
                     );
@@ -698,7 +723,7 @@ impl AbstractState {
 
         // Release input references
         for id in all_references_to_borrow_from {
-            self.release(id, meter)?
+            self.release(id)
         }
         Ok(return_values)
     }
@@ -716,9 +741,7 @@ impl AbstractState {
                 released.insert(*id);
             }
         }
-        for id in released {
-            self.release(id, meter)?
-        }
+        released.into_iter().for_each(|id| self.release(id));
 
         // Check that no local or global is borrowed
         if !self.is_frame_safe_to_destroy() {
@@ -730,7 +753,7 @@ impl AbstractState {
 
         // Check mutable references can be transferred
         for id in values.into_iter().filter_map(|v| v.ref_id()) {
-            if self.borrow_graph.is_mutable(id) && !self.is_writable(id) {
+            if self.borrow_graph.is_mutable(id) && !self.is_writable(id, meter)? {
                 return Err(self.error(StatusCode::RET_BORROWED_MUTABLE_REFERENCE_ERROR, offset));
             }
         }
@@ -785,14 +808,13 @@ impl AbstractState {
             })
     }
 
-    pub fn join_(&self, other: &Self) -> (Self, Metrics) {
+    pub fn join_(&self, other: &Self) -> Self {
         assert!(self.current_function == other.current_function);
         assert!(self.is_canonical() && other.is_canonical());
         assert!(self.next_id == other.next_id);
         assert!(self.locals.len() == other.locals.len());
         let mut self_graph = self.borrow_graph.clone();
         let mut other_graph = other.borrow_graph.clone();
-        let mut metrics = Metrics::new();
         let locals = self
             .locals
             .iter()
@@ -800,11 +822,11 @@ impl AbstractState {
             .map(|(self_value, other_value)| {
                 match (self_value, other_value) {
                     (AbstractValue::Reference(id), AbstractValue::NonReference) => {
-                        metrics.add(self_graph.release(*id));
+                        self_graph.release(*id);
                         AbstractValue::NonReference
                     }
                     (AbstractValue::NonReference, AbstractValue::Reference(id)) => {
-                        metrics.add(other_graph.release(*id));
+                        other_graph.release(*id);
                         AbstractValue::NonReference
                     }
                     // The local has a value on each side, add it to the state
@@ -816,30 +838,16 @@ impl AbstractState {
             })
             .collect();
 
-        let (borrow_graph, metrics) = self_graph.join(&other_graph);
+        let borrow_graph = self_graph.join(&other_graph);
         let current_function = self.current_function;
         let next_id = self.next_id;
-        let joined = Self {
+        Self {
             current_function,
             locals,
             borrow_graph,
             next_id,
-        };
-        (joined, metrics)
+        }
     }
-}
-
-fn charge_graph_metrics(
-    meter: &mut (impl Meter + ?Sized),
-    metrics: Metrics,
-) -> PartialVMResult<()> {
-    let Metrics {
-        total_edges,
-        total_extensions,
-    } = metrics;
-    meter.add_items(Scope::Function, METRIC_COST_PER_EDGE, total_edges)?;
-    meter.add_items(Scope::Function, METRIC_COST_PER_EXTENSION, total_extensions)?;
-    Ok(())
 }
 
 impl AbstractDomain for AbstractState {
@@ -851,22 +859,12 @@ impl AbstractDomain for AbstractState {
     ) -> PartialVMResult<JoinResult> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
         meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, self.locals.len())?;
-        meter.add_items(Scope::Function, JOIN_PER_GRAPH_ITEM_COST, self.graph_size())?;
-        meter.add_items(
-            Scope::Function,
-            JOIN_PER_GRAPH_ITEM_COST,
-            state.graph_size(),
-        )?;
-        let (joined, metrics) = Self::join_(self, state);
+        self.charge_graph_size(meter)?;
+        state.charge_graph_size(meter)?;
+        let joined = Self::join_(self, state);
         assert!(joined.is_canonical());
         assert!(self.locals.len() == joined.locals.len());
-
-        meter.add_items(
-            Scope::Function,
-            JOIN_PER_GRAPH_ITEM_COST,
-            self.borrow_graph.graph_size(),
-        )?;
-        charge_graph_metrics(meter, metrics)?;
+        joined.charge_graph_size(meter)?;
         let locals_unchanged = self
             .locals
             .iter()

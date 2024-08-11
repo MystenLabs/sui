@@ -10,9 +10,7 @@
 
 mod abstract_state;
 
-use crate::reference_safety::abstract_state::{
-    STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
-};
+use crate::reference_safety::abstract_state::STEP_BASE_COST;
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_abstract_stack::AbstractStack;
@@ -182,15 +180,9 @@ fn execute_inner(
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
-    meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
-    meter.add_items(
-        Scope::Function,
-        STEP_PER_GRAPH_ITEM_COST,
-        state.graph_size(),
-    )?;
 
     match bytecode {
-        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?,
+        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop())),
 
         Bytecode::CopyLoc(local) => {
             let value = state.copy_loc(offset, *local, meter)?;
@@ -200,12 +192,9 @@ fn execute_inner(
             let value = state.move_loc(offset, *local)?;
             verifier.push(value)?
         }
-        Bytecode::StLoc(local) => state.st_loc(
-            offset,
-            *local,
-            safe_unwrap_err!(verifier.stack.pop()),
-            meter,
-        )?,
+        Bytecode::StLoc(local) => {
+            state.st_loc(offset, *local, safe_unwrap_err!(verifier.stack.pop()))?
+        }
 
         Bytecode::FreezeRef => {
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
@@ -334,7 +323,7 @@ fn execute_inner(
             // resource value
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             // signer reference
-            state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?;
+            state.release_value(safe_unwrap_err!(verifier.stack.pop()));
         }
 
         Bytecode::LdTrue | Bytecode::LdFalse => {
@@ -557,9 +546,7 @@ fn execute_inner(
                 verifier.push(val)?
             }
         }
-        Bytecode::VariantSwitch(_) => {
-            state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?
-        }
+        Bytecode::VariantSwitch(_) => state.release_value(safe_unwrap_err!(verifier.stack.pop())),
     };
     Ok(())
 }
