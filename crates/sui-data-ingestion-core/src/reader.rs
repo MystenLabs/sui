@@ -48,6 +48,7 @@ pub struct CheckpointReader {
 pub struct ReaderOptions {
     pub tick_interal_ms: u64,
     pub timeout_secs: u64,
+    /// number of maximum concurrent requests to the remote store. Increase it for backfills
     pub batch_size: usize,
     pub data_limit: usize,
 }
@@ -57,7 +58,7 @@ impl Default for ReaderOptions {
         Self {
             tick_interal_ms: 100,
             timeout_secs: 5,
-            batch_size: 100,
+            batch_size: 10,
             data_limit: 0,
         }
     }

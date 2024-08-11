@@ -136,11 +136,11 @@ pub enum ImageAction {
         #[arg(short = 'v', long)]
         ref_val: Option<String>,
     },
-    #[command(name = "list")]
+    #[command(name = "list", aliases = &["ls"])]
     List {
-        #[arg(short, long)]
+        #[arg(short, long, aliases = &["repo"])]
         repo_name: String,
-        #[arg(short, long)]
+        #[arg(short, long, aliases = &["image"])]
         image_name: Option<String>,
         #[arg(short, long)]
         limit: Option<i32>,

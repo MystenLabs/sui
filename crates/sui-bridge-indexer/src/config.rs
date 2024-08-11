@@ -11,6 +11,7 @@ pub struct IndexerConfig {
     pub eth_rpc_url: String,
     #[serde(default = "default_db_url")]
     pub db_url: String,
+    pub eth_ws_url: String,
     pub checkpoints_path: String,
     pub concurrency: u64,
     pub bridge_genesis_checkpoint: u64,

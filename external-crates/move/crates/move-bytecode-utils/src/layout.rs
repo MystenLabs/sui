@@ -604,19 +604,6 @@ impl DatatypeLayoutBuilder {
             Err(_) | Ok(None) => bail!("Could not find module"),
             Ok(Some(m)) => m,
         };
-<<<<<<< HEAD
-        let (_, def) = module
-            .borrow()
-            .find_struct_def_by_name(name.as_str())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Could not find struct named {} in module {}",
-                    name,
-                    declaring_module
-                )
-            })?;
-        Self::build_from_definition(module.borrow(), def, type_arguments, resolver, depth)
-=======
         match (
             module.borrow().find_struct_def_by_name(name),
             module.borrow().find_enum_def_by_name(name),
@@ -646,7 +633,6 @@ impl DatatypeLayoutBuilder {
                 module.borrow().name()
             ),
         }
->>>>>>> main
     }
 
     fn build_from_handle_idx(

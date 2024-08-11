@@ -1216,7 +1216,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
             Vector(t) => write!(f, "vector<{}>", t.display(self.context)),
             TypeDomain(t) => write!(f, "domain<{}>", t.display(self.context)),
             ResourceDomain(mid, sid, inst_opt) => {
-                write!(f, "resources<{}", self.struct_str(*mid, *sid))?;
+                write!(f, "resources<{}", self.datatype_str(*mid, *sid))?;
                 if let Some(inst) = inst_opt {
                     f.write_str("<")?;
                     comma_list(f, inst)?;
@@ -1231,7 +1231,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
                 write!(f, "{}", t.display(self.context))
             }
             Datatype(mid, sid, ts) => {
-                write!(f, "{}", self.struct_str(*mid, *sid))?;
+                write!(f, "{}", self.datatype_str(*mid, *sid))?;
                 if !ts.is_empty() {
                     f.write_str("<")?;
                     comma_list(f, ts)?;
@@ -1269,7 +1269,7 @@ impl<'a> fmt::Display for TypeDisplay<'a> {
 }
 
 impl<'a> TypeDisplay<'a> {
-    fn struct_str(&self, mid: ModuleId, sid: DatatypeId) -> String {
+    fn datatype_str(&self, mid: ModuleId, sid: DatatypeId) -> String {
         match self.context {
             TypeDisplayContext::WithoutEnv {
                 symbol_pool,
@@ -1282,12 +1282,25 @@ impl<'a> TypeDisplay<'a> {
                 }
             }
             TypeDisplayContext::WithEnv { env, .. } => {
-                let struct_env = env.get_module(mid).into_struct(sid);
-                format!(
-                    "{}::{}",
-                    struct_env.module_env.get_name().display(env.symbol_pool()),
-                    struct_env.get_name().display(env.symbol_pool())
-                )
+                let menv = env.get_module(mid);
+                menv.find_struct(sid.symbol())
+                    .map(|senv| {
+                        format!(
+                            "{}::{}",
+                            senv.module_env.get_name().display(env.symbol_pool()),
+                            senv.get_name().display(env.symbol_pool()),
+                        )
+                    })
+                    .or_else(|| {
+                        menv.find_enum(sid.symbol()).map(|eenv| {
+                            format!(
+                                "{}::{}",
+                                eenv.module_env.get_name().display(env.symbol_pool()),
+                                eenv.get_name().display(env.symbol_pool()),
+                            )
+                        })
+                    })
+                    .expect("Unknown struct or enum")
             }
         }
     }

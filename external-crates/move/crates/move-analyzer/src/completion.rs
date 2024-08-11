@@ -6,7 +6,7 @@ use crate::{
     context::Context,
     symbols::{
         self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, ChainCompletionKind, CursorContext,
+        type_list_to_ide_string, type_to_ide_string, ChainCompletionKind, ChainInfo, CursorContext,
         CursorDefinition, DefInfo, FunType, PrecompiledPkgDeps, SymbolicatorRunner, Symbols,
         VariantInfo,
     },
@@ -198,32 +198,37 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
 fn context_specific_lbrace(
     symbols: &Symbols,
     cursor: &CursorContext,
-) -> Option<Vec<CompletionItem>> {
-    match &cursor.defn_name {
-        // look for a struct definition on the line that contains `{`, check its abilities,
-        // and do auto-completion if `key` ability is present
-        Some(CursorDefinition::Struct(sname)) => {
-            let mident = cursor.module?;
-            let typed_ast = symbols.typed_ast.as_ref()?;
-            let struct_def = typed_ast.info.struct_definition_opt(&mident, sname)?;
-            if struct_def.abilities.has_ability_(Ability_::Key) {
-                let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
-                let init_completion = CompletionItem {
-                    label: "id: UID".to_string(),
-                    kind: Some(CompletionItemKind::SNIPPET),
-                    documentation: Some(Documentation::String("Object snippet".to_string())),
-                    insert_text: Some(obj_snippet),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
-                };
-                vec![init_completion].into()
-            } else {
-                None
-            }
-        }
-        Some(_) => None,
-        None => None,
+) -> (Vec<CompletionItem>, bool) {
+    let mut completions = vec![];
+    let mut only_custom_items = false;
+    // look for a struct definition on the line that contains `{`, check its abilities,
+    // and do auto-completion if `key` ability is present
+    let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name else {
+        return (completions, only_custom_items);
+    };
+    only_custom_items = true;
+    let Some(mident) = cursor.module else {
+        return (completions, only_custom_items);
+    };
+    let Some(typed_ast) = symbols.typed_ast.as_ref() else {
+        return (completions, only_custom_items);
+    };
+    let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
+        return (completions, only_custom_items);
+    };
+    if struct_def.abilities.has_ability_(Ability_::Key) {
+        let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+        let init_completion = CompletionItem {
+            label: "id: UID".to_string(),
+            kind: Some(CompletionItemKind::SNIPPET),
+            documentation: Some(Documentation::String("Object snippet".to_string())),
+            insert_text: Some(obj_snippet),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            ..Default::default()
+        };
+        completions.push(init_completion);
     }
+    (completions, only_custom_items)
 }
 
 fn fun_def_info(symbols: &Symbols, mod_ident: ModuleIdent_, name: Symbol) -> Option<&DefInfo> {
@@ -267,6 +272,7 @@ fn call_completion_item(
     arg_names: &[Name],
     arg_types: &[Type],
     ret_type: &Type,
+    inside_use: bool,
 ) -> CompletionItem {
     let sig_string = format!(
         "fun {}({}){}",
@@ -305,12 +311,24 @@ fn call_completion_item(
     });
 
     let method_name = method_name_opt.unwrap_or(function_name);
+    let (insert_text, insert_text_format) = if inside_use {
+        (
+            Some(format!("{method_name}")),
+            Some(InsertTextFormat::PLAIN_TEXT),
+        )
+    } else {
+        (
+            Some(format!("{method_name}{macro_suffix}({arg_snippet})")),
+            Some(InsertTextFormat::SNIPPET),
+        )
+    };
+
     CompletionItem {
         label: format!("{method_name}{macro_suffix}()"),
         label_details,
         kind: Some(CompletionItemKind::METHOD),
-        insert_text: Some(format!("{method_name}{macro_suffix}({arg_snippet})")),
-        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        insert_text,
+        insert_text_format,
         ..Default::default()
     }
 }
@@ -359,6 +377,7 @@ fn dot_completions(
                 arg_names,
                 arg_types,
                 ret_type,
+                /* inside_use */ false,
             )
         } else {
             // this shouldn't really happen as we should be able to get
@@ -393,14 +412,16 @@ fn dot_completions(
     completions
 }
 
-/// Returns all possible completions for a member (e.g., a datatype) component of a name access
-/// chain, where the prefix of this component (e.g, in `some_pkg::some_mod::`) represents a module
-/// specified in `prefix_mod_ident`.
-fn name_chain_member_completions(
+/// Returns all possible completions for a module member (e.g., a datatype) component of a name
+/// access chain, where the prefix of this component (e.g, in `some_pkg::some_mod::`) represents a
+/// module specified in `prefix_mod_ident`. The `inside_use` parameter determines if completion is
+/// for "regular" access chain or for completion within a `use` statement.
+fn module_member_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
     prefix_mod_ident: &ModuleIdent,
     chain_kind: ChainCompletionKind,
+    inside_use: bool,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
@@ -469,6 +490,7 @@ fn name_chain_member_completions(
                         arg_names,
                         arg_types,
                         ret_type,
+                        inside_use,
                     ))
                 } else {
                     None
@@ -543,6 +565,7 @@ fn single_name_member_completion(
             arg_names,
             arg_types,
             ret_type,
+            /* inside_use */ false,
         ));
     };
 
@@ -630,10 +653,10 @@ fn is_pkg_mod_ident(mod_ident: &ModuleIdent_, leading_name: &LeadingNameAccess) 
 /// Gets module identifiers for a given package identified by `leading_name`.
 fn pkg_mod_identifiers(
     symbols: &Symbols,
-    modules: &BTreeMap<Symbol, ModuleIdent>,
+    info: &AliasAutocompleteInfo,
     leading_name: &LeadingNameAccess,
 ) -> BTreeSet<ModuleIdent> {
-    modules
+    info.modules
         .values()
         .filter(|mod_ident| is_pkg_mod_ident(&mod_ident.value, leading_name))
         .copied()
@@ -728,11 +751,12 @@ fn name_chain_entry_completions(
     info: &AliasAutocompleteInfo,
     prev_kind: ChainComponentKind,
     chain_kind: ChainCompletionKind,
+    inside_use: bool,
     completions: &mut Vec<CompletionItem>,
 ) {
     match prev_kind {
         ChainComponentKind::Package(leading_name) => {
-            for mod_ident in pkg_mod_identifiers(symbols, &info.modules, &leading_name) {
+            for mod_ident in pkg_mod_identifiers(symbols, info, &leading_name) {
                 completions.push(completion_item(
                     mod_ident.value.module.value().as_str(),
                     CompletionItemKind::MODULE,
@@ -740,8 +764,8 @@ fn name_chain_entry_completions(
             }
         }
         ChainComponentKind::Module(mod_ident) => {
-            completions.extend(name_chain_member_completions(
-                symbols, cursor, &mod_ident, chain_kind,
+            completions.extend(module_member_completions(
+                symbols, cursor, &mod_ident, chain_kind, inside_use,
             ));
         }
         ChainComponentKind::Member(mod_ident, member_name) => {
@@ -760,7 +784,7 @@ fn next_name_chain_component_kind(
 ) -> Option<ChainComponentKind> {
     match prev_kind {
         ChainComponentKind::Package(leading_name) => {
-            pkg_mod_identifiers(symbols, &info.modules, &leading_name)
+            pkg_mod_identifiers(symbols, info, &leading_name)
                 .into_iter()
                 .find(|mod_ident| mod_ident.value.module.value() == component_name.value)
                 .map(ChainComponentKind::Module)
@@ -783,6 +807,7 @@ fn completions_for_name_chain_entry(
     path_entries: &[Name],
     path_index: usize,
     colon_colon_triggered: bool,
+    inside_use: bool,
     completions: &mut Vec<CompletionItem>,
 ) {
     let ChainComponentInfo {
@@ -814,7 +839,15 @@ fn completions_for_name_chain_entry(
 
     // we are at `::`, or at some component's identifier
     if at_colon_colon || path_entries[path_index].loc.contains(&cursor.loc) {
-        name_chain_entry_completions(symbols, cursor, info, prev_kind, chain_kind, completions);
+        name_chain_entry_completions(
+            symbols,
+            cursor,
+            info,
+            prev_kind,
+            chain_kind,
+            inside_use,
+            completions,
+        );
     } else {
         let component_name = path_entries[path_index];
         if let Some(next_kind) =
@@ -829,6 +862,7 @@ fn completions_for_name_chain_entry(
                 path_entries,
                 path_index + 1,
                 colon_colon_triggered,
+                inside_use,
                 completions,
             );
         }
@@ -957,15 +991,20 @@ fn name_chain_completions(
     cursor: &CursorContext,
     colon_colon_triggered: bool,
 ) -> (Vec<CompletionItem>, bool) {
-    eprintln!("looking for colon(s)");
+    eprintln!("looking for name access chains");
     let mut completions = vec![];
     let mut only_custom_items = false;
-    let Some((sp!(_, chain), chain_kind)) = cursor.find_access_chain() else {
+    let Some(ChainInfo {
+        chain,
+        kind: chain_kind,
+        inside_use,
+    }) = cursor.find_access_chain()
+    else {
         eprintln!("no access chain");
         return (completions, only_custom_items);
     };
 
-    let (leading_name, path_entries) = match &chain {
+    let (leading_name, path_entries) = match &chain.value {
         P::NameAccessChain_::Single(entry) => (
             sp(entry.name.loc, LeadingNameAccess_::Name(entry.name)),
             vec![],
@@ -1036,11 +1075,218 @@ fn name_chain_completions(
             &path_entries,
             /* path_index */ 0,
             colon_colon_triggered,
+            inside_use,
             &mut completions,
         );
     }
 
     eprintln!("found {} access chain completions", completions.len());
+
+    (completions, only_custom_items)
+}
+
+/// Computes auto-completions for module uses.
+fn module_use_completions(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    info: &AliasAutocompleteInfo,
+    mod_use: &P::ModuleUse,
+    package: &LeadingNameAccess,
+    mod_name: &P::ModuleName,
+) -> Vec<CompletionItem> {
+    use P::ModuleUse as MU;
+    let mut completions = vec![];
+
+    let Some(mod_ident) = pkg_mod_identifiers(symbols, info, package)
+        .into_iter()
+        .find(|mod_ident| &mod_ident.value.module == mod_name)
+    else {
+        return completions;
+    };
+
+    match mod_use {
+        MU::Module(_) => (), // nothing to do with just module alias
+        MU::Members(members) => {
+            if let Some((first_name, _)) = members.first() {
+                if cursor.loc.start() > mod_name.loc().end()
+                    && cursor.loc.end() <= first_name.loc.start()
+                {
+                    // cursor is after `::` succeeding module but before the first module member
+                    completions.extend(module_member_completions(
+                        symbols,
+                        cursor,
+                        &mod_ident,
+                        ChainCompletionKind::All,
+                        /* inside_use */ true,
+                    ));
+                    // no point in falling through to the members loop below
+                    return completions;
+                }
+            }
+
+            for (sp!(mloc, _), _) in members {
+                if mloc.contains(&cursor.loc) {
+                    // cursor is at identifier representing module member
+                    completions.extend(module_member_completions(
+                        symbols,
+                        cursor,
+                        &mod_ident,
+                        ChainCompletionKind::All,
+                        /* inside_use */ true,
+                    ));
+                    // no point checking other locations
+                    break;
+                }
+            }
+        }
+        MU::Partial {
+            colon_colon,
+            opening_brace: _,
+        } => {
+            if let Some(colon_colon_loc) = colon_colon {
+                if cursor.loc.start() >= colon_colon_loc.start() {
+                    // cursor is on or past `::`
+                    completions.extend(module_member_completions(
+                        symbols,
+                        cursor,
+                        &mod_ident,
+                        ChainCompletionKind::All,
+                        /* inside_use */ true,
+                    ));
+                }
+            }
+        }
+    }
+
+    completions
+}
+
+/// Handles auto-completions for "regular" `use` declarations (name access chains in `use fun`
+/// declarations are handled as part of name chain completions).
+fn use_decl_completions(symbols: &Symbols, cursor: &CursorContext) -> (Vec<CompletionItem>, bool) {
+    eprintln!("looking for use declarations");
+    let mut completions = vec![];
+    let mut only_custom_items = false;
+    let Some(use_) = cursor.find_use_decl() else {
+        eprintln!("no use declaration");
+        return (completions, only_custom_items);
+    };
+    eprintln!("use declaration {:?}", use_);
+
+    // if we are auto-completing for a use decl, there is no need to include default completions
+    only_custom_items = true;
+
+    // there is no auto-completion info generated by the compiler for this but helper methods used
+    // here are shared with name chain completion where it may exist, so we create an "empty" one
+    // here
+    let info = AliasAutocompleteInfo::new();
+
+    match use_ {
+        P::Use::ModuleUse(sp!(_, mod_ident), mod_use) => {
+            if mod_ident.address.loc.contains(&cursor.loc) {
+                // cursor on package (e.g., on `some_pkg` in `some_pkg::some_mod`)
+                completions.extend(
+                    all_packages(symbols, &info)
+                        .iter()
+                        .map(|n| completion_item(n.as_str(), CompletionItemKind::UNIT)),
+                );
+            } else if cursor.loc.start() > mod_ident.address.loc.end()
+                && cursor.loc.end() <= mod_ident.module.loc().end()
+            {
+                // cursor is either at the `::` succeeding package/address or at the identifier
+                // following that particular `::`
+                for ident in pkg_mod_identifiers(symbols, &info, &mod_ident.address) {
+                    completions.push(completion_item(
+                        ident.value.module.value().as_str(),
+                        CompletionItemKind::MODULE,
+                    ));
+                }
+            } else {
+                completions.extend(module_use_completions(
+                    symbols,
+                    cursor,
+                    &info,
+                    &mod_use,
+                    &mod_ident.address,
+                    &mod_ident.module,
+                ));
+            }
+        }
+        P::Use::NestedModuleUses(leading_name, uses) => {
+            if leading_name.loc.contains(&cursor.loc) {
+                // cursor on package
+                completions.extend(
+                    all_packages(symbols, &info)
+                        .iter()
+                        .map(|n| completion_item(n.as_str(), CompletionItemKind::UNIT)),
+                );
+            } else {
+                if let Some((first_name, _)) = uses.first() {
+                    if cursor.loc.start() > leading_name.loc.end()
+                        && cursor.loc.end() <= first_name.loc().start()
+                    {
+                        // cursor is after `::` succeeding address/package but before the first
+                        // module
+                        for ident in pkg_mod_identifiers(symbols, &info, &leading_name) {
+                            completions.push(completion_item(
+                                ident.value.module.value().as_str(),
+                                CompletionItemKind::MODULE,
+                            ));
+                        }
+                        // no point in falling through to the uses loop below
+                        return (completions, only_custom_items);
+                    }
+                }
+
+                for (mod_name, mod_use) in &uses {
+                    if mod_name.loc().contains(&cursor.loc) {
+                        for ident in pkg_mod_identifiers(symbols, &info, &leading_name) {
+                            completions.push(completion_item(
+                                ident.value.module.value().as_str(),
+                                CompletionItemKind::MODULE,
+                            ));
+                        }
+                        // no point checking other locations
+                        break;
+                    }
+                    completions.extend(module_use_completions(
+                        symbols,
+                        cursor,
+                        &info,
+                        mod_use,
+                        &leading_name,
+                        mod_name,
+                    ));
+                }
+            }
+        }
+        P::Use::Fun { .. } => (), // already handled as part of name chain completion
+        P::Use::Partial {
+            package,
+            colon_colon,
+            opening_brace: _,
+        } => {
+            if package.loc.contains(&cursor.loc) {
+                // cursor on package name/address
+                completions.extend(
+                    all_packages(symbols, &info)
+                        .iter()
+                        .map(|n| completion_item(n.as_str(), CompletionItemKind::UNIT)),
+                );
+            }
+            if let Some(colon_colon_loc) = colon_colon {
+                if cursor.loc.start() >= colon_colon_loc.start() {
+                    // cursor is on or past `::`
+                    for ident in pkg_mod_identifiers(symbols, &info, &package) {
+                        completions.push(completion_item(
+                            ident.value.module.value().as_str(),
+                            CompletionItemKind::MODULE,
+                        ));
+                    }
+                }
+            }
+        }
+    }
 
     (completions, only_custom_items)
 }
@@ -1375,13 +1621,33 @@ fn cursor_completion_items(
             (items, true)
         }
         Some(Tok::ColonColon) => {
-            name_chain_completions(symbols, cursor, /* colon_colon_triggered */ true)
+            let mut items = vec![];
+            let mut only_custom_items = false;
+            let (path_items, path_custom) =
+                name_chain_completions(symbols, cursor, /* colon_colon_triggered */ true);
+            items.extend(path_items);
+            only_custom_items |= path_custom;
+            if !only_custom_items {
+                let (path_items, path_custom) = use_decl_completions(symbols, cursor);
+                items.extend(path_items);
+                only_custom_items |= path_custom;
+            }
+            (items, only_custom_items)
         }
         // Carve out to suggest UID for struct with key ability
-        Some(Tok::LBrace) => (
-            context_specific_lbrace(symbols, cursor).unwrap_or_default(),
-            true,
-        ),
+        Some(Tok::LBrace) => {
+            let mut items = vec![];
+            let mut only_custom_items = false;
+            let (path_items, path_custom) = context_specific_lbrace(symbols, cursor);
+            items.extend(path_items);
+            only_custom_items |= path_custom;
+            if !only_custom_items {
+                let (path_items, path_custom) = use_decl_completions(symbols, cursor);
+                items.extend(path_items);
+                only_custom_items |= path_custom;
+            }
+            (items, only_custom_items)
+        }
         // TODO: should we handle auto-completion on `:`? If we model our support after
         // rust-analyzer then it does not do this - it starts auto-completing types after the first
         // character beyond `:` is typed
@@ -1393,6 +1659,16 @@ fn cursor_completion_items(
                 name_chain_completions(symbols, cursor, /* colon_colon_triggered */ false);
             items.extend(path_items);
             only_custom_items |= path_custom;
+            if !only_custom_items {
+                if matches!(cursor_leader, Some(Tok::Colon)) {
+                    // much like rust-analyzer we do not auto-complete in the middle of `::`
+                    only_custom_items = true;
+                } else {
+                    let (path_items, path_custom) = use_decl_completions(symbols, cursor);
+                    items.extend(path_items);
+                    only_custom_items |= path_custom;
+                }
+            }
             if !only_custom_items {
                 eprintln!("checking default items");
                 let (default_items, default_custom) =

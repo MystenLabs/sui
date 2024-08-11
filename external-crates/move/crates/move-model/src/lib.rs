@@ -18,7 +18,7 @@ use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
 use move_binary_format::file_format::{
-    CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
+    CompiledModule, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_compiler::{
     self,
@@ -333,6 +333,18 @@ pub fn run_bytecode_model_builder<'a>(
                 env.create_move_struct_data(m, def_idx, symbol, Loc::default(), Vec::default());
             module_data.struct_data.insert(struct_id, data);
             module_data.struct_idx_to_id.insert(def_idx, struct_id);
+        }
+
+        // add enums
+        for (i, def) in m.enum_defs().iter().enumerate() {
+            let def_idx = EnumDefinitionIndex(i as u16);
+            let name = m.identifier_at(m.datatype_handle_at(def.enum_handle).name);
+            let symbol = env.symbol_pool().make(name.as_str());
+            let enum_id = DatatypeId::new(symbol);
+            let data =
+                env.create_move_enum_data(m, def_idx, symbol, Loc::default(), None, Vec::default());
+            module_data.enum_data.insert(enum_id, data);
+            module_data.enum_idx_to_id.insert(def_idx, enum_id);
         }
 
         env.module_data.push(module_data);

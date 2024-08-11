@@ -106,19 +106,3 @@ pub fn build_stdlib_doc(output_path: &str) {
         move_stdlib_named_addresses(),
     )
 }
-<<<<<<< HEAD
-
-pub fn build_nursery_doc(output_path: &str) {
-    build_doc(
-        output_path,
-        "",
-        vec![],
-        None,
-        move_nursery_files().as_slice(),
-        vec![move_stdlib_modules_full_path()],
-        false,
-        move_stdlib_named_addresses(),
-    )
-}
-=======
->>>>>>> main

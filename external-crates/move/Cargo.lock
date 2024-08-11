@@ -33,21 +33,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
-name = "android-tzdata"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
-
-[[package]]
-name = "android_system_properties"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "ansi_term"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,20 +443,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "chrono"
-version = "0.4.38"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
-dependencies = [
- "android-tzdata",
- "iana-time-zone",
- "js-sys",
- "num-traits",
- "wasm-bindgen",
- "windows-targets 0.52.5",
-]
-
-[[package]]
 name = "clap"
 version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -617,12 +588,6 @@ name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
-
-[[package]]
-name = "core-foundation-sys"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 
 [[package]]
 name = "cpufeatures"
@@ -1144,29 +1109,6 @@ name = "hex-literal"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
-
-[[package]]
-name = "iana-time-zone"
-version = "0.1.60"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ffbb5a1b541ea2561f8c41c087286cc091e21e556a4f09a8f6cbf17b69b141"
-dependencies = [
- "android_system_properties",
- "core-foundation-sys",
- "iana-time-zone-haiku",
- "js-sys",
- "wasm-bindgen",
- "windows-core",
-]
-
-[[package]]
-name = "iana-time-zone-haiku"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
-dependencies = [
- "cc",
-]
 
 [[package]]
 name = "idna"
@@ -1703,8 +1645,8 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model-2",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-unit-test",
@@ -1855,10 +1797,14 @@ dependencies = [
  "datatest-stable",
  "itertools",
  "log",
+ "move-binary-format",
  "move-compiler",
+ "move-core-types",
+ "move-ir-types",
  "move-model",
- "move-prover",
+ "move-model-2",
  "move-prover-test-utils",
+ "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
@@ -1958,6 +1904,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-model-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "codespan",
+ "codespan-reporting",
+ "datatest-stable",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-symbol-pool",
+ "num",
+ "serde",
+ "vfs",
+]
+
+[[package]]
 name = "move-package"
 version = "0.1.0"
 dependencies = [
@@ -1974,7 +1942,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-docgen",
- "move-model",
+ "move-model-2",
  "move-symbol-pool",
  "named-lock",
  "once_cell",
@@ -1999,31 +1967,6 @@ dependencies = [
  "enum-compat-util",
  "quote 1.0.36",
  "syn 2.0.65",
-]
-
-[[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.5.4",
- "codespan-reporting",
- "datatest-stable",
- "itertools",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-prover-test-utils",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "shell-words",
- "simplelog",
- "tempfile",
- "toml",
- "walkdir",
 ]
 
 [[package]]
@@ -2075,7 +2018,6 @@ dependencies = [
  "move-core-types",
  "move-docgen",
  "move-package",
- "move-prover",
  "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
@@ -3310,12 +3252,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shell-words"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
-
-[[package]]
 name = "signal-hook"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3356,17 +3292,6 @@ name = "similar"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa42c91313f1d05da9b26f267f931cf178d4aba455b4c4622dd7355eb80c6640"
-
-[[package]]
-name = "simplelog"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
-dependencies = [
- "chrono",
- "log",
- "termcolor",
-]
 
 [[package]]
 name = "siphasher"
@@ -4052,15 +3977,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "windows-core"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
-dependencies = [
- "windows-targets 0.52.5",
-]
 
 [[package]]
 name = "windows-sys"
