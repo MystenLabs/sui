@@ -125,17 +125,17 @@ impl Clock {
                 now.checked_duration_since(self.initial_instant)
                     .unwrap_or_else(|| {
                         panic!(
-                            "now: {:?}, initial_instant: {:?}",
+                            "current instant ({:?}) < initial instant ({:?})",
                             now, self.initial_instant
                         )
                     }),
             )
-            .unwrap();
+            .expect("Computing system time should not overflow");
         monotonic_system_time
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_else(|_| {
                 panic!(
-                    "system time: {:?}, UNIX_EPOCH: {:?}",
+                    "system time ({:?}) < UNIX_EPOCH ({:?})",
                     monotonic_system_time,
                     SystemTime::UNIX_EPOCH,
                 )
