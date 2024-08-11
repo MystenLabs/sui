@@ -1,0 +1,9 @@
+[package]
+name = "prover"
+version = "0.0.1"
+published-at = "0x0"
+
+[dependencies]
+
+[addresses]
+prover = "0x0"
