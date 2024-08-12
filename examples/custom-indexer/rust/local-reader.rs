@@ -22,18 +22,18 @@ impl Worker for CustomWorker {
         
 #[tokio::main]
 async fn main() -> Result<()> {
+    let concurrency = 5;
     let (exit_sender, exit_receiver) = oneshot::channel();
     let metrics = DataIngestionMetrics::new(&Registry::new());
-    // let backfill_progress_file_path = PathBuf::from("/Users/zihehuang/work/custom-indexer/backfill_progress");
     let backfill_progress_file_path =
-        env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/backfill_progress_2".to_string());
+        env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/local_reader_progress".to_string());
     let progress_store = FileProgressStore::new(PathBuf::from(backfill_progress_file_path));
     let mut executor = IndexerExecutor::new(progress_store, 1 /* number of workflow types */, metrics);
-    let worker_pool = WorkerPool::new(CustomWorker, "custom_worker".to_string(), 1);
+    let worker_pool = WorkerPool::new(CustomWorker, "local_reader".to_string(), concurrency);
 
     executor.register(worker_pool).await?;
     executor.run(
-        PathBuf::from("/Users/zihehuang/work/sui/examples/custom-indexer/rust/chk".to_string()), // path to a local directory
+        PathBuf::from("./chk".to_string()), // path to a local directory
         None,
         vec![], // optional remote store access options
         ReaderOptions::default(),       /* remote_read_batch_size */
