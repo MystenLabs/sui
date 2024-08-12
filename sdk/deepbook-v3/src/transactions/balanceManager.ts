@@ -28,8 +28,9 @@ export class BalanceManagerContract {
 		});
 
 		tx.moveCall({
-			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::share`,
+			target: '0x2::transfer::public_share_object',
 			arguments: [manager],
+			typeArguments: [`${this.#config.DEEPBOOK_PACKAGE_ID}::balance_manager::BalanceManager`],
 		});
 	};
 
