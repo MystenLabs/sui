@@ -1,5 +1,12 @@
 # @mysten/enoki
 
+## 0.3.15
+
+### Patch Changes
+
+- Updated dependencies [6f79ed9]
+  - @mysten/zklogin@0.7.15
+
 ## 0.3.14
 
 ### Patch Changes
