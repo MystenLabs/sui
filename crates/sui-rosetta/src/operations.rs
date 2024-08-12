@@ -8,7 +8,7 @@ use std::vec;
 
 use anyhow::anyhow;
 use move_core_types::ident_str;
-use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::ModuleResolver;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,7 +22,7 @@ use sui_sdk::rpc_types::{
     SuiTransactionBlockKind, SuiTransactionBlockResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::gas_coin::{GasCoin, GAS};
+use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -33,7 +33,7 @@ use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
     InternalOperation, OperationIdentifier, OperationStatus, OperationType,
 };
-use crate::{Error, SUI};
+use crate::{CoinMetadataCache, Error, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/operations_tests.rs"]
@@ -525,31 +525,20 @@ impl Operations {
     fn process_balance_change(
         gas_owner: SuiAddress,
         gas_used: i128,
-        balance_changes: &[BalanceChange],
+        balance_changes: Vec<(BalanceChange, Currency)>,
         status: Option<OperationStatus>,
         balances: HashMap<(SuiAddress, Currency), i128>,
     ) -> impl Iterator<Item = Operation> {
-        let mut balances = balance_changes
-            .iter()
-            .fold(balances, |mut balances, balance_change| {
-                // Rosetta only care about address owner
-                if let Owner::AddressOwner(owner) = balance_change.owner {
-                    if balances.is_empty() || balance_change.coin_type == GAS::type_tag() {
-                        *balances.entry((owner, SUI.clone())).or_default() += balance_change.amount;
-                    } else {
-                        for (key, _) in balances.iter() {
-                            if TypeTag::from_str(&key.1.metadata.coin_type).ok()
-                                == Some(balance_change.coin_type.clone())
-                            {
-                                *balances.entry((owner, key.1.clone())).or_default() +=
-                                    balance_change.amount;
-                                break;
-                            }
-                        }
+        let mut balances =
+            balance_changes
+                .iter()
+                .fold(balances, |mut balances, (balance_change, ccy)| {
+                    // Rosetta only care about address owner
+                    if let Owner::AddressOwner(owner) = balance_change.owner {
+                        *balances.entry((owner, ccy.clone())).or_default() += balance_change.amount;
                     }
-                }
-                balances
-            });
+                    balances
+                });
         // separate gas from balances
         *balances.entry((gas_owner, SUI.clone())).or_default() -= gas_used;
 
@@ -580,10 +569,11 @@ impl TryFrom<SuiTransactionBlockData> for Operations {
         )?))
     }
 }
-
-impl TryFrom<SuiTransactionBlockResponse> for Operations {
-    type Error = Error;
-    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
+impl Operations {
+    pub async fn try_from_response(
+        response: SuiTransactionBlockResponse,
+        cache: &CoinMetadataCache,
+    ) -> Result<Self, Error> {
         let tx = response
             .transaction
             .ok_or_else(|| anyhow!("Response input should not be empty"))?;
@@ -654,13 +644,23 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
             vec![]
         };
 
+        let mut balance_changes = vec![];
+
+        for balance_change in &response
+            .balance_changes
+            .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
+        {
+            balance_changes.push((
+                balance_change.clone(),
+                cache.get_currency(&balance_change.coin_type).await?,
+            ))
+        }
+
         // Extract coin change operations from balance changes
         let coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
-            &response
-                .balance_changes
-                .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?,
+            balance_changes,
             status,
             accounted_balances,
         );

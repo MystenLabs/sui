@@ -16,6 +16,7 @@ use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
     NetworkIdentifier, SuiEnv,
 };
+use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
@@ -169,8 +170,10 @@ async fn test_custom_coin_transfer() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-
-    let ops2 = Operations::try_from(tx).unwrap();
+    let coin_cache = CoinMetadataCache::new(client);
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",

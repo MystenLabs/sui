@@ -3,6 +3,7 @@
 
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
+use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -749,8 +750,8 @@ async fn test_transaction(
             SuiExecutionStatus::Failure { .. }
         ));
     }
-
-    let ops = response.clone().try_into().unwrap();
+    let coin_cache = CoinMetadataCache::new(client.clone());
+    let ops = Operations::try_from_response(response.clone(), &coin_cache).unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction

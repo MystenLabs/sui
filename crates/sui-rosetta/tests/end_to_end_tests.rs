@@ -13,6 +13,7 @@ use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, NetworkIdentifier,
     SubAccount, SubAccountType, SuiEnv,
 };
+use sui_rosetta::CoinMetadataCache;
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -174,7 +175,8 @@ async fn test_stake() {
         tx.effects.as_ref().unwrap().status()
     );
 
-    let ops2 = Operations::try_from(tx).unwrap();
+    let con_cache = CoinMetadataCache::new(client);
+    let ops2 = Operations::try_from_response(tx, &con_cache).unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -234,7 +236,8 @@ async fn test_stake_all() {
         tx.effects.as_ref().unwrap().status()
     );
 
-    let ops2 = Operations::try_from(tx).unwrap();
+    let coin_cache = CoinMetadataCache::new(client);
+    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -349,8 +352,8 @@ async fn test_withdraw_stake() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-
-    let ops2 = Operations::try_from(tx).unwrap();
+    let coin_cache = CoinMetadataCache::new(client);
+    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -418,8 +421,8 @@ async fn test_pay_sui() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-
-    let ops2 = Operations::try_from(tx).unwrap();
+    let coin_cache = CoinMetadataCache::new(client);
+    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -440,6 +443,7 @@ async fn test_pay_sui_multiple_times() {
     let keystore = &test_cluster.wallet.config.keystore;
 
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let coin_cache = CoinMetadataCache::new(client.clone());
 
     for i in 1..20 {
         println!("Iteration: {}", i);
@@ -477,8 +481,7 @@ async fn test_pay_sui_multiple_times() {
             &SuiExecutionStatus::Success,
             tx.effects.as_ref().unwrap().status()
         );
-
-        let ops2 = Operations::try_from(tx).unwrap();
+        let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
         assert!(
             ops2.contains(&ops),
             "Operation mismatch. expecting:{}, got:{}",
