@@ -195,13 +195,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        root_version: Option<u64>,
+        root_version: Option<UInt53>,
     ) -> Result<Option<Owner>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         Ok(Some(Owner {
             address,
             checkpoint_viewed_at: checkpoint,
-            root_version,
+            root_version: root_version.map(|v| v.into()),
         }))
     }
 
