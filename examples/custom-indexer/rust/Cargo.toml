@@ -12,12 +12,12 @@ prometheus = "0.13.3"
 anyhow = "1.0.86"
 
 [[bin]]
-name = "local-reader"
-path = "local-reader.rs"
+name = "local_reader"
+path = "local_reader.rs"
 
 [[bin]]
-name = "remote-reader"
-path = "remote-reader.rs"
+name = "remote_reader"
+path = "remote_reader.rs"
 
 [workspace]
 

@@ -57,7 +57,7 @@ flowchart LR
 
 The Sui data ingestion framework provides a helper function to quickly bootstrap an indexer workflow.
 
-{@inject: examples/custom-indexer/rust/remote-reader.rs}
+{@inject: examples/custom-indexer/rust/remote_reader.rs}
 
 This is suitable for setups with a single ingestion pipeline where progress tracking is managed outside of the framework.
 
@@ -92,7 +92,7 @@ flowchart LR
   C<-->D("fa:fa-floppy-disk Progress store");
 ```
 
-{@inject: examples/custom-indexer/rust/local-reader.rs}
+{@inject: examples/custom-indexer/rust/local_reader.rs}
 
 Let's highlight a couple lines of code:
 
