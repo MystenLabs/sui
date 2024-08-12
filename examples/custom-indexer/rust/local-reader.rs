@@ -1,3 +1,6 @@
+// Copyright (c) Sui Foundation.
+// SPDX-License-Identifier: Apache-2.0
+
 use tokio::sync::oneshot;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -34,7 +37,7 @@ async fn main() -> Result<()> {
     executor.register(worker_pool).await?;
     executor.run(
         PathBuf::from("./chk".to_string()), // path to a local directory
-        None,
+        Some("https://checkpoints.testnet.sui.io".to_string()),
         vec![], // optional remote store access options
         ReaderOptions::default(),       /* remote_read_batch_size */
         exit_receiver,
