@@ -109,7 +109,7 @@ pub fn check_coin_deny_list_v2_during_signing(
     let coin_types = input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
     for coin_type in coin_types {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
-            return Ok(());
+            continue;
         };
         if check_global_pause(&deny_list, object_store, None) {
             return Err(UserInputError::CoinTypeGlobalPause { coin_type });
