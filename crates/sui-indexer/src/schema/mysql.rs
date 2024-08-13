@@ -26,8 +26,6 @@ diesel::table! {
         checkpoint_commitments -> Mediumblob,
         validator_signature -> Blob,
         end_of_epoch_data -> Nullable<Blob>,
-        min_tx_sequence_number -> Nullable<Bigint>,
-        max_tx_sequence_number -> Nullable<Bigint>
     }
 }
 
@@ -79,74 +77,6 @@ diesel::table! {
         event_type_name -> Text,
         timestamp_ms -> Bigint,
         bcs -> Mediumblob,
-    }
-}
-
-diesel::table! {
-    event_emit_module (package, module, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        module -> Text,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    event_emit_package (package, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    event_senders (sender, tx_sequence_number, event_sequence_number) {
-        sender -> Blob,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-    }
-}
-
-diesel::table! {
-    event_struct_instantiation (package, module, type_instantiation, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        module -> Text,
-        type_instantiation -> Text,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    event_struct_module (package, module, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        module -> Text,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    event_struct_name (package, module, type_name, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        module -> Text,
-        type_name -> Text,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    event_struct_package (package, tx_sequence_number, event_sequence_number) {
-        package -> Blob,
-        tx_sequence_number -> Bigint,
-        event_sequence_number -> Bigint,
-        sender -> Blob,
     }
 }
 
@@ -219,20 +149,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_version (object_id, object_version) {
-        object_id -> Blob,
-        object_version -> Bigint,
-        cp_sequence_number -> Bigint,
-    }
-}
-
-diesel::table! {
     packages (package_id) {
         package_id -> Blob,
-        original_id -> Blob,
-        package_version -> Bigint,
         move_package -> Mediumblob,
-        checkpoint_sequence_number -> Bigint,
     }
 }
 
@@ -261,29 +180,12 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_calls_fun (package, module, func, tx_sequence_number) {
+    tx_calls (package, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Bigint,
         tx_sequence_number -> Bigint,
         package -> Blob,
         module -> Text,
         func -> Text,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    tx_calls_mod (package, module, tx_sequence_number) {
-        tx_sequence_number -> Bigint,
-        package -> Blob,
-        module -> Text,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    tx_calls_pkg (package, tx_sequence_number) {
-        tx_sequence_number -> Bigint,
-        package -> Blob,
-        sender -> Blob,
     }
 }
 
@@ -292,7 +194,6 @@ diesel::table! {
         cp_sequence_number -> Bigint,
         tx_sequence_number -> Bigint,
         object_id -> Blob,
-        sender -> Blob,
     }
 }
 
@@ -309,14 +210,6 @@ diesel::table! {
         cp_sequence_number -> Bigint,
         tx_sequence_number -> Bigint,
         object_id -> Blob,
-        sender -> Blob,
-    }
-}
-
-diesel::table! {
-    tx_kinds (tx_kind, tx_sequence_number) {
-        tx_sequence_number -> Bigint,
-        tx_kind -> Smallint,
     }
 }
 
@@ -325,7 +218,6 @@ diesel::table! {
         cp_sequence_number -> Bigint,
         tx_sequence_number -> Bigint,
         recipient -> Blob,
-        sender -> Blob,
     }
 }
 
@@ -343,30 +235,18 @@ macro_rules! for_all_tables {
         $action!(
             chain_identifier,
             checkpoints,
-            pruner_cp_watermark,
-            display,
             epochs,
-            event_emit_module,
-            event_emit_package,
-            event_senders,
-            event_struct_instantiation,
-            event_struct_module,
-            event_struct_name,
-            event_struct_package,
             events,
             objects,
             objects_history,
             objects_snapshot,
-            objects_version,
             packages,
+            pruner_cp_watermark,
             transactions,
-            tx_calls_fun,
-            tx_calls_mod,
-            tx_calls_pkg,
+            tx_calls,
             tx_changed_objects,
             tx_digests,
             tx_input_objects,
-            tx_kinds,
             tx_recipients,
             tx_senders
         );
