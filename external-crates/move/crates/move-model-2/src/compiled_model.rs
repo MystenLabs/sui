@@ -3,10 +3,11 @@
 
 use crate::source_model::QualifiedMemberId;
 use move_binary_format::file_format::{
-    self, AbilitySet, CodeOffset, CodeUnit, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-    FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex, LocalIndex,
-    MemberCount, SignatureIndex, SignatureToken, StructDefinition, StructDefinitionIndex,
-    StructFieldInformation, StructHandleIndex, StructTypeParameter, TypeParameterIndex, Visibility,
+    self, AbilitySet, CodeOffset, CodeUnit, CompiledModule, ConstantPoolIndex, DatatypeHandleIndex,
+    DatatypeTyParameter, FieldHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
+    FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount, SignatureIndex, SignatureToken,
+    StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
+    Visibility,
 };
 use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_symbol_pool::Symbol;
@@ -346,7 +347,11 @@ fn make_code(module: &CompiledModule, code: &CodeUnit) -> Code {
         .iter()
         .map(|token| make_type(module, token))
         .collect();
-    let code = code.code.iter().map(|bytecode| make_bytecode(module, bytecode)).collect();
+    let code = code
+        .code
+        .iter()
+        .map(|bytecode| make_bytecode(module, bytecode))
+        .collect();
 
     Code { locals, code }
 }
@@ -380,7 +385,7 @@ fn make_bytecode(module: &CompiledModule, bytecode: &file_format::Bytecode) -> B
             let member_id = qualified_member_from_func_handle(module, func_inst.handle);
             let types = signature_to_types(module, func_inst.type_parameters);
             Bytecode::CallGeneric(Box::new((member_id, types)))
-        },
+        }
         Pack(idx) => {
             let struct_def = module.struct_def_at(*idx);
             let member_id = qualified_member_from_struct_handle(module, struct_def.struct_handle);
