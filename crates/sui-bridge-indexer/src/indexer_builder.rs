@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -96,68 +96,27 @@ impl<P, D, M> Indexer<P, D, M> {
         T: Send,
     {
         // Update tasks first
-        let tasks = self.storage.tasks(&self.name)?;
-        // create checkpoint workers base on backfill config and existing tasks in the db
-        match tasks.live_task() {
-            None => {
-                // if diable_live_task is set, we should not have any live task in the db
-                if !self.disable_live_task {
-                    // Scenario 1: No task in database, start live task and backfill tasks
-                    self.storage.register_task(
-                        format!("{} - Live", self.name),
-                        self.start_from_checkpoint,
-                        i64::MAX,
-                    )?;
-                }
-
-                // Create backfill tasks
-                if self.start_from_checkpoint != self.genesis_checkpoint {
-                    self.create_backfill_tasks(self.genesis_checkpoint)?
-                }
-            }
-            Some(mut live_task) => {
-                if self.disable_live_task {
-                    // TODO: delete task
-                    // self.storage.delete_task(live_task.task_name.clone())?;
-                } else if self.start_from_checkpoint > live_task.checkpoint {
-                    // Scenario 2: there are existing tasks in DB and start_from_checkpoint > current checkpoint
-                    // create backfill task to finish at start_from_checkpoint
-                    // update live task to start from start_from_checkpoint and finish at u64::MAX
-                    self.create_backfill_tasks(live_task.checkpoint)?;
-                    live_task.checkpoint = self.start_from_checkpoint;
-                    self.storage.update_task(live_task)?;
-                } else {
-                    // Scenario 3: start_from_checkpoint < current checkpoint
-                    // ignore start_from_checkpoint, resume all task as it is.
-                }
-            }
-        }
-
+        self.update_tasks().await?;
         // get updated tasks from storage and start workers
-        let updated_tasks = self.storage.tasks(&self.name)?;
+        let updated_tasks = self.storage.tasks(&self.name).await?;
         // Start latest checkpoint worker
         // Tasks are ordered in checkpoint descending order, realtime update task always come first
         // tasks won't be empty here, ok to unwrap.
-        let backfill_tasks;
-        let live_task_future = if self.disable_live_task {
-            backfill_tasks = updated_tasks;
-            None
-        } else {
-            let (_live_task, _backfill_tasks) = updated_tasks.split_first().unwrap();
-
-            backfill_tasks = _backfill_tasks.to_vec();
-            let live_task = _live_task;
-
-            Some(self.datasource.start_ingestion_task(
-                live_task.task_name.clone(),
-                live_task.checkpoint,
-                live_task.target_checkpoint,
-                self.storage.clone(),
-                self.data_mapper.clone(),
-            ))
+        let live_task_future = match updated_tasks.live_task() {
+            Some(live_task) if !self.disable_live_task => {
+                let live_task_future = self.datasource.start_ingestion_task(
+                    live_task.task_name.clone(),
+                    live_task.checkpoint,
+                    live_task.target_checkpoint,
+                    self.storage.clone(),
+                    self.data_mapper.clone(),
+                );
+                Some(live_task_future)
+            }
+            _ => None,
         };
 
-        let backfill_tasks = backfill_tasks.to_vec();
+        let backfill_tasks = updated_tasks.backfill_tasks();
         let storage_clone = self.storage.clone();
         let data_mapper_clone = self.data_mapper.clone();
         let datasource_clone = self.datasource.clone();
@@ -165,16 +124,18 @@ impl<P, D, M> Indexer<P, D, M> {
         let handle = spawn_monitored_task!(async {
             // Execute task one by one
             for backfill_task in backfill_tasks {
-                datasource_clone
-                    .start_ingestion_task(
-                        backfill_task.task_name.clone(),
-                        backfill_task.checkpoint,
-                        backfill_task.target_checkpoint,
-                        storage_clone.clone(),
-                        data_mapper_clone.clone(),
-                    )
-                    .await
-                    .expect("Backfill task failed");
+                if backfill_task.checkpoint < backfill_task.target_checkpoint {
+                    datasource_clone
+                        .start_ingestion_task(
+                            backfill_task.task_name.clone(),
+                            backfill_task.checkpoint,
+                            backfill_task.target_checkpoint,
+                            storage_clone.clone(),
+                            data_mapper_clone.clone(),
+                        )
+                        .await
+                        .expect("Backfill task failed");
+                }
             }
         });
 
@@ -187,26 +148,86 @@ impl<P, D, M> Indexer<P, D, M> {
         Ok(())
     }
 
+    async fn update_tasks<R>(&mut self) -> Result<(), Error>
+    where
+        P: Persistent<R>,
+    {
+        let tasks = self.storage.tasks(&self.name).await?;
+        let backfill_tasks = tasks.backfill_tasks();
+        let latest_task = backfill_tasks.first();
+
+        // 1, create and update live task if needed
+        if !self.disable_live_task {
+            let from_checkpoint = max(
+                self.start_from_checkpoint,
+                latest_task
+                    .map(|t| t.target_checkpoint + 1)
+                    .unwrap_or_default(),
+            );
+
+            match tasks.live_task() {
+                None => {
+                    self.storage
+                        .register_task(format!("{} - Live", self.name), from_checkpoint, i64::MAX)
+                        .await?;
+                }
+                Some(mut live_task) => {
+                    if self.start_from_checkpoint > live_task.checkpoint {
+                        live_task.checkpoint = self.start_from_checkpoint;
+                        self.storage.update_task(live_task).await?;
+                    }
+                }
+            }
+        }
+
+        // 2, create backfill tasks base on task config and existing tasks in the db
+        match latest_task {
+            None => {
+                // No task in database, create backfill tasks from genesis to `start_from_checkpoint`
+                if self.start_from_checkpoint != self.genesis_checkpoint {
+                    self.create_backfill_tasks(self.genesis_checkpoint, self.start_from_checkpoint)
+                        .await?
+                }
+            }
+            Some(latest_task) => {
+                if latest_task.target_checkpoint < self.start_from_checkpoint {
+                    self.create_backfill_tasks(
+                        latest_task.target_checkpoint + 1,
+                        self.start_from_checkpoint,
+                    )
+                    .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     // Create backfill tasks according to backfill strategy
-    fn create_backfill_tasks<R>(&mut self, mut current_cp: u64) -> Result<(), Error>
+    async fn create_backfill_tasks<R>(&mut self, mut from_cp: u64, to_cp: u64) -> Result<(), Error>
     where
         P: Persistent<R>,
     {
         match self.backfill_strategy {
-            BackfillStrategy::Simple => self.storage.register_task(
-                format!("{} - backfill - {}", self.name, self.start_from_checkpoint),
-                current_cp + 1,
-                self.start_from_checkpoint as i64,
-            ),
+            BackfillStrategy::Simple => {
+                self.storage
+                    .register_task(
+                        format!("{} - backfill - {}", self.name, to_cp),
+                        from_cp,
+                        self.start_from_checkpoint as i64 - 1,
+                    )
+                    .await
+            }
             BackfillStrategy::Partitioned { task_size } => {
-                while current_cp < self.start_from_checkpoint {
-                    let target_cp = min(current_cp + task_size, self.start_from_checkpoint);
-                    self.storage.register_task(
-                        format!("{} - backfill - {target_cp}", self.name),
-                        current_cp + 1,
-                        target_cp as i64,
-                    )?;
-                    current_cp = target_cp;
+                while from_cp < self.start_from_checkpoint {
+                    let target_cp = min(from_cp + task_size, to_cp) - 1;
+                    self.storage
+                        .register_task(
+                            format!("{} - backfill - {target_cp}", self.name),
+                            from_cp,
+                            target_cp as i64,
+                        )
+                        .await?;
+                    from_cp = target_cp + 1;
                 }
                 Ok(())
             }
@@ -215,8 +236,9 @@ impl<P, D, M> Indexer<P, D, M> {
     }
 }
 
+#[async_trait]
 pub trait Persistent<T>: IndexerProgressStore + Sync + Send + Clone {
-    fn write(&self, data: Vec<T>) -> Result<(), Error>;
+    async fn write(&self, data: Vec<T>) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -228,16 +250,16 @@ pub trait IndexerProgressStore: Send {
         checkpoint_number: u64,
     ) -> anyhow::Result<()>;
 
-    fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
+    async fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
 
-    fn register_task(
+    async fn register_task(
         &mut self,
         task_name: String,
         checkpoint: u64,
         target_checkpoint: i64,
     ) -> Result<(), anyhow::Error>;
 
-    fn update_task(&mut self, task: Task) -> Result<(), Error>;
+    async fn update_task(&mut self, task: Task) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -267,13 +289,16 @@ pub trait Datasource<T: Send>: Sync + Send {
             .await?;
 
         while let Some((block_number, data)) = data_channel.recv().await {
+            if block_number > target_checkpoint {
+                break;
+            }
             if !data.is_empty() {
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
                     Ok::<Vec<_>, Error>(result)
                 })?;
                 // TODO: we might be able to write data and progress in a single transaction.
-                storage.write(processed_data)?;
+                storage.write(processed_data).await?;
             }
             storage
                 .save_progress(task_name.clone(), block_number)

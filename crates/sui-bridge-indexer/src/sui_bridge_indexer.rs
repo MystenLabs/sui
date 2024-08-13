@@ -41,8 +41,9 @@ impl PgBridgePersistent {
 }
 
 // TODO: this is shared between SUI and ETH, move to different file.
+#[async_trait]
 impl Persistent<ProcessedTxnData> for PgBridgePersistent {
-    fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
+    async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
         if data.is_empty() {
             return Ok(());
         }
@@ -115,7 +116,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -127,7 +128,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(cp.into_iter().map(|d| d.into()).collect())
     }
 
-    fn register_task(
+    async fn register_task(
         &mut self,
         task_name: String,
         checkpoint: u64,
@@ -146,7 +147,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
+    async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get()?;
         diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
             .set((

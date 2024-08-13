@@ -3,7 +3,7 @@
 
 use crate::models;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Task {
     pub task_name: String,
     pub checkpoint: u64,
@@ -25,14 +25,22 @@ impl From<models::ProgressStore> for Task {
 
 pub trait Tasks {
     fn live_task(&self) -> Option<Task>;
+
+    fn backfill_tasks(&self) -> Vec<Task>;
 }
 
 impl Tasks for Vec<Task> {
     fn live_task(&self) -> Option<Task> {
-        self.iter().fold(None, |result, other_task| match &result {
-            Some(task) if task.checkpoint < other_task.checkpoint => Some(other_task.clone()),
-            None => Some(other_task.clone()),
-            _ => result,
-        })
+        // TODO: Change the schema to record live task properly.
+        self.iter()
+            .find(|t| t.target_checkpoint == i64::MAX as u64)
+            .cloned()
+    }
+
+    fn backfill_tasks(&self) -> Vec<Task> {
+        self.iter()
+            .filter(|t| t.target_checkpoint != i64::MAX as u64)
+            .cloned()
+            .collect()
     }
 }
