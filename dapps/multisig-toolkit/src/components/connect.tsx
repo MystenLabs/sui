@@ -15,7 +15,14 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 import { Button } from './ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from './ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 function ConnectedButton() {
@@ -41,37 +48,39 @@ function ConnectedButton() {
 			<PopoverContent className="w-[180px] p-0">
 				<Command>
 					<CommandInput placeholder="Search accounts..." />
-					<CommandEmpty>No account found.</CommandEmpty>
-					<CommandGroup>
-						{accounts.map((account) => (
+					<CommandList>
+						<CommandEmpty>No account found.</CommandEmpty>
+						<CommandGroup>
+							{accounts.map((account) => (
+								<CommandItem
+									key={account.address}
+									value={account.address}
+									className="cursor-pointer"
+									onSelect={() => {
+										switchAccount({ account });
+										setOpen(false);
+									}}
+								>
+									<Check
+										className={cn(
+											'mr-2 h-4 w-4',
+											currentAccount?.address === account.address ? 'opacity-100' : 'opacity-0',
+										)}
+									/>
+									{formatAddress(account.address)}
+								</CommandItem>
+							))}
+
 							<CommandItem
-								key={account.address}
-								value={account.address}
 								className="cursor-pointer"
 								onSelect={() => {
-									switchAccount({ account });
-									setOpen(false);
+									disconnect();
 								}}
 							>
-								<Check
-									className={cn(
-										'mr-2 h-4 w-4',
-										currentAccount?.address === account.address ? 'opacity-100' : 'opacity-0',
-									)}
-								/>
-								{formatAddress(account.address)}
+								Disconnect
 							</CommandItem>
-						))}
-
-						<CommandItem
-							className="cursor-pointer"
-							onSelect={() => {
-								disconnect();
-							}}
-						>
-							Disconnect
-						</CommandItem>
-					</CommandGroup>
+						</CommandGroup>
+					</CommandList>
 				</Command>
 			</PopoverContent>
 		</Popover>
