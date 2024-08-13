@@ -2,7 +2,7 @@
 #[allow(unused)]
 module 0x42::m {
     /// This is a doc comment above an enum
-    public enum Enum {
+    public enum Enum has drop {
         /// This is a doc comment above a variant
         A,
         B(),
@@ -20,7 +20,7 @@ module 0x42::m {
         B,
     }
 
-    public struct X { x: Enum }
+    public struct X has drop { x: Enum }
     public struct Y(Enum)
 
     public struct XG { x: GenericEnum<Enum> }
@@ -28,5 +28,20 @@ module 0x42::m {
 
     public struct XGG<T> { x: GenericEnum<T> }
     public struct YGG<T>(GenericEnum<T>)
+
+    public struct VecMap<K: copy, V> has copy, drop, store {
+        contents: vector<Entry<K, V>>,
+    }
+
+    /// An entry in the map
+    public struct Entry<K: copy, V> has copy, drop, store {
+        key: K,
+        value: V,
+    }
+
+    /// Doc comments `type_: VecMap<u64, X>`
+    fun f(x: VecMap<u64, X>): u64 {
+        0
+    }
 }
 
