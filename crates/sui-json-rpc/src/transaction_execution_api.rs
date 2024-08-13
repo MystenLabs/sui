@@ -10,6 +10,12 @@ use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
+use crate::authority_state::StateRead;
+use crate::error::{Error, SuiRpcInputError};
+use crate::{
+    get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
+    SuiRpcModule,
+};
 use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -29,18 +35,12 @@ use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
 };
 use sui_types::signature::GenericSignature;
+use sui_types::storage::PostExecutionPackageResolver;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::{
     InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
 };
 use tracing::instrument;
-
-use crate::authority_state::StateRead;
-use crate::error::{Error, SuiRpcInputError};
-use crate::{
-    get_balance_changes_from_effect, get_object_changes, with_tracing, ObjectProviderCache,
-    SuiRpcModule,
-};
 
 pub struct TransactionExecutionApi {
     state: Arc<dyn StateRead>,
@@ -117,7 +117,10 @@ impl TransactionExecutionApi {
             transaction: txn.clone(),
             include_events: opts.show_events,
             include_input_objects: opts.show_balance_changes || opts.show_object_changes,
-            include_output_objects: opts.show_balance_changes || opts.show_object_changes,
+            include_output_objects: opts.show_balance_changes
+                || opts.show_object_changes
+                // In order to resolve events, we may need access to the newly published packages.
+                || opts.show_events,
             include_auxiliary_data: false,
         };
 
@@ -182,10 +185,13 @@ impl TransactionExecutionApi {
 
         let events = if opts.show_events {
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
-            let backing_package_store = self.state.get_backing_package_store();
+            let backing_package_store = PostExecutionPackageResolver::new(
+                self.state.get_backing_package_store().clone(),
+                &response.output_objects,
+            );
             let mut layout_resolver = epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+                .type_layout_resolver(Box::new(backing_package_store));
             Some(SuiTransactionBlockEvents::try_from(
                 response.events.unwrap_or_default(),
                 digest,
