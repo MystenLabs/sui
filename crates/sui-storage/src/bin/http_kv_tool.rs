@@ -44,7 +44,8 @@ async fn main() {
 
     let options = Options::parse();
 
-    let http_kv = Arc::new(HttpKVStore::new(&options.base_url).unwrap());
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let http_kv = Arc::new(HttpKVStore::new(&options.base_url, 100, metrics).unwrap());
     let kv =
         TransactionKeyValueStore::new("http_kv", KeyValueStoreMetrics::new_for_tests(), http_kv);
 
