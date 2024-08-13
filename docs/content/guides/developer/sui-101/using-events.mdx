@@ -119,11 +119,11 @@ Move smart contracts can call other smart contracts that emit events. For exampl
 
 ## Examples
 
-## Subscribe to event
+### Subscribe to event
 
 This example leverages the Sui TypeScript SDK to subscribe to events the package with ID `<PACKAGE_ID>` emits. Each time the event fires, the code displays the response to the console.
 
-### TypeScript
+#### TypeScript
 
 To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui` at the root of your project. In your TypeScript code, import `JsonRpcProvider` and a connection from the library.
 
@@ -161,7 +161,7 @@ process.on('SIGINT', async () => {
 });
 ```
 
-### Response
+#### Response
 
 When the subscribed to event fires, the example displays the following JSON representation of the event.
 
@@ -186,7 +186,7 @@ subscribeEvent {
 }
 ```
 
-### Rust SDK
+#### Rust SDK
 
 ```rust
 use futures::StreamExt;
@@ -207,7 +207,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-## Filtering event queries
+### Filtering event queries
 
 To filter the events returned from your queries, use the following data structures.
 
@@ -230,7 +230,13 @@ This set of filters applies only to event querying APIs. It differs from the fil
 | `Object`          | Return events associated with the given object           | `{"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}`                     |
 | `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
 
-## Filtering events for subscription
+### Filtering events for subscription (deprecated)
+
+:::warning
+
+This section is deprecated beginning with Sui client version 1.28. Use the [custom indexer](../advanced/custom-indexer.mdx) section to learn about how to stream checkpoints and filter events continuously.
+
+:::
 
 To create a subscription, you can set a filter to return only the set of events you're interested in listening for. 
 
@@ -239,6 +245,7 @@ To create a subscription, you can set a filter to return only the set of events 
 This set of filters applies only to event subscription APIs. It differs from the filters offered for the query API (see previous section). In particular, it supports combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
 
 :::
+
 
 
 | Filter            | Description                                           | JSON-RPC Parameter Example                                                                   |
