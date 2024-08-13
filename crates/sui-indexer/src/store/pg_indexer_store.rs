@@ -1773,15 +1773,15 @@ fn make_final_list_of_objects_to_commit(
         .flat_map(|changes| changes.changed_objects);
     let mut latest_objects = HashMap::new();
     for object in mutated_objects {
-        if deleted_objects.contains_key(&object.object_id) {
+        if deleted_objects.contains_key(&object.object.id()) {
             continue;
         }
-        match latest_objects.entry(object.object_id) {
+        match latest_objects.entry(object.object.id()) {
             Entry::Vacant(e) => {
                 e.insert(object);
             }
             Entry::Occupied(mut e) => {
-                if object.object_version > e.get().object_version {
+                if object.object.version() > e.get().object.version() {
                     e.insert(object);
                 }
             }
