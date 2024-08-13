@@ -24,6 +24,7 @@ use serde_json::value::RawValue;
 use sui_core::traffic_controller::{
     metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
 };
+use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
 use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::{PolicyConfig, Weight};
 use tracing::error;
@@ -278,6 +279,8 @@ fn handle_traffic_resp(
 fn normalize(err: ErrorCode) -> Weight {
     match err {
         ErrorCode::InvalidRequest | ErrorCode::InvalidParams => Weight::one(),
+        // e.g. invalid client signature
+        ErrorCode::ServerError(i) if i == TRANSACTION_EXECUTION_CLIENT_ERROR_CODE => Weight::one(),
         _ => Weight::zero(),
     }
 }
