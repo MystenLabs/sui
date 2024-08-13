@@ -230,7 +230,12 @@ This set of filters applies only to event querying APIs. It differs from the fil
 | `Object`          | Return events associated with the given object           | `{"Object":"0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5"}`                     |
 | `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
 
-## Filtering events for subscription
+## Filtering events for subscription (Deprecated)
+:::warning
+
+This section is deprecated since Sui client version 1.28. Use the [custom indexer](../advanced/custom-indexer.mdx) section to learn about how to stream checkpoints and filter events continuously.
+
+:::
 
 To create a subscription, you can set a filter to return only the set of events you're interested in listening for. 
 
@@ -239,6 +244,7 @@ To create a subscription, you can set a filter to return only the set of events 
 This set of filters applies only to event subscription APIs. It differs from the filters offered for the query API (see previous section). In particular, it supports combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
 
 :::
+
 
 
 | Filter            | Description                                           | JSON-RPC Parameter Example                                                                   |
