@@ -96,34 +96,50 @@ impl Context {
     }
 }
 
-/// A clock that allows to derive the current UNIX system timestamp while guaranteeing that
-/// timestamp will be monotonically incremented having tolerance to ntp and system clock changes and corrections.
+/// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp
+/// will be monotonically incremented, tolerating ntp and system clock changes and corrections.
 /// Explicitly avoid to make `[Clock]` cloneable to ensure that a single instance is shared behind an `[Arc]`
 /// wherever is needed in order to make sure that consecutive calls to receive the system timestamp
 /// will remain monotonically increasing.
 pub(crate) struct Clock {
-    unix_epoch_instant: Instant,
+    initial_instant: Instant,
+    initial_system_time: SystemTime,
 }
 
 impl Clock {
     pub fn new() -> Self {
-        let now = Instant::now();
-        let duration_since_unix_epoch =
-            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(d) => d,
-                Err(e) => panic!("SystemTime before UNIX EPOCH! {e}"),
-            };
-        let unix_epoch_instant = now.checked_sub(duration_since_unix_epoch).unwrap();
-
-        Self { unix_epoch_instant }
+        Self {
+            initial_instant: Instant::now(),
+            initial_system_time: SystemTime::now(),
+        }
     }
 
     // Returns the current time expressed as UNIX timestamp in milliseconds.
-    // Calculated with Rust Instant to ensure monotonicity.
+    // Calculated with Tokio Instant to ensure monotonicity,
+    // and to allow testing with tokio clock.
     pub(crate) fn timestamp_utc_ms(&self) -> BlockTimestampMs {
-        Instant::now()
-            .checked_duration_since(self.unix_epoch_instant)
-            .unwrap()
+        let now: Instant = Instant::now();
+        let monotonic_system_time = self
+            .initial_system_time
+            .checked_add(
+                now.checked_duration_since(self.initial_instant)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "current instant ({:?}) < initial instant ({:?})",
+                            now, self.initial_instant
+                        )
+                    }),
+            )
+            .expect("Computing system time should not overflow");
+        monotonic_system_time
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_else(|_| {
+                panic!(
+                    "system time ({:?}) < UNIX_EPOCH ({:?})",
+                    monotonic_system_time,
+                    SystemTime::UNIX_EPOCH,
+                )
+            })
             .as_millis() as BlockTimestampMs
     }
 }

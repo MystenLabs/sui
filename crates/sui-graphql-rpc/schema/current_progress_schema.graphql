@@ -3033,7 +3033,7 @@ type Query {
 	state at the latest checkpoint known to the GraphQL RPC. Similarly, `Owner.asObject` will
 	return the object's version at the latest checkpoint.
 	"""
-	owner(address: SuiAddress!, rootVersion: Int): Owner
+	owner(address: SuiAddress!, rootVersion: UInt53): Owner
 	"""
 	The object corresponding to the given address at the (optionally) given version.
 	When no version is given, the latest version is returned.

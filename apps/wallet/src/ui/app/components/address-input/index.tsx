@@ -72,7 +72,7 @@ export function AddressInput({
 		refetchInterval: false,
 	});
 
-	const { isSubmitting, setFieldValue } = useFormikContext();
+	const { isSubmitting, setFieldValue, isValidating } = useFormikContext();
 	const suiAddressValidation = useSuiAddressValidation();
 
 	const disabled = forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
@@ -92,7 +92,7 @@ export function AddressInput({
 		setFieldValue('to', '');
 	}, [setFieldValue]);
 
-	const hasWarningOrError = meta.touched && (meta.error || warningData);
+	const hasWarningOrError = meta.touched && (meta.error || warningData) && !isValidating;
 
 	return (
 		<>
@@ -132,7 +132,7 @@ export function AddressInput({
 				</div>
 			</div>
 
-			{meta.touched ? (
+			{meta.touched && !isValidating ? (
 				<div className="mt-2.5 w-full">
 					<Alert noBorder rounded="lg" mode={meta.error || warningData ? 'issue' : 'success'}>
 						{warningData === RecipientWarningType.OBJECT ? (
