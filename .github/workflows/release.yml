@@ -168,6 +168,8 @@ jobs:
         run: |
           choco install checksum
           export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
+          echo ${sui_sha}
+          pwd
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
