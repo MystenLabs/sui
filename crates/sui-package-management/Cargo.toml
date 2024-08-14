@@ -11,6 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 
 sui-json-rpc-types.workspace = true

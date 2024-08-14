@@ -14037,6 +14037,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk 1.32.0",
  "sui-types",
+ "thiserror",
  "tracing",
 ]
 
@@ -14475,6 +14476,7 @@ dependencies = [
  "rand 0.8.5",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-package-management",
  "sui-sdk 1.32.0",
  "sui-test-transaction-builder",
  "sui-types",
