@@ -39,7 +39,7 @@ pub(crate) mod mock_handler;
 pub const APPLICATION_JSON: &str = "application/json";
 
 pub const PING_PATH: &str = "/ping";
-pub const NETWORK_KEY_PATH: &str = "/metrics/network_key";
+pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 
 // Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_hash/:event_index";
@@ -110,7 +110,7 @@ pub(crate) fn make_router(
     Router::new()
         .route("/", get(health_check))
         .route(PING_PATH, get(ping))
-        .route(NETWORK_KEY_PATH, get(metrics_network_key_fetch))
+        .route(METRICS_KEY_PATH, get(metrics_key_fetch))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
         .route(
@@ -167,7 +167,7 @@ async fn ping(
     Ok(Json(metadata))
 }
 
-async fn metrics_network_key_fetch(
+async fn metrics_key_fetch(
     State((_handler, _metrics, metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,

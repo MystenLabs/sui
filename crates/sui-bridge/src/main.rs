@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let metadata =
-        BridgeNodePublicMetadata::new(VERSION.into(), config.network_key_pair.public().clone());
+        BridgeNodePublicMetadata::new(VERSION.into(), config.metrics_key_pair.public().clone());
 
     Ok(run_bridge_node(config, metadata, prometheus_registry)
         .await?

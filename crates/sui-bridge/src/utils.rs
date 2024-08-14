@@ -193,7 +193,7 @@ pub fn generate_bridge_node_config_and_write_to_file(
         approved_governance_actions: vec![],
         run_client,
         db_path: None,
-        network_key_pair: default_ed25519_key_pair(),
+        metrics_key_pair: default_ed25519_key_pair(),
     };
     if run_client {
         config.sui.bridge_client_key_path = Some(PathBuf::from("/path/to/your/bridge_client_key"));
