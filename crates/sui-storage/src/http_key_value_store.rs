@@ -44,7 +44,7 @@ pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
 }
 
 // for non-digest keys, we need a tag to make sure we don't have collisions
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaggedKey {
     CheckpointSequenceNumber(CheckpointSequenceNumber),
 }
@@ -96,7 +96,7 @@ enum Value {
     TxToCheckpoint(CheckpointSequenceNumber),
 }
 
-fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
+pub fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
     match key {
         Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
         Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
@@ -113,6 +113,52 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
         Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "tx2c")),
         Key::ObjectKey(object_id, version) => Ok((encode_object_key(object_id, version), "ob")),
+    }
+}
+
+pub fn path_elements_to_key(digest: &str, type_: &str) -> anyhow::Result<Key> {
+    let decoded_digest = base64_url::decode(digest)?;
+
+    match type_ {
+        "tx" => Ok(Key::Tx(TransactionDigest::try_from(decoded_digest)?)),
+        "fx" => Ok(Key::Fx(TransactionDigest::try_from(decoded_digest)?)),
+        "ev" => Ok(Key::Events(TransactionEventsDigest::try_from(
+            decoded_digest,
+        )?)),
+        "cc" => {
+            // first try to decode as digest, otherwise try to decode as tagged key
+            match CheckpointContentsDigest::try_from(decoded_digest.clone()) {
+                Err(_) => {
+                    let tagged_key = bcs::from_bytes(&decoded_digest)?;
+                    match tagged_key {
+                        TaggedKey::CheckpointSequenceNumber(seq) => {
+                            Ok(Key::CheckpointContents(seq))
+                        }
+                    }
+                }
+                Ok(cc_digest) => Ok(Key::CheckpointContentsByDigest(cc_digest)),
+            }
+        }
+        "cs" => {
+            // first try to decode as digest, otherwise try to decode as tagged key
+            match CheckpointDigest::try_from(decoded_digest.clone()) {
+                Err(_) => {
+                    let tagged_key = bcs::from_bytes(&decoded_digest)?;
+                    match tagged_key {
+                        TaggedKey::CheckpointSequenceNumber(seq) => Ok(Key::CheckpointSummary(seq)),
+                    }
+                }
+                Ok(cs_digest) => Ok(Key::CheckpointSummaryByDigest(cs_digest)),
+            }
+        }
+        "tx2c" => Ok(Key::TxToCheckpoint(TransactionDigest::try_from(
+            decoded_digest,
+        )?)),
+        "ob" => {
+            let object_key: ObjectKey = bcs::from_bytes(&decoded_digest)?;
+            Ok(Key::ObjectKey(object_key.0, object_key.1))
+        }
+        _ => Err(anyhow::anyhow!("Invalid type: {}", type_)),
     }
 }
 
