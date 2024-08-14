@@ -179,7 +179,6 @@ jobs:
           EOF
 
           cd chocolatey
-
           choco pack --version ${{ env.sui_version }} configuration=release
           choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
           choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
