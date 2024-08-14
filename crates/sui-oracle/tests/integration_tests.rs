@@ -466,7 +466,7 @@ async fn publish_package(
 ) -> ObjectID {
     let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
     let gas = client
         .coin_read_api()
         .get_coins(sender, None, None, Some(1))

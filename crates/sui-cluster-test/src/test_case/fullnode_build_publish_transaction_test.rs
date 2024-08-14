@@ -24,7 +24,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
         let compiled_package = compile_basics_package();
         let all_module_bytes =
             compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-        let dependencies = compiled_package.get_dependency_original_package_ids();
+        let dependencies = compiled_package.get_dependency_storage_package_ids();
 
         let params = rpc_params![
             ctx.get_wallet_address(),
