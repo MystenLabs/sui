@@ -1121,7 +1121,7 @@ impl GlobalEnv {
     }
 
     /// Gets a StructEnv in this module by its `StructTag`
-    pub fn find_struct_by_tag(
+    pub fn find_datatype_by_tag(
         &self,
         tag: &language_storage::StructTag,
     ) -> Option<QualifiedId<DatatypeId>> {
@@ -1129,6 +1129,10 @@ impl GlobalEnv {
             .and_then(|menv| {
                 menv.find_struct_by_identifier(tag.name.clone())
                     .map(|sid| menv.get_id().qualified(sid))
+                    .or_else(|| {
+                        menv.find_enum_by_identifier(tag.name.clone())
+                            .map(|sid| menv.get_id().qualified(sid))
+                    })
             })
     }
 
@@ -1242,16 +1246,23 @@ impl GlobalEnv {
         sid: DatatypeId,
         ts: &[Type],
     ) -> Option<language_storage::StructTag> {
-        self.get_struct_type(mid, sid, ts)?.into_struct_tag()
+        self.get_datatype(mid, sid, ts)?.into_struct_tag()
     }
 
     /// Attempt to compute a struct type for (`mid`, `sid`, `ts`).
-    pub fn get_struct_type(&self, mid: ModuleId, sid: DatatypeId, ts: &[Type]) -> Option<MType> {
+    pub fn get_datatype(&self, mid: ModuleId, sid: DatatypeId, ts: &[Type]) -> Option<MType> {
         let menv = self.get_module(mid);
+        let name = menv
+            .find_struct(sid.symbol())
+            .map(|senv| senv.get_identifier())
+            .or_else(|| {
+                menv.find_enum(sid.symbol())
+                    .map(|eenv| eenv.get_identifier())
+            })??;
         Some(MType::Struct {
             address: *menv.self_address(),
             module: menv.get_identifier(),
-            name: menv.get_struct(sid).get_identifier()?,
+            name,
             type_arguments: ts
                 .iter()
                 .map(|t| t.clone().into_normalized_type(self).unwrap())

@@ -15,7 +15,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{
     ast::QualifiedSymbol,
-    model::{DatatypeId, GlobalEnv, ModuleId, QualifiedInstId, StructEnv},
+    model::{DatatypeId, GlobalEnv, ModuleId},
     symbol::{Symbol, SymbolPool},
 };
 
@@ -233,38 +233,16 @@ impl Type {
         }
     }
 
-    /// If this is a struct type, replace the type instantiation.
-    pub fn replace_struct_instantiation(&self, inst: &[Type]) -> Type {
+    /// If this is a datatype, replace the type instantiation.
+    pub fn replace_datatype_instantiation(&self, inst: &[Type]) -> Type {
         match self {
             Type::Datatype(mid, sid, _) => Type::Datatype(*mid, *sid, inst.to_vec()),
             _ => self.clone(),
         }
     }
 
-    /// If this is a struct type, return the associated struct env and type parameters.
-    pub fn get_struct<'env>(
-        &'env self,
-        env: &'env GlobalEnv,
-    ) -> Option<(StructEnv<'env>, &'env [Type])> {
-        if let Type::Datatype(module_idx, struct_idx, params) = self {
-            Some((env.get_module(*module_idx).into_struct(*struct_idx), params))
-        } else {
-            None
-        }
-    }
-
-    /// If this is a struct type, return the associated QualifiedInstId.
-    pub fn get_struct_id(&self, env: &GlobalEnv) -> Option<QualifiedInstId<DatatypeId>> {
-        self.get_struct(env).map(|(se, inst)| {
-            se.module_env
-                .get_id()
-                .qualified(se.get_id())
-                .instantiate(inst.to_vec())
-        })
-    }
-
-    /// Require this to be a struct, if so extracts its content.
-    pub fn require_struct(&self) -> (ModuleId, DatatypeId, &[Type]) {
+    /// Require this to be a datatype, if so extracts its content.
+    pub fn require_datatype(&self) -> (ModuleId, DatatypeId, &[Type]) {
         if let Type::Datatype(mid, sid, targs) = self {
             (*mid, *sid, targs.as_slice())
         } else {
@@ -414,10 +392,10 @@ impl Type {
     }
 
     /// Attempt to convert this type into a normalized::Type
-    pub fn into_struct_type(self, env: &GlobalEnv) -> Option<MType> {
+    pub fn into_datatype_ty(self, env: &GlobalEnv) -> Option<MType> {
         use Type::*;
         match self {
-            Datatype(mid, sid, ts) => env.get_struct_type(mid, sid, &ts),
+            Datatype(mid, sid, ts) => env.get_datatype(mid, sid, &ts),
             _ => None,
         }
     }
@@ -428,7 +406,7 @@ impl Type {
         match self {
             Primitive(p) => Some(p.into_normalized_type().expect("Invariant violation: unexpected spec primitive")),
             Datatype(mid, sid, ts) =>
-                env.get_struct_type(mid, sid, &ts),
+                env.get_datatype(mid, sid, &ts),
             Vector(et) => Some(MType::Vector(
                 Box::new(et.into_normalized_type(env)
                     .expect("Invariant violation: vector type argument contains incomplete, tuple, or spec type"))
@@ -447,7 +425,7 @@ impl Type {
 
     /// Attempt to convert this type into a language_storage::StructTag
     pub fn into_struct_tag(self, env: &GlobalEnv) -> Option<StructTag> {
-        self.into_struct_type(env)?.into_struct_tag()
+        self.into_datatype_ty(env)?.into_struct_tag()
     }
 
     /// Attempt to convert this type into a language_storage::TypeTag
@@ -469,8 +447,8 @@ impl Type {
             TypeTag::Address => Primitive(PrimitiveType::Address),
             TypeTag::Signer => Primitive(PrimitiveType::Signer),
             TypeTag::Struct(s) => {
-                let qid = env.find_struct_by_tag(s).unwrap_or_else(|| {
-                    panic!("Invariant violation: couldn't resolve struct {:?}", s)
+                let qid = env.find_datatype_by_tag(s).unwrap_or_else(|| {
+                    panic!("Invariant violation: couldn't resolve datatype {:?}", s)
                 });
                 let type_args = s
                     .type_params
@@ -1159,7 +1137,7 @@ impl TypeInstantiationDerivation {
 pub enum TypeDisplayContext<'a> {
     WithoutEnv {
         symbol_pool: &'a SymbolPool,
-        reverse_struct_table: &'a BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
+        reverse_datatype_table: &'a BTreeMap<(ModuleId, DatatypeId), QualifiedSymbol>,
     },
     WithEnv {
         env: &'a GlobalEnv,
@@ -1273,7 +1251,7 @@ impl<'a> TypeDisplay<'a> {
         match self.context {
             TypeDisplayContext::WithoutEnv {
                 symbol_pool,
-                reverse_struct_table,
+                reverse_datatype_table: reverse_struct_table,
             } => {
                 if let Some(sym) = reverse_struct_table.get(&(mid, sid)) {
                     sym.display(symbol_pool).to_string()
