@@ -44,7 +44,7 @@ jobs:
         os:
           [
             # ubuntu-ghcloud, # ubuntu-x86_64
-            windows-ghcloud # windows-x86_64
+            windows-latest # windows-x86_64
             # macos-latest-xl, # macos-x86_64
             # macos-latest-xlarge # macos-arm64
           ]
