@@ -33,7 +33,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  TMP_BUILD_DIR: ${{ github.workspace }}'/tmp/release'
+  TMP_BUILD_DIR: './tmp/release'
 
 jobs:
   release-build:
@@ -167,7 +167,6 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          cd ${{ github.workspace }}
           export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}\sui.exe)
           echo ${sui_sha}
           pwd
