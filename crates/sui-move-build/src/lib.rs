@@ -352,22 +352,6 @@ impl CompiledPackage {
         self.dependency_ids.published.values().cloned().collect()
     }
 
-    /// Return the set of Object IDs corresponding to this package's transitive dependencies'
-    /// original package IDs.
-    pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
-        let mut ids: BTreeSet<_> = self
-            .package
-            .deps_compiled_units
-            .iter()
-            .map(|(_, m)| ObjectID::from(*m.unit.module.address()))
-            .collect();
-
-        // `0x0` is not a real dependency ID -- it means that the package has unpublished
-        // dependencies.
-        ids.remove(&ObjectID::ZERO);
-        ids.into_iter().collect()
-    }
-
     pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
         let hash_modules = true;
         MovePackage::compute_digest_for_modules_and_deps(
@@ -394,14 +378,6 @@ impl CompiledPackage {
         self.get_package_bytes(with_unpublished_deps)
             .iter()
             .map(|b| Base64::from_bytes(b))
-            .collect()
-    }
-
-    pub fn get_package_dependencies_hex(&self) -> Vec<String> {
-        self.dependency_ids
-            .published
-            .values()
-            .map(|object_id| object_id.to_hex_uncompressed())
             .collect()
     }
 
