@@ -1083,7 +1083,7 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
 
 // TODO: refine error matching here
 fn normalize(err: SuiError) -> Weight {
-    match dbg!(err) {
+    match err {
         SuiError::UserInputError { .. }
         | SuiError::InvalidSignature { .. }
         | SuiError::SignerSignatureAbsent { .. }
