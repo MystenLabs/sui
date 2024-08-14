@@ -10,6 +10,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-symbol-pool.workspace = true
 sui-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-move-build.workspace = true
