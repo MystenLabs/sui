@@ -62,8 +62,8 @@ jobs:
 
       - name: Check out ${{ env.sui_tag }}
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
-        with:
-          ref: ${{ env.sui_tag }}          
+        # with:
+        #   ref: ${{ env.sui_tag }}          
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
@@ -168,8 +168,7 @@ jobs:
         run: |
           choco install checksum
           export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
-          echo ${sui_sha}
-          pwd
+          cd chocolatey
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
@@ -180,10 +179,9 @@ jobs:
           File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
           EOF
 
-          pwd
-          choco pack ./chocolatey/sui.nuspec --version ${{ env.sui_version }} configuration=release
-          # choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
-          # choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
+          choco pack --version ${{ env.sui_version }} configuration=release
+          choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
+          choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
       # - name: Upload release artifacts for ${{ matrix.os }} platform
       #   uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
