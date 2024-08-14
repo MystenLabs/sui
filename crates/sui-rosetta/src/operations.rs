@@ -665,11 +665,55 @@ impl Operations {
             accounted_balances,
         );
 
-        Ok(ops
+        let ops: Operations = ops
             .into_iter()
             .chain(coin_change_operations)
             .chain(staking_balance)
-            .collect())
+            .collect();
+
+        // This is a workaround for the payCoin cases that are mistakenly considered to be paySui operations
+        // In this case we remove any irrelevant, SUI specific operation entries that sum up to 0 balance changes per address
+        // and keep only the actual entries for the right coin type transfers, as they have been extracted from the transaction's
+        // balance changes section.
+        let mutually_cancelling_balances: HashMap<_, _> = ops
+            .clone()
+            .into_iter()
+            .fold(
+                HashMap::new(),
+                |mut balances: HashMap<(SuiAddress, Currency), i128>, op| {
+                    if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
+                        (&op.account, &op.amount, &op.status)
+                    {
+                        if op.type_ != OperationType::Gas {
+                            *balances
+                                .entry((acc.address, amount.clone().currency))
+                                .or_default() += amount.value;
+                        }
+                    }
+                    balances
+                },
+            )
+            .into_iter()
+            .filter(|balance| {
+                let (_, amount) = balance;
+                *amount == 0
+            })
+            .collect();
+
+        let ops: Operations = ops
+            .clone()
+            .into_iter()
+            .filter(|op| {
+                if let (Some(acc), Some(amount)) = (&op.account, &op.amount) {
+                    return op.type_ == OperationType::Gas
+                        || !mutually_cancelling_balances
+                            .contains_key(&(acc.address, amount.clone().currency));
+                }
+                true
+            })
+            .collect();
+
+        Ok(ops)
     }
 }
 

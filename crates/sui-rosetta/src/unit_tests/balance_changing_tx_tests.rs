@@ -751,7 +751,9 @@ async fn test_transaction(
         ));
     }
     let coin_cache = CoinMetadataCache::new(client.clone());
-    let ops = Operations::try_from_response(response.clone(), &coin_cache).unwrap();
+    let ops = Operations::try_from_response(response.clone(), &coin_cache)
+        .await
+        .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction

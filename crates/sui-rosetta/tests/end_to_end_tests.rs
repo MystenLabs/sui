@@ -176,7 +176,7 @@ async fn test_stake() {
     );
 
     let con_cache = CoinMetadataCache::new(client);
-    let ops2 = Operations::try_from_response(tx, &con_cache).unwrap();
+    let ops2 = Operations::try_from_response(tx, &con_cache).await.unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -237,7 +237,9 @@ async fn test_stake_all() {
     );
 
     let coin_cache = CoinMetadataCache::new(client);
-    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -353,7 +355,9 @@ async fn test_withdraw_stake() {
     );
     println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client);
-    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -422,7 +426,9 @@ async fn test_pay_sui() {
     );
     println!("Sui TX: {tx:?}");
     let coin_cache = CoinMetadataCache::new(client);
-    let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
+    let ops2 = Operations::try_from_response(tx, &coin_cache)
+        .await
+        .unwrap();
     assert!(
         ops2.contains(&ops),
         "Operation mismatch. expecting:{}, got:{}",
@@ -481,7 +487,9 @@ async fn test_pay_sui_multiple_times() {
             &SuiExecutionStatus::Success,
             tx.effects.as_ref().unwrap().status()
         );
-        let ops2 = Operations::try_from_response(tx, &coin_cache).unwrap();
+        let ops2 = Operations::try_from_response(tx, &coin_cache)
+            .await
+            .unwrap();
         assert!(
             ops2.contains(&ops),
             "Operation mismatch. expecting:{}, got:{}",

@@ -128,7 +128,7 @@ impl CoinMetadataCache {
 
     pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
         let mut cache = self.metadata.lock().await;
-        if !cache.contains_key(&type_tag) {
+        if !cache.contains_key(type_tag) {
             let metadata = self
                 .client
                 .coin_read_api()
@@ -145,6 +145,6 @@ impl CoinMetadataCache {
             };
             cache.insert(type_tag.clone(), ccy);
         }
-        cache.get(&type_tag).cloned().ok_or(MissingMetadata)
+        cache.get(type_tag).cloned().ok_or(MissingMetadata)
     }
 }
