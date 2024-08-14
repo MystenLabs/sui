@@ -271,7 +271,7 @@ fn compile_match_head(
 ) -> MatchStep {
     debug_print!(
         context.debug.match_specialization,
-        ("-----\ncompiling with fringe queue entry" => fringe; dbg)
+        ("-----\ncompiling with fringe queue entry" => fringe; sdbg)
     );
     if matrix.is_empty() {
         MatchStep::Failure
@@ -333,8 +333,10 @@ fn compile_match_head(
             // If we have an actual destructuring anywhere, we do that and take the specialized
             // matrix (which holds the default matrix and bindings, for our purpose). If we don't,
             // we just take the default matrix.
+            let decl_fields = context.info.struct_fields(&mident, &datatype_name).unwrap();
             let unpack = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
-                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let fringe_binders =
+                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let fringe_exps = make_fringe_entries(&fringe_binders);
                 let mut inner_fringe = fringe.clone();
                 for fringe_exp in fringe_exps.into_iter().rev() {
@@ -376,7 +378,12 @@ fn compile_match_head(
             let mut arms = BTreeMap::new();
             for (ctor, (ploc, arg_types)) in ctors {
                 unmatched_variants.remove(&ctor);
-                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let decl_fields = context
+                    .info
+                    .enum_variant_fields(&mident, &datatype_name, &ctor)
+                    .unwrap();
+                let fringe_binders =
+                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let fringe_exps = make_fringe_entries(&fringe_binders);
                 let mut inner_fringe = fringe.clone();
                 for fringe_exp in fringe_exps.into_iter().rev() {
@@ -898,6 +905,12 @@ fn make_arm_variant_unpack_fields(
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
+    let decl_fields = context
+        .hlir_context
+        .info
+        .enum_variant_fields(&mident, &enum_, &variant)
+        .unwrap();
+
     let field_tys = {
         let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
         if let Some(mut_) = mut_ref {
@@ -911,13 +924,12 @@ fn make_arm_variant_unpack_fields(
             field_tys
         }
     };
-    let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
+    let fringe_binders =
+        context
+            .hlir_context
+            .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let decl_fields = context
-        .hlir_context
-        .info
-        .enum_variant_fields(&mident, &enum_, &variant);
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
@@ -946,6 +958,11 @@ fn make_arm_struct_unpack_fields(
     fields: Fields<(Type, MatchPattern)>,
 ) -> (Vec<(FringeEntry, MatchPattern)>, Vec<(Field, Var, Type)>) {
     let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
+    let decl_fields = context
+        .hlir_context
+        .info
+        .struct_fields(&mident, &struct_)
+        .unwrap();
 
     let field_tys = {
         let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
@@ -960,10 +977,12 @@ fn make_arm_struct_unpack_fields(
             field_tys
         }
     };
-    let fringe_binders = context.hlir_context.make_unpack_binders(pat_loc, field_tys);
+    let fringe_binders =
+        context
+            .hlir_context
+            .make_unpack_binders(decl_fields.clone(), pat_loc, field_tys);
     let fringe_exps = make_fringe_entries(&fringe_binders);
 
-    let decl_fields = context.hlir_context.info.struct_fields(&mident, &struct_);
     let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
 
     let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];

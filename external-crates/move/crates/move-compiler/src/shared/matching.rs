@@ -78,6 +78,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
 
     fn make_imm_ref_match_binders(
         &mut self,
+        decl_fields: UniqueMap<Field, usize>,
         pattern_loc: Loc,
         arg_types: Fields<N::Type>,
     ) -> Vec<(Field, N::Var, N::Type)> {
@@ -92,7 +93,7 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
             }
         }
 
-        let fields = order_fields_by_decl(None, arg_types.clone());
+        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -107,10 +108,11 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
 
     fn make_unpack_binders(
         &mut self,
+        decl_fields: UniqueMap<Field, usize>,
         pattern_loc: Loc,
         arg_types: Fields<N::Type>,
     ) -> Vec<(Field, N::Var, N::Type)> {
-        let fields = order_fields_by_decl(None, arg_types.clone());
+        let fields = order_fields_by_decl(decl_fields, arg_types.clone());
         fields
             .into_iter()
             .map(|(_, field_name, field_type)| {
@@ -283,7 +285,8 @@ impl PatternArm {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
                 let decl_fields = context
                     .program_info()
-                    .enum_variant_fields(&mident, &enum_, &name);
+                    .enum_variant_fields(&mident, &enum_, &name)
+                    .unwrap();
                 let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
@@ -341,7 +344,10 @@ impl PatternArm {
             TP::Struct(mident, struct_, _, fields)
             | TP::BorrowStruct(_, mident, struct_, _, fields) => {
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
-                let decl_fields = context.program_info().struct_fields(&mident, &struct_);
+                let decl_fields = context
+                    .program_info()
+                    .struct_fields(&mident, &struct_)
+                    .unwrap();
                 let ordered_pats = order_fields_by_decl(decl_fields, field_pats);
                 for (_, _, pat) in ordered_pats.into_iter().rev() {
                     output.pats.push_front(pat);
@@ -921,22 +927,13 @@ fn combine_pattern_fields(
 
 /// Helper function for creating an ordered list of fields Field information and Fields.
 pub fn order_fields_by_decl<T: std::fmt::Debug>(
-    decl_fields: Option<UniqueMap<Field, usize>>,
+    decl_fields: UniqueMap<Field, usize>,
     fields: Fields<T>,
 ) -> Vec<(usize, Field, T)> {
-    let mut texp_fields: Vec<(usize, Field, T)> = if let Some(field_map) = decl_fields {
-        fields
-            .into_iter()
-            .map(|(f, (_exp_idx, t))| (*field_map.get(&f).unwrap(), f, t))
-            .collect()
-    } else {
-        // If no field map, compiler error in typing.
-        fields
-            .into_iter()
-            .enumerate()
-            .map(|(ndx, (f, (_exp_idx, t)))| (ndx, f, t))
-            .collect()
-    };
+    let mut texp_fields: Vec<(usize, Field, T)> = fields
+        .into_iter()
+        .map(|(f, (_exp_idx, t))| (*decl_fields.get(&f).unwrap(), f, t))
+        .collect();
     texp_fields.sort_by(|(decl_idx1, _, _), (decl_idx2, _, _)| decl_idx1.cmp(decl_idx2));
     texp_fields
 }

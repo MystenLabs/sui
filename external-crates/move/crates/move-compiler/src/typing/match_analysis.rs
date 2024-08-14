@@ -373,7 +373,12 @@ fn find_counterexample_impl(
             // recur. If we don't, we check it as a default specialization.
             if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
                 let ctor_arity = arg_types.len() as u32;
-                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let decl_fields = context
+                    .modules
+                    .struct_fields(&mident, &datatype_name)
+                    .unwrap();
+                let fringe_binders =
+                    context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                 let is_positional = context
                     .modules
                     .struct_is_positional(&mident, &datatype_name);
@@ -433,7 +438,12 @@ fn find_counterexample_impl(
             if unmatched_variants.is_empty() {
                 for (ctor, (ploc, arg_types)) in ctors {
                     let ctor_arity = arg_types.len() as u32;
-                    let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                    let decl_fields = context
+                        .modules
+                        .enum_variant_fields(&mident, &datatype_name, &ctor)
+                        .unwrap();
+                    let fringe_binders =
+                        context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
                     let is_positional =
                         context
                             .modules
