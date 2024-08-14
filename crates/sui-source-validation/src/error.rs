@@ -6,6 +6,7 @@ use std::fmt;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_json_rpc_types::SuiRawMoveObject;
+use sui_package_management::PublishedAtError;
 use sui_sdk::error::Error as SdkError;
 use sui_types::{base_types::ObjectID, error::SuiObjectResponseError};
 
@@ -20,6 +21,9 @@ pub enum Error {
     #[error("Could not read a dependency's on-chain object: {0:?}")]
     DependencyObjectReadFailure(SdkError),
 
+    #[error("On-chain package {0} is empty")]
+    EmptyOnChainPackage(AccountAddress),
+
     #[error("Invalid module {name} with error: {message}")]
     InvalidModuleFailure { name: String, message: String },
 
@@ -28,6 +32,12 @@ pub enum Error {
         address: AccountAddress,
         module: Symbol,
     },
+
+    #[error("Source package depends on {0} which is not in the linkage table.")]
+    MissingDependencyInLinkageTable(AccountAddress),
+
+    #[error("On-chain package depends on {0} which is not a source dependency.")]
+    MissingDependencyInSourcePackage(AccountAddress),
 
     #[error(
         "Local dependency did not match its on-chain version at {address}::{package}::{module}"
@@ -49,6 +59,9 @@ pub enum Error {
 
     #[error("On-chain version of dependency {package}::{module} was not found.")]
     OnChainDependencyNotFound { package: Symbol, module: Symbol },
+
+    #[error("{0}. Please supply an explicit on-chain address for the package")]
+    PublishedAt(#[from] PublishedAtError),
 
     #[error("Dependency object does not exist or was deleted: {0:?}")]
     SuiObjectRefFailure(SuiObjectResponseError),

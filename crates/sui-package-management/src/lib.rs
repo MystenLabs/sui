@@ -25,10 +25,18 @@ pub enum LockCommand {
     Upgrade,
 }
 
-#[derive(Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum PublishedAtError {
+    #[error("The 'published-at' field in Move.toml or Move.lock is invalid: {0:?}")]
     Invalid(String),
+
+    #[error("The 'published-at' field is not present in Move.toml or Move.lock")]
     NotPresent,
+
+    #[error(
+        "Conflicting 'published-at' addresses between Move.toml -- {id_manifest} -- and \
+         Move.lock -- {id_lock}"
+    )]
     Conflict {
         id_lock: ObjectID,
         id_manifest: ObjectID,

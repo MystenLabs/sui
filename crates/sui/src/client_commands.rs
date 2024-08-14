@@ -36,7 +36,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
@@ -1605,11 +1605,17 @@ impl SuiClientCommands {
                 skip_source,
                 address_override,
             } => {
-                if skip_source && !verify_deps {
-                    return Err(anyhow!(
-                        "Source skipped and not verifying deps: Nothing to verify."
-                    ));
-                }
+                let mode = match (!skip_source, verify_deps, address_override) {
+                    (false, false, _) => {
+                        bail!("Source skipped and not verifying deps: Nothing to verify.")
+                    }
+
+                    (false, true, _) => ValidationMode::deps(),
+                    (true, false, None) => ValidationMode::root(),
+                    (true, true, None) => ValidationMode::root_and_deps(),
+                    (true, false, Some(at)) => ValidationMode::root_at(*at),
+                    (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
+                };
 
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let chain_id = context
@@ -1627,17 +1633,8 @@ impl SuiClientCommands {
                 .build(&package_path)?;
 
                 let client = context.get_client().await?;
-
                 BytecodeSourceVerifier::new(client.read_api())
-                    .verify_package(
-                        &compiled_package,
-                        verify_deps,
-                        match (skip_source, address_override) {
-                            (true, _) => SourceMode::Skip,
-                            (false, None) => SourceMode::Verify,
-                            (false, Some(addr)) => SourceMode::VerifyAt(addr.into()),
-                        },
-                    )
+                    .verify(&compiled_package, mode)
                     .await?;
 
                 SuiClientCommandResult::VerifySource
@@ -1860,7 +1857,10 @@ pub(crate) async fn compile_package(
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
         let verifier = BytecodeSourceVerifier::new(read_api);
-        if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
+        if let Err(e) = verifier
+            .verify(&compiled_package, ValidationMode::deps())
+            .await
+        {
             return Err(SuiError::ModulePublishFailure {
                 error: format!(
                     "[warning] {e}\n\
