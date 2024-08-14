@@ -7,7 +7,7 @@ use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, Pr
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     authority_service::AuthorityService,
@@ -15,7 +15,8 @@ use crate::{
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
-    commit_syncer::{CommitSyncer, CommitVoteMonitor},
+    commit_syncer::{CommitSyncer, CommitSyncerHandle},
+    commit_vote_monitor::CommitVoteMonitor,
     context::{Clock, Context},
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
@@ -120,7 +121,7 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
-    commit_syncer: CommitSyncer<N::Client>,
+    commit_syncer_handle: CommitSyncerHandle,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -209,6 +210,7 @@ where
             ))
         };
 
+        let commit_consumer_monitor = commit_consumer.monitor();
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -238,6 +240,7 @@ where
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+
         let synchronizer = Synchronizer::start(
             network_client.clone(),
             context.clone(),
@@ -247,14 +250,16 @@ where
             dag_state.clone(),
         );
 
-        let commit_syncer = CommitSyncer::new(
+        let commit_syncer_handle = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
+            commit_consumer_monitor,
             network_client.clone(),
             block_verifier.clone(),
             dag_state.clone(),
-        );
+        )
+        .start();
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -296,7 +301,7 @@ where
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
-            commit_syncer,
+            commit_syncer_handle,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -312,8 +317,16 @@ where
         );
 
         // First shutdown components calling into Core.
-        self.synchronizer.stop().await.ok();
-        self.commit_syncer.stop().await;
+        if let Err(e) = self.synchronizer.stop().await {
+            if e.is_panic() {
+                std::panic::resume_unwind(e.into_panic());
+            }
+            warn!(
+                "Failed to stop synchronizer when shutting down consensus: {:?}",
+                e
+            );
+        };
+        self.commit_syncer_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
@@ -378,7 +391,7 @@ mod tests {
         let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0, 0);
+        let commit_consumer = CommitConsumer::new(sender, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -468,7 +481,7 @@ mod tests {
         // Stop authority 1.
         let index = committee.to_authority_index(1).unwrap();
         authorities.remove(index.value()).stop().await;
-        sleep(Duration::from_secs(15)).await;
+        sleep(Duration::from_secs(10)).await;
 
         // Restart authority 1 and let it run.
         let (authority, receiver) = make_authority(
@@ -481,7 +494,7 @@ mod tests {
         .await;
         output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
-        sleep(Duration::from_secs(15)).await;
+        sleep(Duration::from_secs(10)).await;
 
         // Stop all authorities and exit.
         for authority in authorities {
@@ -678,7 +691,7 @@ mod tests {
         let network_keypair = keypairs[index].0.clone();
 
         let (sender, receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0, 0);
+        let commit_consumer = CommitConsumer::new(sender, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,

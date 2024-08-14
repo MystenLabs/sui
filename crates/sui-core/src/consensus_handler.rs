@@ -10,6 +10,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use consensus_core::CommitConsumerMonitor;
 use lru::LruCache;
 use mysten_metrics::{monitored_mpsc::UnboundedReceiver, monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
@@ -504,12 +505,16 @@ impl MysticetiConsensusHandler {
     pub fn new(
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         mut receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
+        commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
+            // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_output) = receiver.recv().await {
+                let commit_index = consensus_output.commit_ref.index;
                 consensus_handler
                     .handle_consensus_output_internal(consensus_output)
                     .await;
+                commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
         });
         Self {

@@ -27,13 +27,12 @@ use tokio::{
 };
 use tracing::{debug, error, info, trace, warn};
 
-use crate::authority_service::COMMIT_LAG_MULTIPLIER;
-use crate::commit_syncer::CommitVoteMonitor;
+use crate::{authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher};
 use crate::{
     block::{BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
+    commit_vote_monitor::CommitVoteMonitor,
     context::Context,
-    core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
@@ -259,33 +258,28 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
             let (sender, receiver) =
                 channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
-            let context_cloned = context.clone();
-            let network_cloned = network_client.clone();
-            let block_verified_cloned = block_verifier.clone();
-            let core_thread_dispatcher_cloned = core_dispatcher.clone();
-            let dag_state_cloned = dag_state.clone();
-            let command_sender_cloned = commands_sender.clone();
-
-            tasks.spawn(monitored_future!(Self::fetch_blocks_from_authority(
+            let fetch_blocks_from_authority_async = Self::fetch_blocks_from_authority(
                 index,
-                network_cloned,
-                block_verified_cloned,
-                context_cloned,
-                core_thread_dispatcher_cloned,
-                dag_state_cloned,
+                network_client.clone(),
+                block_verifier.clone(),
+                commit_vote_monitor.clone(),
+                context.clone(),
+                core_dispatcher.clone(),
+                dag_state.clone(),
                 receiver,
-                command_sender_cloned,
-            )));
+                commands_sender.clone(),
+            );
+            tasks.spawn(monitored_future!(fetch_blocks_from_authority_async));
             fetch_block_senders.insert(index, sender);
         }
-
-        let commands_sender_clone = commands_sender.clone();
 
         if context.parameters.is_sync_last_proposed_block_enabled() {
             commands_sender
                 .try_send(Command::FetchOwnLastBlock)
                 .expect("Failed to sync our last block");
         }
+
+        let commands_sender_clone = commands_sender.clone();
 
         // Spawn the task to listen to the requests & periodic runs
         tasks.spawn(monitored_future!(async move {
@@ -294,6 +288,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 commands_receiver,
                 fetch_block_senders,
                 core_dispatcher,
+                commit_vote_monitor,
                 fetch_blocks_scheduler_task: JoinSet::new(),
                 fetch_own_last_block_task: JoinSet::new(),
                 network_client,
@@ -301,7 +296,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 inflight_blocks_map,
                 commands_sender: commands_sender_clone,
                 dag_state,
-                commit_vote_monitor,
             };
             s.run().await;
         }));
@@ -427,6 +421,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         peer_index: AuthorityIndex,
         network_client: Arc<C>,
         block_verifier: Arc<V>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         dag_state: Arc<RwLock<DagState>>,
@@ -453,6 +448,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 blocks_guard,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
+                                commit_vote_monitor.clone(),
                                 context.clone(),
                                 commands_sender.clone(),
                                 "live"
@@ -487,6 +483,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         requested_blocks_guard: BlocksGuard,
         core_dispatcher: Arc<D>,
         block_verifier: Arc<V>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
         sync_method: &str,
@@ -528,6 +525,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     block_ref: block.reference(),
                 });
             }
+        }
+
+        // Record commit votes from the verified blocks.
+        for block in &blocks {
+            commit_vote_monitor.observe_block(block);
         }
 
         let metrics = &context.metrics.node_metrics;
@@ -707,10 +709,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
                 let fetch_own_block = |authority_index: AuthorityIndex, fetch_own_block_delay: Duration| {
                     let network_client_cloned = network_client.clone();
-                    let context_cloned = context.clone();
+                    let own_index = context.own_index;
                     async move {
                         sleep(fetch_own_block_delay).await;
-                        let r = network_client_cloned.fetch_latest_blocks(authority_index, vec![context_cloned.own_index], FETCH_REQUEST_TIMEOUT).await;
+                        let r = network_client_cloned.fetch_latest_blocks(authority_index, vec![own_index], FETCH_REQUEST_TIMEOUT).await;
                         (r, authority_index)
                     }
                 };
@@ -826,6 +828,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let block_verifier = self.block_verifier.clone();
+        let commit_vote_monitor = self.commit_vote_monitor.clone();
         let core_dispatcher = self.core_dispatcher.clone();
         let blocks_to_fetch = self.inflight_blocks_map.clone();
         let commands_sender = self.commands_sender.clone();
@@ -851,7 +854,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 for (blocks_guard, fetched_blocks, peer) in results {
                     total_fetched += fetched_blocks.len();
 
-                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, blocks_guard, core_dispatcher.clone(), block_verifier.clone(), context.clone(), commands_sender.clone(), "periodic").await {
+                    if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, blocks_guard, core_dispatcher.clone(), block_verifier.clone(), commit_vote_monitor.clone(), context.clone(), commands_sender.clone(), "periodic").await {
                         warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
                     }
                 }
@@ -996,15 +999,15 @@ mod tests {
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
 
-    use crate::authority_service::COMMIT_LAG_MULTIPLIER;
     use crate::commit::{CommitVote, TrustedCommit};
-    use crate::commit_syncer::CommitVoteMonitor;
+    use crate::{authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher};
     use crate::{
         block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
+        commit_vote_monitor::CommitVoteMonitor,
         context::Context,
-        core_thread::{CoreError, CoreThreadDispatcher},
+        core_thread::CoreThreadDispatcher,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
         network::{BlockStream, NetworkClient},
@@ -1014,64 +1017,6 @@ mod tests {
         },
         CommitDigest, CommitIndex,
     };
-
-    // TODO: create a complete Mock for thread dispatcher to be used from several tests
-    #[derive(Default)]
-    struct MockCoreThreadDispatcher {
-        add_blocks: Mutex<Vec<VerifiedBlock>>,
-        missing_blocks: Mutex<BTreeSet<BlockRef>>,
-        last_known_proposed_round: parking_lot::Mutex<Vec<Round>>,
-    }
-
-    impl MockCoreThreadDispatcher {
-        async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
-            let mut lock = self.add_blocks.lock().await;
-            lock.drain(0..).collect()
-        }
-
-        async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
-            let mut lock = self.missing_blocks.lock().await;
-            lock.extend(block_refs);
-        }
-
-        async fn get_last_own_proposed_round(&self) -> Vec<Round> {
-            let lock = self.last_known_proposed_round.lock();
-            lock.clone()
-        }
-    }
-
-    #[async_trait]
-    impl CoreThreadDispatcher for MockCoreThreadDispatcher {
-        async fn add_blocks(
-            &self,
-            blocks: Vec<VerifiedBlock>,
-        ) -> Result<BTreeSet<BlockRef>, CoreError> {
-            let mut lock = self.add_blocks.lock().await;
-            lock.extend(blocks);
-            Ok(BTreeSet::new())
-        }
-
-        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            Ok(())
-        }
-
-        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            let mut lock = self.missing_blocks.lock().await;
-            let result = lock.clone();
-            lock.clear();
-            Ok(result)
-        }
-
-        fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
-            let mut lock = self.last_known_proposed_round.lock();
-            lock.push(round);
-            Ok(())
-        }
-    }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
     type FetchRequestResponse = (Vec<VerifiedBlock>, Option<Duration>);
@@ -1272,10 +1217,10 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1318,11 +1263,11 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         let handle = Synchronizer::start(
             network_client.clone(),
@@ -1376,11 +1321,11 @@ mod tests {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let network_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
         // Create some test blocks
         let expected_blocks = (0..10)
@@ -1497,7 +1442,7 @@ mod tests {
         // Pass them through the commit vote monitor - so now there will be a big commit lag to prevent
         // the scheduled synchronizer from running
         for block in blocks {
-            commit_vote_monitor.observe(&block);
+            commit_vote_monitor.observe_block(&block);
         }
 
         // WHEN start the synchronizer and wait for a couple of seconds where normally the synchronizer should have kicked in.
