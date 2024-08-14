@@ -16,7 +16,8 @@ use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::SystemEpochInfoEvent;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest, EndOfEpochData,
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest, CheckpointSequenceNumber,
+    EndOfEpochData,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -282,44 +283,20 @@ pub enum DynamicFieldKind {
 
 #[derive(Clone, Debug)]
 pub struct IndexedObject {
-    pub object_id: ObjectID,
-    pub object_version: u64,
-    pub object_digest: ObjectDigest,
-    pub checkpoint_sequence_number: u64,
-    pub owner_type: OwnerType,
-    pub owner_id: Option<SuiAddress>,
+    pub checkpoint_sequence_number: CheckpointSequenceNumber,
     pub object: Object,
-    pub coin_type: Option<String>,
-    pub coin_balance: Option<u64>,
     pub df_info: Option<DynamicFieldInfo>,
 }
 
 impl IndexedObject {
     pub fn from_object(
-        checkpoint_sequence_number: u64,
+        checkpoint_sequence_number: CheckpointSequenceNumber,
         object: Object,
         df_info: Option<DynamicFieldInfo>,
     ) -> Self {
-        let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
-        let coin_type = object
-            .coin_type_maybe()
-            .map(|t| t.to_canonical_string(/* with_prefix */ true));
-        let coin_balance = if coin_type.is_some() {
-            Some(object.get_coin_value_unsafe())
-        } else {
-            None
-        };
-
         Self {
             checkpoint_sequence_number,
-            object_id: object.id(),
-            object_version: object.version().value(),
-            object_digest: object.digest(),
-            owner_type,
-            owner_id,
             object,
-            coin_type,
-            coin_balance,
             df_info,
         }
     }
