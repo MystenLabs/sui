@@ -11,12 +11,6 @@ warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze pol
    = A custom transfer policy for a given type is implemented through calling the private transfer function variant in the module defining this type
    = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
-   ┌─ tests/sui_mode/linter/custom_state_change.move:15:49
-   │
-15 │     public fun custom_transfer_bad(o: S1, ctx: &TxContext) {
-   │                                                 ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
-
 warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/sui_mode/linter/custom_state_change.move:20:16
    │
@@ -42,10 +36,4 @@ warning[Lint W99002]: potentially unenforceable custom transfer/share/freeze pol
    │
    = A custom freeze policy for a given type is implemented through calling the private freeze_object function variant in the module defining this type
    = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[Lint W02009]: Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
-   ┌─ tests/sui_mode/linter/custom_state_change.move:40:27
-   │
-40 │     public fun sender(_: &TxContext): address {
-   │                           ^^^^^^^^^ Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.
 

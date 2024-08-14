@@ -4,9 +4,8 @@
 //! Enforces that public functions use `&mut TxContext` instead of `&TxContext` to ensure upgradability.
 //! Detects and reports instances where a non-mutable reference to `TxContext` is used in public function signatures.
 //! Promotes best practices for future-proofing smart contract code by allowing mutation of the transaction context.
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, LinterDiagnosticCode};
-use crate::expansion::ast::Mutability;
-use crate::naming::ast::{Type, TypeName, Var};
+use super::{LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX};
+
 use crate::{
     diag,
     diagnostics::{
@@ -14,9 +13,10 @@ use crate::{
         WarningFilters,
     },
     expansion::ast::{ModuleIdent, Visibility},
-    naming::ast::{TypeName_, Type_},
-    parser::ast::{DatatypeName, FunctionName},
+    naming::ast::Type_,
+    parser::ast::FunctionName,
     shared::CompilationEnv,
+    sui_mode::{SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
@@ -27,18 +27,18 @@ use move_ir_types::location::Loc;
 const REQUIRE_MUTABLE_TX_CONTEXT_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagnosticCategory::Suspicious as u8,
-    LinterDiagnosticCode::RequireMutableTxContext as u8,
-    "Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.",
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::PreferMutableTxContext as u8,
+    "prefer '&mut TxContext' over '&TxContext'",
 );
 
-pub struct RequireMutableTxContext;
+pub struct PreferMutableTxContext;
 
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
 }
 
-impl TypingVisitorConstructor for RequireMutableTxContext {
+impl TypingVisitorConstructor for PreferMutableTxContext {
     type Context<'a> = Context<'a>;
 
     fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
@@ -54,63 +54,44 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
+    fn visit_module_custom(&mut self, ident: ModuleIdent, _mdef: &mut T::ModuleDefinition) -> bool {
+        // skip if in 'sui::tx_context'
+        ident.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME)
+    }
+
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
         _function_name: FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
-        if let Visibility::Public(_) = fdef.visibility {
-            self.check_function_parameters(&fdef.signature.parameters);
+        if !matches!(&fdef.visibility, Visibility::Public(_)) {
+            return false;
+        }
+
+        for (_, _, sp!(loc, param_ty_)) in &fdef.signature.parameters {
+            if matches!(
+                param_ty_,
+                Type_::Ref(false, t) if t.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME),
+            ) {
+                report_non_mutable_tx_context(self.env, *loc);
+            }
         }
 
         false
     }
 }
 
-impl Context<'_> {
-    fn check_function_parameters(&mut self, parameters: &Vec<(Mutability, Var, Type)>) {
-        for param in parameters {
-            if let Some(loc) = self.is_immutable_tx_context(&param.2) {
-                self.report_non_mutable_tx_context(loc);
-            }
-        }
-    }
-
-    fn is_immutable_tx_context(&self, param_type: &Type) -> Option<Loc> {
-        match &param_type.value {
-            Type_::Ref(false, var_type) => self.is_tx_context_type(var_type),
-            _ => None,
-        }
-    }
-
-    fn is_tx_context_type(&self, var_type: &Type) -> Option<Loc> {
-        match &var_type.value {
-            Type_::Apply(_, type_name, _) => self.is_sui_tx_context(type_name),
-            _ => None,
-        }
-    }
-
-    fn is_sui_tx_context(&self, type_name: &TypeName) -> Option<Loc> {
-        match &type_name.value {
-            TypeName_::ModuleType(module_ident, DatatypeName(sp!(_, struct_name))) => {
-                if module_ident.value.is("sui", "tx_context")
-                    && struct_name.to_string() == "TxContext"
-                {
-                    Some(type_name.loc)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn report_non_mutable_tx_context(&mut self, loc: Loc) {
-        let diag = diag!(
-            REQUIRE_MUTABLE_TX_CONTEXT_DIAG,
-            (loc, "Public functions should take `&mut TxContext` instead of `&TxContext` for better upgradability.")
-        );
-        self.env.add_diag(diag);
-    }
+fn report_non_mutable_tx_context(env: &mut CompilationEnv, loc: Loc) {
+    let msg = format!(
+        "'public' functions should prefer '&mut {0}' over '&{0}' for better upgradability.",
+        TX_CONTEXT_TYPE_NAME
+    );
+    let mut diag = diag!(REQUIRE_MUTABLE_TX_CONTEXT_DIAG, (loc, msg));
+    diag.add_note(
+        "When upgrading, the public function cannot be modified to take '&mut TxContext' instead \
+         of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to \
+         future-proof the function.",
+    );
+    env.add_diag(diag);
 }
