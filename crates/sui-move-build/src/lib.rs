@@ -645,7 +645,7 @@ pub struct PackageDependencies {
     pub invalid: BTreeMap<Symbol, String>,
     /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
     /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
-    pub conflicting: BTreeMap<Symbol, (String, String)>,
+    pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
 }
 
 /// Partition packages in `resolution_graph` into one of four groups:
