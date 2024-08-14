@@ -118,6 +118,25 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 }
 ```
 
+## Verifying zkLogin signatures
+
+ZkLogin signatures can't be verified purely on the client. When verifying a zkLogin signature, the
+SDK uses the GraphQL API to verify the signature. This will work for mainnet signatures without any
+additional configuration.
+
+For testnet signatures, you will need to provide a testnet GraphQL Client:
+
+```typescript
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+
+const publicKey = await verifyPersonalMessageSignature(message, zkSignature, {
+	client: new SuiGraphQLClient({
+		url: 'https://sui-testnet.mystenlabs.com/graphql',
+	}),
+});
+```
+
 ## Deriving a key pair from a mnemonic
 
 The Sui TypeScript SDK supports deriving a key pair from a mnemonic phrase. This can be useful when

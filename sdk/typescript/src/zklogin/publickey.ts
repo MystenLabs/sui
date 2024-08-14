@@ -71,6 +71,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	verifyPersonalMessage(message: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
 		const address = new ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
+
 		return graphqlVerifyZkLoginSignature({
 			address: address,
 			bytes: toB64(message),
