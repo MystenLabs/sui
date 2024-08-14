@@ -7,7 +7,7 @@ use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, Pr
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     authority_service::AuthorityService,
@@ -318,7 +318,13 @@ where
 
         // First shutdown components calling into Core.
         if let Err(e) = self.synchronizer.stop().await {
-            info!("Failed to stop synchronizer: {:?}", e);
+            if e.is_panic() {
+                std::panic::resume_unwind(e.into_panic());
+            }
+            warn!(
+                "Failed to stop synchronizer when shutting down consensus: {:?}",
+                e
+            );
         };
         self.commit_syncer_handle.stop().await;
         self.leader_timeout_handle.stop().await;
@@ -385,7 +391,7 @@ mod tests {
         let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0, 0);
+        let commit_consumer = CommitConsumer::new(sender, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -685,7 +691,7 @@ mod tests {
         let network_keypair = keypairs[index].0.clone();
 
         let (sender, receiver) = unbounded_channel("consensus_output");
-        let commit_consumer = CommitConsumer::new(sender, 0, 0);
+        let commit_consumer = CommitConsumer::new(sender, 0);
 
         let authority = ConsensusAuthority::start(
             network_type,

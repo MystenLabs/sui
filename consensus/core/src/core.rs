@@ -876,7 +876,7 @@ impl CoreTextFixture {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(commit_sender.clone(), 0, 0),
+            CommitConsumer::new(commit_sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -974,7 +974,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1091,7 +1091,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1187,7 +1187,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1296,7 +1296,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1384,7 +1384,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),
@@ -1571,7 +1571,7 @@ mod test {
         let (sender, _receiver) = unbounded_channel("consensus_output");
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store.clone(),
             leader_schedule.clone(),

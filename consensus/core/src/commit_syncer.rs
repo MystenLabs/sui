@@ -886,7 +886,7 @@ mod tests {
         // Fetches should be scheduled until the unhandled commits threshold.
         commit_syncer.try_schedule_once();
 
-        // Verify commit syncer paused after scheduling commit index 15.
+        // Verify commit syncer is paused after scheduling 15 commits to index 25.
         assert_eq!(commit_syncer.unhandled_commits_threshold(), 25);
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(25));
         let pending_fetches = commit_syncer.pending_fetches();

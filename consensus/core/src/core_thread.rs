@@ -335,7 +335,7 @@ mod test {
         ));
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store,
             leader_schedule.clone(),

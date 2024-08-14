@@ -5,13 +5,11 @@ use std::sync::{atomic::AtomicU32, Arc};
 
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 
-use crate::{CommitIndex, CommittedSubDag, Round};
+use crate::{CommitIndex, CommittedSubDag};
 
 pub struct CommitConsumer {
     // A channel to send the committed sub dags through
     pub(crate) sender: UnboundedSender<CommittedSubDag>,
-    // Leader round of the last commit that the consumer has processed.
-    _last_processed_commit_round: Round,
     // Index of the last commit that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from the next index.
     // First commit in the replayed sequence will have index last_processed_commit_index + 1.
@@ -24,13 +22,11 @@ pub struct CommitConsumer {
 impl CommitConsumer {
     pub fn new(
         sender: UnboundedSender<CommittedSubDag>,
-        last_processed_commit_round: Round,
         last_processed_commit_index: CommitIndex,
     ) -> Self {
         let monitor = Arc::new(CommitConsumerMonitor::new(last_processed_commit_index));
         Self {
             sender,
-            _last_processed_commit_round: last_processed_commit_round,
             last_processed_commit_index,
             monitor,
         }

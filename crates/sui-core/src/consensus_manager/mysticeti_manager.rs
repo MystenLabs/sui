@@ -5,7 +5,7 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
 use fastcrypto::ed25519;
 use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
@@ -143,7 +143,6 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consumer = CommitConsumer::new(
             commit_sender,
             // TODO(mysticeti): remove dependency on narwhal executor
-            consensus_handler.last_executed_sub_dag_round() as Round,
             consensus_handler.last_executed_sub_dag_index() as CommitIndex,
         );
         let monitor = consumer.monitor();
