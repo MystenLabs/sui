@@ -178,6 +178,7 @@ jobs:
           File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
           EOF
 
+          pwd
           cd chocolatey
           choco pack --version ${{ env.sui_version }} configuration=release
           choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
