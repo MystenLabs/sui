@@ -35,7 +35,7 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
 pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
-pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true_to_loop";
+pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true";
 pub const WHILE_TRUE_TO_LOOP_DIAG_CODE: u8 = 4;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {

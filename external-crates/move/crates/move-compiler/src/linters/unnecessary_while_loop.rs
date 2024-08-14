@@ -14,7 +14,6 @@ use crate::{
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
-use move_ir_types::location::Loc;
 
 use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, WHILE_TRUE_TO_LOOP_DIAG_CODE};
 
@@ -23,7 +22,7 @@ const WHILE_TRUE_TO_LOOP_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     LinterDiagnosticCategory::Complexity as u8,
     WHILE_TRUE_TO_LOOP_DIAG_CODE,
-    "Detected `while(true) {}` loop. Consider replacing with `loop {}`",
+    "unnecessary 'while (true)', replace with 'loop'",
 );
 
 pub struct WhileTrueToLoop;
@@ -49,24 +48,21 @@ impl TypingVisitorContext for Context<'_> {
     }
 
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        if let UnannotatedExp_::While(_, cond, _) = &exp.exp.value {
-            if is_condition_always_true(&cond.exp.value) {
-                let diag = diag!(
-                    WHILE_TRUE_TO_LOOP_DIAG,
-                    (exp.exp.loc, "`while (true)` can be replaced with `loop`")
-                );
-                self.env.add_diag(diag);
-            }
-        }
+        let UnannotatedExp_::While(_, cond, _) = &exp.exp.value else {
+            return false;
+        };
+        let UnannotatedExp_::Value(sp!(_, Value_::Bool(true))) = &cond.exp.value else {
+            return false;
+        };
+
+        let msg = "'while (true)' can be always replaced with 'loop'";
+        let mut diag = diag!(WHILE_TRUE_TO_LOOP_DIAG, (exp.exp.loc, msg));
+        diag.add_note(
+            "A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a \
+            'break' with a value, e.g. 'let x = loop { break 42 };'",
+        );
+        self.env.add_diag(diag);
+
         false
     }
-}
-
-fn is_condition_always_true(condition: &UnannotatedExp_) -> bool {
-    if let UnannotatedExp_::Value(val) = condition {
-        if let Value_::Bool(b) = &val.value {
-            return *b;
-        }
-    }
-    false
 }

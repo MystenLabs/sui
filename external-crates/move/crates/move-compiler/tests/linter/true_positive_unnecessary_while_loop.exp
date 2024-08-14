@@ -1,21 +1,18 @@
-warning[Lint W01004]: Detected `while(true) {}` loop. Consider replacing with `loop {}`
-  ┌─ tests/linter/true_positive_unnecessary_while_loop.move:4:9
-  │  
-4 │ ╭         while (true) {
-5 │ │             // This should trigger the linter
-6 │ │         }
-  │ ╰─────────^ `while (true)` can be replaced with `loop`
-  │  
-  = This warning can be suppressed with '#[allow(lint(while_true_to_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+warning[Lint W01004]: unnecessary 'while (true)', replace with 'loop'
+  ┌─ tests/linter/true_positive_unnecessary_while_loop.move:3:9
+  │
+3 │         while (true) {};
+  │         ^^^^^^^^^^^^^^^ 'while (true)' can be always replaced with 'loop'
+  │
+  = A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a 'break' with a value, e.g. 'let x = loop { break 42 };'
+  = This warning can be suppressed with '#[allow(lint(while_true))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01004]: Detected `while(true) {}` loop. Consider replacing with `loop {}`
-   ┌─ tests/linter/true_positive_unnecessary_while_loop.move:11:9
-   │  
-11 │ ╭         while (true) {
-12 │ │             if (i == 10) break;
-13 │ │             i = i + 1;
-14 │ │         }
-   │ ╰─────────^ `while (true)` can be replaced with `loop`
-   │  
-   = This warning can be suppressed with '#[allow(lint(while_true_to_loop))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+warning[Lint W01004]: unnecessary 'while (true)', replace with 'loop'
+  ┌─ tests/linter/true_positive_unnecessary_while_loop.move:4:9
+  │
+4 │         while (true) { break }
+  │         ^^^^^^^^^^^^^^^^^^^^^^ 'while (true)' can be always replaced with 'loop'
+  │
+  = A 'loop' is more useful in these cases. Unlike 'while', 'loop' can have a 'break' with a value, e.g. 'let x = loop { break 42 };'
+  = This warning can be suppressed with '#[allow(lint(while_true))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
