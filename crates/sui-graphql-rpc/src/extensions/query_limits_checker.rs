@@ -31,9 +31,11 @@ const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
 const TX_BYTES: &str = "txBytes";
 
+/// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Debug)]
 pub(crate) struct PayloadSize(pub u64);
 
+/// Payload size state for checking the query against mutation limits.
 struct PayloadSizeCheck<'a> {
     variables: &'a Variables,
     max_query_payload_size: u32,
@@ -51,7 +53,6 @@ struct QueryLimitsCheckerExt {
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
 
-/// Payload size state for checking the query against mutation limits.
 impl<'a> PayloadSizeCheck<'a> {
     fn new(limits: &Limits, variables: &'a Variables) -> Self {
         Self {
@@ -183,17 +184,16 @@ impl<'a> PayloadSizeCheck<'a> {
     /// Check the body content-length against the allowed payload. The content-length will include
     /// variables data as well.
     fn check_overall_payload_size(&self, ctx: &ExtensionContext<'_>) -> ServerResult<()> {
-        let payload_size: &PayloadSize = ctx.data_unchecked();
-        let payload_size = payload_size.0;
+        let PayloadSize(payload_size) = ctx.data_unchecked();
         let max_payload_size = (self.max_query_payload_size + self.max_tx_payload_size).into();
-        if payload_size > max_payload_size {
+        if *payload_size > max_payload_size {
             let metrics: &Metrics = ctx.data_unchecked();
             let query_id: &Uuid = ctx.data_unchecked();
             let session_id: &SocketAddr = ctx.data_unchecked();
             metrics
                 .request_metrics
                 .query_payload_too_large_size
-                .observe(payload_size as f64);
+                .observe(*payload_size as f64);
             info!(
                 query_id = %query_id,
                 session_id = %session_id,
@@ -597,9 +597,7 @@ impl Extension for QueryLimitsCheckerExt {
         let metrics: &Metrics = ctx.data_unchecked();
         let instant = Instant::now();
 
-        let cfg = ctx
-            .data::<ServiceConfig>()
-            .expect("No service config provided in schema data");
+        let cfg: &ServiceConfig = ctx.data_unchecked();
 
         // Document layout of the query
         let doc = next.run(ctx, query, variables).await?;

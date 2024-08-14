@@ -86,8 +86,8 @@ pub async fn start_cluster(
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
         graphql_connection_config.clone(),
         Some(fn_rpc_url),
-        Some(cancellation_token.clone()),
         limits,
+        Some(cancellation_token.clone()),
     )
     .await;
 
@@ -179,8 +179,8 @@ pub async fn start_graphql_server(
     start_graphql_server_with_fn_rpc(
         graphql_connection_config,
         None,
-        Some(cancellation_token),
         None,
+        Some(cancellation_token),
     )
     .await
 }
@@ -188,8 +188,8 @@ pub async fn start_graphql_server(
 pub async fn start_graphql_server_with_fn_rpc(
     graphql_connection_config: ConnectionConfig,
     fn_rpc_url: Option<String>,
-    cancellation_token: Option<CancellationToken>,
     limits: Option<Limits>,
+    cancellation_token: Option<CancellationToken>,
 ) -> JoinHandle<()> {
     let cancellation_token = cancellation_token.unwrap_or_default();
 

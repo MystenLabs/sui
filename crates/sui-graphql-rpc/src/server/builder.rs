@@ -519,7 +519,7 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    TypedHeader(content_length): TypedHeader<ContentLength>,
+    TypedHeader(ContentLength(content_length)): TypedHeader<ContentLength>,
     schema: Extension<SuiGraphQLSchema>,
     Extension(watermark_lock): Extension<WatermarkLock>,
     headers: HeaderMap,
@@ -527,7 +527,7 @@ async fn graphql_handler(
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
 
-    req.data.insert(PayloadSize(content_length.0));
+    req.data.insert(PayloadSize(content_length));
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
