@@ -102,7 +102,7 @@ jobs:
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
           aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
-          tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
+          tar -xfv ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
 
       - name: Setup caching
         if: ${{ env.s3_archive_exist == '' }}
@@ -167,7 +167,8 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
+          export binary_path=${{ github.workspace }}\${{ env.TMP_BUILD_DIR }}
+          export sui_sha=$(checksum -t sha256 ${binary_path}\sui.exe)
           echo ${sui_sha}
           pwd
           cd chocolatey
