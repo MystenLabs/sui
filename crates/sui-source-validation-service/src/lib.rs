@@ -34,7 +34,7 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
-use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 
 pub const HOST_PORT_ENV: &str = "HOST_PORT";
 pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "x-sui-source-validation-version";
@@ -172,11 +172,7 @@ pub async fn verify_package(
     let compiled_package = build_config.build(package_path.as_ref())?;
 
     BytecodeSourceVerifier::new(client.read_api())
-        .verify_package(
-            &compiled_package,
-            /* verify_deps */ false,
-            SourceMode::Verify,
-        )
+        .verify(&compiled_package, ValidationMode::root())
         .await
         .map_err(|e| anyhow!("Network {network}: {e}"))?;
 
