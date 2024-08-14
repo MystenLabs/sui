@@ -57,8 +57,8 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batch_size")]
     pub commit_sync_batch_size: u32,
 
-    // Maximum number of commit batches being fetched, before throttling
-    // of outgoing commit fetches starts.
+    // This affects the maximum number of commit batches being fetched, and those fetched but not
+    // processed as consensus output, before throttling of outgoing commit fetches starts.
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
@@ -129,7 +129,9 @@ impl Parameters {
     }
 
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
-        200
+        // This is set to be a multiple of default commit_sync_parallel_fetches to allow fetching ahead,
+        // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
+        80
     }
 
     pub(crate) fn default_sync_last_proposed_block_timeout() -> Duration {

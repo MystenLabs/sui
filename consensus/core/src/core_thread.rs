@@ -8,6 +8,7 @@ use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
 };
+use parking_lot::Mutex;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
@@ -231,6 +232,67 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
     }
 }
 
+// TODO: complete the Mock for thread dispatcher to be used from several tests
+#[derive(Default)]
+pub(crate) struct MockCoreThreadDispatcher {
+    add_blocks: Mutex<Vec<VerifiedBlock>>,
+    missing_blocks: Mutex<BTreeSet<BlockRef>>,
+    last_known_proposed_round: Mutex<Vec<Round>>,
+}
+
+impl MockCoreThreadDispatcher {
+    #[cfg(test)]
+    pub(crate) async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
+        let mut add_blocks = self.add_blocks.lock();
+        add_blocks.drain(0..).collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
+        let mut missing_blocks = self.missing_blocks.lock();
+        missing_blocks.extend(block_refs);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn get_last_own_proposed_round(&self) -> Vec<Round> {
+        let last_known_proposed_round = self.last_known_proposed_round.lock();
+        last_known_proposed_round.clone()
+    }
+}
+
+#[async_trait]
+impl CoreThreadDispatcher for MockCoreThreadDispatcher {
+    async fn add_blocks(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let mut add_blocks = self.add_blocks.lock();
+        add_blocks.extend(blocks);
+        Ok(BTreeSet::new())
+    }
+
+    async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let mut missing_blocks = self.missing_blocks.lock();
+        let result = missing_blocks.clone();
+        missing_blocks.clear();
+        Ok(result)
+    }
+
+    fn set_consumer_availability(&self, _available: bool) -> Result<(), CoreError> {
+        todo!()
+    }
+
+    fn set_last_known_proposed_round(&self, round: Round) -> Result<(), CoreError> {
+        let mut last_known_proposed_round = self.last_known_proposed_round.lock();
+        last_known_proposed_round.push(round);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use mysten_metrics::monitored_mpsc::unbounded_channel;
@@ -273,7 +335,7 @@ mod test {
         ));
         let commit_observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(sender.clone(), 0, 0),
+            CommitConsumer::new(sender.clone(), 0),
             dag_state.clone(),
             store,
             leader_schedule.clone(),

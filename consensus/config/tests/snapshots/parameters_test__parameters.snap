@@ -15,7 +15,7 @@ max_blocks_per_fetch: 1000
 dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 20
 commit_sync_batch_size: 100
-commit_sync_batches_ahead: 200
+commit_sync_batches_ahead: 80
 anemo:
   excessive_message_size: 8388608
 tonic:
