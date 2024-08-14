@@ -11,18 +11,19 @@ use tracing::info;
 use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
+use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
+use sui_indexer_builder::sui_datasource::CheckpointTxnData;
+use sui_indexer_builder::Task;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID};
 
-use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
-use crate::sui_checkpoint_ingestion::Task;
 use crate::{
     models, schema, BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer,
     TokenTransferData, TokenTransferStatus,
