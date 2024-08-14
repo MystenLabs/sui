@@ -167,11 +167,9 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          export binary_path=${{ github.workspace }}\${{ env.TMP_BUILD_DIR }}
-          export sui_sha=$(checksum -t sha256 ${binary_path}\sui.exe)
+          export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}\sui.exe)
           echo ${sui_sha}
           pwd
-          cd chocolatey
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
