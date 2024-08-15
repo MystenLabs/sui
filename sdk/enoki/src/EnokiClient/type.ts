@@ -8,6 +8,7 @@ import type { AuthProvider } from '../EnokiFlow.js';
 
 export type EnokiNetwork = 'mainnet' | 'testnet' | 'devnet';
 export type EnokiDomainNetwork = 'mainnet' | 'testnet';
+export type EnokiSubanameStatus = 'PENDING' | 'ACTIVE';
 
 export interface GetAppApiInput {}
 export interface GetAppApiResponse {
@@ -93,6 +94,7 @@ export interface GetSubnamesApiInput {
 export interface GetSubnamesApiResponse {
 	subnames: {
 		name: string;
+		status: EnokiSubanameStatus;
 	}[];
 }
 

@@ -141,14 +141,22 @@ export class EnokiClient {
 	}
 
 	getSubnames(input: GetSubnamesApiInput) {
-		return this.#fetch<GetSubnamesApiResponse>('subnames', {
-			method: 'GET',
-			body: JSON.stringify({
-				address: input.address,
-				network: input.network,
-				domain: input.domain,
-			}),
-		});
+		const query = new URLSearchParams();
+		if (input.address) {
+			query.set('address', input.address);
+		}
+		if (input.network) {
+			query.set('network', input.network);
+		}
+		if (input.domain) {
+			query.set('domain', input.domain);
+		}
+		return this.#fetch<GetSubnamesApiResponse>(
+			'subnames' + (query.size > 0 ? `?${query.toString()}` : ''),
+			{
+				method: 'GET',
+			},
+		);
 	}
 
 	createSubname(input: CreateSubnameApiInput) {
