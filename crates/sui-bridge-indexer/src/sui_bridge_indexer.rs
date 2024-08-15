@@ -11,18 +11,19 @@ use tracing::info;
 use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
+use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
+use sui_indexer_builder::sui_datasource::CheckpointTxnData;
+use sui_indexer_builder::Task;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID};
 
-use crate::indexer_builder::{CheckpointTxnData, DataMapper, IndexerProgressStore, Persistent};
 use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
-use crate::sui_checkpoint_ingestion::Task;
 use crate::{
     models, schema, BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer,
     TokenTransferData, TokenTransferStatus,
@@ -41,8 +42,9 @@ impl PgBridgePersistent {
 }
 
 // TODO: this is shared between SUI and ETH, move to different file.
+#[async_trait]
 impl Persistent<ProcessedTxnData> for PgBridgePersistent {
-    fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
+    async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
         if data.is_empty() {
             return Ok(());
         }
@@ -115,7 +117,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -127,7 +129,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(cp.into_iter().map(|d| d.into()).collect())
     }
 
-    fn register_task(
+    async fn register_task(
         &mut self,
         task_name: String,
         checkpoint: u64,
@@ -146,7 +148,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
+    async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get()?;
         diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
             .set((
