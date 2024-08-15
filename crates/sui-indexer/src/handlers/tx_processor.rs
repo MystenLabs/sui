@@ -10,7 +10,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_rest_api::CheckpointData;
 use tokio::sync::watch;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use sui_types::object::Object;
 use tokio::time::Duration;
@@ -30,7 +30,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-
 use crate::types::IndexedPackage;
 use crate::types::{IndexedObjectChange, IndexerResult};
 
@@ -289,20 +288,8 @@ pub(crate) struct EpochEndIndexingObjectStore<'a> {
 
 impl<'a> EpochEndIndexingObjectStore<'a> {
     pub fn new(data: &'a CheckpointData) -> Self {
-        // We only care about latest output objects at the end of an epoch
-        let mut output_objects_by_id = BTreeMap::new();
-        for obj in data.output_objects() {
-            output_objects_by_id
-                .entry(obj.id())
-                .or_insert_with(Vec::new)
-                .push(obj);
-        }
-        let epoch_end_objects = output_objects_by_id
-            .into_iter()
-            .flat_map(|(_, objs)| objs.into_iter().max_by_key(|o| o.version()))
-            .collect::<Vec<_>>();
         Self {
-            objects: epoch_end_objects,
+            objects: data.latest_live_output_objects(),
         }
     }
 }
