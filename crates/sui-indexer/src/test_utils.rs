@@ -148,7 +148,7 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
             if config.reset_db {
-                crate::db::reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
+                crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
             }
             let store_clone = store.clone();
 
