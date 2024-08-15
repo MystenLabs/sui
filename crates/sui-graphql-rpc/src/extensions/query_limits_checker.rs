@@ -102,10 +102,10 @@ fn check_mutation_dry_run(
                             // will make it easier for a dev to debug
                             if tx_bytes_len > max_tx_payload_size {
                                 log_metric(
-                                            ctx,
-                                            "The txBytes size of dryRunTransactionBlock node is too large: {}",
-                                            tx_bytes_len
-                                        );
+                                    ctx,
+                                    "The txBytes size of dryRunTransactionBlock node is too large.",
+                                    *payload_size,
+                                );
                                 return Err(graphql_error_at_pos(
                                             code::BAD_USER_INPUT,
                                             format!(
@@ -121,8 +121,8 @@ fn check_mutation_dry_run(
                             } else {
                                 log_metric(
                                         ctx,
-                                        "This node's txBytes plus previous nodes' values exceed the max tx payload size allowed: {}",
-                                        max_tx_payload_size,
+                                        "This node's txBytes plus previous nodes' values exceed the max tx payload size allowed.",
+                                        *payload_size
                                     );
                                 return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -163,12 +163,12 @@ fn check_mutation_dry_run(
                             if seen_vars.contains(&v1_name) && seen_vars.contains(&v2_name) {
                                 continue;
                             } else if seen_vars.contains(&v1_name) {
-                                seen_vars.insert(v2_name);
+                                seen_vars.insert(v2_name.clone());
                                 let v2_len =
                                     get_value_str_len(&var2.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!("Error getting the signatures size: {}", e),
+                                            format!("Error getting the {} size: {}", v2_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -179,8 +179,8 @@ fn check_mutation_dry_run(
                                 if v2_len > max_tx_payload_size {
                                     log_metric(
                                         ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large: {}",
-                                         v2_len,
+                                        "The txBytes+signatures size of executeTransactionBlock node is too large",
+                                        *payload_size
                                     );
                                     return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -194,16 +194,12 @@ fn check_mutation_dry_run(
 
                                 v2_len
                             } else if seen_vars.contains(&v2_name) {
-                                seen_vars.insert(v2_name);
+                                seen_vars.insert(v1_name.clone());
                                 let v1_len =
                                     get_value_str_len(&var1.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!(
-                                                "Error getting the {} size: {}",
-                                                f.node.arguments[0].0.node.to_string(),
-                                                e
-                                            ),
+                                            format!("Error getting the {} size: {}", v1_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -215,8 +211,8 @@ fn check_mutation_dry_run(
                                 if (v1_len) > max_tx_payload_size {
                                     log_metric(
                                         ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large: {}",
-                                        v1_len,
+                                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
+                                        *payload_size
                                     );
                                     return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -230,18 +226,14 @@ fn check_mutation_dry_run(
 
                                 v1_len
                             } else {
-                                seen_vars.insert(v1_name);
-                                seen_vars.insert(v2_name);
+                                seen_vars.insert(v1_name.clone());
+                                seen_vars.insert(v2_name.clone());
 
                                 let v1_len =
                                     get_value_str_len(&var1.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!(
-                                                "Error getting the {} size: {}",
-                                                f.node.arguments[0].0.node.to_string(),
-                                                e
-                                            ),
+                                            format!("Error getting the {} size: {}", v1_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -249,7 +241,7 @@ fn check_mutation_dry_run(
                                     get_value_str_len(&var2.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!("Error getting the signatures size: {}", e),
+                                            format!("Error getting the {} size: {}", v2_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -261,8 +253,8 @@ fn check_mutation_dry_run(
                                 if (v1_len + v2_len) > max_tx_payload_size {
                                     log_metric(
                                         ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large: {}",
-                                        v1_len + v2_len,
+                                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
+                                        *payload_size
                                     );
                                     return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -283,28 +275,20 @@ fn check_mutation_dry_run(
                                 get_value_str_len(&var2.1.node, variables).map_err(|e| {
                                     graphql_error_at_pos(
                                         code::INTERNAL_SERVER_ERROR,
-                                        format!(
-                                            "Error getting the {} size: {}",
-                                            f.node.arguments[1].1.node.to_string(),
-                                            e
-                                        ),
+                                        format!("Error getting the {} size: {}", var_name, e),
                                         f.pos,
                                     )
                                 })?;
                             if seen_vars.contains(&var_name) {
                                 v2_len
                             } else {
-                                seen_vars.insert(var_name);
+                                seen_vars.insert(var_name.clone());
 
                                 let v1_len =
                                     get_value_str_len(&var1.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!(
-                                                "Error getting the {} size: {}",
-                                                f.node.arguments[1].1.node.to_string(),
-                                                e
-                                            ),
+                                            format!("Error getting the {} size: {}", var_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -317,8 +301,8 @@ fn check_mutation_dry_run(
                                 if tx_bytes_sigs_len > max_tx_payload_size {
                                     log_metric(
                                         ctx,
-                                        "The txBytes+sigs size of executeTransactionBlock node is too large: {}",
-                                        tx_bytes_sigs_len,
+                                        "The txBytes+sigs size of executeTransactionBlock node is too large.",
+                                        *payload_size,
                                     );
                                     return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -338,28 +322,20 @@ fn check_mutation_dry_run(
                                 get_value_str_len(&var1.1.node, variables).map_err(|e| {
                                     graphql_error_at_pos(
                                         code::INTERNAL_SERVER_ERROR,
-                                        format!(
-                                            "Error getting the {} size: {}",
-                                            var1.1.node.to_string(),
-                                            e
-                                        ),
+                                        format!("Error getting the {} size: {}", var_name, e),
                                         f.pos,
                                     )
                                 })?;
                             if seen_vars.contains(&var_name) {
                                 v1_len
                             } else {
-                                seen_vars.insert(var_name);
+                                seen_vars.insert(var_name.clone());
 
                                 let v2_len =
                                     get_value_str_len(&var2.1.node, variables).map_err(|e| {
                                         graphql_error_at_pos(
                                             code::INTERNAL_SERVER_ERROR,
-                                            format!(
-                                                "Error getting the {} size: {}",
-                                                var2.1.node.to_string(),
-                                                e
-                                            ),
+                                            format!("Error getting the {} size: {}", var_name, e),
                                             f.pos,
                                         )
                                     })?;
@@ -373,8 +349,8 @@ fn check_mutation_dry_run(
                                     log_metric(
                                         ctx,
                                         "The txBytes+sigs size of executeTransactionBlock node is \
-                                        too large: {}",
-                                        tx_bytes_sigs_len,
+                                        too large.",
+                                        *payload_size,
                                     );
                                     return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -396,7 +372,7 @@ fn check_mutation_dry_run(
                                         code::INTERNAL_SERVER_ERROR,
                                         format!(
                                             "Error getting the {} size: {}",
-                                            f.node.arguments[0].0.node.to_string(),
+                                            var1.0.node.to_string(),
                                             e
                                         ),
                                         f.pos,
@@ -406,7 +382,11 @@ fn check_mutation_dry_run(
                                 get_value_str_len(&var2.1.node, variables).map_err(|e| {
                                     graphql_error_at_pos(
                                         code::INTERNAL_SERVER_ERROR,
-                                        format!("Error getting the signatures size: {}", e),
+                                        format!(
+                                            "Error getting the {} size: {}",
+                                            var2.0.node.to_string(),
+                                            e
+                                        ),
                                         f.pos,
                                     )
                                 })?;
@@ -418,8 +398,8 @@ fn check_mutation_dry_run(
                             if (v1_len + v2_len) > max_tx_payload_size {
                                 log_metric(
                                         ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large: {}",
-                                        v1_len + v2_len,
+                                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
+                                        *payload_size,
                                     );
                                 return Err(graphql_error_at_pos(
                                         code::BAD_USER_INPUT,
@@ -440,20 +420,20 @@ fn check_mutation_dry_run(
                         available_budget -= tx_bytes_sigs_len;
                     } else {
                         log_metric(
-                                ctx,
+                            ctx,
+                            "This node's txBytes and signatures plus previous nodes' \
+                                        values exceed the max tx payload size allowed per query.",
+                            *payload_size,
+                        );
+                        return Err(graphql_error_at_pos(
+                            code::BAD_USER_INPUT,
+                            format!(
                                 "This node's txBytes and signatures plus previous nodes' \
                                         values exceed the max tx payload size allowed per query: {}",
-                                max_tx_payload_size,
-                            );
-                        return Err(graphql_error_at_pos(
-                                code::BAD_USER_INPUT,
-                                format!(
-                                    "This node's txBytes and signatures plus previous nodes' \
-                                        values exceed the max tx payload size allowed per query: {}",
-                                    max_tx_payload_size
-                                ),
-                                f.pos,
-                            ));
+                                max_tx_payload_size
+                            ),
+                            f.pos,
+                        ));
                     }
                 }
             }
@@ -469,7 +449,7 @@ fn check_mutation_dry_run(
     if (payload_size - current_tx_payload) > max_query_payload_size {
         log_metric(
             ctx,
-            "The read part of the query payload is too large: {}",
+            "The read part of the query payload is too large.",
             *payload_size,
         );
         return Err(graphql_error(
@@ -490,6 +470,7 @@ fn log_metric(ctx: &ExtensionContext<'_>, message: &str, payload_size: u64) {
     let metrics: &Metrics = ctx.data_unchecked();
     let query_id: &Uuid = ctx.data_unchecked();
     let session_id: &SocketAddr = ctx.data_unchecked();
+
     metrics
         .request_metrics
         .query_payload_too_large_size
