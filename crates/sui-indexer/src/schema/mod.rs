@@ -25,6 +25,7 @@ mod inner {
     pub use crate::schema::pg::event_struct_package;
     pub use crate::schema::pg::events;
     pub use crate::schema::pg::feature_flags;
+    pub use crate::schema::pg::full_objects_history;
     pub use crate::schema::pg::objects;
     pub use crate::schema::pg::objects_history;
     pub use crate::schema::pg::objects_snapshot;
@@ -60,6 +61,7 @@ mod inner {
     pub use crate::schema::mysql::event_struct_package;
     pub use crate::schema::mysql::events;
     pub use crate::schema::mysql::feature_flags;
+    pub use crate::schema::mysql::full_objects_history;
     pub use crate::schema::mysql::objects;
     pub use crate::schema::mysql::objects_history;
     pub use crate::schema::mysql::objects_snapshot;
@@ -92,6 +94,7 @@ pub use inner::event_struct_name;
 pub use inner::event_struct_package;
 pub use inner::events;
 pub use inner::feature_flags;
+pub use inner::full_objects_history;
 pub use inner::objects;
 pub use inner::objects_history;
 pub use inner::objects_snapshot;
