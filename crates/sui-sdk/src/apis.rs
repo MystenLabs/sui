@@ -1155,7 +1155,7 @@ impl QuorumDriverApi {
 
         // JSON-RPC ignores WaitForLocalExecution, so simulate it by polling for the transaction.
         let mut poll_response = tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
-            // Apply a short delay to give state sync a chance to catch up
+            // Apply a short delay to give the full node a chance to catch up.
             tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
 
             let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
