@@ -18,14 +18,13 @@ use sui_bridge::retry_with_max_elapsed_time;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::{metered_channel, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 
+use crate::metrics::BridgeIndexerMetrics;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::{EthEvent, RawEthLog};
-
-use crate::indexer_builder::{CheckpointData, DataMapper, Datasource};
-use crate::metrics::BridgeIndexerMetrics;
+use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
 
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
@@ -59,7 +58,7 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         &self,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-        data_sender: metered_channel::Sender<CheckpointData<RawEthData>>,
+        data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let filter = Filter::new()
             .address(self.bridge_address)
@@ -160,7 +159,7 @@ impl Datasource<RawEthData> for EthSyncDatasource {
         &self,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-        data_sender: metered_channel::Sender<CheckpointData<RawEthData>>,
+        data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
             EthClient::<MeteredEthHttpProvier>::new(

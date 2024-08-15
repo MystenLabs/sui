@@ -13,12 +13,9 @@ pub mod metrics;
 pub mod models;
 pub mod postgres_manager;
 pub mod schema;
-pub mod sui_checkpoint_ingestion;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
 pub mod types;
-
-pub mod indexer_builder;
 
 pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;

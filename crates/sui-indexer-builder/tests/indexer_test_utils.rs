@@ -10,12 +10,12 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
-use sui_bridge_indexer::indexer_builder::{
-    CheckpointData, DataMapper, Datasource, IndexerProgressStore, Persistent,
+
+use sui_indexer_builder::indexer_builder::{
+    DataMapper, DataSender, Datasource, IndexerProgressStore, Persistent,
 };
-use sui_bridge_indexer::sui_checkpoint_ingestion::Task;
+use sui_indexer_builder::Task;
 
 pub struct TestDatasource<T> {
     pub data: Vec<T>,
@@ -30,7 +30,7 @@ where
         &self,
         starting_checkpoint: u64,
         _target_checkpoint: u64,
-        data_sender: Sender<CheckpointData<T>>,
+        data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let data_clone = self.data.clone();
 

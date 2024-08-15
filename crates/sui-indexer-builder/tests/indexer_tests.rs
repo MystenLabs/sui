@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::Registry;
-
 use crate::indexer_test_utils::{InMemoryPersistent, NoopDataMapper, TestDatasource};
-use sui_bridge_indexer::indexer_builder::{BackfillStrategy, IndexerBuilder, IndexerProgressStore};
-use sui_bridge_indexer::sui_checkpoint_ingestion::Task;
+use prometheus::Registry;
+use sui_indexer_builder::indexer_builder::{
+    BackfillStrategy, IndexerBuilder, IndexerProgressStore,
+};
+use sui_indexer_builder::Task;
 
 mod indexer_test_utils;
 
