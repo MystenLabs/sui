@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{bail, Context, Result};
-use fastcrypto::ed25519::Ed25519PublicKey;
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
+use fastcrypto::traits::{KeyPair, ToFromBytes};
+use futures::stream::{self, StreamExt};
 use multiaddr::Multiaddr;
 use once_cell::sync::Lazy;
 use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
+use rustls::crypto::hmac::Key;
 use serde::Deserialize;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -16,6 +19,7 @@ use std::{
 use sui_tls::Allower;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeSummary;
+use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::{debug, error, info};
 
@@ -280,7 +284,10 @@ impl SuiNodeProvider {
                         let mut allow = nodes.write().unwrap();
                         allow.clear();
                         allow.extend(peers);
-                        info!("{} peers managed to make it on the allow list", allow.len());
+                        info!(
+                            "{} validator peers managed to make it on the allow list",
+                            allow.len()
+                        );
                         JSON_RPC_STATE
                             .with_label_values(&["update_peer_count", "success"])
                             .inc_by(allow.len() as f64);
@@ -303,11 +310,14 @@ impl SuiNodeProvider {
 
                 match Self::get_bridge_validators(bridge_rpc_url.clone()).await {
                     Ok(summary) => {
-                        let extracted = extract_bridge(summary);
+                        let extracted = extract_bridge(summary).await;
                         let mut allow = bridge_nodes.write().unwrap();
                         allow.clear();
                         allow.extend(extracted);
-                        info!("{} peers managed to make it on the allow list", allow.len());
+                        info!(
+                            "{} sui bridge peers managed to make it on the allow list",
+                            allow.len()
+                        );
                         JSON_RPC_STATE
                             .with_label_values(&["update_bridge_peer_count", "success"])
                             .inc_by(allow.len() as f64);
@@ -324,32 +334,120 @@ impl SuiNodeProvider {
     }
 }
 
-fn extract_bridge(summary: BridgeSummary) -> impl Iterator<Item = (Ed25519PublicKey, BridgePeer)> {
-    summary.committee.members.into_iter().filter_map(|(_, cm)| {
-        match Ed25519PublicKey::from_bytes(&cm.bridge_pubkey_bytes) {
-            Ok(public_key) => {
-                debug!(
-                    "adding public key {:?} for sui address {:?}",
-                    public_key, cm.sui_address
-                );
-                Some((
-                    public_key.clone(),
-                    BridgePeer {
-                        sui_address: cm.sui_address,
-                        public_key,
-                    },
-                )) // scoped to filter_map
+async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, BridgePeer)> {
+    let client = reqwest::Client::builder().build().unwrap();
+    let results: Vec<_> = stream::iter(summary.committee.members)
+        .filter_map(|(_, cm)| {
+            let client = client.clone();
+            async move {
+                // TODO: handle unwrap maybe url validate
+                let bridge_node_url =
+                    String::from_utf8(cm.http_rest_url).ok()? + "/metrics_pub_key";
+
+                let response = client.get(&bridge_node_url).send().await.ok()?;
+                let raw = response.bytes().await.ok()?;
+                // Try to deserialize the raw bytes into a string
+                let metrics_pub_key: String = match serde_json::from_slice(&raw) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        error!("Failed to deserialize response: {:?}", error);
+                        return None;
+                    }
+                };
+                // info!("here's the whole key: {:?}", metrics_pub_key);
+                // match Ed25519KeyPair::decode_base64(&metrics_pub_key) {
+                //     Ok(key) => {
+                //         let pubickey: Ed25519PublicKey = key.public().clone();
+                //         error!("here's the pub key: {:?}", pubickey);
+                //     }
+                //     Err(error) => {
+                //         error!(
+                //             "unable to decode key pair for bridge node {:?} error: {error}",
+                //             bridge_node_url
+                //         );
+                //     }
+                // }
+                match Ed25519KeyPair::decode_base64(&metrics_pub_key) {
+                    Ok(metrics_key) => {
+                        debug!(
+                            "adding metrics key {:?} for sui address {:?}",
+                            metrics_key, bridge_node_url
+                        );
+                        Some((
+                            metrics_key.public().clone(),
+                            BridgePeer {
+                                sui_address: cm.sui_address.clone(),
+                                public_key: metrics_key.public().clone(),
+                            },
+                        ))
+                    }
+                    Err(error) => {
+                        error!(
+                            "unable to decode public key for bridge node {:?} error: {error}",
+                            bridge_node_url
+                        );
+                        None
+                    }
+                }
             }
-            Err(error) => {
-                error!(
-                    "unable to decode public key for bridge node sui_address: {:?} error: {error}",
-                    cm.sui_address
-                );
-                None // scoped to filter_map
-            }
-        }
-    })
+        })
+        .collect()
+        .await;
+
+    results
 }
+
+// async fn extract_bridge(
+//     summary: BridgeSummary,
+// ) -> impl Iterator<Item = (Ed25519PublicKey, BridgePeer)> {
+//     let client = reqwest::Client::builder().build().unwrap();
+// summary.committee.members.into_iter().filter_map(|(_, cm)| {
+
+//     summary.committee.members.into_iter().filter_map(|(_, cm)| {
+//         // TODO: handle unwrap maybe url validate
+//         let bridge_node_url = String::from_utf8(cm.http_rest_url).unwrap() + "/metrics_pub_key";
+
+//         let response = client.get(bridge_node_url).send().await?;
+
+//         let raw = response.bytes().await?;
+
+//         #[derive(Debug, Deserialize)]
+//         struct ResponseBody {
+//             metrics_pub_key: String,
+//         }
+
+//         let body: ResponseBody = match serde_json::from_slice(&raw) {
+//             Ok(b) => b,
+//             Err(error) => {
+//                 error!("shit");
+//                 todo!();
+//             }
+//         };
+
+//         match Ed25519PublicKey::from_bytes(&raw.to_vec()) {
+//             Ok(public_key) => {
+//                 debug!(
+//                     "adding public key {:?} for sui address {:?}",
+//                     public_key, cm.sui_address
+//                 );
+//                 Some((
+//                     public_key.clone(),
+//                     BridgePeer {
+//                         sui_address: cm.sui_address,
+//                         public_key,
+//                     },
+//                 )) // scoped to filter_map
+//             }
+//             Err(error) => {
+//                 error!(
+//                     "unable to decode public key for bridge node sui_address: {:?} error: {error}",
+//                     cm.sui_address
+//                 );
+//                 None // scoped to filter_map
+//             }
+//         }
+//     })
+// }
 
 /// extract will get the network pubkey bytes from a SuiValidatorSummary type.  This type comes from a
 /// full node rpc result.  See get_validators for details.  The key here, if extracted successfully, will
