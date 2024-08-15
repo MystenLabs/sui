@@ -1224,9 +1224,9 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::table
                 .filter(checkpoints::epoch.eq(epoch as i64))
-                .select(max(checkpoints::network_total_transactions))
-                .first::<Option<i64>>(conn)
-                .map(|o| o.unwrap_or(0))
+                .select(checkpoints::network_total_transactions)
+                .order_by(checkpoints::sequence_number.desc())
+                .first::<i64>(conn)
         })
         .context("Failed to get network total transactions in epoch")
         .map(|v| v as u64)
