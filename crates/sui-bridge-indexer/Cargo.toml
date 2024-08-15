@@ -31,6 +31,7 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 backoff.workspace = true
 sui-config.workspace = true
+sui-indexer-builder.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

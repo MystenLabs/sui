@@ -12796,6 +12796,7 @@ dependencies = [
  "sui-bridge",
  "sui-config",
  "sui-data-ingestion-core",
+ "sui-indexer-builder",
  "sui-json-rpc-types",
  "sui-sdk 1.32.0",
  "sui-test-transaction-builder",
@@ -13479,6 +13480,21 @@ dependencies = [
  "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "sui-indexer-builder"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "mysten-metrics",
+ "prometheus",
+ "sui-data-ingestion-core",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

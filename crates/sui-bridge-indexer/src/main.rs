@@ -12,7 +12,6 @@ use ethers::providers::Middleware;
 use ethers::providers::Provider;
 use sui_bridge_indexer::eth_bridge_indexer::EthSubscriptionDatasource;
 use sui_bridge_indexer::eth_bridge_indexer::EthSyncDatasource;
-use sui_bridge_indexer::indexer_builder::BackfillStrategy;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -22,7 +21,6 @@ use mysten_metrics::start_prometheus_server;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
-use sui_bridge_indexer::indexer_builder::{IndexerBuilder, SuiCheckpointDatasource};
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
 use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
@@ -30,6 +28,8 @@ use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
+use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
+use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
