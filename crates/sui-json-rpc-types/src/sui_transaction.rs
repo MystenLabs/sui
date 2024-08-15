@@ -181,7 +181,7 @@ impl SuiTransactionBlockResponseOptions {
     }
 
     #[deprecated(
-        since = "1.31.0",
+        since = "1.33.0",
         note = "Balance and object changes no longer require local execution"
     )]
     pub fn require_local_execution(&self) -> bool {
