@@ -208,7 +208,7 @@ mod tests {
         )
         .unwrap();
         let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(&mut conn, /* drop_all */ true).unwrap();
+        reset_database(&mut conn).unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())
