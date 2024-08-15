@@ -33,6 +33,7 @@ use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
+use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
@@ -40,13 +41,16 @@ use crate::models::objects::{
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
-    chain_identifier, checkpoints, display, epochs, events, objects, objects_history,
-    objects_snapshot, packages, pruner_cp_watermark, transactions, tx_calls, tx_changed_objects,
-    tx_digests, tx_input_objects, tx_recipients, tx_senders,
+    chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
+    event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
+    event_struct_package, events, objects, objects_history, objects_snapshot, objects_version,
+    packages, pruner_cp_watermark, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
+    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
+use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
-    insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
+    insert_or_ignore_into, on_conflict_do_update, persist_chunk_into_table, read_only_blocking,
     transactional_blocking_with_retry,
 };
 
@@ -69,7 +73,7 @@ macro_rules! chunk {
     }};
 }
 
-macro_rules! prune_tx_indice_table {
+macro_rules! prune_tx_or_event_indice_table {
     ($table:ident, $conn:expr, $min_tx:expr, $max_tx:expr, $context_msg:expr) => {
         diesel::delete($table::table.filter($table::tx_sequence_number.between($min_tx, $max_tx)))
             .execute($conn)
@@ -462,6 +466,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                             objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
                             objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
+                            objects_snapshot::object_type_package
+                                .eq(excluded(objects_snapshot::object_type_package)),
+                            objects_snapshot::object_type_module
+                                .eq(excluded(objects_snapshot::object_type_module)),
+                            objects_snapshot::object_type_name
+                                .eq(excluded(objects_snapshot::object_type_name)),
                             objects_snapshot::object_type
                                 .eq(excluded(objects_snapshot::object_type)),
                             objects_snapshot::serialized_object
@@ -484,6 +494,9 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded.checkpoint_sequence_number),
                             objects_snapshot::owner_type.eq(excluded.owner_type),
                             objects_snapshot::owner_id.eq(excluded.owner_id),
+                            objects_snapshot::object_type_package.eq(excluded.object_type_package),
+                            objects_snapshot::object_type_module.eq(excluded.object_type_module),
+                            objects_snapshot::object_type_name.eq(excluded.object_type_name),
                             objects_snapshot::object_type.eq(excluded.object_type),
                             objects_snapshot::serialized_object.eq(excluded.serialized_object),
                             objects_snapshot::coin_type.eq(excluded.coin_type),
@@ -522,13 +535,16 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_objects_history_chunks
             .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
+        let mut object_versions: Vec<StoredObjectVersion> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
         for object in objects {
             match object {
                 ObjectChangeToCommit::MutatedObject(stored_object) => {
+                    object_versions.push(StoredObjectVersion::from(&stored_object));
                     mutated_objects.push(stored_object.into());
                 }
                 ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
+                    object_versions.push(StoredObjectVersion::from(&stored_deleted_object));
                     deleted_object_ids.push(stored_deleted_object.into());
                 }
             }
@@ -545,6 +561,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         mutated_object_change_chunk,
                         conn
                     );
+                }
+
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
                 }
 
                 for deleted_objects_chunk in
@@ -806,15 +827,149 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         })
     }
 
+    async fn persist_event_indices_chunk(
+        &self,
+        indices: Vec<EventIndex>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices_chunks
+            .start_timer();
+        let len = indices.len();
+        let (
+            event_emit_packages,
+            event_emit_modules,
+            event_senders,
+            event_struct_packages,
+            event_struct_modules,
+            event_struct_names,
+            event_struct_instantiations,
+        ) = indices.into_iter().map(|i| i.split()).fold(
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            |(
+                mut event_emit_packages,
+                mut event_emit_modules,
+                mut event_senders,
+                mut event_struct_packages,
+                mut event_struct_modules,
+                mut event_struct_names,
+                mut event_struct_instantiations,
+            ),
+             index| {
+                event_emit_packages.push(index.0);
+                event_emit_modules.push(index.1);
+                event_senders.push(index.2);
+                event_struct_packages.push(index.3);
+                event_struct_modules.push(index.4);
+                event_struct_names.push(index.5);
+                event_struct_instantiations.push(index.6);
+                (
+                    event_emit_packages,
+                    event_emit_modules,
+                    event_senders,
+                    event_struct_packages,
+                    event_struct_modules,
+                    event_struct_names,
+                    event_struct_instantiations,
+                )
+            },
+        );
+
+        // Now persist all the event indices in parallel into their tables.
+        let mut futures = vec![];
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_emit_package::table,
+                event_emit_packages,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_emit_module::table,
+                event_emit_modules,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(event_senders::table, event_senders, &this.blocking_cp)
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_package::table,
+                event_struct_packages,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_module::table,
+                event_struct_modules,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_name::table,
+                event_struct_names,
+                &this.blocking_cp
+            )
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            persist_chunk_into_table!(
+                event_struct_instantiation::table,
+                event_struct_instantiations,
+                &this.blocking_cp
+            )
+        }));
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join event indices futures in a chunk: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all event indices in a chunk: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} chunked event indices", len);
+        Ok(())
+    }
+
     async fn persist_tx_indices_chunk(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
         let len = indices.len();
-        let (senders, recipients, input_objects, changed_objects, calls, digests) =
+        let (senders, recipients, input_objects, changed_objects, pkgs, mods, funs, digests, kinds) =
             indices.into_iter().map(|i| i.split()).fold(
                 (
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
                     Vec::new(),
                     Vec::new(),
                     Vec::new(),
@@ -827,23 +982,32 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     mut tx_recipients,
                     mut tx_input_objects,
                     mut tx_changed_objects,
-                    mut tx_calls,
+                    mut tx_pkgs,
+                    mut tx_mods,
+                    mut tx_funs,
                     mut tx_digests,
+                    mut tx_kinds,
                 ),
                  index| {
                     tx_senders.extend(index.0);
                     tx_recipients.extend(index.1);
                     tx_input_objects.extend(index.2);
                     tx_changed_objects.extend(index.3);
-                    tx_calls.extend(index.4);
-                    tx_digests.extend(index.5);
+                    tx_pkgs.extend(index.4);
+                    tx_mods.extend(index.5);
+                    tx_funs.extend(index.6);
+                    tx_digests.extend(index.7);
+                    tx_kinds.extend(index.8);
                     (
                         tx_senders,
                         tx_recipients,
                         tx_input_objects,
                         tx_changed_objects,
-                        tx_calls,
+                        tx_pkgs,
+                        tx_mods,
+                        tx_funs,
                         tx_digests,
+                        tx_kinds,
                     )
                 },
             );
@@ -932,14 +1096,15 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 tracing::error!("Failed to persist tx_changed_objects with error: {}", e);
             })
         }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
-            let calls_len = calls.len();
+            let rows_len = pkgs.len();
             transactional_blocking_with_retry!(
                 &this.blocking_cp,
                 |conn| {
-                    for chunk in calls.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        insert_or_ignore_into!(tx_calls::table, chunk, conn);
+                    for chunk in pkgs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_pkg::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -947,12 +1112,60 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             )
             .tap_ok(|_| {
                 let elapsed = now.elapsed().as_secs_f64();
-                info!(elapsed, "Persisted {} rows to tx_calls tables", calls_len);
+                info!(
+                    elapsed,
+                    "Persisted {} rows to tx_calls_pkg tables", rows_len
+                );
             })
             .tap_err(|e| {
-                tracing::error!("Failed to persist tx_calls with error: {}", e);
+                tracing::error!("Failed to persist tx_calls_pkg with error: {}", e);
             })
         }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = mods.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in mods.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_mod::table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_calls_mod table", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_calls_mod with error: {}", e);
+            })
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = funs.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in funs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_calls_fun::table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                PG_DB_COMMIT_SLEEP_DURATION
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_calls_fun table", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_calls_fun with error: {}", e);
+            })
+        }));
+
         futures.push(self.spawn_blocking_task(move |this| {
             let now = Instant::now();
             let calls_len = digests.len();
@@ -960,12 +1173,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_digests::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_digests chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_digests::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -977,6 +1185,28 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             })
             .tap_err(|e| {
                 tracing::error!("Failed to persist tx_digests with error: {}", e);
+            })
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let rows_len = kinds.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in kinds.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        insert_or_ignore_into!(tx_kinds::table, chunk, conn);
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_kinds tables", rows_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_kinds with error: {}", e);
             })
         }));
 
@@ -1007,12 +1237,35 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_epoch
             .start_timer();
         let epoch_id = epoch.new_epoch.epoch;
+
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
                 if let Some(last_epoch) = &epoch.last_epoch {
                     let last_epoch_id = last_epoch.epoch;
-                    let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+                    // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because
+                    // we are not guaranteed to have the latest data in db when this is set on
+                    // indexer's chain-reading side. However, when we `persist_epoch`, the
+                    // checkpoints from an epoch ago must have been indexed.
+                    let previous_epoch_network_total_transactions = match epoch_id {
+                        0 | 1 => 0,
+                        _ => {
+                            let prev_epoch_id = epoch_id - 2;
+                            let result = checkpoints::table
+                                .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
+                                .select(max(checkpoints::network_total_transactions))
+                                .first::<Option<i64>>(conn)
+                                .map(|o| o.unwrap_or(0))?;
+
+                            result as u64
+                        }
+                    };
+
+                    let epoch_total_transactions = epoch.network_total_transactions
+                        - previous_epoch_network_total_transactions;
+
+                    let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+                    last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
                     info!(last_epoch_id, "Persisting epoch end data.");
                     on_conflict_do_update!(
                         epochs::table,
@@ -1094,6 +1347,14 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, (_, last_partition)) in table_partitions {
+                    // Only advance epoch partition for epoch partitioned tables.
+                    if !self
+                        .partition_manager
+                        .get_strategy(&table)
+                        .is_epoch_partitioned()
+                    {
+                        continue;
+                    }
                     let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_epoch(
                         table.clone(),
@@ -1147,47 +1408,121 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         )
     }
 
+    fn prune_event_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                prune_tx_or_event_indice_table!(
+                    event_emit_module,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_emit_module table"
+                );
+                prune_tx_or_event_indice_table!(
+                    event_emit_package,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_emit_package table"
+                );
+                prune_tx_or_event_indice_table![
+                    event_senders,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_senders table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_instantiation,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_instantiation table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_module,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_module table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_name,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_name table"
+                ];
+                prune_tx_or_event_indice_table![
+                    event_struct_package,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune event_struct_package table"
+                ];
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+    }
+
     fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                prune_tx_indice_table!(
+                prune_tx_or_event_indice_table!(
                     tx_senders,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_senders table"
                 );
-                prune_tx_indice_table!(
+                prune_tx_or_event_indice_table!(
                     tx_recipients,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_recipients table"
                 );
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_input_objects,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_input_objects table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
                     tx_changed_objects,
                     conn,
                     min_tx,
                     max_tx,
                     "Failed to prune tx_changed_objects table"
                 ];
-                prune_tx_indice_table![
-                    tx_calls,
+                prune_tx_or_event_indice_table![
+                    tx_calls_pkg,
                     conn,
                     min_tx,
                     max_tx,
-                    "Failed to prune tx_calls table"
+                    "Failed to prune tx_calls_pkg table"
                 ];
-                prune_tx_indice_table![
+                prune_tx_or_event_indice_table![
+                    tx_calls_mod,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_calls_mod table"
+                ];
+                prune_tx_or_event_indice_table![
+                    tx_calls_fun,
+                    conn,
+                    min_tx,
+                    max_tx,
+                    "Failed to prune tx_calls_fun table"
+                ];
+                prune_tx_or_event_indice_table![
                     tx_digests,
                     conn,
                     min_tx,
@@ -1621,6 +1956,46 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
     }
 
+    async fn persist_event_indices(&self, indices: Vec<EventIndex>) -> Result<(), IndexerError> {
+        if indices.is_empty() {
+            return Ok(());
+        }
+        let len = indices.len();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_event_indices
+            .start_timer();
+        let chunks = chunk!(indices, self.config.parallel_chunk_size);
+
+        let futures = chunks
+            .into_iter()
+            .map(|chunk| {
+                self.spawn_task(move |this: Self| async move {
+                    this.persist_event_indices_chunk(chunk).await
+                })
+            })
+            .collect::<Vec<_>>();
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failed to join persist_event_indices_chunk futures: {}", e);
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all event_indices chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} event_indices chunks", len);
+        Ok(())
+    }
+
     async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
         if indices.is_empty() {
             return Ok(());
@@ -1714,6 +2089,21 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             });
             info!(
                 "Pruned transactions for checkpoint {} from tx {} to tx {}",
+                cp, min_tx, max_tx
+            );
+            self.execute_in_blocking_worker(move |this| {
+                this.prune_event_indices_table(min_tx, max_tx)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "Failed to prune events of transactions for cp {}: {}",
+                    cp,
+                    e
+                );
+            });
+            info!(
+                "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
                 cp, min_tx, max_tx
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);

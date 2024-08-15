@@ -90,6 +90,8 @@ impl IndexedCheckpoint {
     }
 }
 
+/// Represents system state and summary info at the start and end of an epoch. Optional fields are
+/// populated at epoch boundary, since they cannot be determined at the start of the epoch.
 #[derive(Clone, Debug, Default)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
@@ -135,6 +137,9 @@ impl IndexedEpochInfo {
         }
     }
 
+    /// Creates `IndexedEpochInfo` for epoch X-1 at the boundary of epoch X-1 to X.
+    /// `network_total_tx_num_at_last_epoch_end` is needed to determine the number of transactions
+    /// that occurred in the epoch X-1.
     pub fn from_end_of_epoch_data(
         system_state_summary: &SuiSystemStateSummary,
         last_checkpoint_summary: &CertifiedCheckpointSummary,
@@ -214,6 +219,47 @@ impl IndexedEvent {
             event_type_name: event.type_.name.to_string(),
             bcs: event.contents.clone(),
             timestamp_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EventIndex {
+    pub tx_sequence_number: u64,
+    pub event_sequence_number: u64,
+    pub sender: SuiAddress,
+    pub emit_package: ObjectID,
+    pub emit_module: String,
+    pub type_package: ObjectID,
+    pub type_module: String,
+    /// Struct name of the event, without type parameters.
+    pub type_name: String,
+    /// Type instantiation of the event, with type name and type parameters, if any.
+    pub type_instantiation: String,
+}
+
+impl EventIndex {
+    pub fn from_event(
+        tx_sequence_number: u64,
+        event_sequence_number: u64,
+        event: &sui_types::event::Event,
+    ) -> Self {
+        let type_instantiation = event
+            .type_
+            .to_canonical_string(/* with_prefix */ true)
+            .splitn(3, "::")
+            .collect::<Vec<_>>()[2]
+            .to_string();
+        Self {
+            tx_sequence_number,
+            event_sequence_number,
+            sender: event.sender,
+            emit_package: event.package_id,
+            emit_module: event.transaction_module.to_string(),
+            type_package: event.type_.address.into(),
+            type_module: event.type_.module.to_string(),
+            type_name: event.type_.name.to_string(),
+            type_instantiation,
         }
     }
 }
@@ -340,12 +386,13 @@ pub struct IndexedTransaction {
 #[derive(Debug, Clone)]
 pub struct TxIndex {
     pub tx_sequence_number: u64,
+    pub tx_kind: TransactionKind,
     pub transaction_digest: TransactionDigest,
     pub checkpoint_sequence_number: u64,
     pub input_objects: Vec<ObjectID>,
     pub changed_objects: Vec<ObjectID>,
     pub payers: Vec<SuiAddress>,
-    pub senders: Vec<SuiAddress>,
+    pub sender: SuiAddress,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,
 }
