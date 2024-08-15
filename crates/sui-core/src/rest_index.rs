@@ -406,7 +406,7 @@ impl IndexStoreTables {
 
             for tx in &checkpoint.transactions {
                 // determine changes from removed objects
-                for removed_object in tx.removed_objects() {
+                for removed_object in tx.removed_objects_pre_version() {
                     match removed_object.owner() {
                         Owner::AddressOwner(address) => {
                             let owner_key = OwnerIndexKey::new(*address, removed_object.id());
