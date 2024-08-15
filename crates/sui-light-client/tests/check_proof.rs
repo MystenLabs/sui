@@ -63,7 +63,10 @@ async fn read_data(committee_seq: u64, seq: u64) -> (Committee, CheckpointData) 
 #[tokio::test]
 async fn check_can_read_test_data() {
     let (_committee, full_checkpoint) = read_data(15918264, 16005062).await;
-    assert!(full_checkpoint.checkpoint_summary.end_of_epoch_data != None);
+    assert!(full_checkpoint
+        .checkpoint_summary
+        .end_of_epoch_data
+        .is_some());
 }
 
 #[tokio::test]
@@ -214,10 +217,7 @@ async fn test_event_target_fail_no_data() {
         .data[0]
         .clone();
     let sample_eid = EventID::from((
-        full_checkpoint.transactions[1]
-            .effects
-            .transaction_digest()
-            .clone(),
+        *full_checkpoint.transactions[1].effects.transaction_digest(),
         0,
     ));
 
@@ -241,10 +241,7 @@ async fn test_event_target_success() {
         .data[0]
         .clone();
     let sample_eid = EventID::from((
-        full_checkpoint.transactions[1]
-            .effects
-            .transaction_digest()
-            .clone(),
+        *full_checkpoint.transactions[1].effects.transaction_digest(),
         0,
     ));
 
@@ -265,10 +262,7 @@ async fn test_event_target_fail_bad_event() {
         .data[0]
         .clone();
     let sample_eid = EventID::from((
-        full_checkpoint.transactions[1]
-            .effects
-            .transaction_digest()
-            .clone(),
+        *full_checkpoint.transactions[1].effects.transaction_digest(),
         1, // WRONG
     ));
 

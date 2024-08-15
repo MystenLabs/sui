@@ -13,6 +13,7 @@ use sui_types::{
     transaction::Transaction,
 };
 
+#[derive(Default)]
 pub struct ProofTarget {
     // Object ID and data
     pub objects: Vec<(ObjectRef, Object)>,
@@ -27,11 +28,7 @@ pub struct ProofTarget {
 impl ProofTarget {
     // Create a new proof target
     pub fn new() -> Self {
-        Self {
-            objects: Vec::new(),
-            events: Vec::new(),
-            committee: None,
-        }
+        Self::default()
     }
 
     // Add an object to the proof target
@@ -123,10 +120,10 @@ pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
     // Non empty object or event targets require the optional contents proof
     // If it is not present return an error
 
-    if proof.targets.objects.len() > 0 || proof.targets.events.len() > 0 {
-        if proof.contents_proof.is_none() {
-            return Err(anyhow!("Contents proof is missing"));
-        }
+    if (!proof.targets.objects.is_empty() || !proof.targets.events.is_empty())
+        && proof.contents_proof.is_none()
+    {
+        return Err(anyhow!("Contents proof is missing"));
     }
 
     // MILESTONE 3: contents proof is present if required
@@ -141,11 +138,10 @@ pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
         }
 
         // Ensure the digests are in the checkpoint contents
-        if contents_proof
+        if !contents_proof
             .checkpoint_contents
             .enumerate_transactions(summary)
-            .find(|x| x.1 == &digests)
-            .is_none()
+            .any(|x| x.1 == &digests)
         {
             // Could not find the digest in the checkpoint contents
             return Err(anyhow!(
@@ -162,7 +158,7 @@ pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
         }
 
         // If the target includes any events ensure the events digest is not None
-        if proof.targets.events.len() > 0 && contents_proof.events.is_none() {
+        if !proof.targets.events.is_empty() && contents_proof.events.is_none() {
             return Err(anyhow!("Events digest is missing"));
         }
 
