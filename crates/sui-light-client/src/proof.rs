@@ -15,13 +15,42 @@ use sui_types::{
 
 pub struct ProofTarget {
     // Object ID and data
-    objects: Vec<(ObjectRef, Object)>,
+    pub objects: Vec<(ObjectRef, Object)>,
 
     // Event ID and data
-    events: Vec<(EventID, Event)>,
+    pub events: Vec<(EventID, Event)>,
 
     // Committee
-    committee: Option<Committee>,
+    pub committee: Option<Committee>,
+}
+
+impl ProofTarget {
+    // Create a new proof target
+    pub fn new() -> Self {
+        Self {
+            objects: Vec::new(),
+            events: Vec::new(),
+            committee: None,
+        }
+    }
+
+    // Add an object to the proof target
+    pub fn add_object(mut self, object_ref: ObjectRef, object: Object) -> Self {
+        self.objects.push((object_ref, object));
+        self
+    }
+
+    // Add an event to the proof target
+    pub fn add_event(mut self, event_id: EventID, event: Event) -> Self {
+        self.events.push((event_id, event));
+        self
+    }
+
+    // Set the committee
+    pub fn set_committee(mut self, committee: Committee) -> Self {
+        self.committee = Some(committee);
+        self
+    }
 }
 
 pub struct TransactionProof {
@@ -49,21 +78,6 @@ pub struct Proof {
     pub contents_proof: Option<TransactionProof>,
 }
 
-pub struct UnverifiedProof {
-    pub proof: Proof,
-}
-
-/*  TODO: A function to package the proof from checkpoint data and targets
-
-pub fn package_to_proof(
-    checkpoint_data_evidence: &CheckpointData,
-    targets: Vec<ProofTarget>,
-) -> Result<Proof, ()> {
-    unimplemented!()
-}
-
-*/
-
 pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
     // Get checkpoint summary and optional contents
     let summary = &proof.checkpoint_summary;
@@ -76,6 +90,7 @@ pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
     summary.verify_with_contents(committee, contents_ref)?;
 
     // MILESTONE 1 : summary and contents is correct
+    // Note: this is unconditional on the proof targets, and always checked.
 
     // If the proof target is the next committee check it
     if let Some(committee) = &proof.targets.committee {
