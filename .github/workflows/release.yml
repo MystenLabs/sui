@@ -162,8 +162,7 @@ jobs:
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
       - name: Publish Windows sui binary to Chocolatey
-        if: ${{ matrix.os == 'windows-ghcloud' && contains( env.sui_tag, 'testnet') }}
-        continue-on-error: true
+        if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
         shell: bash
         run: |
           choco install checksum
