@@ -20,15 +20,11 @@ impl FileProgressStore {
 
 fn handle_file(f: Result<Vec<u8>, std::io::Error>) -> Result<Value, serde_json::Error> {
     match f {
-        Err(_) => {
-            serde_json::from_str("{}")
+        Err(_) => serde_json::from_str("{}"),
+        Ok(c) => match c.is_empty() {
+            true => serde_json::from_str("{}"),
+            false => serde_json::from_slice(&c),
         },
-        Ok(c) => {
-            match c.is_empty() {
-                true => serde_json::from_str("{}"),
-                false => serde_json::from_slice(&c)
-            }
-        }
     }
 }
 
@@ -55,4 +51,3 @@ impl ProgressStore for FileProgressStore {
         Ok(())
     }
 }
-
