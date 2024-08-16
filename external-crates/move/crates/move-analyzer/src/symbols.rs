@@ -10,7 +10,7 @@
 //! information which is then summarized in the Symbols struct subsequently used by the language
 //! server to find definitions, references, auto-completions, etc.  Parsing analysis is largely
 //! responsible for processing import statements (no longer available at the level of typed AST) and
-//! typing analysis gathers remaining information. In particular, or local definitions, typing
+//! typing analysis gathers remaining information. In particular, for local definitions, typing
 //! analysis builds a scope stack, entering encountered definitions and matching uses to a
 //! definition in the innermost scope.
 //!
@@ -2056,11 +2056,10 @@ fn datatype_type_params(data_tparams: &[DatatypeTypeParameter]) -> Vec<(Type, /*
 
 /// Some functions defined in a module need to be ignored.
 pub fn ignored_function(name: Symbol) -> bool {
-    // In test mode (that's how IDE compiles Move source files),
-    // the compiler inserts an dummy function preventing preventing
-    // publishing of modules compiled in test mode. We need to
-    // ignore its definition to avoid spurious on-hover display
-    // of this function's info whe hovering close to `module` keyword.
+    // In test mode (that's how IDE compiles Move source files), the compiler inserts an dummy
+    // function preventing publishing of modules compiled in test mode. We need to ignore its
+    // definition to avoid spurious on-hover display of this function's info whe hovering close to
+    // `module` keyword.
     name == UNIT_TEST_POISON_FUN_NAME
 }
 
