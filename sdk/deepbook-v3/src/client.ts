@@ -301,10 +301,14 @@ export class DeepBookClient {
 		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
 
 		return {
-			prices: parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			prices: parsed_prices.map((price) =>
+				parseFloat(
+					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
+				),
 			),
-			quantities: parsed_quantities.map((price) => Number(price) / baseCoin.scalar),
+			quantities: parsed_quantities.map((price) =>
+				parseFloat((Number(price) / baseCoin.scalar).toFixed(9)),
+			),
 		};
 	}
 
@@ -338,14 +342,22 @@ export class DeepBookClient {
 		const ask_parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(ask_quantities));
 
 		return {
-			bid_prices: bid_parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			bid_prices: bid_parsed_prices.map((price) =>
+				parseFloat(
+					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
+				),
 			),
-			bid_quantities: bid_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
-			ask_prices: ask_parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			bid_quantities: bid_parsed_quantities.map((quantity) =>
+				parseFloat((Number(quantity) / baseCoin.scalar).toFixed(9)),
 			),
-			ask_quantities: ask_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
+			ask_prices: ask_parsed_prices.map((price) =>
+				parseFloat(
+					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
+				),
+			),
+			ask_quantities: ask_parsed_quantities.map((quantity) =>
+				parseFloat((Number(quantity) / baseCoin.scalar).toFixed(9)),
+			),
 		};
 	}
 
