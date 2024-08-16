@@ -27,7 +27,7 @@ use sui_sdk::rpc_types::{
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::GasCoin;
+use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
@@ -779,11 +779,15 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
+                    | OperationType::PayCoin
                     | OperationType::StakeReward
                     | OperationType::StakePrinciple
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
-                            *changes.entry(addr.address).or_default() += amount.value
+                            // Todo: amend this method and tests to cover other coin types too (eg. test_publish_and_move_call also mints MY_COIN)
+                            if amount.currency.metadata.coin_type == GAS::type_().to_string() {
+                                *changes.entry(addr.address).or_default() += amount.value
+                            }
                         }
                     }
                     _ => {}
