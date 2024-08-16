@@ -79,7 +79,7 @@ module sui::groth16 {
     }
 
     /// Creates a `PublicProofInputs` wrapper from bytes.
-    #[deprecated(note = b"Use `public_proof_inputs_from_byte_arrays` instead")]
+    #[deprecated(note = b"Use `public_proof_inputs_from_scalars` instead")]
     public fun public_proof_inputs_from_bytes(bytes: vector<u8>): PublicProofInputs {
         PublicProofInputs { bytes }
     }
