@@ -526,10 +526,11 @@ export class DeepBookContract {
 
 		const baseCoinInput =
 			params.baseCoin ??
-			coinWithBalance({ type: baseCoin.type, balance: baseAmount * baseCoin.scalar });
+			coinWithBalance({ type: baseCoin.type, balance: Math.round(baseAmount * baseCoin.scalar) });
 
 		const deepCoin =
-			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
+			params.deepCoin ??
+			coinWithBalance({ type: deepCoinType, balance: Math.round(deepAmount * DEEP_SCALAR) });
 
 		const minQuoteInput = Math.round(minQuote * quoteCoin.scalar);
 
@@ -569,10 +570,14 @@ export class DeepBookContract {
 
 		const quoteCoinInput =
 			params.quoteCoin ??
-			coinWithBalance({ type: quoteCoin.type, balance: quoteAmount * quoteCoin.scalar });
+			coinWithBalance({
+				type: quoteCoin.type,
+				balance: Math.round(quoteAmount * quoteCoin.scalar),
+			});
 
 		const deepCoin =
-			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
+			params.deepCoin ??
+			coinWithBalance({ type: deepCoinType, balance: Math.round(deepAmount * DEEP_SCALAR) });
 
 		const minBaseInput = Math.round(minBase * baseCoin.scalar);
 
