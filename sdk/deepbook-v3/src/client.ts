@@ -93,7 +93,7 @@ export class DeepBookClient {
 
 		return {
 			coinType: coin.type,
-			balance: parseFloat(adjusted_balance.toFixed(9)),
+			balance: Number(adjusted_balance.toFixed(9)),
 		};
 	}
 
@@ -142,9 +142,9 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
-			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
-			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -173,9 +173,9 @@ export class DeepBookClient {
 
 		return {
 			quoteQuantity: quoteQuantity,
-			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
-			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
-			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -206,9 +206,9 @@ export class DeepBookClient {
 		return {
 			baseQuantity,
 			quoteQuantity,
-			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
-			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
-			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -302,12 +302,10 @@ export class DeepBookClient {
 
 		return {
 			prices: parsed_prices.map((price) =>
-				parseFloat(
-					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
-				),
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
 			),
 			quantities: parsed_quantities.map((price) =>
-				parseFloat((Number(price) / baseCoin.scalar).toFixed(9)),
+				Number((Number(price) / baseCoin.scalar).toFixed(9)),
 			),
 		};
 	}
@@ -343,20 +341,16 @@ export class DeepBookClient {
 
 		return {
 			bid_prices: bid_parsed_prices.map((price) =>
-				parseFloat(
-					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
-				),
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
 			),
 			bid_quantities: bid_parsed_quantities.map((quantity) =>
-				parseFloat((Number(quantity) / baseCoin.scalar).toFixed(9)),
+				Number((Number(quantity) / baseCoin.scalar).toFixed(9)),
 			),
 			ask_prices: ask_parsed_prices.map((price) =>
-				parseFloat(
-					((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9),
-				),
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
 			),
 			ask_quantities: ask_parsed_quantities.map((quantity) =>
-				parseFloat((Number(quantity) / baseCoin.scalar).toFixed(9)),
+				Number((Number(quantity) / baseCoin.scalar).toFixed(9)),
 			),
 		};
 	}
@@ -384,9 +378,9 @@ export class DeepBookClient {
 		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
 
 		return {
-			base: parseFloat((baseInVault / baseScalar).toFixed(9)),
-			quote: parseFloat((quoteInVault / quoteScalar).toFixed(9)),
-			deep: parseFloat((deepInVault / DEEP_SCALAR).toFixed(9)),
+			base: Number((baseInVault / baseScalar).toFixed(9)),
+			quote: Number((quoteInVault / quoteScalar).toFixed(9)),
+			deep: Number((deepInVault / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -436,6 +430,6 @@ export class DeepBookClient {
 		const adjusted_mid_price =
 			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
 
-		return parseFloat(adjusted_mid_price.toFixed(9));
+		return Number(adjusted_mid_price.toFixed(9));
 	}
 }
