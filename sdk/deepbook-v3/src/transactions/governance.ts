@@ -33,6 +33,7 @@ export class GovernanceContract {
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+			const stakeInput = stakeAmount * DEEP_SCALAR;
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::stake`,
@@ -40,7 +41,7 @@ export class GovernanceContract {
 					tx.object(pool.address),
 					tx.object(balanceManager.address),
 					tradeProof,
-					tx.pure.u64(stakeAmount * DEEP_SCALAR),
+					tx.pure.u64(stakeInput),
 				],
 				typeArguments: [baseCoin.type, quoteCoin.type],
 			});
