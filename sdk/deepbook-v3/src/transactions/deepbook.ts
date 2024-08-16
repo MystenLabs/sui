@@ -46,8 +46,8 @@ export class DeepBookContract {
 		const balanceManager = this.#config.getBalanceManager(balanceManagerKey);
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
-		const inputPrice = (price * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar;
-		const inputQuantity = quantity * baseCoin.scalar;
+		const inputPrice = Math.floor((price * FLOAT_SCALAR * quoteCoin.scalar) / baseCoin.scalar);
+		const inputQuantity = Math.floor(quantity * baseCoin.scalar);
 
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
 
@@ -93,6 +93,7 @@ export class DeepBookContract {
 		const baseCoin = this.#config.getCoin(pool.baseCoin);
 		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 		const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
+		const inputQuantity = Math.floor(quantity * baseCoin.scalar);
 
 		tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::place_market_order`,
@@ -102,7 +103,7 @@ export class DeepBookContract {
 				tradeProof,
 				tx.pure.u64(clientOrderId),
 				tx.pure.u8(selfMatchingOption),
-				tx.pure.u64(quantity * baseCoin.scalar),
+				tx.pure.u64(inputQuantity),
 				tx.pure.bool(isBid),
 				tx.pure.bool(payWithDeep),
 				tx.object(SUI_CLOCK_OBJECT_ID),
@@ -127,6 +128,7 @@ export class DeepBookContract {
 			const baseCoin = this.#config.getCoin(pool.baseCoin);
 			const quoteCoin = this.#config.getCoin(pool.quoteCoin);
 			const tradeProof = tx.add(this.#config.balanceManager.generateProof(balanceManagerKey));
+			const inputQuantity = Math.floor(newQuantity * baseCoin.scalar);
 
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::modify_order`,
@@ -135,7 +137,7 @@ export class DeepBookContract {
 					tx.object(balanceManager.address),
 					tradeProof,
 					tx.pure.u128(orderId),
-					tx.pure.u64(newQuantity),
+					tx.pure.u64(inputQuantity),
 					tx.object(SUI_CLOCK_OBJECT_ID),
 				],
 				typeArguments: [baseCoin.type, quoteCoin.type],
