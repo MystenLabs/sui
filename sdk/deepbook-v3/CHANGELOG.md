@@ -1,5 +1,12 @@
 # @mysten/deepbook-v3
 
+## 0.3.0
+
+### Minor Changes
+
+- 36f1c6f: Rounding for numbers, exports update
+- c51f186: New contract constants
+
 ## 0.2.1
 
 ### Patch Changes
