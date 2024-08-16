@@ -4,8 +4,9 @@
 
 // Boogie model for multisets, based on Boogie arrays. This theory assumes extensional equality for element types.
 
-type {:datatype} Multiset _;
-function {:constructor} Multiset<T>(v: [T]int, l: int): Multiset T;
+datatype Multiset<T> {
+    Multiset(v: [T]int, l: int)
+}
 
 function {:builtin "MapConst"} MapConstMultiset<T>(l: int): [T]int;
 
@@ -14,32 +15,32 @@ function {:inline} EmptyMultiset<T>(): Multiset T {
 }
 
 function {:inline} LenMultiset<T>(s: Multiset T): int {
-    l#Multiset(s)
+    s->l
 }
 
 function {:inline} ExtendMultiset<T>(s: Multiset T, v: T): Multiset T {
-    (var len := l#Multiset(s);
-    (var cnt := v#Multiset(s)[v];
-    Multiset(v#Multiset(s)[v := (cnt + 1)], len + 1)))
+    (var len := s->l;
+    (var cnt := s->v[v];
+    Multiset(s->v[v := (cnt + 1)], len + 1)))
 }
 
 // This function returns (s1 - s2). This function assumes that s2 is a subset of s1.
 function {:inline} SubtractMultiset<T>(s1: Multiset T, s2: Multiset T): Multiset T {
-    (var len1 := l#Multiset(s1);
-    (var len2 := l#Multiset(s2);
-    Multiset((lambda v:T :: v#Multiset(s1)[v]-v#Multiset(s2)[v]), len1-len2)))
+    (var len1 := s1->l;
+    (var len2 := s2->l;
+    Multiset((lambda v:T :: s1->v[v]-s2->v[v]), len1-len2)))
 }
 
 function {:inline} IsEmptyMultiset<T>(s: Multiset T): bool {
-    (l#Multiset(s) == 0) &&
-    (forall v: T :: v#Multiset(s)[v] == 0)
+    (s->l == 0) &&
+    (forall v: T :: s->v[v] == 0)
 }
 
 function {:inline} IsSubsetMultiset<T>(s1: Multiset T, s2: Multiset T): bool {
-    (l#Multiset(s1) <= l#Multiset(s2)) &&
-    (forall v: T :: v#Multiset(s1)[v] <= v#Multiset(s2)[v])
+    (s1->l <= s2->l) &&
+    (forall v: T :: s1->v[v] <= s2->v[v])
 }
 
 function {:inline} ContainsMultiset<T>(s: Multiset T, v: T): bool {
-    v#Multiset(s)[v] > 0
+    s->v[v] > 0
 }

@@ -4,7 +4,7 @@
 
 // Boogie model for vectors, based on smt arrays.
 
-// This version of vectors requires boogie to be called with `-useArrayTheory`.
+// This version of vectors requires boogie to be called without `-useArrayAxiom`.
 // It is not extensional.
 
 // Currently we just include the basic vector array theory.

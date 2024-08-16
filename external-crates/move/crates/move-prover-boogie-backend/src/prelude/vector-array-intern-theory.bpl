@@ -7,15 +7,15 @@
 // This version of vectors uses an encoding of an internalization function to
 // achieve extensional equality on vectors.
 
-type {:datatype} Vec _;
-
-function {:constructor} Vec<T>(v: [int]T, l: int): Vec T;
+datatype Vec<T> {
+    Vec(v: [int]T, l: int)
+}
 
 function {:builtin "MapConst"} MapConstVec<T>(T): [int]T;
 function {:inline} DefaultVecElem<T>(): T;
 function {:inline} DefaultVecMap<T>(): [int]T { MapConstVec(DefaultVecElem()) }
 
-axiom {:ctor "Vec"} (forall<T> x: Vec T :: {l#Vec(x)} l#Vec(x) >= 0);
+axiom {:ctor "Vec"} (forall<T> v: Vec T :: {v->l} v->l >= 0);
 
 function {:inline} VecIntern<T>(v: Vec T): Vec T;
 
@@ -27,10 +27,10 @@ axiom {:ctor "Vec"} (forall<T> v1, v2: Vec T ::
 
 function VecRepIsEqual<T>(v1: Vec T, v2: Vec T): bool {
     v1 == v2 ||
-    (var l := l#Vec(v1);
-     l == l#Vec(v2) &&
-     (forall i: int :: //{v#Vec(v1)[i], v#Vec(v2)[i]}
-         i >= 0 && i < l ==> v#Vec(v1)[i] == v#Vec(v2)[i]))
+    (var l := v1->l;
+     l == v2->l &&
+     (forall i: int :: //{v1->v[i], v2->v[i]}
+         i >= 0 && i < l ==> v1->v[i] == v2->v[i]))
 }
 
 
@@ -56,50 +56,39 @@ function {:inline} MakeVec4<T>(v1: T, v2: T, v3: T, v4: T): Vec T {
 }
 
 function {:inline} ExtendVec<T>(v: Vec T, elem: T): Vec T {
-    (var l := l#Vec(v);
-    VecIntern(Vec(v#Vec(v)[l := elem], l + 1)))
+    (var l := v->l;
+    VecIntern(Vec(v->v[l := elem], l + 1)))
 }
 
 function {:inline} ReadVec<T>(v: Vec T, i: int): T {
-    v#Vec(v)[i]
+    v->v[i]
 }
 
 function {:inline} LenVec<T>(v: Vec T): int {
-    l#Vec(v)
+    v->l
 }
 
 function {:inline} IsEmptyVec<T>(v: Vec T): bool {
-    l#Vec(v) == 0
+    v->l == 0
 }
 
 function {:inline} RemoveVec<T>(v: Vec T): Vec T {
-    (var l := l#Vec(v) - 1;
-    VecIntern(Vec(v#Vec(v)[l := DefaultVecElem()], l)))
+    (var l := v->l - 1;
+    VecIntern(Vec(v->v[l := DefaultVecElem()], l)))
 }
 
 function {:inline} RemoveAtVec<T>(v: Vec T, i: int): Vec T {
-    (var l := l#Vec(v) - 1;
+    (var l := v->l - 1;
     VecIntern(Vec(
         (lambda j: int ::
            if j >= 0 && j < l then
-               if j < i then v#Vec(v)[j] else v#Vec(v)[j+1]
+               if j < i then v->v[j] else v->v[j+1]
            else DefaultVecElem()),
         l)))
 }
 
-function {:inline} InsertAtVec<T>(v: Vec T, i: int, elem: T): Vec T {
-    (var l := l#Vec(v) + 1;
-    VecIntern(Vec(
-        (lambda j: int ::
-         if j >= 0 && j < l then
-           if j < i then v#Vec(v)[j]
-           else if j > i then v#Vec(v)[j-1] else elem
-         else DefaultVecElem()),
-        l)))
-}
-
 function {:inline} ConcatVec<T>(v1: Vec T, v2: Vec T): Vec T {
-    (var l1, m1, l2, m2 := l#Vec(v1), v#Vec(v1), l#Vec(v2), v#Vec(v2);
+    (var l1, m1, l2, m2 := v1->l, v1->v, v2->l, v2->v;
     VecIntern(Vec(
         (lambda i: int ::
           if i >= 0 && i < l1 + l2 then
@@ -109,14 +98,14 @@ function {:inline} ConcatVec<T>(v1: Vec T, v2: Vec T): Vec T {
 }
 
 function {:inline} ReverseVec<T>(v: Vec T): Vec T {
-    (var l := l#Vec(v);
+    (var l := v->l;
     VecIntern(Vec(
-        (lambda i: int :: if 0 <= i && i < l then v#Vec(v)[l - i - 1] else DefaultVecElem()),
+        (lambda i: int :: if 0 <= i && i < l then v->v[l - i - 1] else DefaultVecElem()),
         l)))
 }
 
 function {:inline} SliceVec<T>(v: Vec T, i: int, j: int): Vec T {
-    (var m := v#Vec(v);
+    (var m := v->v;
     VecIntern(Vec(
         (lambda k:int ::
           if 0 <= k && k < j - i then
@@ -128,17 +117,17 @@ function {:inline} SliceVec<T>(v: Vec T, i: int, j: int): Vec T {
 
 
 function {:inline} UpdateVec<T>(v: Vec T, i: int, elem: T): Vec T {
-    VecIntern(Vec(v#Vec(v)[i := elem], l#Vec(v)))
+    VecIntern(Vec(v->v[i := elem], v->l))
 }
 
 function {:inline} SwapVec<T>(v: Vec T, i: int, j: int): Vec T {
-    (var m := v#Vec(v);
-    VecIntern(Vec(m[i := m[j]][j := m[i]], l#Vec(v))))
+    (var m := v->v;
+    VecIntern(Vec(m[i := m[j]][j := m[i]], v->l)))
 }
 
 function {:inline} ContainsVec<T>(v: Vec T, e: T): bool {
-    (var l := l#Vec(v);
-    (exists i: int :: i >= 0 && i < l && v#Vec(v)[i] == e))
+    (var l := v->l;
+    (exists i: int :: i >= 0 && i < l && v->v[i] == e))
 }
 
 function IndexOfVec<T>(v: Vec T, e: T): int;

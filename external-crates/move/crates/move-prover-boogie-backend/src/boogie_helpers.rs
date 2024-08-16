@@ -68,9 +68,8 @@ pub fn boogie_field_sel(field_env: &FieldEnv<'_>, inst: &[Type]) -> String {
         unreachable!();
     };
     format!(
-        "${}#{}",
+        "${}",
         field_env.get_name().display(struct_env.symbol_pool()),
-        boogie_struct_name(struct_env, inst)
     )
 }
 
@@ -919,16 +918,16 @@ fn type_name_to_info_pack(env: &GlobalEnv, ty: &Type) -> Option<TypeInfoPack> {
 /// Convert a type info into a format that can be recognized by Boogie
 pub fn boogie_reflection_type_info(env: &GlobalEnv, ty: &Type) -> (String, String) {
     fn get_symbol_is_struct(idx: TypeParameterIndex) -> String {
-        format!("is#$TypeParamStruct(#{}_info)", idx)
+        format!("(#{}_info is $TypeParamStruct)", idx)
     }
     fn get_symbol_account_address(idx: TypeParameterIndex) -> String {
-        format!("a#$TypeParamStruct(#{}_info)", idx)
+        format!("#{}_info->a", idx)
     }
     fn get_symbol_module_name(idx: TypeParameterIndex) -> String {
-        format!("m#$TypeParamStruct(#{}_info)", idx)
+        format!("#{}_info->m", idx)
     }
     fn get_symbol_struct_name(idx: TypeParameterIndex) -> String {
-        format!("s#$TypeParamStruct(#{}_info)", idx)
+        format!("#{}_info->s", idx)
     }
 
     let extlib_address = env.get_extlib_address();
@@ -969,6 +968,6 @@ pub fn boogie_reflection_type_is_struct(env: &GlobalEnv, ty: &Type) -> String {
     match type_name_to_info_pack(env, ty) {
         None => "false".to_string(),
         Some(TypeInfoPack::Struct(..)) => "true".to_string(),
-        Some(TypeInfoPack::Symbolic(idx)) => format!("is#$TypeParamStruct(#{}_info)", idx),
+        Some(TypeInfoPack::Symbolic(idx)) => format!("(#{}_info is $TypeParamStruct)", idx),
     }
 }

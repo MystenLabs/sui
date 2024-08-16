@@ -171,8 +171,9 @@ function {:builtin "bv2nat"} $bv2int.{{impl.base}}(i: bv{{impl.base}}) returns (
 
 {%- endfor %}
 
-type {:datatype} $Range;
-function {:constructor} $Range(lb: int, ub: int): $Range;
+datatype $Range {
+    $Range(lb: int, ub: int)
+}
 
 function {:inline} $IsValid'bool'(v: bool): bool {
   true
@@ -202,7 +203,7 @@ function $IsValid'u256'(v: int): bool {
   v >= 0 && v <= $MAX_U256
 }
 
-function $IsValid'num'(v: int): bool {
+function {:inline} $IsValid'num'(v: int): bool {
   true
 }
 
@@ -212,12 +213,12 @@ function $IsValid'address'(v: int): bool {
 }
 
 function {:inline} $IsValidRange(r: $Range): bool {
-   $IsValid'u64'(lb#$Range(r)) &&  $IsValid'u64'(ub#$Range(r))
+   $IsValid'u64'(r->lb) &&  $IsValid'u64'(r->ub)
 }
 
 // Intentionally not inlined so it serves as a trigger in quantifiers.
 function $InRange(r: $Range, i: int): bool {
-   lb#$Range(r) <= i && i < ub#$Range(r)
+   r->lb <= i && i < r->ub
 }
 
 
@@ -260,33 +261,32 @@ function {:inline} $IsEqual'bool'(x: bool, y: bool): bool {
 // ============================================================================================
 // Memory
 
-type {:datatype} $Location;
-
-// A global resource location within the statically known resource type's memory,
-// where `a` is an address.
-function {:constructor} $Global(a: int): $Location;
-
-// A local location. `i` is the unique index of the local.
-function {:constructor} $Local(i: int): $Location;
-
-// The location of a reference outside of the verification scope, for example, a `&mut` parameter
-// of the function being verified. References with these locations don't need to be written back
-// when mutation ends.
-function {:constructor} $Param(i: int): $Location;
-
-// The location of an uninitialized mutation. Using this to make sure that the location
-// will not be equal to any valid mutation locations, i.e., $Local, $Global, or $Param.
-function {:constructor} $Uninitialized(): $Location;
+datatype $Location {
+    // A global resource location within the statically known resource type's memory,
+    // where `a` is an address.
+    $Global(a: int),
+    // A local location. `i` is the unique index of the local.
+    $Local(i: int),
+    // The location of a reference outside of the verification scope, for example, a `&mut` parameter
+    // of the function being verified. References with these locations don't need to be written back
+    // when mutation ends.
+    $Param(i: int),
+    // The location of an uninitialized mutation. Using this to make sure that the location
+    // will not be equal to any valid mutation locations, i.e., $Local, $Global, or $Param.
+    $Uninitialized()
+}
 
 // A mutable reference which also carries its current value. Since mutable references
 // are single threaded in Move, we can keep them together and treat them as a value
 // during mutation until the point they are stored back to their original location.
-type {:datatype} $Mutation _;
-function {:constructor} $Mutation<T>(l: $Location, p: Vec int, v: T): $Mutation T;
+datatype $Mutation<T> {
+    $Mutation(l: $Location, p: Vec int, v: T)
+}
 
 // Representation of memory for a given type.
-type {:datatype} $Memory _;
-function {:constructor} $Memory<T>(domain: [int]bool, contents: [int]T): $Memory T;
+datatype $Memory<T> {
+    $Memory(domain: [int]bool, contents: [int]T)
+}
 
 function {:builtin "MapConst"} $ConstMemoryDomain(v: bool): [int]bool;
 function {:builtin "MapConst"} $ConstMemoryContent<T>(v: T): [int]T;
@@ -296,29 +296,29 @@ axiom $ConstMemoryDomain(true) == (lambda i: int :: true);
 
 // Dereferences a mutation.
 function {:inline} $Dereference<T>(ref: $Mutation T): T {
-    v#$Mutation(ref)
+    ref->v
 }
 
 // Update the value of a mutation.
 function {:inline} $UpdateMutation<T>(m: $Mutation T, v: T): $Mutation T {
-    $Mutation(l#$Mutation(m), p#$Mutation(m), v)
+    $Mutation(m->l, m->p, v)
 }
 
 function {:inline} $ChildMutation<T1, T2>(m: $Mutation T1, offset: int, v: T2): $Mutation T2 {
-    $Mutation(l#$Mutation(m), ExtendVec(p#$Mutation(m), offset), v)
+    $Mutation(m->l, ExtendVec(m->p, offset), v)
 }
 
 // Return true if two mutations share the location and path
 function {:inline} $IsSameMutation<T1, T2>(parent: $Mutation T1, child: $Mutation T2 ): bool {
-    l#$Mutation(parent) == l#$Mutation(child) && p#$Mutation(parent) == p#$Mutation(child)
+    parent->l == child->l && parent->p == child->p
 }
 
 // Return true if the mutation is a parent of a child which was derived with the given edge offset. This
 // is used to implement write-back choices.
 function {:inline} $IsParentMutation<T1, T2>(parent: $Mutation T1, edge: int, child: $Mutation T2 ): bool {
-    l#$Mutation(parent) == l#$Mutation(child) &&
-    (var pp := p#$Mutation(parent);
-    (var cp := p#$Mutation(child);
+    parent->l == child->l &&
+    (var pp := parent->p;
+    (var cp := child->p;
     (var pl := LenVec(pp);
     (var cl := LenVec(cp);
      cl == pl + 1 &&
@@ -329,9 +329,9 @@ function {:inline} $IsParentMutation<T1, T2>(parent: $Mutation T1, edge: int, ch
 
 // Return true if the mutation is a parent of a child, for hyper edge.
 function {:inline} $IsParentMutationHyper<T1, T2>(parent: $Mutation T1, hyper_edge: Vec int, child: $Mutation T2 ): bool {
-    l#$Mutation(parent) == l#$Mutation(child) &&
-    (var pp := p#$Mutation(parent);
-    (var cp := p#$Mutation(child);
+    parent->l == child->l &&
+    (var pp := parent->p;
+    (var cp := child->p;
     (var pl := LenVec(pp);
     (var cl := LenVec(cp);
     (var el := LenVec(hyper_edge);
@@ -349,47 +349,47 @@ function {:inline} $EdgeMatches(edge: int, edge_pattern: int): bool {
 
 
 function {:inline} $SameLocation<T1, T2>(m1: $Mutation T1, m2: $Mutation T2): bool {
-    l#$Mutation(m1) == l#$Mutation(m2)
+    m1->l == m2->l
 }
 
 function {:inline} $HasGlobalLocation<T>(m: $Mutation T): bool {
-    is#$Global(l#$Mutation(m))
+    (m->l) is $Global
 }
 
 function {:inline} $HasLocalLocation<T>(m: $Mutation T, idx: int): bool {
-    l#$Mutation(m) == $Local(idx)
+    m->l == $Local(idx)
 }
 
 function {:inline} $GlobalLocationAddress<T>(m: $Mutation T): int {
-    a#$Global(l#$Mutation(m))
+    (m->l)->a
 }
 
 
 
 // Tests whether resource exists.
 function {:inline} $ResourceExists<T>(m: $Memory T, addr: int): bool {
-    domain#$Memory(m)[addr]
+    m->domain[addr]
 }
 
 // Obtains Value of given resource.
 function {:inline} $ResourceValue<T>(m: $Memory T, addr: int): T {
-    contents#$Memory(m)[addr]
+    m->contents[addr]
 }
 
 // Update resource.
 function {:inline} $ResourceUpdate<T>(m: $Memory T, a: int, v: T): $Memory T {
-    $Memory(domain#$Memory(m)[a := true], contents#$Memory(m)[a := v])
+    $Memory(m->domain[a := true], m->contents[a := v])
 }
 
 // Remove resource.
 function {:inline} $ResourceRemove<T>(m: $Memory T, a: int): $Memory T {
-    $Memory(domain#$Memory(m)[a := false], contents#$Memory(m))
+    $Memory(m->domain[a := false], m->contents)
 }
 
 // Copies resource from memory s to m.
 function {:inline} $ResourceCopy<T>(m: $Memory T, s: $Memory T, a: int): $Memory T {
-    $Memory(domain#$Memory(m)[a := domain#$Memory(s)[a]],
-            contents#$Memory(m)[a := contents#$Memory(s)[a]])
+    $Memory(m->domain[a := s->domain[a]],
+            m->contents[a := s->contents[a]])
 }
 
 
@@ -962,7 +962,7 @@ procedure {:inline 1} $Not(src: bool) returns (dst: bool)
 // Native Vector
 
 function {:inline} $SliceVecByRange<T>(v: Vec T, r: $Range): Vec T {
-    SliceVec(v, lb#$Range(r), ub#$Range(r))
+    SliceVec(v, r->lb, r->ub)
 }
 
 {%- for instance in vec_instances %}
@@ -1089,22 +1089,23 @@ procedure {:inline 1} $1_Account_create_signer(
 // ==================================================================================
 // Native Signer
 
-type {:datatype} $signer;
-function {:constructor} $signer($addr: int): $signer;
+datatype $signer {
+    $signer($addr: int)
+}
 function {:inline} $IsValid'signer'(s: $signer): bool {
-    $IsValid'address'($addr#$signer(s))
+    $IsValid'address'(s->$addr)
 }
 function {:inline} $IsEqual'signer'(s1: $signer, s2: $signer): bool {
     s1 == s2
 }
 
 procedure {:inline 1} $1_signer_borrow_address(signer: $signer) returns (res: int) {
-    res := $addr#$signer(signer);
+    res := signer->$addr;
 }
 
 function {:inline} $1_signer_$borrow_address(signer: $signer): int
 {
-    $addr#$signer(signer)
+    signer->$addr
 }
 
 function $1_signer_is_txn_signer(s: $signer): bool;
@@ -1173,12 +1174,12 @@ type $1_event_EventHandle;
 var $1_event_EventHandles: [$1_event_EventHandle]bool;
 
 // Universal representation of an an event. For each concrete event type, we generate a constructor.
-type {:datatype} $EventRep;
+type $EventRep;
 
 // Representation of EventStore that consists of event streams.
-type {:datatype} $EventStore;
-function {:constructor} $EventStore(
-    counter: int, streams: [$1_event_EventHandle]Multiset $EventRep): $EventStore;
+datatype $EventStore {
+    $EventStore(counter: int, streams: [$1_event_EventHandle]Multiset $EventRep)
+}
 
 // Global state holding EventStore.
 var $es: $EventStore;
@@ -1188,27 +1189,27 @@ procedure {:inline 1} $InitEventStore() {
 }
 
 function {:inline} $EventStore__is_empty(es: $EventStore): bool {
-    (counter#$EventStore(es) == 0) &&
+    (es->counter == 0) &&
     (forall handle: $1_event_EventHandle ::
-        (var stream := streams#$EventStore(es)[handle];
+        (var stream := es->streams[handle];
         IsEmptyMultiset(stream)))
 }
 
 // This function returns (es1 - es2). This function assumes that es2 is a subset of es1.
 function {:inline} $EventStore__subtract(es1: $EventStore, es2: $EventStore): $EventStore {
-    $EventStore(counter#$EventStore(es1)-counter#$EventStore(es2),
+    $EventStore(es1->counter-es2->counter,
         (lambda handle: $1_event_EventHandle ::
         SubtractMultiset(
-            streams#$EventStore(es1)[handle],
-            streams#$EventStore(es2)[handle])))
+            es1->streams[handle],
+            es2->streams[handle])))
 }
 
 function {:inline} $EventStore__is_subset(es1: $EventStore, es2: $EventStore): bool {
-    (counter#$EventStore(es1) <= counter#$EventStore(es2)) &&
+    (es1->counter <= es2->counter) &&
     (forall handle: $1_event_EventHandle ::
         IsSubsetMultiset(
-            streams#$EventStore(es1)[handle],
-            streams#$EventStore(es2)[handle]
+            es1->streams[handle],
+            es2->streams[handle]
         )
     )
 }
@@ -1238,16 +1239,16 @@ procedure {:inline 1} $InitEventStore() {
 // ============================================================================================
 // Type Reflection on Type Parameters
 
-type {:datatype} $TypeParamInfo;
-
-function {:constructor} $TypeParamBool(): $TypeParamInfo;
-function {:constructor} $TypeParamU8(): $TypeParamInfo;
-function {:constructor} $TypeParamU16(): $TypeParamInfo;
-function {:constructor} $TypeParamU32(): $TypeParamInfo;
-function {:constructor} $TypeParamU64(): $TypeParamInfo;
-function {:constructor} $TypeParamU128(): $TypeParamInfo;
-function {:constructor} $TypeParamU256(): $TypeParamInfo;
-function {:constructor} $TypeParamAddress(): $TypeParamInfo;
-function {:constructor} $TypeParamSigner(): $TypeParamInfo;
-function {:constructor} $TypeParamVector(e: $TypeParamInfo): $TypeParamInfo;
-function {:constructor} $TypeParamStruct(a: int, m: Vec int, s: Vec int): $TypeParamInfo;
+datatype $TypeParamInfo {
+    $TypeParamBool(),
+    $TypeParamU8(),
+    $TypeParamU16(),
+    $TypeParamU32(),
+    $TypeParamU64(),
+    $TypeParamU128(),
+    $TypeParamU256(),
+    $TypeParamAddress(),
+    $TypeParamSigner(),
+    $TypeParamVector(e: $TypeParamInfo),
+    $TypeParamStruct(a: int, m: Vec int, s: Vec int)
+}

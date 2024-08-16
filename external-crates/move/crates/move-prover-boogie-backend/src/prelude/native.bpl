@@ -115,6 +115,117 @@ procedure {:inline 1} $1_vector_reverse{{S}}(m: $Mutation (Vec ({{T}}))) returns
     m' := $UpdateMutation(m, ReverseVec($Dereference(m)));
 }
 
+procedure {:inline 1} $1_vector_reverse_append{{S}}(m: $Mutation (Vec ({{T}})), other: Vec ({{T}})) returns (m': $Mutation (Vec ({{T}}))) {
+    m' := $UpdateMutation(m, ConcatVec($Dereference(m), ReverseVec(other)));
+}
+
+procedure {:inline 1} $1_vector_trim_reverse{{S}}(m: $Mutation (Vec ({{T}})), new_len: int) returns (v: (Vec ({{T}})), m': $Mutation (Vec ({{T}}))) {
+    var len: int;
+    v := $Dereference(m);
+    if (LenVec(v) < new_len) {
+        call $ExecFailureAbort();
+        return;
+    }
+    v := SliceVec(v, new_len, LenVec(v));
+    v := ReverseVec(v);
+    m' := $UpdateMutation(m, SliceVec($Dereference(m), 0, new_len));
+}
+
+procedure {:inline 1} $1_vector_trim{{S}}(m: $Mutation (Vec ({{T}})), new_len: int) returns (v: (Vec ({{T}})), m': $Mutation (Vec ({{T}}))) {
+    var len: int;
+    v := $Dereference(m);
+    if (LenVec(v) < new_len) {
+        call $ExecFailureAbort();
+        return;
+    }
+    v := SliceVec(v, new_len, LenVec(v));
+    m' := $UpdateMutation(m, SliceVec($Dereference(m), 0, new_len));
+}
+
+procedure {:inline 1} $1_vector_reverse_slice{{S}}(m: $Mutation (Vec ({{T}})), left: int, right: int) returns (m': $Mutation (Vec ({{T}}))) {
+    var left_vec: Vec ({{T}});
+    var mid_vec: Vec ({{T}});
+    var right_vec: Vec ({{T}});
+    var v: Vec ({{T}});
+    if (left > right) {
+        call $ExecFailureAbort();
+        return;
+    }
+    if (left == right) {
+        m' := m;
+        return;
+    }
+    v := $Dereference(m);
+    if (!(right >= 0 && right <= LenVec(v))) {
+        call $ExecFailureAbort();
+        return;
+    }
+    left_vec := SliceVec(v, 0, left);
+    right_vec := SliceVec(v, right, LenVec(v));
+    mid_vec := ReverseVec(SliceVec(v, left, right));
+    m' := $UpdateMutation(m, ConcatVec(left_vec, ConcatVec(mid_vec, right_vec)));
+}
+
+procedure {:inline 1} $1_vector_rotate{{S}}(m: $Mutation (Vec ({{T}})), rot: int) returns (n: int, m': $Mutation (Vec ({{T}}))) {
+    var v: Vec ({{T}});
+    var len: int;
+    var left_vec: Vec ({{T}});
+    var right_vec: Vec ({{T}});
+    v := $Dereference(m);
+    if (!(rot >= 0 && rot <= LenVec(v))) {
+        call $ExecFailureAbort();
+        return;
+    }
+    left_vec := SliceVec(v, 0, rot);
+    right_vec := SliceVec(v, rot, LenVec(v));
+    m' := $UpdateMutation(m, ConcatVec(right_vec, left_vec));
+    n := LenVec(v) - rot;
+}
+
+procedure {:inline 1} $1_vector_rotate_slice{{S}}(m: $Mutation (Vec ({{T}})), left: int, rot: int, right: int) returns (n: int, m': $Mutation (Vec ({{T}}))) {
+    var left_vec: Vec ({{T}});
+    var mid_vec: Vec ({{T}});
+    var right_vec: Vec ({{T}});
+    var mid_left_vec: Vec ({{T}});
+    var mid_right_vec: Vec ({{T}});
+    var v: Vec ({{T}});
+    v := $Dereference(m);
+    if (!(left <= rot && rot <= right)) {
+        call $ExecFailureAbort();
+        return;
+    }
+    if (!(right >= 0 && right <= LenVec(v))) {
+        call $ExecFailureAbort();
+        return;
+    }
+    v := $Dereference(m);
+    left_vec := SliceVec(v, 0, left);
+    right_vec := SliceVec(v, right, LenVec(v));
+    mid_left_vec := SliceVec(v, left, rot);
+    mid_right_vec := SliceVec(v, rot, right);
+    mid_vec := ConcatVec(mid_right_vec, mid_left_vec);
+    m' := $UpdateMutation(m, ConcatVec(left_vec, ConcatVec(mid_vec, right_vec)));
+    n := left + (right - rot);
+}
+
+procedure {:inline 1} $1_vector_insert{{S}}(m: $Mutation (Vec ({{T}})), i: int, e: {{T}}) returns (m': $Mutation (Vec ({{T}}))) {
+    var left_vec: Vec ({{T}});
+    var right_vec: Vec ({{T}});
+    var v: Vec ({{T}});
+    v := $Dereference(m);
+    if (!(i >= 0 && i <= LenVec(v))) {
+        call $ExecFailureAbort();
+        return;
+    }
+    if (i == LenVec(v)) {
+        m' := $UpdateMutation(m, ExtendVec(v, e));
+    } else {
+        left_vec := ExtendVec(SliceVec(v, 0, i), e);
+        right_vec := SliceVec(v, i, LenVec(v));
+        m' := $UpdateMutation(m, ConcatVec(left_vec, right_vec));
+    }
+}
+
 procedure {:inline 1} $1_vector_length{{S}}(v: Vec ({{T}})) returns (l: int) {
     l := LenVec(v);
 }
@@ -144,7 +255,7 @@ returns (dst: $Mutation ({{T}}), m': $Mutation (Vec ({{T}})))
         call $ExecFailureAbort();
         return;
     }
-    dst := $Mutation(l#$Mutation(m), ExtendVec(p#$Mutation(m), index), ReadVec(v, index));
+    dst := $Mutation(m->l, ExtendVec(m->p, index), ReadVec(v, index));
     m' := m;
 }
 
@@ -185,25 +296,6 @@ procedure {:inline 1} $1_vector_remove{{S}}(m: $Mutation (Vec ({{T}})), i: int) 
     }
     e := ReadVec(v, i);
     m' := $UpdateMutation(m, RemoveAtVec(v, i));
-}
-
-procedure {:inline 1} $1_vector_insert{{S}}(m: $Mutation (Vec ({{T}})), val: {{T}}, i: int) returns (m': $Mutation (Vec ({{T}}))) {
-
-    var len: int;
-    var v: Vec ({{T}});
-
-    v := $Dereference(m);
-
-    len := LenVec(v);
-    if (i < 0 || i > len) {
-        call $ExecFailureAbort();
-        return;
-    }
-    if (i == len) {
-        m' := $UpdateMutation(m, ExtendVec(v, val));
-    } else {
-        m' := $UpdateMutation(m, InsertAtVec(v, i, val));
-    }
 }
 
 procedure {:inline 1} $1_vector_swap_remove{{S}}(m: $Mutation (Vec ({{T}})), i: int) returns (e: {{T}}, m': $Mutation (Vec ({{T}})))
@@ -396,7 +488,26 @@ returns (dst: $Mutation ({{V}}), m': $Mutation ({{Self}})) {
     if (!ContainsTable(t, enc_k)) {
         call $Abort($StdError(7/*INVALID_ARGUMENTS*/, 101/*ENOT_FOUND*/));
     } else {
-        dst := $Mutation(l#$Mutation(m), ExtendVec(p#$Mutation(m), enc_k), GetTable(t, enc_k));
+        dst := $Mutation(m->l, ExtendVec(m->p, enc_k), GetTable(t, enc_k));
+        m' := m;
+    }
+}
+{%- endif %}
+
+{%- if impl.fun_borrow_mut_with_default != "" %}
+procedure {:inline 2} {{impl.fun_borrow_mut_with_default}}{{S}}(m: $Mutation ({{Self}}), k: {{K}}, default: {{V}})
+returns (dst: $Mutation ({{V}}), m': $Mutation ({{Self}})) {
+    var enc_k: int;
+    var t: {{Self}};
+    var t': {{Self}};
+    enc_k := {{ENC}}(k);
+    t := $Dereference(m);
+    if (!ContainsTable(t, enc_k)) {
+        m' := $UpdateMutation(m, AddTable(t, enc_k, default));
+        t' := $Dereference(m');
+        dst := $Mutation(m'->l, ExtendVec(m'->p, enc_k), GetTable(t', enc_k));
+    } else {
+        dst := $Mutation(m->l, ExtendVec(m->p, enc_k), GetTable(t, enc_k));
         m' := m;
     }
 }
@@ -552,9 +663,9 @@ procedure {:inline 1} $1_event_destroy_handle{{S}}(handle: $1_event_EventHandle{
 
 function {:inline} $ExtendEventStore{{S}}(
         es: $EventStore, handle: $1_event_EventHandle{{S}}, msg: {{T}}): $EventStore {
-    (var stream := streams#$EventStore(es)[handle];
+    (var stream := es->streams[handle];
     (var stream_new := ExtendMultiset(stream, $ToEventRep{{S}}(msg));
-    $EventStore(counter#$EventStore(es)+1, streams#$EventStore(es)[handle := stream_new])))
+    $EventStore(es->counter+1, es->streams[handle := stream_new])))
 }
 
 function {:inline} $CondExtendEventStore{{S}}(

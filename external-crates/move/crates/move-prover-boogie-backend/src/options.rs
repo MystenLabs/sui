@@ -15,7 +15,7 @@ const DEFAULT_BOOGIE_FLAGS: &[&str] = &[
     "-printVerifiedProceduresCount:0",
     "-printModel:1",
     "-enhancedErrorMessages:1",
-    "-monomorphize",
+    //"-monomorphize",
     "-proverOpt:O:model_validate=true",
 ];
 

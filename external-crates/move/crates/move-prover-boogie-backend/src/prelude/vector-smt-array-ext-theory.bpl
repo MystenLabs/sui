@@ -12,10 +12,10 @@
 
 {% include "vector-array-theory" %}
 
-axiom {:ctor "Vec"} (forall<T> v: Vec T :: {l#Vec(v)} l#Vec(v) >= 0);
+axiom {:ctor "Vec"} (forall<T> v: Vec T :: {v->l} v->l >= 0);
 
-axiom {:ctor "Vec"} (forall<T> v: Vec T :: {v#Vec(v)}{l#Vec(v)}
-    MapIte(MapRange(0, l#Vec(v)), MapConstVec(DefaultVecElem()), v#Vec(v))
+axiom {:ctor "Vec"} (forall<T> v: Vec T :: {v->v}{v->l}
+    MapIte(MapRange(0, v->l), MapConstVec(DefaultVecElem()), v->v)
                 == MapConstVec(DefaultVecElem()));
 
 function {:builtin "MapIte"} MapIte<T,U>([T]bool, [T]U, [T]U) : [T]U;
