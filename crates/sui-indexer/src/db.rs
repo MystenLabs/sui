@@ -200,6 +200,7 @@ pub mod setup_postgres {
     use anyhow::anyhow;
     use diesel::migration::MigrationSource;
     use diesel::PgConnection;
+    use diesel::RunQueryDsl;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use prometheus::Registry;
     use secrecy::ExposeSecret;
@@ -208,9 +209,58 @@ pub mod setup_postgres {
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
     pub fn reset_database(conn: &mut PoolConnection<PgConnection>) -> Result<(), anyhow::Error> {
-        info!("Resetting database ...");
-        conn.revert_all_migrations(MIGRATIONS)
-            .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
+        info!("Resetting PG database ...");
+
+        let drop_all_tables = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+            LOOP
+                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_tables).execute(conn)?;
+        info!("Dropped all tables.");
+
+        let drop_all_procedures = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid)
+                      WHERE ns.nspname = 'public' AND prokind = 'p')
+            LOOP
+                EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_procedures).execute(conn)?;
+        info!("Dropped all procedures.");
+
+        let drop_all_functions = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ON (pg_proc.pronamespace = pg_namespace.oid)
+                      WHERE pg_namespace.nspname = 'public' AND prokind = 'f')
+            LOOP
+                EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_functions).execute(conn)?;
+        info!("Dropped all functions.");
+
+        diesel::sql_query(
+            "
+        CREATE TABLE IF NOT EXISTS __diesel_schema_migrations (
+            version VARCHAR(50) PRIMARY KEY,
+            run_on TIMESTAMP NOT NULL DEFAULT NOW()
+        )",
+        )
+        .execute(conn)?;
+        info!("Created __diesel_schema_migrations table.");
+
         conn.run_migrations(&MIGRATIONS.migrations().unwrap())
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
         info!("Reset database complete.");
@@ -307,6 +357,7 @@ pub mod setup_mysql {
     use anyhow::anyhow;
     use diesel::migration::MigrationSource;
     use diesel::MysqlConnection;
+    use diesel::RunQueryDsl;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use prometheus::Registry;
     use secrecy::ExposeSecret;
@@ -315,12 +366,32 @@ pub mod setup_mysql {
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/mysql");
 
     pub fn reset_database(conn: &mut PoolConnection<MysqlConnection>) -> Result<(), anyhow::Error> {
-        info!("Resetting database ...");
-        conn.revert_all_migrations(MIGRATIONS)
-            .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
+        info!("Resetting MySQL database ...");
+
+        let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
+            "SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE()",
+        )
+        .load(conn)?;
+        for table_name in table_names {
+            let drop_table_query = format!("DROP TABLE IF EXISTS {}", table_name);
+            diesel::sql_query(drop_table_query).execute(conn)?;
+        }
+        info!("Drop tables complete.");
+
+        diesel::sql_query(
+            "
+            CREATE TABLE __diesel_schema_migrations (
+                version VARCHAR(50) PRIMARY KEY,
+                run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+            )
+        ",
+        )
+        .execute(conn)?;
+        info!("Created __diesel_schema_migrations table.");
+
         conn.run_migrations(&MIGRATIONS.migrations().unwrap())
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
-        info!("Reset database complete.");
+        info!("All migrations complete, reset database complete");
         Ok(())
     }
 
