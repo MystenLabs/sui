@@ -15,9 +15,11 @@ module sui::groth16 {
     // Error if the number of public inputs given exceeds the max.
     const ETooManyPublicInputs: u64 = 2;
 
-    #[allow(unused_const)]
     // Error a public input does not have the correct length.
     const EInvalidScalar: u64 = 3;
+
+    // We need to set an upper bound on the number of public inputs to avoid a DoS attack.
+    const MaxPublicInputs: u64 = 8; // This must match the corresponding constant in the native verify function.
 
     /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
     /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
@@ -66,6 +68,7 @@ module sui::groth16 {
 
     /// Creates a `PublicProofInputs` wrapper from an byte arrays. Each byte array must be have length 32 and represents a scalar field element in little-endian format.
     public fun public_proof_inputs_from_scalars(scalars: &vector<vector<u8>>): PublicProofInputs {
+        assert!(scalars.length() <= MaxPublicInputs, ETooManyPublicInputs);
         let mut bytes = vector[];
         let mut i = 0;
         while (i < scalars.length()) {
