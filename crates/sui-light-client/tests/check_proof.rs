@@ -100,7 +100,7 @@ async fn test_new_committee() {
         targets: ProofTarget::new().set_committee(new_committee.clone()),
     };
 
-    assert!(verify_proof(&committee, committee_proof).is_ok());
+    assert!(verify_proof(&committee, &committee_proof).is_ok());
 }
 
 // Fail if the new committee does not match the target of the proof
@@ -114,7 +114,7 @@ async fn test_incorrect_new_committee() {
         targets: ProofTarget::new().set_committee(committee.clone()), // WRONG
     };
 
-    assert!(verify_proof(&committee, committee_proof).is_err());
+    assert!(verify_proof(&committee, &committee_proof).is_err());
 }
 
 // Fail if the certificate is incorrect even if no proof targets are given
@@ -151,7 +151,7 @@ async fn test_fail_incorrect_cert() {
 
     assert!(verify_proof(
         &new_committee, // WRONG
-        committee_proof
+        &committee_proof
     )
     .is_err());
 }
@@ -169,7 +169,7 @@ async fn test_object_target_fail_no_data() {
         targets: ProofTarget::new().add_object(sample_ref, sample_object),
     };
 
-    assert!(verify_proof(&committee, bad_proof).is_err());
+    assert!(verify_proof(&committee, &bad_proof).is_err());
 }
 
 #[tokio::test]
@@ -182,7 +182,7 @@ async fn test_object_target_success() {
     let target = ProofTarget::new().add_object(sample_ref, sample_object);
     let object_proof = construct_proof(target, &full_checkpoint).unwrap();
 
-    assert!(verify_proof(&committee, object_proof).is_ok());
+    assert!(verify_proof(&committee, &object_proof).is_ok());
 }
 
 #[tokio::test]
@@ -196,14 +196,14 @@ async fn test_object_target_fail_wrong_object() {
 
     let target = ProofTarget::new().add_object(wrong_ref, sample_object.clone()); // WRONG
     let object_proof = construct_proof(target, &full_checkpoint).unwrap();
-    assert!(verify_proof(&committee, object_proof).is_err());
+    assert!(verify_proof(&committee, &object_proof).is_err());
 
     // Does not exist
     sample_ref.1 = sample_ref.1.next(); // WRONG
 
     let target = ProofTarget::new().add_object(sample_ref, sample_object);
     let object_proof = construct_proof(target, &full_checkpoint).unwrap();
-    assert!(verify_proof(&committee, object_proof).is_err());
+    assert!(verify_proof(&committee, &object_proof).is_err());
 }
 
 #[tokio::test]
@@ -227,7 +227,7 @@ async fn test_event_target_fail_no_data() {
         targets: ProofTarget::new().add_event(sample_eid, sample_event),
     };
 
-    assert!(verify_proof(&committee, bad_proof).is_err());
+    assert!(verify_proof(&committee, &bad_proof).is_err());
 }
 
 #[tokio::test]
@@ -248,7 +248,7 @@ async fn test_event_target_success() {
     let target = ProofTarget::new().add_event(sample_eid, sample_event);
     let event_proof = construct_proof(target, &full_checkpoint).unwrap();
 
-    assert!(verify_proof(&committee, event_proof).is_ok());
+    assert!(verify_proof(&committee, &event_proof).is_ok());
 }
 
 #[tokio::test]
@@ -269,5 +269,5 @@ async fn test_event_target_fail_bad_event() {
     let target = ProofTarget::new().add_event(sample_eid, sample_event);
     let event_proof = construct_proof(target, &full_checkpoint).unwrap();
 
-    assert!(verify_proof(&committee, event_proof).is_err());
+    assert!(verify_proof(&committee, &event_proof).is_err());
 }
