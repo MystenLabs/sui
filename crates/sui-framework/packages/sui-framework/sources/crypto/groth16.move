@@ -15,6 +15,10 @@ module sui::groth16 {
     // Error if the number of public inputs given exceeds the max.
     const ETooManyPublicInputs: u64 = 2;
 
+    #[allow(unused_const)]
+    // Error a public input does not have the correct length.
+    const EInvalidScalar: u64 = 3;
+
     /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
     /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
     public struct Curve has store, copy, drop {
@@ -60,7 +64,22 @@ module sui::groth16 {
         bytes: vector<u8>,
     }
 
+    /// Creates a `PublicProofInputs` wrapper from an byte arrays. Each byte array must be have length 32 and represents a scalar field element in little-endian format.
+    public fun public_proof_inputs_from_scalars(scalars: &vector<vector<u8>>): PublicProofInputs {
+        let mut bytes = vector[];
+        let mut i = 0;
+        while (i < scalars.length()) {
+            let scalar = scalars[i];
+            // For the currently supported curves the scalars must have length 32 bytes, but if curves with different scalar sizes should be supported this code must be refactored.
+            assert!(scalar.length() == 32, EInvalidScalar);
+            bytes.append(scalar);
+            i = i + 1;
+        };
+        PublicProofInputs { bytes }
+    }
+
     /// Creates a `PublicProofInputs` wrapper from bytes.
+    #[deprecated(note = b"Use `public_proof_inputs_from_byte_arrays` instead")]
     public fun public_proof_inputs_from_bytes(bytes: vector<u8>): PublicProofInputs {
         PublicProofInputs { bytes }
     }

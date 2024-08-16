@@ -37,6 +37,13 @@ module sui::groth16_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = groth16::EInvalidScalar)]
+    fun test_invalid_public_inputs() {
+        let public_inputs_too_short = vector[x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", x"1234"];
+        groth16::public_proof_inputs_from_scalars(&public_inputs_too_short);
+    }
+
+    #[test]
     fun test_verify_groth_16_proof_bls12381() {
         let curve = bls12381();
 
@@ -48,7 +55,7 @@ module sui::groth16_tests {
         let pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
 
         let inputs_bytes = x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849";
-        let inputs = groth16::public_proof_inputs_from_bytes(inputs_bytes);
+        let inputs = groth16::public_proof_inputs_from_scalars(&vector[inputs_bytes]);
 
         let proof_bytes = x"a29981304df8e0f50750b558d4de59dbc8329634b81c986e28e9fff2b0faa52333b14a1f7b275b029e13499d1f5dd8ab955cf5fa3000a097920180381a238ce12df52207597eade4a365a6872c0a19a39c08a9bfb98b69a15615f90cc32660180ca32e565c01a49b505dd277713b1eae834df49643291a3601b11f56957bde02d5446406d0e4745d1bd32c8ccb8d8e80b877712f5f373016d2ecdeebb58caebc7a425b8137ebb1bd0c5b81c1d48151b25f0f24fe9602ba4e403811fb17db6f14";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
@@ -59,10 +66,6 @@ module sui::groth16_tests {
         vk_bytes.pop_back();
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
         assert!(groth16::verify_groth16_proof(&curve, &invalid_pvk, &inputs, &proof) == false);
-
-        // Invalid public inputs bytes.
-        let invalid_inputs = groth16::public_proof_inputs_from_bytes(x"cf");
-        assert!(groth16::verify_groth16_proof(&curve, &pvk, &invalid_inputs, &proof) == false);
 
         // Invalid proof bytes.
         let invalid_proof = groth16::proof_points_from_bytes(x"4a");
@@ -80,8 +83,19 @@ module sui::groth16_tests {
         let delta_bytes = x"8229cb9443ef1fb72887f917f500e2aef998717d91857bcb92061ecd74d1d24c2b2b282736e8074e4316939b4c9853c117aa08ed49206860d648818b2cccb526585f5790161b1730d39c73603b482424a27bba891aaa6d99f3025d3df2a6bd42";
         let pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
 
-        let inputs_bytes = x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849";
-        let inputs = groth16::public_proof_inputs_from_bytes(inputs_bytes);
+        // We give 9 equal inputs which exceeds the limit of 8
+        let inputs_bytes = vector[
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
+            x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849"
+        ];
+        let inputs = groth16::public_proof_inputs_from_scalars(&inputs_bytes);
 
         let proof_bytes = x"a29981304df8e0f50750b558d4de59dbc8329634b81c986e28e9fff2b0faa52333b14a1f7b275b029e13499d1f5dd8ab955cf5fa3000a097920180381a238ce12df52207597eade4a365a6872c0a19a39c08a9bfb98b69a15615f90cc32660180ca32e565c01a49b505dd277713b1eae834df49643291a3601b11f56957bde02d5446406d0e4745d1bd32c8ccb8d8e80b877712f5f373016d2ecdeebb58caebc7a425b8137ebb1bd0c5b81c1d48151b25f0f24fe9602ba4e403811fb17db6f14";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
@@ -120,6 +134,13 @@ module sui::groth16_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = groth16::EInvalidScalar)]
+    fun test_invalid_public_inputs_bn254() {
+        let public_inputs_too_short = vector[x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", x"1234"];
+        groth16::public_proof_inputs_from_scalars(&public_inputs_too_short);
+    }
+
+    #[test]
     fun test_verify_groth_16_proof_bn254() {
         let curve = bn254();
 
@@ -131,7 +152,7 @@ module sui::groth16_tests {
         let pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
 
         let inputs_bytes = x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a";
-        let inputs = groth16::public_proof_inputs_from_bytes(inputs_bytes);
+        let inputs = groth16::public_proof_inputs_from_scalars(&vector[inputs_bytes]);
 
         let proof_bytes = x"dd2ef02e57d6a282df6b7f36c134ab7e55c2e04c5b8cbd7831be18e0e7224623ae8bd6c41637c10cbd02f5e68de6394461f417895ddd264d6f0ddacf68c6cd02feb8881f0efa599139a6faf4223dd8743777c4346cba52322eb466af96f2be9f813af1450f84d6f8029804f60cac1add70ad1a3d4226404f84f4022dc18caa0f";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
@@ -142,10 +163,6 @@ module sui::groth16_tests {
         vk_bytes.pop_back();
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
         assert!(groth16::verify_groth16_proof(&curve, &invalid_pvk, &inputs, &proof) == false);
-
-        // Invalid public inputs bytes.
-        let invalid_inputs = groth16::public_proof_inputs_from_bytes(x"cf");
-        assert!(groth16::verify_groth16_proof(&curve, &pvk, &invalid_inputs, &proof) == false);
 
         // Invalid proof bytes.
         let invalid_proof = groth16::proof_points_from_bytes(x"4a");
@@ -164,8 +181,18 @@ module sui::groth16_tests {
         let pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
 
         // We give 9 equal inputs which exceeds the limit of 8
-        let inputs_bytes = x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a";
-        let inputs = groth16::public_proof_inputs_from_bytes(inputs_bytes);
+        let inputs_bytes = vector[
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", 
+            x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a"
+        ];
+        let inputs = groth16::public_proof_inputs_from_scalars(&inputs_bytes);
 
         let proof_bytes = x"dd2ef02e57d6a282df6b7f36c134ab7e55c2e04c5b8cbd7831be18e0e7224623ae8bd6c41637c10cbd02f5e68de6394461f417895ddd264d6f0ddacf68c6cd02feb8881f0efa599139a6faf4223dd8743777c4346cba52322eb466af96f2be9f813af1450f84d6f8029804f60cac1add70ad1a3d4226404f84f4022dc18caa0f";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
