@@ -3,14 +3,13 @@
 use anyhow::{bail, Context, Result};
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use fastcrypto::traits::{KeyPair, ToFromBytes};
+use futures::future;
 use futures::stream::{self, StreamExt};
 use multiaddr::Multiaddr;
 use once_cell::sync::Lazy;
 use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
-use rustls::crypto::hmac::Key;
 use serde::Deserialize;
-use std::str::FromStr;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -58,6 +57,7 @@ pub struct SuiPeer {
 /// A BridgePeer is the collated sui chain data we have about validators
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct BridgePeer {
+    pub http_rest_url: String,
     pub sui_address: SuiAddress,
     pub public_key: Ed25519PublicKey,
 }
@@ -288,6 +288,7 @@ impl SuiNodeProvider {
                             "{} validator peers managed to make it on the allow list",
                             allow.len()
                         );
+
                         JSON_RPC_STATE
                             .with_label_values(&["update_peer_count", "success"])
                             .inc_by(allow.len() as f64);
@@ -318,6 +319,8 @@ impl SuiNodeProvider {
                             "{} sui bridge peers managed to make it on the allow list",
                             allow.len()
                         );
+                        info!("confirming the structure of our map {:?}", allow);
+
                         JSON_RPC_STATE
                             .with_label_values(&["update_bridge_peer_count", "success"])
                             .inc_by(allow.len() as f64);
@@ -337,12 +340,21 @@ impl SuiNodeProvider {
 async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, BridgePeer)> {
     let client = reqwest::Client::builder().build().unwrap();
     let results: Vec<_> = stream::iter(summary.committee.members)
+        .filter(|(_, x)| {
+            future::ready(
+                String::from_utf8(x.http_rest_url.clone())
+                    .unwrap()
+                    .contains("mystenlabs.com"),
+            )
+        })
         .filter_map(|(_, cm)| {
             let client = client.clone();
             async move {
                 // TODO: handle unwrap maybe url validate
                 let bridge_node_url =
                     String::from_utf8(cm.http_rest_url).ok()? + "/metrics_pub_key";
+
+                info!(bridge_node_url);
 
                 let response = client.get(&bridge_node_url).send().await.ok()?;
                 let raw = response.bytes().await.ok()?;
@@ -378,6 +390,7 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Bridge
                             BridgePeer {
                                 sui_address: cm.sui_address.clone(),
                                 public_key: metrics_key.public().clone(),
+                                http_rest_url: bridge_node_url,
                             },
                         ))
                     }

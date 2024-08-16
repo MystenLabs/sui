@@ -11,7 +11,7 @@ use prometheus::{
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_types::crypto::NetworkKeyPair;
-use tracing::error;
+use tracing::{error, info};
 
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
@@ -62,6 +62,8 @@ pub fn start_metrics_push_task(
 ) {
     use fastcrypto::traits::KeyPair;
 
+    info!("using metrics configs: {:?} ", metrics_config);
+
     const DEFAULT_METRICS_PUSH_INTERVAL: Duration = Duration::from_secs(60);
 
     let (interval, url) = match metrics_config {
@@ -97,6 +99,7 @@ pub fn start_metrics_push_task(
                 m.set_timestamp_ms(now);
             }
         }
+        info!("metrics sample: {:?}", metric_families[0]);
 
         let mut buf: Vec<u8> = vec![];
         let encoder = prometheus::ProtobufEncoder::new();
@@ -108,14 +111,21 @@ pub fn start_metrics_push_task(
             err
         })?;
 
-        let response = client
+        let response = match client
             .client()
             .post(url.to_owned())
             .header(reqwest::header::CONTENT_ENCODING, "snappy")
             .header(reqwest::header::CONTENT_TYPE, prometheus::PROTOBUF_FORMAT)
             .body(compressed)
             .send()
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(err) => {
+                error!("whole error {:?}", err);
+                return Err(anyhow::anyhow!("couldn't even send the request?"));
+            }
+        };
 
         if !response.status().is_success() {
             let status = response.status();

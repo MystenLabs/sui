@@ -49,6 +49,10 @@ async fn main() -> anyhow::Result<()> {
     let metadata =
         BridgeNodePublicMetadata::new(VERSION.into(), config.metrics_key_pair.public().clone());
 
+    info!(
+        "starting metrics push task with key: pub, {}",
+        config.metrics_key_pair.copy().public()
+    );
     start_metrics_push_task(
         &config.metrics,
         config.metrics_key_pair.copy(),
