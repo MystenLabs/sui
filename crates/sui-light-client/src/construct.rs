@@ -7,6 +7,11 @@ use anyhow::anyhow;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffectsAPI;
 
+/// Construct a proof from the given checkpoint data and proof targets.
+///
+/// Only minimal cheaper checks are performed to ensure the proof is valid. If you need guaranteed
+/// validity consider calling `verify_proof` function on the constructed proof. It either returns
+/// `Ok` with a proof, or `Err` with a description of the error.
 pub fn construct_proof(targets: ProofTarget, data: &CheckpointData) -> anyhow::Result<Proof> {
     let checkpoint_summary = data.checkpoint_summary.clone();
     let mut this_proof = Proof {

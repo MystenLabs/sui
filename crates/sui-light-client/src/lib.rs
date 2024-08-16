@@ -3,3 +3,9 @@
 
 pub mod construct;
 pub mod proof;
+
+#[doc(inline)]
+pub use proof::*;
+
+#[doc(inline)]
+pub use construct::*;

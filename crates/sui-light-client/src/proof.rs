@@ -13,69 +13,96 @@ use sui_types::{
     transaction::Transaction,
 };
 
+/// Define aspect of Sui state that need to be certified in a proof
 #[derive(Default)]
 pub struct ProofTarget {
-    // Object ID and data
+
+    /// Objects that need to be certified
     pub objects: Vec<(ObjectRef, Object)>,
 
-    // Event ID and data
+    /// Events that need to be certified
     pub events: Vec<(EventID, Event)>,
 
-    // Committee
+    /// The next committee being certified
     pub committee: Option<Committee>,
 }
 
 impl ProofTarget {
-    // Create a new proof target
+
+    /// Create a new empty proof target. An empty proof target still ensures that the
+    /// checkpoint summary is correct.
     pub fn new() -> Self {
         Self::default()
     }
 
-    // Add an object to the proof target
+    /// Add an object to be certified by object reference and content. A verified proof will
+    /// ensure that both the reference and content are correct. Note that some content is
+    /// meta-data such as the transaction that created this object.
     pub fn add_object(mut self, object_ref: ObjectRef, object: Object) -> Self {
         self.objects.push((object_ref, object));
         self
     }
 
-    // Add an event to the proof target
+    /// Add an event to be certified by event ID and content. A verified proof will ensure that
+    /// both the ID and content are correct.
     pub fn add_event(mut self, event_id: EventID, event: Event) -> Self {
         self.events.push((event_id, event));
         self
     }
 
-    // Set the committee
+    /// Add the next committee to be certified. A verified proof will ensure that the next
+    /// committee is correct.
     pub fn set_committee(mut self, committee: Committee) -> Self {
         self.committee = Some(committee);
         self
     }
+
 }
 
+/// Part of a Proof that provides evidence relating to a specific transaction to
+/// certify objects and events.
 pub struct TransactionProof {
-    // Checkpoint contents including this transaction
+
+    /// Checkpoint contents including this transaction.
     pub checkpoint_contents: CheckpointContents,
 
-    // The transaction
+    /// The transaction being certified.
     pub transaction: Transaction,
 
-    // The effects of the transaction
+    /// The effects of the transaction being certified.
     pub effects: TransactionEffects,
 
-    // The events of the transaction
+    /// The events of the transaction being certified.
     pub events: Option<TransactionEvents>,
 }
 
+/// A proof for specific targets. It certifies a checkpoint summary and optionally includes
+/// transaction evidence to certify objects and events.
 pub struct Proof {
-    // Proof Targets
+
+    /// Targets of the proof are objects, events or a committee that need to be certified
     pub targets: ProofTarget,
 
-    // The certified checkpoint summary
+    /// A summary of the checkpoint being certified.
     pub checkpoint_summary: CertifiedCheckpointSummary,
 
-    // The content
+    /// Optional transaction proof to certify objects and events.
     pub contents_proof: Option<TransactionProof>,
 }
 
-pub fn verify_proof(committee: &Committee, proof: Proof) -> anyhow::Result<()> {
+
+/// Verify a proof against a committee. A proof is valid if it certifies the checkpoint summary
+/// and optionally includes transaction evidence to certify objects and events.
+///
+/// If the result is `Ok(())` then the proof is valid. If Err is returned then the proof is invalid
+/// and the error message will describe the reason. Once a proof is verified it can be trusted,
+/// and information in `targets` as well as `checkpoint_summary` or `contents_proof` can be
+/// trusted as being authentic.
+///
+/// The authoritative committee is required to verify the proof. The sequence of committees can be
+/// verified through a proof for Committee proof target on the last checkpoint of each epoch,
+/// sequentially since the first epoch.
+pub fn verify_proof(committee: &Committee, proof: &Proof) -> anyhow::Result<()> {
     // Get checkpoint summary and optional contents
     let summary = &proof.checkpoint_summary;
     let contents_ref = proof
