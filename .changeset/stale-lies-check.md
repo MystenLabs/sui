@@ -2,4 +2,4 @@
 '@mysten/deepbook-v3': minor
 ---
 
-Rounding for division
+Rounding for numbers, exports update
