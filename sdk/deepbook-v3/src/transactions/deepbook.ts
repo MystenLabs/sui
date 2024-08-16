@@ -531,13 +531,15 @@ export class DeepBookContract {
 		const deepCoin =
 			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
 
+		const minQuoteInput = Math.round(minQuote * quoteCoin.scalar);
+
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_base_for_quote`,
 			arguments: [
 				tx.object(pool.address),
 				baseCoinInput,
 				deepCoin,
-				tx.pure.u64(quoteCoin.scalar * minQuote),
+				tx.pure.u64(minQuoteInput),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],
@@ -572,13 +574,15 @@ export class DeepBookContract {
 		const deepCoin =
 			params.deepCoin ?? coinWithBalance({ type: deepCoinType, balance: deepAmount * DEEP_SCALAR });
 
+		const minBaseInput = Math.round(minBase * baseCoin.scalar);
+
 		const [baseCoinResult, quoteCoinResult, deepCoinResult] = tx.moveCall({
 			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::swap_exact_quote_for_base`,
 			arguments: [
 				tx.object(pool.address),
 				quoteCoinInput,
 				deepCoin,
-				tx.pure.u64(baseCoin.scalar * minBase),
+				tx.pure.u64(minBaseInput),
 				tx.object(SUI_CLOCK_OBJECT_ID),
 			],
 			typeArguments: [baseCoin.type, quoteCoin.type],

@@ -93,7 +93,7 @@ export class DeepBookClient {
 
 		return {
 			coinType: coin.type,
-			balance: adjusted_balance,
+			balance: parseFloat(adjusted_balance.toFixed(9)),
 		};
 	}
 
@@ -142,9 +142,9 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
+			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -173,9 +173,9 @@ export class DeepBookClient {
 
 		return {
 			quoteQuantity: quoteQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
+			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -206,9 +206,9 @@ export class DeepBookClient {
 		return {
 			baseQuantity,
 			quoteQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: parseFloat((baseOut / baseScalar).toFixed(9)),
+			quoteOut: parseFloat((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: parseFloat((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -372,9 +372,9 @@ export class DeepBookClient {
 		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
 
 		return {
-			base: baseInVault / baseScalar,
-			quote: quoteInVault / quoteScalar,
-			deep: deepInVault / DEEP_SCALAR,
+			base: parseFloat((baseInVault / baseScalar).toFixed(9)),
+			quote: parseFloat((quoteInVault / quoteScalar).toFixed(9)),
+			deep: parseFloat((deepInVault / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -424,6 +424,6 @@ export class DeepBookClient {
 		const adjusted_mid_price =
 			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
 
-		return adjusted_mid_price;
+		return parseFloat(adjusted_mid_price.toFixed(9));
 	}
 }

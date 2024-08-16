@@ -58,7 +58,7 @@ export class FlashLoanContract {
 			const borrowScalar = baseCoin.scalar;
 
 			const [baseCoinReturn] = tx.splitCoins(baseCoinInput, [
-				tx.pure.u64(borrowAmount * borrowScalar),
+				tx.pure.u64(Math.round(borrowAmount * borrowScalar)),
 			]);
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
@@ -110,7 +110,7 @@ export class FlashLoanContract {
 			const borrowScalar = quoteCoin.scalar;
 
 			const [quoteCoinReturn] = tx.splitCoins(quoteCoinInput, [
-				tx.pure.u64(borrowAmount * borrowScalar),
+				tx.pure.u64(Math.round(borrowAmount * borrowScalar)),
 			]);
 			tx.moveCall({
 				target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_quote`,
