@@ -16,7 +16,6 @@ use sui_types::{
 /// Define aspect of Sui state that need to be certified in a proof
 #[derive(Default)]
 pub struct ProofTarget {
-
     /// Objects that need to be certified
     pub objects: Vec<(ObjectRef, Object)>,
 
@@ -28,7 +27,6 @@ pub struct ProofTarget {
 }
 
 impl ProofTarget {
-
     /// Create a new empty proof target. An empty proof target still ensures that the
     /// checkpoint summary is correct.
     pub fn new() -> Self {
@@ -56,13 +54,11 @@ impl ProofTarget {
         self.committee = Some(committee);
         self
     }
-
 }
 
 /// Part of a Proof that provides evidence relating to a specific transaction to
 /// certify objects and events.
 pub struct TransactionProof {
-
     /// Checkpoint contents including this transaction.
     pub checkpoint_contents: CheckpointContents,
 
@@ -79,7 +75,6 @@ pub struct TransactionProof {
 /// A proof for specific targets. It certifies a checkpoint summary and optionally includes
 /// transaction evidence to certify objects and events.
 pub struct Proof {
-
     /// Targets of the proof are objects, events or a committee that need to be certified
     pub targets: ProofTarget,
 
@@ -89,7 +84,6 @@ pub struct Proof {
     /// Optional transaction proof to certify objects and events.
     pub contents_proof: Option<TransactionProof>,
 }
-
 
 /// Verify a proof against a committee. A proof is valid if it certifies the checkpoint summary
 /// and optionally includes transaction evidence to certify objects and events.
