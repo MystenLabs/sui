@@ -93,7 +93,7 @@ export class DeepBookClient {
 
 		return {
 			coinType: coin.type,
-			balance: adjusted_balance,
+			balance: Number(adjusted_balance.toFixed(9)),
 		};
 	}
 
@@ -142,9 +142,9 @@ export class DeepBookClient {
 
 		return {
 			baseQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -173,9 +173,9 @@ export class DeepBookClient {
 
 		return {
 			quoteQuantity: quoteQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -206,9 +206,9 @@ export class DeepBookClient {
 		return {
 			baseQuantity,
 			quoteQuantity,
-			baseOut: baseOut / baseScalar,
-			quoteOut: quoteOut / quoteScalar,
-			deepRequired: deepRequired / DEEP_SCALAR,
+			baseOut: Number((baseOut / baseScalar).toFixed(9)),
+			quoteOut: Number((quoteOut / quoteScalar).toFixed(9)),
+			deepRequired: Number((deepRequired / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -301,10 +301,12 @@ export class DeepBookClient {
 		const parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(quantities));
 
 		return {
-			prices: parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			prices: parsed_prices.map((price) =>
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
 			),
-			quantities: parsed_quantities.map((price) => Number(price) / baseCoin.scalar),
+			quantities: parsed_quantities.map((price) =>
+				Number((Number(price) / baseCoin.scalar).toFixed(9)),
+			),
 		};
 	}
 
@@ -338,14 +340,18 @@ export class DeepBookClient {
 		const ask_parsed_quantities = bcs.vector(bcs.u64()).parse(new Uint8Array(ask_quantities));
 
 		return {
-			bid_prices: bid_parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			bid_prices: bid_parsed_prices.map((price) =>
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
 			),
-			bid_quantities: bid_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
-			ask_prices: ask_parsed_prices.map(
-				(price) => (Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar,
+			bid_quantities: bid_parsed_quantities.map((quantity) =>
+				Number((Number(quantity) / baseCoin.scalar).toFixed(9)),
 			),
-			ask_quantities: ask_parsed_quantities.map((quantity) => Number(quantity) / baseCoin.scalar),
+			ask_prices: ask_parsed_prices.map((price) =>
+				Number(((Number(price) / FLOAT_SCALAR / quoteCoin.scalar) * baseCoin.scalar).toFixed(9)),
+			),
+			ask_quantities: ask_parsed_quantities.map((quantity) =>
+				Number((Number(quantity) / baseCoin.scalar).toFixed(9)),
+			),
 		};
 	}
 
@@ -372,9 +378,9 @@ export class DeepBookClient {
 		const deepInVault = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
 
 		return {
-			base: baseInVault / baseScalar,
-			quote: quoteInVault / quoteScalar,
-			deep: deepInVault / DEEP_SCALAR,
+			base: Number((baseInVault / baseScalar).toFixed(9)),
+			quote: Number((quoteInVault / quoteScalar).toFixed(9)),
+			deep: Number((deepInVault / DEEP_SCALAR).toFixed(9)),
 		};
 	}
 
@@ -424,6 +430,6 @@ export class DeepBookClient {
 		const adjusted_mid_price =
 			(parsed_mid_price * baseCoin.scalar) / quoteCoin.scalar / FLOAT_SCALAR;
 
-		return adjusted_mid_price;
+		return Number(adjusted_mid_price.toFixed(9));
 	}
 }
