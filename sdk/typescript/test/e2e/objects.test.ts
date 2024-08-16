@@ -119,10 +119,11 @@ describe('Object Reading API', () => {
 		// Transfer the entire gas object:
 		tx.transferObjects([tx.gas], normalizeSuiAddress('0x2'));
 
-		await toolbox.client.signAndExecuteTransaction({
+		const { digest } = await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
 			transaction: tx,
 		});
+		await toolbox.client.waitForTransaction({ digest });
 
 		const res = await toolbox.client.tryGetPastObject({
 			id: data[0].coinObjectId,
