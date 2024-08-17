@@ -14381,6 +14381,7 @@ dependencies = [
  "tap",
  "thiserror",
  "tokio",
+ "url",
 ]
 
 [[package]]
