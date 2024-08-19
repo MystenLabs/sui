@@ -1451,15 +1451,21 @@ impl DBBatch {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
-
+        let mut total = 0usize;
         new_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
+                total += k_buf.len() + v_buf.len();
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
+        self.db_metrics
+            .op_metrics
+            .rocksdb_batch_put_bytes
+            .with_label_values(&[&db.cf])
+            .observe(total as f64);
         Ok(self)
     }
 
