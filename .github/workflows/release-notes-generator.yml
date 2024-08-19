@@ -1,4 +1,6 @@
-name: Release Notes Generator
+name: Create Sui Release with Release Notes
+
+concurrency: ${{ github.workflow }}-${{ inputs.release_tag }}
 
 on:
   workflow_dispatch:
