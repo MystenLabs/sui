@@ -29,9 +29,8 @@ use LocalState::*;
 use crate::ability_cache::AbilityCache;
 
 pub(crate) const STEP_BASE_COST: u128 = 1;
-pub(crate) const RET_PER_LOCAL_COST: u128 = 2;
-pub(crate) const JOIN_BASE_COST: u128 = 1;
-pub(crate) const JOIN_PER_LOCAL_COST: u128 = 2;
+pub(crate) const RET_COST: u128 = 10;
+pub(crate) const JOIN_COST: u128 = 10;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AbstractState {
@@ -152,12 +151,7 @@ impl AbstractDomain for AbstractState {
         state: &AbstractState,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(
-            Scope::Function,
-            JOIN_PER_LOCAL_COST,
-            state.local_states.len(),
-        )?;
+        meter.add(Scope::Function, JOIN_COST)?;
         let joined = Self::join_(self, state);
         assert!(self.local_states.len() == joined.local_states.len());
         let locals_unchanged = self

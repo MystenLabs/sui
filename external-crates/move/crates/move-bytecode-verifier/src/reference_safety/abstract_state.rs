@@ -75,13 +75,12 @@ impl std::fmt::Display for Label {
 }
 
 pub(crate) const STEP_BASE_COST: u128 = 1;
-pub(crate) const JOIN_BASE_COST: u128 = 1;
-pub(crate) const JOIN_PER_LOCAL_COST: u128 = 2;
+pub(crate) const JOIN_BASE_COST: u128 = 10;
 
 pub(crate) const PER_GRAPH_ITEM_COST: u128 = 2;
-pub(crate) const PER_GRAPH_ITEM_COST_GROWTH: f32 = 1.5;
+pub(crate) const PER_GRAPH_ITEM_COST_GROWTH: f32 = 1.2;
 
-pub(crate) const ADD_BORROW_COST: u128 = 3;
+pub(crate) const ADD_BORROW_COST: u128 = 4;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -123,15 +122,6 @@ impl AbstractState {
 
     pub(crate) fn graph_size(&self) -> usize {
         self.borrow_graph.graph_size()
-    }
-
-    fn charge_graph_size(&self, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-        meter.add_items_with_growth(
-            Scope::Function,
-            PER_GRAPH_ITEM_COST,
-            self.graph_size(),
-            PER_GRAPH_ITEM_COST_GROWTH,
-        )
     }
 
     /// returns the frame root id
@@ -299,7 +289,7 @@ impl AbstractState {
     /// - Immutable references are not writable by the typing rules
     fn is_writable(&self, id: RefID, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<bool> {
         assert!(self.borrow_graph.is_mutable(id));
-        self.charge_graph_size(meter)?;
+        charge_graph_size(self.graph_size(), meter)?;
         Ok(!self.has_consistent_borrows(id, None))
     }
 
@@ -313,7 +303,7 @@ impl AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<bool> {
         assert!(self.borrow_graph.is_mutable(id));
-        self.charge_graph_size(meter)?;
+        charge_graph_size(self.graph_size(), meter)?;
         Ok(!self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::StructField)))
     }
 
@@ -858,13 +848,13 @@ impl AbstractDomain for AbstractState {
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(Scope::Function, JOIN_PER_LOCAL_COST, self.locals.len())?;
-        self.charge_graph_size(meter)?;
-        state.charge_graph_size(meter)?;
+        let self_size = self.graph_size();
+        let state_size = state.graph_size();
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());
         assert!(self.locals.len() == joined.locals.len());
-        joined.charge_graph_size(meter)?;
+        let max_size = std::cmp::max(std::cmp::max(self_size, state_size), joined.graph_size());
+        charge_graph_size(max_size, meter)?;
         let locals_unchanged = self
             .locals
             .iter()
@@ -879,4 +869,13 @@ impl AbstractDomain for AbstractState {
             Ok(JoinResult::Changed)
         }
     }
+}
+
+fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
+    meter.add_items_with_growth(
+        Scope::Function,
+        PER_GRAPH_ITEM_COST,
+        size,
+        PER_GRAPH_ITEM_COST_GROWTH,
+    )
 }
