@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use super::balance::{self, Balance};
 use super::base64::Base64;
@@ -54,6 +54,10 @@ pub(crate) enum PackageLookup {
         version: u64,
         checkpoint_viewed_at: u64,
     },
+
+    /// Get the package whose original ID matches the storage ID of the package at the given
+    /// address, but that has the max version at the given checkpoint.
+    Latest { checkpoint_viewed_at: u64 },
 }
 
 /// Information used by a package to link to a specific version of its dependency.
@@ -97,6 +101,14 @@ pub(crate) type CModule = JsonCursor<ConsistentNamedCursor>;
 struct PackageVersionKey {
     address: SuiAddress,
     version: u64,
+}
+
+/// DataLoader key for fetching the latest version of a user package: The package with the largest
+/// version whose original ID matches the original ID of the package at `address`.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct LatestKey {
+    address: SuiAddress,
+    checkpoint_viewed_at: u64,
 }
 
 /// A MovePackage is a kind of Move object that represents code that has been published on chain.
@@ -304,6 +316,19 @@ impl MovePackage {
         .extend()
     }
 
+    /// Fetch the latest version of this package (the package with the highest `version` that shares
+    /// this packages's original ID)
+    async fn latest_package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
+        Ok(MovePackage::query(
+            ctx,
+            self.super_.address,
+            MovePackage::latest_at(self.checkpoint_viewed_at_impl()),
+        )
+        .await
+        .extend()?
+        .ok_or_else(|| Error::Internal("No latest version found".to_string()))?)
+    }
+
     /// A representation of the module called `name` in this package, including the
     /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
@@ -482,6 +507,14 @@ impl MovePackage {
         }
     }
 
+    /// Look-up the package that shares the same original ID as the package at `address`, but has
+    /// the latest version, as of the given checkpoint.
+    pub(crate) fn latest_at(checkpoint_viewed_at: u64) -> PackageLookup {
+        PackageLookup::Latest {
+            checkpoint_viewed_at,
+        }
+    }
+
     pub(crate) async fn query(
         ctx: &Context<'_>,
         address: SuiAddress,
@@ -502,6 +535,27 @@ impl MovePackage {
                     let DataLoader(loader) = &ctx.data_unchecked();
                     let Some(translation) = loader
                         .load_one(PackageVersionKey { address, version })
+                        .await?
+                    else {
+                        return Ok(None);
+                    };
+
+                    (translation, Object::latest_at(checkpoint_viewed_at))
+                }
+            }
+
+            PackageLookup::Latest {
+                checkpoint_viewed_at,
+            } => {
+                if is_system_package(address) {
+                    (address, Object::latest_at(checkpoint_viewed_at))
+                } else {
+                    let DataLoader(loader) = &ctx.data_unchecked();
+                    let Some(translation) = loader
+                        .load_one(LatestKey {
+                            address,
+                            checkpoint_viewed_at,
+                        })
                         .await?
                     else {
                         return Ok(None);
@@ -577,6 +631,75 @@ impl Loader<PackageVersionKey> for Db {
         }
 
         Ok(result)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<LatestKey> for Db {
+    type Value = SuiAddress;
+    type Error = Error;
+
+    async fn load(&self, keys: &[LatestKey]) -> Result<HashMap<LatestKey, SuiAddress>, Error> {
+        use packages::dsl;
+        let other = diesel::alias!(packages as other);
+
+        let mut ids_by_cursor: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+        for key in keys {
+            ids_by_cursor
+                .entry(key.checkpoint_viewed_at)
+                .or_default()
+                .insert(key.address.into_vec());
+        }
+
+        // Issue concurrent reads for each group of IDs
+        let futures = ids_by_cursor
+            .into_iter()
+            .map(|(checkpoint_viewed_at, ids)| {
+                self.execute(move |conn| {
+                    let results: Vec<(Vec<u8>, Vec<u8>)> = conn.results(|| {
+                        let o_original_id = other.field(dsl::original_id);
+                        let o_package_id = other.field(dsl::package_id);
+                        let o_cp_seq_num = other.field(dsl::checkpoint_sequence_number);
+                        let o_version = other.field(dsl::package_version);
+
+                        let query = dsl::packages
+                            .inner_join(other.on(dsl::original_id.eq(o_original_id)))
+                            .select((dsl::package_id, o_package_id))
+                            .filter(dsl::package_id.eq_any(ids.iter().cloned()))
+                            .filter(o_cp_seq_num.le(checkpoint_viewed_at as i64))
+                            .order_by((dsl::package_id, dsl::original_id, o_version.desc()))
+                            .distinct_on((dsl::package_id, dsl::original_id));
+                        query
+                    })?;
+
+                    Ok::<_, diesel::result::Error>(
+                        results
+                            .into_iter()
+                            .map(|(p, latest)| (checkpoint_viewed_at, p, latest))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+            });
+
+        // Wait for the reads to all finish, and gather them into the result map.
+        let groups = futures::future::join_all(futures).await;
+
+        let mut results = HashMap::new();
+        for group in groups {
+            for (checkpoint_viewed_at, address, latest) in
+                group.map_err(|e| Error::Internal(format!("Failed to fetch packages: {e}")))?
+            {
+                results.insert(
+                    LatestKey {
+                        address: addr(&address)?,
+                        checkpoint_viewed_at,
+                    },
+                    addr(&latest)?,
+                );
+            }
+        }
+
+        Ok(results)
     }
 }
 
