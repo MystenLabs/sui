@@ -2201,6 +2201,22 @@ type MovePackage implements IObject & IOwner {
 	moduleBcs: Base64
 }
 
+"""
+Filter for paginating `MovePackage`s that were created within a range of checkpoints.
+"""
+input MovePackageCheckpointFilter {
+	"""
+	Fetch packages that were published strictly after this checkpoint. Omitting this fetches
+	packages published since genesis.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Fetch packages that were published strictly before this checkpoint. Omitting this fetches
+	packages published up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
 type MovePackageConnection {
 	"""
 	Information to aid in pagination.
@@ -3114,6 +3130,14 @@ type Query {
 	The objects that exist in the network.
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	"""
+	The Move packages that exist in the network, optionally filtered to be strictly before
+	`beforeCheckpoint` and/or strictly after `afterCheckpoint`.
+	
+	This query will return all versions of a given user package that appear between the
+	specified checkpoints, but only records the latest versions of system packages.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: MovePackageCheckpointFilter): MovePackageConnection!
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
 	version known to the GraphQL service).

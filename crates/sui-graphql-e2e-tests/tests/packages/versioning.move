@@ -18,6 +18,13 @@ module P0::m {
             functions { nodes { name } }
         }
     }
+
+    packages(first: 10) {
+        nodes {
+            address
+            version
+        }
+    }
 }
 
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
@@ -34,6 +41,13 @@ module P1::m {
         version
         module(name: "m") {
             functions { nodes { name } }
+        }
+    }
+
+    packages(first: 10) {
+        nodes {
+            address
+            version
         }
     }
 }
@@ -53,6 +67,13 @@ module P2::m {
         version
         module(name: "m") {
             functions { nodes { name } }
+        }
+    }
+
+    packages(first: 10) {
+        nodes {
+            address
+            version
         }
     }
 }
@@ -218,6 +239,39 @@ module P2::m {
     v4: package(address: "@{P0}", version: 4) {
         module(name: "m") {
             functions { nodes { name } }
+        }
+    }
+}
+
+//# run-graphql
+{   # Querying packages with checkpoint bounds
+    before: packages(first: 10, filter: { beforeCheckpoint: 1 }) {
+        nodes {
+            address
+            version
+            previousTransactionBlock {
+                effects { checkpoint { sequenceNumber } }
+            }
+        }
+    }
+
+    after: packages(first: 10, filter: { afterCheckpoint: 1 }) {
+        nodes {
+            address
+            version
+            previousTransactionBlock {
+                effects { checkpoint { sequenceNumber } }
+            }
+        }
+    }
+
+    between: packages(first: 10, filter: { afterCheckpoint: 1, beforeCheckpoint: 3 }) {
+        nodes {
+            address
+            version
+            previousTransactionBlock {
+                effects { checkpoint { sequenceNumber } }
+            }
         }
     }
 }
