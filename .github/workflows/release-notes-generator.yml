@@ -45,14 +45,19 @@ jobs:
         shell: bash
         working-directory: ./
         run: |
-          echo "current_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV           
+          echo "current_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Checkout main
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: main
 
       - name: Generate Release Notes
         shell: bash
         working-directory: ./
         run: |
-          # ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} > ./release_notes.txt
-          echo "release notes go here, so make sure that everything works" > ./release_notes.txt
+          ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} > ./release_notes.txt
+
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
           else
