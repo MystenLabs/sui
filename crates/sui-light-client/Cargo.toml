@@ -32,8 +32,8 @@ sui-sdk.workspace = true
 move-binary-format.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
+url.workspace = true
+reqwest.workspace = true
+object_store.workspace = true
 env_logger = "0.11.5"
-object_store = {version = "0.11.0", features = ["http", "aws", "gcp"]}
-url = "2.5.2"
 log = "0.4.22"
-reqwest = "0.12.5"

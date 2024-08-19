@@ -4870,21 +4870,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
-name = "foreign-types"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
-dependencies = [
- "foreign-types-shared",
-]
-
-[[package]]
-name = "foreign-types-shared"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
-
-[[package]]
 name = "form_urlencoded"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5740,22 +5725,6 @@ dependencies = [
  "hyper-util",
  "pin-project-lite",
  "tokio",
- "tower-service",
-]
-
-[[package]]
-name = "hyper-tls"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
-dependencies = [
- "bytes",
- "http-body-util",
- "hyper 1.4.1",
- "hyper-util",
- "native-tls",
- "tokio",
- "tokio-native-tls",
  "tower-service",
 ]
 
@@ -8312,23 +8281,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "native-tls"
-version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8614eb2c83d59d1c8cc974dd3f920198647674a0a035e1af1fa58707e317466"
-dependencies = [
- "libc",
- "log",
- "openssl",
- "openssl-probe",
- "openssl-sys",
- "schannel",
- "security-framework",
- "security-framework-sys",
- "tempfile",
-]
-
-[[package]]
 name = "neptune"
 version = "13.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8787,38 +8739,7 @@ dependencies = [
  "rustls-pemfile 2.1.2",
  "serde",
  "serde_json",
- "snafu 0.7.4",
- "tokio",
- "tracing",
- "url",
- "walkdir",
-]
-
-[[package]]
-name = "object_store"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25a0c4b3a0e31f8b66f71ad8064521efa773910196e2cde791436f13409f3b45"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "futures",
- "humantime",
- "hyper 1.4.1",
- "itertools 0.13.0",
- "md-5 0.10.6",
- "parking_lot 0.12.1",
- "percent-encoding",
- "quick-xml",
- "rand 0.8.5",
- "reqwest 0.12.5",
- "ring 0.17.3",
- "rustls-pemfile 2.1.2",
- "serde",
- "serde_json",
- "snafu 0.8.4",
+ "snafu",
  "tokio",
  "tracing",
  "url",
@@ -8900,48 +8821,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "openssl"
-version = "0.10.66"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9529f4786b70a3e8c61e11179af17ab6188ad8d0ded78c5529441ed39d4bd9c1"
-dependencies = [
- "bitflags 2.4.1",
- "cfg-if",
- "foreign-types",
- "libc",
- "once_cell",
- "openssl-macros",
- "openssl-sys",
-]
-
-[[package]]
-name = "openssl-macros"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
-dependencies = [
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
-
-[[package]]
-name = "openssl-sys"
-version = "0.9.103"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f9e8deee91df40a943c71b917e5874b951d32a802526c85721ce3b776c929d6"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
-]
 
 [[package]]
 name = "opentelemetry"
@@ -10617,7 +10500,6 @@ dependencies = [
  "async-compression",
  "base64 0.22.1",
  "bytes",
- "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -10627,13 +10509,11 @@ dependencies = [
  "http-body-util",
  "hyper 1.4.1",
  "hyper-rustls 0.27.2",
- "hyper-tls",
  "hyper-util",
  "ipnet",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -10646,9 +10526,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper 1.0.1",
- "system-configuration",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls 0.26.0",
  "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-service",
@@ -12104,16 +11982,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb0656e7e3ffb70f6c39b3c2a86332bb74aa3c679da781642590f3c1118c5045"
 dependencies = [
  "doc-comment",
- "snafu-derive 0.7.4",
-]
-
-[[package]]
-name = "snafu"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b835cb902660db3415a672d862905e791e54d306c6e8189168c7f3d9ae1c79d"
-dependencies = [
- "snafu-derive 0.8.4",
+ "snafu-derive",
 ]
 
 [[package]]
@@ -12126,18 +11995,6 @@ dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "syn 1.0.107",
-]
-
-[[package]]
-name = "snafu-derive"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d1e02fca405f6280643174a50c942219f0bbf4dbf7d480f1dd864d6f211ae5"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
 ]
 
 [[package]]
@@ -12159,7 +12016,7 @@ dependencies = [
  "futures",
  "glob",
  "log",
- "object_store 0.10.2",
+ "object_store",
  "regex",
  "reqwest 0.12.5",
  "reqwest-middleware",
@@ -12678,7 +12535,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "num_enum 0.6.1",
- "object_store 0.10.2",
+ "object_store",
  "parquet",
  "prometheus",
  "serde",
@@ -12732,7 +12589,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "num_enum 0.6.1",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -13004,7 +12861,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "narwhal-config",
- "object_store 0.10.2",
+ "object_store",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -13074,7 +12931,7 @@ dependencies = [
  "nonempty",
  "num-bigint 0.4.4",
  "num_cpus",
- "object_store 0.10.2",
+ "object_store",
  "once_cell",
  "parking_lot 0.12.1",
  "pprof",
@@ -13166,7 +13023,7 @@ dependencies = [
  "futures",
  "mysten-metrics",
  "notify",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -13194,7 +13051,7 @@ dependencies = [
  "futures",
  "mysten-metrics",
  "notify",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -13831,7 +13688,7 @@ dependencies = [
  "log",
  "move-binary-format",
  "move-core-types",
- "object_store 0.11.0",
+ "object_store",
  "reqwest 0.12.5",
  "serde",
  "serde_json",
@@ -14607,7 +14464,7 @@ dependencies = [
  "indicatif",
  "integer-encoding",
  "num_enum 0.6.1",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "serde",
  "serde_json",
@@ -14721,7 +14578,7 @@ dependencies = [
  "mysten-metrics",
  "num_cpus",
  "num_enum 0.6.1",
- "object_store 0.10.2",
+ "object_store",
  "once_cell",
  "parking_lot 0.12.1",
  "percent-encoding",
@@ -14899,7 +14756,7 @@ dependencies = [
  "narwhal-storage",
  "narwhal-types",
  "num_cpus",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "ron",
  "serde",
@@ -15180,7 +15037,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-service",
  "notify",
- "object_store 0.10.2",
+ "object_store",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -15366,27 +15223,6 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
-]
-
-[[package]]
-name = "system-configuration"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3a3adc5c275d719af8cb4272ea1c4a6d668a777f37e115f6d11ddbc1c8e0e7"
-dependencies = [
- "bitflags 1.3.2",
- "core-foundation",
- "system-configuration-sys",
-]
-
-[[package]]
-name = "system-configuration-sys"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75fb188eb626b924683e3b95e3a48e63551fcfb51949de2f06a9d91dbee93c9"
-dependencies = [
- "core-foundation-sys",
- "libc",
 ]
 
 [[package]]
@@ -15841,16 +15677,6 @@ dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "tokio-native-tls"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
-dependencies = [
- "native-tls",
- "tokio",
 ]
 
 [[package]]
