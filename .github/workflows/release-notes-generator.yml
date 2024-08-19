@@ -7,14 +7,17 @@ on:
         description: 'Sui Release Tag'
         type: string
         required: true
+        default: devnet-test-tag
       previous_branch:
         description: 'Previous Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
+        default: origin/releases/sui-v1.29.0-release
       current_branch:
         description: 'Current Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
+        default: origin/releases/sui-v1.30.0-release
 
 jobs:
   get-release-notes:
@@ -48,7 +51,8 @@ jobs:
         shell: bash
         working-directory: ./
         run: |
-          ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} > ./release_notes.txt
+          # ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} > ./release_notes.txt
+          echo "release notes go here, so make sure that everything works" > ./release_notes.txt
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
           else
