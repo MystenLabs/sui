@@ -56,7 +56,7 @@ jobs:
         shell: bash
         working-directory: ./
         run: |
-          ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} > ./release_notes.txt
+          ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} | tee -a ./release_notes.txt
 
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
