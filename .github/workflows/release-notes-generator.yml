@@ -19,6 +19,9 @@ on:
         required: true
         default: releases/sui-v1.30.0-release
 
+env:
+  RELEASE_NOTES_FILE: "./release_notes.txt"
+
 jobs:
   get-release-notes:
     name: Get Release Notes for ${{ inputs.release_tag }} release
@@ -62,7 +65,8 @@ jobs:
         shell: bash
         working-directory: ./
         run: |
-          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} | tee -a ./release_notes.txt
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} | tee -a ${{ env.RELEASE_NOTES_FILE }}
+          echo "### Full Log: https://github.com/MystenLabs/sui/commits/${{ inputs.release_tag }}" >> ${{ env.RELEASE_NOTES_FILE }}
 
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
