@@ -1902,6 +1902,10 @@ impl TransactionData {
             .iter()
             .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
+
+    pub fn digest(&self) -> TransactionDigest {
+        TransactionDigest::new(default_hash(self))
+    }
 }
 
 #[enum_dispatch]
@@ -2378,7 +2382,7 @@ impl Message for SenderSignedData {
 
     /// Computes the tx digest that encodes the Rust type prefix from Signable trait.
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(default_hash(&self.intent_message().value))
+        self.intent_message().value.digest()
     }
 }
 
