@@ -13,17 +13,6 @@ use std::path::PathBuf;
     version
 )]
 pub enum Command {
-    GenerateDocsExamples,
-    GenerateSchema {
-        /// Path to output GraphQL schema to, in SDL format.
-        #[clap(short, long)]
-        file: Option<PathBuf>,
-    },
-    GenerateExamples {
-        /// Path to output examples docs.
-        #[clap(short, long)]
-        file: Option<PathBuf>,
-    },
     StartServer {
         /// The title to display at the top of the page
         #[clap(short, long)]
