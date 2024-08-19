@@ -362,7 +362,7 @@ impl AbstractState {
     //**********************************************************************************************
 
     /// destroys local@idx
-    pub fn release_value(&mut self, value: AbstractValue) -> () {
+    pub fn release_value(&mut self, value: AbstractValue) {
         match value {
             AbstractValue::Reference(id) => self.release(id),
             AbstractValue::NonReference => (),

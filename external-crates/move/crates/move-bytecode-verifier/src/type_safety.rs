@@ -140,7 +140,7 @@ fn charge_ty(meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialV
     )
 }
 
-pub(crate) fn verify<'env, 'a>(
+pub(crate) fn verify<'env>(
     module: &'env CompiledModule,
     function_context: &FunctionContext<'env>,
     ability_cache: &mut AbilityCache<'env>,
