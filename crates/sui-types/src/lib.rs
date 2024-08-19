@@ -82,6 +82,7 @@ pub mod sui_system_state;
 pub mod supported_protocol_versions;
 pub mod traffic_control;
 pub mod transaction;
+pub mod transaction_executor;
 pub mod transfer;
 pub mod versioned;
 pub mod zk_login_authenticator;

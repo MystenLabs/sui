@@ -13093,7 +13093,6 @@ dependencies = [
  "sui-move-build",
  "sui-network",
  "sui-protocol-config",
- "sui-rest-api",
  "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
