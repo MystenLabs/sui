@@ -1089,7 +1089,7 @@ where
 
         debug!(checkpoint_seq = ?checkpoint.sequence_number(), "verified checkpoint summary");
         if let Some(checkpoint_summary_age_metric) = metrics.checkpoint_summary_age_metric() {
-            checkpoint.report_checkpoint_age_ms(checkpoint_summary_age_metric);
+            checkpoint.report_checkpoint_age(checkpoint_summary_age_metric);
         }
 
         current = checkpoint.clone();
