@@ -65,24 +65,11 @@ module sui::groth16 {
         bytes: vector<u8>,
     }
 
-    /// Creates a `PublicProofInputs` wrapper from an byte arrays. Each byte array must be have length 32 and represents a scalar field element in little-endian format.
-    public fun public_proof_inputs_from_scalars(scalars: &vector<vector<u8>>): PublicProofInputs {
-        assert!(scalars.length() <= MaxPublicInputs, ETooManyPublicInputs);
-        let mut bytes = vector[];
-        let mut i = 0;
-        while (i < scalars.length()) {
-            let scalar = scalars[i];
-            // For the currently supported curves the scalars must have length 32 bytes, but if curves with different scalar sizes should be supported this code must be refactored.
-            assert!(scalar.length() == 32, EInvalidScalar);
-            bytes.append(scalar);
-            i = i + 1;
-        };
-        PublicProofInputs { bytes }
-    }
-
-    /// Creates a `PublicProofInputs` wrapper from bytes.
-    #[deprecated(note = b"Use `public_proof_inputs_from_scalars` instead")]
+    /// Creates a `PublicProofInputs` wrapper from bytes. The `bytes` parameter should be a concatenation of a number of
+    /// 32 bytes scalar field elements to be used as public inputs in little-endian format to a circuit.
     public fun public_proof_inputs_from_bytes(bytes: vector<u8>): PublicProofInputs {
+        assert!(bytes.length() % 32 == 0, EInvalidScalar);
+        assert!(bytes.length() / 32 <= MaxPublicInputs, ETooManyPublicInputs);
         PublicProofInputs { bytes }
     }
 

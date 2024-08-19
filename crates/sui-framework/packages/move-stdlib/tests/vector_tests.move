@@ -694,6 +694,16 @@ module std::vector_tests {
     }
 
     #[test]
+    fun concat_macro() {
+        assert!(vector<vector<u8>>[].concat!().is_empty());
+        assert!(vector<vector<u8>>[vector[], vector[]].concat!().is_empty());
+        assert!(vector[vector[1]].concat!() == vector[1]);
+        assert!(vector[vector[1], vector[]].concat!() == vector[1]);
+        assert!(vector[vector[1], vector[2]].concat!() == vector[1, 2]);
+        assert!(vector[vector[1], vector[2, 3]].concat!() == vector[1, 2, 3]);
+    }
+
+    #[test]
     fun any_all_macro() {
         assert!(vector<u8>[].any!(|e| *e == 2) == false);
         assert!(vector<u8>[].all!(|e| *e == 2) == true);
