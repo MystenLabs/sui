@@ -22,11 +22,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout sui repo main branch
+      - name: Checkout ${{ inputs.previous_branch }}
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
-          fetch-depth: 0
-          ref: main
+          ref: ${{ inputs.previous_branch }}
+
+      - name: Checkout ${{ inputs.current_branch }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ inputs.current_branch }}          
 
       - name: Generate Release Notes
         id: release_notes
