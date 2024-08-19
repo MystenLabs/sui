@@ -2172,6 +2172,11 @@ type MovePackage implements IObject & IOwner {
 	"""
 	bcs: Base64
 	"""
+	Fetch another version of this package (the package that shares this package's original ID,
+	but has the specified `version`).
+	"""
+	packageAtVersion(version: Int!): MovePackage
+	"""
 	A representation of the module called `name` in this package, including the
 	structs and functions it defines.
 	"""
@@ -3043,6 +3048,19 @@ type Query {
 	When no version is given, the latest version is returned.
 	"""
 	object(address: SuiAddress!, version: UInt53): Object
+	"""
+	The package corresponding to the given address at the (optionally) given version.
+	
+	When no version is given, the package is loaded directly from the address given. Otherwise,
+	the address is translated before loading to point to the package whose original ID matches
+	the package at `address`, but whose version is `version`. For non-system packages, this may
+	result in a different address than `address` because different versions of a package,
+	introduced by upgrades, exist at distinct addresses.
+	
+	Note that this interpretation of `version` is different from a historical object read (the
+	interpretation of `version` for the `object` query).
+	"""
+	package(address: SuiAddress!, version: UInt53): MovePackage
 	"""
 	Look-up an Account by its SuiAddress.
 	"""

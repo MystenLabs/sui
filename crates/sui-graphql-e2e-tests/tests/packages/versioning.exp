@@ -1,0 +1,318 @@
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5076800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-15:
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5251600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 17-22:
+//# upgrade --package P1 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5426400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, line 24:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 26-45:
+//# run-graphql
+Response: {
+  "data": {
+    "v1": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            }
+          ]
+        }
+      }
+    },
+    "v2": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            }
+          ]
+        }
+      }
+    },
+    "v3": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 6, lines 47-84:
+//# run-graphql
+Response: {
+  "data": {
+    "v1_from_p1": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            }
+          ]
+        }
+      }
+    },
+    "v1_from_p2": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            }
+          ]
+        }
+      }
+    },
+    "v2_from_p0": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            }
+          ]
+        }
+      }
+    },
+    "v2_from_p2": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            }
+          ]
+        }
+      }
+    },
+    "v3_from_p0": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        }
+      }
+    },
+    "v3_from_p1": {
+      "module": {
+        "functions": {
+          "nodes": [
+            {
+              "name": "f"
+            },
+            {
+              "name": "g"
+            },
+            {
+              "name": "h"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 86-141:
+//# run-graphql
+Response: {
+  "data": {
+    "v1": {
+      "v1": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              }
+            ]
+          }
+        }
+      },
+      "v2": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              }
+            ]
+          }
+        }
+      },
+      "v3": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              },
+              {
+                "name": "h"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "v2": {
+      "v1": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              }
+            ]
+          }
+        }
+      },
+      "v2": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              }
+            ]
+          }
+        }
+      },
+      "v3": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              },
+              {
+                "name": "h"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "v3": {
+      "v1": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              }
+            ]
+          }
+        }
+      },
+      "v2": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              }
+            ]
+          }
+        }
+      },
+      "v3": {
+        "module": {
+          "functions": {
+            "nodes": [
+              {
+                "name": "f"
+              },
+              {
+                "name": "g"
+              },
+              {
+                "name": "h"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 143-171:
+//# run-graphql
+Response: {
+  "data": {
+    "v0": null,
+    "v1": {
+      "v0": null,
+      "v4": null
+    },
+    "v4": null
+  }
+}

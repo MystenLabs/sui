@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeSet, HashMap};
+
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
@@ -8,9 +10,7 @@ use super::coin::Coin;
 use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
-use super::object::{
-    self, Object, ObjectFilter, ObjectImpl, ObjectLookup, ObjectOwner, ObjectStatus,
-};
+use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
@@ -19,10 +19,16 @@ use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::uint53::UInt53;
 use crate::consistency::ConsistentNamedCursor;
+use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
+use crate::types::sui_address::addr;
 use async_graphql::connection::{Connection, CursorType, Edge};
+use async_graphql::dataloader::Loader;
 use async_graphql::*;
+use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
+use sui_indexer::schema::packages;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
+use sui_types::is_system_package;
 use sui_types::{move_package::MovePackage as NativeMovePackage, object::Data};
 
 #[derive(Clone)]
@@ -33,6 +39,21 @@ pub(crate) struct MovePackage {
     /// Move-object-specific data, extracted from the native representation at
     /// `graphql_object.native_object.data`.
     pub native: NativeMovePackage,
+}
+
+/// Filter for a point query of a MovePackage, supporting querying different versions of a package
+/// by their version. Note that different versions of the same user package exist at different IDs
+/// to each other, so this is different from looking up the historical version of an object.
+pub(crate) enum PackageLookup {
+    /// Get the package at the given address, if it was created before the given checkpoint.
+    ById { checkpoint_viewed_at: u64 },
+
+    /// Get the package whose original ID matches the storage ID of the package at the given
+    /// address, but whose version is `version`.
+    Versioned {
+        version: u64,
+        checkpoint_viewed_at: u64,
+    },
 }
 
 /// Information used by a package to link to a specific version of its dependency.
@@ -65,6 +86,18 @@ struct TypeOrigin {
 pub(crate) struct MovePackageDowncastError;
 
 pub(crate) type CModule = JsonCursor<ConsistentNamedCursor>;
+
+/// DataLoader key for fetching the storage ID of the (user) package that shares an original (aka
+/// runtime) ID with the package stored at `package_id`, and whose version is `version`.
+///
+/// Note that this is different from looking up the historical version of an object -- the query
+/// returns the ID of the package (each version of a user package is at a different ID) -- and it
+/// does not work for system packages (whose versions do all reside under the same ID).
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct PackageVersionKey {
+    address: SuiAddress,
+    version: u64,
+}
 
 /// A MovePackage is a kind of Move object that represents code that has been published on chain.
 /// It exposes information about its modules, type definitions, functions, and dependencies.
@@ -255,6 +288,22 @@ impl MovePackage {
         ObjectImpl(&self.super_).bcs().await
     }
 
+    /// Fetch another version of this package (the package that shares this package's original ID,
+    /// but has the specified `version`).
+    async fn package_at_version(
+        &self,
+        ctx: &Context<'_>,
+        version: u64,
+    ) -> Result<Option<MovePackage>> {
+        MovePackage::query(
+            ctx,
+            self.super_.address,
+            MovePackage::by_version(version, self.checkpoint_viewed_at_impl()),
+        )
+        .await
+        .extend()
+    }
+
     /// A representation of the module called `name` in this package, including the
     /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
@@ -416,11 +465,53 @@ impl MovePackage {
         }
     }
 
+    /// Look-up the package by its Storage ID, as of a given checkpoint.
+    pub(crate) fn by_id_at(checkpoint_viewed_at: u64) -> PackageLookup {
+        PackageLookup::ById {
+            checkpoint_viewed_at,
+        }
+    }
+
+    /// Look-up a specific version of the package, identified by the storage ID of any version of
+    /// the package, and the desired version (the actual object loaded might be at a different
+    /// object ID).
+    pub(crate) fn by_version(version: u64, checkpoint_viewed_at: u64) -> PackageLookup {
+        PackageLookup::Versioned {
+            version,
+            checkpoint_viewed_at,
+        }
+    }
+
     pub(crate) async fn query(
         ctx: &Context<'_>,
         address: SuiAddress,
-        key: ObjectLookup,
+        key: PackageLookup,
     ) -> Result<Option<Self>, Error> {
+        let (address, key) = match key {
+            PackageLookup::ById {
+                checkpoint_viewed_at,
+            } => (address, Object::latest_at(checkpoint_viewed_at)),
+
+            PackageLookup::Versioned {
+                version,
+                checkpoint_viewed_at,
+            } => {
+                if is_system_package(address) {
+                    (address, Object::at_version(version, checkpoint_viewed_at))
+                } else {
+                    let DataLoader(loader) = &ctx.data_unchecked();
+                    let Some(translation) = loader
+                        .load_one(PackageVersionKey { address, version })
+                        .await?
+                    else {
+                        return Ok(None);
+                    };
+
+                    (translation, Object::latest_at(checkpoint_viewed_at))
+                }
+            }
+        };
+
         let Some(object) = Object::query(ctx, address, key).await? else {
             return Ok(None);
         };
@@ -428,6 +519,64 @@ impl MovePackage {
         Ok(Some(MovePackage::try_from(&object).map_err(|_| {
             Error::Internal(format!("{address} is not a package"))
         })?))
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<PackageVersionKey> for Db {
+    type Value = SuiAddress;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[PackageVersionKey],
+    ) -> Result<HashMap<PackageVersionKey, SuiAddress>, Error> {
+        use packages::dsl;
+        let other = diesel::alias!(packages as other);
+
+        let id_versions: BTreeSet<_> = keys
+            .iter()
+            .map(|k| (k.address.into_vec(), k.version as i64))
+            .collect();
+
+        let stored_packages: Vec<(Vec<u8>, i64, Vec<u8>)> = self
+            .execute(move |conn| {
+                conn.results(|| {
+                    let mut query = dsl::packages
+                        .inner_join(other.on(dsl::original_id.eq(other.field(dsl::original_id))))
+                        .select((
+                            dsl::package_id,
+                            other.field(dsl::package_version),
+                            other.field(dsl::package_id),
+                        ))
+                        .into_boxed();
+
+                    for (id, version) in id_versions.iter().cloned() {
+                        query = query.or_filter(
+                            dsl::package_id
+                                .eq(id)
+                                .and(other.field(dsl::package_version).eq(version)),
+                        );
+                    }
+
+                    query
+                })
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to load packages: {e}")))?;
+
+        let mut result = HashMap::new();
+        for (id, version, other_id) in stored_packages {
+            result.insert(
+                PackageVersionKey {
+                    address: addr(&id)?,
+                    version: version as u64,
+                },
+                addr(&other_id)?,
+            );
+        }
+
+        Ok(result)
     }
 }
 

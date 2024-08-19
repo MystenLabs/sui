@@ -12,6 +12,7 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
+use super::move_package::MovePackage;
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -214,17 +215,37 @@ impl Query {
         version: Option<UInt53>,
     ) -> Result<Option<Object>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
+        let key = match version {
+            Some(version) => Object::at_version(version.into(), checkpoint),
+            None => Object::latest_at(checkpoint),
+        };
 
-        match version {
-            Some(version) => {
-                Object::query(ctx, address, Object::at_version(version.into(), checkpoint))
-                    .await
-                    .extend()
-            }
-            None => Object::query(ctx, address, Object::latest_at(checkpoint))
-                .await
-                .extend(),
-        }
+        Object::query(ctx, address, key).await.extend()
+    }
+
+    /// The package corresponding to the given address at the (optionally) given version.
+    ///
+    /// When no version is given, the package is loaded directly from the address given. Otherwise,
+    /// the address is translated before loading to point to the package whose original ID matches
+    /// the package at `address`, but whose version is `version`. For non-system packages, this may
+    /// result in a different address than `address` because different versions of a package,
+    /// introduced by upgrades, exist at distinct addresses.
+    ///
+    /// Note that this interpretation of `version` is different from a historical object read (the
+    /// interpretation of `version` for the `object` query).
+    async fn package(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        version: Option<UInt53>,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let key = match version {
+            Some(version) => MovePackage::by_version(version.into(), checkpoint),
+            None => MovePackage::by_id_at(checkpoint),
+        };
+
+        MovePackage::query(ctx, address, key).await.extend()
     }
 
     /// Look-up an Account by its SuiAddress.
