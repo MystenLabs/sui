@@ -10,7 +10,6 @@ export default defineConfig({
 		exclude: [...configDefaults.exclude, 'tests/**'],
 		// TODO: Create custom extension environment.
 		environment: 'happy-dom',
-		minThreads: 1,
 		setupFiles: ['./testSetup.ts'],
 		restoreMocks: true,
 	},
