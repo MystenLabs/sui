@@ -37,6 +37,19 @@ static VERSION: Version = Version {
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
+        Command::GenerateConfig { output } => {
+            let config = ServiceConfig::default();
+            let toml = toml::to_string_pretty(&config).expect("Failed to serialize configuration");
+
+            if let Some(path) = output {
+                fs::write(&path, toml).unwrap_or_else(|e| {
+                    panic!("Failed to write configuration to {}: {e}", path.display())
+                });
+            } else {
+                println!("{}", toml);
+            }
+        }
+
         Command::StartServer {
             ide_title,
             db_url,
