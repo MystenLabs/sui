@@ -884,6 +884,33 @@
         }
       }
     },
+    "/transactions/simulate": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "description": "[![unstable](https://img.shields.io/badge/api-unstable-red?style=for-the-badge)](#) _Api subject to change; use at your own risk_\n\n",
+        "operationId": "SimulateTransaction",
+        "requestBody": {
+          "content": {
+            "application/bcs": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSimulationResponse"
+                }
+              },
+              "application/bcs": {}
+            }
+          }
+        }
+      }
+    },
     "/coins/{coin_type}": {
       "get": {
         "tags": [
@@ -4047,24 +4074,6 @@
         "type": "string",
         "format": "base64"
       },
-      "SignedTransaction": {
-        "type": "object",
-        "required": [
-          "signatures",
-          "transaction"
-        ],
-        "properties": {
-          "signatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UserSignature"
-            }
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/Transaction"
-          }
-        }
-      },
       "SimpleSignature": {
         "oneOf": [
           {
@@ -5170,6 +5179,39 @@
           },
           "transaction": {
             "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
+      "TransactionSimulationResponse": {
+        "description": "Response type for the transaction simulation endpoint",
+        "type": "object",
+        "required": [
+          "effects"
+        ],
+        "properties": {
+          "balance_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "events": {
+            "$ref": "#/components/schemas/TransactionEvents"
+          },
+          "input_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
+          },
+          "output_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
           }
         }
       },

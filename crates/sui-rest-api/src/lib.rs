@@ -93,6 +93,7 @@ const ENDPOINTS: &[&dyn ApiEndpoint<RestService>] = &[
     &system::GetProtocolConfig,
     &system::GetGasInfo,
     &transactions::ExecuteTransaction,
+    &transactions::SimulateTransaction,
     &coins::GetCoinInfo,
 ];
 

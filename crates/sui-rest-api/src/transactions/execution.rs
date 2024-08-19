@@ -1,25 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-
-use axum::extract::{Query, State};
-use schemars::JsonSchema;
 use sui_sdk_types::types::framework::Coin;
 use sui_sdk_types::types::{
-    Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
-    TransactionEffects, TransactionEvents, ValidatorAggregatedSignature,
+    Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction, Transaction, TransactionEffects, TransactionEvents, ValidatorAggregatedSignature
 };
-use sui_types::transaction_executor::TransactionExecutor;
-use tap::Pipe;
-
 use crate::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
 use crate::response::Bcs;
 use crate::{accept::AcceptFormat, response::ResponseContent};
-use crate::{RestService, Result};
+use crate::{RestError, RestService, Result};
+use axum::extract::{Query, State};
+use schemars::JsonSchema;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionExecutor};
+use tap::Pipe;
 
 pub struct ExecuteTransaction;
 
@@ -36,8 +33,6 @@ impl ApiEndpoint<RestService> for ExecuteTransaction {
         &self,
         generator: &mut schemars::gen::SchemaGenerator,
     ) -> openapiv3::v3_1::Operation {
-        generator.subschema_for::<SignedTransaction>();
-
         OperationBuilder::new()
             .tag("Transactions")
             .operation_id("ExecuteTransaction")
@@ -172,7 +167,7 @@ async fn execute_transaction(
 }
 
 /// Query parameters for the execute transaction endpoint
-#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct ExecuteTransactionQueryParameters {
     // TODO once transaction finality support is more fully implemented up and down the stack, add
     // back in this parameter, which will be mutally-exclusive with the other parameters. When
@@ -319,7 +314,7 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&Address, Coin<'_>)> + '_ 
     })
 }
 
-fn derive_balance_changes(
+pub(crate) fn derive_balance_changes(
     _effects: &TransactionEffects,
     input_objects: &[Object],
     output_objects: &[Object],
@@ -355,4 +350,107 @@ fn derive_balance_changes(
             })
         })
         .collect()
+}
+
+pub struct SimulateTransaction;
+
+impl ApiEndpoint<RestService> for SimulateTransaction {
+    fn method(&self) -> axum::http::Method {
+        axum::http::Method::POST
+    }
+
+    fn path(&self) -> &'static str {
+        "/transactions/simulate"
+    }
+
+    fn operation(
+        &self,
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> openapiv3::v3_1::Operation {
+        OperationBuilder::new()
+            .tag("Transactions")
+            .operation_id("SimulateTransaction")
+            .request_body(RequestBodyBuilder::new().bcs_content().build())
+            .response(
+                200,
+                ResponseBuilder::new()
+                    .json_content::<TransactionSimulationResponse>(generator)
+                    .bcs_content()
+                    .build(),
+            )
+            .build()
+    }
+
+    fn handler(&self) -> RouteHandler<RestService> {
+        RouteHandler::new(self.method(), simulate_transaction)
+    }
+}
+
+async fn simulate_transaction(
+    State(state): State<Option<Arc<dyn TransactionExecutor>>>,
+    accept: AcceptFormat,
+    //TODO allow accepting JSON as well as BCS
+    Bcs(transaction): Bcs<Transaction>,
+) -> Result<ResponseContent<TransactionSimulationResponse>> {
+    let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
+
+    if transaction.gas_payment.objects.is_empty() {
+        return Err(RestError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "no gas payment provided",
+        ));
+    }
+
+    let SimulateTransactionResult {
+        input_objects,
+        output_objects,
+        events,
+        effects,
+        mock_gas_id,
+    } = executor
+        .simulate_transaction(transaction.try_into()?)
+        .map_err(anyhow::Error::from)?;
+
+    if mock_gas_id.is_some() {
+        return Err(RestError::new(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "simulate unexpectedly used a mock gas payment",
+        ));
+    }
+
+    let events = events.map(TryInto::try_into).transpose()?;
+    let effects = effects.try_into()?;
+
+    let input_objects = input_objects
+        .into_values()
+        .map(TryInto::try_into)
+        .collect::<Result<Vec<_>, _>>()?;
+    let output_objects = output_objects
+        .into_values()
+        .map(TryInto::try_into)
+        .collect::<Result<Vec<_>, _>>()?;
+    let balance_changes = derive_balance_changes(&effects, &input_objects, &output_objects);
+
+    TransactionSimulationResponse {
+        events,
+        effects,
+        balance_changes: Some(balance_changes),
+        input_objects: Some(input_objects),
+        output_objects: Some(output_objects),
+    }
+    .pipe(|response| match accept {
+        AcceptFormat::Json => ResponseContent::Json(response),
+        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+    })
+    .pipe(Ok)
+}
+
+/// Response type for the transaction simulation endpoint
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
+pub struct TransactionSimulationResponse {
+    effects: TransactionEffects,
+    events: Option<TransactionEvents>,
+    balance_changes: Option<Vec<BalanceChange>>,
+    input_objects: Option<Vec<Object>>,
+    output_objects: Option<Vec<Object>>,
 }

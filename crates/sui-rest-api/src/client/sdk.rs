@@ -14,6 +14,7 @@ use sui_sdk_types::types::ObjectId;
 use sui_sdk_types::types::SignedCheckpointSummary;
 use sui_sdk_types::types::SignedTransaction;
 use sui_sdk_types::types::StructTag;
+use sui_sdk_types::types::Transaction;
 use sui_sdk_types::types::TransactionDigest;
 use sui_sdk_types::types::ValidatorCommittee;
 use sui_sdk_types::types::Version;
@@ -36,6 +37,7 @@ use crate::system::X_SUI_MIN_SUPPORTED_PROTOCOL_VERSION;
 use crate::transactions::ListTransactionsQueryParameters;
 use crate::transactions::TransactionExecutionResponse;
 use crate::transactions::TransactionResponse;
+use crate::transactions::TransactionSimulationResponse;
 use crate::types::X_SUI_CHAIN;
 use crate::types::X_SUI_CHAIN_ID;
 use crate::types::X_SUI_CHECKPOINT_HEIGHT;
@@ -397,6 +399,26 @@ impl Client {
             .inner
             .post(url)
             .query(parameters)
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
+            .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
+            .body(body)
+            .send()
+            .await?;
+
+        self.bcs(response).await
+    }
+
+    pub async fn simulate_transaction(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<Response<TransactionSimulationResponse>> {
+        let url = self.url().join("transactions/simulate")?;
+
+        let body = bcs::to_bytes(transaction)?;
+
+        let response = self
+            .inner
+            .post(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .header(reqwest::header::CONTENT_TYPE, crate::APPLICATION_BCS)
             .body(body)
