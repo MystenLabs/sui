@@ -695,7 +695,7 @@ pub struct ProtocolConfig {
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
     max_publish_or_upgrade_per_ptb: Option<u64>,
 
-    /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
+    /// Maximum gas budget in MIST that a transaction can use.
     max_tx_gas: Option<u64>,
 
     /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
