@@ -50,6 +50,7 @@ bcs_convert_impl!(
 );
 bcs_convert_impl!(crate::signature::GenericSignature, UserSignature);
 bcs_convert_impl!(crate::effects::TransactionEvents, TransactionEvents);
+bcs_convert_impl!(crate::transaction::Command, Command);
 
 impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
     for ValidatorAggregatedSignature
@@ -381,6 +382,24 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
                 version: version.into(),
             },
             crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+        }
+    }
+}
+
+impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
+    fn from(value: crate::transaction::TransactionExpiration) -> Self {
+        match value {
+            crate::transaction::TransactionExpiration::None => Self::None,
+            crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+        }
+    }
+}
+
+impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
+    fn from(value: TransactionExpiration) -> Self {
+        match value {
+            TransactionExpiration::None => Self::None,
+            TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
         }
     }
 }
