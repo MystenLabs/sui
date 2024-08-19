@@ -1,0 +1,22 @@
+[package]
+name = "sui-package-dump"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+cynic.workspace = true
+fastcrypto.workspace = true
+move-core-types.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sui-types.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
