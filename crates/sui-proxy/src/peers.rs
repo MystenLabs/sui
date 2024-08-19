@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{bail, Context, Result};
-use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
-use fastcrypto::traits::{KeyPair, ToFromBytes};
+use fastcrypto::ed25519::Ed25519PublicKey;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use fastcrypto::traits::ToFromBytes;
 use futures::future;
 use futures::stream::{self, StreamExt};
 use multiaddr::Multiaddr;
@@ -379,17 +381,18 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Bridge
                 //         );
                 //     }
                 // }
-                match Ed25519KeyPair::decode_base64(&metrics_pub_key) {
+                let metrics_bytes = Base64::decode(&metrics_pub_key).unwrap();
+                match Ed25519PublicKey::from_bytes(&metrics_bytes) {
                     Ok(metrics_key) => {
                         debug!(
                             "adding metrics key {:?} for sui address {:?}",
                             metrics_key, bridge_node_url
                         );
                         Some((
-                            metrics_key.public().clone(),
+                            metrics_key.clone(),
                             BridgePeer {
                                 sui_address: cm.sui_address.clone(),
-                                public_key: metrics_key.public().clone(),
+                                public_key: metrics_key.clone(),
                                 http_rest_url: bridge_node_url,
                             },
                         ))
