@@ -33,17 +33,17 @@ class CommandMaker:
     @staticmethod
     def generate_key(filename):
         assert isinstance(filename, str)
-        return f'./narwhal-node generate_keys --filename {filename}'
+        return f'./narwhal-node generate-keys --filename {filename}'
 
     @staticmethod
     def get_pub_key(filename):
         assert isinstance(filename, str)
-        return f'./narwhal-node get_pub_key --filename {filename}'
+        return f'./narwhal-node get-pub-key --filename {filename}'
 
     @staticmethod
     def generate_network_key(filename):
         assert isinstance(filename, str)
-        return f'./narwhal-node generate_network_keys --filename {filename}'
+        return f'./narwhal-node generate-network-keys --filename {filename}'
      
     @staticmethod
     def run_primary(primary_keys, primary_network_keys, worker_keys, committee, workers, store, parameters, debug=False):
@@ -71,7 +71,7 @@ class CommandMaker:
         v = '-vvv' if debug else '-vv'
         return (f'./narwhal-node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
                 f'--worker-keys {worker_keys} --committee {committee} --workers {workers} --store {store} '
-                f'--parameters {parameters} worker --id {id}')
+                f'--parameters {parameters} worker {id}')
 
     @staticmethod
     def run_client(address, size, rate, nodes):
@@ -81,7 +81,7 @@ class CommandMaker:
         assert isinstance(nodes, list)
         assert all(isinstance(x, str) for x in nodes)
         nodes = f'--nodes {" ".join(nodes)}' if nodes else ''
-        return f'./narwhal-benchmark-client {address} --size {size} --rate {rate} {nodes}'
+        return f'./narwhal-benchmark-client {address} {size} {rate} {nodes}'
 
     @staticmethod
     def alias_demo_binaries(origin):
