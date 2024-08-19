@@ -27,30 +27,41 @@ jobs:
         with:
           ref: ${{ inputs.previous_branch }}
 
-      - name: Checkout ${{ inputs.current_branch }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ inputs.current_branch }}          
-
-      - name: Generate Release Notes
-        id: release_notes
+      - name: Get ${{ inputs.previous_branch }} commit
         shell: bash
         working-directory: ./
         run: |
-          echo "release_notes=$(./scripts/release_notes.py generate ${{ inputs.previous_branch }} ${{ inputs.current_branch }})" >> $GITHUB_ENV
+          echo "previous_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Checkout ${{ inputs.current_branch }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ inputs.current_branch }}
+
+      - name: Get ${{ inputs.current_branch }} commit
+        shell: bash
+        working-directory: ./
+        run: |
+          echo "current_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV           
+
+      - name: Generate Release Notes
+        shell: bash
+        working-directory: ./
+        run: |
+          echo "release_notes=$(./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }})" >> $GITHUB_ENV
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
           else
             echo "pre_release=false" >> $GITHUB_ENV
           fi
 
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-          tag_name: ${{ inputs.release_tag }}
-          release_name: ${{ inputs.release_tag }}
-          body: ${{ env.release_notes }}
-          draft: false
-          prerelease: ${{ env.pre_release }}
+      # - name: Create Release
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      #   with:
+      #     tag_name: ${{ inputs.release_tag }}
+      #     release_name: ${{ inputs.release_tag }}
+      #     body: ${{ env.release_notes }}
+      #     draft: false
+      #     prerelease: ${{ env.pre_release }}
