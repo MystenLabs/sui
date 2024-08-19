@@ -12,12 +12,12 @@ on:
         description: 'Previous Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
-        default: origin/releases/sui-v1.29.0-release
+        default: releases/sui-v1.29.0-release
       current_branch:
         description: 'Current Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
-        default: origin/releases/sui-v1.30.0-release
+        default: releases/sui-v1.30.0-release
 
 jobs:
   get-release-notes:
