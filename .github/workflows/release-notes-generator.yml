@@ -1,0 +1,52 @@
+name: Release Notes Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Sui Release Tag'
+        type: string
+        required: true
+      previous_branch:
+        description: 'Previous Release Branch (Ex: releases/sui-vX.XX.X-release)'
+        type: string
+        required: true
+      current_branch:
+        description: 'Current Release Branch (Ex: releases/sui-vX.XX.X-release)'
+        type: string
+        required: true
+
+jobs:
+  get-release-notes:
+    name: Get Release Notes for ${{ inputs.release_tag }} release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sui repo main branch
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Generate Release Notes
+        id: release_notes
+        shell: bash
+        working-directory: ./
+        run: |
+          echo "release_notes=$(./scripts/release_notes.py generate ${{ inputs.previous_branch }} ${{ inputs.current_branch }})" >> $GITHUB_ENV
+          if [[ ${{ inputs.release_tag }} == devnet* ]]; then
+            echo "pre_release=true" >> $GITHUB_ENV
+          else
+            echo "pre_release=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          release_name: ${{ inputs.release_tag }}
+          body: ${{ env.release_notes }}
+          draft: false
+          prerelease: ${{ env.pre_release }}
