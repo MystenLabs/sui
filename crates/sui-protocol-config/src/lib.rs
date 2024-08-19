@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 54;
+const MAX_PROTOCOL_VERSION: u64 = 55;
 
 // Record history of protocol version allocations here:
 //
@@ -167,6 +167,7 @@ const MAX_PROTOCOL_VERSION: u64 = 54;
 //             Update stdlib natives costs
 // Version 54: Enable random beacon on mainnet.
 //             Enable soft bundle on mainnet.
+// Version 55: Enable enums on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2651,6 +2652,10 @@ impl ProtocolConfig {
                     // Enable soft bundle on mainnet.
                     cfg.feature_flags.soft_bundle = true;
                     cfg.max_soft_bundle_size = Some(5);
+                }
+                55 => {
+                    // Turn on enums mainnet
+                    cfg.move_binary_format_version = Some(7);
                 }
                 // Use this template when making changes:
                 //
