@@ -55,13 +55,13 @@ jobs:
             echo "pre_release=false" >> $GITHUB_ENV
           fi
 
-      # - name: Create Release
-      #   uses: actions/create-release@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-      #   with:
-      #     tag_name: ${{ inputs.release_tag }}
-      #     release_name: ${{ inputs.release_tag }}
-      #     body: ${{ env.release_notes }}
-      #     draft: false
-      #     prerelease: ${{ env.pre_release }}
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          release_name: ${{ inputs.release_tag }}
+          body: ${{ env.release_notes }}
+          draft: false
+          prerelease: ${{ env.pre_release }}
