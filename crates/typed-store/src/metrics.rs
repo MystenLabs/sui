@@ -250,6 +250,7 @@ pub struct OperationMetrics {
     pub rocksdb_multiget_bytes: HistogramVec,
     pub rocksdb_put_latency_seconds: HistogramVec,
     pub rocksdb_put_bytes: HistogramVec,
+    pub rocksdb_batch_put_bytes: HistogramVec,
     pub rocksdb_delete_latency_seconds: HistogramVec,
     pub rocksdb_deletes: IntCounterVec,
     pub rocksdb_batch_commit_latency_seconds: HistogramVec,
@@ -336,6 +337,16 @@ impl OperationMetrics {
             rocksdb_put_bytes: register_histogram_vec_with_registry!(
                 "rocksdb_put_bytes",
                 "Rocksdb put call puts data size in bytes",
+                &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            rocksdb_batch_put_bytes: register_histogram_vec_with_registry!(
+                "rocksdb_batch_put_bytes",
+                "Rocksdb batch put call puts data size in bytes",
                 &["cf_name"],
                 prometheus::exponential_buckets(1.0, 4.0, 15)
                     .unwrap()
