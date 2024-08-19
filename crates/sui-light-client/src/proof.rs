@@ -13,16 +13,16 @@ use sui_types::{
     transaction::Transaction,
 };
 
-/// Define aspect of Sui state that need to be certified in a proof
+/// Define aspect of Sui state that needs to be certified in a proof
 #[derive(Default)]
 pub struct ProofTarget {
-    /// Objects that need to be certified
+    /// Objects that need to be certified.
     pub objects: Vec<(ObjectRef, Object)>,
 
-    /// Events that need to be certified
+    /// Events that need to be certified.
     pub events: Vec<(EventID, Event)>,
 
-    /// The next committee being certified
+    /// The next committee being certified.
     pub committee: Option<Committee>,
 }
 
@@ -35,7 +35,7 @@ impl ProofTarget {
 
     /// Add an object to be certified by object reference and content. A verified proof will
     /// ensure that both the reference and content are correct. Note that some content is
-    /// meta-data such as the transaction that created this object.
+    /// metadata such as the transaction that created this object.
     pub fn add_object(mut self, object_ref: ObjectRef, object: Object) -> Self {
         self.objects.push((object_ref, object));
         self
@@ -56,7 +56,7 @@ impl ProofTarget {
     }
 }
 
-/// Part of a Proof that provides evidence relating to a specific transaction to
+/// Part of a proof that provides evidence relating to a specific transaction to
 /// certify objects and events.
 pub struct TransactionProof {
     /// Checkpoint contents including this transaction.
@@ -75,7 +75,7 @@ pub struct TransactionProof {
 /// A proof for specific targets. It certifies a checkpoint summary and optionally includes
 /// transaction evidence to certify objects and events.
 pub struct Proof {
-    /// Targets of the proof are objects, events or a committee that need to be certified
+    /// Targets of the proof are a committee, objects, or events that need to be certified.
     pub targets: ProofTarget,
 
     /// A summary of the checkpoint being certified.
@@ -94,7 +94,7 @@ pub struct Proof {
 /// trusted as being authentic.
 ///
 /// The authoritative committee is required to verify the proof. The sequence of committees can be
-/// verified through a proof for Committee proof target on the last checkpoint of each epoch,
+/// verified through a Committee proof target on the last checkpoint of each epoch,
 /// sequentially since the first epoch.
 pub fn verify_proof(committee: &Committee, proof: &Proof) -> anyhow::Result<()> {
     // Get checkpoint summary and optional contents
