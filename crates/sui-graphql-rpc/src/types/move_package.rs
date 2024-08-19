@@ -7,7 +7,7 @@ use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
 use super::coin::Coin;
-use super::cursor::{JsonCursor, Page};
+use super::cursor::{BcsCursor, JsonCursor, Page, RawPaginated, Target};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
@@ -18,14 +18,19 @@ use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use super::uint53::UInt53;
-use crate::consistency::ConsistentNamedCursor;
+use crate::consistency::{Checkpointed, ConsistentNamedCursor};
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
+use crate::raw_query::RawQuery;
 use crate::types::sui_address::addr;
+use crate::{filter, query};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::dataloader::Loader;
 use async_graphql::*;
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
+use diesel::prelude::QueryableByName;
+use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, Selectable};
+use serde::{Deserialize, Serialize};
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::schema::packages;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
 use sui_types::is_system_package;
@@ -39,6 +44,18 @@ pub(crate) struct MovePackage {
     /// Move-object-specific data, extracted from the native representation at
     /// `graphql_object.native_object.data`.
     pub native: NativeMovePackage,
+}
+
+/// Filter for paginating `MovePackage`s that were created within a range of checkpoints.
+#[derive(InputObject, Debug, Default, Clone)]
+pub(crate) struct MovePackageCheckpointFilter {
+    /// Fetch packages that were published strictly after this checkpoint. Omitting this fetches
+    /// packages published since genesis.
+    pub after_checkpoint: Option<UInt53>,
+
+    /// Fetch packages that were published strictly before this checkpoint. Omitting this fetches
+    /// packages published up to the latest checkpoint (inclusive).
+    pub before_checkpoint: Option<UInt53>,
 }
 
 /// Filter for a point query of a MovePackage, supporting querying different versions of a package
@@ -87,9 +104,31 @@ struct TypeOrigin {
     defining_id: SuiAddress,
 }
 
+/// A wrapper around the stored representation of a package, used to implement pagination-related
+/// traits.
+#[derive(Selectable, QueryableByName)]
+#[diesel(table_name = packages)]
+struct StoredHistoryPackage {
+    original_id: Vec<u8>,
+    #[diesel(embed)]
+    object: StoredHistoryObject,
+}
+
 pub(crate) struct MovePackageDowncastError;
 
 pub(crate) type CModule = JsonCursor<ConsistentNamedCursor>;
+pub(crate) type Cursor = BcsCursor<PackageCursor>;
+
+/// The inner struct for the `MovePackage` cursor. The package is identified by the checkpoint it
+/// was created in, its original ID, and its version, and the `checkpoint_viewed_at` specifies the
+/// checkpoint snapshot that the data came from.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct PackageCursor {
+    pub checkpoint_sequence_number: u64,
+    pub original_id: Vec<u8>,
+    pub package_version: u64,
+    pub checkpoint_viewed_at: u64,
+}
 
 /// DataLoader key for fetching the storage ID of the (user) package that shares an original (aka
 /// runtime) ID with the package stored at `package_id`, and whose version is `version`.
@@ -573,6 +612,164 @@ impl MovePackage {
         Ok(Some(MovePackage::try_from(&object).map_err(|_| {
             Error::Internal(format!("{address} is not a package"))
         })?))
+    }
+
+    /// Query the database for a `page` of Move packages. The Page uses the checkpoint sequence
+    /// number the package was created at, its original ID, and its version as the cursor. The query
+    /// can optionally be filtered by a bound on the checkpoints the packages were created in.
+    ///
+    /// The `checkpoint_viewed_at` parameter represents the checkpoint sequence number at which this
+    /// page was queried. Each entity returned in the connection will inherit this checkpoint, so
+    /// that when viewing that entity's state, it will be as if it is being viewed at this
+    /// checkpoint.
+    ///
+    /// The cursors in `page` may also include checkpoint viewed at fields. If these are set, they
+    /// take precedence over the checkpoint that pagination is being conducted in.
+    pub(crate) async fn paginate_by_checkpoint(
+        db: &Db,
+        page: Page<Cursor>,
+        filter: Option<MovePackageCheckpointFilter>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Connection<String, MovePackage>, Error> {
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let after_checkpoint: Option<u64> = filter
+            .as_ref()
+            .and_then(|f| f.after_checkpoint)
+            .map(|v| v.into());
+
+        // Clamp the "before checkpoint" bound by "checkpoint viewed at".
+        let before_checkpoint = filter
+            .as_ref()
+            .and_then(|f| f.before_checkpoint)
+            .map(|v| v.into())
+            .unwrap_or(u64::MAX)
+            .min(checkpoint_viewed_at + 1);
+
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                let mut q = query!(
+                    r#"
+                    SELECT
+                            p.original_id,
+                            o.*
+                    FROM
+                            packages p
+                    INNER JOIN
+                            objects_history o
+                    ON
+                            p.package_id = o.object_id
+                    AND     p.package_version = o.object_version
+                    AND     p.checkpoint_sequence_number = o.checkpoint_sequence_number
+                "#
+                );
+
+                q = filter!(
+                    q,
+                    format!("o.checkpoint_sequence_number < {before_checkpoint}")
+                );
+                if let Some(after) = after_checkpoint {
+                    q = filter!(q, format!("{after} < o.checkpoint_sequence_number"));
+                }
+
+                page.paginate_raw_query::<StoredHistoryPackage>(conn, checkpoint_viewed_at, q)
+            })
+            .await?;
+
+        let mut conn = Connection::new(prev, next);
+
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
+        for stored in results {
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            let package =
+                MovePackage::try_from_stored_history_object(stored.object, checkpoint_viewed_at)?;
+            conn.edges.push(Edge::new(cursor, package));
+        }
+
+        Ok(conn)
+    }
+
+    /// `checkpoint_viewed_at` points to the checkpoint snapshot that this `MovePackage` came from.
+    /// This is stored in the `MovePackage` so that related fields from the package are read from
+    /// the same checkpoint (consistently).
+    pub(crate) fn try_from_stored_history_object(
+        history_object: StoredHistoryObject,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Self, Error> {
+        let object = Object::try_from_stored_history_object(
+            history_object,
+            checkpoint_viewed_at,
+            /* root_version */ None,
+        )?;
+        Self::try_from(&object).map_err(|_| Error::Internal("Not a package!".to_string()))
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
+    }
+}
+
+impl RawPaginated<Cursor> for StoredHistoryPackage {
+    fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "o.checkpoint_sequence_number > {cp} OR (\
+                 o.checkpoint_sequence_number = {cp} AND
+                 p.original_id > '\\x{id}'::bytea OR (\
+                 p.original_id = '\\x{id}'::bytea AND \
+                 p.package_version >= {pv}\
+                 ))",
+                cp = cursor.checkpoint_sequence_number,
+                id = hex::encode(&cursor.original_id),
+                pv = cursor.package_version,
+            )
+        )
+    }
+
+    fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "o.checkpoint_sequence_number < {cp} OR (\
+                 o.checkpoint_sequence_number = {cp} AND
+                 p.original_id < '\\x{id}'::bytea OR (\
+                 p.original_id = '\\x{id}'::bytea AND \
+                 p.package_version <= {pv}\
+                 ))",
+                cp = cursor.checkpoint_sequence_number,
+                id = hex::encode(&cursor.original_id),
+                pv = cursor.package_version,
+            )
+        )
+    }
+
+    fn order(asc: bool, query: RawQuery) -> RawQuery {
+        if asc {
+            query
+                .order_by("o.checkpoint_sequence_number ASC")
+                .order_by("p.original_id ASC")
+                .order_by("p.package_version ASC")
+        } else {
+            query
+                .order_by("o.checkpoint_sequence_number DESC")
+                .order_by("p.original_id DESC")
+                .order_by("p.package_version DESC")
+        }
+    }
+}
+
+impl Target<Cursor> for StoredHistoryPackage {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(PackageCursor {
+            checkpoint_sequence_number: self.object.checkpoint_sequence_number as u64,
+            original_id: self.original_id.clone(),
+            package_version: self.object.object_version as u64,
+            checkpoint_viewed_at,
+        })
     }
 }
 
