@@ -27,27 +27,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout ${{ inputs.previous_branch }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ inputs.previous_branch }}
-
-      - name: Get ${{ inputs.previous_branch }} commit
+      - name: Get commits for branches
         shell: bash
         working-directory: ./
         run: |
-          echo "previous_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV
-
-      - name: Checkout ${{ inputs.current_branch }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ inputs.current_branch }}
-
-      - name: Get ${{ inputs.current_branch }} commit
-        shell: bash
-        working-directory: ./
-        run: |
-          echo "current_commit=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "previous_commit=$(curl https://api.github.com/repos/MystenLabs/sui/commits/${{ inputs.previous_branch }} | jq .sha)" >> $GITHUB_ENV
+          echo "current_commit=$(curl https://api.github.com/repos/MystenLabs/sui/commits/${{ inputs.current_branch }} | jq .sha)" >> $GITHUB_ENV
 
       - name: Checkout main
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
