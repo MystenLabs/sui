@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.3.1
+
+### Patch Changes
+
+- d70e8ff: Upgrade Package
+
 ## 0.3.0
 
 ### Minor Changes
