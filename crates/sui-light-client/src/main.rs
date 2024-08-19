@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
 
-use sui_rest_api::{CheckpointData, Client};
+use sui_rest_api::CheckpointData;
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,
@@ -26,10 +26,10 @@ use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
-use std::{cell::RefCell, collections::HashMap, fs, io::Write, path::PathBuf, str::FromStr, sync::Mutex};
+use std::{collections::HashMap, fs, io::Write, path::PathBuf, str::FromStr, sync::Mutex};
 use std::{io::Read, sync::Arc};
 
-use log::{info, warn};
+use log::info;
 use object_store::parse_url;
 use object_store::path::Path;
 use serde_json::json;
@@ -55,7 +55,10 @@ struct RemotePackageStore {
 
 impl RemotePackageStore {
     pub fn new(config: Config) -> Self {
-        Self { config , cache: Mutex::new(HashMap::new()) }
+        Self {
+            config,
+            cache: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -64,8 +67,6 @@ impl PackageStore for RemotePackageStore {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
-
-
         // Check if we have it in the cache
         if let Some(package) = self.cache.lock().unwrap().get(&id) {
             info!("Fetch Package: {} cache hit", id);
@@ -124,7 +125,6 @@ struct Config {
 }
 
 async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyhow::Result<u64> {
-
     // GraphQL query to get the last checkpoint of an epoch
     let query = json!({
         "query": "query ($epochID: Int) { epoch(id: $epochID) { epochId checkpoints(last: 1) { nodes { sequenceNumber } } } }",
@@ -134,9 +134,7 @@ async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyho
     // Submit the query by POSTing to the GraphQL endpoint
     let client = reqwest::Client::new();
     let resp = client
-        .post(
-            &config.graphql_url
-        )
+        .post(&config.graphql_url)
         .header("Content-Type", "application/json")
         .body(query.to_string())
         .send()
@@ -483,7 +481,6 @@ async fn get_verified_effects_and_events(
 }
 
 async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Object> {
-
     let sui_client: Arc<sui_sdk::SuiClient> = Arc::new(
         SuiClientBuilder::default()
             .build(config.full_node_url.as_str())
@@ -494,13 +491,16 @@ async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Ob
     info!("Getting object: {}", id);
 
     let read_api = sui_client.read_api();
-    let object_json = read_api.get_object_with_options(id, SuiObjectDataOptions::bcs_lossless()).await?;
-    let object = object_json.into_object().expect("Cannot make into object data");
-    let object : Object = object.try_into().expect("Cannot reconstruct object");
+    let object_json = read_api
+        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
+        .await?;
+    let object = object_json
+        .into_object()
+        .expect("Cannot make into object data");
+    let object: Object = object.try_into().expect("Cannot reconstruct object");
 
     // Need to authenticate this object
-    let (effects, _) = get_verified_effects_and_events(config,
-        object.previous_transaction).await?;
+    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction).await?;
 
     // check that this object ID, version and hash is in the effects
     let target_object_ref = object.compute_object_reference();
