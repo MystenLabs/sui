@@ -7,6 +7,7 @@ use openapi::ApiEndpoint;
 use reader::StateReader;
 use std::sync::Arc;
 use sui_types::storage::RestStateReader;
+use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
 pub mod accept;
@@ -32,7 +33,7 @@ pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
+pub use transactions::ExecuteTransactionQueryParameters;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";

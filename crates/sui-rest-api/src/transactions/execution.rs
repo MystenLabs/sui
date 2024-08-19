@@ -11,6 +11,7 @@ use sui_sdk2::types::{
     Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
     TransactionEffects, TransactionEvents, ValidatorAggregatedSignature,
 };
+use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
 use crate::openapi::{
@@ -19,22 +20,6 @@ use crate::openapi::{
 use crate::response::Bcs;
 use crate::{accept::AcceptFormat, response::ResponseContent};
 use crate::{RestService, Result};
-
-/// Trait to define the interface for how the REST service interacts with a a QuorumDriver or a
-/// simulated transaction executor.
-#[async_trait::async_trait]
-pub trait TransactionExecutor: Send + Sync {
-    async fn execute_transaction(
-        &self,
-        request: sui_types::quorum_driver_types::ExecuteTransactionRequestV3,
-        client_addr: Option<std::net::SocketAddr>,
-    ) -> Result<
-        sui_types::quorum_driver_types::ExecuteTransactionResponseV3,
-        sui_types::quorum_driver_types::QuorumDriverError,
-    >;
-
-    //TODO include Simulate functionality
-}
 
 pub struct ExecuteTransaction;
 
