@@ -717,18 +717,15 @@ impl TransactionOrchestratorMetrics {
 }
 
 #[async_trait::async_trait]
-impl<A> sui_rest_api::TransactionExecutor for TransactiondOrchestrator<A>
+impl<A> sui_types::transaction_executor::TransactionExecutor for TransactiondOrchestrator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     async fn execute_transaction(
         &self,
-        request: sui_types::quorum_driver_types::ExecuteTransactionRequestV3,
+        request: ExecuteTransactionRequestV3,
         client_addr: Option<std::net::SocketAddr>,
-    ) -> Result<
-        sui_types::quorum_driver_types::ExecuteTransactionResponseV3,
-        sui_types::quorum_driver_types::QuorumDriverError,
-    > {
+    ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
         self.execute_transaction_v3(request, client_addr).await
     }
 }
