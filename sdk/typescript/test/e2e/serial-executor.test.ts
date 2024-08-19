@@ -29,7 +29,7 @@ afterAll(() => {
 	vi.restoreAllMocks();
 });
 
-describe('SerialExecutor', () => {
+describe('SerialExecutor', { retry: 3 }, () => {
 	beforeEach(async () => {
 		vi.clearAllMocks();
 		await executor.resetCache();

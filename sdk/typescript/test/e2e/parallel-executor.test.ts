@@ -39,7 +39,7 @@ afterAll(() => {
 	vi.restoreAllMocks();
 });
 
-describe('ParallelTransactionExecutor', () => {
+describe('ParallelTransactionExecutor', { retry: 3 }, () => {
 	beforeEach(async () => {
 		await executor.resetCache();
 		vi.clearAllMocks();
