@@ -5,7 +5,9 @@ mod execution;
 pub use execution::EffectsFinality;
 pub use execution::ExecuteTransaction;
 pub use execution::ExecuteTransactionQueryParameters;
+pub use execution::SimulateTransaction;
 pub use execution::TransactionExecutionResponse;
+pub use execution::TransactionSimulationResponse;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
