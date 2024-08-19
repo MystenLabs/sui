@@ -7,17 +7,14 @@ on:
         description: 'Sui Release Tag'
         type: string
         required: true
-        default: devnet-test-tag
       previous_branch:
         description: 'Previous Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
-        default: releases/sui-v1.29.0-release
       current_branch:
         description: 'Current Release Branch (Ex: releases/sui-vX.XX.X-release)'
         type: string
         required: true
-        default: releases/sui-v1.30.0-release
 
 env:
   RELEASE_NOTES_FILE: "./release_notes.txt"
@@ -66,7 +63,8 @@ jobs:
         working-directory: ./
         run: |
           GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} | tee -a ${{ env.RELEASE_NOTES_FILE }}
-          echo "### Full Log: https://github.com/MystenLabs/sui/commits/${{ inputs.release_tag }}" >> ${{ env.RELEASE_NOTES_FILE }}
+          echo "---" >> ${{ env.RELEASE_NOTES_FILE }}
+          echo "#### Full Log: https://github.com/MystenLabs/sui/commits/${{ inputs.release_tag }}" >> ${{ env.RELEASE_NOTES_FILE }}
 
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
@@ -81,6 +79,6 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag }}
           release_name: ${{ inputs.release_tag }}
-          body_path: ./release_notes.txt
+          body_path: ${{ env.RELEASE_NOTES_FILE }}
           draft: false
           prerelease: ${{ env.pre_release }}
