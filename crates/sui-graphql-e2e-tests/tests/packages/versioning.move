@@ -8,10 +8,34 @@ module P0::m {
     public fun f(): u64 { 42 }
 }
 
+//# create-checkpoint
+
+//# run-graphql
+{
+    latestPackage(address: "@{P0}") {
+        version
+        module(name: "m") {
+            functions { nodes { name } }
+        }
+    }
+}
+
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
 module P1::m {
     public fun f(): u64 { 42 }
     public fun g(): u64 { 43 }
+}
+
+//# create-checkpoint
+
+//# run-graphql
+{
+    latestPackage(address: "@{P0}") {
+        version
+        module(name: "m") {
+            functions { nodes { name } }
+        }
+    }
 }
 
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
@@ -24,10 +48,26 @@ module P2::m {
 //# create-checkpoint
 
 //# run-graphql
+{
+    latestPackage(address: "@{P0}") {
+        version
+        module(name: "m") {
+            functions { nodes { name } }
+        }
+    }
+}
+
+//# run-graphql
 {   # Test fetching by ID
     v1: package(address: "@{P0}") {
         module(name: "m") {
             functions { nodes { name } }
+        }
+
+        latestPackage {
+            module(name: "m") {
+                functions { nodes { name } }
+            }
         }
     }
 
@@ -35,11 +75,23 @@ module P2::m {
         module(name: "m") {
             functions { nodes { name } }
         }
+
+        latestPackage {
+            module(name: "m") {
+                functions { nodes { name } }
+            }
+        }
     }
 
     v3: package(address: "@{P2}") {
         module(name: "m") {
             functions { nodes { name } }
+        }
+
+        latestPackage {
+            module(name: "m") {
+                functions { nodes { name } }
+            }
         }
     }
 }

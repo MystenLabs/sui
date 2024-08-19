@@ -248,6 +248,21 @@ impl Query {
         MovePackage::query(ctx, address, key).await.extend()
     }
 
+    /// The latest version of the package at `address`.
+    ///
+    /// This corresponds to the package with the highest `version` that shares its original ID with
+    /// the package at `address`.
+    async fn latest_package(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        MovePackage::query(ctx, address, MovePackage::latest_at(checkpoint))
+            .await
+            .extend()
+    }
+
     /// Look-up an Account by its SuiAddress.
     async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Address>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
