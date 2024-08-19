@@ -98,6 +98,11 @@ export function isTransaction(obj: unknown): obj is Transaction {
 
 export type TransactionObjectInput = string | CallArg | TransactionObjectArgument;
 
+const modulePluginRegistry = {
+	buildPlugins: [] as TransactionPlugin[],
+	serializationPlugins: [] as TransactionPlugin[],
+};
+
 const TRANSACTION_REGISTRY_KEY = Symbol.for('@mysten/transaction/registry');
 function getGlobalPluginRegistry() {
 	try {
@@ -109,18 +114,12 @@ function getGlobalPluginRegistry() {
 		};
 
 		if (!target[TRANSACTION_REGISTRY_KEY]) {
-			target[TRANSACTION_REGISTRY_KEY] = {
-				buildPlugins: [],
-				serializationPlugins: [],
-			};
+			target[TRANSACTION_REGISTRY_KEY] = modulePluginRegistry;
 		}
 
 		return target[TRANSACTION_REGISTRY_KEY];
 	} catch (e) {
-		return {
-			buildPlugins: [],
-			serializationPlugins: [],
-		};
+		return modulePluginRegistry;
 	}
 }
 
