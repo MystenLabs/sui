@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_sdk_types::types::framework::Coin;
-use sui_sdk_types::types::{
-    Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction, Transaction, TransactionEffects, TransactionEvents, ValidatorAggregatedSignature
-};
 use crate::openapi::{
     ApiEndpoint, OperationBuilder, RequestBodyBuilder, ResponseBuilder, RouteHandler,
 };
@@ -15,6 +11,11 @@ use axum::extract::{Query, State};
 use schemars::JsonSchema;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use sui_sdk_types::types::framework::Coin;
+use sui_sdk_types::types::{
+    Address, BalanceChange, CheckpointSequenceNumber, Object, Owner, SignedTransaction,
+    Transaction, TransactionEffects, TransactionEvents, ValidatorAggregatedSignature,
+};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionExecutor};
 use tap::Pipe;
 
@@ -314,7 +315,7 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&Address, Coin<'_>)> + '_ 
     })
 }
 
-pub(crate) fn derive_balance_changes(
+fn derive_balance_changes(
     _effects: &TransactionEffects,
     input_objects: &[Object],
     output_objects: &[Object],
@@ -370,6 +371,7 @@ impl ApiEndpoint<RestService> for SimulateTransaction {
         OperationBuilder::new()
             .tag("Transactions")
             .operation_id("SimulateTransaction")
+            .query_parameters::<SimulateTransactionQueryParameters>(generator)
             .request_body(RequestBodyBuilder::new().bcs_content().build())
             .response(
                 200,
@@ -388,12 +390,24 @@ impl ApiEndpoint<RestService> for SimulateTransaction {
 
 async fn simulate_transaction(
     State(state): State<Option<Arc<dyn TransactionExecutor>>>,
+    Query(parameters): Query<SimulateTransactionQueryParameters>,
     accept: AcceptFormat,
     //TODO allow accepting JSON as well as BCS
     Bcs(transaction): Bcs<Transaction>,
 ) -> Result<ResponseContent<TransactionSimulationResponse>> {
     let executor = state.ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
 
+    simulate_transaction_impl(&executor, &parameters, transaction).map(|response| match accept {
+        AcceptFormat::Json => ResponseContent::Json(response),
+        AcceptFormat::Bcs => ResponseContent::Bcs(response),
+    })
+}
+
+pub(super) fn simulate_transaction_impl(
+    executor: &Arc<dyn TransactionExecutor>,
+    parameters: &SimulateTransactionQueryParameters,
+    transaction: Transaction,
+) -> Result<TransactionSimulationResponse> {
     if transaction.gas_payment.objects.is_empty() {
         return Err(RestError::new(
             axum::http::StatusCode::BAD_REQUEST,
@@ -434,23 +448,39 @@ async fn simulate_transaction(
     TransactionSimulationResponse {
         events,
         effects,
-        balance_changes: Some(balance_changes),
-        input_objects: Some(input_objects),
-        output_objects: Some(output_objects),
+        balance_changes: parameters.balance_changes.then_some(balance_changes),
+        input_objects: parameters.input_objects.then_some(input_objects),
+        output_objects: parameters.output_objects.then_some(output_objects),
     }
-    .pipe(|response| match accept {
-        AcceptFormat::Json => ResponseContent::Json(response),
-        AcceptFormat::Bcs => ResponseContent::Bcs(response),
-    })
     .pipe(Ok)
 }
 
 /// Response type for the transaction simulation endpoint
 #[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
 pub struct TransactionSimulationResponse {
-    effects: TransactionEffects,
-    events: Option<TransactionEvents>,
-    balance_changes: Option<Vec<BalanceChange>>,
-    input_objects: Option<Vec<Object>>,
-    output_objects: Option<Vec<Object>>,
+    pub effects: TransactionEffects,
+    pub events: Option<TransactionEvents>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub input_objects: Option<Vec<Object>>,
+    pub output_objects: Option<Vec<Object>>,
+}
+
+/// Query parameters for the simulate transaction endpoint
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, JsonSchema)]
+pub struct SimulateTransactionQueryParameters {
+    /// Request `BalanceChanges` be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    #[schemars(with = "bool")]
+    pub balance_changes: bool,
+    /// Request input `Object`s be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    #[schemars(with = "bool")]
+    pub input_objects: bool,
+    /// Request output `Object`s be included in the Response.
+    #[serde(default)]
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
+    #[schemars(with = "bool")]
+    pub output_objects: bool,
 }
