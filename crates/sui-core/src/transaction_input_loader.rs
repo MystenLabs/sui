@@ -34,7 +34,7 @@ impl TransactionInputLoader {
     /// a single hash map lookup when notify_read_objects_for_execution is called later.
     /// TODO: implement this caching
     #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_signing(
+    pub fn read_objects_for_signing(
         &self,
         _tx_digest_for_caching: Option<&TransactionDigest>,
         input_object_kinds: &[InputObjectKind],
@@ -122,7 +122,7 @@ impl TransactionInputLoader {
     /// cached, but only with appropriate invalidation logic for when an object is received by a
     /// different tx first.
     #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_execution(
+    pub fn read_objects_for_execution(
         &self,
         shared_lock_store: &impl GetSharedLocks,
         tx_key: &TransactionKey,
