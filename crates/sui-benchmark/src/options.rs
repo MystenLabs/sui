@@ -207,9 +207,18 @@ pub enum RunSpec {
         // type and load % of adversarial transactions in the benchmark workload.
         // Format is "{adversarial_type}-{load_factor}".
         // `load_factor` is a number between 0.0 and 1.0 which dictates how much load per tx
-        // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum for `adversarial_type`
+        // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum
+        // for `adversarial_type`
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = ["0-1.0".to_string()])]
         adversarial_cfg: Vec<String>,
+        // type and % of failure transactions in the benchmark workload.
+        // Format is "{failure_type}-{load_factor}".
+        // `load_factor` is a number between 0.0 and 1.0 which dictates how the probability
+        // that a transaction will fail with this type.
+        // Default is (0-1.0) implying no induced failures for 100% of transactions. See
+        // `FailurePayloadType` enum for `_type`
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = ["0-1.0".to_string()])]
+        failure_cfg: Vec<String>,
 
         // --- generic options ---
         // Target qps
