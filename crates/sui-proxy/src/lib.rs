@@ -5,7 +5,6 @@ pub mod config;
 pub mod consumer;
 pub mod handlers;
 pub mod histogram_relay;
-mod ip;
 pub mod metrics;
 pub mod middleware;
 pub mod peers;
@@ -145,9 +144,8 @@ mod tests {
         // Insert the client's public key into the allowlist and verify the request is successful
         allower.get_mut().write().unwrap().insert(
             client_pub_key.to_owned(),
-            peers::SuiPeer {
+            peers::AllowedPeer {
                 name: "some-node".into(),
-                p2p_address: Multiaddr::empty(),
                 public_key: client_pub_key.to_owned(),
             },
         );

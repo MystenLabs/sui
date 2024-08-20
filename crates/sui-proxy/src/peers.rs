@@ -38,14 +38,13 @@ static JSON_RPC_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .unwrap()
 });
 
-/// SuiNods a mapping of public key to SuiPeer data
-pub type SuiPeers = Arc<RwLock<HashMap<Ed25519PublicKey, SuiPeer>>>;
+/// AllowedPeers is a mapping of public key to AllowedPeer data
+pub type AllowedPeers = Arc<RwLock<HashMap<Ed25519PublicKey, AllowedPeer>>>;
 
-/// A SuiPeer is the collated sui chain data we have about validators
+/// A AllowedPeer is the collated sui chain data we have about validators
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
-pub struct SuiPeer {
+pub struct AllowedPeer {
     pub name: String,
-    pub p2p_address: Multiaddr,
     pub public_key: Ed25519PublicKey,
 }
 
@@ -55,8 +54,8 @@ pub struct SuiPeer {
 /// Handlers also use this data in an Extractor extension to check incoming clients on the http api against known keys.
 #[derive(Debug, Clone)]
 pub struct SuiNodeProvider {
-    nodes: SuiPeers,
-    static_nodes: SuiPeers,
+    nodes: AllowedPeers,
+    static_nodes: AllowedPeers,
     rpc_url: String,
     rpc_poll_interval: Duration,
 }
@@ -69,9 +68,13 @@ impl Allower for SuiNodeProvider {
 }
 
 impl SuiNodeProvider {
-    pub fn new(rpc_url: String, rpc_poll_interval: Duration, static_peers: Vec<SuiPeer>) -> Self {
+    pub fn new(
+        rpc_url: String,
+        rpc_poll_interval: Duration,
+        static_peers: Vec<AllowedPeer>,
+    ) -> Self {
         // build our hashmap with the static pub keys. we only do this one time at binary startup.
-        let static_nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_peers
+        let static_nodes: HashMap<Ed25519PublicKey, AllowedPeer> = static_peers
             .into_iter()
             .map(|v| (v.public_key.clone(), v))
             .collect();
@@ -86,33 +89,31 @@ impl SuiNodeProvider {
     }
 
     /// get is used to retrieve peer info in our handlers
-    pub fn get(&self, key: &Ed25519PublicKey) -> Option<SuiPeer> {
+    pub fn get(&self, key: &Ed25519PublicKey) -> Option<AllowedPeer> {
         debug!("look for {:?}", key);
         // check static nodes first
         if let Some(v) = self.static_nodes.read().unwrap().get(key) {
-            return Some(SuiPeer {
+            return Some(AllowedPeer {
                 name: v.name.to_owned(),
-                p2p_address: v.p2p_address.to_owned(),
                 public_key: v.public_key.to_owned(),
             });
         }
         // check dynamic nodes
         if let Some(v) = self.nodes.read().unwrap().get(key) {
-            return Some(SuiPeer {
+            return Some(AllowedPeer {
                 name: v.name.to_owned(),
-                p2p_address: v.p2p_address.to_owned(),
                 public_key: v.public_key.to_owned(),
             });
         }
         None
     }
     /// Get a reference to the inner service
-    pub fn get_ref(&self) -> &SuiPeers {
+    pub fn get_ref(&self) -> &AllowedPeers {
         &self.nodes
     }
 
     /// Get a mutable reference to the inner service
-    pub fn get_mut(&mut self) -> &mut SuiPeers {
+    pub fn get_mut(&mut self) -> &mut AllowedPeers {
         &mut self.nodes
     }
 
@@ -221,26 +222,20 @@ impl SuiNodeProvider {
 /// extract will get the network pubkey bytes from a SuiValidatorSummary type.  This type comes from a
 /// full node rpc result.  See get_validators for details.  The key here, if extracted successfully, will
 /// ultimately be stored in the allow list and let us communicate with those actual peers via tls.
-fn extract(summary: SuiSystemStateSummary) -> impl Iterator<Item = (Ed25519PublicKey, SuiPeer)> {
+fn extract(
+    summary: SuiSystemStateSummary,
+) -> impl Iterator<Item = (Ed25519PublicKey, AllowedPeer)> {
     summary.active_validators.into_iter().filter_map(|vm| {
         match Ed25519PublicKey::from_bytes(&vm.network_pubkey_bytes) {
             Ok(public_key) => {
-                let Ok(p2p_address) = Multiaddr::try_from(vm.p2p_address) else {
-                    error!(
-                        "refusing to add peer to allow list; unable to decode multiaddr for {}",
-                        vm.name
-                    );
-                    return None; // scoped to filter_map
-                };
                 debug!(
-                    "adding public key {:?} for address {:?}",
-                    public_key, p2p_address
+                    "adding public key {:?} for sui validator {:?}",
+                    public_key, vm.name
                 );
                 Some((
                     public_key.clone(),
-                    SuiPeer {
+                    AllowedPeer {
                         name: vm.name,
-                        p2p_address,
                         public_key,
                     },
                 )) // scoped to filter_map
