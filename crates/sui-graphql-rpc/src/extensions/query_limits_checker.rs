@@ -114,7 +114,7 @@ fn check_mutation_dry_run(
                             variables,
                             max_tx_payload_size,
                             ctx,
-                            &payload_size,
+                            payload_size,
                             available_budget,
                             seen_vars,
                         )?;
@@ -125,7 +125,7 @@ fn check_mutation_dry_run(
                             variables,
                             max_tx_payload_size,
                             ctx,
-                            &payload_size,
+                            payload_size,
                             available_budget,
                             seen_vars,
                         )?;
@@ -412,14 +412,14 @@ fn check_mutation_dry_run(
                 let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
                     graphql_error_at_pos(
                         code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var1.0.node.to_string(), e),
+                        format!("Error getting the {} size: {}", var1.0.node, e),
                         f.pos,
                     )
                 })?;
                 let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
                     graphql_error_at_pos(
                         code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var2.0.node.to_string(), e),
+                        format!("Error getting the {} size: {}", var2.0.node, e),
                         f.pos,
                     )
                 })?;
@@ -544,7 +544,7 @@ fn check_mutation_dry_run(
 
     // This represents the tx payload we found from variables and values of txBytes and sigs
     // fields
-    let current_tx_payload = max_tx_payload_size as u64 - available_budget;
+    let current_tx_payload = max_tx_payload_size - available_budget;
     // Check if the total payload size (a.k.a the content-length header) minus the values of
     // the txBytes and sigs fields is less than the `max_query_payload_size`. This verifies
     // that the "read" part of the query is within the set limits.
@@ -1022,10 +1022,7 @@ fn get_value_str_len(arg: &GqlValue, variables: &Variables) -> Result<u64, anyho
     }
 }
 
-/// Check if the arguments in a node is a GqlValue::Variable or not
+/// Check if the argument in a node is a GqlValue::Variable or not
 fn is_variable(arg: &GqlValue) -> bool {
-    match arg {
-        GqlValue::Variable(_) => true,
-        _ => false,
-    }
+    matches!(arg, GqlValue::Variable(_))
 }
