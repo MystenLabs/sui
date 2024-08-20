@@ -16,7 +16,7 @@ pub enum Command {
     /// Output a TOML config (suitable for passing into the --config parameter of the start-server
     /// command) with all values set to their defaults.
     GenerateConfig {
-        /// Optional path to a file to output to. Prints to stdout if none is provided.
+        /// Optional path to an output file. Prints to `stdout` if not provided.
         output: Option<PathBuf>,
     },
 

@@ -20,10 +20,11 @@ mod query;
 /// Ensure all packages created before `before_checkpoint` are written to the `output_dir`ectory,
 /// from the GraphQL service at `rpc_url`.
 ///
-/// `output_dir` can be a path to a non-existent directory, in which case it will be created, or an
-/// existing empty directory (in which case it will be filled), or an existing directory that has
-/// been written to in the past (in which case this invocation will pick back up from where the
-/// previous invocation left off).
+/// `output_dir` can be a path to a non-existent directory, an existing empty directory, or an
+/// existing directory written to in the past. If the path is non-existent, the invocation creates
+/// it. If the path exists but is empty, the invocation writes to the directory. If the directory
+/// has been written to in the past, the invocation picks back up where the previous invocation
+/// left off.
 pub async fn dump(
     rpc_url: String,
     output_dir: PathBuf,
@@ -116,8 +117,8 @@ async fn max_page_size(client: &Client) -> Result<i32> {
 /// Read all the packages between `after_checkpoint` and `before_checkpoint`, in batches of
 /// `page_size` from the `client` connected to a GraphQL service.
 ///
-/// If `after_checkpoint` is not provided, packages will be read from genesis. If
-/// `before_checkpoint` is not provided, packages will be read until the latest checkpoint.
+/// If `after_checkpoint` is not provided, packages are read from genesis. If `before_checkpoint`
+/// is not provided, packages are read until the latest checkpoint.
 ///
 /// Returns the latest checkpoint that was read from in this fetch, and a list of all the packages
 /// that were read.
@@ -198,10 +199,10 @@ async fn fetch_packages(
 ///
 /// - `linkage.json` -- a JSON serialization of the package's linkage table, mapping dependency
 ///   original IDs to the version of the dependency being depended on and the ID of the object
-///   on-chain that contains that version.
+///   on chain that contains that version.
 ///
-/// - `origins.json` -- a JSON serialize of the type origin table, mapping type names contained in
-///   this package to the version of the package that first introduced that type.
+/// - `origins.json` -- a JSON serialization of the type origin table, mapping type names contained
+///   in this package to the version of the package that first introduced that type.
 ///
 /// - `*.mv` -- a BCS serialization of each compiled module in the package.
 fn dump_package(output_dir: &Path, pkg: &packages::MovePackage) -> Result<()> {
