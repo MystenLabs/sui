@@ -164,7 +164,7 @@ where
         let start_time = Instant::now();
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
-        let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 

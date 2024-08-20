@@ -45,18 +45,17 @@ pub(crate) struct TransactionConsumer {
 }
 
 impl TransactionConsumer {
-    pub(crate) fn new(
-        tx_receiver: Receiver<TransactionsGuard>,
-        context: Arc<Context>,
-        max_consumed_transactions_per_request: Option<u64>,
-    ) -> Self {
+    pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
         Self {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
                 .consensus_max_transactions_in_block_bytes(),
-            max_consumed_transactions_per_request: max_consumed_transactions_per_request
-                .unwrap_or(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
+            max_consumed_transactions_per_request: context
+                .protocol_config
+                .consensus_max_num_transactions_in_block()
+                // TODO: remove below after protocol 55 has rolled out.
+                .max(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
             pending_transactions: None,
         }
     }
@@ -74,7 +73,6 @@ impl TransactionConsumer {
         // Handle one batch of incoming transactions from TransactionGuard.
         // Returns the remaining txs as a new TransactionGuard, if the batch breaks any limit.
         let mut handle_txs = |t: TransactionsGuard| -> Option<TransactionsGuard> {
-            // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
             let remaining_txs: Vec<_> = t
                 .transactions
                 .into_iter()
@@ -273,7 +271,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit asynchronously the transactions and keep the waiters
         let mut included_in_block_waiters = FuturesUnordered::new();
@@ -325,7 +323,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit some transactions
         for i in 0..10 {
@@ -393,7 +391,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let mut all_receivers = Vec::new();
         // submit a few transactions individually.
         for i in 0..10 {
