@@ -562,7 +562,7 @@ mod checked {
         // Use the same verifier and meter for all packages, custom configured for signing.
         let for_signing = true;
         let mut verifier = sui_execution::verifier(protocol_config, for_signing, metrics);
-        let mut meter = verifier.meter(protocol_config.meter_config());
+        let mut meter = verifier.meter(protocol_config.meter_config_for_signing());
 
         // Measure time for verifying all packages in the PTB
         let shared_meter_verifier_timer = metrics

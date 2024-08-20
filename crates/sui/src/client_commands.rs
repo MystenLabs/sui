@@ -1106,7 +1106,7 @@ impl SuiClientCommands {
                 let mut used_ticks = meter.accumulator(Scope::Package).clone();
                 used_ticks.name = pkg_name;
 
-                let meter_config = protocol_config.meter_config();
+                let meter_config = protocol_config.meter_config_for_signing();
 
                 let exceeded = matches!(
                     meter_config.max_per_pkg_meter_units,
