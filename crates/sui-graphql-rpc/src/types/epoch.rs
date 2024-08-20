@@ -32,7 +32,7 @@ pub(crate) struct Epoch {
     pub checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
+/// `DataLoader` key for fetching an `Epoch` by its ID, optionally constrained by a consistency
 /// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct EpochKey {

@@ -131,7 +131,7 @@ pub(crate) struct TransactionBlockCursor {
     pub tx_checkpoint_number: u64,
 }
 
-/// DataLoader key for fetching a `TransactionBlock` by its digest, optionally constrained by a
+/// `DataLoader` key for fetching a `TransactionBlock` by its digest, optionally constrained by a
 /// consistency cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {

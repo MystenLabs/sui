@@ -143,13 +143,12 @@ impl Event {
     /// checkpoint sequence numbers as the cursor to determine the correct page of results. The
     /// query can optionally be further `filter`-ed by the `EventFilter`.
     ///
-    /// The `checkpoint_viewed_at` parameter represents the checkpoint sequence number at which this
-    /// page was queried. Each entity returned in the connection will inherit this checkpoint, so
-    /// that when viewing that entity's state, it will be as if it is being viewed at this
-    /// checkpoint.
+    /// The `checkpoint_viewed_at` parameter represents the checkpoint sequence number at which
+    /// this page was queried. Each entity returned in the connection inherits this checkpoint, so
+    /// that when viewing that entity's state, it's as if it's being viewed at this checkpoint.
     ///
-    /// The cursors in `page` may also include checkpoint viewed at fields. If these are set, they
-    /// take precedence over the checkpoint that pagination is being conducted in.
+    /// The cursors in `page` might also include checkpoint viewed at fields. If these are set,
+    /// they take precedence over the checkpoint that pagination is being conducted in.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,

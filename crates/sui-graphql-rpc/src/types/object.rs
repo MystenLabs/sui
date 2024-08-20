@@ -185,7 +185,7 @@ pub(crate) struct AddressOwner {
 /// Filter for a point query of an Object.
 pub(crate) enum ObjectLookup {
     LatestAt {
-        /// The checkpoint sequence number at which this was viewed at
+        /// The checkpoint sequence number at which this was viewed at.
         checkpoint_viewed_at: u64,
     },
 
@@ -193,7 +193,7 @@ pub(crate) enum ObjectLookup {
         /// The parent version to be used as an upper bound for the query. Look for the latest
         /// version of a child object whose version is less than or equal to this upper bound.
         parent_version: u64,
-        /// The checkpoint sequence number at which this was viewed at
+        /// The checkpoint sequence number at which this was viewed at.
         checkpoint_viewed_at: u64,
     },
 
@@ -280,7 +280,7 @@ pub(crate) enum IObject {
     SuinsRegistration(SuinsRegistration),
 }
 
-/// DataLoader key for fetching an `Object` at a specific version, constrained by a consistency
+/// `DataLoader` key for fetching an `Object` at a specific version, constrained by a consistency
 /// cursor (if that version was created after the checkpoint the query is viewing at, then it will
 /// fail).
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
@@ -290,7 +290,7 @@ struct HistoricalKey {
     checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching the latest version of an object whose parent object has version
+/// `DataLoader` key for fetching the latest version of an object whose parent object has version
 /// `parent_version`, as of `checkpoint_viewed_at`. This look-up can fail to find a valid object if
 /// the key is not self-consistent, for example if the `parent_version` is set to a higher version
 /// than the object's actual parent as of `checkpoint_viewed_at`.
@@ -301,7 +301,7 @@ struct ParentVersionKey {
     checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching the latest version of an `Object` as of a consistency cursor.
+/// `DataLoader` key for fetching the latest version of an object as of a given checkpoint.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct LatestAtKey {
     id: SuiAddress,

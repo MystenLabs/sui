@@ -225,12 +225,12 @@ impl Query {
         Object::query(ctx, address, key).await.extend()
     }
 
-    /// The package corresponding to the given address at the (optionally) given version.
+    /// The package corresponding to the given address (at the optionally given version).
     ///
     /// When no version is given, the package is loaded directly from the address given. Otherwise,
     /// the address is translated before loading to point to the package whose original ID matches
-    /// the package at `address`, but whose version is `version`. For non-system packages, this may
-    /// result in a different address than `address` because different versions of a package,
+    /// the package at `address`, but whose version is `version`. For non-system packages, this
+    /// might result in a different address than `address` because different versions of a package,
     /// introduced by upgrades, exist at distinct addresses.
     ///
     /// Note that this interpretation of `version` is different from a historical object read (the
@@ -440,8 +440,8 @@ impl Query {
     /// The Move packages that exist in the network, optionally filtered to be strictly before
     /// `beforeCheckpoint` and/or strictly after `afterCheckpoint`.
     ///
-    /// This query will return all versions of a given user package that appear between the
-    /// specified checkpoints, but only records the latest versions of system packages.
+    /// This query returns all versions of a given user package that appear between the specified
+    /// checkpoints, but only records the latest versions of system packages.
     async fn packages(
         &self,
         ctx: &Context<'_>,

@@ -178,7 +178,7 @@ pub enum ToolCommand {
     },
 
     /// Download all packages to the local filesystem from a GraphQL service. Each package gets its
-    /// own sub-directory, named for its ID on-chain and version containing two metadata files
+    /// own sub-directory, named for its ID on chain and version containing two metadata files
     /// (linkage.json and origins.json), a file containing the overall object and a file for every
     /// module it contains. Each module file is named for its module name, with a .mv suffix, and
     /// contains Move bytecode (suitable for passing into a disassembler).
