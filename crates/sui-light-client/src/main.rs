@@ -127,7 +127,7 @@ struct Config {
 async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyhow::Result<u64> {
     // GraphQL query to get the last checkpoint of an epoch
     let query = json!({
-        "query": "query ($epochID: Int) { epoch(id: $epochID) { epochId checkpoints(last: 1) { nodes { sequenceNumber } } } }",
+        "query": "query ($epochID: Int) { epoch(id: $epochID) { checkpoints(last: 1) { nodes { sequenceNumber } } } }",
         "variables": { "epochID": epoch_id }
     });
 
@@ -276,7 +276,7 @@ async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<()> {
         .await?;
     let latest = download_checkpoint_summary(config, latest_seq).await?;
 
-    // Binary search to find missing checkpoints
+    // Sequentially record all the missing end of epoch checkpoints numbers
     while last_epoch + 1 < latest.epoch() {
         let target_epoch = last_epoch + 1;
         let target_last_checkpoint_number =
@@ -551,23 +551,27 @@ pub async fn main() {
                 exec_digests.transaction, exec_digests.effects
             );
 
-            for event in events.as_ref().unwrap().data.iter() {
-                let type_layout = resolver
-                    .type_layout(event.type_.clone().into())
-                    .await
-                    .unwrap();
+            if events.is_some() {
+                for event in events.as_ref().unwrap().data.iter() {
+                    let type_layout = resolver
+                        .type_layout(event.type_.clone().into())
+                        .await
+                        .unwrap();
 
-                let json_val =
-                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
+                    let json_val =
+                        SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
 
-                println!(
-                    "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
-                    event.package_id,
-                    event.transaction_module,
-                    event.sender,
-                    event.type_,
-                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
-                );
+                    println!(
+                        "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
+                        event.package_id,
+                        event.transaction_module,
+                        event.sender,
+                        event.type_,
+                        serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                    );
+                }
+            } else {
+                println!("No events found");
             }
         }
         Some(SCommands::Object { oid }) => {
