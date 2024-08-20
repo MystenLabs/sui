@@ -18,10 +18,6 @@ use crate::{
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
-/// Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
-/// Using a higher limit that is 250 * 2 = 500, to account for bursty traffic and system transactions.
-const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 500;
-
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
 /// When its last transaction is included to a block then `included_in_block_ack` will be signalled.
 /// If the guard is dropped without getting acknowledged that means the transactions have not been
@@ -45,18 +41,15 @@ pub(crate) struct TransactionConsumer {
 }
 
 impl TransactionConsumer {
-    pub(crate) fn new(
-        tx_receiver: Receiver<TransactionsGuard>,
-        context: Arc<Context>,
-        max_consumed_transactions_per_request: Option<u64>,
-    ) -> Self {
+    pub(crate) fn new(tx_receiver: Receiver<TransactionsGuard>, context: Arc<Context>) -> Self {
         Self {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
                 .consensus_max_transactions_in_block_bytes(),
-            max_consumed_transactions_per_request: max_consumed_transactions_per_request
-                .unwrap_or(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
+            max_consumed_transactions_per_request: context
+                .protocol_config
+                .max_num_transactions_in_block(),
             pending_transactions: None,
         }
     }
@@ -74,7 +67,6 @@ impl TransactionConsumer {
         // Handle one batch of incoming transactions from TransactionGuard.
         // Returns the remaining txs as a new TransactionGuard, if the batch breaks any limit.
         let mut handle_txs = |t: TransactionsGuard| -> Option<TransactionsGuard> {
-            // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
             let remaining_txs: Vec<_> = t
                 .transactions
                 .into_iter()
@@ -273,7 +265,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit asynchronously the transactions and keep the waiters
         let mut included_in_block_waiters = FuturesUnordered::new();
@@ -325,7 +317,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // submit some transactions
         for i in 0..10 {
@@ -393,7 +385,7 @@ mod tests {
 
         let context = Arc::new(Context::new_for_test(4).0);
         let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let mut all_receivers = Vec::new();
         // submit a few transactions individually.
         for i in 0..10 {
