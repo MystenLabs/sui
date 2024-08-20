@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::histogram::Histogram;
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 use std::sync::Arc;
 
@@ -21,11 +21,11 @@ pub struct CheckpointMetrics {
     pub last_skipped_checkpoint_signature_submission: IntGauge,
     pub last_ignored_checkpoint_signature_received: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
-    pub checkpoint_creation_latency_ms: Histogram,
+    pub checkpoint_creation_latency: Histogram,
     pub remote_checkpoint_forks: IntCounter,
     pub split_brain_checkpoint_forks: IntCounter,
-    pub last_created_checkpoint_age_ms: Histogram,
-    pub last_certified_checkpoint_age_ms: Histogram,
+    pub last_created_checkpoint_age: Histogram,
+    pub last_certified_checkpoint_age: Histogram,
 }
 
 impl CheckpointMetrics {
@@ -43,16 +43,18 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
-            last_created_checkpoint_age_ms: Histogram::new_in_registry(
-                "last_created_checkpoint_age_ms",
+            last_created_checkpoint_age: register_histogram_with_registry!(
+                "last_created_checkpoint_age",
                 "Age of the last created checkpoint",
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ),
-            last_certified_checkpoint_age_ms: Histogram::new_in_registry(
-                "last_certified_checkpoint_age_ms",
+            ).unwrap(),
+            last_certified_checkpoint_age: register_histogram_with_registry!(
+                "last_certified_checkpoint_age",
                 "Age of the last certified checkpoint",
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ),
+            ).unwrap(),
             checkpoint_errors: register_int_counter_with_registry!(
                 "checkpoint_errors",
                 "Checkpoints errors count",
@@ -109,11 +111,12 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
-            checkpoint_creation_latency_ms: Histogram::new_in_registry(
-                "checkpoint_creation_latency_ms",
+            checkpoint_creation_latency: register_histogram_with_registry!(
+                "checkpoint_creation_latency",
                 "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             remote_checkpoint_forks: register_int_counter_with_registry!(
                 "remote_checkpoint_forks",
                 "Number of remote checkpoints that forked from local checkpoints",
