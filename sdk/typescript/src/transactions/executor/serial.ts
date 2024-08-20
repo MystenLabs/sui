@@ -11,10 +11,23 @@ import { isTransaction, Transaction } from '../Transaction.js';
 import { CachingTransactionExecutor } from './caching.js';
 import { SerialQueue } from './queue.js';
 
+export interface SerializeTransactionExecutorOptions extends Omit<ObjectCacheOptions, 'address'> {
+	client: SuiClient;
+	signer: Signer;
+	sponsor?: (options: { bytes: Uint8Array }) => Promise<{
+		bytes: Uint8Array;
+	}>;
+	executeTransaction?: (options: { signature: string; transaction: Uint8Array }) => Promise<{
+		digest: string;
+		effects: string;
+	}>;
+}
+
 export class SerialTransactionExecutor {
 	#queue = new SerialQueue();
 	#signer: Signer;
 	#cache: CachingTransactionExecutor;
+<<<<<<< Updated upstream
 	#defaultGasBudget: bigint;
 
 	constructor({
@@ -27,12 +40,42 @@ export class SerialTransactionExecutor {
 		/** The gasBudget to use if the transaction has not defined it's own gasBudget, defaults to `50_000_000n` */
 		defaultGasBudget?: bigint;
 	}) {
+=======
+	#client: SuiClient;
+	#lastDigest: string | null = null;
+	#sponsor;
+	#executeTransaction;
+
+	constructor({
+		signer,
+		sponsor,
+		executeTransaction,
+		...options
+	}: SerializeTransactionExecutorOptions) {
+>>>>>>> Stashed changes
 		this.#signer = signer;
 		this.#defaultGasBudget = defaultGasBudget;
 		this.#cache = new CachingTransactionExecutor({
 			client: options.client,
 			cache: options.cache,
 		});
+		this.#sponsor = sponsor;
+		this.#executeTransaction =
+			executeTransaction ||
+			(async ({ signature, transaction }) => {
+				const results = await this.#client.executeTransactionBlock({
+					signature,
+					transactionBlock: transaction,
+					options: {
+						showRawEffects: true,
+					},
+				});
+
+				return {
+					digest: results.digest,
+					effects: toB64(Uint8Array.from(results.rawEffects!)),
+				};
+			});
 	}
 
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
@@ -57,20 +100,33 @@ export class SerialTransactionExecutor {
 	}
 
 	#buildTransaction = async (transaction: Transaction) => {
+		const copy = Transaction.from(transaction);
+		copy.setSenderIfNotSet(this.#signer.toSuiAddress());
+
+		if (this.#sponsor) {
+			const { bytes } = await this.#sponsor({
+				bytes: await this.#cache.buildTransaction({ transaction: copy, onlyTransactionKind: true }),
+			});
+
+			return bytes;
+		}
+
 		const gasCoin = await this.#cache.cache.getCustom<{
 			objectId: string;
 			version: string;
 			digest: string;
 		}>('gasCoin');
 
-		const copy = Transaction.from(transaction);
 		if (gasCoin) {
 			copy.setGasPayment([gasCoin]);
 		}
 
+<<<<<<< Updated upstream
 		copy.setGasBudgetIfNotSet(this.#defaultGasBudget);
 		copy.setSenderIfNotSet(this.#signer.toSuiAddress());
 
+=======
+>>>>>>> Stashed changes
 		return this.#cache.buildTransaction({ transaction: copy });
 	};
 
@@ -92,6 +148,7 @@ export class SerialTransactionExecutor {
 				: transaction;
 
 			const { signature } = await this.#signer.signTransaction(bytes);
+<<<<<<< Updated upstream
 			const results = await this.#cache
 				.executeTransaction({
 					signature,
@@ -102,15 +159,20 @@ export class SerialTransactionExecutor {
 					await this.resetCache();
 					throw error;
 				});
+=======
+			const results = await this.#executeTransaction({
+				signature,
+				transaction: bytes,
+			}).catch(async (error) => {
+				await this.resetCache();
+				throw error;
+			});
+>>>>>>> Stashed changes
 
-			const effectsBytes = Uint8Array.from(results.rawEffects!);
-			const effects = bcs.TransactionEffects.parse(effectsBytes);
+			const effects = bcs.TransactionEffects.fromBase64(results.effects);
 			await this.applyEffects(effects);
 
-			return {
-				digest: results.digest,
-				effects: toB64(effectsBytes),
-			};
+			return results;
 		});
 	}
 }

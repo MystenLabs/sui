@@ -42,6 +42,14 @@ export interface ParallelTransactionExecutorOptions extends Omit<ObjectCacheOpti
 	maxPoolSize?: number;
 	/** An initial list of coins used to fund the gas pool, uses all owned SUI coins by default */
 	sourceCoins?: string[];
+
+	sponsor?: (options: { bytes: Uint8Array }) => Promise<{
+		bytes: Uint8Array;
+	}>;
+	executeTransaction?: (options: { signature: string; transaction: Uint8Array }) => Promise<{
+		digest: string;
+		effects: string;
+	}>;
 }
 
 interface CoinWithBalance {
@@ -73,6 +81,9 @@ export class ParallelTransactionExecutor {
 		expiration: number;
 	} = null;
 
+	#sponsor;
+	#executeTransaction;
+
 	constructor(options: ParallelTransactionExecutorOptions) {
 		this.#signer = options.signer;
 		this.#client = options.client;
@@ -93,6 +104,24 @@ export class ParallelTransactionExecutor {
 		this.#sourceCoins = options.sourceCoins
 			? new Map(options.sourceCoins.map((id) => [id, null]))
 			: null;
+
+		this.#sponsor = options.sponsor;
+		this.#executeTransaction =
+			options.executeTransaction ||
+			(async ({ signature, transaction }) => {
+				const results = await this.#client.executeTransactionBlock({
+					signature,
+					transactionBlock: transaction,
+					options: {
+						showRawEffects: true,
+					},
+				});
+
+				return {
+					digest: results.digest,
+					effects: toB64(Uint8Array.from(results.rawEffects!)),
+				};
+			});
 	}
 
 	resetCache() {
@@ -174,11 +203,41 @@ export class ParallelTransactionExecutor {
 		return usedObjects;
 	}
 
+<<<<<<< Updated upstream
 	async #execute(
 		transaction: Transaction,
 		usedObjects: Set<string>,
 		options?: SuiTransactionBlockResponseOptions,
 	) {
+=======
+	async #setGasData(transaction: Transaction) {
+		const data = transaction.getData();
+
+		if (!data.gasData.price) {
+			transaction.setGasPrice(await this.#getGasPrice());
+		}
+
+		if (!data.gasData.budget) {
+			transaction.setGasBudget(this.#defaultGasBudget);
+		}
+
+		await this.#updateCache();
+		gasCoin = await this.#getGasCoin();
+		this.#pendingTransactions++;
+		transaction.setGasPayment([
+			{
+				objectId: gasCoin.id,
+				version: gasCoin.version,
+				digest: gasCoin.digest,
+			},
+		]);
+
+		// Resolve cached references
+		await this.#cache.buildTransaction({ transaction, onlyTransactionKind: true });
+	}
+
+	async #execute(transaction: Transaction, usedObjects: Set<string>) {
+>>>>>>> Stashed changes
 		let gasCoin!: CoinWithBalance;
 		try {
 			transaction.setSenderIfNotSet(this.#signer.toSuiAddress());
