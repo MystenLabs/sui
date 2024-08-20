@@ -652,8 +652,8 @@ mod tests {
                 after: None,
                 before: None,
                 limit: 20,
+                scan_limit: None,
                 end: Front,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }
@@ -671,8 +671,8 @@ mod tests {
                 ),
                 before: None,
                 limit: 20,
+                scan_limit: None,
                 end: Front,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }
@@ -690,8 +690,8 @@ mod tests {
                 ),
                 before: None,
                 limit: 10,
+                scan_limit: None,
                 end: Front,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }
@@ -709,6 +709,7 @@ mod tests {
                     42,
                 ),
                 limit: 20,
+                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -754,8 +755,8 @@ mod tests {
                     42,
                 ),
                 limit: 10,
+                scan_limit: None,
                 end: Front,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }
@@ -808,8 +809,8 @@ mod tests {
                     42,
                 ),
                 limit: 20,
+                scan_limit: None,
                 end: Front,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }

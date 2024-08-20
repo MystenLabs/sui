@@ -109,7 +109,7 @@ Response: {
   }
 }
 
-task 16, lines 83-107:
+task 16, lines 83-108:
 //# run-graphql --cursors {"c":4,"t":2,"i":true} {"c":4,"t":7,"i":true}
 Response: {
   "data": {
@@ -148,7 +148,7 @@ Response: {
   }
 }
 
-task 17, lines 109-132:
+task 17, lines 110-133:
 //# run-graphql --cursors {"c":4,"t":4,"i":true} {"c":4,"t":8,"i":true}
 Response: {
   "data": {

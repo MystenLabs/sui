@@ -7,7 +7,7 @@ use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
 use super::coin::Coin;
-use super::cursor::{BcsCursor, JsonCursor, Page, RawPaginated, Target};
+use super::cursor::{BcsCursor, JsonCursor, Page, RawPaginated, ScanLimited, Target};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
@@ -879,6 +879,8 @@ impl Target<Cursor> for StoredHistoryPackage {
         })
     }
 }
+
+impl ScanLimited for BcsCursor<PackageCursor> {}
 
 #[async_trait::async_trait]
 impl Loader<PackageVersionKey> for Db {

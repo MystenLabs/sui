@@ -24,6 +24,7 @@ use connection::Edge;
 use cursor::TxLookup;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use sui_indexer::{
     models::transactions::StoredTransaction,
@@ -334,9 +335,9 @@ impl TransactionBlock {
             .execute_repeatable(move |conn| {
                 let Some(tx_bounds) = TxBounds::query(
                     conn,
-                    filter.after_checkpoint.map(|c| u64::from(c)),
-                    filter.at_checkpoint.map(|c| u64::from(c)),
-                    filter.before_checkpoint.map(|c| u64::from(c)),
+                    filter.after_checkpoint.map(u64::from),
+                    filter.at_checkpoint.map(u64::from),
+                    filter.before_checkpoint.map(u64::from),
                     checkpoint_viewed_at,
                     scan_limit,
                     &page,
