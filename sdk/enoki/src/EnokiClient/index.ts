@@ -4,14 +4,20 @@
 import type {
 	CreateSponsoredTransactionApiInput,
 	CreateSponsoredTransactionApiResponse,
+	CreateSubnameApiInput,
+	CreateSubnameApiResponse,
 	CreateZkLoginNonceApiInput,
 	CreateZkLoginNonceApiResponse,
 	CreateZkLoginZkpApiInput,
 	CreateZkLoginZkpApiResponse,
+	DeleteSubnameApiInput,
+	DeleteSubnameApiResponse,
 	ExecuteSponsoredTransactionApiInput,
 	ExecuteSponsoredTransactionApiResponse,
 	GetAppApiInput,
 	GetAppApiResponse,
+	GetSubnamesApiInput,
+	GetSubnamesApiResponse,
 	GetZkLoginApiInput,
 	GetZkLoginApiResponse,
 } from './type.js';
@@ -29,6 +35,8 @@ export interface EnokiClientConfig {
 
 export class EnokiClientError extends Error {
 	errors: { code: string; message: string; data: unknown }[] = [];
+	status: number;
+	code: string;
 
 	constructor(status: number, response: string) {
 		let errors;
@@ -46,6 +54,8 @@ export class EnokiClientError extends Error {
 		});
 		this.errors = errors ?? [];
 		this.name = 'EnokiClientError';
+		this.status = status;
+		this.code = errors?.[0]?.code ?? 'unknown_error';
 	}
 }
 
@@ -132,6 +142,53 @@ export class EnokiClient {
 				}),
 			},
 		);
+	}
+
+	getSubnames(input: GetSubnamesApiInput) {
+		const query = new URLSearchParams();
+		if (input.address) {
+			query.set('address', input.address);
+		}
+		if (input.network) {
+			query.set('network', input.network);
+		}
+		if (input.domain) {
+			query.set('domain', input.domain);
+		}
+		return this.#fetch<GetSubnamesApiResponse>(
+			'subnames' + (query.size > 0 ? `?${query.toString()}` : ''),
+			{
+				method: 'GET',
+			},
+		);
+	}
+
+	createSubname(input: CreateSubnameApiInput) {
+		return this.#fetch<CreateSubnameApiResponse>('subnames', {
+			method: 'POST',
+			headers: input.jwt
+				? {
+						[ZKLOGIN_HEADER]: input.jwt,
+					}
+				: {},
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+				targetAddress: input.targetAddress,
+			}),
+		});
+	}
+
+	deleteSubname(input: DeleteSubnameApiInput) {
+		this.#fetch<DeleteSubnameApiResponse>('subnames', {
+			method: 'DELETE',
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+			}),
+		});
 	}
 
 	async #fetch<T = unknown>(path: string, init: RequestInit): Promise<T> {
