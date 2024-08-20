@@ -1531,6 +1531,11 @@ impl ProtocolConfig {
     pub fn authority_capabilities_v2(&self) -> bool {
         self.feature_flags.authority_capabilities_v2
     }
+
+    pub fn max_num_transactions_in_block(&self) -> u64 {
+        // 500 is the value used before this field is introduced.
+        self.consensus_max_num_transactions_in_block.unwrap_or(500)
+    }
 }
 
 #[cfg(not(msim))]

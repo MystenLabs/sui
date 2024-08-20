@@ -158,9 +158,7 @@ impl BlockVerifier for SignedBlockVerifier {
         }
 
         let max_num_transactions_limit =
-            self.context
-                .protocol_config
-                .consensus_max_num_transactions_in_block() as usize;
+            self.context.protocol_config.max_num_transactions_in_block() as usize;
         if batch.len() > max_num_transactions_limit && max_num_transactions_limit > 0 {
             return Err(ConsensusError::TooManyTransactions {
                 count: batch.len(),
