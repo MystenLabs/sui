@@ -94,6 +94,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
 const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
+const PRUNE_BATCH_SIZE: usize = 500;
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -262,19 +263,31 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         .context("Failed reading checkpoint range from PostgresDB")
     }
 
-    fn get_transaction_range_for_checkpoint(
+    fn get_transaction_range_for_checkpoint_range(
         &self,
-        checkpoint: u64,
+        min_cp: u64,
+        max_cp: u64,
     ) -> Result<(u64, u64), IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
-            pruner_cp_watermark::dsl::pruner_cp_watermark
+            let (min_tx, _) = pruner_cp_watermark::dsl::pruner_cp_watermark
                 .select((
                     pruner_cp_watermark::min_tx_sequence_number,
                     pruner_cp_watermark::max_tx_sequence_number,
                 ))
-                .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint as i64))
+                .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(min_cp as i64))
                 .first::<(i64, i64)>(conn)
-                .map(|(min, max)| (min as u64, max as u64))
+                .map(|(min, max)| (min as u64, max as u64))?;
+
+            let (_, max_tx) = pruner_cp_watermark::dsl::pruner_cp_watermark
+                .select((
+                    pruner_cp_watermark::min_tx_sequence_number,
+                    pruner_cp_watermark::max_tx_sequence_number,
+                ))
+                .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(max_cp as i64))
+                .first::<(i64, i64)>(conn)
+                .map(|(min, max)| (min as u64, max as u64))?;
+
+            Ok::<_, IndexerError>((min_tx, max_tx))
         })
         .context("Failed reading transaction range from PostgresDB")
     }
@@ -1377,12 +1390,13 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         Ok(())
     }
 
-    fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+    fn prune_checkpoints_table(&self, min_cp: u64, max_cp: u64) -> Result<(), IndexerError> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
                 diesel::delete(
-                    checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
+                    checkpoints::table
+                        .filter(checkpoints::sequence_number.between(min_cp as i64, max_cp as i64)),
                 )
                 .execute(conn)
                 .map_err(IndexerError::from)
@@ -1535,13 +1549,15 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         )
     }
 
-    fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+    fn prune_cp_tx_table(&self, min_cp: u64, max_cp: u64) -> Result<(), IndexerError> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
                 diesel::delete(
-                    pruner_cp_watermark::table
-                        .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
+                    pruner_cp_watermark::table.filter(
+                        pruner_cp_watermark::checkpoint_sequence_number
+                            .between(min_cp as i64, max_cp as i64),
+                    ),
                 )
                 .execute(conn)
                 .map_err(IndexerError::from)
@@ -2047,6 +2063,10 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
     }
 
     async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError> {
+        let prune_batch_size = std::env::var("PRUNE_BATCH_SIZE")
+            .unwrap_or_else(|_e| PRUNE_BATCH_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         let (mut min_cp, max_cp) = match self.get_checkpoint_range_for_epoch(epoch)? {
             (min_cp, Some(max_cp)) => Ok((min_cp, max_cp)),
             _ => Err(IndexerError::PostgresReadError(format!(
@@ -2054,42 +2074,55 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
                 epoch
             ))),
         }?;
-
         // NOTE: for disaster recovery, min_cp is the min cp of the current epoch, which is likely
         // partially pruned already. min_prunable_cp is the min cp to be pruned.
         // By std::cmp::max, we will resume the pruning process from the next checkpoint, instead of
         // the first cp of the current epoch.
         let min_prunable_cp = self.get_min_prunable_checkpoint()?;
         min_cp = std::cmp::max(min_cp, min_prunable_cp);
-        for cp in min_cp..=max_cp {
+        for batch_min_cp in (min_cp..=max_cp).step_by(prune_batch_size) {
+            let batch_max_cp = std::cmp::min(batch_min_cp + prune_batch_size as u64 - 1, max_cp);
             // NOTE: the order of pruning tables is crucial:
             // 1. prune checkpoints table, checkpoints table is the source table of available range,
             // we prune it first to make sure that we always have full data for checkpoints within the available range;
-            // 2. then prune tx_* tables;
+            // 2. then prune tx_* tables, event_* tables etc.
             // 3. then prune pruner_cp_watermark table, which is the checkpoint pruning watermark table and also tx seq source
             // of a checkpoint to prune tx_* tables;
             // 4. lastly we prune epochs table when all checkpoints of the epoch have been pruned.
             info!(
-                "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
-                cp, epoch, min_prunable_cp
+                "Pruning from cp {} to cp {} of epoch {} (min_prunable_cp: {})",
+                batch_min_cp, batch_max_cp, epoch, min_prunable_cp
             );
-            self.execute_in_blocking_worker(move |this| this.prune_checkpoints_table(cp))
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("Failed to prune checkpoint {}: {}", cp, e);
-                });
+            self.execute_in_blocking_worker(move |this| {
+                this.prune_checkpoints_table(batch_min_cp, batch_max_cp)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "Failed to prune from cp {} to cp {}: {}",
+                    batch_min_cp,
+                    batch_max_cp,
+                    e
+                );
+            });
 
-            let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp)?;
+            let (min_tx, max_tx) =
+                self.get_transaction_range_for_checkpoint_range(batch_min_cp, batch_max_cp)?;
             self.execute_in_blocking_worker(move |this| {
                 this.prune_tx_indices_table(min_tx, max_tx)
             })
             .await
             .unwrap_or_else(|e| {
-                tracing::error!("Failed to prune transactions for cp {}: {}", cp, e);
+                tracing::error!(
+                    "Failed to prune transactions from cp {} to cp {}: {}",
+                    batch_min_cp,
+                    batch_max_cp,
+                    e
+                );
             });
             info!(
-                "Pruned transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
+                "Pruned transactions from cp {} to cp {} from tx {} to tx {}",
+                batch_min_cp, batch_max_cp, min_tx, max_tx
             );
             self.execute_in_blocking_worker(move |this| {
                 this.prune_event_indices_table(min_tx, max_tx)
@@ -2097,28 +2130,35 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
             .unwrap_or_else(|e| {
                 tracing::error!(
-                    "Failed to prune events of transactions for cp {}: {}",
-                    cp,
+                    "Failed to prune events of transactions from cp {} to cp {}: {}",
+                    batch_min_cp,
+                    batch_max_cp,
                     e
                 );
             });
             info!(
-                "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
-                cp, min_tx, max_tx
+                "Pruned events of transactions from cp {} to cp {} from tx {} to tx {}",
+                batch_min_cp, batch_max_cp, min_tx, max_tx
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);
 
-            self.execute_in_blocking_worker(move |this| this.prune_cp_tx_table(cp))
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!(
-                        "Failed to prune pruner_cp_watermark table for cp {}: {}",
-                        cp,
-                        e
-                    );
-                });
-            info!("Pruned checkpoint {} of epoch {}", cp, epoch);
-            self.metrics.last_pruned_checkpoint.set(cp as i64);
+            self.execute_in_blocking_worker(move |this| {
+                this.prune_cp_tx_table(batch_min_cp, batch_max_cp)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "Failed to prune pruner_cp_watermark table from cp {} to cp {}: {}",
+                    batch_min_cp,
+                    batch_max_cp,
+                    e
+                );
+            });
+            info!(
+                "Pruned from cp {} to cp {} of epoch {}",
+                batch_min_cp, batch_max_cp, epoch
+            );
+            self.metrics.last_pruned_checkpoint.set(batch_min_cp as i64);
         }
 
         // NOTE: prune epochs table last, otherwise get_checkpoint_range_for_epoch would fail.
