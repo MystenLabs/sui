@@ -912,13 +912,13 @@ impl ConsensusAdapter {
     ) {
         let notifications = FuturesUnordered::new();
         for transaction_key in transaction_keys {
-            let transaction_digest = if let SequencedConsensusTransactionKey::External(
+            let transaction_digests = if let SequencedConsensusTransactionKey::External(
                 ConsensusTransactionKey::Certificate(digest),
             ) = transaction_key
             {
-                Some(digest)
+                vec![digest]
             } else {
-                None
+                vec![]
             };
 
             notifications.push(async move {
@@ -927,7 +927,7 @@ impl ConsensusAdapter {
                         processed.expect("Storage error when waiting for consensus message processed");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
                     },
-                    processed = epoch_store.transactions_executed_in_checkpoint_notify(vec![transaction_digest.unwrap()]), if transaction_digest.is_some() => {
+                    processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
