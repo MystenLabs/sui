@@ -89,23 +89,27 @@ impl ProtocolConfigs {
         use feature_flags::dsl as f;
         use protocol_configs::dsl as p;
 
-        let latest_version: i64 = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    e::epochs
-                        .select(e::protocol_version)
-                        .order_by(e::epoch.desc())
+        let version = if let Some(version) = protocol_version {
+            version
+        } else {
+            let latest_version: i64 = db
+                .execute(move |conn| {
+                    conn.first(move || {
+                        e::epochs
+                            .select(e::protocol_version)
+                            .order_by(e::epoch.desc())
+                    })
                 })
-            })
-            .await
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Failed to fetch latest protocol version in db: {e}"
-                ))
-            })?;
+                .await
+                .map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to fetch latest protocol version in db: {e}"
+                    ))
+                })?;
+            latest_version as u64
+        };
 
-        let version = protocol_version.unwrap_or(latest_version as u64);
-
+        // TODO: This could be optimized by fetching all configs and flags in a single query.
         let configs: BTreeMap<String, Option<String>> = db
             .execute(move |conn| {
                 conn.results(move || {
