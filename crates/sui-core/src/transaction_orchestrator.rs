@@ -111,22 +111,15 @@ where
         );
 
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
-        let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
-        let metrics_clone = metrics.clone();
         let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
         let pending_tx_log_clone = pending_tx_log.clone();
         let _local_executor_handle = {
             spawn_monitored_task!(async move {
-                Self::loop_execute_finalized_tx_locally(
-                    state_clone,
-                    effects_receiver,
-                    pending_tx_log_clone,
-                    metrics_clone,
-                )
-                .await;
+                Self::loop_execute_finalized_tx_locally(effects_receiver, pending_tx_log_clone)
+                    .await;
             })
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
@@ -428,57 +421,19 @@ where
     }
 
     async fn loop_execute_finalized_tx_locally(
-        validator_state: Arc<AuthorityState>,
         mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
-        metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
+                Ok(Ok((transaction, ..))) => {
                     let tx_digest = transaction.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
-                        panic!(
-                            "Failed to finish transaction {tx_digest} in pending transaction log: {err}"
+                        error!(
+                            ?tx_digest,
+                            "Failed to finish transaction in pending transaction log: {err}"
                         );
                     }
-
-                    if transaction.contains_shared_object() {
-                        // Do not locally execute transactions with shared objects, as this can
-                        // cause forks until MVCC is merged.
-                        continue;
-                    }
-
-                    let epoch_store = validator_state.load_epoch_store_one_call_per_task();
-
-                    // This is a redundant verification, but SignatureVerifier will cache the
-                    // previous result.
-                    let transaction = match epoch_store.verify_transaction(transaction) {
-                        Ok(transaction) => transaction,
-                        Err(err) => {
-                            // This should be impossible, since we verified the transaction
-                            // before sending it to quorum driver.
-                            error!(
-                                    ?err,
-                                    "Transaction signature failed to verify after quorum driver execution."
-                                );
-                            continue;
-                        }
-                    };
-
-                    let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                        transaction,
-                        effects_cert.executed_epoch(),
-                    );
-
-                    let _ = Self::execute_finalized_tx_locally_with_timeout(
-                        &validator_state,
-                        &epoch_store,
-                        &executable_tx,
-                        &effects_cert,
-                        &metrics,
-                    )
-                    .await;
                 }
                 Ok(Err((tx_digest, _err))) => {
                     if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
