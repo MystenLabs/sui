@@ -1184,8 +1184,10 @@ pub struct ProtocolConfig {
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
-    /// The maximum size of transactions included in a consensus proposed block
+    /// The maximum size of transactions included in a consensus block.
     consensus_max_transactions_in_block_bytes: Option<u64>,
+    /// The maximum number of transactions included in a consensus block.
+    consensus_max_num_transactions_in_block: Option<u64>,
 
     /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
     /// in a checkpoint will be deferred once their touch shared objects hit this limit.
@@ -1528,6 +1530,11 @@ impl ProtocolConfig {
 
     pub fn authority_capabilities_v2(&self) -> bool {
         self.feature_flags.authority_capabilities_v2
+    }
+
+    pub fn max_num_transactions_in_block(&self) -> u64 {
+        // 500 is the value used before this field is introduced.
+        self.consensus_max_num_transactions_in_block.unwrap_or(500)
     }
 }
 
@@ -2015,6 +2022,8 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            consensus_max_num_transactions_in_block: None,
 
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
@@ -2656,6 +2665,12 @@ impl ProtocolConfig {
                 55 => {
                     // Turn on enums mainnet
                     cfg.move_binary_format_version = Some(7);
+
+                    // Assume 1KB per transaction and 500 transactions per block.
+                    cfg.consensus_max_transactions_in_block_bytes = Some(512 * 1024);
+                    // Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
+                    // Using a higher limit that is 512, to account for bursty traffic and system transactions.
+                    cfg.consensus_max_num_transactions_in_block = Some(512);
                 }
                 // Use this template when making changes:
                 //
