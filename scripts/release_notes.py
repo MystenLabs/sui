@@ -304,7 +304,7 @@ def do_generate(from_, to):
         print(f"## {impacted}")
 
         if impacted == "Protocol":
-            print(f"Sui Protocol Version in this release: {protocol_version}")
+            print(f"#### Sui Protocol Version in this release: `{protocol_version}`")
         print()
 
         for pr, note in reversed(notes):

@@ -1,4 +1,6 @@
-name: Release Notes Generator
+name: Create Sui Release with Release Notes
+
+concurrency: ${{ github.workflow }}-${{ inputs.release_tag }}
 
 on:
   workflow_dispatch:
@@ -16,24 +18,41 @@ on:
         type: string
         required: true
 
+env:
+  RELEASE_NOTES_FILE: "./release_notes.txt"
+
 jobs:
   get-release-notes:
     name: Get Release Notes for ${{ inputs.release_tag }} release
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout sui repo main branch
+      - name: Get commits for branches
+        shell: bash
+        working-directory: ./
+        run: |
+          echo "previous_commit=$(curl https://api.github.com/repos/MystenLabs/sui/commits/${{ inputs.previous_branch }} | jq .sha)" >> $GITHUB_ENV
+          echo "current_commit=$(curl https://api.github.com/repos/MystenLabs/sui/commits/${{ inputs.current_branch }} | jq .sha)" >> $GITHUB_ENV
+
+      - name: Checkout main
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
           fetch-depth: 0
           ref: main
+    
+      - name: Setup Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
+        with:
+          python-version: 3.10.10       
 
       - name: Generate Release Notes
-        id: release_notes
         shell: bash
         working-directory: ./
         run: |
-          echo "release_notes=$(./scripts/release_notes.py generate ${{ inputs.previous_branch }} ${{ inputs.current_branch }})" >> $GITHUB_ENV
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py generate ${{ env.previous_commit }} ${{ env.current_commit }} | tee -a ${{ env.RELEASE_NOTES_FILE }}
+          echo "---" >> ${{ env.RELEASE_NOTES_FILE }}
+          echo "#### Full Log: https://github.com/MystenLabs/sui/commits/${{ inputs.release_tag }}" >> ${{ env.RELEASE_NOTES_FILE }}
+
           if [[ ${{ inputs.release_tag }} == devnet* ]]; then
             echo "pre_release=true" >> $GITHUB_ENV
           else
@@ -47,6 +66,6 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag }}
           release_name: ${{ inputs.release_tag }}
-          body: ${{ env.release_notes }}
+          body_path: ${{ env.RELEASE_NOTES_FILE }}
           draft: false
           prerelease: ${{ env.pre_release }}
