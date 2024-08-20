@@ -423,7 +423,7 @@ reqwest = { version = "0.12", default_features = false, features = [
     "json",
     "rustls-tls",
 ] }
-roaring = "=0.10.3"
+roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
 rusoto_core = { version = "0.48.0", default_features = false, features = [
@@ -576,7 +576,7 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "dbb5a074c2d25660525ab5d36d65ff0cb8051949" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "9a125ed5764fb5bcc1acb6074064bc8f9ea85b38", features = ["hash", "serde", "schemars"] }
+sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bd233b6879b917fb95e17f21927c198e7a60c924", features = ["hash", "serde", "schemars"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
