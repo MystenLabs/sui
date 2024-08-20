@@ -2105,9 +2105,9 @@ dependencies = [
 
 [[package]]
 name = "bnum"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56953345e39537a3e18bdaeba4cb0c58a78c1f61f361dc0fa7c5c7340ae87c5f"
+checksum = "3e31ea183f6ee62ac8b8a8cf7feddd766317adfb13ff469de57ce033efd6a790"
 
 [[package]]
 name = "brotli"
@@ -2162,9 +2162,9 @@ dependencies = [
 
 [[package]]
 name = "bs58"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5353f36341f7451062466f0b755b96ac3a9547e4d7f6b70d603fc721a7d7896"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
  "sha2 0.10.8",
  "tinyvec",
@@ -2567,7 +2567,7 @@ version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b6be4a5df2098cd811f3194f64ddb96c267606bffd9689ac7b0160097b01ad3"
 dependencies = [
- "bs58 0.5.0",
+ "bs58 0.5.1",
  "coins-core",
  "digest 0.10.7",
  "hmac 0.12.1",
@@ -2601,7 +2601,7 @@ checksum = "5286a0843c21f8367f7be734f89df9b822e0321d8bcce8d6e735aadff7d74979"
 dependencies = [
  "base64 0.21.7",
  "bech32",
- "bs58 0.5.0",
+ "bs58 0.5.1",
  "digest 0.10.7",
  "generic-array",
  "hex",
@@ -4659,7 +4659,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "sha2 0.10.8",
  "sha3 0.10.6",
  "signature 2.0.0",
@@ -8321,7 +8321,7 @@ dependencies = [
  "roaring",
  "serde",
  "serde_test",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "sui-protocol-config",
  "thiserror",
  "tokio",
@@ -10800,9 +10800,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.10.3"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1c77081a55300e016cb86f2864415b7518741879db925b8d488a0ee0d2da6bf"
+checksum = "8f4b84ba6e838ceb47b41de5194a60244fac43d9fe03b71dbe8c5a201081d6d1"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -11713,9 +11713,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
+checksum = "69cecfa94848272156ea67b2b1a53f20fc7bc638c4a46d2f8abde08f05f4b857"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -11725,7 +11725,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "serde_with_macros 3.8.1",
+ "serde_with_macros 3.9.0",
  "time",
 ]
 
@@ -11743,9 +11743,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
+checksum = "a8fee4991ef4f274617a51ad4af30519438dacb2f56ac773b08a1922ff743350"
 dependencies = [
  "darling 0.20.3",
  "proc-macro2 1.0.78",
@@ -12858,7 +12858,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "shared-crypto",
  "sui-authority-aggregation",
  "sui-config",
@@ -12891,7 +12891,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "shared-crypto",
  "sui-bridge",
  "sui-config",
@@ -12997,7 +12997,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.5",
  "serde",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "sui-keys",
  "sui-protocol-config",
@@ -13076,7 +13076,7 @@ dependencies = [
  "serde",
  "serde-reflection",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
@@ -13420,7 +13420,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
  "sui-config",
@@ -13497,7 +13497,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "serial_test",
  "shared-crypto",
@@ -13583,7 +13583,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "simulacrum",
  "sui-data-ingestion-core",
  "sui-json",
@@ -13774,7 +13774,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "sui-enum-compat-util",
  "sui-json",
  "sui-macros",
@@ -14248,7 +14248,7 @@ dependencies = [
  "move-vm-config",
  "schemars",
  "serde",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "sui-protocol-config-macros",
  "tracing",
 ]
@@ -14293,7 +14293,7 @@ dependencies = [
  "rustls-pemfile 2.1.2",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "snap",
  "sui-tls",
@@ -14328,7 +14328,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
  "shellexpand",
@@ -14373,7 +14373,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "sui-protocol-config",
  "sui-sdk 0.0.0",
@@ -14457,21 +14457,21 @@ dependencies = [
 [[package]]
 name = "sui-sdk"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=9a125ed5764fb5bcc1acb6074064bc8f9ea85b38#9a125ed5764fb5bcc1acb6074064bc8f9ea85b38"
+source = "git+https://github.com/mystenlabs/sui-rust-sdk.git?rev=bd233b6879b917fb95e17f21927c198e7a60c924#bd233b6879b917fb95e17f21927c198e7a60c924"
 dependencies = [
  "base64ct",
  "bcs",
  "blake2",
  "bnum",
- "bs58 0.5.0",
+ "bs58 0.5.1",
  "hex",
  "roaring",
  "schemars",
  "serde",
  "serde_derive",
  "serde_json",
- "serde_with 3.8.1",
- "winnow 0.6.9",
+ "serde_with 3.9.0",
+ "winnow 0.6.18",
 ]
 
 [[package]]
@@ -14495,7 +14495,7 @@ dependencies = [
  "reqwest 0.12.5",
  "serde",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "shared-crypto",
  "sui-config",
  "sui-json",
@@ -14812,7 +14812,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
  "sui-config",
@@ -15058,7 +15058,7 @@ dependencies = [
  "serde",
  "serde-name",
  "serde_json",
- "serde_with 3.8.1",
+ "serde_with 3.9.0",
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
@@ -16032,7 +16032,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
- "winnow 0.6.9",
+ "winnow 0.6.18",
 ]
 
 [[package]]
@@ -17299,9 +17299,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.9"
+version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86c949fede1d13936a99f14fafd3e76fd642b556dd2ce96287fbe2e0151bfac6"
+checksum = "68a9bda4691f099d435ad181000724da8e5899daa10713c2d432552b9ccd3a6f"
 dependencies = [
  "memchr",
 ]
