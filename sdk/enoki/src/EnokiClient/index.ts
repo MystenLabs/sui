@@ -35,6 +35,8 @@ export interface EnokiClientConfig {
 
 export class EnokiClientError extends Error {
 	errors: { code: string; message: string; data: unknown }[] = [];
+	status: number;
+	code: string;
 
 	constructor(status: number, response: string) {
 		let errors;
@@ -52,6 +54,8 @@ export class EnokiClientError extends Error {
 		});
 		this.errors = errors ?? [];
 		this.name = 'EnokiClientError';
+		this.status = status;
+		this.code = errors?.[0]?.code ?? 'unknown_error';
 	}
 }
 
