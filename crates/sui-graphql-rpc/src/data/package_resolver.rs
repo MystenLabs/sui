@@ -26,7 +26,7 @@ pub(crate) type PackageResolver = Arc<Resolver<PackageCache>>;
 /// to `fetch`
 pub struct DbPackageStore(DataLoader);
 
-/// DataLoader key for fetching the latest version of a `Package` by its ID.
+/// `DataLoader` key for fetching the latest version of a `Package` by its ID.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct PackageKey(AccountAddress);
 
