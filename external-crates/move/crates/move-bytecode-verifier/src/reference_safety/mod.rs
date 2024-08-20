@@ -182,19 +182,22 @@ fn execute_inner(
     meter.add(Scope::Function, STEP_BASE_COST)?;
 
     match bytecode {
-        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop())),
+        Bytecode::Pop => state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?,
 
         Bytecode::CopyLoc(local) => {
             let value = state.copy_loc(offset, *local, meter)?;
             verifier.push(value)?
         }
         Bytecode::MoveLoc(local) => {
-            let value = state.move_loc(offset, *local)?;
+            let value = state.move_loc(offset, *local, meter)?;
             verifier.push(value)?
         }
-        Bytecode::StLoc(local) => {
-            state.st_loc(offset, *local, safe_unwrap_err!(verifier.stack.pop()))?
-        }
+        Bytecode::StLoc(local) => state.st_loc(
+            offset,
+            *local,
+            safe_unwrap_err!(verifier.stack.pop()),
+            meter,
+        )?,
 
         Bytecode::FreezeRef => {
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
@@ -274,13 +277,13 @@ fn execute_inner(
         }
         Bytecode::MoveFromDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let value = state.move_from(offset, *idx)?;
+            let value = state.move_from(offset, *idx, meter)?;
             verifier.push(value)?
         }
         Bytecode::MoveFromGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let struct_inst = verifier.module.struct_instantiation_at(*idx);
-            let value = state.move_from(offset, struct_inst.def)?;
+            let value = state.move_from(offset, struct_inst.def, meter)?;
             verifier.push(value)?
         }
 
@@ -323,7 +326,7 @@ fn execute_inner(
             // resource value
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             // signer reference
-            state.release_value(safe_unwrap_err!(verifier.stack.pop()));
+            state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?;
         }
 
         Bytecode::LdTrue | Bytecode::LdFalse => {
@@ -546,7 +549,9 @@ fn execute_inner(
                 verifier.push(val)?
             }
         }
-        Bytecode::VariantSwitch(_) => state.release_value(safe_unwrap_err!(verifier.stack.pop())),
+        Bytecode::VariantSwitch(_) => {
+            state.release_value(safe_unwrap_err!(verifier.stack.pop()), meter)?
+        }
     };
     Ok(())
 }

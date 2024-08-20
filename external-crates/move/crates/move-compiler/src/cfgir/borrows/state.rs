@@ -369,7 +369,7 @@ impl BorrowState {
 
     fn release(&mut self, ref_id: RefID) {
         self.id_to_exp.remove(&ref_id);
-        self.borrows.release(ref_id)
+        self.borrows.release(ref_id);
     }
 
     fn divergent_control_flow(&mut self) {
