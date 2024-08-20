@@ -80,9 +80,9 @@ impl Default for VerifierConfig {
 impl Default for MeterConfig {
     fn default() -> Self {
         Self {
-            max_per_fun_meter_units: Some(800_000),
-            max_per_mod_meter_units: Some(800_000),
-            max_per_pkg_meter_units: Some(800_000),
+            max_per_fun_meter_units: Some(600_000),
+            max_per_mod_meter_units: Some(600_000),
+            max_per_pkg_meter_units: Some(600_000),
         }
     }
 }

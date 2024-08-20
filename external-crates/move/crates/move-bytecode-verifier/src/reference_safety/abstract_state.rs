@@ -77,13 +77,13 @@ impl std::fmt::Display for Label {
 pub(crate) const STEP_BASE_COST: u128 = 1;
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 
-pub(crate) const PER_GRAPH_ITEM_COST: u128 = 2;
+pub(crate) const PER_GRAPH_ITEM_COST: u128 = 4;
 pub(crate) const PER_GRAPH_ITEM_COST_GROWTH: f32 = 1.2;
 
-pub(crate) const RELEASE_ITEM_COST: u128 = 2;
-pub(crate) const RELEASE_ITEM_COST_GROWTH: f32 = 1.2;
+pub(crate) const RELEASE_ITEM_COST: u128 = 3;
+pub(crate) const RELEASE_ITEM_COST_GROWTH: f32 = 1.3;
 
-pub(crate) const ADD_BORROW_COST: u128 = 4;
+pub(crate) const ADD_BORROW_COST: u128 = 2;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug, PartialEq, Eq)]
