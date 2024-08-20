@@ -843,4 +843,65 @@ module bridge::bridge {
         let inner = load_inner_mut(bridge);
         inner.execute_add_tokens_on_sui(payload);
     }
+
+    #[test_only]
+    public fun get_seq_num_for(bridge: &mut Bridge, message_type: u8): u64 {
+        let inner = load_inner_mut(bridge);
+        let seq_num = if (inner.sequence_nums.contains(&message_type)) {
+            inner.sequence_nums[&message_type]
+        } else {
+            inner.sequence_nums.insert(message_type, 0);
+            0
+        };
+        seq_num
+    }
+
+    #[test_only]
+    public fun get_seq_num_inc_for(bridge: &mut Bridge, message_type: u8): u64 {
+        let inner = load_inner_mut(bridge);
+        inner.get_current_seq_num_and_increment(message_type)
+    }
+
+    #[test_only]
+    public fun transfer_approve_key(event: TokenTransferApproved): BridgeMessageKey {
+        event.message_key
+    }
+
+    #[test_only]
+    public fun transfer_claimed_key(event: TokenTransferClaimed): BridgeMessageKey {
+        event.message_key
+    }
+
+    #[test_only]
+    public fun transfer_already_approved_key(event: TokenTransferAlreadyApproved): BridgeMessageKey {
+        event.message_key
+    }
+
+    #[test_only]
+    public fun transfer_already_claimed_key(event: TokenTransferAlreadyClaimed): BridgeMessageKey {
+        event.message_key
+    }
+
+    #[test_only]
+    public fun transfer_limit_exceed_key(event: TokenTransferLimitExceed): BridgeMessageKey {
+        event.message_key
+    }
+
+    #[test_only]
+    public fun unwrap_deposited_event(event: TokenDepositedEvent): (u64, u8, vector<u8>, u8, vector<u8>, u8, u64) {
+        (
+            event.seq_num,
+            event.source_chain,
+            event.sender_address,
+            event.target_chain,
+            event.target_address,
+            event.token_type,
+            event.amount,
+        )
+    }
+
+    #[test_only]
+    public fun unwrap_emergency_op_event(event: EmergencyOpEvent): bool {
+        event.frozen
+    }
 }
