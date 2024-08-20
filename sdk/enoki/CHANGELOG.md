@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.4.0
+
+### Minor Changes
+
+- f589885: Add sdk methods for managing enoki subnames
+
 ## 0.3.17
 
 ### Patch Changes
