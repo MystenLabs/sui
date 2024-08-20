@@ -59,11 +59,13 @@ mod inner {
     pub use crate::schema::mysql::event_struct_name;
     pub use crate::schema::mysql::event_struct_package;
     pub use crate::schema::mysql::events;
+    pub use crate::schema::mysql::feature_flags;
     pub use crate::schema::mysql::objects;
     pub use crate::schema::mysql::objects_history;
     pub use crate::schema::mysql::objects_snapshot;
     pub use crate::schema::mysql::objects_version;
     pub use crate::schema::mysql::packages;
+    pub use crate::schema::mysql::protocol_configs;
     pub use crate::schema::mysql::pruner_cp_watermark;
     pub use crate::schema::mysql::transactions;
     pub use crate::schema::mysql::tx_calls_fun;
