@@ -59,7 +59,7 @@ async fn get_checkpoint_full(
     Path(checkpoint_id): Path<CheckpointId>,
     accept: AcceptFormat,
     State(state): State<StateReader>,
-) -> Result<ResponseContent<CheckpointData>> {
+) -> Result<ResponseContent<sui_types::full_checkpoint_content::CheckpointData>> {
     let verified_summary = match checkpoint_id {
         CheckpointId::SequenceNumber(s) => {
             // Since we need object contents we need to check for the lowest available checkpoint
@@ -85,8 +85,7 @@ async fn get_checkpoint_full(
 
     let checkpoint_data = state
         .inner()
-        .get_checkpoint_data(verified_summary, checkpoint_contents)?
-        .into();
+        .get_checkpoint_data(verified_summary, checkpoint_contents)?;
 
     match accept {
         AcceptFormat::Json => ResponseContent::Json(checkpoint_data),
