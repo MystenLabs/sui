@@ -1130,7 +1130,10 @@ mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query payload is too large. The maximum allowed is 50 bytes".to_string()]
+            vec![
+                "The read part of the query payload is too large. The maximum allowed is 50 bytes"
+                    .to_string()
+            ]
         );
     }
 
@@ -1224,7 +1227,9 @@ mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query payload is too large. The maximum allowed is 100 bytes"]
+            vec![
+                "The read part of the query payload is too large. The maximum allowed is 100 bytes"
+            ]
         );
     }
 
