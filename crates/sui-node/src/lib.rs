@@ -55,6 +55,7 @@ use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
+use mysten_service::server_timing::server_timing_middleware;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -2048,6 +2049,8 @@ pub async fn build_http_server(
         .await
         .unwrap();
     let addr = listener.local_addr().unwrap();
+
+    router = router.layer(axum::middleware::from_fn(server_timing_middleware));
 
     let handle = tokio::spawn(async move {
         axum::serve(
