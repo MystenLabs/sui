@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -105,20 +105,20 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         &mut self,
         task_name: String,
         checkpoint: u64,
-        target_checkpoint: i64,
+        target_checkpoint: u64,
     ) -> Result<(), Error> {
-        self.progress_store.lock().await.insert(
+        let existing = self.progress_store.lock().await.insert(
             task_name.clone(),
             Task {
-                task_name,
+                task_name: task_name.clone(),
                 checkpoint,
-                target_checkpoint: target_checkpoint as u64,
-                timestamp: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
+                target_checkpoint,
+                timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
             },
         );
+        if existing.is_some() {
+            return Err(anyhow!("Task {task_name} already exists"));
+        }
         Ok(())
     }
 
