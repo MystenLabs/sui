@@ -550,7 +550,7 @@ mod test {
                 .build()
                 .await,
         );
-        test_simulated_load(test_cluster, 10).await;
+        test_simulated_load(test_cluster, 30).await;
 
         let checkpoint_files = std::fs::read_dir(path)
             .map(|entries| {
