@@ -31,6 +31,7 @@ struct Locals<'a> {
 }
 
 const TYPE_NODE_COST: u128 = 6;
+const TYPE_NODE_QUADRATIC_THRESHOLD: usize = 10;
 const TYPE_PUSH_COST: u128 = 3;
 
 impl<'a> Locals<'a> {
@@ -133,10 +134,15 @@ macro_rules! charge_clone {
 }
 
 fn charge_ty(meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialVMResult<()> {
+    let size = ty.preorder_traversal().count();
     meter.add_items(
         Scope::Function,
         TYPE_NODE_COST,
-        ty.preorder_traversal().count(),
+        // max(x, x^2/10)
+        std::cmp::max(
+            size,
+            size.saturating_mul(size) / TYPE_NODE_QUADRATIC_THRESHOLD,
+        ),
     )
 }
 

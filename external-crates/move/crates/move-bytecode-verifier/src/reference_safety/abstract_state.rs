@@ -16,7 +16,10 @@ use move_binary_format::{
 use move_borrow_graph::references::RefID;
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cmp::max,
+    collections::{BTreeMap, BTreeSet},
+};
 
 type BorrowGraph = move_borrow_graph::graph::BorrowGraph<(), Label>;
 
@@ -80,6 +83,10 @@ pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const PER_GRAPH_ITEM_COST: u128 = 4;
 
 pub(crate) const RELEASE_ITEM_COST: u128 = 3;
+pub(crate) const RELEASE_ITEM_QUADRATIC_THRESHOLD: usize = 5;
+
+pub(crate) const JOIN_ITEM_COST: u128 = 4;
+pub(crate) const JOIN_ITEM_QUADRATIC_THRESHOLD: usize = 10;
 
 pub(crate) const ADD_BORROW_COST: u128 = 3;
 
@@ -882,6 +889,7 @@ impl AbstractDomain for AbstractState {
         assert!(joined.is_canonical());
         assert!(self.locals.len() == joined.locals.len());
         let max_size = std::cmp::max(std::cmp::max(self_size, state_size), joined.graph_size());
+        charge_join(self_size, state_size, meter)?;
         charge_graph_size(max_size, meter)?;
         charge_release(released, meter)?;
         let locals_unchanged = self
@@ -901,17 +909,38 @@ impl AbstractDomain for AbstractState {
 }
 
 fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-    meter.add_items(Scope::Function, PER_GRAPH_ITEM_COST, scale(size))
+    let size = max(size, 1);
+    meter.add_items(Scope::Function, PER_GRAPH_ITEM_COST, size)
 }
 
 fn charge_release(released: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-    meter.add_items(Scope::Function, RELEASE_ITEM_COST, scale(released))
+    let size = max(released, 1);
+    meter.add_items(
+        Scope::Function,
+        RELEASE_ITEM_COST,
+        // max(x, x^2/5)
+        std::cmp::max(
+            size,
+            size.saturating_mul(size) / RELEASE_ITEM_QUADRATIC_THRESHOLD,
+        ),
+    )
 }
 
-fn scale(x: usize) -> usize {
-    if x == 0 {
-        return 0;
-    }
-
-    x.saturating_add((x / 3).saturating_mul(x))
+fn charge_join(
+    size1: usize,
+    size2: usize,
+    meter: &mut (impl Meter + ?Sized),
+) -> PartialVMResult<()> {
+    let size1 = max(size1, 1);
+    let size2 = max(size2, 1);
+    let size = size1.saturating_add(size2);
+    meter.add_items(
+        Scope::Function,
+        JOIN_ITEM_COST,
+        // max(x, x^2/10)
+        std::cmp::max(
+            size,
+            size.saturating_mul(size) / JOIN_ITEM_QUADRATIC_THRESHOLD,
+        ),
+    )
 }

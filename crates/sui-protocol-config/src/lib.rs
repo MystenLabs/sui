@@ -2739,9 +2739,9 @@ impl ProtocolConfig {
     /// MeterConfig for metering packages during signing. It is NOT safe to use during execution.
     pub fn meter_config_for_signing(&self) -> MeterConfig {
         MeterConfig {
-            max_per_fun_meter_units: Some(600_000),
-            max_per_mod_meter_units: Some(600_000),
-            max_per_pkg_meter_units: Some(600_000),
+            max_per_fun_meter_units: Some(1_000_000),
+            max_per_mod_meter_units: Some(1_000_000),
+            max_per_pkg_meter_units: Some(1_000_000),
         }
     }
 
