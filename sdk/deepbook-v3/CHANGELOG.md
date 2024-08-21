@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.3.3
+
+### Patch Changes
+
+- ed221a6: Update package address
+
 ## 0.3.2
 
 ### Patch Changes
