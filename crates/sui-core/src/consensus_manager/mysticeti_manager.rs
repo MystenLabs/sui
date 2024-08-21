@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
@@ -126,9 +126,15 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_config = config
             .consensus_config()
             .expect("consensus_config should exist");
-        let parameters = Parameters {
+
+        let mut parameters = Parameters {
             db_path: self.get_store_path(epoch),
             ..consensus_config.parameters.clone().unwrap_or_default()
+        };
+
+        // Disable the automated last known block sync for mainnet for now
+        if epoch_store.get_chain_identifier().chain() == sui_protocol_config::Chain::Mainnet {
+            parameters.sync_last_known_own_block_timeout = Duration::ZERO;
         };
 
         let own_protocol_key = self.protocol_keypair.public();
