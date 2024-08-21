@@ -33,6 +33,9 @@ pub struct VMConfig {
     pub error_execution_state: bool,
     // configuration for binary deserialization (modules)
     pub binary_config: BinaryConfig,
+    // Whether value serialization errors when generating type layouts should be rethrown or
+    // converted to a different error.
+    pub rethrow_serialization_type_layout_errors: bool,
 }
 
 impl Default for VMConfig {
@@ -46,6 +49,7 @@ impl Default for VMConfig {
             profiler_config: None,
             error_execution_state: true,
             binary_config: BinaryConfig::with_extraneous_bytes_check(false),
+            rethrow_serialization_type_layout_errors: false,
         }
     }
 }
