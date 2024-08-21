@@ -892,7 +892,7 @@ impl AbstractDomain for AbstractState {
         let (joined, released) = Self::join_(self, state);
         assert!(joined.is_canonical());
         assert!(self.locals.len() == joined.locals.len());
-        let max_size = std::cmp::max(std::cmp::max(self_size, state_size), joined.graph_size());
+        let max_size = max(max(self_size, state_size), joined.graph_size());
         charge_join(self_size, state_size, meter)?;
         charge_graph_size(max_size, meter)?;
         charge_release(released, meter)?;
@@ -923,7 +923,7 @@ fn charge_release(released: usize, meter: &mut (impl Meter + ?Sized)) -> Partial
         Scope::Function,
         RELEASE_ITEM_COST,
         // max(x, x^2/5)
-        std::cmp::max(
+        max(
             size,
             size.saturating_mul(size) / RELEASE_ITEM_QUADRATIC_THRESHOLD,
         ),
@@ -942,7 +942,7 @@ fn charge_join(
         Scope::Function,
         JOIN_ITEM_COST,
         // max(x, x^2/10)
-        std::cmp::max(
+        max(
             size,
             size.saturating_mul(size) / JOIN_ITEM_QUADRATIC_THRESHOLD,
         ),

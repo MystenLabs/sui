@@ -5,7 +5,7 @@
 //! This module defines the transfer functions for verifying type safety of a procedure body.
 //! It does not utilize control flow, but does check each block independently
 
-use std::num::NonZeroU64;
+use std::{cmp::max, num::NonZeroU64};
 
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_abstract_stack::AbstractStack;
@@ -139,7 +139,7 @@ fn charge_ty(meter: &mut (impl Meter + ?Sized), ty: &SignatureToken) -> PartialV
         Scope::Function,
         TYPE_NODE_COST,
         // max(x, x^2/10)
-        std::cmp::max(
+        max(
             size,
             size.saturating_mul(size) / TYPE_NODE_QUADRATIC_THRESHOLD,
         ),

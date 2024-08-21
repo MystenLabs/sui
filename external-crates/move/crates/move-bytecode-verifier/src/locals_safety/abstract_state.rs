@@ -4,6 +4,7 @@
 
 //! This module defines the abstract state for the local safety analysis.
 
+use crate::ability_cache::AbilityCache;
 use move_abstract_interpreter::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -26,8 +27,6 @@ pub(crate) enum LocalState {
 }
 use LocalState::*;
 
-use crate::ability_cache::AbilityCache;
-
 pub(crate) const STEP_BASE_COST: u128 = 1;
 pub(crate) const RET_COST: u128 = 10;
 pub(crate) const JOIN_COST: u128 = 10;
@@ -44,7 +43,7 @@ impl AbstractState {
     pub fn new(
         _module: &CompiledModule,
         function_context: &FunctionContext,
-        ability_ache: &mut AbilityCache,
+        ability_cache: &mut AbilityCache,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self> {
         let num_args = function_context.parameters().len();
@@ -59,7 +58,7 @@ impl AbstractState {
             .iter()
             .chain(function_context.locals().0.iter())
             .map(|st| {
-                ability_ache.abilities(
+                ability_cache.abilities(
                     Scope::Function,
                     meter,
                     function_context.type_parameters(),

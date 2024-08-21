@@ -7,7 +7,10 @@ use move_binary_format::{
     safe_unwrap, CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    cmp::max,
+    collections::{btree_map::Entry, BTreeMap},
+};
 
 const TYPE_ARG_COST: u128 = 1;
 
@@ -79,7 +82,7 @@ impl<'a> AbilityCache<'a> {
                 match entry {
                     Entry::Occupied(entry) => *entry.get(),
                     Entry::Vacant(entry) => {
-                        meter.add_items(scope, TYPE_ARG_COST, std::cmp::max(type_args.len(), 1))?;
+                        meter.add_items(scope, TYPE_ARG_COST, max(type_args.len(), 1))?;
                         let sh = self.module.datatype_handle_at(*idx);
                         let declared_abilities = sh.abilities;
                         let abilities = AbilitySet::polymorphic_abilities(
