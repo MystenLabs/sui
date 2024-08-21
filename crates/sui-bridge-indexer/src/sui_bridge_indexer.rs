@@ -133,14 +133,14 @@ impl IndexerProgressStore for PgBridgePersistent {
         &mut self,
         task_name: String,
         checkpoint: u64,
-        target_checkpoint: i64,
+        target_checkpoint: u64,
     ) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get()?;
         diesel::insert_into(schema::progress_store::table)
             .values(models::ProgressStore {
                 task_name,
                 checkpoint: checkpoint as i64,
-                target_checkpoint,
+                target_checkpoint: target_checkpoint as i64,
                 // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
             })

@@ -154,3 +154,38 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
     recorded_data.sort();
     assert_eq!(data, recorded_data);
 }
+
+#[tokio::test]
+async fn resume_test() {
+    telemetry_subscribers::init_for_testing();
+    let registry = Registry::new();
+    mysten_metrics::init_metrics(&registry);
+
+    let data = (0..=50u64).collect::<Vec<_>>();
+    let datasource = TestDatasource { data: data.clone() };
+    let persistent = InMemoryPersistent::new();
+    persistent.progress_store.lock().await.insert(
+        "test_indexer - backfill - 30".to_string(),
+        Task {
+            task_name: "test_indexer - backfill - 30".to_string(),
+            checkpoint: 10,
+            target_checkpoint: 30,
+            timestamp: 0,
+        },
+    );
+    let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
+        .with_backfill_strategy(BackfillStrategy::Simple)
+        .build(30, 0, persistent.clone());
+    indexer.start().await.unwrap();
+
+    // it should have 2 task created for the indexer, one existing task and one live task
+    let tasks = persistent.tasks("test_indexer").await.unwrap();
+    assert_eq!(2, tasks.len());
+    // the first one will be the live task
+    assert_eq!(50, tasks.first().unwrap().checkpoint);
+    assert_eq!(i64::MAX as u64, tasks.first().unwrap().target_checkpoint);
+    // the data recorded in storage should be the same as the datasource
+    let mut recorded_data = persistent.data.lock().await.clone();
+    recorded_data.sort();
+    assert_eq!((10..=50u64).collect::<Vec<_>>(), recorded_data);
+}

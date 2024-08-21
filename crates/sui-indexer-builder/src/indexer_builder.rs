@@ -157,7 +157,11 @@ impl<P, D, M> Indexer<P, D, M> {
             match tasks.live_task() {
                 None => {
                     self.storage
-                        .register_task(format!("{} - Live", self.name), from_checkpoint, i64::MAX)
+                        .register_task(
+                            format!("{} - Live", self.name),
+                            from_checkpoint,
+                            i64::MAX as u64,
+                        )
                         .await?;
                 }
                 Some(mut live_task) => {
@@ -174,15 +178,18 @@ impl<P, D, M> Indexer<P, D, M> {
             None => {
                 // No task in database, create backfill tasks from genesis to `start_from_checkpoint`
                 if self.start_from_checkpoint != self.genesis_checkpoint {
-                    self.create_backfill_tasks(self.genesis_checkpoint, self.start_from_checkpoint)
-                        .await?
+                    self.create_backfill_tasks(
+                        self.genesis_checkpoint,
+                        self.start_from_checkpoint - 1,
+                    )
+                    .await?
                 }
             }
             Some(latest_task) => {
-                if latest_task.target_checkpoint < self.start_from_checkpoint {
+                if latest_task.target_checkpoint + 1 < self.start_from_checkpoint {
                     self.create_backfill_tasks(
                         latest_task.target_checkpoint + 1,
-                        self.start_from_checkpoint,
+                        self.start_from_checkpoint - 1,
                     )
                     .await?;
                 }
@@ -200,20 +207,20 @@ impl<P, D, M> Indexer<P, D, M> {
             BackfillStrategy::Simple => {
                 self.storage
                     .register_task(
-                        format!("{} - backfill - {}", self.name, to_cp),
+                        format!("{} - backfill - {from_cp}:{to_cp}", self.name),
                         from_cp,
-                        self.start_from_checkpoint as i64 - 1,
+                        to_cp,
                     )
                     .await
             }
             BackfillStrategy::Partitioned { task_size } => {
                 while from_cp < self.start_from_checkpoint {
-                    let target_cp = min(from_cp + task_size, to_cp) - 1;
+                    let target_cp = min(from_cp + task_size - 1, to_cp);
                     self.storage
                         .register_task(
-                            format!("{} - backfill - {target_cp}", self.name),
+                            format!("{} - backfill - {from_cp}:{target_cp}", self.name),
                             from_cp,
-                            target_cp as i64,
+                            target_cp,
                         )
                         .await?;
                     from_cp = target_cp + 1;
@@ -245,7 +252,7 @@ pub trait IndexerProgressStore: Send {
         &mut self,
         task_name: String,
         checkpoint: u64,
-        target_checkpoint: i64,
+        target_checkpoint: u64,
     ) -> Result<(), anyhow::Error>;
 
     async fn update_task(&mut self, task: Task) -> Result<(), Error>;
