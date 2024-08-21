@@ -5,13 +5,21 @@ use anyhow::{anyhow, Context, Result};
 
 use clap::*;
 use object_store::aws::AmazonS3Builder;
+use object_store::{BackoffConfig, RetryConfig};
 use object_store::{ClientOptions, DynObjectStore};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{env, fs};
 use tracing::info;
+
+const INIT_BACKOFF_MS: u64 = 200;
+const MAX_BACKOFF_MS: u64 = 10_000;
+const MAX_RETRIES: usize = 10;
+const RETRY_TIMEOUT_SECS: u64 = 180;
+const EXPONENT_BASE: f64 = 2.0;
 
 /// Object-store type.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
@@ -105,6 +113,18 @@ fn default_object_store_connection_limit() -> usize {
     20
 }
 
+pub fn retry_config() -> RetryConfig {
+    RetryConfig {
+        backoff: BackoffConfig {
+            init_backoff: Duration::from_millis(INIT_BACKOFF_MS),
+            max_backoff: Duration::from_millis(MAX_BACKOFF_MS),
+            base: EXPONENT_BASE,
+        },
+        max_retries: MAX_RETRIES,
+        retry_timeout: Duration::from_secs(RETRY_TIMEOUT_SECS),
+    }
+}
+
 impl ObjectStoreConfig {
     fn new_local_fs(&self) -> Result<Arc<DynObjectStore>, anyhow::Error> {
         info!(directory=?self.directory, object_store_type="File", "Object Store");
@@ -125,7 +145,9 @@ impl ObjectStoreConfig {
 
         info!(bucket=?self.bucket, object_store_type="S3", "Object Store");
 
-        let mut builder = AmazonS3Builder::new().with_imdsv1_fallback();
+        let mut builder = AmazonS3Builder::new()
+            .with_imdsv1_fallback()
+            .with_retry(retry_config());
 
         if self.aws_virtual_hosted_style_request {
             builder = builder.with_virtual_hosted_style_request(true);
@@ -174,7 +196,7 @@ impl ObjectStoreConfig {
 
         info!(bucket=?self.bucket, object_store_type="GCS", "Object Store");
 
-        let mut builder = GoogleCloudStorageBuilder::new();
+        let mut builder = GoogleCloudStorageBuilder::new().with_retry(retry_config());
 
         if let Some(bucket) = &self.bucket {
             builder = builder.with_bucket_name(bucket);
@@ -206,7 +228,7 @@ impl ObjectStoreConfig {
         info!(bucket=?self.bucket, account=?self.azure_storage_account,
           object_store_type="Azure", "Object Store");
 
-        let mut builder = MicrosoftAzureBuilder::new();
+        let mut builder = MicrosoftAzureBuilder::new().with_retry(retry_config());
 
         if let Some(bucket) = &self.bucket {
             builder = builder.with_container_name(bucket);

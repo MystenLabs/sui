@@ -7,28 +7,47 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::path::Path;
-use object_store::GetResult;
+use object_store::{BackoffConfig, GetResult, RetryConfig};
 use percent_encoding::{percent_encode, utf8_percent_encode, NON_ALPHANUMERIC};
-use reqwest::Client;
-use reqwest::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::fmt;
 use std::sync::Arc;
+use sui_config::object_storage_config::retry_config;
 
 #[derive(Debug)]
 struct GoogleCloudStorageClient {
-    client: Client,
+    client: ClientWithMiddleware,
     bucket_name_encoded: String,
 }
 
 impl GoogleCloudStorageClient {
     pub fn new(bucket: &str) -> Result<Self> {
-        let mut builder = ClientBuilder::new();
-        builder = builder.user_agent(DEFAULT_USER_AGENT);
-        let client = builder.https_only(false).build()?;
+        let RetryConfig {
+            backoff:
+                BackoffConfig {
+                    init_backoff,
+                    max_backoff,
+                    base,
+                },
+            max_retries,
+            ..
+        } = retry_config();
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(init_backoff, max_backoff)
+            .base(base as u32)
+            .build_with_max_retries(max_retries as u32);
+        let reqwest_client = reqwest::Client::builder()
+            .user_agent(DEFAULT_USER_AGENT)
+            .https_only(false)
+            .build()?;
+        let middleware_client = ClientBuilder::new(reqwest_client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
         let bucket_name_encoded = percent_encode(bucket.as_bytes(), NON_ALPHANUMERIC).to_string();
 
         Ok(Self {
-            client,
+            client: middleware_client,
             bucket_name_encoded,
         })
     }
