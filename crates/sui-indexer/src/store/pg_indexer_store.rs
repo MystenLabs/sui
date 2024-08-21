@@ -20,6 +20,7 @@ use itertools::Itertools;
 use tap::TapFallible;
 use tracing::info;
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 
 use crate::db::ConnectionPool;
@@ -32,6 +33,7 @@ use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
+use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
@@ -43,9 +45,10 @@ use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
-    event_struct_package, events, objects, objects_history, objects_snapshot, objects_version,
-    packages, pruner_cp_watermark, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+    event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
+    objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
+    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
+    tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -60,6 +63,7 @@ use super::ObjectChangeToCommit;
 
 #[cfg(feature = "postgres-feature")]
 use diesel::upsert::excluded;
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
 #[macro_export]
 macro_rules! chunk {
@@ -193,6 +197,38 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 .map(|v| v.map(|v| v as u64))
         })
         .context("Failed reading latest epoch id from PostgresDB")
+    }
+
+    /// Get the range of the protocol versions that need to be indexed.
+    pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
+        // We start indexing from the next protocol version after the latest one stored in the db.
+        let start = read_only_blocking!(&self.blocking_cp, |conn| {
+            protocol_configs::dsl::protocol_configs
+                .select(max(protocol_configs::protocol_version))
+                .first::<Option<i64>>(conn)
+        })
+        .context("Failed reading latest protocol version from PostgresDB")?
+        .map_or(1, |v| v + 1);
+
+        // We end indexing at the protocol version of the latest epoch stored in the db.
+        let end = read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select(max(epochs::protocol_version))
+                .first::<Option<i64>>(conn)
+        })
+        .context("Failed reading latest epoch protocol version from PostgresDB")?
+        .unwrap_or(1);
+        Ok((start, end))
+    }
+
+    pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            chain_identifier::dsl::chain_identifier
+                .select(chain_identifier::checkpoint_digest)
+                .first::<Vec<u8>>(conn)
+                .optional()
+        })
+        .context("Failed reading chain id from PostgresDB")
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
@@ -627,6 +663,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         // If the first checkpoint has sequence number 0, we need to persist the digest as
         // chain identifier.
         if first_checkpoint.sequence_number == 0 {
+            let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
+            self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())?;
             transactional_blocking_with_retry!(
                 &self.blocking_cp,
                 |conn| {
@@ -1629,6 +1667,11 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .await
     }
 
+    async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_chain_identifier())
+            .await
+    }
+
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
@@ -2142,6 +2185,73 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
 
     fn as_any(&self) -> &dyn StdAny {
         self
+    }
+
+    /// Persist protocol configs and feature flags until the protocol version for the latest epoch
+    /// we have stored in the db, inclusive.
+    fn persist_protocol_configs_and_feature_flags(
+        &self,
+        chain_id: Vec<u8>,
+    ) -> Result<(), IndexerError> {
+        let chain_id = ChainIdentifier::from(
+            CheckpointDigest::try_from(chain_id).expect("Unable to convert chain id"),
+        );
+
+        let mut all_configs = vec![];
+        let mut all_flags = vec![];
+
+        let (start_version, end_version) = self.get_protocol_version_index_range()?;
+        info!(
+            "Persisting protocol configs with start_version: {}, end_version: {}",
+            start_version, end_version
+        );
+
+        // Gather all protocol configs and feature flags for all versions between start and end.
+        for version in start_version..=end_version {
+            let protocol_configs = ProtocolConfig::get_for_version_if_supported(
+                (version as u64).into(),
+                chain_id.chain(),
+            )
+            .ok_or(IndexerError::GenericError(format!(
+                "Unable to fetch protocol version {} and chain {:?}",
+                version,
+                chain_id.chain()
+            )))?;
+            let configs_vec = protocol_configs
+                .attr_map()
+                .into_iter()
+                .map(|(k, v)| StoredProtocolConfig {
+                    protocol_version: version,
+                    config_name: k,
+                    config_value: v.map(|v| v.to_string()),
+                })
+                .collect::<Vec<_>>();
+            all_configs.extend(configs_vec);
+
+            let feature_flags = protocol_configs
+                .feature_map()
+                .into_iter()
+                .map(|(k, v)| StoredFeatureFlag {
+                    protocol_version: version,
+                    flag_name: k,
+                    flag_value: v,
+                })
+                .collect::<Vec<_>>();
+            all_flags.extend(feature_flags);
+        }
+
+        // Now insert all of them into the db.
+        // TODO: right now the size of these updates is manageable but later we may consider batching.
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                insert_or_ignore_into!(protocol_configs::table, all_configs.clone(), conn);
+                insert_or_ignore_into!(feature_flags::table, all_flags.clone(), conn);
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )?;
+        Ok(())
     }
 }
 
