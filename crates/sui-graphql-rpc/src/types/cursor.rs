@@ -728,8 +728,8 @@ mod tests {
                     42,
                 ),
                 limit: 10,
+                scan_limit: None,
                 end: Back,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }
@@ -782,8 +782,8 @@ mod tests {
                     42,
                 ),
                 limit: 10,
+                scan_limit: None,
                 end: Back,
-                scan_limit: None
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
     }

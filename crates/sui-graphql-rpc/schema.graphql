@@ -444,9 +444,7 @@ type Checkpoint {
 	the next `scanLimit` many transactions in the direction of pagination, and so on until all
 	transactions in the scanning range have been visited.
 	
-	By default, the scanning range includes all transactions known to GraphQL, but it can be
-	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
-	`afterCheckpoint` and `atCheckpoint` filters.
+	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
@@ -1185,9 +1183,7 @@ type Epoch {
 	the next `scanLimit` many transactions in the direction of pagination, and so on until all
 	transactions in the scanning range have been visited.
 	
-	By default, the scanning range includes all transactions known to GraphQL, but it can be
-	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
-	`afterCheckpoint` and `atCheckpoint` filters.
+	By default, the scanning range consists of all transactions in this epoch.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
