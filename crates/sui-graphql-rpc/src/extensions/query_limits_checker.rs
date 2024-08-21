@@ -29,7 +29,6 @@ use uuid::Uuid;
 pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 const DRY_RUN_TX_BLOCK: &str = "dryRunTransactionBlock";
 const EXECUTE_TX_BLOCK: &str = "executeTransactionBlock";
-const TX_BYTES: &str = "txBytes";
 
 /// The size of the query payload in bytes, as it comes from the request header: `Content-Length`.
 #[derive(Debug)]
@@ -88,13 +87,30 @@ fn check_mutation_dry_run(
         traverse_items(
             variables,
             max_tx_payload_size,
-            ctx,
-            payload_size,
             &mut available_budget,
             &mut seen_vars,
             &op.node.selection_set.node.items,
             &doc.fragments,
         )?;
+    }
+
+    // Check if the total payload size (a.k.a the content-length header) minus the values of
+    // the txBytes and sigs fields is less than the `max_query_payload_size`. This verifies
+    // that the "read" part of the query is within the set limits.
+    if (payload_size - max_tx_payload_size - available_budget) > max_query_payload_size {
+        log_metric(
+            ctx,
+            "The read part of the query payload is too large.",
+            *payload_size,
+        );
+        return Err(graphql_error(
+            code::BAD_USER_INPUT,
+            format!(
+                "The read part of the query payload is too large. The maximum allowed is {} \
+                    bytes",
+                max_query_payload_size
+            ),
+        ));
     }
 
     /// Traverse the items of the query and check if the txBytes and signatures are within the max
@@ -108,8 +124,6 @@ fn check_mutation_dry_run(
     fn traverse_items(
         variables: &Variables,
         max_tx_payload_size: u64,
-        ctx: &ExtensionContext<'_>,
-        payload_size: &u64,
         available_budget: &mut u64,
         seen_vars: &mut HashSet<String>,
         items: &[Positioned<Selection>],
@@ -143,8 +157,6 @@ fn check_mutation_dry_run(
                     traverse_items(
                         variables,
                         max_tx_payload_size,
-                        ctx,
-                        payload_size,
                         available_budget,
                         seen_vars,
                         &def.node.selection_set.node.items,
@@ -155,8 +167,6 @@ fn check_mutation_dry_run(
                     traverse_items(
                         variables,
                         max_tx_payload_size,
-                        ctx,
-                        payload_size,
                         available_budget,
                         seen_vars,
                         &f.node.selection_set.node.items,
@@ -175,30 +185,21 @@ fn check_mutation_dry_run(
         variables: &Variables,
         max_tx_payload_size: u64,
     ) -> ServerResult<()> {
-        let node_len = if is_variable(&node.1.node) {
-            let node_name = node.0.node.to_string();
+        let node_name = node.0.node.to_string();
+        if is_variable(&node.1.node) {
             if seen_vars.contains(&node_name) {
                 return Ok(());
             }
 
             seen_vars.insert(node_name.clone());
-            let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
-                graphql_error_at_pos(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Error getting size of variable: {}", node_name),
-                    node.1.pos,
-                )
-            })?;
-            node_len
-        } else {
-            get_value_str_len(&node.1.node, variables).map_err(|_| {
-                graphql_error_at_pos(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Error getting size of variable: {}", node.0.node),
-                    node.1.pos,
-                )
-            })?
         };
+        let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
+            graphql_error_at_pos(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Error getting size of variable: {}", node_name),
+                node.1.pos,
+            )
+        })?;
 
         if node_len > *available_budget {
             return Err(graphql_error_at_pos(
@@ -213,25 +214,6 @@ fn check_mutation_dry_run(
         *available_budget -= node_len;
 
         Ok(())
-    }
-
-    // Check if the total payload size (a.k.a the content-length header) minus the values of
-    // the txBytes and sigs fields is less than the `max_query_payload_size`. This verifies
-    // that the "read" part of the query is within the set limits.
-    if (payload_size - max_tx_payload_size - available_budget) > max_query_payload_size {
-        log_metric(
-            ctx,
-            "The read part of the query payload is too large.",
-            *payload_size,
-        );
-        return Err(graphql_error(
-            code::BAD_USER_INPUT,
-            format!(
-                "The read part of the query payload is too large. The maximum allowed is {} \
-                    bytes",
-                max_query_payload_size
-            ),
-        ));
     }
 
     Ok(())
