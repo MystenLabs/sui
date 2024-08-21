@@ -182,7 +182,7 @@ impl<P, D, M> Indexer<P, D, M> {
                         self.genesis_checkpoint,
                         self.start_from_checkpoint - 1,
                     )
-                        .await?
+                    .await?
                 }
             }
             Some(latest_task) => {
@@ -191,7 +191,7 @@ impl<P, D, M> Indexer<P, D, M> {
                         latest_task.target_checkpoint + 1,
                         self.start_from_checkpoint - 1,
                     )
-                        .await?;
+                    .await?;
                 }
             }
         }
