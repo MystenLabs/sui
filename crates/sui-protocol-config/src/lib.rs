@@ -168,6 +168,7 @@ const MAX_PROTOCOL_VERSION: u64 = 55;
 // Version 54: Enable random beacon on mainnet.
 //             Enable soft bundle on mainnet.
 // Version 55: Enable enums on mainnet.
+//             Rethrow serialization type layout errors instead of converting them.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -506,6 +507,10 @@ struct FeatureFlags {
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
     authority_capabilities_v2: bool,
+
+    // Rethrow type layout errors during serialization instead of trying to convert them.
+    #[serde(skip_serializing_if = "is_false")]
+    rethrow_serialization_type_layout_errors: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1535,6 +1540,10 @@ impl ProtocolConfig {
     pub fn max_num_transactions_in_block(&self) -> u64 {
         // 500 is the value used before this field is introduced.
         self.consensus_max_num_transactions_in_block.unwrap_or(500)
+    }
+
+    pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
+        self.feature_flags.rethrow_serialization_type_layout_errors
     }
 }
 
@@ -2671,6 +2680,8 @@ impl ProtocolConfig {
                     // Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
                     // Using a higher limit that is 512, to account for bursty traffic and system transactions.
                     cfg.consensus_max_num_transactions_in_block = Some(512);
+
+                    cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
                 // Use this template when making changes:
                 //

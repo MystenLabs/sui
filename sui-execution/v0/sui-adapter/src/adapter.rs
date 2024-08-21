@@ -72,6 +72,8 @@ mod checked {
 
                 profiler_config: vm_profiler_config,
                 binary_config: to_binary_config(protocol_config),
+                rethrow_serialization_type_layout_errors: protocol_config
+                    .rethrow_serialization_type_layout_errors(),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

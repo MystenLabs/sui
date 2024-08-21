@@ -72,6 +72,8 @@ mod checked {
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
                 binary_config: to_binary_config(protocol_config),
+                rethrow_serialization_type_layout_errors: protocol_config
+                    .rethrow_serialization_type_layout_errors(),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)
