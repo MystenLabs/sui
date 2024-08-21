@@ -44,7 +44,7 @@ pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, Round};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
-pub use transaction::{TransactionClient, TransactionVerifier, ValidationError};
+pub use transaction::{ClientError, TransactionClient, TransactionVerifier, ValidationError};
 
 #[cfg(test)]
 #[path = "tests/randomized_tests.rs"]
