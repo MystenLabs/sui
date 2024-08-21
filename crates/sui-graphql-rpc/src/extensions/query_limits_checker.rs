@@ -68,6 +68,16 @@ fn check_mutation_dry_run(
     ctx: &ExtensionContext<'_>,
 ) -> ServerResult<()> {
     let PayloadSize(payload_size) = ctx.data_unchecked();
+    if *payload_size > (max_query_payload_size + max_tx_payload_size) {
+        return Err(graphql_error(
+            code::BAD_USER_INPUT,
+            format!(
+                "The query payload size is too large. The maximum transaction related payload allowed is {} bytes, and the maximum read query payload allowed is {} bytes",
+                 max_tx_payload_size, max_query_payload_size
+            ),
+        ));
+    }
+
     // Keep track of the remaining mutation/dry run bytes budget
     // SAFETY max_tx_payload_size is u32, so it's safe to convert to u64
     let mut available_budget: u64 = max_tx_payload_size;
@@ -108,27 +118,17 @@ fn check_mutation_dry_run(
         for n in items {
             match &n.node {
                 Selection::Field(f) => {
-                    if f.node.name.node == DRY_RUN_TX_BLOCK {
-                        check_dry_run(
-                            f,
-                            variables,
-                            max_tx_payload_size,
-                            ctx,
-                            payload_size,
-                            available_budget,
-                            seen_vars,
-                        )?;
-                    }
-                    if f.node.name.node == EXECUTE_TX_BLOCK {
-                        check_execute_tx_block(
-                            f,
-                            variables,
-                            max_tx_payload_size,
-                            ctx,
-                            payload_size,
-                            available_budget,
-                            seen_vars,
-                        )?;
+                    if f.node.name.node == DRY_RUN_TX_BLOCK || f.node.name.node == EXECUTE_TX_BLOCK
+                    {
+                        for arg in &f.node.arguments {
+                            check_node(
+                                arg,
+                                available_budget,
+                                seen_vars,
+                                variables,
+                                max_tx_payload_size,
+                            )?;
+                        }
                     }
                 }
                 Selection::FragmentSpread(fs) => {
@@ -168,387 +168,57 @@ fn check_mutation_dry_run(
         Ok(())
     }
 
-    /// Checks if the transaction block's txBytes and signatures are within the max_tx_payload_size
-    /// and if the available budget is not exhausted.
-    ///
-    ///
-    /// This handles multiple cases
-    /// txBytes is a variable, signatures is a variable
-    /// txBytes is a variable, signatures is a String value
-    /// txBytes is a String value, signatures is a variable
-    /// txBytes is a String value, signatures is a String value
-    fn check_execute_tx_block(
-        f: &Positioned<Field>,
-        variables: &Variables,
-        max_tx_payload_size: u64,
-        ctx: &ExtensionContext<'_>,
-        payload_size: &u64,
+    fn check_node(
+        node: &(Positioned<Name>, Positioned<Value>),
         available_budget: &mut u64,
         seen_vars: &mut HashSet<String>,
+        variables: &Variables,
+        max_tx_payload_size: u64,
     ) -> ServerResult<()> {
-        // we need to handle multiple cases
-        // txBytes is a variable, signatures is a variable
-        // txBytes is a variable, signatures is a String value
-        // txBytes is a String value, signatures is a variable
-        // txBytes is a String value, signatures is a String value
-        let args_len = f.node.arguments.len();
-        if args_len != 2 {
-            return Err(graphql_error_at_pos(
-                                code::INTERNAL_SERVER_ERROR,
-                                "The executeTransactionBlock node should have 2 arguments: txBytes and signatures, but found {args_len}",
-                                f.pos,
-                            ));
-        }
-
-        let (var1, var2) = (&f.node.arguments[0], &f.node.arguments[1]);
-
-        // collect all the txBytes and signatures sizes, from variables and direct
-        // String values. If a variable is found, it is included only once in this
-        // value
-        let tx_bytes_sigs_len = match (&var1.1.node, &var2.1.node) {
-            (GqlValue::Variable(v1), GqlValue::Variable(v2)) => {
-                let v1_name = v1.to_string();
-                let v2_name = v2.to_string();
-                // we already checked these variables, so skip them
-                if seen_vars.contains(&v1_name) && seen_vars.contains(&v2_name) {
-                    0
-                } else if seen_vars.contains(&v1_name) {
-                    seen_vars.insert(v2_name.clone());
-                    let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", v2_name, e),
-                            f.pos,
-                        )
-                    })?;
-                    // Explicitly check if this node's txBytes+signatures size is bigger
-                    // than the whole tx payload size allowed. This allows to pinpoint
-                    // exactly to which node in the query has such a big size,
-                    // which will make it easier for a dev to debug
-                    if v2_len > max_tx_payload_size {
-                        log_metric(
-                                        ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large",
-                                        *payload_size
-                                    );
-                        return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos
-                                    ));
-                    }
-
-                    v2_len
-                } else if seen_vars.contains(&v2_name) {
-                    seen_vars.insert(v1_name.clone());
-                    let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", v1_name, e),
-                            f.pos,
-                        )
-                    })?;
-
-                    // Explicitly check if this node's txBytes+signatures size is bigger
-                    // than the whole tx payload size allowed. This allows to pinpoint
-                    // exactly to which node in the query has such a big size,
-                    // which will make it easier for a dev to debug
-                    if (v1_len) > max_tx_payload_size {
-                        log_metric(
-                                        ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
-                                        *payload_size
-                                    );
-                        return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos
-                                    ));
-                    }
-
-                    v1_len
-                } else {
-                    seen_vars.insert(v1_name.clone());
-                    seen_vars.insert(v2_name.clone());
-
-                    let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", v1_name, e),
-                            f.pos,
-                        )
-                    })?;
-                    let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", v2_name, e),
-                            f.pos,
-                        )
-                    })?;
-
-                    // Explicitly check if this node's txBytes+signatures size is bigger
-                    // than the whole tx payload size allowed. This allows to pinpoint
-                    // exactly to which node in the query has such a big size,
-                    // which will make it easier for a dev to debug
-                    if (v1_len + v2_len) > max_tx_payload_size {
-                        log_metric(
-                                        ctx,
-                                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
-                                        *payload_size
-                                    );
-                        return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos
-                                    ));
-                    }
-
-                    v1_len + v2_len
-                }
+        let node_len = if is_variable(&node.1.node) {
+            let node_name = node.0.node.to_string();
+            if seen_vars.contains(&node_name) {
+                return Ok(());
             }
-            (GqlValue::Variable(v1), _) => {
-                let var_name = format!("{}", v1);
-                let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
-                    graphql_error_at_pos(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var_name, e),
-                        f.pos,
-                    )
-                })?;
-                if seen_vars.contains(&var_name) {
-                    v2_len
-                } else {
-                    seen_vars.insert(var_name.clone());
 
-                    let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", var_name, e),
-                            f.pos,
-                        )
-                    })?;
-
-                    let tx_bytes_sigs_len = v1_len + v2_len;
-                    // Explicitly check if this node's txBytes size is bigger than the
-                    // whole tx payload size allowed. This allows to pinpoint exactly
-                    // to which node in the query has such a big txBytes size, which
-                    // will make it easier for a dev to debug
-                    if tx_bytes_sigs_len > max_tx_payload_size {
-                        log_metric(
-                            ctx,
-                            "The txBytes+sigs size of executeTransactionBlock node is too large.",
-                            *payload_size,
-                        );
-                        return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "The txBytes+sigs size of executeTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos
-                                    ));
-                    }
-                    tx_bytes_sigs_len
-                }
-            }
-            (_, GqlValue::Variable(v2)) => {
-                let var_name = format!("{}", v2);
-                let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
-                    graphql_error_at_pos(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var_name, e),
-                        f.pos,
-                    )
-                })?;
-                if seen_vars.contains(&var_name) {
-                    v1_len
-                } else {
-                    seen_vars.insert(var_name.clone());
-
-                    let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the {} size: {}", var_name, e),
-                            f.pos,
-                        )
-                    })?;
-
-                    let tx_bytes_sigs_len = v1_len + v2_len;
-                    // Explicitly check if this node's txBytes size is bigger than the
-                    // whole tx payload size allowed. This allows to pinpoint exactly
-                    // to which node in the query has such a big txBytes size, which
-                    // will make it easier for a dev to debug
-                    if tx_bytes_sigs_len > max_tx_payload_size {
-                        log_metric(
-                            ctx,
-                            "The txBytes+sigs size of executeTransactionBlock node is \
-                                        too large.",
-                            *payload_size,
-                        );
-                        return Err(graphql_error_at_pos(
-                            code::BAD_USER_INPUT,
-                            format!(
-                                "The txBytes+sigs size of executeTransactionBlock node \
-                                            is too large. The maximum allowed is {} bytes",
-                                max_tx_payload_size
-                            ),
-                            f.pos,
-                        ));
-                    }
-                    tx_bytes_sigs_len
-                }
-            }
-            // txBytes & signatures are not passed from variables, so they are direct String values
-            (_, _) => {
-                let v1_len = get_value_str_len(&var1.1.node, variables).map_err(|e| {
-                    graphql_error_at_pos(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var1.0.node, e),
-                        f.pos,
-                    )
-                })?;
-                let v2_len = get_value_str_len(&var2.1.node, variables).map_err(|e| {
-                    graphql_error_at_pos(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting the {} size: {}", var2.0.node, e),
-                        f.pos,
-                    )
-                })?;
-
-                // Explicitly check if this node's txBytes+signatures size is bigger
-                // than the whole tx payload size allowed. This allows to pinpoint
-                // exactly to which node in the query has such a big size,
-                // which will make it easier for a dev to debug
-                if (v1_len + v2_len) > max_tx_payload_size {
-                    log_metric(
-                        ctx,
-                        "The txBytes+signatures size of executeTransactionBlock node is too large.",
-                        *payload_size,
-                    );
-                    return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos
-                                    ));
-                }
-
-                v1_len + v2_len
-            }
+            seen_vars.insert(node_name.clone());
+            let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
+                graphql_error_at_pos(
+                    code::INTERNAL_SERVER_ERROR,
+                    format!("Error getting size of variable: {}", node_name),
+                    node.1.pos,
+                )
+            })?;
+            node_len
+        } else {
+            get_value_str_len(&node.1.node, variables).map_err(|_| {
+                graphql_error_at_pos(
+                    code::INTERNAL_SERVER_ERROR,
+                    format!("Error getting size of variable: {}", node.0.node),
+                    node.1.pos,
+                )
+            })?
         };
 
-        // check if budget is not exhausted due to this node's txBytes+signatures size
-        if *available_budget >= tx_bytes_sigs_len {
-            *available_budget -= tx_bytes_sigs_len;
-        } else {
-            log_metric(
-                ctx,
-                "This node's txBytes and signatures plus previous nodes' \
-                                        values exceed the max tx payload size allowed per query.",
-                *payload_size,
-            );
+        if node_len > *available_budget {
             return Err(graphql_error_at_pos(
-                            code::BAD_USER_INPUT,
-                            format!(
-                                "This node's txBytes and signatures plus previous nodes' \
-                                        values exceed the max tx payload size allowed per query: {}",
-                                max_tx_payload_size
-                            ),
-                            f.pos,
-                        ));
+                code::BAD_USER_INPUT,
+                format!(
+                    "Maximum allowed transaction payload size exceeded. Maximum allowed is {} bytes.",
+                    max_tx_payload_size
+                ),
+                node.1.pos,
+            ));
         }
+        *available_budget -= node_len;
+
         Ok(())
     }
 
-    /// Check if the dry run node's txBytes is within the max_tx_payload_size and if the available
-    /// budget is not exhausted.
-    fn check_dry_run(
-        f: &Positioned<Field>,
-        variables: &Variables,
-        max_tx_payload_size: u64,
-        ctx: &ExtensionContext<'_>,
-        payload_size: &u64,
-        available_budget: &mut u64,
-        seen_vars: &mut HashSet<String>,
-    ) -> ServerResult<()> {
-        if f.node.name.node == DRY_RUN_TX_BLOCK {
-            for arg in &f.node.arguments {
-                if arg.0.node == TX_BYTES {
-                    if is_variable(&arg.1.node) && seen_vars.contains(&arg.1.node.to_string()) {
-                        // we already checked this variable, so skip it
-                        continue;
-                    } else if is_variable(&arg.1.node) {
-                        seen_vars.insert(arg.1.node.to_string());
-                    }
-                    let tx_bytes_len = get_value_str_len(&arg.1.node, variables).map_err(|e| {
-                        graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
-                            format!("Error getting the txBytes size: {}", e),
-                            arg.1.pos,
-                        )
-                    })?;
-
-                    // Explicitly check if this node's txBytes size is bigger than the
-                    // whole tx payload size allowed. This allows to pinpoint exactly
-                    // to which node in the query has such a big txBytes size, which
-                    // will make it easier for a dev to debug
-                    if tx_bytes_len > max_tx_payload_size {
-                        log_metric(
-                            ctx,
-                            "The txBytes size of dryRunTransactionBlock node is too large.",
-                            *payload_size,
-                        );
-                        return Err(graphql_error_at_pos(
-                                            code::BAD_USER_INPUT,
-                                            format!(
-                                                "The {TX_BYTES} size of dryRunTransactionBlock node is too large. The maximum allowed is {} bytes",
-                                                max_tx_payload_size
-                                            ),
-                                            f.pos
-                                        ));
-
-                    // check if budget is not exhausted due to this node's txBytes size
-                    } else if *available_budget >= tx_bytes_len {
-                        *available_budget -= tx_bytes_len;
-                    } else {
-                        log_metric(
-                                        ctx,
-                                        "This node's txBytes plus previous nodes' values exceed the max tx payload size allowed.",
-                                        *payload_size
-                                    );
-                        return Err(graphql_error_at_pos(
-                                        code::BAD_USER_INPUT,
-                                        format!(
-                                            "This node's txBytes plus previous nodes' values exceed the max tx payload size allowed: {}",
-                                            max_tx_payload_size
-                                        ),
-                                        f.pos,
-                                    ));
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    // This represents the tx payload we found from variables and values of txBytes and sigs
-    // fields
-    let current_tx_payload = max_tx_payload_size - available_budget;
     // Check if the total payload size (a.k.a the content-length header) minus the values of
     // the txBytes and sigs fields is less than the `max_query_payload_size`. This verifies
     // that the "read" part of the query is within the set limits.
-    if (payload_size - current_tx_payload) > max_query_payload_size {
+    if (payload_size - max_tx_payload_size - available_budget) > max_query_payload_size {
         log_metric(
             ctx,
             "The read part of the query payload is too large.",

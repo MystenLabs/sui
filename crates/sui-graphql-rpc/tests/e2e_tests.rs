@@ -3,6 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
+    use expect_test::expect;
     use fastcrypto::encoding::{Base64, Encoding};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -1002,9 +1003,10 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        assert_eq!(err,
-            vec!["The txBytes+signatures size of executeTransactionBlock node is too large. The maximum allowed is 10 bytes".to_string()]
-        );
+        let expect = expect![
+            "Maximum allowed transaction payload size exceeded. Maximum allowed is 10 bytes."
+        ];
+        expect.assert_eq(&format!("{:#?}", err));
     }
 
     #[tokio::test]
@@ -1128,13 +1130,10 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        assert_eq!(
-            err,
-            vec![
-                "The read part of the query payload is too large. The maximum allowed is 50 bytes"
-                    .to_string()
-            ]
-        );
+        let expect = expect![
+            "The read part of the query payload is too large. The maximum allowed is 50 bytes"
+        ];
+        expect.assert_eq(&format!("{:#?}", err));
     }
 
     #[tokio::test]
@@ -1225,12 +1224,10 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        assert_eq!(
-            err,
-            vec![
-                "The read part of the query payload is too large. The maximum allowed is 100 bytes"
-            ]
-        );
+        let expect = expect![
+            "The read part of the query payload is too large. The maximum allowed is 100 bytes"
+        ];
+        expect.assert_eq(&format!("{:#?}", err));
     }
 
     #[tokio::test]
@@ -1321,9 +1318,11 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        assert_eq!(
-            err,
-            vec!["The txBytes size of dryRunTransactionBlock node is too large. The maximum allowed is 50 bytes".to_string()]
-        );
+
+        let expect = expect![
+            "Maximum allowed transaction payload size exceeded. Maximum allowed is 50 bytes."
+        ];
+        expect.assert_eq(&format!("{:#?}", err));
+        cluster.cleanup_resources().await
     }
 }
