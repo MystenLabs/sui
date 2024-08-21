@@ -22,7 +22,7 @@ services:
       - ./dbs/validator1:/opt/sui/db:rw
       - ./logs/validator1:/opt/sui/logs
     command:
-        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml > /opt/sui/logs/full_logs.log 2>&1'"
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
     restart: on-failure
     logging:
       driver: "json-file"
@@ -50,7 +50,7 @@ services:
       - ./dbs/validator2:/opt/sui/db:rw
       - ./logs/validator2:/opt/sui/logs
     command:
-        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml > /opt/sui/logs/full_logs.log 2>&1'"
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
     restart: on-failure
     logging:
       driver: "json-file"
@@ -77,7 +77,7 @@ services:
       - ./dbs/validator3:/opt/sui/db:rw
       - ./logs/validator3:/opt/sui/logs
     command:
-        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml > /opt/sui/logs/full_logs.log 2>&1'"
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
     restart: on-failure
     logging:
       driver: "json-file"
@@ -104,7 +104,7 @@ services:
       - ./dbs/validator4:/opt/sui/db:rw
       - ./logs/validator4:/opt/sui/logs
     command:
-        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml > /opt/sui/logs/full_logs.log 2>&1'"
+        "bash -c '/usr/local/bin/sui-node-inst --config-path /opt/sui/config/validator.yaml >> /opt/sui/logs/full_logs.log 2>&1'"
     restart: on-failure
     logging:
       driver: "json-file"
