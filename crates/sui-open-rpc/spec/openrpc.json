@@ -1341,6 +1341,7 @@
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
