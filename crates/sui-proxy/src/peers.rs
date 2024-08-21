@@ -2,20 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{bail, Context, Result};
 use fastcrypto::ed25519::Ed25519PublicKey;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
+use futures::stream::{self, StreamExt};
 use once_cell::sync::Lazy;
 use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
 use serde::Deserialize;
-use std::time::Duration;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 use sui_tls::Allower;
+use sui_types::bridge::BridgeSummary;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::{debug, error, info};
+use url::Url;
 
 static JSON_RPC_STATE: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
@@ -181,6 +185,70 @@ impl SuiNodeProvider {
         Ok(body.result)
     }
 
+    /// get_bridge_validators will retrieve known bridge validators
+    async fn get_bridge_validators(url: String) -> Result<BridgeSummary> {
+        let rpc_method = "suix_getLatestBridge";
+        let observe = || {
+            let timer = JSON_RPC_DURATION
+                .with_label_values(&[rpc_method])
+                .start_timer();
+            || {
+                timer.observe_duration();
+            }
+        }();
+        let client = reqwest::Client::builder().build().unwrap();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method":rpc_method,
+            "id":1,
+        });
+        let response = client
+            .post(url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(request.to_string())
+            .send()
+            .await
+            .with_context(|| {
+                JSON_RPC_STATE
+                    .with_label_values(&[rpc_method, "failed_get"])
+                    .inc();
+                observe();
+                "unable to perform json rpc"
+            })?;
+
+        let raw = response.bytes().await.with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_body_extract"])
+                .inc();
+            observe();
+            "unable to extract body bytes from json rpc"
+        })?;
+
+        #[derive(Debug, Deserialize)]
+        struct ResponseBody {
+            result: BridgeSummary,
+        }
+
+        let body: ResponseBody = match serde_json::from_slice(&raw) {
+            Ok(b) => b,
+            Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&[rpc_method, "failed_json_decode"])
+                    .inc();
+                observe();
+                bail!(
+                    "unable to decode json: {error} response from json rpc: {:?}",
+                    raw
+                )
+            }
+        };
+        JSON_RPC_STATE
+            .with_label_values(&[rpc_method, "success"])
+            .inc();
+        observe();
+        Ok(body.result)
+    }
+
     /// poll_peer_list will act as a refresh interval for our cache
     pub fn poll_peer_list(&self) {
         info!("Started polling for peers using rpc: {}", self.rpc_url);
@@ -202,7 +270,10 @@ impl SuiNodeProvider {
                         let mut allow = nodes.write().unwrap();
                         allow.clear();
                         allow.extend(peers);
-                        info!("{} peers managed to make it on the allow list", allow.len());
+                        info!(
+                            "{} sui peers managed to make it on the allow list",
+                            allow.len()
+                        );
                         JSON_RPC_STATE
                             .with_label_values(&["update_peer_count", "success"])
                             .inc_by(allow.len() as f64);
@@ -212,6 +283,29 @@ impl SuiNodeProvider {
                             .with_label_values(&["update_peer_count", "failed"])
                             .inc();
                         error!("unable to refresh peer list: {error}")
+                    }
+                }
+                match Self::get_bridge_validators(rpc_url.to_owned()).await {
+                    Ok(summary) => {
+                        let extracted = extract_bridge(summary).await;
+                        let mut allow = nodes.write().unwrap();
+                        allow.clear();
+                        allow.extend(extracted);
+                        info!(
+                            "{} sui bridge peers managed to make it on the allow list",
+                            allow.len()
+                        );
+                        info!("confirming the structure of our map {:?}", allow);
+
+                        JSON_RPC_STATE
+                            .with_label_values(&["update_bridge_peer_count", "success"])
+                            .inc_by(allow.len() as f64);
+                    }
+                    Err(error) => {
+                        JSON_RPC_STATE
+                            .with_label_values(&["update_bridge_peer_count", "failed"])
+                            .inc();
+                        error!("unable to refresh sui bridge peer list: {error}")
                     }
                 }
             }
@@ -251,6 +345,99 @@ fn extract(
     })
 }
 
+async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, AllowedPeer)> {
+    let client = reqwest::Client::builder().build().unwrap();
+    let results: Vec<_> = stream::iter(summary.committee.members)
+        .filter_map(|(_, cm)| {
+            let client = client.clone();
+            async move {
+                debug!(
+                    "Extracting metrics public key for bridge node with sui address {}",
+                    cm.sui_address
+                );
+
+                // Convert the Vec<u8> to a String and handle errors properly
+                let url_str = match String::from_utf8(cm.http_rest_url) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        error!(
+                            "Invalid UTF-8 sequence in http_rest_url for node with addr {}",
+                            cm.sui_address
+                        );
+                        return None;
+                    }
+                };
+                // Parse the URL
+                let mut bridge_url = match Url::parse(&url_str) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        error!("Unable to parse http_rest_url: {}", url_str);
+                        return None;
+                    }
+                };
+                bridge_url.set_path("/metrics_pub_key");
+
+                // use the host portion of the http_rest_url as the "name"
+                let bridge_host = match bridge_url.host_str() {
+                    Some(host) => host,
+                    None => {
+                        error!("Hostname is missing from http_rest_url {}", url_str);
+                        return None;
+                    }
+                };
+                let bridge_name = String::from(bridge_host);
+                let bridge_request_url = bridge_url.as_str();
+
+                let response = client.get(bridge_request_url).send().await.ok()?;
+                let raw = response.bytes().await.ok()?;
+                // Try to deserialize the raw bytes into a string
+                let metrics_pub_key: String = match serde_json::from_slice(&raw) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        error!("Failed to deserialize response: {:?}", error);
+                        return None;
+                    }
+                };
+                let metrics_bytes = match Base64::decode(&metrics_pub_key) {
+                    Ok(pubkey_bytes) => pubkey_bytes,
+                    Err(error) => {
+                        error!(
+                            "unable to decode public key for bridge node {:?} error: {error}",
+                            bridge_name
+                        );
+                        return None;
+                    }
+                };
+                match Ed25519PublicKey::from_bytes(&metrics_bytes) {
+                    Ok(metrics_key) => {
+                        debug!(
+                            "adding metrics key {:?} for sui address {:?}",
+                            metrics_key, bridge_request_url
+                        );
+                        Some((
+                            metrics_key.clone(),
+                            AllowedPeer {
+                                public_key: metrics_key.clone(),
+                                name: bridge_name,
+                            },
+                        ))
+                    }
+                    Err(error) => {
+                        error!(
+                            "unable to decode public key for bridge node {:?} error: {error}",
+                            bridge_request_url
+                        );
+                        None
+                    }
+                }
+            }
+        })
+        .collect()
+        .await;
+
+    results
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,15 +453,11 @@ mod tests {
     #[test]
     fn depend_on_sui_sui_system_state_summary() {
         let CertKeyPair(_, client_pub_key) = generate_self_cert("sui".into());
-        let p2p_address: Multiaddr = "/ip4/127.0.0.1/tcp/10000"
-            .parse()
-            .expect("expected a multiaddr value");
         // all fields here just satisfy the field types, with exception to active_validators, we use
         // some of those.
         let depends_on = SuiSystemStateSummary {
             active_validators: vec![SuiValidatorSummary {
                 network_pubkey_bytes: Vec::from(client_pub_key.as_bytes()),
-                p2p_address: format!("{p2p_address}"),
                 primary_address: "empty".into(),
                 worker_address: "empty".into(),
                 ..Default::default()

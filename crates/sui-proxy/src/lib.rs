@@ -42,7 +42,6 @@ mod tests {
     use axum::http::StatusCode;
     use axum::routing::post;
     use axum::Router;
-    use multiaddr::Multiaddr;
     use prometheus::Encoder;
     use prometheus::PROTOBUF_FORMAT;
     use protobuf::RepeatedField;
