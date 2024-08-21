@@ -78,12 +78,10 @@ pub(crate) const STEP_BASE_COST: u128 = 1;
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 
 pub(crate) const PER_GRAPH_ITEM_COST: u128 = 4;
-pub(crate) const PER_GRAPH_ITEM_COST_GROWTH: f32 = 1.2;
 
 pub(crate) const RELEASE_ITEM_COST: u128 = 3;
-pub(crate) const RELEASE_ITEM_COST_GROWTH: f32 = 1.3;
 
-pub(crate) const ADD_BORROW_COST: u128 = 2;
+pub(crate) const ADD_BORROW_COST: u128 = 3;
 
 /// AbstractState is the analysis state over which abstract interpretation is performed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -903,19 +901,17 @@ impl AbstractDomain for AbstractState {
 }
 
 fn charge_graph_size(size: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-    meter.add_items_with_growth(
-        Scope::Function,
-        PER_GRAPH_ITEM_COST,
-        size,
-        PER_GRAPH_ITEM_COST_GROWTH,
-    )
+    meter.add_items(Scope::Function, PER_GRAPH_ITEM_COST, scale(size))
 }
 
 fn charge_release(released: usize, meter: &mut (impl Meter + ?Sized)) -> PartialVMResult<()> {
-    meter.add_items_with_growth(
-        Scope::Function,
-        RELEASE_ITEM_COST,
-        released,
-        RELEASE_ITEM_COST_GROWTH,
-    )
+    meter.add_items(Scope::Function, RELEASE_ITEM_COST, scale(released))
+}
+
+fn scale(x: usize) -> usize {
+    if x == 0 {
+        return 0;
+    }
+
+    x.saturating_add((x / 3).saturating_mul(x))
 }

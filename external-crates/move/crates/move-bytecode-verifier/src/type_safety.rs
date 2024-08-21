@@ -30,8 +30,8 @@ struct Locals<'a> {
     locals: &'a Signature,
 }
 
-const TYPE_NODE_COST: u128 = 2;
-const TYPE_PUSH_COST: u128 = 1;
+const TYPE_NODE_COST: u128 = 6;
+const TYPE_PUSH_COST: u128 = 3;
 
 impl<'a> Locals<'a> {
     fn new(parameters: &'a Signature, locals: &'a Signature) -> Self {
