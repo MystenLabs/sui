@@ -5,7 +5,7 @@
 //! This module defines the transfer functions for verifying type safety of a procedure body.
 //! It does not utilize control flow, but does check each block independently
 
-use std::{cell::RefCell, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_abstract_stack::AbstractStack;
@@ -56,7 +56,7 @@ impl<'a> Locals<'a> {
 struct TypeSafetyChecker<'env, 'a> {
     module: &'env CompiledModule,
     function_context: &'a FunctionContext<'env>,
-    ability_cache: RefCell<&'a mut AbilityCache<'env>>,
+    ability_cache: &'a mut AbilityCache<'env>,
     locals: Locals<'env>,
     stack: AbstractStack<SignatureToken>,
 }
@@ -71,7 +71,7 @@ impl<'env, 'a> TypeSafetyChecker<'env, 'a> {
         Self {
             module,
             function_context,
-            ability_cache: RefCell::new(ability_cache),
+            ability_cache,
             locals,
             stack: AbstractStack::new(),
         }
@@ -82,11 +82,11 @@ impl<'env, 'a> TypeSafetyChecker<'env, 'a> {
     }
 
     fn abilities(
-        &self,
+        &mut self,
         meter: &mut (impl Meter + ?Sized),
         t: &SignatureToken,
     ) -> PartialVMResult<AbilitySet> {
-        self.ability_cache.borrow_mut().abilities(
+        self.ability_cache.abilities(
             Scope::Function,
             meter,
             self.function_context.type_parameters(),

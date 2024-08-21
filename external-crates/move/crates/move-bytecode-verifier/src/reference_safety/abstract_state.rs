@@ -230,13 +230,16 @@ impl AbstractState {
         variant_tag: VariantTag,
         field_index: MemberCount,
         child_id: RefID,
-    ) {
+        meter: &mut (impl Meter + ?Sized),
+    ) -> PartialVMResult<()> {
+        meter.add(Scope::Function, ADD_BORROW_COST)?;
         self.borrow_graph.add_strong_field_borrow(
             (),
             parent,
             Label::VariantField(enum_def_idx, variant_tag, field_index),
             child_id,
-        )
+        );
+        Ok(())
     }
 
     /// removes `id` from borrow graph
@@ -607,7 +610,8 @@ impl AbstractState {
                     variant_tag,
                     i as MemberCount,
                     field_borrow_id,
-                );
+                    meter,
+                )?;
                 Ok(AbstractValue::Reference(field_borrow_id))
             })
             .collect::<PartialVMResult<_>>()?;

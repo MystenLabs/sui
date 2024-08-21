@@ -7133,7 +7133,6 @@ dependencies = [
 name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.2.6",
  "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
