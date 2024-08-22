@@ -168,8 +168,7 @@ impl Address {
         scan_limit: Option<u64>,
     ) -> Result<ScanConnection<String, TransactionBlock>> {
         use AddressTransactionBlockRelationship as R;
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?
-            .with_scan_limit(scan_limit);
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(match relation {
             // Relationship defaults to "signer" if none is supplied.

@@ -42,8 +42,6 @@ pub(crate) struct Page<C> {
     /// Maximum number of entries in the page.
     limit: u64,
 
-    scan_limit: Option<u64>,
-
     /// In case there are more than `limit` entries in the range described by `(after, before)`,
     /// this field states whether the entries up to limit are taken fron the `Front` or `Back` of
     /// that range.
@@ -103,9 +101,9 @@ pub(crate) trait Target<C: CursorType> {
     fn cursor(&self, checkpoint_viewed_at: u64) -> C;
 }
 
-/// Interface for dealing with cursors that may come from a `scan_limit`-ed query.
+/// Interface for dealing with cursors that may come from a scan-limit-ed query.
 pub(crate) trait ScanLimited: Clone + PartialEq {
-    /// Whether the cursor was derived from a `scan_limit`. Only applicable to the `startCursor` and
+    /// Whether the cursor was derived from a scan limit. Only applicable to the `startCursor` and
     /// `endCursor` returned from a Connection's `PageInfo`, and indicates that the cursor may not
     /// have a corresponding node in the result set.
     fn is_scan_limited(&self) -> bool {
@@ -159,7 +157,6 @@ impl<C> Page<C> {
                 before,
                 limit: limit.unwrap_or(limits.default_page_size as u64),
                 end: End::Front,
-                scan_limit: None,
             },
 
             (None, after, Some(limit), before) => Page {
@@ -167,7 +164,6 @@ impl<C> Page<C> {
                 before,
                 limit,
                 end: End::Back,
-                scan_limit: None,
             },
         };
 
@@ -185,14 +181,7 @@ impl<C> Page<C> {
             before: None,
             limit,
             end: End::Front,
-            scan_limit: None,
         }
-    }
-
-    /// Builds a Page with optional scan limit.
-    pub(crate) fn with_scan_limit(mut self, scan_limit: Option<u64>) -> Self {
-        self.scan_limit = scan_limit;
-        self
     }
 
     pub(crate) fn after(&self) -> Option<&C> {
@@ -393,7 +382,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// Given the results of a database query, determine whether the result set has a previous and
     /// next page and is consistent with the provided cursors. Slightly different logic applies
     /// depending on whether the provided cursors stem from either tip of the response, or if they
-    /// were derived from a `scan_limit`.
+    /// were derived from a scan limit.
     ///
     /// Returns two booleans indicating whether there is a previous or next page in the range,
     /// followed by an iterator of values in the page, fetched from the database. The values
@@ -418,7 +407,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
                 }
 
                 // Page drawn from the front, and the cursor for the first element does not match
-                // `after`. If that cursor is not from a `scan_limit`, then it must have appeared in
+                // `after`. If that cursor is not from a scan limit, then it must have appeared in
                 // the previous page, and should also be at the tip of the current page. This
                 // absence implies the bound was invalid, so we return an empty result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a && !a.is_scan_limited() => {
@@ -656,7 +645,6 @@ mod tests {
                 after: None,
                 before: None,
                 limit: 20,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -675,7 +663,6 @@ mod tests {
                 ),
                 before: None,
                 limit: 20,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -694,7 +681,6 @@ mod tests {
                 ),
                 before: None,
                 limit: 10,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -713,7 +699,6 @@ mod tests {
                     42,
                 ),
                 limit: 20,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -732,7 +717,6 @@ mod tests {
                     42,
                 ),
                 limit: 10,
-                scan_limit: None,
                 end: Back,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -759,7 +743,6 @@ mod tests {
                     42,
                 ),
                 limit: 10,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -786,7 +769,6 @@ mod tests {
                     42,
                 ),
                 limit: 10,
-                scan_limit: None,
                 end: Back,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));
@@ -813,7 +795,6 @@ mod tests {
                     42,
                 ),
                 limit: 20,
-                scan_limit: None,
                 end: Front,
             }"#]];
         expect.assert_eq(&format!("{page:#?}"));

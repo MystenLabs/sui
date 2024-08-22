@@ -138,15 +138,6 @@ impl TxBounds {
             (0, hi as u64)
         };
 
-        let test = Self {
-            tx_lo,
-            tx_hi,
-            cursor_lo_exclusive: page.after().map(|a| a.tx_sequence_number),
-            cursor_hi: page.before().map(|b| b.tx_sequence_number),
-            scan_limit,
-            end: page.end(),
-        };
-
         // If the cursors point outside checkpoint bounds, we can return early.
         if matches!(page.after(), Some(a) if tx_hi <= a.tx_sequence_number.saturating_add(1)) {
             return Ok(None);
