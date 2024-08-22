@@ -8,8 +8,8 @@
 
 mod abstract_state;
 
-use crate::locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST};
-use abstract_state::{AbstractState, LocalState};
+use crate::ability_cache::AbilityCache;
+use abstract_state::{AbstractState, LocalState, RET_COST, STEP_BASE_COST};
 use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
@@ -22,9 +22,10 @@ use move_core_types::vm_status::StatusCode;
 pub(crate) fn verify<'a>(
     module: &CompiledModule,
     function_context: &'a FunctionContext<'a>,
+    ability_cache: &mut AbilityCache,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(module, function_context)?;
+    let initial_state = AbstractState::new(module, function_context, ability_cache, meter)?;
     LocalsSafetyAnalysis().analyze_function(initial_state, function_context, meter)
 }
 
@@ -70,7 +71,7 @@ fn execute_inner(
 
         Bytecode::Ret => {
             let local_states = state.local_states();
-            meter.add_items(Scope::Function, RET_PER_LOCAL_COST, local_states.len())?;
+            meter.add_items(Scope::Function, RET_COST, local_states.len())?;
             let all_local_abilities = state.all_local_abilities();
             assert!(local_states.len() == all_local_abilities.len());
             for (local_state, local_abilities) in local_states.iter().zip(all_local_abilities) {

@@ -7,7 +7,8 @@ use move_binary_format::file_format::{
     Bytecode::*, CompiledModule, SignatureToken::*, Visibility::Public, *,
 };
 use move_bytecode_verifier::{
-    verify_module_unmetered, verify_module_with_config_for_test, SignatureChecker,
+    ability_cache::AbilityCache, verify_module_unmetered, verify_module_with_config_for_test,
+    SignatureChecker,
 };
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
@@ -20,7 +21,8 @@ fn test_reference_of_reference() {
     m.signatures[0] = Signature(vec![Reference(Box::new(Reference(Box::new(
         SignatureToken::Bool,
     ))))]);
-    let errors = SignatureChecker::verify_module(&m);
+    let ability_cache = &mut AbilityCache::new(&m);
+    let errors = SignatureChecker::verify_module(&m, ability_cache, &mut DummyMeter);
     assert!(errors.is_err());
 }
 
