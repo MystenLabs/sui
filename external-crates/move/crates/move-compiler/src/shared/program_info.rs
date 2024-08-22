@@ -219,6 +219,21 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
             _ => panic!("ICE should have failed in naming"),
         }
     }
+
+    pub fn datatype_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        match self.datatype_kind(m, n) {
+            DatatypeKind::Struct => self.struct_declared_loc_(m, &n.0.value),
+            DatatypeKind::Enum => self.enum_declared_loc_(m, &n.0.value),
+        }
+    }
+
+    pub fn datatype_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        match self.datatype_kind(m, n) {
+            DatatypeKind::Struct => self.struct_declared_abilities(m, n),
+            DatatypeKind::Enum => self.enum_declared_abilities(m, n),
+        }
+    }
+
     pub fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
         self.struct_definition_opt(m, n)
             .expect("ICE should have failed in naming")

@@ -868,8 +868,8 @@ fn entry_return(
                 let (declared_loc_opt, declared_abilities) = match tn_ {
                     TypeName_::Multiple(_) => (None, AbilitySet::collection(*tloc)),
                     TypeName_::ModuleType(m, n) => (
-                        Some(context.info.struct_declared_loc(m, n)),
-                        context.info.struct_declared_abilities(m, n).clone(),
+                        Some(context.info.datatype_declared_loc(m, n)),
+                        context.info.datatype_declared_abilities(m, n).clone(),
                     ),
                     TypeName_::Builtin(b) => (None, b.value.declared_abilities(b.loc)),
                 };
@@ -1064,7 +1064,7 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
             let store_loc = if let Some((first_ty_module, first_ty_name)) = &first_ty_tn {
                 let abilities = context
                     .info
-                    .struct_declared_abilities(first_ty_module, first_ty_name);
+                    .datatype_declared_abilities(first_ty_module, first_ty_name);
                 abilities.ability_loc_(Ability_::Store).unwrap()
             } else {
                 first_ty
