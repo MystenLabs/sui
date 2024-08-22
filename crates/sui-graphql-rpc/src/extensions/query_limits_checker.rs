@@ -17,7 +17,7 @@ use async_graphql_value::{ConstValue, Value};
 use async_trait::async_trait;
 use axum::http::HeaderName;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -71,8 +71,10 @@ fn check_mutation_dry_run(
         return Err(graphql_error(
             code::BAD_USER_INPUT,
             format!(
-                "The query payload size is too large. The maximum transaction related payload allowed is {} bytes, and the maximum read query payload allowed is {} bytes",
-                 max_tx_payload_size, max_query_payload_size
+                "The query payload size is too large. The maximum transaction related payload \
+                (which is txBytes and signatures) allowed is {} bytes, and the maximum read query \
+                (without txBytes and signatures) payload allowed is {} bytes",
+                max_tx_payload_size, max_query_payload_size
             ),
         ));
     }
@@ -80,24 +82,27 @@ fn check_mutation_dry_run(
     // Keep track of the remaining mutation/dry run bytes budget
     // SAFETY max_tx_payload_size is u32, so it's safe to convert to u64
     let mut available_budget: u64 = max_tx_payload_size;
-    // Keep track of the variables that have been seen so far so that we don't double count
-    let mut seen_vars = HashSet::<String>::new();
+    // Keep track of the variables and their length
+    let mut variables_length = HashMap::<String, u64>::new();
 
+    // traversing each dryRun or executeTxBlcok node in the query against the tx payload size
     for (_name, op) in doc.operations.iter() {
-        traverse_items(
+        traverse_and_check_tx_payload(
             variables,
             max_tx_payload_size,
             &mut available_budget,
-            &mut seen_vars,
+            &mut variables_length,
             &op.node.selection_set.node.items,
             &doc.fragments,
         )?;
     }
+    // the tx payload is within max allowed, now check if the read part of the query is ok.
 
+    let vars_length = variables_length.values().sum::<u64>();
     // Check if the total payload size (a.k.a the content-length header) minus the values of
-    // the txBytes and sigs fields is less than the `max_query_payload_size`. This verifies
+    // the txBytes and sigs variables is less than the `max_query_payload_size`. This verifies
     // that the "read" part of the query is within the set limits.
-    if (payload_size - max_tx_payload_size - available_budget) > max_query_payload_size {
+    if (payload_size - vars_length) > max_query_payload_size {
         log_metric(
             ctx,
             "The read part of the query payload is too large.",
@@ -113,19 +118,15 @@ fn check_mutation_dry_run(
         ));
     }
 
-    /// Traverse the items of the query and check if the txBytes and signatures are within the max
-    /// allowed limits, and if the available tx budget is not exhausted.
+    /// Traverse the items of the query and check if the available tx budget is not exhausted.
     ///
-    /// It matches each item in the selection set and then calls check_dry_run on dry run nodes or
-    /// check_execute_tx_block to check executeTransactionBlock nodes to do the actual checks.
-    /// For fragment spreads, it recursively calls itself to traverse the fragment's selection set.
-    /// That is, when a fragment is reused, we need to ensure that it is included in the check
-    /// every single time it is referenced in the query.
-    fn traverse_items(
+    /// The value of the txBytes and signatures fields are subtracted from the available budget for
+    /// each node that is either a dryRun (which has only txBytes) or executeTransactionBlock node.
+    fn traverse_and_check_tx_payload(
         variables: &Variables,
         max_tx_payload_size: u64,
         available_budget: &mut u64,
-        seen_vars: &mut HashSet<String>,
+        variables_length: &mut HashMap<String, u64>,
         items: &[Positioned<Selection>],
         fragments: &HashMap<Name, Positioned<FragmentDefinition>>,
     ) -> ServerResult<()> {
@@ -138,7 +139,7 @@ fn check_mutation_dry_run(
                             check_node(
                                 arg,
                                 available_budget,
-                                seen_vars,
+                                variables_length,
                                 variables,
                                 max_tx_payload_size,
                             )?;
@@ -154,21 +155,21 @@ fn check_mutation_dry_run(
                             fs.pos,
                         )
                     })?;
-                    traverse_items(
+                    traverse_and_check_tx_payload(
                         variables,
                         max_tx_payload_size,
                         available_budget,
-                        seen_vars,
+                        variables_length,
                         &def.node.selection_set.node.items,
                         fragments,
                     )?;
                 }
                 Selection::InlineFragment(f) => {
-                    traverse_items(
+                    traverse_and_check_tx_payload(
                         variables,
                         max_tx_payload_size,
                         available_budget,
-                        seen_vars,
+                        variables_length,
                         &f.node.selection_set.node.items,
                         fragments,
                     )?;
@@ -181,27 +182,36 @@ fn check_mutation_dry_run(
     fn check_node(
         node: &(Positioned<Name>, Positioned<Value>),
         available_budget: &mut u64,
-        seen_vars: &mut HashSet<String>,
+        variables_length: &mut HashMap<String, u64>,
         variables: &Variables,
         max_tx_payload_size: u64,
     ) -> ServerResult<()> {
         let node_name = node.0.node.to_string();
-        if is_variable(&node.1.node) {
-            if seen_vars.contains(&node_name) {
-                return Ok(());
+        let node_len = if is_variable(&node.1.node) {
+            if let Some(v) = variables_length.get(&node_name) {
+                *v
+            } else {
+                let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
+                    graphql_error_at_pos(
+                        code::INTERNAL_SERVER_ERROR,
+                        format!("Error getting size of variable: {}", node_name),
+                        node.1.pos,
+                    )
+                })?;
+                variables_length.insert(node_name.clone(), node_len);
+                node_len
             }
-
-            seen_vars.insert(node_name.clone());
+        } else {
+            get_value_str_len(&node.1.node, variables).map_err(|_| {
+                graphql_error_at_pos(
+                    code::INTERNAL_SERVER_ERROR,
+                    format!("Error getting size of variable: {}", node_name),
+                    node.1.pos,
+                )
+            })?
         };
-        let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
-            graphql_error_at_pos(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Error getting size of variable: {}", node_name),
-                node.1.pos,
-            )
-        })?;
 
-        if node_len > *available_budget {
+        if node_len >= *available_budget {
             return Err(graphql_error_at_pos(
                 code::BAD_USER_INPUT,
                 format!(
