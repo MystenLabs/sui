@@ -80,7 +80,7 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
 
 #[async_trait]
 impl IndexerProgressStore for PgBridgePersistent {
-    async fn load_progress(&self, task_name: String) -> anyhow::Result<u64> {
+    async fn load_progress(&self, task_name: &str) -> anyhow::Result<u64> {
         let mut conn = self.pool.get()?;
         let cp: Option<models::ProgressStore> = dsl::progress_store
             .find(&task_name)
@@ -132,14 +132,14 @@ impl IndexerProgressStore for PgBridgePersistent {
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        task_name: &str,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get()?;
         diesel::insert_into(schema::progress_store::table)
             .values(models::ProgressStore {
-                task_name,
+                task_name: task_name.to_string(),
                 checkpoint: checkpoint as i64,
                 target_checkpoint: target_checkpoint as i64,
                 // Timestamp is defaulted to current time in DB if None
@@ -159,6 +159,14 @@ impl IndexerProgressStore for PgBridgePersistent {
                 columns::timestamp.eq(now),
                 columns::completed.eq(task.completed),
             ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    async fn complete_task(&mut self, task_name: &str) -> Result<(), Error> {
+        let mut conn = self.pool.get()?;
+        diesel::update(dsl::progress_store.filter(columns::task_name.eq(task_name)))
+            .set(columns::completed.eq(true))
             .execute(&mut conn)?;
         Ok(())
     }
