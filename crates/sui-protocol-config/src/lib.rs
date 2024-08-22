@@ -2736,16 +2736,13 @@ impl ProtocolConfig {
         }
     }
 
-    pub fn meter_config(&self) -> MeterConfig {
+    /// MeterConfig for metering packages during signing. It is NOT stable between binaries and
+    /// cannot used during execution.
+    pub fn meter_config_for_signing(&self) -> MeterConfig {
         MeterConfig {
-            max_per_fun_meter_units: Some(self.max_verifier_meter_ticks_per_function() as u128),
-            max_per_mod_meter_units: Some(self.max_meter_ticks_per_module() as u128),
-            max_per_pkg_meter_units: Some(
-                // Until the per-package limit was introduced, the per-module limit played double
-                // duty.
-                self.max_meter_ticks_per_package_as_option()
-                    .unwrap_or_else(|| self.max_meter_ticks_per_module()) as u128,
-            ),
+            max_per_fun_meter_units: Some(2_200_000),
+            max_per_mod_meter_units: Some(2_200_000),
+            max_per_pkg_meter_units: Some(2_200_000),
         }
     }
 
