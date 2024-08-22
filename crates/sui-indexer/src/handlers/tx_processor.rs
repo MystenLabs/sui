@@ -30,7 +30,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
-
 use crate::types::IndexedPackage;
 use crate::types::{IndexedObjectChange, IndexerResult};
 
@@ -289,9 +288,8 @@ pub(crate) struct EpochEndIndexingObjectStore<'a> {
 
 impl<'a> EpochEndIndexingObjectStore<'a> {
     pub fn new(data: &'a CheckpointData) -> Self {
-        // We only care about output objects for end-of-epoch indexing
         Self {
-            objects: data.output_objects(),
+            objects: data.latest_live_output_objects(),
         }
     }
 }
