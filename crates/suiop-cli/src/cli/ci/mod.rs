@@ -20,7 +20,7 @@ pub struct CIArgs {
 pub(crate) enum CIAction {
     #[clap(aliases = ["k", "key"])]
     Keys(KeyArgs),
-    #[clap(aliases = ["i", "image"])]
+    #[clap(aliases = ["i"])]
     Image(ImageArgs),
 }
 
