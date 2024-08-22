@@ -1003,10 +1003,13 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        let expect = expect![
+
+        let expected = vec![
             "Maximum allowed transaction payload size exceeded. Maximum allowed is 10 bytes."
+                .to_string(),
         ];
-        expect.assert_eq(&format!("{:#?}", err));
+        assert_eq!(expected, err);
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -1066,6 +1069,7 @@ mod tests {
             .await
             .unwrap();
         assert!(res.errors().is_empty());
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -1130,10 +1134,12 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        let expect = expect![
-            "The read part of the query payload is too large. The maximum allowed is 50 bytes"
+        let expected = vec![
+            "The read part of the query payload is too large. The maximum allowed is 50 bytes."
+                .to_string(),
         ];
-        expect.assert_eq(&format!("{:#?}", err));
+        assert_eq!(expected, err);
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -1224,10 +1230,12 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-        let expect = expect![
-            "The read part of the query payload is too large. The maximum allowed is 100 bytes"
+        let expect = vec![
+            "The read part of the query payload is too large. The maximum allowed is 100 bytes."
+                .to_string(),
         ];
-        expect.assert_eq(&format!("{:#?}", err));
+        assert_eq!(err, expect);
+        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -1318,11 +1326,11 @@ mod tests {
             .iter()
             .map(|e| e.message.to_string())
             .collect();
-
-        let expect = expect![
+        let expected = vec![
             "Maximum allowed transaction payload size exceeded. Maximum allowed is 50 bytes."
+                .to_string(),
         ];
-        expect.assert_eq(&format!("{:#?}", err));
+        assert_eq!(err, expected);
         cluster.cleanup_resources().await
     }
 }

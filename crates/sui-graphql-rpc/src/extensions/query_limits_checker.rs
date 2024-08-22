@@ -73,7 +73,7 @@ fn check_mutation_dry_run(
             format!(
                 "The query payload size is too large. The maximum transaction related payload \
                 (which is txBytes and signatures) allowed is {} bytes, and the maximum read query \
-                (without txBytes and signatures) payload allowed is {} bytes",
+                (without txBytes and signatures) payload allowed is {} bytes.",
                 max_tx_payload_size, max_query_payload_size
             ),
         ));
@@ -112,7 +112,7 @@ fn check_mutation_dry_run(
             code::BAD_USER_INPUT,
             format!(
                 "The read part of the query payload is too large. The maximum allowed is {} \
-                    bytes",
+                    bytes.",
                 max_query_payload_size
             ),
         ));
