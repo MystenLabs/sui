@@ -92,6 +92,10 @@ pub struct Limits {
     pub max_type_nodes: u32,
     /// Maximum deph of a move value.
     pub max_move_value_depth: u32,
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+    pub max_transaction_ids: u32,
+    /// Maximum number of candidates to scan when gathering a page of results.
+    pub max_scan_limit: u32,
 }
 
 #[GraphQLConfig]
@@ -282,6 +286,16 @@ impl ServiceConfig {
     async fn max_move_value_depth(&self) -> u32 {
         self.limits.max_move_value_depth
     }
+
+    /// Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+    async fn max_transaction_ids(&self) -> u32 {
+        self.limits.max_transaction_ids
+    }
+
+    /// Maximum number of candidates to scan when gathering a page of results.
+    async fn max_scan_limit(&self) -> u32 {
+        self.limits.max_scan_limit
+    }
 }
 
 impl TxExecFullNodeConfig {
@@ -452,6 +466,10 @@ impl Default for Limits {
             max_type_nodes: 256,
             // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1988>
             max_move_value_depth: 128,
+            // Filter-specific limits, such as the number of transaction ids that can be specified
+            // for the `TransactionBlockFilter`.
+            max_transaction_ids: 1000,
+            max_scan_limit: 100_000_000,
         }
     }
 }
@@ -514,6 +532,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 11
+                max-scan-limit = 50
             "#,
         )
         .unwrap();
@@ -533,6 +553,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                max_transaction_ids: 11,
+                max_scan_limit: 50,
             },
             ..Default::default()
         };
@@ -596,6 +618,8 @@ mod tests {
                 max-type-argument-width = 64
                 max-type-nodes = 128
                 max-move-value-depth = 256
+                max-transaction-ids = 42
+                max-scan-limit = 420
 
                 [experiments]
                 test-flag = true
@@ -618,6 +642,8 @@ mod tests {
                 max_type_argument_width: 64,
                 max_type_nodes: 128,
                 max_move_value_depth: 256,
+                max_transaction_ids: 42,
+                max_scan_limit: 420,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

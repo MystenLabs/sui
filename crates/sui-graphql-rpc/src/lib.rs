@@ -4,6 +4,7 @@
 pub use sui_graphql_rpc_client as client;
 pub mod commands;
 pub mod config;
+pub(crate) mod connection;
 pub(crate) mod consistency;
 pub mod context_data;
 pub(crate) mod data;
