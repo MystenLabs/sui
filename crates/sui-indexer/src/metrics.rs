@@ -130,7 +130,6 @@ pub struct IndexerMetrics {
     pub epoch_db_commit_latency: Histogram,
     // latencies of slow DB update queries, now only advance epoch and objects_snapshot update
     pub advance_epoch_latency: Histogram,
-    pub update_object_snapshot_latency: Histogram,
     // latencies of RPC endpoints in read.rs
     pub get_transaction_block_latency: Histogram,
     pub multi_get_transaction_blocks_latency: Histogram,
@@ -566,12 +565,6 @@ impl IndexerMetrics {
             advance_epoch_latency: register_histogram_with_registry!(
                 "advance_epoch_latency",
                 "Time spent in advancing epoch",
-                DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            ).unwrap(),
-            update_object_snapshot_latency: register_histogram_with_registry!(
-                "update_object_snapshot_latency",
-                "Time spent in updating object snapshot",
                 DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),

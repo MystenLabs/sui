@@ -96,38 +96,6 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
 const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 
-// with rn = 1, we only select the latest version of each object,
-// so that we don't have to update the same object multiple times.
-const UPDATE_OBJECTS_SNAPSHOT_QUERY: &str = r"
-INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
-SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
-FROM (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
-    FROM objects_history
-    WHERE checkpoint_sequence_number >= $1 AND checkpoint_sequence_number < $2
-) as subquery
-WHERE rn = 1
-ON CONFLICT (object_id) DO UPDATE
-SET object_version = EXCLUDED.object_version,
-    object_status = EXCLUDED.object_status,
-    object_digest = EXCLUDED.object_digest,
-    checkpoint_sequence_number = EXCLUDED.checkpoint_sequence_number,
-    owner_type = EXCLUDED.owner_type,
-    owner_id = EXCLUDED.owner_id,
-    object_type = EXCLUDED.object_type,
-    object_type_package = EXCLUDED.object_type_package,
-    object_type_module = EXCLUDED.object_type_module,
-    object_type_name = EXCLUDED.object_type_name,
-    serialized_object = EXCLUDED.serialized_object,
-    coin_type = EXCLUDED.coin_type,
-    coin_balance = EXCLUDED.coin_balance,
-    df_kind = EXCLUDED.df_kind,
-    df_name = EXCLUDED.df_name,
-    df_object_type = EXCLUDED.df_object_type,
-    df_object_id = EXCLUDED.df_object_id;
-";
-
 #[derive(Clone)]
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
@@ -617,34 +585,6 @@ impl PgIndexerStore {
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
         })
-    }
-
-    fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
-        let work_mem_gb = std::env::var("INDEXER_PG_WORK_MEM")
-            .unwrap_or_else(|_e| "16".to_string())
-            .parse::<i64>()
-            .unwrap();
-        let pg_work_mem_query_string = format!("SET work_mem = '{}GB'", work_mem_gb);
-        let pg_work_mem_query = pg_work_mem_query_string.as_str();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| { RunQueryDsl::execute(diesel::sql_query(pg_work_mem_query), conn,) },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )?;
-
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                RunQueryDsl::execute(
-                    diesel::sql_query(UPDATE_OBJECTS_SNAPSHOT_QUERY)
-                        .bind::<diesel::sql_types::BigInt, _>(start_cp as i64)
-                        .bind::<diesel::sql_types::BigInt, _>(end_cp as i64),
-                    conn,
-                )
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )?;
-        Ok(())
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
@@ -1764,7 +1704,7 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
-    async fn backfill_objects_snapshot(
+    async fn persist_objects_snapshot(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError> {
@@ -1856,37 +1796,6 @@ impl IndexerStore for PgIndexerStore {
             })?;
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} objects history", len);
-        Ok(())
-    }
-
-    async fn update_objects_snapshot(
-        &self,
-        start_cp: u64,
-        end_cp: u64,
-    ) -> Result<(), IndexerError> {
-        let skip_snapshot = std::env::var("SKIP_OBJECT_SNAPSHOT")
-            .map(|val| val.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
-        if skip_snapshot {
-            info!("skipping object snapshot");
-            return Ok(());
-        }
-
-        let guard = self.metrics.update_object_snapshot_latency.start_timer();
-
-        self.spawn_blocking_task(move |this| this.update_objects_snapshot(start_cp, end_cp))
-            .await
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed to update objects snapshot: {:?}",
-                    e
-                ))
-            })??;
-        let elapsed = guard.stop_and_record();
-        info!(
-            elapsed,
-            "Persisted snapshot for checkpoints from {} to {}", start_cp, end_cp
-        );
         Ok(())
     }
 
