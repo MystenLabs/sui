@@ -22,21 +22,27 @@ use sui_indexer::schema::checkpoints;
 /// outermost bounds are determined by the checkpoint filters. These get translated into bounds in
 /// terms of transaction sequence numbers:
 ///
+/// ```no_run
 ///     tx_lo                                                             tx_hi
 ///     [-----------------------------------------------------------------)
+/// ```
 ///
 /// If cursors are provided, they further restrict the range of transactions to scan. Cursors are
 /// exclusive, but when issuing database queries, we treat them inclusively so that we can detect
 /// previous and next pages based on the existence of cursors in the results:
 ///
+/// ```no_run
 ///             cursor_lo                                  cursor_hi_inclusive
 ///             [------------------------------------------]
+/// ```
 ///
 /// Finally, the scan limit restricts the number of transactions to scan. The scan limit can be
 /// applied to either the front (forward pagination) or the back (backward pagination):
 ///
+/// ```no_run
 ///             [-----scan-limit-----)---------------------|  end = Front
 ///             |---------------------[-----scan-limit------) end = Back
+/// ```
 ///
 /// This data structure can be used to compute the interval of transactions to look in for
 /// candidates to include in a page of results. It can also determine whether the scanning has been
