@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
@@ -41,6 +41,7 @@ pub struct MysticetiManager {
     metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
+    boot_counter: Mutex<u64>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -69,6 +70,7 @@ impl MysticetiManager {
             authority: ArcSwapOption::empty(),
             client,
             consensus_handler: Mutex::new(None),
+            boot_counter: Mutex::new(0),
         }
     }
 
@@ -124,9 +126,15 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_config = config
             .consensus_config()
             .expect("consensus_config should exist");
-        let parameters = Parameters {
+
+        let mut parameters = Parameters {
             db_path: self.get_store_path(epoch),
             ..consensus_config.parameters.clone().unwrap_or_default()
+        };
+
+        // Disable the automated last known block sync for mainnet for now
+        if epoch_store.get_chain_identifier().chain() == sui_protocol_config::Chain::Mainnet {
+            parameters.sync_last_known_own_block_timeout = Duration::ZERO;
         };
 
         let own_protocol_key = self.protocol_keypair.public();
@@ -149,6 +157,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
+        let boot_counter = *self.boot_counter.lock().await;
         let authority = ConsensusAuthority::start(
             network_type,
             own_index,
@@ -160,9 +169,14 @@ impl ConsensusManagerTrait for MysticetiManager {
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),
+            boot_counter,
         )
         .await;
         let client = authority.transaction_client();
+
+        // Now increment the boot counter
+        let mut boot_counter = self.boot_counter.lock().await;
+        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 

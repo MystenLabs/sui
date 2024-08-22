@@ -100,6 +100,7 @@ impl Core {
         signals: CoreSignals,
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
+        sync_last_known_own_block: bool,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context
@@ -133,7 +134,7 @@ impl Core {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
         }
 
-        let min_propose_round = if context.parameters.is_sync_last_proposed_block_enabled() {
+        let min_propose_round = if sync_last_known_own_block {
             None
         } else {
             // if the sync is disabled then we practically don't want to impose any restriction.
@@ -305,16 +306,9 @@ impl Core {
     /// `> last_known_proposed_round`. At the moment is allowed to call the method only once leading to a panic
     /// if attempt to do multiple times.
     pub(crate) fn set_last_known_proposed_round(&mut self, round: Round) {
-        assert!(
-            self.context
-                .parameters
-                .is_sync_last_proposed_block_enabled(),
-            "Should not attempt to set the last known proposed round if that has been already set"
-        );
-        assert!(
-            self.last_known_proposed_round.is_none(),
-            "Attempted to set the last known proposed round more than once"
-        );
+        if self.last_known_proposed_round.is_some() {
+            panic!("Should not attempt to set the last known proposed round if that has been already set");
+        }
         self.last_known_proposed_round = Some(round);
         info!("Set last known proposed round to {round}");
     }
@@ -894,6 +888,7 @@ impl CoreTextFixture {
             signals,
             block_signer,
             dag_state,
+            false,
         );
 
         Self {
@@ -999,6 +994,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            false,
         );
 
         // New round should be 5
@@ -1116,6 +1112,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            false,
         );
 
         // New round should be 4
@@ -1203,6 +1200,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            false,
         );
 
         // Send some transactions
@@ -1312,6 +1310,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            false,
         );
 
         let mut expected_ancestors = BTreeSet::new();
@@ -1358,7 +1357,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context.with_parameters(Parameters {
-            sync_last_proposed_block_timeout: Duration::from_millis(2_000),
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
         }));
 
@@ -1400,6 +1399,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            true,
         );
 
         // No new block should have been produced
@@ -1587,6 +1587,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            false,
         );
 
         // No proposal during recovery.
