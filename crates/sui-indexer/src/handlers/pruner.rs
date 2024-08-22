@@ -41,24 +41,16 @@ where
     }
 
     pub async fn start(&self, cancel: CancellationToken) -> IndexerResult<()> {
-        loop {
-            if cancel.is_cancelled() {
-                info!("Pruner task cancelled.");
-                return Ok(());
-            }
-
-            let (mut min_epoch, mut max_epoch) = self.store.get_available_epoch_range().await?;
-            while min_epoch + self.epochs_to_keep > max_epoch {
-                if cancel.is_cancelled() {
-                    info!("Pruner task cancelled.");
-                    return Ok(());
-                }
+        let mut last_seen_max_epoch = 0;
+        while !cancel.is_cancelled() {
+            let (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
+            if max_epoch == last_seen_max_epoch {
                 tokio::time::sleep(Duration::from_secs(5)).await;
-                (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
+                continue;
             }
+            last_seen_max_epoch = max_epoch;
 
             let table_partitions = self.partition_manager.get_table_partitions()?;
-            let table_names = table_partitions.keys().cloned().collect::<Vec<_>>();
             for (table_name, (min_partition, max_partition)) in table_partitions {
                 if max_epoch != max_partition {
                     error!(
@@ -66,9 +58,16 @@ where
                         table_name, max_epoch, max_partition
                     );
                 }
-                // drop partitions if pruning is enabled afterwards, where all epochs before min_epoch
-                // would have been pruned already if the pruner was running.
-                for epoch in min_partition..min_epoch {
+                let epochs_to_keep = if table_name == "objects_history" {
+                    2
+                } else {
+                    self.epochs_to_keep
+                };
+                for epoch in min_partition..max_epoch.saturating_sub(epochs_to_keep - 1) {
+                    if cancel.is_cancelled() {
+                        info!("Pruner task cancelled.");
+                        return Ok(());
+                    }
                     self.partition_manager
                         .drop_table_partition(table_name.clone(), epoch)?;
                     info!(
@@ -84,11 +83,6 @@ where
                     return Ok(());
                 }
                 info!("Pruning epoch {}", epoch);
-                for table_name in table_names.clone() {
-                    self.partition_manager
-                        .drop_table_partition(table_name.clone(), epoch)?;
-                    info!("Dropped table partition {} epoch {}", table_name, epoch);
-                }
                 self.store.prune_epoch(epoch).await.unwrap_or_else(|e| {
                     error!("Failed to prune epoch {}: {}", epoch, e);
                 });
@@ -96,5 +90,7 @@ where
                 info!("Pruned epoch {}", epoch);
             }
         }
+        info!("Pruner task cancelled.");
+        Ok(())
     }
 }
