@@ -73,8 +73,8 @@ pub struct Parameters {
     /// Time to wait during node start up until the node has synced the last proposed block via the
     /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
     /// used for amnesia recovery.
-    #[serde(default = "Parameters::default_sync_last_proposed_block_timeout")]
-    pub sync_last_proposed_block_timeout: Duration,
+    #[serde(default = "Parameters::default_sync_last_known_own_block_timeout")]
+    pub sync_last_known_own_block_timeout: Duration,
 }
 
 impl Parameters {
@@ -134,12 +134,14 @@ impl Parameters {
         80
     }
 
-    pub(crate) fn default_sync_last_proposed_block_timeout() -> Duration {
-        Duration::ZERO
-    }
-
-    pub fn is_sync_last_proposed_block_enabled(&self) -> bool {
-        !self.sync_last_proposed_block_timeout.is_zero()
+    pub(crate) fn default_sync_last_known_own_block_timeout() -> Duration {
+        if cfg!(msim) {
+            Duration::from_millis(500)
+        } else {
+            // Here we prioritise liveness over the complete de-risking of block equivocation. 5 seconds
+            // in the majority of cases should be good enough for this given a healthy network.
+            Duration::from_secs(5)
+        }
     }
 }
 
@@ -152,8 +154,8 @@ impl Default for Parameters {
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
-            sync_last_proposed_block_timeout: Parameters::default_sync_last_proposed_block_timeout(
-            ),
+            sync_last_known_own_block_timeout:
+                Parameters::default_sync_last_known_own_block_timeout(),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
