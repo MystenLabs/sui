@@ -88,6 +88,12 @@ gen_eth_events!(
 
 gen_eth_events!(EthBridgeVault, "abi/bridge_vault.json");
 
+abigen!(
+    EthERC20,
+    "abi/erc20.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
 impl EthBridgeEvent {
     pub fn try_into_bridge_action(
         self,
