@@ -34,8 +34,10 @@ async fn indexer_simple_backfill_task_test() {
     // the first one will be the live task and second one will be the backfill
     assert_eq!(10, tasks.first().unwrap().checkpoint);
     assert_eq!(i64::MAX as u64, tasks.first().unwrap().target_checkpoint);
+    assert!(!tasks.first().unwrap().completed);
     assert_eq!(4, tasks.last().unwrap().checkpoint);
     assert_eq!(4, tasks.last().unwrap().target_checkpoint);
+    assert!(tasks.last().unwrap().completed);
 
     // the data recorded in storage should be the same as the datasource
     let mut recorded_data = persistent.data.lock().await.clone();
@@ -64,14 +66,19 @@ async fn indexer_partitioned_backfill_task_test() {
     // the first one will be the live task and rest will be the backfills
     assert_eq!(50, tasks.first().unwrap().checkpoint);
     assert_eq!(i64::MAX as u64, tasks.first().unwrap().target_checkpoint);
+    assert!(!tasks.first().unwrap().completed);
     assert_eq!(34, tasks.get(1).unwrap().checkpoint);
     assert_eq!(34, tasks.get(1).unwrap().target_checkpoint);
+    assert!(tasks.get(1).unwrap().completed);
     assert_eq!(29, tasks.get(2).unwrap().checkpoint);
     assert_eq!(29, tasks.get(2).unwrap().target_checkpoint);
+    assert!(tasks.get(2).unwrap().completed);
     assert_eq!(19, tasks.get(3).unwrap().checkpoint);
     assert_eq!(19, tasks.get(3).unwrap().target_checkpoint);
+    assert!(tasks.get(3).unwrap().completed);
     assert_eq!(9, tasks.get(4).unwrap().checkpoint);
     assert_eq!(9, tasks.get(4).unwrap().target_checkpoint);
+    assert!(tasks.get(4).unwrap().completed);
     // the data recorded in storage should be the same as the datasource
     let mut recorded_data = persistent.data.lock().await.clone();
     recorded_data.sort();
@@ -95,6 +102,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test() {
             checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            completed: false,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
@@ -131,6 +139,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
             checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            completed: false,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
@@ -171,6 +180,7 @@ async fn resume_test() {
             checkpoint: 10,
             target_checkpoint: 30,
             timestamp: 0,
+            completed: false,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)

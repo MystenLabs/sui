@@ -106,6 +106,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 target_checkpoint: i64::MAX,
                 // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
+                completed: false,
             })
             .on_conflict(dsl::task_name)
             .do_update()
@@ -143,6 +144,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 target_checkpoint: target_checkpoint as i64,
                 // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
+                completed: false,
             })
             .execute(&mut conn)?;
         Ok(())
@@ -155,6 +157,7 @@ impl IndexerProgressStore for PgBridgePersistent {
                 columns::checkpoint.eq(task.checkpoint as i64),
                 columns::target_checkpoint.eq(task.target_checkpoint as i64),
                 columns::timestamp.eq(now),
+                columns::completed.eq(task.completed),
             ))
             .execute(&mut conn)?;
         Ok(())

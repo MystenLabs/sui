@@ -158,7 +158,7 @@ impl<P, D, M> Indexer<P, D, M> {
                 None => {
                     self.storage
                         .register_task(
-                            format!("{} - Live", self.name),
+                            &format!("{} - Live", self.name),
                             from_checkpoint,
                             i64::MAX as u64,
                         )
@@ -207,7 +207,7 @@ impl<P, D, M> Indexer<P, D, M> {
             BackfillStrategy::Simple => {
                 self.storage
                     .register_task(
-                        format!("{} - backfill - {from_cp}:{to_cp}", self.name),
+                        &format!("{} - backfill - {from_cp}:{to_cp}", self.name),
                         from_cp,
                         to_cp,
                     )
@@ -218,7 +218,7 @@ impl<P, D, M> Indexer<P, D, M> {
                     let target_cp = min(from_cp + task_size - 1, to_cp);
                     self.storage
                         .register_task(
-                            format!("{} - backfill - {from_cp}:{target_cp}", self.name),
+                            &format!("{} - backfill - {from_cp}:{target_cp}", self.name),
                             from_cp,
                             target_cp,
                         )
@@ -239,7 +239,7 @@ pub trait Persistent<T>: IndexerProgressStore + Sync + Send + Clone {
 
 #[async_trait]
 pub trait IndexerProgressStore: Send {
-    async fn load_progress(&self, task_name: String) -> anyhow::Result<u64>;
+    async fn load_progress(&self, task_name: &str) -> anyhow::Result<u64>;
     async fn save_progress(
         &mut self,
         task_name: String,
@@ -250,12 +250,13 @@ pub trait IndexerProgressStore: Send {
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        task_name: &str,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), anyhow::Error>;
 
     async fn update_task(&mut self, task: Task) -> Result<(), Error>;
+    async fn complete_task(&mut self, task_name: &str) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -284,6 +285,7 @@ pub trait Datasource<T: Send>: Sync + Send {
             .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
             .await?;
 
+        let mut last_block = 0;
         while let Some((block_number, data)) = data_channel.recv().await {
             if block_number > target_checkpoint {
                 break;
@@ -299,6 +301,10 @@ pub trait Datasource<T: Send>: Sync + Send {
             storage
                 .save_progress(task_name.clone(), block_number)
                 .await?;
+            last_block = block_number;
+        }
+        if last_block == target_checkpoint {
+            storage.complete_task(&task_name).await?;
         }
         join_handle.abort();
         join_handle.await?

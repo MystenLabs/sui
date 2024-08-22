@@ -64,12 +64,12 @@ impl<T> InMemoryPersistent<T> {
 
 #[async_trait]
 impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
-    async fn load_progress(&self, task_name: String) -> anyhow::Result<u64> {
+    async fn load_progress(&self, task_name: &str) -> anyhow::Result<u64> {
         Ok(self
             .progress_store
             .lock()
             .await
-            .get(&task_name)
+            .get(task_name)
             .unwrap()
             .checkpoint)
     }
@@ -103,17 +103,18 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        task_name: &str,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), Error> {
         let existing = self.progress_store.lock().await.insert(
-            task_name.clone(),
+            task_name.to_string(),
             Task {
-                task_name: task_name.clone(),
+                task_name: task_name.to_string(),
                 checkpoint,
                 target_checkpoint,
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
+                completed: false,
             },
         );
         if existing.is_some() {
@@ -127,6 +128,16 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             .lock()
             .await
             .insert(task.task_name.clone(), task);
+        Ok(())
+    }
+
+    async fn complete_task(&mut self, task_name: &str) -> Result<(), Error> {
+        self.progress_store
+            .lock()
+            .await
+            .get_mut(task_name)
+            .unwrap()
+            .completed = true;
         Ok(())
     }
 }

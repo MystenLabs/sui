@@ -17,6 +17,7 @@ pub struct ProgressStore {
     pub checkpoint: i64,
     pub target_checkpoint: i64,
     pub timestamp: Option<PgTimestamp>,
+    pub completed: bool,
 }
 
 impl From<ProgressStore> for Task {
@@ -27,6 +28,7 @@ impl From<ProgressStore> for Task {
             target_checkpoint: value.target_checkpoint as u64,
             // Ok to unwrap, timestamp is defaulted to now() in database
             timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
+            completed: value.completed,
         }
     }
 }
