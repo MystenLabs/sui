@@ -73,18 +73,17 @@ impl ReputationScores {
 /// multiple commits.
 /// These subdags are "scoring" for the purposes of leader schedule change. As
 /// new subdags are added, the DAG is traversed and votes for leaders are recorded
-/// and scored along with stake. On a leader schedule change, finalize reputation
+/// and scored along with stake. On a leader schedule change, finalized reputation
 /// scores will be calculated based on the votes & stake collected in this struct.
 pub(crate) struct ScoringSubdag {
     pub(crate) context: Arc<Context>,
     pub(crate) commit_range: Option<CommitRange>,
     // Only includes committed leaders for now.
-    // TODO(arun): Include skipped leaders as well
+    // TODO: Include skipped leaders as well
     pub(crate) leaders: HashSet<BlockRef>,
     // A map of votes to the stake of strongly linked blocks that include that vote
     // Note: Inlcuding stake aggregator so that we can quickly check if it exceeds
-    // quourum threshold and only include those scores. If we decide to include
-    // all stake from blocks certifying votes then we can replace this with Stake.
+    // quourum threshold and only include those scores for certain scoring strategies.
     pub(crate) votes: BTreeMap<BlockRef, StakeAggregator<QuorumThreshold>>,
 }
 
@@ -98,10 +97,7 @@ impl ScoringSubdag {
         }
     }
 
-    pub(crate) fn add_unscored_committed_subdags(
-        &mut self,
-        committed_subdags: Vec<CommittedSubDag>,
-    ) {
+    pub(crate) fn add_subdags(&mut self, committed_subdags: Vec<CommittedSubDag>) {
         let _s = self
             .context
             .metrics
@@ -118,7 +114,7 @@ impl ScoringSubdag {
                 ));
             } else {
                 let commit_range = self.commit_range.as_mut().unwrap();
-                commit_range.extend(subdag.commit_ref.index);
+                commit_range.extend_to(subdag.commit_ref.index);
             }
 
             // Add the committed leader to the list of leaders we will be scoring.
@@ -153,9 +149,9 @@ impl ScoringSubdag {
 
                     if let Some(stake) = self.votes.get_mut(ancestor) {
                         // Vote is strongly linked to a future block, so we
-                        // consider this a certified vote.
+                        // consider this a distributed vote.
                         tracing::trace!(
-                            "Found a certified vote {ancestor} from authority {}",
+                            "Found a distributed vote {ancestor} from authority {}",
                             ancestor.author
                         );
                         stake.add(block.author(), &self.context.committee);
@@ -179,22 +175,14 @@ impl ScoringSubdag {
         let scores_per_authority = if self
             .context
             .protocol_config
-            .consensus_certified_vote_scoring_strategy()
+            .consensus_distributed_vote_scoring_strategy()
         {
-            if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
-                if scoring_strategy == "certified_vote_v3" {
-                    self.score_certified_votes_v3()
-                } else {
-                    self.score_certified_votes_v2()
-                }
-            } else {
-                self.score_certified_votes_v2()
-            }
+            self.score_distributed_votes()
         } else {
             self.score_votes()
         };
 
-        // TODO(arun): Normalize scores
+        // TODO: Normalize scores
         ReputationScores::new(
             self.commit_range
                 .clone()
@@ -220,11 +208,11 @@ impl ScoringSubdag {
         scores_per_authority
     }
 
-    /// This scoring strategy is like `CertifiedVoteScoringStrategyV1` but instead of
-    /// only giving one point for each vote that is included in 2f+1 blocks. We
-    /// give a score equal to the amount of stake of all blocks that included
-    /// the vote.
-    fn score_certified_votes_v2(&self) -> Vec<u64> {
+    /// This scoring strategy aims to give scores based on overall vote distribution.
+    /// Instead of only giving one point for each vote that is included in 2f+1
+    /// blocks. We give a score equal to the amount of stake of all blocks that
+    /// included the vote.
+    fn score_distributed_votes(&self) -> Vec<u64> {
         let num_authorities = self.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -241,9 +229,11 @@ impl ScoringSubdag {
     }
 
     /// This scoring strategy gives points equal to the amount of stake in blocks
-    /// that include the authority's vote, if the amount of total_stake > 2f+1
-    // TODO(arun): Remove after running experiments
-    fn score_certified_votes_v3(&self) -> Vec<u64> {
+    /// that include the authority's vote, if that amount of total_stake > 2f+1.
+    /// We consider this a certified vote.
+    // TODO: This will be used for ancestor selection
+    #[allow(unused)]
+    fn score_certified_votes(&self) -> Vec<u64> {
         let num_authorities = self.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
 
@@ -261,7 +251,7 @@ impl ScoringSubdag {
         scores_per_authority
     }
 
-    pub(crate) fn scored_committed_subdags_count(&self) -> usize {
+    pub(crate) fn scored_subdags_count(&self) -> usize {
         if let Some(commit_range) = &self.commit_range {
             commit_range.size()
         } else {
@@ -377,7 +367,7 @@ mod tests {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
+            scoring_subdag.add_subdags(vec![subdag]);
         }
 
         let scores = scoring_subdag.calculate_scores();
@@ -391,7 +381,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_certified_vote_scoring_strategy_for_testing(false);
+            .set_consensus_distributed_vote_scoring_strategy_for_testing(false);
         let context = Arc::new(context);
 
         // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
@@ -427,7 +417,7 @@ mod tests {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
+            scoring_subdag.add_subdags(vec![subdag]);
         }
 
         let scores = scoring_subdag.calculate_scores();
@@ -436,9 +426,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_certified_vote_v3_scoring_subdag() {
-        std::env::set_var("CONSENSUS_SCORING_STRATEGY", "certified_vote_v3");
-
+    async fn test_certified_vote_scoring_subdag() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -475,11 +463,11 @@ mod tests {
                 last_committed_rounds[block.author().value()] =
                     max(block.round(), last_committed_rounds[block.author().value()]);
             }
-            scoring_subdag.add_unscored_committed_subdags(vec![subdag]);
+            scoring_subdag.add_subdags(vec![subdag]);
         }
 
-        let scores = scoring_subdag.calculate_scores();
-        assert_eq!(scores.scores_per_authority, vec![4, 4, 4, 4]);
-        assert_eq!(scores.commit_range, (1..=4).into());
+        let scores_per_authority = scoring_subdag.score_certified_votes();
+        assert_eq!(scores_per_authority, vec![4, 4, 4, 4]);
+        assert_eq!(scoring_subdag.commit_range.unwrap(), (1..=4).into());
     }
 }

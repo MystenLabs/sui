@@ -65,6 +65,7 @@ feature_flags:
   passkey_auth: true
   authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
+  consensus_distributed_vote_scoring_strategy: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

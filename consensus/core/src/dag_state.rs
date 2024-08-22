@@ -145,7 +145,7 @@ impl DagState {
             unscored_committed_subdags.len()
         );
 
-        scoring_subdag.add_unscored_committed_subdags(unscored_committed_subdags);
+        scoring_subdag.add_subdags(unscored_committed_subdags);
 
         let mut state = Self {
             context,
@@ -1469,9 +1469,7 @@ mod test {
         );
         // Unscored subdags will be recoverd based on the flushed commits and no commit info
         assert_eq!(
-            dag_state.read_scoring_subdag(
-                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
-            ),
+            dag_state.read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count()),
             5
         );
     }

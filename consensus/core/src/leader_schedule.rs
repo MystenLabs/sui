@@ -65,7 +65,7 @@ impl LeaderSchedule {
 
         tracing::info!(
             "LeaderSchedule recovered using {leader_swap_table:?}. There are {} committed subdags scored in DagState.",
-            dag_state.read().read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_committed_subdags_count()),
+            dag_state.read().read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count()),
         );
 
         // create the schedule
@@ -78,7 +78,7 @@ impl LeaderSchedule {
     ) -> usize {
         let scored_committed_subdags_count = dag_state
             .read()
-            .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_committed_subdags_count())
+            .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
             as u64;
         assert!(
             scored_committed_subdags_count <= self.num_commits_per_schedule,
@@ -604,9 +604,9 @@ mod tests {
         // Leader Scoring & Schedule Change is disabled, unscored subdags should not be accumulated.
         assert_eq!(
             0,
-            dag_state.read().read_scoring_subdag(
-                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
-            )
+            dag_state
+                .read()
+                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
         );
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
@@ -689,9 +689,9 @@ mod tests {
         );
         assert_eq!(
             1,
-            dag_state.read().read_scoring_subdag(
-                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
-            )
+            dag_state
+                .read()
+                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
         );
         let recovered_scores = dag_state
             .read()
@@ -739,9 +739,9 @@ mod tests {
         );
         assert_eq!(
             0,
-            dag_state.read().read_scoring_subdag(
-                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
-            )
+            dag_state
+                .read()
+                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
         );
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
@@ -814,9 +814,9 @@ mod tests {
         );
         assert_eq!(
             expected_scored_subdags.len(),
-            dag_state.read().read_scoring_subdag(
-                |scoring_subdag| scoring_subdag.scored_committed_subdags_count()
-            )
+            dag_state
+                .read()
+                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
         );
         let recovered_scores = dag_state
             .read()
@@ -849,9 +849,9 @@ mod tests {
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
         )];
-        dag_state.write().update_scoring_subdag(|scoring_subdag| {
-            scoring_subdag.add_unscored_committed_subdags(unscored_subdags)
-        });
+        dag_state
+            .write()
+            .update_scoring_subdag(|scoring_subdag| scoring_subdag.add_subdags(unscored_subdags));
 
         let commits_until_leader_schedule_update =
             leader_schedule.commits_until_leader_schedule_update(dag_state.clone());
@@ -950,9 +950,8 @@ mod tests {
 
         let mut dag_state_write = dag_state.write();
         dag_state_write.set_last_commit(last_commit);
-        dag_state_write.update_scoring_subdag(|scoring_subdag| {
-            scoring_subdag.add_unscored_committed_subdags(unscored_subdags)
-        });
+        dag_state_write
+            .update_scoring_subdag(|scoring_subdag| scoring_subdag.add_subdags(unscored_subdags));
         drop(dag_state_write);
 
         assert_eq!(
