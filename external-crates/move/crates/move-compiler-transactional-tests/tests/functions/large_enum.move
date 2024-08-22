@@ -29,8 +29,8 @@ entry fun x3(): X3 {
     X3::U64(0)
 }
 
-
 }
 
+//# run 0x42::m::x1
 
 //# run 0x42::m::x3

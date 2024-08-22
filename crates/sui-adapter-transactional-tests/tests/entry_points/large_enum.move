@@ -9,23 +9,23 @@
 
 module test::m {
 
-public enum X1 {
-    Big(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8),
+public enum X1 has drop  {
+    Big1(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8),
 }
 
-public enum X2 {
+public enum X2 has drop  {
     V1(X1, X1, X1),
     V2(X1, X1, X1),
     V3(X1, X1, X1),
 }
 
-public enum X3 {
+public enum X3 has drop {
     X2(X2, X2, X2),
     U64(u64),
 }
 
 entry fun x1(): X1 {
-    X1::Big(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    X1::Big1(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
 }
 
 entry fun x3(): X3 {
@@ -34,6 +34,8 @@ entry fun x3(): X3 {
 
 }
 
-
 //# programmable --sender A
 //> test::m::x1()
+
+//# programmable --sender A
+//> test::m::x3()
