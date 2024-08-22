@@ -49,8 +49,8 @@ use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
-    IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
-    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
+    IndexedObject, IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -199,6 +199,7 @@ where
                     0, //first_checkpoint_id
                     None,
                 ),
+                network_total_transactions: 0,
             }));
         }
 
@@ -225,7 +226,12 @@ where
         let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
 
         // Now we just entered epoch X, we want to calculate the diff between
-        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2)
+        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2). Note that on
+        // the indexer's chain-reading side, this is not guaranteed to have the latest data. Rather
+        // than impose a wait on the reading side, however, we overwrite this on the persisting
+        // side, where we can guarantee that the previous epoch's checkpoints have been written to
+        // db.
+
         let network_tx_count_prev_epoch = match system_state.epoch {
             // If first epoch change, this number is 0
             1 => Ok(0),
@@ -249,6 +255,7 @@ where
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
                 Some(&event),
             ),
+            network_total_transactions: checkpoint_summary.network_total_transactions,
         }))
     }
 
@@ -271,20 +278,21 @@ where
         let object_history_changes: TransactionObjectChangesToCommit =
             Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
-        let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
+        let (checkpoint, db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
             } = data;
 
-            let (db_transactions, db_events, db_indices, db_displays) = Self::index_transactions(
-                transactions,
-                &checkpoint_summary,
-                &checkpoint_contents,
-                &metrics,
-            )
-            .await?;
+            let (db_transactions, db_events, db_tx_indices, db_event_indices, db_displays) =
+                Self::index_transactions(
+                    transactions,
+                    &checkpoint_summary,
+                    &checkpoint_contents,
+                    &metrics,
+                )
+                .await?;
 
             let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
             (
@@ -295,7 +303,8 @@ where
                 ),
                 db_transactions,
                 db_events,
-                db_indices,
+                db_tx_indices,
+                db_event_indices,
                 db_displays,
             )
         };
@@ -308,7 +317,8 @@ where
             checkpoint,
             transactions: db_transactions,
             events: db_events,
-            tx_indices: db_indices,
+            tx_indices: db_tx_indices,
+            event_indices: db_event_indices,
             display_updates: db_displays,
             object_changes,
             object_history_changes,
@@ -326,6 +336,7 @@ where
         Vec<IndexedTransaction>,
         Vec<IndexedEvent>,
         Vec<TxIndex>,
+        Vec<EventIndex>,
         BTreeMap<String, StoredDisplay>,
     )> {
         let checkpoint_seq = checkpoint_summary.sequence_number();
@@ -346,7 +357,8 @@ where
         let mut db_transactions = Vec::new();
         let mut db_events = Vec::new();
         let mut db_displays = BTreeMap::new();
-        let mut db_indices = Vec::new();
+        let mut db_tx_indices = Vec::new();
+        let mut db_event_indices = Vec::new();
 
         for tx in transactions {
             let CheckpointTransaction {
@@ -364,6 +376,7 @@ where
                     checkpoint_seq, tx_digest, sender_signed_data.digest()
                 )));
             }
+
             let tx = sender_signed_data.transaction_data();
             let events = events
                 .as_ref()
@@ -386,6 +399,12 @@ where
                     checkpoint_summary.timestamp_ms,
                 )
             }));
+
+            db_event_indices.extend(
+                events.iter().enumerate().map(|(idx, event)| {
+                    EventIndex::from_event(tx_sequence_number, idx as u64, event)
+                }),
+            );
 
             db_displays.extend(
                 events
@@ -414,7 +433,7 @@ where
                 object_changes,
                 balance_change,
                 events,
-                transaction_kind,
+                transaction_kind: transaction_kind.clone(),
                 successful_tx_num: if fx.status().is_ok() {
                     tx.kind().tx_count() as u64
                 } else {
@@ -442,8 +461,8 @@ where
             // Payers
             let payers = vec![tx.gas_owner()];
 
-            // Senders
-            let senders = vec![tx.sender()];
+            // Sender
+            let sender = tx.sender();
 
             // Recipients
             let recipients = fx
@@ -463,19 +482,26 @@ where
                 .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
                 .collect();
 
-            db_indices.push(TxIndex {
+            db_tx_indices.push(TxIndex {
                 tx_sequence_number,
                 transaction_digest: tx_digest,
                 checkpoint_sequence_number: *checkpoint_seq,
                 input_objects,
                 changed_objects,
-                senders,
+                sender,
                 payers,
                 recipients,
                 move_calls,
+                tx_kind: transaction_kind,
             });
         }
-        Ok((db_transactions, db_events, db_indices, db_displays))
+        Ok((
+            db_transactions,
+            db_events,
+            db_tx_indices,
+            db_event_indices,
+            db_displays,
+        ))
     }
 
     async fn index_objects(
