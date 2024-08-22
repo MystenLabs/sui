@@ -319,6 +319,18 @@ pub trait CFGIRVisitorContext {
     }
 }
 
+impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: CFGIRVisitorConstructor> CFGIRVisitor for V {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+        self.visit(env, program)
+    }
+}
+
 //**************************************************************************************************
 // simple absint visitor
 //**************************************************************************************************

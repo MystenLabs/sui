@@ -4,8 +4,8 @@
 use move_symbol_pool::Symbol;
 
 use crate::{
-    command_line::compiler::Visitor, diagnostics::codes::WarningFilter,
-    linters::constant_naming::ConstantNamingVisitor, typing::visitor::TypingVisitor,
+    cfgir::visitor::CFGIRVisitor, command_line::compiler::Visitor,
+    diagnostics::codes::WarningFilter, typing::visitor::TypingVisitor,
 };
 pub mod constant_naming;
 pub mod meaningless_math_operation;
@@ -38,7 +38,7 @@ pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
 pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
 pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true";
 pub const WHILE_TRUE_TO_LOOP_DIAG_CODE: u8 = 4;
-pub const MEANINGLESS_MATH_FILTER_NAME: &str = "meaningless_math_operation";
+pub const MEANINGLESS_MATH_FILTER_NAME: &str = "unnecessary_math";
 pub const MEANINGLESS_MATH_DIAG_CODE: u8 = 8;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
@@ -72,13 +72,9 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
         LintLevel::None | LintLevel::Default => vec![],
         LintLevel::All => {
             vec![
-                constant_naming::ConstantNamingVisitor::visitor(ConstantNamingVisitor),
-                unnecessary_while_loop::WhileTrueToLoop::visitor(
-                    unnecessary_while_loop::WhileTrueToLoop,
-                ),
-                meaningless_math_operation::MeaninglessMathOperation::visitor(
-                    meaningless_math_operation::MeaninglessMathOperation,
-                ),
+                constant_naming::ConstantNamingVisitor.visitor(),
+                unnecessary_while_loop::WhileTrueToLoop.visitor(),
+                meaningless_math_operation::MeaninglessMathOperation.visitor(),
             ]
         }
     }

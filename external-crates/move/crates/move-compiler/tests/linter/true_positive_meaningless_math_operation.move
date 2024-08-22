@@ -1,25 +1,60 @@
 module 0x42::M {
-    public fun multiply_by_zero(x: u64): u64 {
-        x * 0 // Should trigger the linter
+    public fun unchanged(x: u64) {
+        x * 1;
+        1 * x;
+        x / 1;
+        x + 0;
+        0 + x;
+        x - 0;
+        x << 0;
+        x << 0;
     }
 
-    public fun left_shift_by_zero(x: u64): u64 {
-        x << 0 // Should trigger the linter
+    public fun always_zero(x: u64) {
+        x * 0;
+        0 * x;
+        0 / x;
+        0 % x;
+        x % 1;
     }
 
-    public fun right_shift_by_zero(x: u64): u64 {
-        x >> 0 // Should trigger the linter
+    public fun always_one(x: u64) {
+        1 % x;
     }
 
-    public fun multiply_by_one(x: u64): u64 {
-        x * 1 // Should trigger the linter
+    public fun ast_fold(x: u64) {
+        let y = 1;
+        x * y;
+        x - (1 - 1);
     }
 
-    public fun add_zero(x: u64): u64 {
-        x + 0 // Should trigger the linter
+    public fun t_u8(x: u8) {
+        x * 1;
+        x * 0;
+        1 % x;
     }
 
-    public fun subtract_zero(x: u64): u64 {
-        x - 0 // Should trigger the linter
+    public fun t_u16(x: u16) {
+        x * 1;
+        x * 0;
+        1 % x;
+    }
+
+    public fun t_u32(x: u32) {
+        x * 1;
+        x * 0;
+        1 % x;
+    }
+
+    public fun t_u128(x: u128) {
+        x * 1;
+        x * 0;
+        1 % x;
+    }
+
+    public fun t_u256(x: u256) {
+        x * 1;
+        x * 0;
+        1 % x;
     }
 }
