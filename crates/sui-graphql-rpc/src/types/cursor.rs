@@ -52,7 +52,7 @@ pub(crate) struct Page<C> {
 
 /// Whether the page is extracted from the beginning or the end of the range bounded by the cursors.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-enum End {
+pub(crate) enum End {
     Front,
     Back,
 }
@@ -209,6 +209,10 @@ impl<C> Page<C> {
 
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
+    }
+
+    pub(crate) fn end(&self) -> End {
+        self.end
     }
 }
 

@@ -358,7 +358,7 @@ impl TransactionBlock {
                         move || {
                             tx::transactions
                                 .filter(tx::tx_sequence_number.ge(tx_bounds.scan_lo() as i64))
-                                .filter(tx::tx_sequence_number.le(tx_bounds.scan_hi() as i64))
+                                .filter(tx::tx_sequence_number.lt(tx_bounds.scan_hi() as i64))
                                 .into_boxed()
                         },
                     )?;
@@ -552,7 +552,7 @@ fn apply_forward_scan_limited_pagination(
     conn.start_cursor = Some(
         Cursor::new(cursor::TransactionBlockCursor {
             checkpoint_viewed_at,
-            tx_sequence_number: tx_bounds.inclusive_scan_lo(),
+            tx_sequence_number: tx_bounds.scan_start_cursor(),
             is_scan_limited: true,
         })
         .encode_cursor(),
@@ -566,7 +566,7 @@ fn apply_forward_scan_limited_pagination(
         conn.end_cursor = Some(
             Cursor::new(cursor::TransactionBlockCursor {
                 checkpoint_viewed_at,
-                tx_sequence_number: tx_bounds.inclusive_scan_hi(),
+                tx_sequence_number: tx_bounds.scan_end_cursor(),
                 is_scan_limited: true,
             })
             .encode_cursor(),
@@ -588,7 +588,7 @@ fn apply_backward_scan_limited_pagination(
     conn.end_cursor = Some(
         Cursor::new(cursor::TransactionBlockCursor {
             checkpoint_viewed_at,
-            tx_sequence_number: tx_bounds.inclusive_scan_hi(),
+            tx_sequence_number: tx_bounds.scan_end_cursor(),
             is_scan_limited: true,
         })
         .encode_cursor(),
@@ -602,7 +602,7 @@ fn apply_backward_scan_limited_pagination(
         conn.start_cursor = Some(
             Cursor::new(cursor::TransactionBlockCursor {
                 checkpoint_viewed_at,
-                tx_sequence_number: tx_bounds.inclusive_scan_lo(),
+                tx_sequence_number: tx_bounds.scan_start_cursor(),
                 is_scan_limited: true,
             })
             .encode_cursor(),

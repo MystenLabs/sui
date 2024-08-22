@@ -7,57 +7,70 @@ use crate::{
     filter, inner_join, query,
     raw_query::RawQuery,
     types::{
-        cursor::Page,
+        cursor::{End, Page},
         digest::Digest,
         sui_address::SuiAddress,
         transaction_block::TransactionBlockKindInput,
         type_filter::{FqNameFilter, ModuleFilter},
     },
 };
-use diesel::{
-    query_dsl::positional_order_dsl::PositionalOrderDsl, CombineDsl, ExpressionMethods,
-    NullableExpressionMethods, QueryDsl,
-};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use std::fmt::Write;
 use sui_indexer::schema::checkpoints;
 
+/// Bounds on transaction sequence number, imposed by filters, cursors, and the scan limit. The
+/// outermost bounds are determined by the checkpoint filters. These get translated into bounds in
+/// terms of transaction sequence numbers:
+///
+///     tx_lo                                                             tx_hi
+///     [-----------------------------------------------------------------)
+///
+/// If cursors are provided, they further restrict the range of transactions to scan. Cursors are
+/// exclusive, but when issuing database queries, we treat them inclusively so that we can detect
+/// previous and next pages based on the existence of cursors in the results:
+///
+///             cursor_lo                                  cursor_hi_inclusive
+///             [------------------------------------------]
+///
+/// Finally, the scan limit restricts the number of transactions to scan. The scan limit can be
+/// applied to either the front (forward pagination) or the back (backward pagination):
+///
+///             [-----scan-limit-----)---------------------|  end = Front
+///             |---------------------[-----scan-limit------) end = Back
+///
+/// This data structure can be used to compute the interval of transactions to look in for
+/// candidates to include in a page of results. It can also determine whether the scanning has been
+/// cut short on either side, implying that there is a previous or next page of values to scan.
+///
+/// NOTE: for consistency, assume that lowerbounds are inclusive and upperbounds are exclusive.
+/// Bounds that do not follow this convention will be annotated explicitly (e.g. `lo_exclusive` or
+/// `hi_inclusive`).
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
-    /// The inclusive lower bound tx_sequence_number corresponding to the first tx_sequence_number
-    /// of the lower checkpoint bound before applying `after` cursor and `scan_limit`.
-    pub lo: u64,
-    /// The inclusive upper bound tx_sequence_number corresponding to the last tx_sequence_number of
-    /// the upper checkpoint bound before applying `before` cursor and `scan_limit`.
-    pub hi: u64,
-    /// Exclusive starting cursor - the lower bound will snap to this value if it is larger than
-    /// `lo`.
-    pub after: Option<u64>,
-    /// Exclusive ending cursor - the upper bound will snap to this value if it is smaller than
-    /// `hi`.
-    pub before: Option<u64>,
-    pub scan_limit: Option<u64>,
-    pub is_from_front: bool,
+    /// The inclusive lower bound tx_sequence_number derived from checkpoint bounds. If checkpoint
+    /// bounds are not provided, this will default to `0`.
+    tx_lo: u64,
+
+    /// The exclusive upper bound tx_sequence_number derived from checkpoint bounds. If checkpoint
+    /// bounds are not provided, this will default to the total transaction count at the checkpoint
+    /// viewed.
+    tx_hi: u64,
+
+    /// The starting cursor (aka `after`).
+    cursor_lo_exclusive: Option<u64>,
+
+    // The ending cursor (aka `before`).
+    cursor_hi: Option<u64>,
+
+    /// The number of transactions to treat as candidates, defaults to all the transactions in the
+    /// range defined by the bounds above.
+    scan_limit: Option<u64>,
+
+    /// Which end of the range candidates will be scanned from.
+    end: End,
 }
 
 impl TxBounds {
-    fn new(
-        lo: u64,
-        hi: u64,
-        after: Option<u64>,
-        before: Option<u64>,
-        scan_limit: Option<u64>,
-        is_from_front: bool,
-    ) -> Self {
-        Self {
-            lo,
-            hi,
-            after,
-            before,
-            scan_limit,
-            is_from_front,
-        }
-    }
-
     /// Determines the `tx_sequence_number` range from the checkpoint bounds for a transaction block
     /// query. If no checkpoint range is specified, the default is between 0 and the
     /// `checkpoint_viewed_at`. The corresponding `tx_sequence_number` range is fetched from db, and
@@ -65,173 +78,168 @@ impl TxBounds {
     /// combinations, i.e. `after` cursor is greater than the upper bound, return None.
     pub(crate) fn query(
         conn: &mut Conn,
-        after_cp: Option<u64>,
-        at_cp: Option<u64>,
-        before_cp: Option<u64>,
+        cp_after: Option<u64>,
+        cp_at: Option<u64>,
+        cp_before: Option<u64>,
         checkpoint_viewed_at: u64,
         scan_limit: Option<u64>,
         page: &Page<Cursor>,
     ) -> Result<Option<Self>, diesel::result::Error> {
-        // If `after_cp` is given, increment it by 1 so we can uniformly select the lower bound
-        // checkpoint's `min_tx_sequence_number`. The range is inclusive of this value.
-        let lo_cp = max_option([after_cp.map(|x| x.saturating_add(1)), at_cp]).unwrap_or(0);
-        // Assumes that `before_cp` is greater than 0. In the `TransactionBlock::paginate` flow, we
-        // check if `before_cp` is 0, and if so, short-circuit and produce no results. Similarly, if
-        // `before_cp` is given, decrement by 1 so we can select the upper bound checkpoint's
-        // `max_tx_sequence_number` uniformly. The range is inclusive of this value.
-        let hi_cp = min_option([
-            before_cp.map(|x| x.saturating_sub(1)),
-            at_cp,
-            Some(checkpoint_viewed_at),
-        ])
-        .unwrap(); // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)`
+        // Lowerbound in terms of checkpoint sequence number. We want to get the total transaction
+        // count of the checkpoint before this one, or 0 if there is no previous checkpoint.
+        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap_or(0);
 
-        use checkpoints::dsl;
-
-        let from_db: Vec<(Option<i64>, Option<i64>)> = conn.results(move || {
-            // Construct a UNION ALL query ordered on `sequence_number` to get the tx ranges for the
-            // checkpoint range.
-            dsl::checkpoints
-                .select((
-                    dsl::sequence_number.nullable(),
-                    dsl::network_total_transactions.nullable(),
-                ))
-                .filter(dsl::sequence_number.eq(lo_cp.saturating_sub(1) as i64))
-                .union(
-                    dsl::checkpoints
-                        .select((
-                            dsl::sequence_number.nullable(),
-                            dsl::network_total_transactions.nullable() - 1,
-                        ))
-                        .filter(dsl::sequence_number.eq(hi_cp as i64)),
-                )
-                .positional_order_by(1) // order by checkpoint's sequence number, which is the first column
-        })?;
-
-        // Expect exactly two rows, returning early if not.
-        let [(Some(db_lo_cp), Some(lo)), (Some(db_hi_cp), Some(hi))] = from_db.as_slice() else {
-            return Ok(None);
+        let cp_before_inclusive = match cp_before {
+            // There are no results strictly before checkpoint 0.
+            Some(0) => return Ok(None),
+            Some(x) => Some(x - 1),
+            None => None,
         };
 
-        if *db_lo_cp as u64 != lo_cp.saturating_sub(1) || *db_hi_cp as u64 != hi_cp {
-            return Ok(None);
-        }
+        // Upperbound in terms of checkpoint sequence number. We want to get the total transaction
+        // count at the end of this checkpoint. If no upperbound is given, use
+        // `checkpoint_viewed_at`.
+        //
+        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)
+        let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
 
-        let lo = if lo_cp == 0 { 0 } else { *lo as u64 };
-        let hi = *hi as u64;
+        use checkpoints::dsl;
+        let (tx_lo, tx_hi) = if let Some(cp_prev) = cp_lo.checked_sub(1) {
+            let res: Vec<i64> = conn.results(move || {
+                dsl::checkpoints
+                    .select(dsl::network_total_transactions)
+                    .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
+                    .order_by(dsl::network_total_transactions.asc())
+            })?;
 
-        if page.after().is_some_and(|x| x.tx_sequence_number >= hi)
-            || page.before().is_some_and(|x| x.tx_sequence_number <= lo)
-        {
-            return Ok(None);
-        }
+            // If there are not two distinct results, it means that the transaction bounds are
+            // empty (lo and hi are the same), or it means that the one or other of the checkpoints
+            // doesn't exist, so we can return early.
+            let &[lo, hi] = res.as_slice() else {
+                return Ok(None);
+            };
 
-        Ok(Some(Self::new(
-            lo,
-            hi,
-            page.after().map(|x| x.tx_sequence_number),
-            page.before().map(|x| x.tx_sequence_number),
+            (lo as u64, hi as u64)
+        } else {
+            let res: Option<i64> = conn
+                .first(move || {
+                    dsl::checkpoints
+                        .select(dsl::network_total_transactions)
+                        .filter(dsl::sequence_number.eq(cp_hi as i64))
+                })
+                .optional()?;
+
+            // If there is no result, it means that the checkpoint doesn't exist, so we can return
+            // early.
+            let Some(hi) = res else {
+                return Ok(None);
+            };
+
+            (0, hi as u64)
+        };
+
+        let test = Self {
+            tx_lo,
+            tx_hi,
+            cursor_lo_exclusive: page.after().map(|a| a.tx_sequence_number),
+            cursor_hi: page.before().map(|b| b.tx_sequence_number),
             scan_limit,
-            page.is_from_front(),
-        )))
-    }
+            end: page.end(),
+        };
 
-    /// Returns the max of the current tx lower bound or the `after` tx cursor.
-    fn cursor_lo(&self) -> u64 {
-        max_option([self.after, Some(self.lo)]).unwrap()
-    }
-
-    /// Determines the lower bound for the scanning range. `exclude_cursor` determines whether to
-    /// include `after` cursor in this calculation. When paginating backwards, the lower bound is
-    /// the larger of either the lower bound or the `tx_sequence_number` some `scan_limit` distance
-    /// less than the upper bound. The latter is additionally added by 1 if `before` cursor is None
-    /// to avoid over-counting.
-    fn calculate_lo(&self, exclude_cursor: bool) -> u64 {
-        let cursor_lo = self.cursor_lo().saturating_add(exclude_cursor as u64);
-
-        if self.is_from_front {
-            cursor_lo
-        } else if let Some(scan_limit) = self.scan_limit {
-            cursor_lo.max(
-                self.cursor_hi()
-                    .saturating_sub(scan_limit)
-                    // We encounter an off-by-one error when the `before` cursor is not provided, so
-                    // we add 1 to counteract this
-                    .saturating_add(self.before.is_none() as u64),
-            )
-        } else {
-            cursor_lo
+        // If the cursors point outside checkpoint bounds, we can return early.
+        if matches!(page.after(), Some(a) if tx_hi <= a.tx_sequence_number.saturating_add(1)) {
+            return Ok(None);
         }
+
+        if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
+            return Ok(None);
+        }
+
+        Ok(Some(Self {
+            tx_lo,
+            tx_hi,
+            cursor_lo_exclusive: page.after().map(|a| a.tx_sequence_number),
+            cursor_hi: page.before().map(|b| b.tx_sequence_number),
+            scan_limit,
+            end: page.end(),
+        }))
     }
 
-    /// The lower bound `tx_sequence_number` of the range to scan within. This is inclusive of the
-    /// `after` cursor, which is needed for the db call, but should be excluded when determining the
-    /// first scanned transaction. When paginating forwards, this is the larger value between the
-    /// lower checkpoint's `tx_sequence_number` and the `after` cursor. If scanning backwards, then
-    /// the lower bound is the larger between the former and the `tx_sequence_number` some
-    /// `scan_limit` distance less than the upper bound.
+    /// Inclusive lowerbound for range of transactions to scan, accounting for the bounds from
+    /// filters and the cursor, but not scan limits. For the purposes of scanning records in the
+    /// DB, cursors are treated inclusively, even though they are exclusive bounds.
+    fn db_lo(&self) -> u64 {
+        max_option([self.cursor_lo_exclusive, Some(self.tx_lo)]).unwrap()
+    }
+
+    /// Exclusive upperbound for range of transactions to scan, accounting for the bounds from
+    /// filters and the cursor, but not scan limits. For the purposes of scanning records in the
+    /// DB, cursors are treated inclusively, even though they are exclusive bounds.
+    fn db_hi(&self) -> u64 {
+        min_option([
+            self.cursor_hi.map(|h| h.saturating_add(1)),
+            Some(self.tx_hi),
+        ])
+        .unwrap()
+    }
+
+    /// Whether the cursor lowerbound restricts the transaction range.
+    fn has_cursor_prev_page(&self) -> bool {
+        self.cursor_lo_exclusive.is_some_and(|lo| self.tx_lo <= lo)
+    }
+
+    /// Whether the cursor upperbound restricts the transaction range.
+    fn has_cursor_next_page(&self) -> bool {
+        self.cursor_hi.is_some_and(|hi| hi < self.tx_hi)
+    }
+
+    /// Inclusive lowerbound of range of transactions to scan.
     pub(crate) fn scan_lo(&self) -> u64 {
-        self.calculate_lo(/* exclude_cursor */ false)
-    }
-
-    /// The lower bound `tx_sequence_number` of the scanned transactions, exclusive of the `after`
-    /// cursor.
-    pub(crate) fn inclusive_scan_lo(&self) -> u64 {
-        self.calculate_lo(self.after.is_some())
-    }
-
-    /// Returns the min of the current tx upper bound or the `before` tx cursor.
-    fn cursor_hi(&self) -> u64 {
-        min_option([self.before, Some(self.hi)]).unwrap()
-    }
-
-    /// Determines the upper bound for the scanning range. `exclude_cursor` determines whether to
-    /// include `before` cursor in this calculation. When paginating forwards, the upper bound is
-    /// the smaller of either the upper bound or the `tx_sequence_number` some `scan_limit` distance
-    /// more than the lower bound. The latter is additionally subtracted by 1 if `after` cursor is
-    /// None to avoid over-counting.
-    fn calculate_hi(&self, exclude_cursor: bool) -> u64 {
-        let cursor_hi = self.cursor_hi().saturating_sub(exclude_cursor as u64);
-
-        if !self.is_from_front {
-            cursor_hi
-        } else if let Some(scan_limit) = self.scan_limit {
-            // If the `after` cursor is not provided, we will overcount when adding scan_limit
-            // directly to the `lo` unless we subtract 1
-            cursor_hi.min(
-                self.cursor_lo()
-                    .saturating_add(scan_limit)
-                    .saturating_sub(self.after.is_none() as u64),
-            )
-        } else {
-            cursor_hi
+        match (self.end, self.scan_limit) {
+            (End::Front, _) | (_, None) => self.db_lo(),
+            (End::Back, Some(scan_limit)) => self
+                .db_hi()
+                // If there is a next page, additionally scan the cursor upperbound.
+                .saturating_sub(self.has_cursor_next_page() as u64)
+                .saturating_sub(scan_limit)
+                .max(self.db_lo()),
         }
     }
 
-    /// The upper bound `tx_sequence_number` of the range to scan within. This is inclusive of the
-    /// `before` cursor, which is needed for the db call, but should be excluded when determining
-    /// the last scanned transaction. When paginating backwards, this is the smaller value between
-    /// the upper checkpoint's `tx_sequence_number` and the `before` cursor. If scanning forwards,
-    /// then the upper bound is the smaller between the former and the `tx_sequence_number` some
-    /// `scan_limit` distance more than the lower bound.
+    /// Exclusive upperbound of range of transactions to scan.
     pub(crate) fn scan_hi(&self) -> u64 {
-        self.calculate_hi(/* exclude_cursor */ false)
+        match (self.end, self.scan_limit) {
+            (End::Back, _) | (_, None) => self.db_hi(),
+            (End::Front, Some(scan_limit)) => self
+                .db_lo()
+                // If there is a previous page, additionally scan the cursor lowerbound.
+                .saturating_add(self.has_cursor_prev_page() as u64)
+                .saturating_add(scan_limit)
+                .min(self.db_hi()),
+        }
     }
 
-    /// The upper bound `tx_sequence_number` of the scanned transactions, exclusive of the `before`
-    /// cursor.
-    pub(crate) fn inclusive_scan_hi(&self) -> u64 {
-        self.calculate_hi(self.before.is_some())
+    /// The first transaction scanned, ignoring transactions pointed at by cursors.
+    pub(crate) fn scan_start_cursor(&self) -> u64 {
+        let skip_cursor_lo = self.end == End::Front && self.has_cursor_prev_page();
+        self.scan_lo().saturating_add(skip_cursor_lo as u64)
     }
 
-    /// Whether there are more transactions to scan to the left of this page.
+    /// The last transaction scanned, ignoring transactions pointed at by cursors.
+    pub(crate) fn scan_end_cursor(&self) -> u64 {
+        let skip_cursor_hi = self.end == End::Back && self.has_cursor_next_page();
+        self.scan_hi().saturating_sub(skip_cursor_hi as u64 + 1)
+    }
+
+    /// Whether there are more transactions to scan before this page.
     pub(crate) fn scan_has_prev_page(&self) -> bool {
-        self.lo < self.inclusive_scan_lo()
+        self.tx_lo < self.scan_start_cursor()
     }
 
-    /// Whether there are more transactions to scan to the right of this page.
+    /// Whether there are more transactions to scan after this page.
     pub(crate) fn scan_has_next_page(&self) -> bool {
-        self.inclusive_scan_hi() < self.hi
+        self.scan_end_cursor() + 1 < self.tx_hi
     }
 }
 
@@ -306,7 +314,7 @@ fn select_tx(sender: Option<SuiAddress>, bound: TxBounds, from: &str) -> RawQuer
     let mut query = filter!(
         query!(format!("SELECT tx_sequence_number FROM {from}")),
         format!(
-            "{} <= tx_sequence_number AND tx_sequence_number <= {}",
+            "{} <= tx_sequence_number AND tx_sequence_number < {}",
             bound.scan_lo(),
             bound.scan_hi()
         )
