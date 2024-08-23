@@ -71,6 +71,8 @@ impl RosettaClient {
         }
     }
 
+    // Used to print port, when keeping test running by waiting for online server handle.
+    #[allow(dead_code)]
     pub fn online_port(&self) -> u16 {
         self.online_port
     }
