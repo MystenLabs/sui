@@ -98,6 +98,58 @@ async fn test_custom_coin_balance() {
 }
 
 #[tokio::test]
+async fn test_default_balance() {
+    // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
+    const SUI_BALANCE: u64 = 150_000_000_000_000_000;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let client = test_cluster.wallet.get_client().await.unwrap();
+
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+
+    let request: AccountBalanceRequest = serde_json::from_value(json!(
+        {
+            "network_identifier": {
+                "blockchain": "sui",
+                "network": "localnet"
+            },
+            "account_identifier": {
+                "address": test_cluster.get_address_0()
+            }
+        }
+    ))
+    .unwrap();
+    let response: AccountBalanceResponse = rosetta_client
+        .call(RosettaEndpoint::Balance, &request)
+        .await;
+    println!(
+        "response: {}",
+        serde_json::to_string_pretty(&response).unwrap()
+    );
+    assert_eq!(response.balances.len(), 1);
+    assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
+
+    // Keep server running for testing with bash/curl
+    // To test with curl,
+    // 1. Uncomment the following lines
+    // 2. use `cargo test -- --nocapture` to print the server <port> and <address0>
+    // 3. run curl 'localhost:<port>/account/balance' --header 'Content-Type: application/json' \
+    // --data-raw '{
+    //     "network_identifier": {
+    //         "blockchain": "sui",
+    //         "network": "localnet"
+    //     },
+    //     "account_identifier": {
+    //         "address": "<address0 above>"
+    //     }
+    // }'
+    // println!("port: {}", rosetta_client.online_port());
+    // println!("address0: {}", test_cluster.get_address_0());
+    // for handle in _handles.into_iter() {
+    //     handle.await.unwrap();
+    // }
+}
+
+#[tokio::test]
 async fn test_custom_coin_transfer() {
     const COIN1_BALANCE: u64 = 100_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;

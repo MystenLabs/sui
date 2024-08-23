@@ -70,6 +70,11 @@ impl RosettaClient {
             offline_port: offline,
         }
     }
+
+    pub fn online_port(&self) -> u16 {
+        self.online_port
+    }
+
     pub async fn call<R: Serialize, T: DeserializeOwned>(
         &self,
         endpoint: RosettaEndpoint,
