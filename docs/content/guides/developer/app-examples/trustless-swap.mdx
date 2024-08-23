@@ -877,7 +877,7 @@ All the endpoints are defined in `server.ts`, particularly, there are two endpoi
 - `/locked` to query `Locked` objects.
 - `/escrows` to query `Escrow` objects.
 
-The implementation for both endpoints is pretty straightforward. You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
+You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
 
 ```ts title='server.ts'
 import { prisma } from './db';
@@ -1430,6 +1430,9 @@ export function LockOwnedObjects() {
 ```
 </details>
 
+Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account and the `Locked` object struct type to the call. The struct type is usually identified by the format of `{PACKAGE_ID}::{{MODULE_NAME}}::{{STRUCT_TYPE}}`. The returned data is stored inside the cache at query key `getOwnedObjects`. Recall the previous section where you invalidate the data at this key after the mutation succeeds, the `useSuiClientInfiniteQuery()` hook automatically re-fetches the data, thus you don't have to worry about the out-dated data living in your frontend application.
+
+
 <details>
   <summary>
     Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
@@ -1524,7 +1527,7 @@ As previously mentioned, the example uses `@tanstack/react-query` to query, cach
 
 When you execute a transaction call to mutate data on the Sui blockchain, use the `useMutation()` hook. The `useMutation()` hook accepts several inputs, however, you only need two of them for this example. The first parameter, `mutationFn`, accepts the function to execute the main mutating logic, while the second parameter, `onSuccess`, is a callback that runs when the mutating logic succeeds.
 
-The main mutating logic is fairly straightforward, executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfer it to the connected wallet account, all within the same `Transaction`. The example reuses the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
+The main mutating logic includes executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfering it to the connected wallet account, all within the same `Transaction`. The example reuses the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
 
 Another benefit of wrapping the main mutating logic inside `useMutation()` is that you can access and manipulate the cache storing server state. The example fetches the cache from remote servers by using query call in an appropriate callback. In this case, it is the `onSuccess` callback. When the transaction succeeds, invalidate the cache data at the cache key called `getOwnedObjects`, then `@tanstack/react-query` handles the re-fetching mechanism for the invalidated data automatically. Do this by using `invalidateQueries()` on the `@tanstack/react-query` configured client instance retrieved by `useQueryClient()` hook in the **Setup Providers** step.
 
@@ -1620,7 +1623,7 @@ Let's take a look at the **My Locked Objects** tab by examining `src/components/
   {@inject: examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
 </details>
 
-Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account and the `Locked` object struct type to the call. The struct type is usually identified by the format of `{PACKAGE_ID}::{{MODULE_NAME}}::{{STRUCT_TYPE}}`. The returned data is stored inside the cache at query key `getOwnedObjects`. Recall the previous section where you invalidate the data at this key after the mutation succeeds, the `useSuiClientInfiniteQuery()` hook automatically re-fetches the data, thus you don't have to worry about the out-dated data living in your frontend application.
+Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`.
 
 ##### `LockedObject` and `Locked` component
 
@@ -1633,7 +1636,7 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
   {@inject: examples/trading/frontend/src/components/locked/LockedObject.tsx}
 </details>
 
-The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. It also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
+The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it will also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
 <details>
   <summary>
@@ -1676,10 +1679,6 @@ export function Locked({
     },
   );
 
-  const isOwner = () => {
-    return !!locked.creator && account?.address === locked.creator;
-  };
-
   const getLabel = () => {
     if (locked.deleted) return "Deleted";
     if (hideControls) {
@@ -1719,9 +1718,6 @@ export function Locked({
 ```
 </details>
 
-
-The `Locked` component is a bit complex because it has multiple actions that can be performed on the locked object. The `Locked` component is responsible for rendering the `ApiLockedObject` and providing the necessary actions to interact with the locked object. The `Locked` component consists of the following actions:
-
 Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` component:
 
 <details>
@@ -1743,7 +1739,7 @@ Run your app and ensure you can:
 
 Unlocking owned objects is another crucial on-chain action in this application and is very likely to be used all over. Hence, it's beneficial to extract its logic into separated mutating functions to enhance reusability and encapsulation.
 
-To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. The implementation is straightforward, call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
+To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. Call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
 
 <details>
   <summary>
@@ -1953,7 +1949,7 @@ Run your app and ensure you can:
 
 ### Create escrows
 
-To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. The mutation implementation is pretty straightforward. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
+To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
 
 <details>
   <summary>
