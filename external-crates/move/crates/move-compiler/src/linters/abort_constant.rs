@@ -23,7 +23,7 @@ const ABORT_CONSTANT_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     LinterDiagnosticCategory::Style as u8,
     ABORT_CONSTANT_DIAG_CODE,
-    "Prefer using named constants with 'abort' and 'assert' for clarity",
+    "use named constants with 'abort' and 'assert'",
 );
 
 pub struct AssertAbortNamedConstants;
@@ -67,7 +67,7 @@ impl TypingVisitorContext for Context<'_> {
 
 impl Context<'_> {
     fn check_named_constant(&mut self, arg_exp: &T::Exp) {
-        if !Self::contains_non_constant(arg_exp) {
+        if !Self::is_constant(arg_exp) {
             let diag = diag!(
                 ABORT_CONSTANT_DIAG,
                 (
@@ -80,14 +80,12 @@ impl Context<'_> {
     }
 
     #[growing_stack]
-    fn contains_non_constant(exp: &T::Exp) -> bool {
+    fn is_constant(exp: &T::Exp) -> bool {
         match &exp.exp.value {
             UnannotatedExp_::Constant(_, _) => true,
-            UnannotatedExp_::ExpList(exp_list) => {
-                exp_list.iter().any(|item| {
-                    matches!(item, ExpListItem::Single(exp, _) if !Self::contains_non_constant(exp))
-                })
-            }
+            UnannotatedExp_::ExpList(exp_list) => exp_list
+                .iter()
+                .any(|item| matches!(item, ExpListItem::Single(exp, _) if !Self::is_constant(exp))),
             _ => false,
         }
     }

@@ -8,8 +8,7 @@ module 0x42::M {
     }
 
     fun test_lint_assert_correct() {
-        let x = true;
-        assert!(x == false, ERROR_NOT_OWNER); // Correct: using a named constant
+        assert!(false, ERROR_NOT_OWNER); // Correct: using a named constant
     }
 
     fun test_lint_abort_complex_constant() {

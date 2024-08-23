@@ -154,7 +154,7 @@ pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true";
 pub const WHILE_TRUE_TO_LOOP_DIAG_CODE: u8 = 4;
 pub const MEANINGLESS_MATH_FILTER_NAME: &str = "unnecessary_math";
 pub const MEANINGLESS_MATH_DIAG_CODE: u8 = 8;
-pub const ABORT_CONSTANT_FILTER_NAME: &str = "abort_constant";
+pub const ABORT_CONSTANT_FILTER_NAME: &str = "abort_without_constant";
 pub const ABORT_CONSTANT_DIAG_CODE: u8 = 9;
 >>>>>>> 3c440e0213 ([move][move-linter] implement abort constant rules)
 
