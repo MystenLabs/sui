@@ -972,19 +972,13 @@ pnpm install --ignore-workspace
 pnpm db:setup:dev
 ```
 
-3. [Publish the contract and demo data](#demo-data)
+3. Deploy the Sui package
 
-4. Run both the API and the indexer
-
-```
-pnpm dev
-```
-
-5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
-
-### Demo data {#demo-data}
-
-{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+<details>
+  <summary>
+    Deployment instructions
+  </summary>
+  {@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
 Next, configure the Sui CLI to use `testnet` as the active environment. 
 
@@ -1016,10 +1010,7 @@ For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/
 
 Now that you have an account with some Testnet SUI, you can deploy your contracts. 
 
-There are some helper functions to:
-
-1. Publish the smart contract
-2. Create some demo data (for testnet)
+There are some helper functions to publish the smart contract so you can create some demo data (for Testnet).
 
 To produce demo data:
 
@@ -1046,6 +1037,15 @@ If you want to reset the database (start from scratch), run:
 ```
 pnpm db:reset:dev && pnpm db:setup:dev
 ```
+</details>
+
+4. Run both the API and the indexer
+
+```
+pnpm dev
+```
+
+5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
 
 ### Next steps
 
