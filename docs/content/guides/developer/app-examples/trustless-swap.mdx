@@ -1090,9 +1090,15 @@ Replace the content of `tsconfig.json` with the following:
 
 {@inject: examples/trading/frontend/tsconfig.json}
 
+The paths option under `compilerOptions` is what defines the aliasing for TypeScript. Here, the alias `@/*` is mapped to the `./src/*` directory, meaning that any time you use `@/`, TypeScript will resolve it as a reference to the src folder. This setup reduces the need for lengthy relative paths when importing files in your project.
+
 Replace the content of `vite.config.ts` with the following:
 
 {@inject: examples/trading/frontend/vite.config.ts}
+
+Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory. 
+
+This aligns with the `tsconfig.json` setup, ensuring that both TypeScript and Vite understand how to resolve `@/` imports.
 
 ### Adding Tailwind CSS
 
