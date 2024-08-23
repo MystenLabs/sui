@@ -184,8 +184,6 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
         &self,
         (data, checkpoint_num, timestamp_ms): CheckpointTxnData,
     ) -> Result<Vec<ProcessedTxnData>, Error> {
-        // self.metrics.total_sui_bridge_transactions.inc();
-
         if !data.input_objects.iter().any(|obj| {
             obj.data
                 .type_()
@@ -195,6 +193,8 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
             return Ok(vec![]);
         }
 
+        self.metrics.total_deepbook_transactions.inc();
+
         match &data.events {
             Some(events) => {
                 let processed_sui_events =
@@ -203,7 +203,7 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
                             ev,
                             &data,
                             checkpoint_num,
-                            timestamp_ms,
+                            // timestamp_ms,
                             self.package_id,
                         )? {
                             result.push(data);
@@ -241,7 +241,7 @@ fn process_sui_event(
     ev: &Event,
     tx: &CheckpointTransaction,
     checkpoint: u64,
-    timestamp_ms: u64,
+    // timestamp_ms: u64,
     package_id: ObjectID,
 ) -> Result<Option<ProcessedTxnData>, anyhow::Error> {
     Ok(if ev.type_.address == *package_id {
