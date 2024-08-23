@@ -293,9 +293,7 @@ pub(crate) fn subqueries(filter: &TransactionBlockFilter, tx_bounds: TxBounds) -
         subqueries.push(("tx_digests", select_ids(txs, tx_bounds)));
     }
 
-    let Some((_, mut subquery)) = subqueries.pop() else {
-        return None;
-    };
+    let (_, mut subquery) = subqueries.pop()?;
 
     if !subqueries.is_empty() {
         subquery = query!("SELECT tx_sequence_number FROM ({}) AS initial", subquery);

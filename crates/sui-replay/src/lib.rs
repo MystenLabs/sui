@@ -586,9 +586,8 @@ pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
 fn parse_configs_versions(
     configs_and_versions: Option<Vec<String>>,
 ) -> Option<Vec<(ObjectID, SequenceNumber)>> {
-    let Some(configs_and_versions) = configs_and_versions else {
-        return None;
-    };
+    let configs_and_versions = configs_and_versions?;
+
     assert!(configs_and_versions.len() % 2 == 0, "Invalid number of arguments for configs and version -- you must supply a version for each config");
     Some(
         configs_and_versions

@@ -114,9 +114,9 @@ struct IndexStoreTables {
     ///
     /// A few uses for this singleton:
     /// - determining if the DB has been initialized (as some tables will still be empty post
-    /// initializatio)
+    ///     initialization)
     /// - version of the DB. Everytime a new table or schema is changed the version number needs to
-    /// be incremented.
+    ///     be incremented.
     meta: DBMap<(), MetadataInfo>,
 
     /// An index of extra metadata for Transactions.

@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 fastcrypto.workspace = true
 mysten-network.workspace = true

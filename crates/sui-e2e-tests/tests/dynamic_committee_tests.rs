@@ -57,6 +57,7 @@ trait StatePredicate {
         runner: &StressTestRunner,
         effects: &TransactionEffects,
     );
+    #[allow(unused)]
     async fn post_epoch_post_condition(
         &mut self,
         runner: &StressTestRunner,
@@ -351,7 +352,7 @@ async fn fuzz_dynamic_committee() {
     let num_operations = 10;
 
     // Add more actions here as we create them
-    let actions = vec![Box::new(add_stake::RequestAddStakeGen)];
+    let actions = [Box::new(add_stake::RequestAddStakeGen)];
 
     let mut runner = StressTestRunner::new().await;
 

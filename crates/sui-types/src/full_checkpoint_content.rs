@@ -177,7 +177,7 @@ impl CheckpointTransaction {
                             ObjectIn::NotExist,
                             ObjectOut::PackageWrite((version, _)),
                             IDOperation::Created,
-                        ) => Some(((id, &version), None)),
+                        ) => Some(((id, version), None)),
 
                         // Unwrapped Objects
                         (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::None) => {
@@ -241,7 +241,7 @@ impl CheckpointTransaction {
                             ObjectIn::NotExist,
                             ObjectOut::PackageWrite((version, _)),
                             IDOperation::Created,
-                        ) => Some((id, &version)),
+                        ) => Some((id, version)),
 
                         _ => None,
                     }

@@ -693,11 +693,11 @@ fn create_genesis_context(
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
-    hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
-    hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
-    hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
+    hasher.update(bcs::to_bytes(genesis_chain_parameters).unwrap());
+    hasher.update(bcs::to_bytes(genesis_validators).unwrap());
+    hasher.update(bcs::to_bytes(token_distribution_schedule).unwrap());
     for system_package in system_packages {
-        hasher.update(&bcs::to_bytes(system_package.bytes()).unwrap());
+        hasher.update(bcs::to_bytes(system_package.bytes()).unwrap());
     }
 
     let hash = hasher.finalize();

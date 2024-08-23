@@ -256,9 +256,7 @@ pub async fn compare_system_package<S: ObjectStore>(
     let mut new_normalized = new_pkg.normalize(binary_config).ok()?;
 
     for (name, cur_module) in cur_normalized {
-        let Some(new_module) = new_normalized.remove(&name) else {
-            return None;
-        };
+        let new_module = new_normalized.remove(&name)?;
 
         if let Err(e) = compatibility.check(&cur_module, &new_module) {
             error!("Compatibility check failed, for new version of {id}::{name}: {e:?}");

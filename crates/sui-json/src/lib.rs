@@ -703,7 +703,7 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
             // representing a JSON array rather than with the array itself ("[0x42,0x7]" rather than
             // [0x42,0x7]).
             let mut object_ids = vec![];
-            for tok in s[1..s.len() - 1].to_string().split(',') {
+            for tok in s[1..s.len() - 1].split(',') {
                 let id = JsonValue::String(tok.to_string());
                 object_ids.push(resolve_object_arg(idx, &id)?);
             }

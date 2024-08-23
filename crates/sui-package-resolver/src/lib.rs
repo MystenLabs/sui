@@ -132,6 +132,7 @@ pub enum ErrorConstants {
     /// * A numeric value (u8, u16, u32, u64, u128, u256); or
     /// * A boolean value; or
     /// * An address value
+    ///
     /// Otherwise, the `Raw` bytes of the error constant are returned.
     Rendered {
         /// The name of the error constant.
@@ -1547,7 +1548,7 @@ impl<'l> ResolutionContext<'l> {
 
             O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
-                let def = &self.datatypes[&key];
+                let def = &self.datatypes[key];
 
                 let param_layouts = params
                     .iter()
@@ -1639,7 +1640,7 @@ impl<'l> ResolutionContext<'l> {
 
             O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
-                let defining_id = &self.datatypes[&key].defining_id;
+                let defining_id = &self.datatypes[key].defining_id;
                 for param in params {
                     self.relocate_signature(param)?;
                 }

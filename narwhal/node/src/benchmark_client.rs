@@ -31,6 +31,7 @@ use worker::LazyNarwhalClient;
 /// * the size of the transactions via the --size property
 /// * the worker address <ADDR> to send the transactions to. A url format is expected ex http://127.0.0.1:7000
 /// * the rate of sending transactions via the --rate parameter
+///
 /// Optionally the --nodes parameter can be passed where a list of worker addresses
 /// should be passed. The benchmarking client will first try to connect to all of those nodes before start sending
 /// any transactions. That confirms the system is up and running and ready to start processing the transactions.

@@ -500,7 +500,7 @@ impl SamplingFilter {
 
     fn clamp(sample_rate: f64) -> f64 {
         // clamp sample rate to between 0.0001 and 1.0
-        sample_rate.max(0.0001).min(1.0)
+        sample_rate.clamp(0.0001, 1.0)
     }
 
     fn update_sampling_rate(&self, sample_rate: f64) {
