@@ -94,12 +94,11 @@ export function LockedList({
   return (
     <>
       {enableSearch && (
-        <TextField.Root className="mt-3">
-          <TextField.Input
-            placeholder="Search by locked id"
-            value={lockedId}
-            onChange={(e) => setLockedId(e.target.value)}
-          />
+        <TextField.Root 
+          className="mt-3" 
+          placeholder="Search by locked id"
+          value={lockedId}
+          onChange={(e) => setLockedId(e.target.value)}>
         </TextField.Root>
       )}
       <InfiniteScrollArea
