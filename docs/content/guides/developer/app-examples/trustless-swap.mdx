@@ -1086,15 +1086,21 @@ yarn create @mysten/dapp --template react-client-dapp
 
 First, set up import aliases to make the code more readable and maintainable. This allows you to import files using `@/` instead of relative paths.
 
-Replace the content of `tsconfig.json` with the following:
-
-{@inject: examples/trading/frontend/tsconfig.json}
+<details>
+  <summary>
+    Replace the content of `tsconfig.json` with the following:
+  </summary>
+  {@inject: examples/trading/frontend/tsconfig.json}
+</details>
 
 The paths option under `compilerOptions` is what defines the aliasing for TypeScript. Here, the alias `@/*` is mapped to the `./src/*` directory, meaning that any time you use `@/`, TypeScript will resolve it as a reference to the src folder. This setup reduces the need for lengthy relative paths when importing files in your project.
 
-Replace the content of `vite.config.ts` with the following:
-
-{@inject: examples/trading/frontend/vite.config.ts}
+<details>
+  <summary>
+    Replace the content of `vite.config.ts` with the following:
+  </summary>
+  {@inject: examples/trading/frontend/vite.config.ts}
+</details>
 
 Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory. 
 
@@ -1120,29 +1126,36 @@ Next, generate the Tailwind CSS configuration file by running:
 npx tailwindcss init -p
 ```
 
-Replace the content of `tailwind.config.js` with the following:
+<details>
+  <summary>
+    Replace the content of `tailwind.config.js` with the following:
+  </summary>
+  {@inject: examples/trading/frontend/tailwind.config.js}
+</details>
 
-{@inject: examples/trading/frontend/tailwind.config.js}
-
-Add the `src/styles/` directory and add `base.css`: 
-
-{@inject: examples/trading/frontend/src/styles/base.css}
+<details>
+  <summary>
+    Add the `src/styles/` directory and add `base.css`: 
+  </summary>
+  {@inject: examples/trading/frontend/src/styles/base.css}
+</details>
 
 ### Connecting your deployed package
 
 First, deploy your package via the [scripts in the api directory](#deployment).
 
-Then, create a `src/constants.ts` file and fill it with the following:
-
-{@inject: examples/trading/frontend/src/constants.ts}
+<details>
+  <summary>
+    Then, create a `src/constants.ts` file and fill it with the following:
+  </summary>
+  {@inject: examples/trading/frontend/src/constants.ts}
+</details>
 
 ### Add helper functions and UI components
 
-Create a `src/utils/` directory and add the following file: 
-
 <details>
   <summary>
-    `helpers.ts`
+    Create a `src/utils/` directory and add the following file: 
   </summary>
   {@inject: examples/trading/frontend/src/utils/helpers.ts}
 </details>
@@ -1193,18 +1206,26 @@ or
 yarn add react-router-dom react-hot-toast
 ```
 
-Then, create a `src/routes/` directory and add `index.tsx`. This file contains the routing configuration:
-
-{@inject: examples/trading/frontend/src/routes/index.tsx}
+<details>
+  <summary>
+    Then, create a `src/routes/` directory and add `index.tsx`. This file contains the routing configuration:
+  </summary>
+  {@inject: examples/trading/frontend/src/routes/index.tsx}
+</details>
 
 Add the following respective files to the `src/routes/` directory:
 
-- `root.tsx`. This file contains the root component that is rendered on every page:
+<details>
+  <summary>
+    `root.tsx`. This file contains the root component that is rendered on every page:
+  </summary>
+  {@inject: examples/trading/frontend/src/routes/root.tsx}
+</details>
 
-{@inject: examples/trading/frontend/src/routes/root.tsx}
-
-- `LockedDashboard.tsx`. This file contains the component for the `Manage Objects` page.
-
+<details>
+  <summary>
+    `LockedDashboard.tsx`. This file contains the component for the `Manage Objects` page.
+  </summary>
 ```tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -1217,8 +1238,12 @@ export function LockedDashboard() {
   )
 }
 ```
-- `EscrowDashboard.tsx`. This file contains the component for the `Escrows` page.
+</details>
 
+<details>
+  <summary>
+    `EscrowDashboard.tsx`. This file contains the component for the `Escrows` page.
+  </summary>
 ```tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -1231,10 +1256,14 @@ export function EscrowDashboard() {
   )
 }
 ```
+</details>
 
-Update `src/main.tsx` by replacing the `App` component with the `RouterProvider` and replace `"dark"` with `"light"` in the `Theme` component:
-
-{@inject: examples/trading/frontend/src/main.tsx}
+<details>
+  <summary>
+  Update `src/main.tsx` by replacing the `App` component with the `RouterProvider` and replace `"dark"` with `"light"` in the `Theme` component:
+  </summary>
+  {@inject: examples/trading/frontend/src/main.tsx}
+</details>
 
 Note that `dApp Kit` provides a set of hooks for making query and mutation calls to the Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`.
 
@@ -1245,8 +1274,10 @@ Note that `dApp Kit` provides a set of hooks for making query and mutation calls
 
 :::
 
-Create `src/components/Header.tsx`. This file contains the navigation links and the connect wallet button:
-
+<details>
+  <summary>
+    Create `src/components/Header.tsx`. This file contains the navigation links and the connect wallet button:
+  </summary>
 ```tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -1312,6 +1343,7 @@ export function Header() {
   );
 }
 ```
+</details>
 
 The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
 
@@ -1326,9 +1358,12 @@ At this point, you have a basic routing setup. Run your app and ensure you can:
 
 ### Type definitions
 
-All the type definitions are in `src/types/types.ts`. Create this file and add the following:
-
-{@inject: examples/trading/frontend/src/types/types.ts}
+<details>
+  <summary>
+    All the type definitions are in `src/types/types.ts`. Create this file and add the following:
+  </summary>
+  {@inject: examples/trading/frontend/src/types/types.ts}
+</details>
 
 `ApiLockedObject` and `ApiEscrowObject` represent the `Locked` and `Escrow` indexed data model the indexing and API service return.
 
@@ -1338,8 +1373,10 @@ All the type definitions are in `src/types/types.ts`. Create this file and add t
 
 The first role of the UI is to display the owned objects of the connected wallet account. 
 
-First add this file `src/components/locked/LockOwnedObjects.tsx`: 
-
+<details>
+  <summary>
+    First add this file `src/components/locked/LockOwnedObjects.tsx`: 
+  </summary>
 ```tsx
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1389,9 +1426,12 @@ export function LockOwnedObjects() {
   );
 }
 ```
+</details>
 
-Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
-
+<details>
+  <summary>
+    Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
+  </summary>
 ```tsx
 import { useState } from "react";
 import { Tabs } from "@radix-ui/themes";
@@ -1433,6 +1473,7 @@ export function LockedDashboard() {
   );
 }
 ```
+</details>
 
 :::danger[Checkpoint]
 
@@ -1448,7 +1489,13 @@ Note, if you don't see any objects, you may need to create some demo data. You'l
 
 In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's create and examine the execute transaction hook.
 
-{@inject: examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+
+<details>
+  <summary>
+    Create `src/hooks/useTransactionExecution.ts`:
+  </summary>
+  {@inject: examples/trading/frontend/src/hooks/useTransactionExecution.ts}
+</details>
 
 A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
@@ -1464,7 +1511,12 @@ The full source code of the demo bear smart contract is available at [Trading Co
 
 You need a utility function to create a dummy object representing a real world asset so you can use it to test and demonstrate escrow users flow on the UI directly.
 
-{@inject: examples/trading/frontend/src/mutations/demo.ts}
+<details>
+  <summary>
+    Create `src/helpers/create-demo-objects.ts`:
+  </summary>
+  {@inject: examples/trading/frontend/src/helpers/create-demo-objects.ts}
+</details>
 
 As previously mentioned, the example uses `@tanstack/react-query` to query, cache, and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update this data is by interacting with these remote servers. In this case, it could be from an API or directly from Sui blockchain RPC.
 
@@ -1476,7 +1528,12 @@ Another benefit of wrapping the main mutating logic inside `useMutation()` is th
 
 Now the logic to create a dummy bear object exists. You just need to attach it into the button in the header.
 
-{@inject: examples/trading/frontend/src/components/Header.tsx}
+<details>
+  <summary>
+    `Header.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/Header.tsx}
+</details>
 
 :::danger[Checkpoint]
 
@@ -1492,6 +1549,10 @@ Locking owned objects is a crucial on-chain action in this application and is ve
 
 To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions, use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because our smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
 
+<details>
+  <summary>
+    Create `src/hooks/useLockObjectMutation.ts`:
+  </summary>
 ```tsx
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1525,10 +1586,16 @@ export function useLockObjectMutation() {
   });
 }
 ```
+</details>
 
 Update `src/components/locked/LockOwnedObjects.tsx` to include the `useLockObjectMutation` hook:
 
-{@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+<details>
+  <summary>
+    `LockOwnedObjects.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+</details>
 
 :::danger[Checkpoint]
 
@@ -1544,7 +1611,12 @@ Note, the object should disappear from the list of owned objects. You will be ab
 
 Let's take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
 
-{@inject: examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
+<details>
+  <summary>
+    `OwnedLockedList.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
+</details>
 
 Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account and the `Locked` object struct type to the call. The struct type is usually identified by the format of `{PACKAGE_ID}::{{MODULE_NAME}}::{{STRUCT_TYPE}}`. The returned data is stored inside the cache at query key `getOwnedObjects`. Recall the previous section where you invalidate the data at this key after the mutation succeeds, the `useSuiClientInfiniteQuery()` hook automatically re-fetches the data, thus you don't have to worry about the out-dated data living in your frontend application.
 
@@ -1552,10 +1624,19 @@ Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiC
 
 The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using `dApp Kit` `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recalling that in this smart contract, the locked item is put into a dynamic object field.
 
-{@inject: examples/trading/frontend/src/components/locked/LockedObject.tsx}
+<details>
+  <summary>
+    `LockedObject.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/locked/LockedObject.tsx}
+</details>
 
 The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. It also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
+<details>
+  <summary>
+    `Locked.tsx`
+  </summary>
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1634,12 +1715,19 @@ export function Locked({
   );
 }
 ```
+</details>
+
 
 The `Locked` component is a bit complex because it has multiple actions that can be performed on the locked object. The `Locked` component is responsible for rendering the `ApiLockedObject` and providing the necessary actions to interact with the locked object. The `Locked` component consists of the following actions:
 
 Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` component:
 
-{@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
+<details>
+  <summary>
+    `LockedDashboard.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
+</details>
 
 :::danger[Checkpoint]
 
@@ -1655,10 +1743,19 @@ Unlocking owned objects is another crucial on-chain action in this application a
 
 To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. The implementation is straightforward, call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
 
-{@inject: examples/trading/frontend/src/mutations/locked.ts#mutationunlock}
+<details>
+  <summary>
+    `unlock.ts`
+  </summary>
+  {@inject: examples/trading/frontend/src/mutations/unlock.ts}
+</details>
 
 Update `src/components/locked/partials/Locked.tsx` to include the `useUnlockObjectMutation` hook:
 
+<details>
+  <summary>
+    `Locked.tsx`
+  </summary>
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
@@ -1762,6 +1859,7 @@ export function Locked({
   );
 }
 ```
+</details>
 
 :::danger[Checkpoint]
 
@@ -1775,6 +1873,10 @@ Run your app and ensure you can:
 
 Update `src/routes/EscrowDashboard.tsx` to include the `LockedList` component:
 
+<details>
+  <summary>
+    `EscrowDashboard.tsx`
+  </summary>
 ```tsx
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
@@ -1828,10 +1930,16 @@ export function EscrowDashboard() {
   );
 }
 ```
+</details>
 
 Add `src/components/locked/ApiLockedList.tsx`:
 
-{@inject: examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+<details>
+  <summary>
+    `ApiLockedList.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
+</details>
 
 :::danger[Checkpoint]
 
@@ -1845,6 +1953,10 @@ Run your app and ensure you can:
 
 To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. The mutation implementation is pretty straightforward. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
 
+<details>
+  <summary>
+    `escrow.ts`
+  </summary>
 ```tsx
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1888,14 +2000,25 @@ export function useCreateEscrowMutation() {
   });
 }
 ```
+</details>
 
 Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook:
 
-{@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+<details>
+  <summary>
+    `Locked.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+</details>
 
 Add `src/components/escrows/CreateEscrow.tsx`:
 
-{@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+<details>
+  <summary>
+    `CreateEscrow.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+</details>
 
 :::danger[Checkpoint]
 
@@ -1911,6 +2034,10 @@ Note, the object should disappear from the list of locked objects in the `Browse
 
 To cancel the escrow, create a mutation through the `useCancelEscrowMutation` hook in `src/mutations/escrow.ts`. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. The `{PACKAGE_ID}::shared::return_to_sender` Move call is generic, thus it requires the type parameters of the escrowed object. Next, execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
 
+<details>
+  <summary>
+    `escrow.ts`
+  </summary>
 ```tsx
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -1993,9 +2120,14 @@ export function useCancelEscrowMutation() {
   });
 }
 ```
+</details>
 
 Add `src/components/escrows/Escrow.tsx`:
 
+<details>
+  <summary>
+    `Escrow.tsx`
+  </summary>
 ```tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -2145,13 +2277,23 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   );
 }
 ```
+</details>
 
 Add `src/components/escrows/EscrowList.tsx`:
 
-{@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+<details>
+  <summary>
+    `EscrowList.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+</details>
 
 Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
 
+<details>
+  <summary>
+    `EscrowDashboard.tsx`
+  </summary>
 ```tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -2226,6 +2368,7 @@ export function EscrowDashboard() {
   );
 }
 ```
+</details>
 
 :::danger[Checkpoint]
 
@@ -2240,6 +2383,10 @@ Run your app and ensure you can:
 
 To accept the escrow, create a mutation through the `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus it requires the type parameters of the escrowed and locked objects. Query the objects details by using `multiGetObjects` on Sui client instance. Lastly, execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the connected wallet account. When the mutation succeeds, invalidate the cache to allow automatic re-fetch of the data.
 
+<details>
+  <summary>
+    `escrow.ts`
+  </summary>
 ```tsx
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
@@ -2385,14 +2532,25 @@ export function useAcceptEscrowMutation() {
   });
 }
 ```
+</details>
 
 Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook:
 
-{@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
+<details>
+  <summary>
+    `Escrow.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
+</details>
 
 Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
 
-{@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+<details>
+  <summary>
+    `EscrowDashboard.tsx`
+  </summary>
+  {@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+</details>
 
 :::danger[Checkpoint]
 
