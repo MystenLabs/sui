@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::histogram::Histogram;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry,
 };
 use std::sync::Arc;
 
@@ -14,11 +15,11 @@ pub struct CheckpointExecutorMetrics {
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_epoch: IntGauge,
     pub checkpoint_exec_inflight: IntGauge,
-    pub checkpoint_exec_latency: Histogram,
-    pub checkpoint_prepare_latency: Histogram,
+    pub checkpoint_exec_latency_us: Histogram,
+    pub checkpoint_prepare_latency_us: Histogram,
     pub checkpoint_transaction_count: Histogram,
-    pub checkpoint_contents_age: Histogram,
-    pub last_executed_checkpoint_age: Histogram,
+    pub checkpoint_contents_age_ms: Histogram,
+    pub last_executed_checkpoint_age_ms: Histogram,
 }
 
 impl CheckpointExecutorMetrics {
@@ -60,38 +61,31 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
-            checkpoint_exec_latency: register_histogram_with_registry!(
-                "checkpoint_exec_latency",
-                "Latency of executing a checkpoint from enqueue to all effects available",
+            checkpoint_exec_latency_us: Histogram::new_in_registry(
+                "checkpoint_exec_latency_us",
+                "Latency of executing a checkpoint from enqueue to all effects available, in microseconds",
                 registry,
-            )
-            .unwrap(),
-            checkpoint_prepare_latency: register_histogram_with_registry!(
-                "checkpoint_prepare_latency",
-                "Latency of preparing a checkpoint to enqueue for execution",
+            ),
+            checkpoint_prepare_latency_us: Histogram::new_in_registry(
+                "checkpoint_prepare_latency_us",
+                "Latency of preparing a checkpoint to enqueue for execution, in microseconds",
                 registry,
-            )
-            .unwrap(),
-            checkpoint_transaction_count: register_histogram_with_registry!(
+            ),
+            checkpoint_transaction_count: Histogram::new_in_registry(
                 "checkpoint_transaction_count",
                 "Number of transactions in the checkpoint",
                 registry,
-            )
-            .unwrap(),
-            checkpoint_contents_age: register_histogram_with_registry!(
-                "checkpoint_contents_age",
+            ),
+            checkpoint_contents_age_ms: Histogram::new_in_registry(
+                "checkpoint_contents_age_ms",
                 "Age of checkpoints when they arrive for execution",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
-            last_executed_checkpoint_age: register_histogram_with_registry!(
-                "last_executed_checkpoint_age",
+            ),
+            last_executed_checkpoint_age_ms: Histogram::new_in_registry(
+                "last_executed_checkpoint_age_ms",
                 "Age of the last executed checkpoint",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            )
-            .unwrap(),
+            ),
         };
         Arc::new(this)
     }
