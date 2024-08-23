@@ -9,13 +9,10 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use async_trait::async_trait;
 use consensus_core::CommitConsumerMonitor;
 use lru::LruCache;
 use mysten_metrics::{monitored_mpsc::UnboundedReceiver, monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
-use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point_async, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
@@ -33,7 +30,8 @@ use tracing::{debug, error, info, instrument, trace_span, warn};
 use crate::{
     authority::{
         authority_per_epoch_store::{
-            AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndicesWithStats,
+            AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndices,
+            ExecutionIndicesWithStats,
         },
         epoch_start_configuration::EpochStartConfigTrait,
         AuthorityMetrics, AuthorityState,
@@ -167,6 +165,11 @@ impl<C> ConsensusHandler<C> {
         }
     }
 
+    /// Returns the last subdag index processed by the handler.
+    pub fn last_processed_subdag_index(&self) -> u64 {
+        self.last_consensus_stats.index.sub_dag_index
+    }
+
     /// Updates the execution indexes based on the provided input.
     fn update_index_and_hash(&mut self, index: ExecutionIndices, v: &[u8]) {
         update_index_and_hash(&mut self.last_consensus_stats, index, v)
@@ -199,31 +202,9 @@ fn update_index_and_hash(
     last_consensus_stats.hash = hash;
 }
 
-#[async_trait]
-impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
-    /// This function gets called by the consensus for each consensus commit.
-    #[instrument(level = "debug", skip_all)]
-    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
-        let _scope = monitored_scope("HandleConsensusOutput");
-        self.handle_consensus_output_internal(consensus_output)
-            .await;
-    }
-
-    fn last_executed_sub_dag_round(&self) -> u64 {
-        self.last_consensus_stats.index.last_committed_round
-    }
-
-    fn last_executed_sub_dag_index(&self) -> u64 {
-        self.last_consensus_stats.index.sub_dag_index
-    }
-}
-
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     #[instrument(level = "debug", skip_all)]
-    async fn handle_consensus_output_internal(
-        &mut self,
-        consensus_output: impl ConsensusOutputAPI,
-    ) {
+    async fn handle_consensus_output(&mut self, consensus_output: impl ConsensusOutputAPI) {
         // This code no longer supports old protocol versions.
         assert!(self
             .epoch_store
@@ -512,7 +493,7 @@ impl MysticetiConsensusHandler {
             while let Some(consensus_output) = receiver.recv().await {
                 let commit_index = consensus_output.commit_ref.index;
                 consensus_handler
-                    .handle_consensus_output_internal(consensus_output)
+                    .handle_consensus_output(consensus_output)
                     .await;
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
@@ -876,7 +857,9 @@ mod tests {
 
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
-    use narwhal_types::{Batch, Certificate, CommittedSubDag, HeaderV1Builder, ReputationScores};
+    use narwhal_types::{
+        Batch, Certificate, CommittedSubDag, ConsensusOutput, HeaderV1Builder, ReputationScores,
+    };
     use prometheus::Registry;
     use sui_protocol_config::ConsensusTransactionOrdering;
     use sui_types::{
