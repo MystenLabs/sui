@@ -88,9 +88,8 @@ mod tests;
 /// # Arguments
 ///
 /// * `db` - a reference to a rocks DB object
-/// * `cf;<ty,ty>` - a comma separated list of column families to open. For each
-/// column family a concatenation of column family name (cf) and Key-Value <ty, ty>
-/// should be provided.
+/// * `cf;<ty,ty>` - a comma separated list of column families to open. For each column family a
+///     concatenation of column family name (cf) and Key-Value <ty, ty> should be provided.
 ///
 /// # Examples
 ///
@@ -2735,7 +2734,7 @@ fn populate_missing_cfs(
 /// Given a vec<u8>, find the value which is one more than the vector
 /// if the vector was a big endian number.
 /// If the vector is already minimum, don't change it.
-fn big_endian_saturating_add_one(v: &mut Vec<u8>) {
+fn big_endian_saturating_add_one(v: &mut [u8]) {
     if is_max(v) {
         return;
     }
@@ -2769,7 +2768,6 @@ fn test_helpers() {
 
     uint::construct_uint! {
         // 32 byte number
-        #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
         struct Num32(4);
     }
 

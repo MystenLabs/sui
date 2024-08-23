@@ -206,6 +206,7 @@ impl BlockVerifier for SignedBlockVerifier {
     }
 }
 
+#[allow(unused)]
 pub(crate) struct NoopBlockVerifier;
 
 impl BlockVerifier for NoopBlockVerifier {

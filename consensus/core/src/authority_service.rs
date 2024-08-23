@@ -133,7 +133,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .rejected_future_blocks
-                .with_label_values(&[&peer_hostname])
+                .with_label_values(&[peer_hostname])
                 .inc();
             debug!(
                 "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
@@ -157,7 +157,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname, &"handle_send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
             debug!(
                 "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
@@ -192,7 +192,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .rejected_blocks
-                .with_label_values(&[&"commit_lagging"])
+                .with_label_values(&["commit_lagging"])
                 .inc();
             debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
@@ -213,7 +213,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .metrics
             .node_metrics
             .verified_blocks
-            .with_label_values(&[&peer_hostname])
+            .with_label_values(&[peer_hostname])
             .inc();
 
         let missing_ancestors = self

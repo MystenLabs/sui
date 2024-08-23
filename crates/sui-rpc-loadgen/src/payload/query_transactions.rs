@@ -82,7 +82,7 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactionBlocks> for RpcCommandProcessor 
                     }
                 };
 
-                results = join_all(clients.iter().enumerate().map(|(_i, client)| {
+                results = join_all(clients.iter().map(|client| {
                     let with_query = query.clone();
                     async move {
                         query_transaction_blocks(client, with_query, cursor, None)

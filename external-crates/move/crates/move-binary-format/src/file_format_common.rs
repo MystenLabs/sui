@@ -334,7 +334,7 @@ pub enum Opcodes {
 }
 
 /// Upper limit on the binary size
-pub const BINARY_SIZE_LIMIT: usize = usize::max_value();
+pub const BINARY_SIZE_LIMIT: usize = usize::MAX;
 
 /// A wrapper for the binary vector
 #[derive(Default, Debug)]

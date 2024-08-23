@@ -313,16 +313,12 @@ impl SimulatorStore for PersistedStore {
     fn insert_committee(&mut self, committee: Committee) {
         let epoch = committee.epoch as usize;
 
-        let mut committees = if let Some(c) = self
+        let mut committees = self
             .read_write
             .epoch_to_committee
             .get(&())
             .expect("Fatal: DB read failed")
-        {
-            c
-        } else {
-            vec![]
-        };
+            .unwrap_or_default();
 
         if committees.get(epoch).is_some() {
             return;
@@ -397,16 +393,12 @@ impl SimulatorStore for PersistedStore {
                 .live_objects
                 .insert(&object_id, &version)
                 .expect("Fatal: DB write failed");
-            let mut q = if let Some(x) = self
+            let mut q = self
                 .read_write
                 .objects
                 .get(&object_id)
                 .expect("Fatal: DB read failed")
-            {
-                x
-            } else {
-                BTreeMap::new()
-            };
+                .unwrap_or_default();
             q.insert(version, object);
             self.read_write
                 .objects

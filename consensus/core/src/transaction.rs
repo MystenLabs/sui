@@ -229,6 +229,7 @@ pub enum ValidationError {
 }
 
 /// `NoopTransactionVerifier` accepts all transactions.
+#[allow(unused)]
 pub(crate) struct NoopTransactionVerifier;
 
 impl TransactionVerifier for NoopTransactionVerifier {

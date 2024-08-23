@@ -23,14 +23,16 @@ use crate::{
 /// Role of CommitObserver
 /// - Called by core when try_commit() returns newly committed leaders.
 /// - The newly committed leaders are sent to commit observer and then commit observer
-/// gets subdags for each leader via the commit interpreter (linearizer)
+///     gets subdags for each leader via the commit interpreter (linearizer)
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
+///
 /// No back pressure mechanism is needed as backpressure is handled as input into
 /// consenus.
+///
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
-/// is sent to the consumer.
+///     is sent to the consumer.
 /// - When CommitObserver is initialized a last processed commit index can be used
-/// to ensure any missing commits are re-sent.
+///     to ensure any missing commits are re-sent.
 pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.

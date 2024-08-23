@@ -259,9 +259,6 @@ impl Event {
             checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
             #[cfg(feature = "postgres-feature")]
             senders: vec![Some(native_event.sender.to_vec())],
-            #[cfg(feature = "mysql-feature")]
-            #[cfg(not(feature = "postgres-feature"))]
-            senders: serde_json::to_value(vec![native_event.sender.to_vec()]).unwrap(),
             package: native_event.package_id.to_vec(),
             module: native_event.transaction_module.to_string(),
             event_type: native_event
@@ -289,17 +286,6 @@ impl Event {
             #[cfg(feature = "postgres-feature")]
             {
                 stored.senders.first()
-            }
-            #[cfg(feature = "mysql-feature")]
-            #[cfg(not(feature = "postgres-feature"))]
-            {
-                stored
-                    .senders
-                    .as_array()
-                    .ok_or_else(|| {
-                        Error::Internal("Failed to parse event senders as array".to_string())
-                    })?
-                    .first()
             }
         }) else {
             return Err(Error::Internal("No senders found for event".to_string()));
