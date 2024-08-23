@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.4.0
+
+### Minor Changes
+
+- adc704a: trade params and account getters
+
 ## 0.3.3
 
 ### Patch Changes
