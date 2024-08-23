@@ -1333,7 +1333,7 @@ In the frontend, you might need to execute a transaction block in multiple place
 
 A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
 ### Generate demo data
 
