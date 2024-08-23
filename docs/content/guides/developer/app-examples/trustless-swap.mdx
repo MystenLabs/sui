@@ -1234,9 +1234,6 @@ Add the following respective files to the `src/routes/` directory:
     `LockedDashboard.tsx`. This file contains the component for the `Manage Objects` page.
   </summary>
 ```tsx
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 export function LockedDashboard() {
   return (
     <div>
@@ -1252,9 +1249,6 @@ export function LockedDashboard() {
     `EscrowDashboard.tsx`. This file contains the component for the `Escrows` page.
   </summary>
 ```tsx
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 export function EscrowDashboard() {
   return (
     <div>
@@ -1286,9 +1280,6 @@ Note that `dApp Kit` provides a set of hooks for making query and mutation calls
     Create `src/components/Header.tsx`. This file contains the navigation links and the connect wallet button:
   </summary>
 ```tsx
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { ConnectButton } from "@mysten/dapp-kit";
 import { SizeIcon } from "@radix-ui/react-icons";
 import { Box, Container, Flex, Heading } from "@radix-ui/themes";
@@ -2140,9 +2131,6 @@ Add `src/components/escrows/Escrow.tsx`:
     `Escrow.tsx`
   </summary>
 ```tsx
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { Button } from "@radix-ui/themes";
@@ -2306,9 +2294,6 @@ Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
     `EscrowDashboard.tsx`
   </summary>
 ```tsx
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
 import { LockedList } from "../components/locked/ApiLockedList";
