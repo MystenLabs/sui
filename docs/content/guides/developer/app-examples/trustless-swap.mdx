@@ -962,88 +962,88 @@ Now that you have an indexer and an API service, you can deploy your move packag
 
 1. Install dependencies by running
 
-```
-pnpm install --ignore-workspace
-```
+    ```
+    pnpm install --ignore-workspace
+    ```
 
 2. Setup the database by running
 
-```
-pnpm db:setup:dev
-```
+    ```
+    pnpm db:setup:dev
+    ```
 
 3. Deploy the Sui package
 
-<details>
-  <summary>
-    Deployment instructions
-  </summary>
-  {@include: ../../../snippets/initialize-sui-client-cli.mdx}
+  <details>
+    <summary>
+      Deployment instructions
+    </summary>
+    {@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
-Next, configure the Sui CLI to use `testnet` as the active environment. 
+  Next, configure the Sui CLI to use `testnet` as the active environment. 
 
-Use the following command to list your available environments:
+  Use the following command to list your available environments:
 
-```bash
-sui client envs
-```
+  ```bash
+  sui client envs
+  ```
 
-If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
+  If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
-```bash
-sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
-```
+  ```bash
+  sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+  ```
 
-Run the following command to activate the `testnet` environment:
+  Run the following command to activate the `testnet` environment:
 
-```bash
-sui client switch --env testnet
-```
+  ```bash
+  sui client switch --env testnet
+  ```
 
-Before being able to publish your package to Testnet, you need Testnet SUI tokens. To get some, run the following command: 
+  Before being able to publish your package to Testnet, you need Testnet SUI tokens. To get some, run the following command: 
 
-```bash
-sui client faucet
-```
+  ```bash
+  sui client faucet
+  ```
 
-For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
+  For other ways to get SUI in your Testnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
 
-Now that you have an account with some Testnet SUI, you can deploy your contracts. 
+  Now that you have an account with some Testnet SUI, you can deploy your contracts. 
 
-There are some helper functions to publish the smart contract so you can create some demo data (for Testnet).
+  There are some helper functions to publish the smart contract so you can create some demo data (for Testnet).
 
-To produce demo data:
+  To produce demo data:
 
-1. Publish the smart contract by running
+  1. Publish the smart contract by running
 
-```
-npx ts-node helpers/publish-contracts.ts
-```
+      ```
+      npx ts-node helpers/publish-contracts.ts
+      ```
 
-2. Produce demo non-locked and locked objects
+  2. Produce demo non-locked and locked objects
 
-```
-npx ts-node helpers/create-demo-data.ts
-```
+      ```
+      npx ts-node helpers/create-demo-data.ts
+      ```
 
-3. Produce demo escrows
+  3. Produce demo escrows
 
-```
-npx ts-node helpers/create-demo-escrows.ts
-```
+      ```
+      npx ts-node helpers/create-demo-escrows.ts
+      ```
 
-If you want to reset the database (start from scratch), run:
+  If you want to reset the database (start from scratch), run:
 
-```
-pnpm db:reset:dev && pnpm db:setup:dev
-```
+  ```
+  pnpm db:reset:dev && pnpm db:setup:dev
+  ```
 </details>
 
 4. Run both the API and the indexer
 
-```
-pnpm dev
-```
+    ```
+    pnpm dev
+    ```
 
 5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
 
