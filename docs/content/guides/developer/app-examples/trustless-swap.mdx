@@ -1315,6 +1315,15 @@ export function Header() {
 
 The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
 
+:::danger[Checkpoint]
+
+At this point, you have a basic routing setup. Run your app and ensure you can:
+
+- Navigate between the `Manage Objects` and `Escrows` pages.
+- Connect and disconnect your wallet.
+
+:::
+
 ### Type definitions
 
 All the type definitions are in `src/types/types.ts`. Create this file and add the following:
@@ -1324,6 +1333,116 @@ All the type definitions are in `src/types/types.ts`. Create this file and add t
 `ApiLockedObject` and `ApiEscrowObject` represent the `Locked` and `Escrow` indexed data model the indexing and API service return.
 
 `EscrowListingQuery` and `LockedListingQuery` are the query parameters model to provide to the API service to fetch from the endpoints `/escrow` and `/locked` accordingly.
+
+### Display owned objects
+
+The first role of the UI is to display the owned objects of the connected wallet account. 
+
+First add this file `src/components/locked/LockOwnedObjects.tsx`: 
+
+```tsx
+import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
+import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
+import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
+
+/**
+ * A component that fetches all the objects owned by the connected wallet address
+ * and allows the user to lock them, so they can be used in escrow.
+ */
+export function LockOwnedObjects() {
+  const account = useCurrentAccount();
+
+  const { data, fetchNextPage, isFetchingNextPage, hasNextPage, refetch } =
+    useSuiClientInfiniteQuery(
+      "getOwnedObjects",
+      {
+        owner: account?.address!,
+        options: {
+          showDisplay: true,
+          showType: true,
+        },
+      },
+      {
+        enabled: !!account,
+        select: (data) =>
+          data.pages
+            .flatMap((page) => page.data)
+            .filter(
+              // we're filtering out objects that don't have Display or image_url
+              // for demo purposes. The Escrow contract works with all objects.
+              (x) => !!x.data?.display && !!x.data?.display?.data?.image_url,
+            ),
+      },
+    );
+
+  return (
+    <InfiniteScrollArea
+      loadMore={() => fetchNextPage()}
+      hasNextPage={hasNextPage}
+      loading={isFetchingNextPage}
+    >
+      {data?.map((obj) => (
+        <SuiObjectDisplay object={obj.data!}>
+        </SuiObjectDisplay>
+      ))}
+    </InfiniteScrollArea>
+  );
+}
+```
+
+Next, update `src/routes/LockedDashboard.tsx` to include the `LockOwnedObjects` component:
+
+```tsx
+import { useState } from "react";
+import { Tabs } from "@radix-ui/themes";
+import { LockOwnedObjects } from "@/components/locked/LockOwnedObjects";
+
+export function LockedDashboard() {
+  const tabs = [
+    {
+      name: "Lock Owned objects",
+      component: () => <LockOwnedObjects />,
+    },
+  ];
+
+  const [tab, setTab] = useState(tabs[0].name);
+
+  return (
+    <Tabs.Root value={tab} onValueChange={setTab}>
+      <Tabs.List>
+        {tabs.map((tab, index) => {
+          return (
+            <Tabs.Trigger
+              key={index}
+              value={tab.name}
+              className="cursor-pointer"
+            >
+              {tab.name}
+            </Tabs.Trigger>
+          );
+        })}
+      </Tabs.List>
+      {tabs.map((tab, index) => {
+        return (
+          <Tabs.Content key={index} value={tab.name}>
+            {tab.component()}
+          </Tabs.Content>
+        );
+      })}
+    </Tabs.Root>
+  );
+}
+```
+
+:::danger[Checkpoint]
+
+Run your app and ensure you can:
+
+- View the owned objects of the connected wallet account.
+
+Note, if you don't see any objects, you may need to create some demo data. You'll be able to mint objects after completing the next steps.
+
+:::
 
 ### Execute transaction hook
 
@@ -1359,72 +1478,69 @@ Now the logic to create a dummy bear object exists. You just need to attach it i
 
 {@inject: examples/trading/frontend/src/components/Header.tsx}
 
-#### Finished demo mutations
+:::danger[Checkpoint]
 
-At this point, view the UI and click `New Demo Bear` to create a dummy bear object. Note, you won't be able to view the bear until you implement future steps.
+Run your app and ensure you can:
 
-### Lock/unlock owned-object mutation
+- Mint a demo bear object and view it in the `Manage Objects` tab.
 
-Locking and unlocking of owned objects are two crucial on-chain actions in this application and are very likely to be used all over. Hence, it's beneficial to extract their logic into separated mutating functions to enhance reusability and encapsulation.
+:::
 
-#### Lock owned objects
+### Locking owned objects
+
+Locking owned objects is a crucial on-chain action in this application and is very likely to be used all over. Hence, it's beneficial to extract its logic into separated mutating functions to enhance reusability and encapsulation.
 
 To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions, use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because our smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
 
-{@inject: examples/trading/frontend/src/mutations/locked.ts#mutationlock}
+```tsx
+import { CONSTANTS } from "@/constants";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { SuiObjectData } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { useMutation } from "@tanstack/react-query";
+/**
+ * Builds and executes the PTB to lock an object.
+ */
+export function useLockObjectMutation() {
+  const account = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
 
-#### Unlock owned objects
+  return useMutation({
+    mutationFn: async ({ object }: { object: SuiObjectData }) => {
+      if (!account?.address)
+        throw new Error("You need to connect your wallet!");
+      const txb = new Transaction();
 
-To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. The implementation is straightforward, call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
+      const [locked, key] = txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::lock::lock`,
+        arguments: [txb.object(object.objectId)],
+        typeArguments: [object.type!],
+      });
 
-{@inject: examples/trading/frontend/src/mutations/locked.ts#mutationunlock}
+      txb.transferObjects([locked, key], txb.pure.address(account.address));
 
-#### Finished locked mutations
+      return executeTransaction(txb);
+    },
+  });
+}
+```
 
-When finished, the `locked.ts` file should look like this:
+Update `src/components/locked/LockOwnedObjects.tsx` to include the `useLockObjectMutation` hook:
 
-{@inject: examples/trading/frontend/src/mutations/locked.ts}
+{@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
 
-### Create/accept/cancel escrow mutations
+:::danger[Checkpoint]
 
-To create, accept, or cancel escrows, it's better to implement mutations for each of these actions to allow reusability and encapsulation.
+Run your app and ensure you can:
 
-#### Create escrows
+- Lock an owned object. 
 
-To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. The mutation implementation is pretty straightforward. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
+Note, the object should disappear from the list of owned objects. You will be able to view and unlock locked objects in later steps.
 
-{@inject: examples/trading/frontend/src/mutations/escrow.ts#mutationcreateescrow}
+:::
 
-#### Accept escrows
-
-To accept the escrow, create a mutation through the `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus it requires the type parameters of the escrowed and locked objects. Query the objects details by using `multiGetObjects` on Sui client instance. Lastly, execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the connected wallet account. When the mutation succeeds, invalidate the cache to allow automatic re-fetch of the data.
-
-{@inject: examples/trading/frontend/src/mutations/escrow.ts#mutationacceptescrow}
-
-#### Cancel escrows
-
-To cancel the escrow, create a mutation through the `useCancelEscrowMutation` hook in `src/mutations/escrow.ts`. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. The `{PACKAGE_ID}::shared::return_to_sender` Move call is generic, thus it requires the type parameters of the escrowed object. Next, execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
-
-{@inject: examples/trading/frontend/src/mutations/escrow.ts#mutationcancelescrow}
-
-#### Finished escrow mutations
-
-When finished, the `escrow.ts` file should look like this:
-
-{@inject: examples/trading/frontend/src/mutations/escrow.ts}
-
-### Locked dashboard
-
-The UI has a tab for users to manage their owned objects to be ready for escrow trading. The code of this tab lives in the file `src/routes/LockedDashBoard.tsx`.
-
-In this tab, there are two sub-tabs:
-
-- **My Locked Objects** tab to list out all of owned `Locked` objects.
-- **Lock Own Objects** tab to lock owned objects.
-
-{@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
-
-#### My Locked Objects tab
+### Display owned locked objects
 
 Let's take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
 
@@ -1440,70 +1556,851 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
 
 The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. It also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
-{@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+```tsx
+import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
+import { ExplorerLink } from "../../ExplorerLink";
+import { ApiLockedObject } from "@/types/types";
+
+/**
+ * Prefer to use the `Locked` component only through `LockedObject`.
+ *
+ * This can also render data directly from the API, but we prefer
+ * to also validate ownership from on-chain state (as objects are transferrable)
+ * and the API cannot track all the ownership changes.
+ */
+export function Locked({
+  locked,
+  hideControls,
+}: {
+  locked: ApiLockedObject;
+  hideControls?: boolean;
+}) {
+  const account = useCurrentAccount();
+
+  const suiObject = useSuiClientQuery(
+    "getObject",
+    {
+      id: locked.itemId,
+      options: {
+        showDisplay: true,
+        showType: true,
+        showOwner: true,
+      },
+    },
+    {
+      select: (data) => data.data,
+    },
+  );
+
+  const isOwner = () => {
+    return !!locked.creator && account?.address === locked.creator;
+  };
+
+  const getLabel = () => {
+    if (locked.deleted) return "Deleted";
+    if (hideControls) {
+      if (locked.creator === account?.address) return "You offer this";
+      return "You'll receive this if accepted";
+    }
+    return undefined;
+  };
+
+  const getLabelClasses = () => {
+    if (locked.deleted)
+      return "bg-red-50 rounded px-3 py-1 text-sm text-red-500";
+    if (hideControls) {
+      if (!!locked.creator && locked.creator === account?.address)
+        return "bg-blue-50 rounded px-3 py-1 text-sm text-blue-500";
+      return "bg-green-50 rounded px-3 py-1 text-sm text-green-700";
+    }
+    return undefined;
+  };
+
+  return (
+    <SuiObjectDisplay
+      object={suiObject.data!}
+      label={getLabel()}
+      labelClasses={getLabelClasses()}
+    >
+      <div className="text-right flex flex-wrap items-center justify-between">
+        {
+          <p className="text-sm flex-shrink-0 flex items-center gap-2">
+            <ExplorerLink id={locked.objectId} isAddress={false} />
+          </p>
+        }
+      </div>
+    </SuiObjectDisplay>
+  );
+}
+```
 
 The `Locked` component is a bit complex because it has multiple actions that can be performed on the locked object. The `Locked` component is responsible for rendering the `ApiLockedObject` and providing the necessary actions to interact with the locked object. The `Locked` component consists of the following actions:
 
-- **Unlock** button to unlock the locked object. 
-- **Create Escrow** button to create an escrow out of the locked object. This contains a complex UI so it is implemented in `src/components/escrows/CreateEscrow.tsx`.
+Update `src/routes/LockedDashboard.tsx` to include the `OwnedLockedList` component:
 
-{@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+{@inject: examples/trading/frontend/src/routes/LockedDashboard.tsx}
 
-#### Lock owned object
+:::danger[Checkpoint]
 
-You have all the logic you need to implement this UI. Use the same `useSuiClientInfiniteQuery()` hook to query all the owned objects of the connected wallet. Filter out objects that do not exist in the Object Display `display.data.image_url` as you can assume the valid NFTs conform to the Object Display and have an image in the metadata. Lastly, use the lock mutation from `useLockObjectMutation()` hook whenever the user clicks the lock button.
+Run your app and ensure you can:
 
-{@inject: examples/trading/frontend/src/components/locked/LockOwnedObjects.tsx}
+- View the locked objects of the connected wallet account.
 
-#### Finished locked dashboard
+:::
 
-At this point, view the `Managed Objects` page in the UI to see the list of owned objects and the ability to lock/unlock them.
+### Unlocking owned objects
 
-### Escrow dashboard
+Unlocking owned objects is another crucial on-chain action in this application and is very likely to be used all over. Hence, it's beneficial to extract its logic into separated mutating functions to enhance reusability and encapsulation.
 
-The UI has a place for users to discover, create, and execute trades. The code of this tab lives in the file `src/routes/EscrowDashboard.tsx`.
+To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. The implementation is straightforward, call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
 
-In this tab, there are three sub-tabs:
+{@inject: examples/trading/frontend/src/mutations/locked.ts#mutationunlock}
 
-- **Requested Escrows** tab to list out all of the escrow requested for locked objects.
-- **Browse Locked Objects** tab to browse locked objects to trade for.
-- **My Pending Requests** tab to browse escrows you have initiated for third-party locked objects.
+Update `src/components/locked/partials/Locked.tsx` to include the `useUnlockObjectMutation` hook:
 
-{@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+```tsx
+import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
+import { Button } from "@radix-ui/themes";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  LockOpen1Icon,
+} from "@radix-ui/react-icons";
+import { ExplorerLink } from "../../ExplorerLink";
+import { useState } from "react";
+import { ApiLockedObject } from "@/types/types";
+import { useUnlockMutation } from "@/mutations/locked";
 
-#### Requested escrows
+/**
+ * Prefer to use the `Locked` component only through `LockedObject`.
+ *
+ * This can also render data directly from the API, but we prefer
+ * to also validate ownership from on-chain state (as objects are transferrable)
+ * and the API cannot track all the ownership changes.
+ */
+export function Locked({
+  locked,
+  hideControls,
+}: {
+  locked: ApiLockedObject;
+  hideControls?: boolean;
+}) {
+  const [isToggled, setIsToggled] = useState(false);
+  const account = useCurrentAccount();
+  const { mutate: unlockMutation, isPending } = useUnlockMutation();
 
-Let's take a look at the **Requested Escrows** tab by examining `src/components/escrows/EscrowList.tsx`. This time, the data is retrieved by using `useInfiniteQuery` directly from `react-query`. Fetch the data by calling the API service that you already implemented in the [Escrow Indexing and API Service Guide](#backend). Call the `/escrows` endpoint to fetch all the escrows requested to you. The rationale behind using an API service to fetch the data is because the indexed data includes additional information that allows query efficiency and flexibility. You can fetch specific escrows satisfying different configured query clauses rather than limited query features of Sui blockchain RPC endpoints.
+  const suiObject = useSuiClientQuery(
+    "getObject",
+    {
+      id: locked.itemId,
+      options: {
+        showDisplay: true,
+        showType: true,
+        showOwner: true,
+      },
+    },
+    {
+      select: (data) => data.data,
+    },
+  );
 
-{@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+  const isOwner = () => {
+    return !!locked.creator && account?.address === locked.creator;
+  };
 
-The `Escrow` component renders the details of an escrow by providing `ApiEscrowObject` as a rendering property. There is some data you need to fetch to gather necessary escrow information for display in the UI:
+  const getLabel = () => {
+    if (locked.deleted) return "Deleted";
+    if (hideControls) {
+      if (locked.creator === account?.address) return "You offer this";
+      return "You'll receive this if accepted";
+    }
+    return undefined;
+  };
 
-- Query the escrowed item object directly from Sui blockchain by using `useSuiClientQuery('getObject')` as this is the only way to have its Object Display metadata.
-- Fetch the `ApiLockedObject` corresponding to the escrow's key ID from the API service as this is the most efficient way to fetch the locked object in a complex query.
-- Fetch the on-chain `Locked` object corresponding to the returned `ApiLockedObject` to pass it onto `<LockedObject />`.
+  const getLabelClasses = () => {
+    if (locked.deleted)
+      return "bg-red-50 rounded px-3 py-1 text-sm text-red-500";
+    if (hideControls) {
+      if (!!locked.creator && locked.creator === account?.address)
+        return "bg-blue-50 rounded px-3 py-1 text-sm text-blue-500";
+      return "bg-green-50 rounded px-3 py-1 text-sm text-green-700";
+    }
+    return undefined;
+  };
 
-{@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
+  return (
+    <SuiObjectDisplay
+      object={suiObject.data!}
+      label={getLabel()}
+      labelClasses={getLabelClasses()}
+    >
+      <div className="text-right flex flex-wrap items-center justify-between">
+        {
+          <p className="text-sm flex-shrink-0 flex items-center gap-2">
+            <ExplorerLink id={locked.objectId} isAddress={false} />
+          </p>
+        }
+        {!hideControls && isOwner() && (
+          <Button
+            className="ml-auto cursor-pointer"
+            disabled={isPending}
+            onClick={() => {
+              unlockMutation({
+                lockedId: locked.objectId,
+                keyId: locked.keyId,
+                suiObject: suiObject.data!,
+              });
+            }}
+          >
+            <LockOpen1Icon /> Unlock
+          </Button>
+        )}
+      </div>
+    </SuiObjectDisplay>
+  );
+}
+```
 
-As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons.
+:::danger[Checkpoint]
 
-The functionality to collect the locked object in an escrow object is used in multiple places. Hence, it's better to extract the logic into a separate hook to enhance reusability and encapsulation.
+Run your app and ensure you can:
 
-{@inject: examples/trading/frontend/src/hooks/useGetLockedObject.ts}
+- Unlock a locked object.
 
-#### Browse locked objects
+:::
 
-The `src/components/locked/ApiLockedList.tsx` component renders all the on-chain locked objects based on the `LockedListingQuery` property. Call the API service to fetch the `ApiLockedObject` data using the provided query parameters. One caveat around the API service is that the `creator` field of the `ApiLockedObject` could be stale because the `Locked` object has the `store` ability. This means that the object can be transferred freely, hence, the ownership might not be correctly tracked by the API service. That's why you still fetch from the Sui blockchain as an additional step to define the object with latest on-chain information to ensure its data correctness in regards to ownership.
+### Display locked objects to escrow
+
+Update `src/routes/EscrowDashboard.tsx` to include the `LockedList` component:
+
+```tsx
+import { useState } from "react";
+import { Tabs, Tooltip } from "@radix-ui/themes";
+import { LockedList } from "../components/locked/ApiLockedList";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
+
+export function EscrowDashboard() {
+  const tabs = [
+    {
+      name: "Browse Locked Objects",
+      component: () => (
+        <LockedList
+          params={{
+            deleted: "false",
+          }}
+          enableSearch
+        />
+      ),
+      tooltip: "Browse locked objects you can trade for.",
+    },
+  ];
+
+  const [tab, setTab] = useState(tabs[0].name);
+
+  return (
+    <Tabs.Root value={tab} onValueChange={setTab}>
+      <Tabs.List>
+        {tabs.map((tab, index) => {
+          return (
+            <Tabs.Trigger
+              key={index}
+              value={tab.name}
+              className="cursor-pointer"
+            >
+              {tab.name}
+              <Tooltip content={tab.tooltip}>
+                <InfoCircledIcon className="ml-3" />
+              </Tooltip>
+            </Tabs.Trigger>
+          );
+        })}
+      </Tabs.List>
+      {tabs.map((tab, index) => {
+        return (
+          <Tabs.Content key={index} value={tab.name}>
+            {tab.component()}
+          </Tabs.Content>
+        );
+      })}
+    </Tabs.Root>
+  );
+}
+```
+
+Add `src/components/locked/ApiLockedList.tsx`:
 
 {@inject: examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
 
-#### My Pending Requests tab
+:::danger[Checkpoint]
 
-The **My Pending Requests** tab uses the same `<EscrowList />` component as **Requested Escrows** tab as they're both trying to display the escrows. The only difference is that the former fetches all the escrows with current wallet as recipient, while the latter fetches all the escrows with current wallet as sender.
+Run your app and ensure you can:
 
-#### Finished escrow dashboard
+- View the locked objects in the `Browse Locked Objects` tab in the `Escrows` page.
 
-At this point, view the `Escrows` page in the UI to see the list of escrows requested to you, browse locked objects to trade for, and browse escrows you have initiated for third-party locked objects.
+:::
+
+### Create escrows
+
+To create escrows, include a mutating function through the `useCreateEscrowMutation` hook in `src/mutations/escrow.ts`. The mutation implementation is pretty straightforward. It accepts the escrowed item to be traded and the `ApiLockedObject` from another party as parameters. Then, call the `{PACKAGE_ID}::shared::create` Move function and provide the escrowed item, the key id of the locked object to exchange, and the recipient of the escrow (locked object's owner).
+
+```tsx
+import { CONSTANTS } from "@/constants";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { ApiLockedObject } from "@/types/types";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { SuiObjectData } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { useMutation } from "@tanstack/react-query";
+
+/**
+ * Builds and executes the PTB to create an escrow.
+ */
+export function useCreateEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
+
+  return useMutation({
+    mutationFn: async ({
+      object,
+      locked,
+    }: {
+      object: SuiObjectData;
+      locked: ApiLockedObject;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+
+      const txb = new Transaction();
+      txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
+        arguments: [
+          txb.object(object.objectId!),
+          txb.pure.id(locked.keyId),
+          txb.pure.address(locked.creator!),
+        ],
+        typeArguments: [object.type!],
+      });
+
+      return executeTransaction(txb);
+    },
+  });
+}
+```
+
+Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook:
+
+{@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
+
+Add `src/components/escrows/CreateEscrow.tsx`:
+
+{@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
+
+:::danger[Checkpoint]
+
+Run your app and ensure you can:
+
+- Create an escrow.
+
+Note, the object should disappear from the list of locked objects in the `Browse Locked Objects` tab in the `Escrows` page. You will be able to view and accept/cancel escrows in later steps.
+
+:::
+
+### Cancel escrows
+
+To cancel the escrow, create a mutation through the `useCancelEscrowMutation` hook in `src/mutations/escrow.ts`. The cancel function accepts the escrow `ApiEscrowObject` and its on-chain data. The `{PACKAGE_ID}::shared::return_to_sender` Move call is generic, thus it requires the type parameters of the escrowed object. Next, execute `{PACKAGE_ID}::shared::return_to_sender` and transfer the returned escrowed object to the creator of the escrow.
+
+```tsx
+import { CONSTANTS, QueryKey } from "@/constants";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { ApiEscrowObject, ApiLockedObject } from "@/types/types";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { SuiObjectData } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+/**
+ * Builds and executes the PTB to create an escrow.
+ */
+export function useCreateEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
+
+  return useMutation({
+    mutationFn: async ({
+      object,
+      locked,
+    }: {
+      object: SuiObjectData;
+      locked: ApiLockedObject;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+
+      const txb = new Transaction();
+      txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
+        arguments: [
+          txb.object(object.objectId!),
+          txb.pure.id(locked.keyId),
+          txb.pure.address(locked.creator!),
+        ],
+        typeArguments: [object.type!],
+      });
+
+      return executeTransaction(txb);
+    },
+  });
+}
+
+/**
+ * Builds and executes the PTB to cancel an escrow.
+ */
+export function useCancelEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      escrow,
+      suiObject,
+    }: {
+      escrow: ApiEscrowObject;
+      suiObject: SuiObjectData;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+      const txb = new Transaction();
+
+      const item = txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::return_to_sender`,
+        arguments: [txb.object(escrow.objectId)],
+        typeArguments: [suiObject?.type!],
+      });
+
+      txb.transferObjects([item], txb.pure.address(currentAccount?.address!));
+
+      return executeTransaction(txb);
+    },
+
+    onSuccess: () => {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+      }, 1_000);
+    },
+  });
+}
+```
+
+Add `src/components/escrows/Escrow.tsx`:
+
+```tsx
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
+import { Button } from "@radix-ui/themes";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  Cross1Icon,
+} from "@radix-ui/react-icons";
+import { CONSTANTS, QueryKey } from "@/constants";
+import { ExplorerLink } from "../ExplorerLink";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { ApiEscrowObject } from "@/types/types";
+import {
+  useCancelEscrowMutation,
+} from "@/mutations/escrow";
+import { useGetLockedObject } from "@/hooks/useGetLockedObject";
+import { LockedObject } from "../locked/LockedObject";
+
+/**
+ * A component that displays an escrow and allows the user to accept or cancel it.
+ * Accepts an `escrow` object as returned from the API.
+ */
+export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
+  const account = useCurrentAccount();
+  const [isToggled, setIsToggled] = useState(true);
+  const { mutate: cancelEscrowMutation, isPending: pendingCancellation } =
+    useCancelEscrowMutation();
+
+  const suiObject = useSuiClientQuery("getObject", {
+    id: escrow?.itemId,
+    options: {
+      showDisplay: true,
+      showType: true,
+    },
+  });
+
+  const lockedData = useQuery({
+    queryKey: [QueryKey.Locked, escrow.keyId],
+    queryFn: async () => {
+      const res = await fetch(
+        `${CONSTANTS.apiEndpoint}locked?keyId=${escrow.keyId}`,
+      );
+      return res.json();
+    },
+    select: (data) => data.data[0],
+    enabled: !escrow.cancelled,
+  });
+
+  const { data: suiLockedObject } = useGetLockedObject({
+    lockedId: lockedData.data?.objectId,
+  });
+
+  const getLabel = () => {
+    if (escrow.cancelled) return "Cancelled";
+    if (escrow.swapped) return "Swapped";
+    if (escrow.sender === account?.address) return "You offer this";
+    if (escrow.recipient === account?.address) return "You'll receive this";
+    return undefined;
+  };
+  const getLabelClasses = () => {
+    if (escrow.cancelled) return "text-red-500";
+    if (escrow.swapped) return "text-green-500";
+    if (escrow.sender === account?.address)
+      return "bg-blue-50 rounded px-3 py-1 text-sm text-blue-500";
+    if (escrow.recipient === account?.address)
+      return "bg-green-50 rounded px-3 py-1 text-sm text-green-700";
+    return undefined;
+  };
+
+  return (
+    <SuiObjectDisplay
+      object={suiObject.data?.data!}
+      label={getLabel()}
+      labelClasses={getLabelClasses()}
+    >
+      <div className="flex gap-3 flex-wrap">
+        {
+          <p className="text-sm flex-shrink-0 flex items-center gap-2">
+            <ExplorerLink id={escrow.objectId} isAddress={false} />
+          </p>
+        }
+        <Button
+          className="ml-auto cursor-pointer bg-transparent text-black"
+          onClick={() => setIsToggled(!isToggled)}
+        >
+          Details
+          {isToggled ? <ArrowUpIcon /> : <ArrowDownIcon />}
+        </Button>
+        {!escrow.cancelled &&
+          !escrow.swapped &&
+          escrow.sender === account?.address && (
+            <Button
+              color="amber"
+              className="cursor-pointer"
+              disabled={pendingCancellation}
+              onClick={() =>
+                cancelEscrowMutation({
+                  escrow,
+                  suiObject: suiObject.data?.data!,
+                })
+              }
+            >
+              <Cross1Icon />
+              Cancel request
+            </Button>
+          )}
+        {isToggled && lockedData.data && (
+          <div className="min-w-[340px] w-full justify-self-start text-left">
+            {suiLockedObject?.data && (
+              <LockedObject
+                object={suiLockedObject.data}
+                itemId={lockedData.data.itemId}
+                hideControls
+              />
+            )}
+
+            {!lockedData.data.deleted &&
+              escrow.recipient === account?.address && (
+                <div className="text-right mt-5">
+                  <p className="text-xs pb-3">
+                    When accepting the exchange, the escrowed item will be
+                    transferred to you and your locked item will be transferred
+                    to the sender.
+                  </p>
+                </div>
+              )}
+            {lockedData.data.deleted &&
+              !escrow.swapped &&
+              escrow.recipient === account?.address && (
+                <div>
+                  <p className="text-red-500 text-sm py-2 flex items-center gap-3">
+                    <Cross1Icon />
+                    The locked object has been deleted so you can't accept this
+                    anymore.
+                  </p>
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    </SuiObjectDisplay>
+  );
+}
+```
+
+Add `src/components/escrows/EscrowList.tsx`:
+
+{@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
+
+Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
+
+```tsx
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState } from "react";
+import { Tabs, Tooltip } from "@radix-ui/themes";
+import { LockedList } from "../components/locked/ApiLockedList";
+import { EscrowList } from "../components/escrows/EscrowList";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+
+export function EscrowDashboard() {
+  const account = useCurrentAccount();
+  const tabs = [
+    {
+      name: "Browse Locked Objects",
+      component: () => (
+        <LockedList
+          params={{
+            deleted: "false",
+          }}
+          enableSearch
+        />
+      ),
+      tooltip: "Browse locked objects you can trade for.",
+    },
+    {
+      name: "My Pending Requests",
+      component: () => (
+        <EscrowList
+          params={{
+            sender: account?.address,
+            swapped: "false",
+            cancelled: "false",
+            
+          }}
+          enableSearch
+        />
+      ),
+      tooltip: "Escrows you have initiated for third party locked objects.",
+    },
+  ];
+
+  const [tab, setTab] = useState(tabs[0].name);
+
+  return (
+    <Tabs.Root value={tab} onValueChange={setTab}>
+      <Tabs.List>
+        {tabs.map((tab, index) => {
+          return (
+            <Tabs.Trigger
+              key={index}
+              value={tab.name}
+              className="cursor-pointer"
+            >
+              {tab.name}
+              <Tooltip content={tab.tooltip}>
+                <InfoCircledIcon className="ml-3" />
+              </Tooltip>
+            </Tabs.Trigger>
+          );
+        })}
+      </Tabs.List>
+      {tabs.map((tab, index) => {
+        return (
+          <Tabs.Content key={index} value={tab.name}>
+            {tab.component()}
+          </Tabs.Content>
+        );
+      })}
+    </Tabs.Root>
+  );
+}
+```
+
+:::danger[Checkpoint]
+
+Run your app and ensure you can:
+
+- View the escrows in the `My Pending Requests` tab in the `Escrows` page.
+- Cancel an escrow that you requested.
+
+:::
+
+### Accept escrows
+
+To accept the escrow, create a mutation through the `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus it requires the type parameters of the escrowed and locked objects. Query the objects details by using `multiGetObjects` on Sui client instance. Lastly, execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the connected wallet account. When the mutation succeeds, invalidate the cache to allow automatic re-fetch of the data.
+
+```tsx
+import { CONSTANTS, QueryKey } from "@/constants";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { ApiEscrowObject, ApiLockedObject } from "@/types/types";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { SuiObjectData } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+/**
+ * Builds and executes the PTB to create an escrow.
+ */
+export function useCreateEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
+
+  return useMutation({
+    mutationFn: async ({
+      object,
+      locked,
+    }: {
+      object: SuiObjectData;
+      locked: ApiLockedObject;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+
+      const txb = new Transaction();
+      txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
+        arguments: [
+          txb.object(object.objectId!),
+          txb.pure.id(locked.keyId),
+          txb.pure.address(locked.creator!),
+        ],
+        typeArguments: [object.type!],
+      });
+
+      return executeTransaction(txb);
+    },
+  });
+}
+
+/**
+ * Builds and executes the PTB to cancel an escrow.
+ */
+export function useCancelEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      escrow,
+      suiObject,
+    }: {
+      escrow: ApiEscrowObject;
+      suiObject: SuiObjectData;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+      const txb = new Transaction();
+
+      const item = txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::return_to_sender`,
+        arguments: [txb.object(escrow.objectId)],
+        typeArguments: [suiObject?.type!],
+      });
+
+      txb.transferObjects([item], txb.pure.address(currentAccount?.address!));
+
+      return executeTransaction(txb);
+    },
+
+    onSuccess: () => {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+      }, 1_000);
+    },
+  });
+}
+
+/**
+ * Builds and executes the PTB to accept an escrow.
+ */
+export function useAcceptEscrowMutation() {
+  const currentAccount = useCurrentAccount();
+  const client = useSuiClient();
+  const executeTransaction = useTransactionExecution();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      escrow,
+      locked,
+    }: {
+      escrow: ApiEscrowObject;
+      locked: ApiLockedObject;
+    }) => {
+      if (!currentAccount?.address)
+        throw new Error("You need to connect your wallet!");
+      const txb = new Transaction();
+
+      const escrowObject = await client.multiGetObjects({
+        ids: [escrow.itemId, locked.itemId],
+        options: {
+          showType: true,
+        },
+      });
+
+      const escrowType = escrowObject.find(
+        (x) => x.data?.objectId === escrow.itemId,
+      )?.data?.type;
+
+      const lockedType = escrowObject.find(
+        (x) => x.data?.objectId === locked.itemId,
+      )?.data?.type;
+
+      if (!escrowType || !lockedType) {
+        throw new Error("Failed to fetch types.");
+      }
+
+      const item = txb.moveCall({
+        target: `${CONSTANTS.escrowContract.packageId}::shared::swap`,
+        arguments: [
+          txb.object(escrow.objectId),
+          txb.object(escrow.keyId),
+          txb.object(locked.objectId),
+        ],
+        typeArguments: [escrowType, lockedType],
+      });
+
+      txb.transferObjects([item], txb.pure.address(currentAccount.address));
+
+      return executeTransaction(txb);
+    },
+
+    onSuccess: () => {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+      }, 1_000);
+    },
+  });
+}
+```
+
+Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook:
+
+{@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
+
+Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
+
+{@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
+
+:::danger[Checkpoint]
+
+Run your app and ensure you can:
+
+- Accept an escrow that someone else requested.
+
+:::
 
 ### Finished frontend
 
