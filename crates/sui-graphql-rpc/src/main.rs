@@ -6,67 +6,54 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{ConnectionConfig, ServerConfig, ServiceConfig};
-use sui_graphql_rpc::config::{Ide, TxExecFullNodeConfig};
-use sui_graphql_rpc::server::builder::export_schema;
-use sui_graphql_rpc::server::graphiql_server::{
-    start_graphiql_server, start_graphiql_server_from_cfg_path,
+use sui_graphql_rpc::config::{
+    ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
-use tracing::error;
+use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+// VERSION mimics what other sui binaries use for the same const
+static VERSION: Version = Version {
+    year: env!("CARGO_PKG_VERSION_MAJOR"),
+    month: env!("CARGO_PKG_VERSION_MINOR"),
+    patch: env!("CARGO_PKG_VERSION_PATCH"),
+    sha: GIT_REVISION,
+    full: const_str::concat!(
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        ".",
+        env!("CARGO_PKG_VERSION_PATCH"),
+        "-",
+        GIT_REVISION
+    ),
+};
 
 #[tokio::main]
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateConfig { path } => {
-            let cfg = ServerConfig::default();
-            if let Some(file) = path {
-                println!("Write config to file: {:?}", file);
-                cfg.to_yaml_file(file)
-                    .expect("Failed writing config to file");
-            } else {
-                println!(
-                    "{}",
-                    &cfg.to_yaml().expect("Failed serializing config to yaml")
-                );
-            }
-        }
-        Command::GenerateDocsExamples => {
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            // we are looking to put examples content in
-            // sui/docs/content/references/sui-graphql/examples.mdx
-            let filename = "docs/content/references/sui-graphql/examples.mdx";
-            buf.pop();
-            buf.pop();
-            buf.push(filename);
-            let content = sui_graphql_rpc::examples::generate_examples_for_docs()
-                .expect("Generating examples markdown file for docs failed");
-            std::fs::write(buf, content).expect("Writing examples markdown failed");
-            println!("Generated the docs example.mdx file and copied it to {filename}.");
-        }
-        Command::GenerateSchema { file } => {
-            let out = export_schema();
-            if let Some(file) = file {
-                println!("Write schema to file: {:?}", file);
-                std::fs::write(file, &out).unwrap();
-            } else {
-                println!("{}", &out);
-            }
-        }
-        Command::GenerateExamples { file } => {
-            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
-                .expect("Generating examples markdown failed");
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            buf.push("docs");
-            buf.push("examples.md");
-            let file = file.unwrap_or(buf);
+        Command::GenerateConfig { output } => {
+            let config = ServiceConfig::default();
+            let toml = toml::to_string_pretty(&config).expect("Failed to serialize configuration");
 
-            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
-            println!("Written examples to file: {:?}", file);
+            if let Some(path) = output {
+                fs::write(&path, toml).unwrap_or_else(|e| {
+                    panic!("Failed to write configuration to {}: {e}", path.display())
+                });
+            } else {
+                println!("{}", toml);
+            }
         }
+
         Command::StartServer {
             ide_title,
             db_url,
+            db_pool_size,
             port,
             host,
             config,
@@ -74,11 +61,14 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
-            let connection = ConnectionConfig::new(port, host, db_url, None, prom_host, prom_port);
+            let connection =
+                ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
+            let tracker = TaskTracker::new();
+            let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
             let server_config = ServerConfig {
@@ -89,17 +79,31 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config).await.unwrap();
-        }
-        Command::FromConfig { path } => {
-            println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap())
-                .await
-                .map_err(|x| {
-                    error!("Error: {:?}", x);
-                    x
-                })
-                .unwrap();
+            let cancellation_token_clone = cancellation_token.clone();
+            let graphql_service_handle = tracker.spawn(async move {
+                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
+                    .await
+                    .unwrap();
+            });
+
+            // Wait for shutdown signal
+            tokio::select! {
+                result = graphql_service_handle => {
+                    if let Err(e) = result {
+                        println!("GraphQL service crashed or exited with error: {:?}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Ctrl+C signal received.");
+                },
+            }
+
+            println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
     }
 }

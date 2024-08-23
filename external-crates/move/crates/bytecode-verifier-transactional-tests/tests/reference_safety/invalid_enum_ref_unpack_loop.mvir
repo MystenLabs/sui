@@ -1,0 +1,197 @@
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Invalid since `y`'s referene stays live between loop iterations, but we then write to `y`'s root in the loop.
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+        label looper:
+            jump_if (*copy(y) == 0) c1;
+            jump_if (*copy(y) == 2) c2;
+            jump_if (*copy(y) == 1) c3;
+            jump c4;
+        label c1:
+            return;
+        label c2:
+            *copy(e) = X.One { x: 2 };
+            jump looper;
+        label c3:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 10;
+            jump looper;
+        label c4:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = *copy(y) - 1;
+            jump looper;
+        return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Same as above, but we alias `y` to `counter` between loop iterations.
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = move(y);
+        label looper:
+            jump_if (*copy(counter) == 0) c1;
+            jump_if (*copy(counter) == 2) c2;
+            jump_if (*copy(counter) == 1) c3;
+            jump c4;
+        label c1:
+            return;
+        label c2:
+            *copy(e) = X.One { x: 2 };
+        label c3:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 10;
+        label c4:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = *copy(y) - 1;
+            counter = move(y);
+            jump looper;
+        return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Same as above, but we alias `y` to `counter` with no loops
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = move(y);
+        label looper:
+            jump_if (*copy(counter) == 0) c1;
+            jump_if (*copy(counter) == 2) c2;
+            jump_if (*copy(counter) == 1) c3;
+            jump c4;
+        label c1:
+            return;
+        label c2:
+            *copy(e) = X.One { x: 2 };
+        label c3:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 10;
+        label c4:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = *copy(y) - 1;
+            counter = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Same as above, but we alias `y` to an immutable ref `counter` between loop iterations.
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = freeze(move(y));
+        label looper:
+            jump_if (*copy(counter) == 0) c1;
+            jump_if (*copy(counter) == 2) c2;
+            jump_if (*copy(counter) == 1) c3;
+            jump c4;
+        label c1:
+            return;
+        label c2:
+            *copy(e) = X.One { x: 2 };
+            jump looper;
+        label c3:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 10;
+            jump looper;
+        label c4:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = *copy(y) - 1;
+            counter = freeze(move(y));
+            jump looper;
+        return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    // Invalid since `counter` is invalidated, but not written again before the loop starts back up.
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = freeze(move(y));
+        label looper:
+            jump_if (*copy(counter) == 0) c1;
+            jump_if (*copy(counter) == 2) c2;
+            jump_if (*copy(counter) == 1) c3;
+            jump c4;
+        label c1:
+            return;
+        label c2:
+            _ = move(counter);
+            *copy(e) = X.One { x: 2 };
+            jump looper;
+        label c3:
+            &mut X.One { x: x } = copy(e);
+            *move(x) = 10;
+            jump looper;
+        label c4:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = *copy(y) - 1;
+            counter = freeze(move(y));
+            jump looper;
+        return;
+    }
+}

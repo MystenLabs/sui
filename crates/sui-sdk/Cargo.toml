@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 clap.workspace = true
 colored.workspace = true
 jsonrpsee.workspace = true
@@ -46,11 +47,6 @@ tempfile.workspace = true
 futures-core.workspace = true
 futures.workspace = true
 rand.workspace = true
-
-[[example]]
-name = "tic_tac_toe"
-path = "examples/tic_tac_toe.rs"
-test = false
 
 [[example]]
 name = "coin_read_api"

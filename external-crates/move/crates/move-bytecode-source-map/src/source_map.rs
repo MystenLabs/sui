@@ -4,13 +4,12 @@
 
 use anyhow::{format_err, Result};
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
-        AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, FunctionDefinitionIndex, LocalIndex,
-        MemberCount, ModuleHandleIndex, SignatureIndex, StructDefinition, StructDefinitionIndex,
-        TableIndex,
+        AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, EnumDefinition, EnumDefinitionIndex,
+        FunctionDefinitionIndex, LocalIndex, MemberCount, ModuleHandleIndex, SignatureIndex,
+        StructDefinition, StructDefinitionIndex, TableIndex, VariantTag,
     },
+    CompiledModule,
 };
 use move_command_line_common::files::FileHash;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -39,6 +38,19 @@ pub struct StructSourceMap {
     /// Note that fields to a struct source map need to be added in the order of the fields in the
     /// struct definition.
     pub fields: Vec<Loc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EnumSourceMap {
+    /// The source declaration location of the enum
+    pub definition_location: Loc,
+
+    /// Important: type parameters need to be added in the order of their declaration
+    pub type_parameters: Vec<SourceName>,
+
+    /// Note that variants to an enum source map need to be added in the order of the variants in the
+    /// enum definition.
+    pub variants: Vec<(SourceName, Vec<Loc>)>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -81,6 +93,9 @@ pub struct SourceMap {
     // A mapping of `StructDefinitionIndex` to source map for each struct/resource.
     struct_map: BTreeMap<TableIndex, StructSourceMap>,
 
+    // A mapping of `EnumDefinitionIndex` to source map for each enum (and its variants)
+    enum_map: BTreeMap<TableIndex, EnumSourceMap>,
+
     // A mapping of `FunctionDefinitionIndex` to the soure map for that function.
     // For scripts, this map has a single element that points to a source map corresponding to the
     // script's "main" function.
@@ -117,11 +132,11 @@ impl StructSourceMap {
 
     pub fn dummy_struct_map(
         &mut self,
-        view: &BinaryIndexedView,
+        module: &CompiledModule,
         struct_def: &StructDefinition,
         default_loc: Loc,
     ) -> Result<()> {
-        let struct_handle = view.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
 
         // Add dummy locations for the fields
         match struct_def.declared_field_count() {
@@ -130,6 +145,54 @@ impl StructSourceMap {
         }
 
         for i in 0..struct_handle.type_parameters.len() {
+            let name = format!("Ty{}", i);
+            self.add_type_parameter((name, default_loc))
+        }
+        Ok(())
+    }
+}
+
+impl EnumSourceMap {
+    pub fn new(definition_location: Loc) -> Self {
+        Self {
+            definition_location,
+            type_parameters: Vec::new(),
+            variants: Vec::new(),
+        }
+    }
+
+    pub fn add_type_parameter(&mut self, type_name: SourceName) {
+        self.type_parameters.push(type_name)
+    }
+
+    pub fn get_type_parameter_name(&self, type_parameter_idx: usize) -> Option<SourceName> {
+        self.type_parameters.get(type_parameter_idx).cloned()
+    }
+
+    pub fn add_variant_location(&mut self, variant: SourceName, field_locs: Vec<Loc>) {
+        self.variants.push((variant, field_locs))
+    }
+
+    pub fn get_variant_location(&self, variant_tag: u16) -> Option<(SourceName, Vec<Loc>)> {
+        self.variants.get(variant_tag as usize).cloned()
+    }
+
+    pub fn dummy_enum_map(
+        &mut self,
+        view: &CompiledModule,
+        enum_def: &EnumDefinition,
+        default_loc: Loc,
+    ) -> Result<()> {
+        let enum_handle = view.datatype_handle_at(enum_def.enum_handle);
+
+        // Add dummy locations for the variants
+        for (i, variant) in enum_def.variants.iter().enumerate() {
+            let field_locs = (0..variant.fields.len()).map(|_| default_loc).collect();
+            let name = format!("Variant{}", i);
+            self.variants.push(((name, default_loc), field_locs))
+        }
+
+        for i in 0..enum_handle.type_parameters.len() {
             let name = format!("Ty{}", i);
             self.add_type_parameter((name, default_loc))
         }
@@ -230,7 +293,7 @@ impl FunctionSourceMap {
 
     pub fn dummy_function_map(
         &mut self,
-        view: &BinaryIndexedView,
+        module: &CompiledModule,
         type_parameters: &[AbilitySet],
         parameters: SignatureIndex,
         code: Option<CodeUnit>,
@@ -243,14 +306,14 @@ impl FunctionSourceMap {
         }
 
         // Generate names for each parameter
-        let params = view.signature_at(parameters);
+        let params = module.signature_at(parameters);
         for i in 0..params.0.len() {
             let name = format!("Arg{}", i);
             self.add_parameter_mapping((name, default_loc))
         }
 
         if let Some(code) = code {
-            let locals = view.signature_at(code.locals);
+            let locals = module.signature_at(code.locals);
             for i in 0..locals.0.len() {
                 let name = format!("loc{}", i);
                 self.add_local_mapping((name, default_loc))
@@ -275,6 +338,7 @@ impl SourceMap {
             definition_location,
             module_name,
             struct_map: BTreeMap::new(),
+            enum_map: BTreeMap::new(),
             function_map: BTreeMap::new(),
             constant_map: BTreeMap::new(),
         }
@@ -408,6 +472,16 @@ impl SourceMap {
                 )) })
     }
 
+    pub fn add_top_level_enum_mapping(
+        &mut self,
+        enum_def_idx: EnumDefinitionIndex,
+        location: Loc,
+    ) -> Result<()> {
+        self.enum_map.insert(enum_def_idx.0, EnumSourceMap::new(location)).map_or(Ok(()), |_| { Err(format_err!(
+                "Multiple enums at same struct definition index encountered when constructing source map"
+                )) })
+    }
+
     pub fn add_const_mapping(
         &mut self,
         const_idx: ConstantPoolIndex,
@@ -470,15 +544,6 @@ impl SourceMap {
             .ok_or_else(|| format_err!("Unable to get struct type parameter name"))
     }
 
-    pub fn get_function_source_map(
-        &self,
-        fdef_idx: FunctionDefinitionIndex,
-    ) -> Result<&FunctionSourceMap> {
-        self.function_map
-            .get(&fdef_idx.0)
-            .ok_or_else(|| format_err!("Unable to get function source map"))
-    }
-
     pub fn get_struct_source_map(
         &self,
         struct_def_idx: StructDefinitionIndex,
@@ -488,71 +553,106 @@ impl SourceMap {
             .ok_or_else(|| format_err!("Unable to get struct source map"))
     }
 
+    pub fn add_enum_variant_mapping(
+        &mut self,
+        enum_def_idx: EnumDefinitionIndex,
+        variant_name: SourceName,
+        field_locs: Vec<Loc>,
+    ) -> Result<()> {
+        let enum_entry = self
+            .enum_map
+            .get_mut(&enum_def_idx.0)
+            .ok_or_else(|| format_err!("variant_name add file mapping to undefined enum index"))?;
+        enum_entry.add_variant_location(variant_name, field_locs);
+        Ok(())
+    }
+
+    pub fn get_enum_field_name(
+        &self,
+        enum_def_idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+    ) -> Option<SourceName> {
+        self.enum_map
+            .get(&enum_def_idx.0)
+            .and_then(|enum_source_map| {
+                enum_source_map
+                    .get_variant_location(variant_tag)
+                    .map(|x| x.0)
+            })
+    }
+
+    pub fn add_enum_type_parameter_mapping(
+        &mut self,
+        enum_def_idx: EnumDefinitionIndex,
+        name: SourceName,
+    ) -> Result<()> {
+        let enum_entry = self.enum_map.get_mut(&enum_def_idx.0).ok_or_else(|| {
+            format_err!("Tried to add enum type parameter mapping to undefined enum index")
+        })?;
+        enum_entry.add_type_parameter(name);
+        Ok(())
+    }
+
+    pub fn get_function_source_map(
+        &self,
+        fdef_idx: FunctionDefinitionIndex,
+    ) -> Result<&FunctionSourceMap> {
+        self.function_map
+            .get(&fdef_idx.0)
+            .ok_or_else(|| format_err!("Unable to get function source map"))
+    }
+
+    pub fn get_enum_source_map(&self, enum_def_idx: EnumDefinitionIndex) -> Result<&EnumSourceMap> {
+        self.enum_map
+            .get(&enum_def_idx.0)
+            .ok_or_else(|| format_err!("Unable to get enum source map {}", enum_def_idx.0))
+    }
+
+    pub fn get_enum_type_parameter_name(
+        &self,
+        enum_def_idx: EnumDefinitionIndex,
+        type_parameter_idx: usize,
+    ) -> Result<SourceName> {
+        self.enum_map
+            .get(&enum_def_idx.0)
+            .and_then(|enum_source_map| enum_source_map.get_type_parameter_name(type_parameter_idx))
+            .ok_or_else(|| format_err!("Unable to get enum type parameter name"))
+    }
+
     /// Create a 'dummy' source map for a compiled module or script. This is useful for e.g. disassembling
     /// with generated or real names depending upon if the source map is available or not.
-    pub fn dummy_from_view(view: &BinaryIndexedView, default_loc: Loc) -> Result<Self> {
-        let module_ident = match view {
-            BinaryIndexedView::Script(..) => {
-                anyhow::bail!("Scripts are no longer supported for dummy source map")
-            }
-            BinaryIndexedView::Module(..) => {
-                let module_handle = view.module_handle_at(ModuleHandleIndex::new(0));
-                let module_name = ModuleName(Symbol::from(
-                    view.identifier_at(module_handle.name).as_str(),
-                ));
-                let address = *view.address_identifier_at(module_handle.address);
-                ModuleIdent::new(module_name, address)
-            }
+    pub fn dummy_from_view(module: &CompiledModule, default_loc: Loc) -> Result<Self> {
+        let module_ident = {
+            let module_handle = module.module_handle_at(ModuleHandleIndex::new(0));
+            let module_name = ModuleName(Symbol::from(
+                module.identifier_at(module_handle.name).as_str(),
+            ));
+            let address = *module.address_identifier_at(module_handle.address);
+            ModuleIdent::new(module_name, address)
         };
         let mut empty_source_map = Self::new(default_loc, module_ident);
 
-        match view {
-            BinaryIndexedView::Script(script) => {
-                empty_source_map.add_top_level_function_mapping(
-                    FunctionDefinitionIndex(0_u16),
+        for (function_idx, function_def) in module.function_defs.iter().enumerate() {
+            empty_source_map.add_top_level_function_mapping(
+                FunctionDefinitionIndex(function_idx as TableIndex),
+                default_loc,
+                false,
+            )?;
+            let function_handle = module.function_handle_at(function_def.function);
+            empty_source_map
+                .function_map
+                .get_mut(&(function_idx as TableIndex))
+                .ok_or_else(|| format_err!("Unable to get function map while generating dummy"))?
+                .dummy_function_map(
+                    module,
+                    &function_handle.type_parameters,
+                    function_handle.parameters,
+                    function_def.code.clone(),
                     default_loc,
-                    false,
                 )?;
-                empty_source_map
-                    .function_map
-                    .get_mut(&(0_u16))
-                    .ok_or_else(|| {
-                        format_err!("Unable to get function map while generating dummy")
-                    })?
-                    .dummy_function_map(
-                        view,
-                        &script.type_parameters,
-                        script.parameters,
-                        Some(script.code.clone()),
-                        default_loc,
-                    )?;
-            }
-            BinaryIndexedView::Module(module) => {
-                for (function_idx, function_def) in module.function_defs.iter().enumerate() {
-                    empty_source_map.add_top_level_function_mapping(
-                        FunctionDefinitionIndex(function_idx as TableIndex),
-                        default_loc,
-                        false,
-                    )?;
-                    let function_handle = module.function_handle_at(function_def.function);
-                    empty_source_map
-                        .function_map
-                        .get_mut(&(function_idx as TableIndex))
-                        .ok_or_else(|| {
-                            format_err!("Unable to get function map while generating dummy")
-                        })?
-                        .dummy_function_map(
-                            view,
-                            &function_handle.type_parameters,
-                            function_handle.parameters,
-                            function_def.code.clone(),
-                            default_loc,
-                        )?;
-                }
-            }
-        };
+        }
 
-        for (struct_idx, struct_def) in view.struct_defs().into_iter().flatten().enumerate() {
+        for (struct_idx, struct_def) in module.struct_defs().iter().enumerate() {
             empty_source_map.add_top_level_struct_mapping(
                 StructDefinitionIndex(struct_idx as TableIndex),
                 default_loc,
@@ -561,10 +661,22 @@ impl SourceMap {
                 .struct_map
                 .get_mut(&(struct_idx as TableIndex))
                 .ok_or_else(|| format_err!("Unable to get struct map while generating dummy"))?
-                .dummy_struct_map(view, struct_def, default_loc)?;
+                .dummy_struct_map(module, struct_def, default_loc)?;
         }
 
-        for const_idx in 0..view.constant_pool().len() {
+        for (enum_idx, enum_def) in module.enum_defs().iter().enumerate() {
+            empty_source_map.add_top_level_enum_mapping(
+                EnumDefinitionIndex(enum_idx as TableIndex),
+                default_loc,
+            )?;
+            empty_source_map
+                .enum_map
+                .get_mut(&(enum_idx as TableIndex))
+                .ok_or_else(|| format_err!("Unable to get enum map while generating dummy"))?
+                .dummy_enum_map(module, enum_def, default_loc)?;
+        }
+
+        for const_idx in 0..module.constant_pool().len() {
             empty_source_map.add_const_mapping(
                 ConstantPoolIndex(const_idx as TableIndex),
                 ConstantName(Symbol::from(format!("CONST{}", const_idx))),

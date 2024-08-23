@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use crate::execution_value::SuiResolver;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -17,7 +18,6 @@ use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::SuiResolver,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     storage::BackingPackageStore,
 };
@@ -156,7 +156,7 @@ impl<'state> LinkageView<'state> {
         // speed up other requests.
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package: defining_id,
         } in context.type_origin_table()
         {
@@ -308,7 +308,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 
         for TypeOrigin {
             module_name,
-            struct_name,
+            datatype_name: struct_name,
             package,
         } in package.move_package().type_origin_table()
         {

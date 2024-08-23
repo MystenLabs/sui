@@ -9,14 +9,14 @@ error[E04007]: incompatible types
   │                Given: '()'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/while_condition_invalid.move:4:16
+  ┌─ tests/move_check/typing/while_condition_invalid.move:4:17
   │
 4 │         while ((())) ();
-  │                ^^^^
-  │                │
-  │                Invalid while condition
-  │                Expected: 'bool'
-  │                Given: '()'
+  │                 ^^
+  │                 │
+  │                 Invalid while condition
+  │                 Expected: 'bool'
+  │                 Given: '()'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_condition_invalid.move:5:16

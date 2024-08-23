@@ -2,16 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-	CreateSponsoredTransactionBlockApiInput,
-	CreateSponsoredTransactionBlockApiResponse,
+	CreateSponsoredTransactionApiInput,
+	CreateSponsoredTransactionApiResponse,
+	CreateSubnameApiInput,
+	CreateSubnameApiResponse,
 	CreateZkLoginNonceApiInput,
 	CreateZkLoginNonceApiResponse,
 	CreateZkLoginZkpApiInput,
 	CreateZkLoginZkpApiResponse,
-	ExecuteSponsoredTransactionBlockApiInput,
-	ExecuteSponsoredTransactionBlockApiResponse,
+	DeleteSubnameApiInput,
+	DeleteSubnameApiResponse,
+	ExecuteSponsoredTransactionApiInput,
+	ExecuteSponsoredTransactionApiResponse,
 	GetAppApiInput,
 	GetAppApiResponse,
+	GetSubnamesApiInput,
+	GetSubnamesApiResponse,
 	GetZkLoginApiInput,
 	GetZkLoginApiResponse,
 } from './type.js';
@@ -25,6 +31,32 @@ export interface EnokiClientConfig {
 
 	/** The API URL for Enoki. In most cases, this should not be set. */
 	apiUrl?: string;
+}
+
+export class EnokiClientError extends Error {
+	errors: { code: string; message: string; data: unknown }[] = [];
+	status: number;
+	code: string;
+
+	constructor(status: number, response: string) {
+		let errors;
+		try {
+			const parsedResponse = JSON.parse(response) as {
+				errors: { code: string; message: string; data: unknown }[];
+			};
+			errors = parsedResponse.errors;
+		} catch (e) {
+			// Ignore
+		}
+		const cause = errors?.[0] ? new Error(errors[0].message) : undefined;
+		super(`Request to Enoki API failed (status: ${status})`, {
+			cause,
+		});
+		this.errors = errors ?? [];
+		this.name = 'EnokiClientError';
+		this.status = status;
+		this.code = errors?.[0]?.code ?? 'unknown_error';
+	}
 }
 
 /**
@@ -82,21 +114,26 @@ export class EnokiClient {
 		});
 	}
 
-	createSponsoredTransactionBlock(input: CreateSponsoredTransactionBlockApiInput) {
-		return this.#fetch<CreateSponsoredTransactionBlockApiResponse>('transaction-blocks/sponsor', {
+	createSponsoredTransaction(input: CreateSponsoredTransactionApiInput) {
+		return this.#fetch<CreateSponsoredTransactionApiResponse>('transaction-blocks/sponsor', {
 			method: 'POST',
-			headers: {
-				[ZKLOGIN_HEADER]: input.jwt,
-			},
+			headers: input.jwt
+				? {
+						[ZKLOGIN_HEADER]: input.jwt,
+					}
+				: {},
 			body: JSON.stringify({
+				sender: input.sender,
 				network: input.network,
-				transactionBlockKindBytes: input.transactionBlockKindBytes,
+				transactionBlockKindBytes: input.transactionKindBytes,
+				allowedAddresses: input.allowedAddresses,
+				allowedMoveCallTargets: input.allowedMoveCallTargets,
 			}),
 		});
 	}
 
-	executeSponsoredTransactionBlock(input: ExecuteSponsoredTransactionBlockApiInput) {
-		return this.#fetch<ExecuteSponsoredTransactionBlockApiResponse>(
+	executeSponsoredTransaction(input: ExecuteSponsoredTransactionApiInput) {
+		return this.#fetch<ExecuteSponsoredTransactionApiResponse>(
 			`transaction-blocks/sponsor/${input.digest}`,
 			{
 				method: 'POST',
@@ -105,6 +142,53 @@ export class EnokiClient {
 				}),
 			},
 		);
+	}
+
+	getSubnames(input: GetSubnamesApiInput) {
+		const query = new URLSearchParams();
+		if (input.address) {
+			query.set('address', input.address);
+		}
+		if (input.network) {
+			query.set('network', input.network);
+		}
+		if (input.domain) {
+			query.set('domain', input.domain);
+		}
+		return this.#fetch<GetSubnamesApiResponse>(
+			'subnames' + (query.size > 0 ? `?${query.toString()}` : ''),
+			{
+				method: 'GET',
+			},
+		);
+	}
+
+	createSubname(input: CreateSubnameApiInput) {
+		return this.#fetch<CreateSubnameApiResponse>('subnames', {
+			method: 'POST',
+			headers: input.jwt
+				? {
+						[ZKLOGIN_HEADER]: input.jwt,
+					}
+				: {},
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+				targetAddress: input.targetAddress,
+			}),
+		});
+	}
+
+	deleteSubname(input: DeleteSubnameApiInput) {
+		this.#fetch<DeleteSubnameApiResponse>('subnames', {
+			method: 'DELETE',
+			body: JSON.stringify({
+				network: input.network,
+				domain: input.domain,
+				subname: input.subname,
+			}),
+		});
 	}
 
 	async #fetch<T = unknown>(path: string, init: RequestInit): Promise<T> {
@@ -119,7 +203,7 @@ export class EnokiClient {
 		});
 
 		if (!res.ok) {
-			throw new Error('Failed to fetch');
+			throw new EnokiClientError(res.status, await res.text());
 		}
 
 		const { data } = await res.json();

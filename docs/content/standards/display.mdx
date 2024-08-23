@@ -45,24 +45,22 @@ The following represents the template the `init` function defines:
 /// to use it to get the `Display<Hero>` object - a way to describe a
 /// type for the ecosystem.
 module examples::my_hero {
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{sender};
     use std::string::{utf8, String};
-    use sui::transfer;
-    use sui::object::{Self, UID};
 
     // The creator bundle: these two packages often go together.
     use sui::package;
     use sui::display;
 
     /// The Hero - an outstanding collection of digital art.
-    struct Hero has key, store {
+    public struct Hero has key, store {
         id: UID,
         name: String,
         image_url: String,
     }
 
     /// One-Time-Witness for the module.
-    struct MY_HERO has drop {}
+    public struct MY_HERO has drop {}
 
     /// In the module initializer one claims the `Publisher` object
     /// to then create a `Display`. The `Display` is initialized with
@@ -100,7 +98,7 @@ module examples::my_hero {
         let publisher = package::claim(otw, ctx);
 
         // Get a new `Display` object for the `Hero` type.
-        let display = display::new_with_fields<Hero>(
+        let mut display = display::new_with_fields<Hero>(
             &publisher, keys, values, ctx
         );
 

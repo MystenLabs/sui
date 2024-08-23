@@ -10,7 +10,7 @@ import { type SignMessageRequest } from '_payloads/transactions/SignMessage';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
 import { type SignedTransaction } from '_src/ui/app/WalletSigner';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { type SuiSignMessageOutput } from '@mysten/wallet-standard';
 import { filter, lastValueFrom, map, race, Subject, take } from 'rxjs';
 import { v4 as uuidV4 } from 'uuid';

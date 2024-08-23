@@ -9,7 +9,7 @@ import {
 	SuiObjectChangePublished,
 	SuiObjectChangeTransferred,
 	SuiObjectChangeWrapped,
-} from '@mysten/sui.js/client';
+} from '@mysten/sui/client';
 
 import { groupByOwner } from './groupByOwner';
 import { SuiObjectChangeTypes } from './types';

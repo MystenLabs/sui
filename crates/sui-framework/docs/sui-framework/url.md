@@ -1,7 +1,6 @@
-
-<a name="0x2_url"></a>
-
-# Module `0x2::url`
+---
+title: Module `0x2::url`
+---
 
 URL: standard Uniform Resource Locator string
 
@@ -13,7 +12,7 @@ URL: standard Uniform Resource Locator string
 -  [Function `update`](#0x2_url_update)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
 </code></pre>
 
 
@@ -25,7 +24,7 @@ URL: standard Uniform Resource Locator string
 Standard Uniform Resource Locator (URL) string.
 
 
-<pre><code><b>struct</b> <a href="url.md#0x2_url_Url">Url</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="../sui-framework/url.md#0x2_url_Url">Url</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -36,7 +35,7 @@ Standard Uniform Resource Locator (URL) string.
 
 <dl>
 <dt>
-<code><a href="url.md#0x2_url">url</a>: <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
+<code><a href="../sui-framework/url.md#0x2_url">url</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a></code>
 </dt>
 <dd>
 
@@ -50,10 +49,10 @@ Standard Uniform Resource Locator (URL) string.
 
 ## Function `new_unsafe`
 
-Create a <code><a href="url.md#0x2_url_Url">Url</a></code>, with no validation
+Create a <code><a href="../sui-framework/url.md#0x2_url_Url">Url</a></code>, with no validation
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_new_unsafe">new_unsafe</a>(<a href="url.md#0x2_url">url</a>: <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="url.md#0x2_url_Url">url::Url</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_new_unsafe">new_unsafe</a>(<a href="../sui-framework/url.md#0x2_url">url</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>
 </code></pre>
 
 
@@ -62,8 +61,8 @@ Create a <code><a href="url.md#0x2_url_Url">Url</a></code>, with no validation
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_new_unsafe">new_unsafe</a>(<a href="url.md#0x2_url">url</a>: String): <a href="url.md#0x2_url_Url">Url</a> {
-    <a href="url.md#0x2_url_Url">Url</a> { <a href="url.md#0x2_url">url</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_new_unsafe">new_unsafe</a>(<a href="../sui-framework/url.md#0x2_url">url</a>: String): <a href="../sui-framework/url.md#0x2_url_Url">Url</a> {
+    <a href="../sui-framework/url.md#0x2_url_Url">Url</a> { <a href="../sui-framework/url.md#0x2_url">url</a> }
 }
 </code></pre>
 
@@ -75,11 +74,11 @@ Create a <code><a href="url.md#0x2_url_Url">Url</a></code>, with no validation
 
 ## Function `new_unsafe_from_bytes`
 
-Create a <code><a href="url.md#0x2_url_Url">Url</a></code> with no validation from bytes
+Create a <code><a href="../sui-framework/url.md#0x2_url_Url">Url</a></code> with no validation from bytes
 Note: this will abort if <code>bytes</code> is not valid ASCII
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_new_unsafe_from_bytes">new_unsafe_from_bytes</a>(bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="url.md#0x2_url_Url">url::Url</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">new_unsafe_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>
 </code></pre>
 
 
@@ -88,9 +87,9 @@ Note: this will abort if <code>bytes</code> is not valid ASCII
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_new_unsafe_from_bytes">new_unsafe_from_bytes</a>(bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="url.md#0x2_url_Url">Url</a> {
-    <b>let</b> <a href="url.md#0x2_url">url</a> = <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(bytes);
-    <a href="url.md#0x2_url_Url">Url</a> { <a href="url.md#0x2_url">url</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">new_unsafe_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../sui-framework/url.md#0x2_url_Url">Url</a> {
+    <b>let</b> <a href="../sui-framework/url.md#0x2_url">url</a> = bytes.to_ascii_string();
+    <a href="../sui-framework/url.md#0x2_url_Url">Url</a> { <a href="../sui-framework/url.md#0x2_url">url</a> }
 }
 </code></pre>
 
@@ -105,7 +104,7 @@ Note: this will abort if <code>bytes</code> is not valid ASCII
 Get inner URL
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="url.md#0x2_url_Url">url::Url</a>): <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>
 </code></pre>
 
 
@@ -114,8 +113,8 @@ Get inner URL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="url.md#0x2_url_Url">Url</a>): String{
-    self.<a href="url.md#0x2_url">url</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/url.md#0x2_url_inner_url">inner_url</a>(self: &<a href="../sui-framework/url.md#0x2_url_Url">Url</a>): String{
+    self.<a href="../sui-framework/url.md#0x2_url">url</a>
 }
 </code></pre>
 
@@ -130,7 +129,7 @@ Get inner URL
 Update the inner URL
 
 
-<pre><code><b>public</b> <b>fun</b> <b>update</b>(self: &<b>mut</b> <a href="url.md#0x2_url_Url">url::Url</a>, <a href="url.md#0x2_url">url</a>: <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
+<pre><code><b>public</b> <b>fun</b> <b>update</b>(self: &<b>mut</b> <a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>, <a href="../sui-framework/url.md#0x2_url">url</a>: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
 </code></pre>
 
 
@@ -139,8 +138,8 @@ Update the inner URL
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <b>update</b>(self: &<b>mut</b> <a href="url.md#0x2_url_Url">Url</a>, <a href="url.md#0x2_url">url</a>: String) {
-    self.<a href="url.md#0x2_url">url</a> = <a href="url.md#0x2_url">url</a>;
+<pre><code><b>public</b> <b>fun</b> <b>update</b>(self: &<b>mut</b> <a href="../sui-framework/url.md#0x2_url_Url">Url</a>, <a href="../sui-framework/url.md#0x2_url">url</a>: String) {
+    self.<a href="../sui-framework/url.md#0x2_url">url</a> = <a href="../sui-framework/url.md#0x2_url">url</a>;
 }
 </code></pre>
 

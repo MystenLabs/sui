@@ -6,8 +6,8 @@ import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import { useFormatCoin, useGetTimeBeforeEpochNumber } from '@mysten/core';
-import { type StakeObject } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type StakeObject } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -120,8 +120,8 @@ export function StakeCard({
 	const delegationState = inactiveValidator
 		? StakeState.IN_ACTIVE
 		: isEarnedRewards
-		? StakeState.EARNING
-		: StakeState.WARM_UP;
+			? StakeState.EARNING
+			: StakeState.WARM_UP;
 
 	const rewards = isEarnedRewards && estimatedReward ? BigInt(estimatedReward) : 0n;
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module oracle::decimal_value {
-    struct DecimalValue has store, drop, copy {
+    public struct DecimalValue has store, drop, copy {
         value: u64,
         decimal: u8,
     }

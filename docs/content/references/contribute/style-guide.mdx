@@ -1,12 +1,9 @@
 ---
 title: Style Guide
 slug: /style-guide
-toc_max_heading_level: 2
 ---
 
-# Style Guide
-
-This document defines the styles, word and term usage, and content formatting for Sui documentation. Entries are in alphabetical order. A style guide is never finished. Expect continued iterations to add additional styles, additional information to existing styles, and infrequently a change to an existing style.
+This document defines the styles, vocabulary usage, and content formatting for Sui documentation. Entries are in alphabetical order. A style guide is never finished. Expect continued iterations to add additional styles, additional information to existing styles, and infrequently a change to an existing style.
 
 ## Accessibility {#accessibility}
 
@@ -46,9 +43,6 @@ Alerts add emphasis to information. Use Admonitions, a Docusaurus feature, to in
 ### Note {#note}
 
 Use Note to add emphasis to information that the reader should know, but could be overlooked when scanning a topic or document. Provide information that prevents users from getting stuck.
-
-import Tabs from "@theme/Tabs";
-import TabItem from "@theme/TabItem";
 
 <Tabs>
 <TabItem value="example" label="Example" default>
@@ -136,7 +130,7 @@ Backup your configuration files before you delete your network.
 
 **Do:**
 
-Use sentence capitalization for section headings, table cells, list items, captions, alt text, and error messages.
+Use sentence capitalization for section headings, table cells/headers, list items, captions, alt text, and error messages.
 
 Capitalize proper nouns. [Proper nouns](#proper-nouns).
 
@@ -241,9 +235,9 @@ Use imperative verbs for tasks, procedures, and instructions.
 
 **Example**
 
-- **Indicative –** The Sui Explorer displays transactions on the network.
-- **Imperative –** Open Sui Explorer to view transactions on the network.
-- **Subjunctive –** We suggest that you view your transaction in Sui Explorer after you complete a transfer.
+- **Indicative –** Sui network explorers display transactions on the network.
+- **Imperative –** Open a Sui network explorer to view transactions on the network.
+- **Subjunctive –** We suggest that you view your transaction in a Sui network explorer after you complete a transfer.
 
 ### Person {#person}
 
@@ -251,11 +245,11 @@ Use second person in most cases.
 
 **Example**
 
-> You can view transaction history in Sui Explorer.
+> You used to could view transaction history in Sui Explorer.
 
 **Rather than:**
 
-> We can view transaction history in Sui Explorer.
+> We used to could view transaction history in Sui Explorer.
 
 ### Present tense {#present-tense}
 
@@ -349,6 +343,18 @@ Use sentence casing for section headers.
 </TabItem>
 </Tabs>
 
+### Code elements in section headings
+
+Do not use code styling in section headings. Instead, use regular font in the heading and code styling in the content.
+
+**Example:**
+
+```
+## ObjectName
+
+`ObjectName` is an object.
+```
+
 ## Images / Graphics {#images-graphics}
 
 Only use images and screenshots to supplement and help explain text. Images do not replace text. Readers should be able to understand the documentation without the images. However, images can help readers understand the text more clearly.
@@ -427,7 +433,7 @@ Use bulleted lists to list more than two pieces of related information, such as 
 <Tabs>
 <TabItem value="example" label="Example" default>
 
-Sui Explorer supports the following browsers:
+Sui Explorer used to support the following browsers:
 
 - Firefox version X or later
 - Chrome version X or later
@@ -438,7 +444,7 @@ Sui Explorer supports the following browsers:
 
 ```
 
-Sui Explorer supports the following browsers:
+Sui Explorer used to support the following browsers:
 
 - Firefox version X or later
 - Chrome version X or later
@@ -648,7 +654,7 @@ Proper nouns include:
 
 **Example**
 
-> Sui Explorer
+> Sui Wallet
 
 ## Product names {#product-names}
 
@@ -668,17 +674,11 @@ Product names are proper nouns. Capitalize all words of a product name. When ref
 
 **Example**
 
-> Sui Explorer
-
 > Sui Wallet
 
 **Example**
 
 > You can mint an NFT directly from your Sui Wallet.
-
-> Find transaction details in Sui Explorer.
-
-> After you complete a transaction in your Sui Wallet, view details about the transaction on Sui Explorer.
 
 ## Slashes {#slashes}
 

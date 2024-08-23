@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     diag,
@@ -21,7 +21,7 @@ use super::ast::Attribute_;
 /// type or for unknown base types.
 pub fn modules(
     env: &mut CompilationEnv,
-    pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
+    pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
     let mut definers = BTreeMap::new();

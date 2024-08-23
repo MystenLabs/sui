@@ -2,9 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{
-    ast_debug::*, Identifier, Name, NamedAddressMap, NamedAddressMapIndex, NamedAddressMaps,
-    NumericalAddress, TName,
+use crate::{
+    diag,
+    diagnostics::Diagnostic,
+    ice,
+    shared::{
+        ast_debug::*, format_comma, Identifier, Name, NamedAddressMap, NamedAddressMapIndex,
+        NamedAddressMaps, NumericalAddress, TName,
+    },
 };
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
@@ -99,12 +104,31 @@ pub enum Use {
         ty: Box<NameAccessChain>,
         method: Name,
     },
+    // used for one of the three cases when `LeadingNameAccess` represents `some_pkg`
+    // - `some_pkg`
+    // - `some_pkg::`
+    // - `some_pkg::{`
+    // where first location represents `::` and the second one represents `{`
+    Partial {
+        package: LeadingNameAccess,
+        colon_colon: Option<Loc>,
+        opening_brace: Option<Loc>,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum ModuleUse {
     Module(Option<ModuleName>),
     Members(Vec<(Name, Option<Name>)>),
+    // used for one of the three cases when defining `ModuleUse` for `some_mod`:
+    // - `... some_mod`
+    // - `... some_mod::`
+    // - `... some_mod::{`
+    // where first location represents `::` and the second one represents `{`
+    Partial {
+        colon_colon: Option<Loc>,
+        opening_brace: Option<Loc>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,12 +195,19 @@ pub struct ModuleIdent_ {
 pub type ModuleIdent = Spanned<ModuleIdent_>;
 
 #[derive(Debug, Clone)]
+pub enum ModuleDefinitionMode {
+    Braces,
+    Semicolon,
+}
+
+#[derive(Debug, Clone)]
 pub struct ModuleDefinition {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
     pub is_spec_module: bool,
+    pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
 
@@ -184,10 +215,11 @@ pub struct ModuleDefinition {
 pub enum ModuleMember {
     Function(Function),
     Struct(StructDefinition),
+    Enum(EnumDefinition),
     Use(UseDecl),
     Friend(FriendDecl),
     Constant(Constant),
-    Spec(SpecBlock),
+    Spec(Spanned<String>),
 }
 
 //**************************************************************************************************
@@ -202,16 +234,16 @@ pub struct FriendDecl {
 }
 
 //**************************************************************************************************
-// Structs
+// Datatypes
 //**************************************************************************************************
 
 new_name!(Field);
-new_name!(StructName);
+new_name!(DatatypeName);
 
 pub type ResourceLoc = Option<Loc>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StructTypeParameter {
+pub struct DatatypeTypeParameter {
     pub is_phantom: bool,
     pub name: Name,
     pub constraints: Vec<Ability>,
@@ -222,16 +254,42 @@ pub struct StructDefinition {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
     pub abilities: Vec<Ability>,
-    pub name: StructName,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub name: DatatypeName,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
     pub fields: StructFields,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StructFields {
-    Defined(Vec<(Field, Type)>),
+    Named(Vec<(Field, Type)>),
     Native(Loc),
     Positional(Vec<Type>),
+}
+
+new_name!(VariantName);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct EnumDefinition {
+    pub attributes: Vec<Attributes>,
+    pub loc: Loc,
+    pub abilities: Vec<Ability>,
+    pub name: DatatypeName,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
+    pub variants: Vec<VariantDefinition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariantDefinition {
+    pub loc: Loc,
+    pub name: VariantName,
+    pub fields: VariantFields,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VariantFields {
+    Named(Vec<(Field, Type)>),
+    Positional(Vec<Type>),
+    Empty,
 }
 
 //**************************************************************************************************
@@ -298,144 +356,48 @@ pub struct Constant {
 }
 
 //**************************************************************************************************
-// Specification Blocks
+// Names
 //**************************************************************************************************
 
-// Specification block:
-//    SpecBlock = "spec" <SpecBlockTarget> "{" SpecBlockMember* "}"
-#[derive(Debug, Clone, PartialEq)]
-pub struct SpecBlock_ {
-    pub attributes: Vec<Attributes>,
-    pub target: SpecBlockTarget,
-    pub uses: Vec<UseDecl>,
-    pub members: Vec<SpecBlockMember>,
-}
-
-pub type SpecBlock = Spanned<SpecBlock_>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpecBlockTarget_ {
-    Code,
-    Module,
-    Member(Name, Option<Box<FunctionSignature>>),
-    Schema(Name, Vec<(Name, Vec<Ability>)>),
-}
-
-pub type SpecBlockTarget = Spanned<SpecBlockTarget_>;
-
+// A single name with optional type arguments that may be a macro call.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PragmaProperty_ {
+pub struct PathEntry {
     pub name: Name,
-    pub value: Option<PragmaValue>,
+    pub tyargs: Option<Spanned<Vec<Type>>>,
+    pub is_macro: Option<Loc>,
 }
 
+// A path root.
+// For now these should never have tyargs or macro call set (though the type arguments will be
+// used for enums).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PragmaValue {
-    Literal(Value),
-    Ident(NameAccessChain),
+pub struct RootPathEntry {
+    pub name: LeadingNameAccess,
+    pub tyargs: Option<Spanned<Vec<Type>>>,
+    pub is_macro: Option<Loc>,
 }
 
-pub type PragmaProperty = Spanned<PragmaProperty_>;
-
+// INVARIANT: entries should be non-zero, or this should be converted to a `SingleName`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpecApplyPattern_ {
-    pub visibility: Option<Visibility>,
-    pub name_pattern: Vec<SpecApplyFragment>,
-    pub type_parameters: Vec<(Name, Vec<Ability>)>,
+pub struct NamePath {
+    pub root: RootPathEntry,
+    pub entries: Vec<PathEntry>,
+    // if parsing of this name path was incomplete
+    pub is_incomplete: bool,
 }
 
-pub type SpecApplyPattern = Spanned<SpecApplyPattern_>;
-
+// See the NameAccess trait below for usage.
+// INVARIANT: never push onto a Single. A Single is a final form, demoted from a Path.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpecApplyFragment_ {
-    Wildcard,
-    NamePart(Name),
+pub enum NameAccessChain_ {
+    Single(PathEntry),
+    Path(NamePath),
 }
-
-pub type SpecApplyFragment = Spanned<SpecApplyFragment_>;
-
-#[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum SpecBlockMember_ {
-    Condition {
-        kind: SpecConditionKind,
-        properties: Vec<PragmaProperty>,
-        exp: Exp,
-        additional_exps: Vec<Exp>,
-    },
-    Function {
-        uninterpreted: bool,
-        name: FunctionName,
-        signature: FunctionSignature,
-        body: FunctionBody,
-    },
-    Variable {
-        is_global: bool,
-        name: Name,
-        type_parameters: Vec<(Name, Vec<Ability>)>,
-        type_: Type,
-        init: Option<Exp>,
-    },
-    Let {
-        name: Name,
-        post_state: bool,
-        def: Exp,
-    },
-    Update {
-        lhs: Exp,
-        rhs: Exp,
-    },
-    Include {
-        properties: Vec<PragmaProperty>,
-        exp: Exp,
-    },
-    Apply {
-        exp: Exp,
-        patterns: Vec<SpecApplyPattern>,
-        exclusion_patterns: Vec<SpecApplyPattern>,
-    },
-    Pragma {
-        properties: Vec<PragmaProperty>,
-    },
-}
-
-pub type SpecBlockMember = Spanned<SpecBlockMember_>;
-
-// Specification condition kind.
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum SpecConditionKind_ {
-    Assert,
-    Assume,
-    Decreases,
-    AbortsIf,
-    AbortsWith,
-    SucceedsIf,
-    Modifies,
-    Emits,
-    Ensures,
-    Requires,
-    Invariant(Vec<(Name, Vec<Ability>)>),
-    InvariantUpdate(Vec<(Name, Vec<Ability>)>),
-    Axiom(Vec<(Name, Vec<Ability>)>),
-}
-pub type SpecConditionKind = Spanned<SpecConditionKind_>;
+pub type NameAccessChain = Spanned<NameAccessChain_>;
 
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
-
-// A ModuleAccess references a local or global name or something from a module,
-// either a struct type or a function.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NameAccessChain_ {
-    // <Name>
-    One(Name),
-    // (<Name>|<Num>)::<Name>
-    Two(LeadingNameAccess, Name),
-    // (<Name>|<Num>)::<Name>::<Name>
-    Three(Spanned<(LeadingNameAccess, Name)>, Name),
-}
-pub type NameAccessChain = Spanned<NameAccessChain_>;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Ability_ {
@@ -450,7 +412,7 @@ pub type Ability = Spanned<Ability_>;
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
-    Apply(Box<NameAccessChain>, Vec<Type>),
+    Apply(Box<NameAccessChain>),
     // &t
     // &mut t
     Ref(bool, Box<Type>),
@@ -461,6 +423,7 @@ pub enum Type_ {
     // (t1, t2, ... , tn)
     // Used for return values and expression blocks
     Multiple(Vec<Type>),
+    UnresolvedError,
 }
 pub type Type = Spanned<Type_>;
 
@@ -475,8 +438,8 @@ pub type Mutability = Option<Loc>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
-    Named(Vec<(Field, Bind)>),
-    Positional(Vec<Bind>),
+    Named(Vec<Ellipsis<(Field, Bind)>>),
+    Positional(Vec<Ellipsis<Bind>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -488,7 +451,7 @@ pub enum Bind_ {
     // T<t1, ... , tn> { f1: b1, ... fn: bn }
     // T ( b1, ... bn )
     // T<t1, ... , tn> ( b1, ... bn )
-    Unpack(Box<NameAccessChain>, Option<Vec<Type>>, FieldBindings),
+    Unpack(Box<NameAccessChain>, FieldBindings),
 }
 pub type Bind = Spanned<Bind_>;
 // b1, ..., bn
@@ -594,19 +557,14 @@ pub enum Exp_ {
     // copy e
     Copy(Loc, Box<Exp>),
     // [m::]n[<t1, .., tn>]
-    Name(NameAccessChain, Option<Vec<Type>>),
+    Name(NameAccessChain),
 
     // f(earg,*)
     // f!(earg,*)
-    Call(
-        NameAccessChain,
-        Option<Loc>,
-        Option<Vec<Type>>,
-        Spanned<Vec<Exp>>,
-    ),
+    Call(NameAccessChain, Spanned<Vec<Exp>>),
 
     // tn {f1: e1, ... , f_n: e_n }
-    Pack(NameAccessChain, Option<Vec<Type>>, Vec<(Field, Exp)>),
+    Pack(NameAccessChain, Vec<(Field, Exp)>),
 
     // vector [ e1, ..., e_n ]
     // vector<t> [e1, ..., en ]
@@ -618,6 +576,8 @@ pub enum Exp_ {
 
     // if (eb) et else ef
     IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
+    // match subject arms
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     // while (eb) eloop
     While(Box<Exp>, Box<Exp>),
     // loop eloop
@@ -642,6 +602,8 @@ pub enum Exp_ {
     ExpList(Vec<Exp>),
     // ()
     Unit,
+    // (e)
+    Parens(Box<Exp>),
 
     // a = e
     Assign(Box<Exp>, Box<Exp>),
@@ -677,7 +639,7 @@ pub enum Exp_ {
         Spanned<Vec<Exp>>,
     ),
     // e[e']
-    Index(Box<Exp>, Box<Exp>), // spec only
+    Index(Box<Exp>, Spanned<Vec<Exp>>), // spec only
 
     // (e as t)
     Cast(Box<Exp>, Type),
@@ -685,11 +647,13 @@ pub enum Exp_ {
     Annotate(Box<Exp>, Type),
 
     // spec { ... }
-    Spec(SpecBlock),
+    Spec(Spanned<String>),
 
     // Internal node marking an error was added to the error list
     // This is here so the pass can continue even when an error is hit
     UnresolvedError,
+    // e.X, where X is not a valid tok after dot and cannot be parsed (includes location of the dot)
+    DotUnresolved(Loc, Box<Exp>),
 }
 pub type Exp = Spanned<Exp_>;
 
@@ -715,6 +679,42 @@ pub enum SequenceItem_ {
     Bind(BindList, Option<Type>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub guard: Option<Box<Exp>>,
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Ellipsis<T> {
+    Binder(T),
+    Ellipsis(Loc),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern_ {
+    // T<t1, ..., tn>(pat1, ..., patn)
+    PositionalConstructor(NameAccessChain, Spanned<Vec<Ellipsis<MatchPattern>>>),
+    // T<t1, ..., tn> { x1: pat1, ..., xn: patn }
+    FieldConstructor(
+        NameAccessChain,
+        Spanned<Vec<Ellipsis<(Field, MatchPattern)>>>,
+    ),
+    // T<t1, ..., tn>
+    Name(Mutability, NameAccessChain),
+    // 0 | true | ...
+    Literal(Value),
+    // pat1 | pat2
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    // x @ pat
+    At(Var, Box<MatchPattern>),
+}
+
+pub type MatchPattern = Spanned<MatchPattern_>;
 
 //**************************************************************************************************
 // Traits
@@ -771,11 +771,248 @@ impl LeadingNameAccess_ {
     }
 }
 
+impl NameAccessChain_ {
+    pub fn single(name: Name) -> Self {
+        NameAccessChain_::Single(PathEntry {
+            name,
+            tyargs: None,
+            is_macro: None,
+        })
+    }
+
+    pub fn path(root: RootPathEntry) -> NamePath {
+        NamePath {
+            root,
+            entries: vec![],
+            is_incomplete: false,
+        }
+    }
+}
+
+impl NamePath {
+    /// Destructively take the type arguments, if any.
+    pub(crate) fn take_tyargs(&mut self) -> Option<Spanned<Vec<Type>>> {
+        if self.root.tyargs.is_some() {
+            return std::mem::take(&mut self.root.tyargs);
+        }
+        for entry in self.entries.iter_mut() {
+            if entry.tyargs.is_some() {
+                return std::mem::take(&mut entry.tyargs);
+            }
+        }
+        None
+    }
+}
+
+// Possibly move this trait out of `ast.rs`?
+#[allow(clippy::len_without_is_empty)]
+pub trait NameAccess {
+    fn is_macro(&self) -> Option<&Loc>;
+    fn tyargs(&self) -> Option<&Spanned<Vec<Type>>>;
+
+    fn push_path_entry(
+        &mut self,
+        name: Name,
+        tyargs: Option<Spanned<Vec<Type>>>,
+        is_macro: Option<Loc>,
+    ) -> Vec<Diagnostic>;
+
+    fn has_tyargs(&self) -> bool;
+    fn tyargs_loc(&self) -> Option<Loc>;
+    fn has_tyargs_last(&self) -> bool;
+    fn len(&self) -> usize;
+}
+
+impl NameAccess for PathEntry {
+    fn is_macro(&self) -> Option<&Loc> {
+        self.is_macro.as_ref()
+    }
+
+    fn tyargs(&self) -> Option<&Spanned<Vec<Type>>> {
+        self.tyargs.as_ref()
+    }
+
+    fn push_path_entry(
+        &mut self,
+        name: Name,
+        _tyargs: Option<Spanned<Vec<Type>>>,
+        _is_macro: Option<Loc>,
+    ) -> Vec<Diagnostic> {
+        let diag = ice!((name.loc, "Tried adding this name to a Single chain"));
+        vec![diag]
+    }
+
+    fn has_tyargs(&self) -> bool {
+        self.tyargs.is_some()
+    }
+
+    fn has_tyargs_last(&self) -> bool {
+        true
+    }
+
+    fn tyargs_loc(&self) -> Option<Loc> {
+        self.tyargs.as_ref().map(|sp!(loc, _)| *loc)
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+}
+
+impl NameAccess for NamePath {
+    fn is_macro(&self) -> Option<&Loc> {
+        self.root
+            .is_macro
+            .as_ref()
+            .or_else(|| self.entries.iter().find_map(|e| e.is_macro.as_ref()))
+    }
+
+    fn tyargs(&self) -> Option<&Spanned<Vec<Type>>> {
+        self.root
+            .tyargs
+            .as_ref()
+            .or_else(|| self.entries.iter().find_map(|e| e.tyargs.as_ref()))
+    }
+
+    fn push_path_entry(
+        &mut self,
+        name: Name,
+        tyargs: Option<Spanned<Vec<Type>>>,
+        is_macro: Option<Loc>,
+    ) -> Vec<Diagnostic> {
+        let mut diags: Vec<Diagnostic> = vec![];
+
+        let mut final_tyargs = tyargs;
+
+        if let (Some(prev_loc), Some(sp!(new_loc, _))) = (self.tyargs_loc(), &final_tyargs) {
+            let mut diag = diag!(
+                Syntax::InvalidName,
+                (
+                    *new_loc,
+                    "Paths cannot include type arguments more than once"
+                ),
+                (prev_loc, "Previous type arguments appeared here")
+            );
+            diag.add_note("Type arguments should only appear on module members");
+            diags.push(diag);
+            // If we already had tyargs, remove these.
+            final_tyargs = None;
+        }
+
+        if let Some(prev_loc) = self.is_macro() {
+            let diag = diag!(
+                Syntax::InvalidName,
+                (
+                    name.loc,
+                    "A macro call cannot have name access entries after it"
+                ),
+                (*prev_loc, "Macro invocation given here")
+            );
+            diags.push(diag);
+            // If this is a macro, remove previous `!` usages.
+            self.root.is_macro = None;
+            for entry in self.entries.iter_mut() {
+                entry.is_macro = None;
+            }
+        }
+
+        if self.len() > 3 {
+            let diag = diag!(
+                Syntax::InvalidName,
+                (name.loc, "Paths cannot have length greater than four")
+            );
+            diags.push(diag);
+        } else {
+            let path_entry = PathEntry {
+                name,
+                tyargs: final_tyargs,
+                is_macro,
+            };
+            self.entries.push(path_entry);
+        }
+        diags
+    }
+
+    fn has_tyargs(&self) -> bool {
+        self.root.tyargs.is_some() || self.entries.iter().any(|entry| entry.tyargs.is_some())
+    }
+
+    fn has_tyargs_last(&self) -> bool {
+        if !self.has_tyargs() {
+            // Tyargs are last vacuously
+            true
+        } else if let Some(last) = self.entries.last() {
+            last.tyargs.is_some()
+        } else {
+            self.entries.is_empty() && self.root.tyargs.is_some()
+        }
+    }
+
+    fn tyargs_loc(&self) -> Option<Loc> {
+        self.tyargs().map(|tyarg_ref| tyarg_ref.loc)
+    }
+
+    fn len(&self) -> usize {
+        1 + self.entries.len()
+    }
+}
+
+macro_rules! forward_name_access {
+    ($self:ident.$call:ident($($args:ident),*)) => {
+        match $self {
+            NameAccessChain_::Single(entry) => entry.$call($($args),*),
+            NameAccessChain_::Path(entry) => entry.$call($($args),*),
+        }
+    }
+}
+
+impl NameAccess for NameAccessChain_ {
+    fn is_macro(&self) -> Option<&Loc> {
+        forward_name_access!(self.is_macro())
+    }
+
+    fn tyargs(&self) -> Option<&Spanned<Vec<Type>>> {
+        forward_name_access!(self.tyargs())
+    }
+
+    fn push_path_entry(
+        &mut self,
+        name: Name,
+        tyargs: Option<Spanned<Vec<Type>>>,
+        is_macro: Option<Loc>,
+    ) -> Vec<Diagnostic> {
+        forward_name_access!(self.push_path_entry(name, tyargs, is_macro))
+    }
+
+    fn has_tyargs(&self) -> bool {
+        forward_name_access!(self.has_tyargs())
+    }
+
+    fn has_tyargs_last(&self) -> bool {
+        forward_name_access!(self.has_tyargs_last())
+    }
+
+    fn tyargs_loc(&self) -> Option<Loc> {
+        forward_name_access!(self.tyargs_loc())
+    }
+
+    fn len(&self) -> usize {
+        forward_name_access!(self.len())
+    }
+}
+
 impl Definition {
     pub fn file_hash(&self) -> FileHash {
         match self {
             Definition::Module(m) => m.loc.file_hash(),
             Definition::Address(a) => a.loc.file_hash(),
+        }
+    }
+
+    pub fn name_loc(&self) -> Loc {
+        match self {
+            Definition::Module(mdef) => mdef.name.loc(),
+            Definition::Address(aref) => aref.addr.loc,
         }
     }
 }
@@ -986,12 +1223,33 @@ impl fmt::Display for ModuleIdent_ {
     }
 }
 
+impl fmt::Display for RootPathEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl fmt::Display for PathEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl fmt::Display for NamePath {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.root)?;
+        for entry in self.entries.iter() {
+            write!(f, "::{}", entry.name)?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for NameAccessChain_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            NameAccessChain_::One(n) => write!(f, "{}", n),
-            NameAccessChain_::Two(ln, n2) => write!(f, "{}::{}", ln, n2),
-            NameAccessChain_::Three(sp!(_, (ln, n2)), n3) => write!(f, "{}::{}::{}", ln, n2, n3),
+            NameAccessChain_::Single(entry) => entry.fmt(f),
+            NameAccessChain_::Path(entry) => entry.fmt(f),
         }
     }
 }
@@ -1035,6 +1293,24 @@ impl fmt::Display for Ability_ {
                 Ability_::Key => Ability_::KEY,
             }
         )
+    }
+}
+
+impl fmt::Display for Type_ {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        use Type_::*;
+        match self {
+            Apply(n) => write!(f, "{}", n),
+            Ref(mut_, ty) => write!(f, "&{}{}", if *mut_ { "mut " } else { "" }, ty),
+            Fun(args, result) => write!(f, "({}):{}", format_comma(args), result),
+            Unit => write!(f, "()"),
+            Multiple(tys) => {
+                write!(f, "(")?;
+                write!(f, "{}", format_comma(tys))?;
+                write!(f, ")")
+            }
+            UnresolvedError => write!(f, "_|_"),
+        }
     }
 }
 
@@ -1175,6 +1451,7 @@ impl AstDebug for ModuleDefinition {
             name,
             is_spec_module,
             members,
+            definition_mode: _,
         } = self;
         attributes.ast_debug(w);
         match address {
@@ -1198,10 +1475,11 @@ impl AstDebug for ModuleMember {
         match self {
             ModuleMember::Function(f) => f.ast_debug(w),
             ModuleMember::Struct(s) => s.ast_debug(w),
+            ModuleMember::Enum(e) => e.ast_debug(w),
             ModuleMember::Use(u) => u.ast_debug(w),
             ModuleMember::Friend(f) => f.ast_debug(w),
             ModuleMember::Constant(c) => c.ast_debug(w),
-            ModuleMember::Spec(s) => s.ast_debug(w),
+            ModuleMember::Spec(s) => w.write(&s.value),
         }
     }
 }
@@ -1230,6 +1508,13 @@ impl AstDebug for ModuleUse {
                     alias.map(|alias| w.write(&format!("as {}", alias.value)));
                 })
             }),
+            ModuleUse::Partial {
+                colon_colon,
+                opening_brace,
+            } => {
+                colon_colon.map(|_| w.write("::"));
+                opening_brace.map(|_| w.write("{"));
+            }
         }
     }
 }
@@ -1264,6 +1549,15 @@ impl AstDebug for Use {
                 ty.ast_debug(w);
                 w.write(format!(".{method}"));
             }
+            Use::Partial {
+                package,
+                colon_colon,
+                opening_brace,
+            } => {
+                w.write(package.to_string());
+                colon_colon.map(|_| w.write("::"));
+                opening_brace.map(|_| w.write("{"));
+            }
         }
         w.write(";")
     }
@@ -1278,6 +1572,64 @@ impl AstDebug for FriendDecl {
         } = self;
         attributes.ast_debug(w);
         w.write(&format!("friend {}", friend));
+    }
+}
+
+impl AstDebug for EnumDefinition {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let EnumDefinition {
+            attributes,
+            loc: _loc,
+            abilities,
+            name,
+            type_parameters,
+            variants,
+        } = self;
+        attributes.ast_debug(w);
+
+        if !abilities.is_empty() {
+            w.write("[");
+            w.list(abilities, " ", |w, ab_mod| {
+                ab_mod.ast_debug(w);
+                false
+            });
+            w.write("]");
+        }
+
+        w.write(&format!(" enum {}", name));
+        type_parameters.ast_debug(w);
+        w.block(|w| {
+            w.list(variants, ",", |w, variant| {
+                variant.ast_debug(w);
+                true
+            })
+        });
+    }
+}
+
+impl AstDebug for VariantDefinition {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let VariantDefinition {
+            loc: _,
+            name,
+            fields,
+        } = self;
+        w.write(&format!("{}", name));
+        match fields {
+            VariantFields::Named(fields) => w.block(|w| {
+                w.semicolon(fields, |w, (f, st)| {
+                    w.write(&format!("{}: ", f));
+                    st.ast_debug(w);
+                });
+            }),
+            VariantFields::Positional(types) => w.block(|w| {
+                w.semicolon(types.iter().enumerate(), |w, (i, st)| {
+                    w.write(&format!("pos{}: ", i));
+                    st.ast_debug(w);
+                });
+            }),
+            VariantFields::Empty => (),
+        }
     }
 }
 
@@ -1305,7 +1657,7 @@ impl AstDebug for StructDefinition {
         w.write(&format!("struct {}", name));
         type_parameters.ast_debug(w);
         match fields {
-            StructFields::Defined(fields) => w.block(|w| {
+            StructFields::Named(fields) => w.block(|w| {
                 w.semicolon(fields, |w, (f, st)| {
                     w.write(&format!("{}: ", f));
                     st.ast_debug(w);
@@ -1318,216 +1670,6 @@ impl AstDebug for StructDefinition {
                 });
             }),
             StructFields::Native(_) => (),
-        }
-    }
-}
-
-impl AstDebug for SpecBlock_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.write("spec ");
-        self.target.ast_debug(w);
-        w.write("{");
-        w.semicolon(&self.members, |w, m| m.ast_debug(w));
-        w.write("}");
-    }
-}
-
-impl AstDebug for SpecBlockTarget_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            SpecBlockTarget_::Code => {}
-            SpecBlockTarget_::Module => w.write("module "),
-            SpecBlockTarget_::Member(name, sign_opt) => {
-                w.write(name.value);
-                if let Some(sign) = sign_opt {
-                    sign.ast_debug(w);
-                }
-            }
-            SpecBlockTarget_::Schema(n, tys) => {
-                w.write(&format!("schema {}", n.value));
-                if !tys.is_empty() {
-                    w.write("<");
-                    w.list(tys, ", ", |w, ty| {
-                        ty.ast_debug(w);
-                        true
-                    });
-                    w.write(">");
-                }
-            }
-        }
-    }
-}
-
-impl AstDebug for SpecConditionKind_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        use SpecConditionKind_::*;
-        match self {
-            Assert => w.write("assert "),
-            Assume => w.write("assume "),
-            Decreases => w.write("decreases "),
-            AbortsIf => w.write("aborts_if "),
-            AbortsWith => w.write("aborts_with "),
-            SucceedsIf => w.write("succeeds_if "),
-            Modifies => w.write("modifies "),
-            Emits => w.write("emits "),
-            Ensures => w.write("ensures "),
-            Requires => w.write("requires "),
-            Invariant(ty_params) => {
-                w.write("invariant");
-                ty_params.ast_debug(w);
-                w.write(" ")
-            }
-            InvariantUpdate(ty_params) => {
-                w.write("invariant");
-                ty_params.ast_debug(w);
-                w.write(" update ")
-            }
-            Axiom(ty_params) => {
-                w.write("axiom");
-                ty_params.ast_debug(w);
-                w.write(" ")
-            }
-        }
-    }
-}
-
-impl AstDebug for SpecBlockMember_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            SpecBlockMember_::Condition {
-                kind,
-                properties: _,
-                exp,
-                additional_exps,
-            } => {
-                kind.ast_debug(w);
-                exp.ast_debug(w);
-                w.list(additional_exps, ",", |w, e| {
-                    e.ast_debug(w);
-                    true
-                });
-            }
-            SpecBlockMember_::Function {
-                uninterpreted,
-                signature,
-                name,
-                body,
-            } => {
-                if *uninterpreted {
-                    w.write("uninterpreted ");
-                } else if let FunctionBody_::Native = &body.value {
-                    w.write("native ");
-                }
-                w.write("fun ");
-                w.write(&format!("{}", name));
-                signature.ast_debug(w);
-                match &body.value {
-                    FunctionBody_::Defined(body) => w.block(|w| body.ast_debug(w)),
-                    FunctionBody_::Native => w.writeln(";"),
-                }
-            }
-            SpecBlockMember_::Variable {
-                is_global,
-                name,
-                type_parameters,
-                type_,
-                init: _,
-            } => {
-                if *is_global {
-                    w.write("global ");
-                } else {
-                    w.write("local");
-                }
-                w.write(&format!("{}", name));
-                type_parameters.ast_debug(w);
-                w.write(": ");
-                type_.ast_debug(w);
-            }
-            SpecBlockMember_::Update { lhs, rhs } => {
-                w.write("update ");
-                lhs.ast_debug(w);
-                w.write(" = ");
-                rhs.ast_debug(w);
-            }
-            SpecBlockMember_::Let {
-                name,
-                post_state,
-                def,
-            } => {
-                w.write(&format!(
-                    "let {}{} = ",
-                    if *post_state { "post " } else { "" },
-                    name
-                ));
-                def.ast_debug(w);
-            }
-            SpecBlockMember_::Include { properties: _, exp } => {
-                w.write("include ");
-                exp.ast_debug(w);
-            }
-            SpecBlockMember_::Apply {
-                exp,
-                patterns,
-                exclusion_patterns,
-            } => {
-                w.write("apply ");
-                exp.ast_debug(w);
-                w.write(" to ");
-                w.list(patterns, ", ", |w, p| {
-                    p.ast_debug(w);
-                    true
-                });
-                if !exclusion_patterns.is_empty() {
-                    w.write(" exclude ");
-                    w.list(exclusion_patterns, ", ", |w, p| {
-                        p.ast_debug(w);
-                        true
-                    });
-                }
-            }
-            SpecBlockMember_::Pragma { properties } => {
-                w.write("pragma ");
-                w.list(properties, ", ", |w, p| {
-                    p.ast_debug(w);
-                    true
-                });
-            }
-        }
-    }
-}
-
-impl AstDebug for SpecApplyPattern_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.list(&self.name_pattern, "", |w, f| {
-            f.ast_debug(w);
-            true
-        });
-        if !self.type_parameters.is_empty() {
-            w.write("<");
-            self.type_parameters.ast_debug(w);
-            w.write(">");
-        }
-    }
-}
-
-impl AstDebug for SpecApplyFragment_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            SpecApplyFragment_::Wildcard => w.write("*"),
-            SpecApplyFragment_::NamePart(n) => w.write(n.value),
-        }
-    }
-}
-
-impl AstDebug for PragmaProperty_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(self.name.value);
-        if let Some(value) = &self.value {
-            w.write(" = ");
-            match value {
-                PragmaValue::Literal(l) => l.ast_debug(w),
-                PragmaValue::Ident(i) => i.ast_debug(w),
-            }
         }
     }
 }
@@ -1628,7 +1770,7 @@ impl AstDebug for (Name, Vec<Ability>) {
     }
 }
 
-impl AstDebug for Vec<StructTypeParameter> {
+impl AstDebug for Vec<DatatypeTypeParameter> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
             w.write("<");
@@ -1638,7 +1780,7 @@ impl AstDebug for Vec<StructTypeParameter> {
     }
 }
 
-impl AstDebug for StructTypeParameter {
+impl AstDebug for DatatypeTypeParameter {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
             is_phantom,
@@ -1678,13 +1820,8 @@ impl AstDebug for Type_ {
                 ss.ast_debug(w);
                 w.write(")")
             }
-            Type_::Apply(m, ss) => {
+            Type_::Apply(m) => {
                 m.ast_debug(w);
-                if !ss.is_empty() {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
             }
             Type_::Ref(mut_, s) => {
                 w.write("&");
@@ -1699,6 +1836,7 @@ impl AstDebug for Type_ {
                 w.write("):");
                 result.ast_debug(w);
             }
+            Type_::UnresolvedError => w.write("_|_"),
         }
     }
 }
@@ -1709,9 +1847,71 @@ impl AstDebug for Vec<Type> {
     }
 }
 
+impl AstDebug for RootPathEntry {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let RootPathEntry {
+            name,
+            tyargs,
+            is_macro,
+        } = self;
+        w.write(format!("{}", name));
+        if is_macro.is_some() {
+            w.write("!");
+        }
+        if let Some(ts) = tyargs {
+            w.write("<");
+            ts.ast_debug(w);
+            w.write(">");
+        }
+    }
+}
+
+impl AstDebug for PathEntry {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let PathEntry {
+            name,
+            tyargs,
+            is_macro,
+        } = self;
+        w.write(format!("{}", name));
+        if is_macro.is_some() {
+            w.write("!");
+        }
+        if let Some(ts) = tyargs {
+            w.write("<");
+            ts.ast_debug(w);
+            w.write(">");
+        }
+    }
+}
+
+impl AstDebug for NamePath {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let NamePath {
+            root,
+            entries,
+            is_incomplete,
+        } = self;
+        w.write(format!("{}::", root));
+        w.list(entries, "::", |w, e| {
+            e.ast_debug(w);
+            false
+        });
+        if *is_incomplete {
+            if !entries.is_empty() {
+                w.write("::");
+            }
+            w.write("_#incomplete#_");
+        }
+    }
+}
+
 impl AstDebug for NameAccessChain_ {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(&format!("{}", self))
+        match self {
+            NameAccessChain_::Single(entry) => entry.ast_debug(w),
+            NameAccessChain_::Path(entry) => entry.ast_debug(w),
+        }
     }
 }
 
@@ -1769,6 +1969,11 @@ impl AstDebug for Exp_ {
         use Exp_ as E;
         match self {
             E::Unit => w.write("()"),
+            E::Parens(e) => {
+                w.write("(");
+                e.ast_debug(w);
+                w.write(")");
+            }
             E::Value(v) => v.ast_debug(w),
             E::Move(_, e) => {
                 w.write("move ");
@@ -1778,35 +1983,17 @@ impl AstDebug for Exp_ {
                 w.write("copy ");
                 e.ast_debug(w);
             }
-            E::Name(ma, tys_opt) => {
+            E::Name(ma) => {
                 ma.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
             }
-            E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::Call(ma, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if is_macro.is_some() {
-                    w.write("!");
-                }
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write("(");
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::Pack(ma, tys_opt, fields) => {
+            E::Pack(ma, fields) => {
                 ma.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write("{");
                 w.comma(fields, |w, (f, e)| {
                     w.write(&format!("{}: ", f));
@@ -1834,6 +2021,17 @@ impl AstDebug for Exp_ {
                     w.write(" else ");
                     f.ast_debug(w);
                 }
+            }
+            E::Match(subject, arms) => {
+                w.write("match (");
+                subject.ast_debug(w);
+                w.write(") ");
+                w.block(|w| {
+                    w.list(&arms.value, ", ", |w, arm| {
+                        arm.ast_debug(w);
+                        true
+                    })
+                });
             }
             E::While(b, e) => {
                 w.write("while (");
@@ -1931,16 +2129,16 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
             }
-            E::DotCall(e, n, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::DotCall(e, n, is_macro, tyargs, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
                 if is_macro.is_some() {
                     w.write("!");
                 }
-                if let Some(ss) = tys_opt {
+                if let Some(ts) = tyargs {
                     w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
+                    ts.ast_debug(w);
+                    w.write("<");
                 }
                 w.write("(");
                 w.comma(rhs, |w, e| e.ast_debug(w));
@@ -1953,10 +2151,10 @@ impl AstDebug for Exp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::Index(e, i) => {
+            E::Index(e, rhs) => {
                 e.ast_debug(w);
                 w.write("[");
-                i.ast_debug(w);
+                w.comma(&rhs.value, |w, e| e.ast_debug(w));
                 w.write("]");
             }
             E::Annotate(e, ty) => {
@@ -1967,11 +2165,93 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::Spec(s) => {
-                w.write("spec {");
-                s.ast_debug(w);
-                w.write("}");
+                w.write(&s.value);
             }
             E::UnresolvedError => w.write("_|_"),
+            E::DotUnresolved(_, e) => {
+                e.ast_debug(w);
+                w.write(".");
+            }
+        }
+    }
+}
+
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchArm_ {
+            pattern,
+            guard,
+            rhs,
+        } = self;
+        pattern.ast_debug(w);
+        if let Some(exp) = guard.as_ref() {
+            w.write(" if ");
+            exp.ast_debug(w);
+        }
+        w.write(" => ");
+        rhs.ast_debug(w);
+    }
+}
+
+impl<T: AstDebug> AstDebug for Ellipsis<T> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder(p) => p.ast_debug(w),
+        }
+    }
+}
+
+impl AstDebug for Ellipsis<(Field, MatchPattern)> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder((n, p)) => {
+                w.write(&format!("{}: ", n));
+                p.ast_debug(w);
+            }
+        }
+    }
+}
+
+impl AstDebug for MatchPattern_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use MatchPattern_::*;
+        match self {
+            PositionalConstructor(name, fields) => {
+                name.ast_debug(w);
+                w.write("(");
+                w.comma(fields.value.iter(), |w, pat| {
+                    pat.ast_debug(w);
+                });
+                w.write(") ");
+            }
+            FieldConstructor(name, fields) => {
+                name.ast_debug(w);
+                w.write(" {");
+                w.comma(fields.value.iter(), |w, field_pat| field_pat.ast_debug(w));
+                w.write("} ");
+            }
+            Name(mut_, name) => {
+                if mut_.is_some() {
+                    w.write("mut ");
+                }
+                name.ast_debug(w)
+            }
+            Literal(v) => v.ast_debug(w),
+            Or(lhs, rhs) => {
+                lhs.ast_debug(w);
+                w.write(" | ");
+                rhs.ast_debug(w);
+            }
+            At(x, pat) => {
+                w.write(format!("{} @ ", x));
+                pat.ast_debug(w);
+            }
         }
     }
 }
@@ -2066,13 +2346,8 @@ impl AstDebug for Bind_ {
                 }
                 w.write(&format!("{}", v))
             }
-            B::Unpack(ma, tys_opt, fields) => {
+            B::Unpack(ma, fields) => {
                 ma.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 fields.ast_debug(w);
             }
         }
@@ -2093,14 +2368,27 @@ impl AstDebug for LambdaBindings_ {
     }
 }
 
+impl AstDebug for Ellipsis<(Field, Bind)> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder((n, b)) => {
+                w.write(&format!("{}: ", n));
+                b.ast_debug(w);
+            }
+        }
+    }
+}
+
 impl AstDebug for FieldBindings {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             FieldBindings::Named(bs) => {
                 w.write("{");
-                w.comma(bs, |w, (f, b)| {
-                    w.write(&format!("{}: ", f));
-                    b.ast_debug(w);
+                w.comma(bs, |w, e| {
+                    e.ast_debug(w);
                 });
                 w.write("}");
             }

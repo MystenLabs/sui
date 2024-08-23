@@ -1,11 +1,13 @@
 Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
 
+&#9888; **Warning:** Sui indexer is still experimental and we expect occasional breaking changes that require backfills.
+
 ## Architecture
 ![enhanced_FN](https://user-images.githubusercontent.com/106119108/221022505-a1d873c6-60e2-45f1-b2aa-e50192c4dfbb.png)
 
 ## Steps to run locally
 ### Prerequisites
-- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgresql@version` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc:
+- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgresql@15` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc:
 ```sh
 export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"
@@ -26,16 +28,26 @@ brew services start postgresql@version
 
 ### Local Development(Recommended)
 
-Use [sui-test-validator](../../crates/sui-test-validator/README.md)
+See the [docs](https://docs.sui.io/guides/developer/getting-started/local-network) for detailed information. Below is a quick start guide:
+
+Start a local network using the `sui` binary:
+```sh
+cargo run --bin sui -- start --with-faucet --force-regenesis 
+```
+
+If you want to run a local network with the indexer enabled (note that `libpq` is required), you can run the following command after following the steps in the next section to set up an indexer DB:
+```sh
+cargo run --bin sui --features indexer -- start --with-faucet --force-regenesis --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2
+```
 
 ### Running standalone indexer
 1. DB setup, under `sui/crates/sui-indexer` run:
 ```sh
-# an example DATABASE_URL is "postgres://postgres:postgres@localhost/gegao"
+# an example DATABASE_URL is "postgres://postgres:postgres@localhost/exampledb"
 diesel setup --database-url="<DATABASE_URL>"
 diesel database reset --database-url="<DATABASE_URL>"
 ```
-Note that you'll need an existing database for the above to work. Replace `gegao` with the name of the database created.
+Note that you need an existing database for this to work. Using the DATABASE_URL example in the comment of the previous code, replace `exampledb` with the name of your database.
 
 2. Checkout to your target branch
 
@@ -58,4 +70,57 @@ More flags info can be found in this [file](https://github.com/MystenLabs/sui/bl
 Run this command under `sui/crates/sui-indexer`, which will wipe DB; In case of schema changes in `.sql` files, this will also update corresponding `schema.rs` file.
 ```sh
 diesel database reset --database-url="<DATABASE_URL>"
+```
+
+## Steps to run locally (TiDB)
+
+### Prerequisites
+
+1. Install TiDB
+
+``` sh
+curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+```
+
+2. Install a compatible version of MySQL (At the time of writing, this is MySQL 8.0 -- note that 8.3 is incompatible).
+
+``` sh
+brew install mysql@8.0
+```
+
+3. Install a version of `diesel_cli` that supports MySQL (and probably also Postgres). This version of the CLI needs to be built against the version of MySQL that was installed in the previous step (compatible with the local installation of TiDB, 8.0.37 at time of writing).
+
+``` sh
+MYSQLCLIENT_LIB_DIR=/opt/homebrew/Cellar/mysql@8.0/8.0.37/lib/ cargo install diesel_cli --no-default-features --features postgres --features mysql --force
+```
+
+### Run the indexer
+
+1.Run TiDB
+
+```sh
+tiup playground
+```
+
+2.Verify tidb is running by connecting to it using the mysql client, create database `test`
+
+```sh
+mysql --comments --host 127.0.0.1 --port 4000 -u root
+create database test;
+```
+
+3.DB setup, under `sui/crates/sui-indexer` run:
+
+```sh
+# an example DATABASE_URL is "mysql://root:password@127.0.0.1:4000/test"
+diesel setup --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
+diesel database reset --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
+```
+
+Note that you need an existing database for this to work. Using the DATABASE_URL example in the comment of the previous code, replace `test` with the name of your database.
+4. Run indexer as a writer, which pulls data from fullnode and writes data to DB
+
+```sh
+# Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
+cargo run --bin sui-indexer --features mysql-feature --no-default-features -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --fullnode-sync-worker --reset-db
 ```

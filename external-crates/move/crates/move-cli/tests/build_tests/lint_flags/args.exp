@@ -1,0 +1,11 @@
+Command `new --path . foo`:
+Command `build --lint`:
+BUILDING foo
+Command `build --no-lint`:
+BUILDING foo
+Command `build --lint --no-lint`:
+error: the argument '--lint' cannot be used with '--no-lint'
+
+Usage: move build --lint
+
+For more information, try '--help'.

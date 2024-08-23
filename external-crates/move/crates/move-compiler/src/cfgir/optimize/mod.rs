@@ -7,11 +7,13 @@ mod forwarding_jumps;
 mod inline_blocks;
 mod simplify_jumps;
 
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
     editions::FeatureGate,
+    expansion::ast::Mutability,
     hlir::ast::*,
     parser::ast::ConstantName,
     shared::{unique_map::UniqueMap, CompilationEnv},
@@ -19,7 +21,7 @@ use crate::{
 
 pub type Optimization = fn(
     &FunctionSignature,
-    &UniqueMap<Var, SingleType>,
+    &UniqueMap<Var, (Mutability, SingleType)>,
     &UniqueMap<ConstantName, Value>,
     &mut MutForwardCFG,
 ) -> bool;
@@ -39,11 +41,12 @@ const MOVE_2024_OPTIMIZATIONS: &[Optimization] = &[
     inline_blocks::optimize,
 ];
 
+#[growing_stack]
 pub fn optimize(
     env: &mut CompilationEnv,
     package: Option<Symbol>,
     signature: &FunctionSignature,
-    locals: &UniqueMap<Var, SingleType>,
+    locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) {

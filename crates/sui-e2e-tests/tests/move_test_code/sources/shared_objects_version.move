@@ -6,7 +6,7 @@ module move_test_code::shared_objects_version {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Counter has key {
+    public struct Counter has key {
         id: UID,
         value: u64,
     }

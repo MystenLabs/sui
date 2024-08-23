@@ -19,7 +19,6 @@ use crate::{
 #[path = "tests/base_committer_tests.rs"]
 mod base_committer_tests;
 
-#[allow(unused)]
 pub(crate) struct BaseCommitterOptions {
     /// TODO: Re-evaluate if we want this to be configurable after running experiments.
     /// The length of a wave (minimum 3)
@@ -48,13 +47,12 @@ impl Default for BaseCommitterOptions {
 /// the method `try_direct_decide` and `try_indirect_decide` can be called at any
 /// time and any number of times (it is idempotent) to determine whether a leader
 /// can be committed or skipped.
-#[allow(unused)]
 pub(crate) struct BaseCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
-    leader_schedule: LeaderSchedule,
+    leader_schedule: Arc<LeaderSchedule>,
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The options used by this committer
@@ -64,7 +62,7 @@ pub(crate) struct BaseCommitter {
 impl BaseCommitter {
     pub fn new(
         context: Arc<Context>,
-        leader_schedule: LeaderSchedule,
+        leader_schedule: Arc<LeaderSchedule>,
         dag_state: Arc<RwLock<DagState>>,
         options: BaseCommitterOptions,
     ) -> Self {
@@ -141,7 +139,7 @@ impl BaseCommitter {
 
     pub fn elect_leader(&self, round: Round) -> Option<Slot> {
         let wave = self.wave_number(round);
-        tracing::debug!(
+        tracing::trace!(
             "elect_leader: round={}, wave={}, leader_round={}, leader_offset={}",
             round,
             wave,
@@ -200,8 +198,8 @@ impl BaseCommitter {
             let ancestor = self
                 .dag_state
                 .read()
-                .get_uncommitted_block(ancestor)
-                .expect("We should have the whole sub-dag by now");
+                .get_block(ancestor)
+                .unwrap_or_else(|| panic!("Block not found in storage: {:?}", ancestor));
             if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
                 return Some(support);
             }
@@ -237,8 +235,8 @@ impl BaseCommitter {
                 let potential_vote = self
                     .dag_state
                     .read()
-                    .get_uncommitted_block(reference)
-                    .expect("We should have the whole sub-dag by now");
+                    .get_block(reference)
+                    .unwrap_or_else(|| panic!("Block not found in storage: {:?}", reference));
                 let is_vote = self.is_vote(&potential_vote, leader_block);
                 all_votes.insert(*reference, is_vote);
                 is_vote
@@ -288,7 +286,7 @@ impl BaseCommitter {
         let potential_certificates = self
             .dag_state
             .read()
-            .ancestors_at_uncommitted_round(anchor, decision_round);
+            .ancestors_at_round(anchor, decision_round);
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
@@ -397,9 +395,9 @@ impl Display for BaseCommitter {
 /// that has no leader or round offset. Which indicates single leader & pipelining
 /// disabled.
 #[cfg(test)]
-#[allow(unused)]
 mod base_committer_builder {
     use super::*;
+    use crate::leader_schedule::LeaderSwapTable;
 
     pub(crate) struct BaseCommitterBuilder {
         context: Arc<Context>,
@@ -410,7 +408,7 @@ mod base_committer_builder {
     }
 
     impl BaseCommitterBuilder {
-        pub fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
             Self {
                 context,
                 dag_state,
@@ -420,22 +418,25 @@ mod base_committer_builder {
             }
         }
 
-        pub fn with_wave_length(mut self, wave_length: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_wave_length(mut self, wave_length: u32) -> Self {
             self.wave_length = wave_length;
             self
         }
 
-        pub fn with_leader_offset(mut self, leader_offset: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_leader_offset(mut self, leader_offset: u32) -> Self {
             self.leader_offset = leader_offset;
             self
         }
 
-        pub fn with_round_offset(mut self, round_offset: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_round_offset(mut self, round_offset: u32) -> Self {
             self.round_offset = round_offset;
             self
         }
 
-        pub fn build(self) -> BaseCommitter {
+        pub(crate) fn build(self) -> BaseCommitter {
             let options = BaseCommitterOptions {
                 wave_length: DEFAULT_WAVE_LENGTH,
                 leader_offset: 0,
@@ -443,7 +444,10 @@ mod base_committer_builder {
             };
             BaseCommitter::new(
                 self.context.clone(),
-                LeaderSchedule::new(self.context),
+                Arc::new(LeaderSchedule::new(
+                    self.context,
+                    LeaderSwapTable::default(),
+                )),
                 self.dag_state,
                 options,
             )

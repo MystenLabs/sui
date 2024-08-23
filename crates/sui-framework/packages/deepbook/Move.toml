@@ -2,6 +2,7 @@
 name = "DeepBook"
 version = "0.0.1"
 published-at = "0xdee9"
+edition = "2024.beta"
 
 [dependencies]
 MoveStdlib = { local = "../move-stdlib" }

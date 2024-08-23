@@ -1,9 +1,7 @@
-address 0x42 {
-module A {
+module 0x42::A {
     struct A {}
 }
 
-module M {
+module 0x42::M {
     friend 0x42::A::A;
-}
 }

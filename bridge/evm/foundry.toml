@@ -1,0 +1,33 @@
+[profile.default]
+src = 'contracts'
+test = 'test'
+no_match_test = "testSkip"
+out = 'out'
+libs = ['dependencies']
+solc = "0.8.20"
+build_info = true
+extra_output = ["storageLayout"]
+fs_permissions = [{ access = "read", path = "/"}]
+gas_reports = ["SuiBridge"]
+ffi = true
+
+[fmt] 
+line_length = 100
+
+[fuzz]
+runs = 1000
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+anvil = "http://localhost:8545"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+
+[dependencies]
+forge-std = "1.9.2"
+openzeppelin-foundry-upgrades = "0.3.1"
+"@openzeppelin-contracts-upgradeable" = "5.0.1"
+"@openzeppelin-contracts" = "5.0.1"

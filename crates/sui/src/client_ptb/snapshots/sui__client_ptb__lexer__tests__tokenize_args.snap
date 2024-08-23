@@ -1,0 +1,796 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: lex(args)
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Lexeme(
+            At,
+            "@",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 1,
+            end: 4,
+        },
+        value: Lexeme(
+            HexNumber,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 5,
+            end: 6,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 7,
+            end: 8,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 8,
+            end: 10,
+        },
+        value: Lexeme(
+            Ident,
+            "u8",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 11,
+            end: 13,
+        },
+        value: Lexeme(
+            Number,
+            "1_",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 13,
+            end: 17,
+        },
+        value: Lexeme(
+            Ident,
+            "u128",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 18,
+            end: 23,
+        },
+        value: Lexeme(
+            Number,
+            "1_000",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 24,
+            end: 35,
+        },
+        value: Lexeme(
+            Number,
+            "100_000_000",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 36,
+            end: 43,
+        },
+        value: Lexeme(
+            Number,
+            "100_000",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 43,
+            end: 46,
+        },
+        value: Lexeme(
+            Ident,
+            "u64",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 47,
+            end: 48,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 49,
+            end: 50,
+        },
+        value: Lexeme(
+            LBracket,
+            "[",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 50,
+            end: 51,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 51,
+            end: 52,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 53,
+            end: 54,
+        },
+        value: Lexeme(
+            Number,
+            "2",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 54,
+            end: 55,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 56,
+            end: 57,
+        },
+        value: Lexeme(
+            Number,
+            "3",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 57,
+            end: 58,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 59,
+            end: 60,
+        },
+        value: Lexeme(
+            Number,
+            "4",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 60,
+            end: 61,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 62,
+            end: 63,
+        },
+        value: Lexeme(
+            Number,
+            "5",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 63,
+            end: 64,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 65,
+            end: 66,
+        },
+        value: Lexeme(
+            Number,
+            "6",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 66,
+            end: 67,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 68,
+            end: 69,
+        },
+        value: Lexeme(
+            Number,
+            "7",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 69,
+            end: 70,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 71,
+            end: 72,
+        },
+        value: Lexeme(
+            Number,
+            "8",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 72,
+            end: 73,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 74,
+            end: 75,
+        },
+        value: Lexeme(
+            Number,
+            "9",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 75,
+            end: 76,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 77,
+            end: 79,
+        },
+        value: Lexeme(
+            Number,
+            "10",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 79,
+            end: 80,
+        },
+        value: Lexeme(
+            RBracket,
+            "]",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 81,
+            end: 87,
+        },
+        value: Lexeme(
+            Ident,
+            "vector",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 87,
+            end: 88,
+        },
+        value: Lexeme(
+            LBracket,
+            "[",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 88,
+            end: 89,
+        },
+        value: Lexeme(
+            RBracket,
+            "]",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 90,
+            end: 96,
+        },
+        value: Lexeme(
+            Ident,
+            "vector",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 96,
+            end: 97,
+        },
+        value: Lexeme(
+            LBracket,
+            "[",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 97,
+            end: 98,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 98,
+            end: 99,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 99,
+            end: 100,
+        },
+        value: Lexeme(
+            Number,
+            "2",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 100,
+            end: 101,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 101,
+            end: 102,
+        },
+        value: Lexeme(
+            Number,
+            "3",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 102,
+            end: 103,
+        },
+        value: Lexeme(
+            RBracket,
+            "]",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 104,
+            end: 110,
+        },
+        value: Lexeme(
+            Ident,
+            "vector",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 110,
+            end: 111,
+        },
+        value: Lexeme(
+            LBracket,
+            "[",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 111,
+            end: 112,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 112,
+            end: 113,
+        },
+        value: Lexeme(
+            RBracket,
+            "]",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 114,
+            end: 118,
+        },
+        value: Lexeme(
+            Ident,
+            "some",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 118,
+            end: 119,
+        },
+        value: Lexeme(
+            LParen,
+            "(",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 119,
+            end: 120,
+        },
+        value: Lexeme(
+            At,
+            "@",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 120,
+            end: 123,
+        },
+        value: Lexeme(
+            HexNumber,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 123,
+            end: 124,
+        },
+        value: Lexeme(
+            RParen,
+            ")",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 125,
+            end: 129,
+        },
+        value: Lexeme(
+            Ident,
+            "none",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 130,
+            end: 134,
+        },
+        value: Lexeme(
+            Ident,
+            "some",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 134,
+            end: 135,
+        },
+        value: Lexeme(
+            LParen,
+            "(",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 135,
+            end: 141,
+        },
+        value: Lexeme(
+            Ident,
+            "vector",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 141,
+            end: 142,
+        },
+        value: Lexeme(
+            LBracket,
+            "[",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 142,
+            end: 143,
+        },
+        value: Lexeme(
+            Number,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 143,
+            end: 144,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 144,
+            end: 145,
+        },
+        value: Lexeme(
+            Number,
+            "2",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 145,
+            end: 146,
+        },
+        value: Lexeme(
+            Comma,
+            ",",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 146,
+            end: 147,
+        },
+        value: Lexeme(
+            Number,
+            "3",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 147,
+            end: 148,
+        },
+        value: Lexeme(
+            RBracket,
+            "]",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 148,
+            end: 149,
+        },
+        value: Lexeme(
+            RParen,
+            ")",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 150,
+            end: 158,
+        },
+        value: Lexeme(
+            Command,
+            "assign",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 159,
+            end: 177,
+        },
+        value: Lexeme(
+            Command,
+            "transfer-objects",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 178,
+            end: 191,
+        },
+        value: Lexeme(
+            Command,
+            "split-coins",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 192,
+            end: 205,
+        },
+        value: Lexeme(
+            Command,
+            "merge-coins",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 206,
+            end: 221,
+        },
+        value: Lexeme(
+            Command,
+            "make-move-vec",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 222,
+            end: 233,
+        },
+        value: Lexeme(
+            Command,
+            "move-call",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 234,
+            end: 243,
+        },
+        value: Lexeme(
+            Command,
+            "preview",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 244,
+            end: 258,
+        },
+        value: Lexeme(
+            Command,
+            "warn-shadows",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 259,
+            end: 276,
+        },
+        value: Lexeme(
+            Command,
+            "pick-gas-budget",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 277,
+            end: 289,
+        },
+        value: Lexeme(
+            Command,
+            "gas-budget",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 290,
+            end: 299,
+        },
+        value: Lexeme(
+            Command,
+            "summary",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 300,
+            end: 319,
+        },
+        value: Lexeme(
+            Publish,
+            "package-a",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 320,
+            end: 339,
+        },
+        value: Lexeme(
+            Upgrade,
+            "package-b",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 339,
+            end: 339,
+        },
+        value: Lexeme(
+            Eof,
+            "",
+        ),
+    },
+]

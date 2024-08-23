@@ -6,7 +6,6 @@ use crate::LocalNarwhalClient;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::ChainIdentifier;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -109,7 +108,7 @@ async fn reject_invalid_clients_transactions() {
     let mut client = TransactionsClient::new(channel);
     let tx = transaction();
     let txn = TransactionProto {
-        transaction: Bytes::from(tx.clone()),
+        transactions: vec![Bytes::from(tx.clone())],
     };
 
     // Check invalid transactions are rejected
@@ -241,7 +240,7 @@ async fn handle_remote_clients_transactions() {
         let mut fut_list = FuturesOrdered::new();
         for tx in batch.transactions() {
             let txn = TransactionProto {
-                transaction: Bytes::from(tx.clone()),
+                transactions: vec![Bytes::from(tx.clone())],
             };
 
             // Calls to submit_transaction are now blocking, so we need to drive them
@@ -360,7 +359,10 @@ async fn handle_local_clients_transactions() {
             // all at the same time, rather than sequentially.
             let inner_client = client.clone();
             fut_list.push_back(async move {
-                inner_client.submit_transaction(txn.clone()).await.unwrap();
+                inner_client
+                    .submit_transactions(vec![txn.clone()])
+                    .await
+                    .unwrap();
             });
         }
 
@@ -409,7 +411,6 @@ async fn get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
-        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
@@ -417,7 +418,6 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        store.randomness_store.clone(),
         tx_new_certificates,
         rx_feedback,
         rx_consensus_round_updates,
@@ -525,7 +525,6 @@ async fn get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
-        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
@@ -533,7 +532,6 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        store.randomness_store.clone(),
         tx_new_certificates_2,
         rx_feedback_2,
         rx_consensus_round_updates,

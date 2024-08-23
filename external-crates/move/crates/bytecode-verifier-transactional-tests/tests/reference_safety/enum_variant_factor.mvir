@@ -1,0 +1,142 @@
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        Empty { },
+        One { x: u64, y: u64 },
+    }
+
+    f(e: &mut Self.X) {
+        let a1: &mut Self.X;
+        let a2: &mut Self.X;
+        label b0:
+            a1 = copy(e);
+            a2 = copy(e);
+            &mut X.Empty{} = move(a2);
+        return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    c(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let a1: &mut Self.X;
+        label b0:
+            a1 = copy(e);
+            &mut X.One { x: x, y: y} = copy(e);
+            return;
+    }
+
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    c(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let a1: &mut Self.X;
+        label b0:
+            a1 = copy(e);
+            &mut X.One { x: x, y: y} = move(e);
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    c(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let a1: &mut Self.X;
+        let a2: &mut Self.X;
+        label b0:
+            a1 = copy(e);
+            a2 = copy(e);
+            &mut X.One { x: x, y: y} = move(a2);
+            return;
+    }
+}
+
+//# publish
+module 0x1.o {
+    enum X has drop { 
+        One { x: u64, y: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    c(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let a1: &mut Self.X;
+        let a2: &mut Self.X;
+        label b0:
+            a1 = copy(e);
+            a2 = copy(e);
+            &mut X.One { x: x, y: y} = move(a1);
+            return;
+    }
+}
+
+//# publish
+module 0x1.invalid {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = move(y);
+            &mut X.Two { x: x, y: y} = copy(e);
+            // Error: Invalid to write to `y` since it's factored to `counter` which is still a live mutable reference
+            *copy(y) = *copy(counter) - 1;
+            counter = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x1.invalid {
+    enum X has drop { 
+        One { x: u64 },
+        Two { x: u64, y: u64},
+    }
+
+    h(e: &mut Self.X) {
+        let x: &mut u64;
+        let y: &mut u64;
+        let counter: &mut u64;
+        label b0:
+            &mut X.Two { x: x, y: y} = copy(e);
+            *move(x) = 1;
+            *copy(y) = 3;
+            counter = move(y);
+            &mut X.Two { x: x, y: y} = copy(e);
+            // Error: Invalid to read `y` since it's factored to `counter` which is still a live mutable reference
+            *copy(y) = *copy(y) - 1;
+            counter = move(y);
+        return;
+    }
+}

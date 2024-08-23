@@ -5,15 +5,13 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 

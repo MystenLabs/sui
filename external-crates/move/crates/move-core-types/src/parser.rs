@@ -283,13 +283,6 @@ impl<I: Iterator<Item = Token>> Parser<I> {
         Ok(v)
     }
 
-    fn parse_string(&mut self) -> Result<String> {
-        Ok(match self.next()? {
-            Token::Name(s) => s,
-            tok => bail!("unexpected token {:?}, expected string", tok),
-        })
-    }
-
     fn parse_type_tag(&mut self) -> Result<TypeTag> {
         Ok(match self.next()? {
             Token::U8Type => TypeTag::U8,
@@ -366,30 +359,8 @@ where
     Ok(res)
 }
 
-pub fn parse_string_list(s: &str) -> Result<Vec<String>> {
-    parse(s, |parser| {
-        parser.parse_comma_list(|parser| parser.parse_string(), Token::EOF, true)
-    })
-}
-
-pub fn parse_type_tags(s: &str) -> Result<Vec<TypeTag>> {
-    parse(s, |parser| {
-        parser.parse_comma_list(|parser| parser.parse_type_tag(), Token::EOF, true)
-    })
-}
-
 pub fn parse_type_tag(s: &str) -> Result<TypeTag> {
     parse(s, |parser| parser.parse_type_tag())
-}
-
-pub fn parse_transaction_arguments(s: &str) -> Result<Vec<TransactionArgument>> {
-    parse(s, |parser| {
-        parser.parse_comma_list(
-            |parser| parser.parse_transaction_argument(),
-            Token::EOF,
-            true,
-        )
-    })
 }
 
 pub fn parse_transaction_argument(s: &str) -> Result<TransactionArgument> {

@@ -1,0 +1,34 @@
+# Primitive types
+--make-move-vec <address> [@0x1]
+--make-move-vec <bool> [true, false]
+--make-move-vec <u8> [0]
+--make-move-vec <u16> [0]
+--make-move-vec <u32> [0]
+--make-move-vec <u64> [0]
+--make-move-vec <u128> [0]
+--make-move-vec <u256> [0]
+--make-move-vec <vector<u8>> [vector[0]]
+--make-move-vec <vector<u256>> [vector[0]]
+
+# Primitive type annotations on integers
+--assign a 0u8
+--assign b 0u16
+--assign c 0u32
+--assign d 0u64
+--assign e 0u128
+--assign f 0u256
+
+# Support hex numbers
+--assign a 0x0u8
+--assign b 0x0u16
+--assign c 0x0u32
+--assign d 0x0u64
+--assign e 0x0u128
+--assign f 0x0u256
+
+# Nested type arguments
+--make-move-vec <std::option::Option<std::option::Option<vector<u8>>>> [none]
+
+# Std lib types
+--make-move-vec <std::option::Option<vector<u256>>> [vector[]]
+

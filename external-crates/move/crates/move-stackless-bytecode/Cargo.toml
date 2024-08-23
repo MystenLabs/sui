@@ -14,7 +14,6 @@ move-model.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-command-line-common.workspace = true
-move-read-write-set-types.workspace = true
 move-compiler.workspace = true
 
 codespan.workspace = true
@@ -25,7 +24,6 @@ im.workspace = true
 itertools.workspace = true
 log.workspace = true
 serde.workspace = true
-paste.workspace = true
 petgraph.workspace = true
 
 [dev-dependencies]

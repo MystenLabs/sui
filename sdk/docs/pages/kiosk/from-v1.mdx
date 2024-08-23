@@ -21,7 +21,7 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 const placeAndListToKiosk = async () => {
 	const kiosk = 'SomeKioskId';
@@ -30,7 +30,7 @@ const placeAndListToKiosk = async () => {
 	const item = 'SomeItemId';
 	const price = '100000';
 
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	placeAndList(tx, itemType, kiosk, kioskCap, item, price);
 
@@ -56,10 +56,10 @@ const placeAndListToKiosk = async () => {
 	// Assume you have saved the user's preferred kiosk Cap somewhere in your app's state.
 	const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xSomeAddress' });
 
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 
 	// Assume you use the first owned kiosk.
-	new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kioskOwnerCaps[0] })
+	new KioskTransaction({ transaction: tx, kioskClient, cap: kioskOwnerCaps[0] })
 		.placeAndList({
 			itemType: '0xItemAddr::some:ItemType',
 			item: 'SomeItemId',
@@ -79,12 +79,12 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 const createKiosk = async () => {
 	const accountAddress = '0xSomeSuiAddress';
 
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const kiosk_cap = createKioskAndShare(tx);
 
 	tx.transferObjects([kiosk_cap], accountAddress);
@@ -108,9 +108,9 @@ const kioskClient = new KioskClient({
 });
 
 const placeAndListToKiosk = async () => {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 
-	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient });
+	const kioskTx = new KioskTransaction({ transaction: tx, kioskClient });
 
 	kioskTx.shareAndTransferCap('0xSomeSuiAddress').finalize();
 
@@ -126,7 +126,7 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
-import { SuiClient } from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient(
   url: 'https://fullnode.testnet.sui.io:443',
@@ -154,8 +154,8 @@ const purchaseItem = async (item, kioskId) => {
   const policies = await queryTransferPolicy(client, item.type);
   // Selecting the first one for simplicity.
   const policyId = policy[0]?.id;
-  // Initialize tx block.
-  const tx = new TransactionBlock();
+  // Initialize transaction.
+  const tx = new Transaction();
 
   // Both are required if you there is a `kiosk_lock_rule`.
   // Optional otherwise. Function throws an error if there's a kiosk_lock_rule and these are missing.
@@ -215,9 +215,9 @@ const purchase = async () => {
     // You wouldn't need to query this for every purchase.
     const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xSomeAddress' });
 
-    const txb = new TransactionBlock();
+    const tx = new Transaction();
 
-    const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kioskOwnerCaps[0] });
+    const kioskTx = new KioskTransaction({ transaction: tx, kioskClient, cap: kioskOwnerCaps[0] });
 
     // Purchase the item and resolve the rules.
     await kioskTx.purchaseAndResolve({
@@ -245,7 +245,7 @@ import {
 	percentageToBasisPoints,
 	testnetEnvironment,
 } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
 // as well as a kiosk lock, making the objects trade-able only from/to a kiosk.
@@ -262,7 +262,7 @@ const attachStrongRoyalties = async () => {
 	// Use `mainnetEnvironment` for mainnet.
 	const environment = testnetEnvironment;
 
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	attachKioskLockRule(tx, type, policyId, policyCapId, environment);
 	attachRoyaltyRule(
@@ -294,7 +294,7 @@ const kioskClient = new KioskClient({
 });
 
 const adjustPolicy = async () => {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 
 	// You could have more than one cap, since you can create more than one transfer policy.
 	const policyCaps = await kioskClient.getOwnedTransferPoliciesByType({
@@ -302,7 +302,7 @@ const adjustPolicy = async () => {
 		address: '0xOwnerAddress',
 	});
 
-	new TransferPolicyTransaction({ transactionBlock: txb, kioskClient, cap: policyCaps[0] })
+	new TransferPolicyTransaction({ transaction: tx, kioskClient, cap: policyCaps[0] })
 		.addRoyaltyRule(percentageToBasisPoints(2.55), 100_000_000)
 		.addLockRule();
 

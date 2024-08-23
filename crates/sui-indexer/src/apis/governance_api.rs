@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
 
 use cached::{proc_macro::cached, SizedCache};
+use diesel::r2d2::R2D2Connection;
 use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
 use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
@@ -23,38 +24,13 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub struct GovernanceReadApi {
-    inner: IndexerReader,
+pub struct GovernanceReadApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
 }
 
-impl GovernanceReadApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self { inner }
-    }
-
-    /// Get a validator's APY by its address
-    pub async fn get_validator_apy(
-        &self,
-        address: &SuiAddress,
-    ) -> Result<Option<f64>, IndexerError> {
-        let apys = validators_apys_map(self.get_validators_apy().await?);
-        Ok(apys.get(address).copied())
-    }
-
-    async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
-        let system_state_summary: SuiSystemStateSummary =
-            self.get_latest_sui_system_state().await?;
-        let epoch = system_state_summary.epoch;
-        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
-
-        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
-
-        let apys = sui_json_rpc::governance_api::calculate_apys(
-            stake_subsidy_start_epoch,
-            exchange_rate_table,
-        );
-
-        Ok(ValidatorApys { apys, epoch })
     }
 
     pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
@@ -131,7 +107,7 @@ impl GovernanceReadApi {
         let system_state_summary = self.get_latest_sui_system_state().await?;
         let epoch = system_state_summary.epoch;
 
-        let rates = exchange_rates(self, system_state_summary)
+        let rates = exchange_rates(self, &system_state_summary)
             .await?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
@@ -196,17 +172,17 @@ impl GovernanceReadApi {
 #[cached(
     type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
     create = "{ SizedCache::with_size(1) }",
-    convert = "{ system_state_summary.epoch }",
+    convert = " { system_state_summary.epoch } ",
     result = true
 )]
-async fn exchange_rates(
-    state: &GovernanceReadApi,
-    system_state_summary: SuiSystemStateSummary,
+pub async fn exchange_rates(
+    state: &GovernanceReadApi<impl R2D2Connection>,
+    system_state_summary: &SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
     let mut tables = vec![];
 
-    for validator in system_state_summary.active_validators {
+    for validator in &system_state_summary.active_validators {
         tables.push((
             validator.sui_address,
             validator.staking_pool_id,
@@ -285,18 +261,8 @@ async fn exchange_rates(
     Ok(exchange_rates)
 }
 
-/// Cache a map representing the validators' APYs for this epoch
-#[cached(
-    type = "SizedCache<EpochId, BTreeMap<SuiAddress, f64>>",
-    create = "{ SizedCache::with_size(1) }",
-    convert = " {apys.epoch} "
-)]
-fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
-    BTreeMap::from_iter(apys.apys.iter().map(|x| (x.address, x.apy)))
-}
-
 #[async_trait]
-impl GovernanceReadApiServer for GovernanceReadApi {
+impl<T: R2D2Connection + 'static> GovernanceReadApiServer for GovernanceReadApi<T> {
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
@@ -335,7 +301,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
-impl SuiRpcModule for GovernanceReadApi {
+impl<T: R2D2Connection> SuiRpcModule for GovernanceReadApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

@@ -8,34 +8,29 @@ use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast as N,
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
     typing::{ast as T, visitor::TypingVisitor},
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use super::{
-    LinterDiagCategory, COIN_MOD_NAME, COIN_STRUCT_NAME, LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory, LinterDiagnosticCode, COIN_MOD_NAME, COIN_STRUCT_NAME,
     LINT_WARNING_PREFIX, SUI_PKG_NAME,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::CoinField as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::CoinField as u8,
     "sub-optimal 'sui::coin::Coin' field type",
 );
 
 pub struct CoinFieldVisitor;
 
 impl TypingVisitor for CoinFieldVisitor {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        _program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
         for (_, _, mdef) in program.modules.iter() {
             if mdef.attributes.is_test_or_test_only() {
                 continue;
@@ -53,7 +48,7 @@ impl TypingVisitor for CoinFieldVisitor {
 fn struct_def(env: &mut CompilationEnv, sname: Symbol, sdef: &N::StructDefinition, sloc: Loc) {
     env.add_warning_filter_scope(sdef.warning_filter.clone());
 
-    if let N::StructFields::Defined(sfields) = &sdef.fields {
+    if let N::StructFields::Defined(_, sfields) = &sdef.fields {
         for (floc, fname, (_, ftype)) in sfields.iter() {
             if is_field_coin_type(ftype) {
                 let msg = format!("The field '{fname}' of '{sname}' has type 'sui::coin::Coin'");

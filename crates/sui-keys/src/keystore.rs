@@ -122,13 +122,14 @@ pub trait AccountKeystore: Send + Sync {
         phrase: &str,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
+        alias: Option<String>,
     ) -> Result<SuiAddress, anyhow::Error> {
         let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
             .map_err(|e| anyhow::anyhow!("Invalid mnemonic phrase: {:?}", e))?;
         let seed = Seed::new(&mnemonic, "");
         match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
             Ok((address, kp)) => {
-                self.add_key(None, kp)?;
+                self.add_key(alias, kp)?;
                 Ok(address)
             }
             Err(e) => Err(anyhow!("error getting keypair {:?}", e)),
@@ -420,13 +421,10 @@ impl FileBasedKeystore {
         Ok(())
     }
 
+    /// Keys saved as Base64 with 33 bytes `flag || privkey` ($BASE64_STR).
+    /// To see Bech32 format encoding, use `sui keytool export $SUI_ADDRESS` where
+    /// $SUI_ADDRESS can be found with `sui keytool list`. Or use `sui keytool convert $BASE64_STR`
     pub fn save_keystore(&self) -> Result<(), anyhow::Error> {
-        println!(
-            "Keys saved as Base64 with 33 bytes `flag || privkey` ($BASE64_STR). 
-        To see Bech32 format encoding, use `sui keytool export $SUI_ADDRESS` where 
-        $SUI_ADDRESS can be found with `sui keytool list`. Or use `sui keytool convert $BASE64_STR`."
-        );
-
         if let Some(path) = &self.path {
             let store = serde_json::to_string_pretty(
                 &self

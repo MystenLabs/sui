@@ -1,3 +1,4 @@
+#[allow(unused_variable)]
 module a::m {
     // macros have their own unique scopes
     macro fun foo($f: u64): u64 {

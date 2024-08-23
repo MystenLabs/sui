@@ -1,6 +1,7 @@
 processed 17 tasks
 
-task 1 'run'. lines 17-23:
+task 1, lines 17-23:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -9,7 +10,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 2 'run'. lines 25-31:
+task 2, lines 25-31:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -18,7 +20,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 4 'run'. lines 50-56:
+task 4, lines 50-56:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -27,7 +30,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 5 'run'. lines 58-64:
+task 5, lines 58-64:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -36,7 +40,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 7 'run'. lines 81-87:
+task 7, lines 81-87:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -45,7 +50,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 8 'run'. lines 89-95:
+task 8, lines 89-95:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -54,7 +60,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 10 'run'. lines 114-121:
+task 10, lines 114-121:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -63,7 +70,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 11 'run'. lines 123-128:
+task 11, lines 123-128:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -72,7 +80,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 12 'run'. lines 130-136:
+task 12, lines 130-136:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -81,7 +90,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 14 'run'. lines 154-160:
+task 14, lines 154-160:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -90,7 +100,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 15 'run'. lines 162-168:
+task 15, lines 162-168:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,
@@ -99,7 +110,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 16 'run'. lines 170-176:
+task 16, lines 170-176:
+//# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
     sub_status: None,

@@ -10,10 +10,11 @@ use crate::shared::FILTER_ALL;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub enum Severity {
-    Warning = 0,
-    NonblockingError = 1,
-    BlockingError = 2,
-    Bug = 3,
+    Note = 0,
+    Warning = 1,
+    NonblockingError = 2,
+    BlockingError = 3,
+    Bug = 4,
 }
 
 /// A an optional prefix to distinguish between different types of warnings (internal vs. possibly
@@ -81,7 +82,7 @@ pub enum WarningFilter {
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
 /// `"[{external_prefix}{severity}{category}{code}] {message}"`.
-/// Note, this will will panic if `category > 99`
+/// Note, this will panic if `category > 99`
 pub const fn custom(
     external_prefix: &'static str,
     severity: Severity,
@@ -163,6 +164,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
+        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -182,6 +184,10 @@ codes!(
             { msg: "invalid identifier escape", severity: NonblockingError },
         InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
         InvalidLabel: { msg: "invalid expression label", severity: NonblockingError },
+        AmbiguousCast: { msg: "ambiguous 'as'", severity: NonblockingError },
+        InvalidName: { msg: "invalid name", severity: BlockingError },
+        InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
+        InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -208,6 +214,10 @@ codes!(
             { msg: "invalid visibility modifier", severity: NonblockingError },
         InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
         UnknownAttribute: { msg: "unknown attribute", severity: Warning },
+        InvalidSyntaxMethod: { msg: "invalid 'syntax' method type", severity: NonblockingError },
+        MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
+        DuplicateAlias: { msg: "duplicate alias", severity: Warning },
+        InvalidEnum: { msg: "invalid 'enum' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -228,6 +238,11 @@ codes!(
         UnboundLabel: { msg: "unbound label", severity: BlockingError },
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
         InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
+        InvalidTypeParameter: { msg: "invalid type parameter", severity: NonblockingError },
+        InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
+        UnboundVariant: { msg: "unbound variant", severity: BlockingError },
+        InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
+        InvalidPosition: { msg: "invalid usage position", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -270,6 +285,11 @@ codes!(
         UnexpectedFunctionType: { msg: "invalid usage of lambda type", severity: BlockingError },
         UnexpectedLambda: { msg: "invalid usage of lambda", severity: BlockingError },
         CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
+        InvariantError: { msg: "types are not equal", severity: BlockingError },
+        IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
+        InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
+        IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
+        DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -322,7 +342,8 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "issue with attribute value", severity: Warning }
+        ValueWarning: { msg: "issue with attribute value", severity: Warning },
+        AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },
@@ -335,13 +356,35 @@ codes!(
     Editions: [
         FeatureTooNew: {
             msg: "feature is not supported in specified edition",
-            severity: BlockingError,
+            severity: NonblockingError,
         },
+        DeprecatedFeature: {
+            msg: "feature is deprecated in specified edition",
+            severity: NonblockingError,
+        },
+        FeatureInDevelopment: {
+            msg: "feature is under active development",
+            severity: BlockingError,
+        }
     ],
     Migration: [
-        NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },
-        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: BlockingError },
-    ]
+        NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },
+        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: NonblockingError },
+        NeedsRestrictedIdentifier: { msg: "move 2024 migration: restricted identifier", severity: NonblockingError },
+        NeedsGlobalQualification: { msg: "move 2024 migration: global qualification", severity: NonblockingError },
+        RemoveFriend: { msg: "move 2024 migration: remove 'friend'", severity: NonblockingError },
+        MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
+        AddressRemove: { msg: "move 2024 migration: address remove", severity: NonblockingError },
+        AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
+    ],
+    IDE: [
+        DotAutocomplete: { msg: "IDE dot autocomplete", severity: Note },
+        MacroCallInfo: { msg: "IDE macro call info", severity: Note },
+        ExpandedLambda: { msg: "IDE expanded lambda", severity: Note },
+        MissingMatchArms: { msg: "IDE missing match arms", severity: Note },
+        EllipsisExpansion: { msg: "IDE ellipsis expansion", severity: Note },
+        PathAutocomplete: { msg: "IDE path autocomplete", severity: Note },
+    ],
 );
 
 //**************************************************************************************************
@@ -399,6 +442,7 @@ impl DiagnosticInfo {
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
+            Severity::Note => "I",
             Severity::Bug => "ICE",
         };
         debug_assert!(category <= 99);
@@ -454,6 +498,7 @@ impl Severity {
             Severity::Bug => CSRSeverity::Bug,
             Severity::BlockingError | Severity::NonblockingError => CSRSeverity::Error,
             Severity::Warning => CSRSeverity::Warning,
+            Severity::Note => CSRSeverity::Note,
         }
     }
 }

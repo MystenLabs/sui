@@ -4,12 +4,14 @@
 
 //! This module defines the abstract state for the local safety analysis.
 
-use crate::absint::{AbstractDomain, JoinResult};
+use crate::ability_cache::AbilityCache;
+use move_abstract_interpreter::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},
+    CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 
 /// LocalState represents the current assignment state of a local
@@ -23,13 +25,11 @@ pub(crate) enum LocalState {
     /// The local has a value
     Available,
 }
-use crate::meter::{Meter, Scope};
 use LocalState::*;
 
-pub(crate) const STEP_BASE_COST: u128 = 15;
-pub(crate) const RET_PER_LOCAL_COST: u128 = 30;
-pub(crate) const JOIN_BASE_COST: u128 = 10;
-pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
+pub(crate) const STEP_BASE_COST: u128 = 1;
+pub(crate) const RET_COST: u128 = 10;
+pub(crate) const JOIN_COST: u128 = 10;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AbstractState {
@@ -41,25 +41,34 @@ pub(crate) struct AbstractState {
 impl AbstractState {
     /// create a new abstract state
     pub fn new(
-        resolver: &BinaryIndexedView,
-        function_view: &FunctionView,
+        _module: &CompiledModule,
+        function_context: &FunctionContext,
+        ability_cache: &mut AbilityCache,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Self> {
-        let num_args = function_view.parameters().len();
-        let num_locals = num_args + function_view.locals().len();
+        let num_args = function_context.parameters().len();
+        let num_locals = num_args + function_context.locals().len();
         let local_states = (0..num_locals)
             .map(|i| if i < num_args { Available } else { Unavailable })
             .collect();
 
-        let all_local_abilities = function_view
+        let all_local_abilities = function_context
             .parameters()
             .0
             .iter()
-            .chain(function_view.locals().0.iter())
-            .map(|st| resolver.abilities(st, function_view.type_parameters()))
+            .chain(function_context.locals().0.iter())
+            .map(|st| {
+                ability_cache.abilities(
+                    Scope::Function,
+                    meter,
+                    function_context.type_parameters(),
+                    st,
+                )
+            })
             .collect::<PartialVMResult<Vec<_>>>()?;
 
         Ok(Self {
-            current_function: function_view.index(),
+            current_function: function_context.index(),
             local_states,
             all_local_abilities,
         })
@@ -139,14 +148,9 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
-        meter.add(Scope::Function, JOIN_BASE_COST)?;
-        meter.add_items(
-            Scope::Function,
-            JOIN_PER_LOCAL_COST,
-            state.local_states.len(),
-        )?;
+        meter.add(Scope::Function, JOIN_COST)?;
         let joined = Self::join_(self, state);
         assert!(self.local_states.len() == joined.local_states.len());
         let locals_unchanged = self

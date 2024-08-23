@@ -13,6 +13,10 @@ async-trait.workspace = true
 bcs.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+# TODO: `move-command-line-common` is used for `ErrorBitset`. We should
+# refactor the crate into a `move-utils` at some point and use that instead
+# here once we do.
+move-command-line-common.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
 sui-rest-api.workspace = true

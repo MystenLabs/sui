@@ -17,6 +17,7 @@ use move_core_types::language_storage::StructTag;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
@@ -26,11 +27,10 @@ use sui_json_rpc_api::{
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
     ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
-    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiMoveValue, SuiMoveVariant, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiLoadedChildObject, SuiLoadedChildObjectsResponse};
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::key_value_store::TransactionKeyValueStore;
@@ -52,10 +52,10 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
-use crate::with_tracing;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
+use crate::{with_tracing, ObjectProvider};
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
@@ -639,6 +639,27 @@ impl ReadApiServer for ReadApi {
     }
 
     #[instrument(skip(self))]
+    async fn try_get_object_before_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        let version = self
+            .state
+            .find_object_lt_or_eq_version(&object_id, &version)
+            .await
+            .map_err(Error::from)?
+            .map(|obj| obj.version())
+            .unwrap_or_default();
+        self.try_get_past_object(
+            object_id,
+            version,
+            Some(SuiObjectDataOptions::bcs_lossless()),
+        )
+        .await
+    }
+
+    #[instrument(skip(self))]
     async fn try_multi_get_past_objects(
         &self,
         past_objects: Vec<SuiGetPastObjectRequest>,
@@ -701,10 +722,12 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
-                transaction_kv_store.get_tx(digest).await.map_err(|err| {
+                let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
-                })
+                });
+                add_server_timing("tx_kv_lookup");
+                ret
             })
             .await
             .map_err(Error::from)??;
@@ -993,32 +1016,6 @@ impl ReadApiServer for ReadApi {
     }
 
     #[instrument(skip(self))]
-    async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        with_tracing!(async move {
-            Ok(SuiLoadedChildObjectsResponse {
-                loaded_child_objects: match self
-                    .state
-                    .loaded_child_object_versions(&digest)
-                    .map_err(|e| {
-                        error!(
-                            "Failed to get loaded child objects at {digest:?} with error: {e:?}"
-                        );
-                        Error::StateReadError(e)
-                    })? {
-                    Some(v) => v
-                        .into_iter()
-                        .map(|q| SuiLoadedChildObject::new(q.0, q.1))
-                        .collect::<Vec<_>>(),
-                    None => vec![],
-                },
-            })
-        })
-    }
-
-    #[instrument(skip(self))]
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
@@ -1284,6 +1281,17 @@ fn get_value_from_move_struct(
                         "Unexpected move struct type for field {}",
                         var_name
                     )))?;
+                }
+            }
+            SuiMoveValue::Variant(SuiMoveVariant {
+                fields, variant, ..
+            }) => {
+                if let Some(value) = fields.get(part) {
+                    current_value = value;
+                } else {
+                    Err(anyhow!(
+                        "Field value {var_name} cannot be found in variant {variant}",
+                    ))?
                 }
             }
             _ => {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::*;
@@ -9,7 +10,7 @@ use sui_test_transaction_builder::publish_package;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -38,12 +39,17 @@ async fn receive_object_feature_deny() {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(txn)
+        .handle_transaction(txn, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
         .unwrap_err();
 
-    assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+    assert!(matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(..)
+        }
+    ));
 }
 
 #[sim_test]

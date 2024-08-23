@@ -5,9 +5,7 @@ import { fromB64, toB64 } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
 import type { MultiSigStruct } from '../multisig/publickey.js';
-import { computeZkLoginAddressFromSeed } from '../zklogin/address.js';
-import { extractClaimValue } from '../zklogin/jwt-utils.js';
-import { parseZkLoginSignature } from '../zklogin/signature.js';
+import { parseSerializedZkLoginSignature } from '../zklogin/publickey.js';
 import type { PublicKey } from './publickey.js';
 import type { SignatureScheme } from './signature-scheme.js';
 import {
@@ -28,19 +26,13 @@ export type SerializeSignatureInput = {
 };
 
 /**
- * (`flag || signature || pubkey` bytes, as base-64 encoded string).
- * Signature is committed to the intent message of the transaction data, as base-64 encoded string.
- */
-export type SerializedSignature = string;
-
-/**
  * Takes in a signature, its associated signing scheme and a public key, then serializes this data
  */
 export function toSerializedSignature({
 	signature,
 	signatureScheme,
 	publicKey,
-}: SerializeSignatureInput): SerializedSignature {
+}: SerializeSignatureInput): string {
 	if (!publicKey) {
 		throw new Error('`publicKey` is required');
 	}
@@ -56,7 +48,7 @@ export function toSerializedSignature({
 /**
  * Decodes a serialized signature into its constituent components: the signature scheme, the actual signature, and the public key
  */
-export function parseSerializedSignature(serializedSignature: SerializedSignature) {
+export function parseSerializedSignature(serializedSignature: string) {
 	const bytes = fromB64(serializedSignature);
 
 	const signatureScheme =
@@ -72,25 +64,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 				bytes,
 			};
 		case 'ZkLogin':
-			const signatureBytes = bytes.slice(1);
-			const { inputs, maxEpoch, userSignature } = parseZkLoginSignature(signatureBytes);
-			const { issBase64Details, addressSeed } = inputs;
-			const iss = extractClaimValue<string>(issBase64Details, 'iss');
-			const address = computeZkLoginAddressFromSeed(BigInt(addressSeed), iss);
-
-			return {
-				serializedSignature,
-				signatureScheme,
-				zkLogin: {
-					inputs,
-					maxEpoch,
-					userSignature,
-					iss,
-					address,
-					addressSeed: BigInt(addressSeed),
-				},
-				signature: bytes,
-			};
+			return parseSerializedZkLoginSignature(serializedSignature);
 		case 'ED25519':
 		case 'Secp256k1':
 		case 'Secp256r1':

@@ -5,11 +5,11 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
     use crate::type_layout_resolver::TypeLayoutResolver;
-    use move_binary_format::access::ModuleAccess;
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
@@ -23,7 +23,7 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
-    use sui_types::execution_mode::{self, ExecutionMode};
+    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -454,6 +454,19 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok(Mode::empty_results())
             }
+            TransactionKind::ConsensusCommitPrologueV3(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
             TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
@@ -675,18 +688,11 @@ mod checked {
             }
         }
 
+        let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
-            let max_format_version = protocol_config.move_binary_format_version();
             let deserialized_modules: Vec<_> = modules
                 .iter()
-                .map(|m| {
-                    CompiledModule::deserialize_with_config(
-                        m,
-                        max_format_version,
-                        protocol_config.no_extraneous_module_bytes(),
-                    )
-                    .unwrap()
-                })
+                .map(|m| CompiledModule::deserialize_with_config(m, &binary_config).unwrap())
                 .collect();
 
             if version == OBJECT_START_VERSION {

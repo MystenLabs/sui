@@ -6,14 +6,10 @@
 //# publish
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -26,7 +22,7 @@ module t2::o2 {
         transfer::public_share_object(o)
     }
 
-    public fun delete(o2: vector<Obj2>) {
+    public fun delete(mut o2: vector<Obj2>) {
         let o = vector::pop_back(&mut o2);
         deleter(o);
         vector::destroy_empty(o2);
@@ -37,7 +33,7 @@ module t2::o2 {
         object::delete(id);
     }
 
-    public fun pop_coin(o2: vector<Coin<SUI>>): Coin<SUI> {
+    public fun pop_coin(mut o2: vector<Coin<SUI>>): Coin<SUI> {
         let o = vector::pop_back(&mut o2);
         vector::destroy_empty(o2);
         o

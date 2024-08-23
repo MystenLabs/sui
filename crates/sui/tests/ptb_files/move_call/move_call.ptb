@@ -1,0 +1,7 @@
+--assign a none 
+--make-move-vec <0x1::option::Option<u64>> [a] 
+--move-call 0x1::option::is_none <u64> a
+--assign a none 
+--move-call 0x1::option::is_none <u64> none
+--assign a none 
+--move-call 0x1::option::is_none <u64> a

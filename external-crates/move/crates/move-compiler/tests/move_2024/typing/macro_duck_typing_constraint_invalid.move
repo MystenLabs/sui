@@ -7,7 +7,8 @@ module a::m {
     }
 
     macro fun needs_copy<$T, $U, $V>(_: X<$T>, _: $U, $v: $V): X<$U> {
-        mycopy(&$v);
+        let v = $v;
+        mycopy(&v);
         X()
     }
 

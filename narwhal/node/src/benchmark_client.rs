@@ -250,7 +250,7 @@ impl Client {
                         }
                     } else {
                         let tx_proto = TransactionProto {
-                            transaction: Bytes::from(transaction),
+                            transactions: vec![Bytes::from(transaction)],
                         };
                         if let Err(e) = grpc_client.submit_transaction(tx_proto).await {
                             submission_error = Some(eyre::Report::msg(format!("{e}")));
@@ -390,7 +390,7 @@ async fn submit_to_consensus(
     };
     let client = client.as_ref().unwrap().load();
     client
-        .submit_transaction(transaction)
+        .submit_transactions(vec![transaction])
         .await
         .map_err(|e| eyre::Report::msg(format!("Failed to submit to consensus: {:?}", e)))?;
     Ok(())

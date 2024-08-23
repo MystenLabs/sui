@@ -20,7 +20,7 @@ pub type SequenceNumber = u64;
 
 #[derive(Clone, Debug)]
 /// The output of Consensus, which includes all the batches for each certificate in the sub dag
-/// It is sent to the the ExecutionState handle_consensus_transactions
+/// It is sent to the ExecutionState handle_consensus_transactions
 pub struct ConsensusOutput {
     pub sub_dag: Arc<CommittedSubDag>,
     /// Matches certificates in the `sub_dag` one-to-one.
@@ -465,7 +465,7 @@ impl fmt::Display for ConsensusOutputDigest {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Certificate, Header, HeaderV2Builder};
+    use crate::{Certificate, Header, HeaderV1Builder};
     use crate::{CommittedSubDag, ReputationScores};
     use config::AuthorityIdentifier;
     use indexmap::IndexMap;
@@ -478,7 +478,7 @@ mod tests {
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
 
-        let header_builder = HeaderV2Builder::default();
+        let header_builder = HeaderV1Builder::default();
         let header = header_builder
             .author(AuthorityIdentifier(1u16))
             .round(2)
@@ -492,7 +492,7 @@ mod tests {
         let certificate = Certificate::new_unsigned(
             &latest_protocol_version(),
             &committee,
-            Header::V2(header),
+            Header::V1(header),
             Vec::new(),
         )
         .unwrap();
@@ -519,7 +519,7 @@ mod tests {
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
 
-        let header_builder = HeaderV2Builder::default();
+        let header_builder = HeaderV1Builder::default();
         let header = header_builder
             .author(AuthorityIdentifier(1u16))
             .round(2)
@@ -533,7 +533,7 @@ mod tests {
         let certificate = Certificate::new_unsigned(
             &latest_protocol_version(),
             &committee,
-            Header::V2(header),
+            Header::V1(header),
             Vec::new(),
         )
         .unwrap();
@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(sub_dag_round_2.commit_timestamp, newer_timestamp);
 
         // Now create the leader of round 4 with the older timestamp
-        let header_builder = HeaderV2Builder::default();
+        let header_builder = HeaderV1Builder::default();
         let header = header_builder
             .author(AuthorityIdentifier(1u16))
             .round(4)
@@ -565,7 +565,7 @@ mod tests {
         let certificate = Certificate::new_unsigned(
             &latest_protocol_version(),
             &committee,
-            Header::V2(header),
+            Header::V1(header),
             Vec::new(),
         )
         .unwrap();

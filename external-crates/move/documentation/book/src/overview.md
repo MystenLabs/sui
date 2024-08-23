@@ -4,7 +4,10 @@ title: Overview
 sidebar_label: Move
 ---
 
-Move is a next generation language for secure, sandboxed, and formally verified programming. Its first use case is for the Diem blockchain, where Move provides the foundation for its implementation. However, Move has been developed with use cases in mind outside a blockchain context as well.
+Move is a next generation language for secure asset programming. Its primary use case is in
+blockchain environments, where Move programs are used to construct state changes. Move allows
+developers to write programs that flexibly manage and transfer assets, while providing the security
+and protections against attacks on those assets.
 
 ### Start Here
 
@@ -17,18 +20,11 @@ Move is a next generation language for secure, sandboxed, and formally verified 
     to="/docs/move/move-introduction"
   />
   <SimpleTextCard
-    icon="img/modules-and-scripts.svg"
-    iconDark="img/modules-and-scripts-dark.svg"
-    overlay="Understand Move’s two different types of programs: Modules and Scripts"
-    title="Modules and Scripts"
-    to="/docs/move/move-modules-and-scripts"
-  />
-  <SimpleTextCard
-    icon="img/placeholder.svg"
-    iconDark="img/placeholder-dark.svg"
-    overlay="Play with Move directly as you create coins with the language"
-    title="First Tutorial: Creating Coins"
-    to="/docs/move/move-tutorial-creating-coins"
+    icon="img/modules.svg"
+    iconDark="img/modulesdark.svg"
+    overlay="Understand Move Modules"
+    title="Modules "
+    to="/docs/move/move-modules"
   />
 </CardsWrapper>
 
@@ -52,7 +48,7 @@ Move is a next generation language for secure, sandboxed, and formally verified 
   <SimpleTextCard
     icon="img/address.svg"
     iconDark="img/address-dark.svg"
-    overlay="address is a built-in type in Move that is used to represent locations in global storage"
+    overlay="address is a built-in type in Move that is used to represent locations in storage"
     title="Address"
     to="/docs/move/move-address"
   />
@@ -62,13 +58,6 @@ Move is a next generation language for secure, sandboxed, and formally verified 
     overlay="vector<T> is the only primitive collection type provided by Move"
     title="Vector"
     to="/docs/move/move-vector"
-  />
-  <SimpleTextCard
-    icon="img/signer.svg"
-    iconDark="img/signer-dark.svg"
-    overlay="signer is a built-in Move resource type. A signer is a capability that allows the holder to act on behalf of a particular address"
-    title="Signer"
-    to="/docs/move/move-signer"
   />
   <SimpleTextCard
     icon="img/move-references.svg"
@@ -125,11 +114,11 @@ Move is a next generation language for secure, sandboxed, and formally verified 
     to="/docs/move/move-functions"
   />
   <SimpleTextCard
-    icon="img/structs-and-resources.svg"
-    iconDark="img/structs-and-resources-dark.svg"
-    overlay="A struct is a user-defined data structure containing typed fields. A resource is a kind of struct that cannot be copied and cannot be dropped"
-    title="Structs and Resources"
-    to="/docs/move/move-structs-and-resources"
+    icon="img/structs.svg"
+    iconDark="img/structsdark.svg"
+    overlay="A struct is a user-defined data structure containing typed fields."
+    title="Structs"
+    to="/docs/move/move-structs"
   />
   <SimpleTextCard
     icon="img/constants.svg"
@@ -161,35 +150,9 @@ Move is a next generation language for secure, sandboxed, and formally verified 
   />
 </CardsWrapper>
 
-### Global Storage
-
-<CardsWrapper>
-  <SimpleTextCard
-    icon="img/intro-to-global-storage.svg"
-    iconDark="img/intro-to-global-storage-dark.svg"
-    overlay="The purpose of Move programs is to read from and write to persistent global storage"
-    title="Global Storage Structure"
-    to="/docs/move/move-global-storage-structure"
-  />
-  <SimpleTextCard
-    icon="img/intro-to-global-storage.svg"
-    iconDark="img/intro-to-global-storage-dark.svg"
-    overlay="Move programs can create, delete, and update resources in global storage using five instructions"
-    title="Global Storage Operators"
-    to="/docs/move/move-global-storage-operators"
-  />
-</CardsWrapper>
-
 ### Reference
 
 <CardsWrapper>
-  <SimpleTextCard
-    icon="img/standard-library.svg"
-    iconDark="img/standard-library-dark.svg"
-    overlay="The Move standard library exposes interfaces that implement functionality on vectors, option types, error codes and fixed-point numbers"
-    title="Standard Library"
-    to="/docs/move/move-standard-library"
-  />
   <SimpleTextCard
     icon="img/coding-conventions.svg"
     iconDark="img/coding-conventions-dark.svg"

@@ -1,0 +1,58 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:17]
+ 1 │ --make-move-vec [100]
+   ·                 ┬
+   ·                 ╰── Expected '<' but found '['
+ 2 │ --make-move-vec <> [100]
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:18]
+ 1 │ --make-move-vec [100]
+ 2 │ --make-move-vec <> [100]
+   ·                  ┬
+   ·                  ╰── Unexpected '>'
+ 3 │ --make-move-vec <u64>
+   ╰────
+  help: Expected a type here
+
+  × Error when processing PTB
+   ╭─[4:1]
+ 3 │ --make-move-vec <u64>
+ 4 │ --make-move-vec <u64, bool> []
+   · ───────┬───────
+   ·        ╰── Expected '[' but found command '--make-move-vec'
+ 5 │ --make-move-vec u64 []
+   ╰────
+
+  × Error when processing PTB
+   ╭─[4:21]
+ 3 │ --make-move-vec <u64>
+ 4 │ --make-move-vec <u64, bool> []
+   ·                     ┬
+   ·                     ╰── Expected '>' but found ','
+ 5 │ --make-move-vec u64 []
+   ╰────
+
+  × Error when processing PTB
+   ╭─[5:17]
+ 4 │ --make-move-vec <u64, bool> []
+ 5 │ --make-move-vec u64 []
+   ·                 ─┬─
+   ·                  ╰── Expected '<' but found identifier 'u64'
+ 6 │ --make-move-vec <u64> 10 
+   ╰────
+
+  × Error when processing PTB
+   ╭─[6:23]
+ 5 │ --make-move-vec u64 []
+ 6 │ --make-move-vec <u64> 10 
+   ·                       ─┬
+   ·                        ╰── Expected '[' but found number '10'
+   ╰────
+

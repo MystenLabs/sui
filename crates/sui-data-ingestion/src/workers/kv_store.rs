@@ -3,6 +3,7 @@
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use aws_config::timeout::TimeoutConfig;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{AttributeValue, PutRequest, WriteRequest};
 use aws_sdk_dynamodb::Client;
@@ -58,9 +59,15 @@ impl KVStoreWorker {
             None,
             "dynamodb",
         );
+        let timeout_config = TimeoutConfig::builder()
+            .operation_timeout(Duration::from_secs(3))
+            .operation_attempt_timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(3))
+            .build();
         let aws_config = aws_config::from_env()
             .credentials_provider(credentials)
             .region(Region::new(config.aws_region))
+            .timeout_config(timeout_config)
             .load()
             .await;
         let dynamo_client = Client::new(&aws_config);

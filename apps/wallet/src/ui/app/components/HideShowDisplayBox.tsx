@@ -63,7 +63,7 @@ export function HideShowDisplayBox({
 								? value
 								: value.map((aValue, index) => (
 										<span key={index}>{(index > 0 ? ' ' : '') + aValue}</span>
-								  ))}
+									))}
 						</Text>
 					</div>
 				)}

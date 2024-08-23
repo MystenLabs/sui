@@ -11,7 +11,7 @@ use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::{MoveStruct, MoveStructLayout};
+use move_core_types::annotated_value::{MoveStructLayout, MoveValue};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
@@ -26,7 +26,9 @@ use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::error::{ExecutionError, SuiObjectResponseError, UserInputError, UserInputResult};
+use sui_types::error::{
+    ExecutionError, SuiError, SuiObjectResponseError, SuiResult, UserInputError, UserInputResult,
+};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
@@ -910,23 +912,30 @@ impl SuiParsedMoveObject {
             SuiParsedData::Package(_) => Err(anyhow::anyhow!("Object is not a Move object")),
         }
     }
-
-    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
-        match &self.fields {
-            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
-            SuiMoveStruct::WithTypes { fields, .. } => fields.get(field_name).cloned(),
-            _ => None,
-        }
-    }
 }
 
-pub fn type_and_fields_from_move_struct(
-    type_: &StructTag,
-    move_struct: MoveStruct,
-) -> (StructTag, SuiMoveStruct) {
-    match move_struct.into() {
-        SuiMoveStruct::WithTypes { type_, fields } => (type_, SuiMoveStruct::WithFields(fields)),
-        fields => (type_.clone(), fields),
+pub fn type_and_fields_from_move_event_data(
+    event_data: MoveValue,
+) -> SuiResult<(StructTag, serde_json::Value)> {
+    match event_data.into() {
+        SuiMoveValue::Struct(move_struct) => match &move_struct {
+            SuiMoveStruct::WithTypes { type_, .. } => {
+                Ok((type_.clone(), move_struct.clone().to_json_value()))
+            }
+            _ => Err(SuiError::ObjectDeserializationError {
+                error: "Found non-type SuiMoveStruct in MoveValue event".to_string(),
+            }),
+        },
+        SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
+        SuiMoveValue::Vector(_)
+        | SuiMoveValue::Number(_)
+        | SuiMoveValue::Bool(_)
+        | SuiMoveValue::Address(_)
+        | SuiMoveValue::String(_)
+        | SuiMoveValue::UID { .. }
+        | SuiMoveValue::Option(_) => Err(SuiError::ObjectDeserializationError {
+            error: "Invalid MoveValue event type -- this should not be possible".to_string(),
+        }),
     }
 }
 

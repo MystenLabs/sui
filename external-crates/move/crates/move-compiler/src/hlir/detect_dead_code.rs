@@ -11,6 +11,7 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{collections::VecDeque, iter::Peekable};
 
@@ -210,7 +211,7 @@ fn unreachable_code(loc: Loc) -> Option<ControlFlow> {
 
 pub fn program(compilation_env: &mut CompilationEnv, prog: &T::Program) {
     let mut context = Context::new(compilation_env);
-    modules(&mut context, &prog.inner.modules);
+    modules(&mut context, &prog.modules);
 }
 
 fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>) {
@@ -289,6 +290,7 @@ fn body(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
     }
 }
 
+#[growing_stack]
 fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
     let T::Exp {
@@ -321,6 +323,38 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 _ => None,
             }
         }
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                return None;
+            };
+            let arm_somes = arms
+                .value
+                .iter()
+                .map(|sp!(_, arm)| {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    tail(context, &arm.rhs)
+                })
+                .collect::<Vec<_>>();
+            if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                for arm_opt in arm_somes {
+                    let sp!(aloc, arm_error) = arm_opt.unwrap();
+                    context.report_tail_error(sp(aloc, arm_error))
+                }
+            }
+            None
+        }
+        E::VariantMatch(..) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            None
+        }
+
         // Whiles and loops Loops are currently moved to statement position
         E::While(_, _, _) | E::Loop { .. } => statement(context, e),
         E::NamedBlock(name, (_, seq)) => {
@@ -379,6 +413,7 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option<
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
 
@@ -417,6 +452,37 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
             None
         }
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                return None;
+            };
+            let arm_somes = arms
+                .value
+                .iter()
+                .map(|sp!(_, arm)| {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    value(context, &arm.rhs)
+                })
+                .collect::<Vec<_>>();
+            if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                for arm_opt in arm_somes {
+                    let sp!(aloc, arm_error) = arm_opt.unwrap();
+                    context.report_value_error(sp(aloc, arm_error))
+                }
+            }
+            None
+        }
+        E::VariantMatch(_subject, _, _arms) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            None
+        }
         E::While(..) | E::Loop { .. } => statement(context, e),
         E::NamedBlock(name, (_, seq)) => {
             // a named block in value position checks if the body exits that block; if so, at least
@@ -438,6 +504,10 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::Builtin(_, args) | E::Vector(_, _, _, args) => value_report!(args),
 
         E::Pack(_, _, _, fields) => fields
+            .iter()
+            .find_map(|(_, _, (_, (_, field_exp)))| value_report!(field_exp)),
+
+        E::PackVariant(_, _, _, _, fields) => fields
             .iter()
             .find_map(|(_, _, (_, (_, field_exp)))| value_report!(field_exp)),
 
@@ -479,7 +549,12 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // value-based expressions without subexpressions -- no control flow
         // -----------------------------------------------------------------------------------------
-        E::Unit { .. } | E::Value(_) | E::Constant(_, _) | E::Move { .. } | E::Copy { .. } => None,
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Constant(_, _)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::ErrorConstant { .. } => None,
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -530,6 +605,7 @@ fn value_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
     let T::Exp {
@@ -554,7 +630,39 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 }
             }
         }
-
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                for sp!(_, arm) in arms.value.iter() {
+                    arm.guard
+                        .as_ref()
+                        .and_then(|guard| value(context, guard))
+                        .iter()
+                        .for_each(|flow| context.report_value_error(*flow));
+                    statement(context, &arm.rhs);
+                }
+                already_reported(*eloc)
+            } else {
+                // if the test was okay but all arms both diverged, we need to report that for the
+                // purpose of trailing semicolons.
+                let arm_somes = arms
+                    .value
+                    .iter()
+                    .map(|sp!(_, arm)| statement(context, &arm.rhs))
+                    .collect::<Vec<_>>();
+                if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                    divergent(*eloc)
+                } else {
+                    None
+                }
+            }
+        }
+        E::VariantMatch(_subject, _, _arms) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "Found variant match in detect_dead_code")));
+            None
+        }
         E::While(_, test, body) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
@@ -641,6 +749,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::UnaryExp(_, _)
         | E::BinopExp(_, _, _, _)
         | E::Pack(_, _, _, _)
+        | E::PackVariant(_, _, _, _, _)
         | E::ExpList(_)
         | E::Borrow(_, _, _)
         | E::TempBorrow(_, _)
@@ -648,6 +757,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Annotate(_, _)
         | E::BorrowLocal(_, _)
         | E::Constant(_, _)
+        | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError => value(context, e),

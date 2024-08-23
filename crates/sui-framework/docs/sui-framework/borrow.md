@@ -1,7 +1,6 @@
-
-<a name="0x2_borrow"></a>
-
-# Module `0x2::borrow`
+---
+title: Module `0x2::borrow`
+---
 
 A simple library that enables hot-potato-locked borrow mechanics.
 
@@ -19,7 +18,7 @@ sure the object is returned and was not swapped for another one.
 -  [Function `destroy`](#0x2_borrow_destroy)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -50,7 +49,7 @@ An object wrapping a <code>T</code> and providing the borrow API.
 
 </dd>
 <dt>
-<code>value: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;T&gt;</code>
+<code>value: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;T&gt;</code>
 </dt>
 <dd>
 
@@ -104,7 +103,7 @@ A hot potato making sure the object is put back once borrowed.
 The <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></code> does not match the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code>.
 
 
-<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>: u64 = 0;
+<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -114,7 +113,7 @@ The <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></code> does not match
 An attempt to swap the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a>.value</code> with another object of the same type.
 
 
-<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>: u64 = 1;
+<pre><code><b>const</b> <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -138,7 +137,7 @@ Create a new <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> s
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_new">new</a>&lt;T: key + store&gt;(value: T, ctx: &<b>mut</b> TxContext): <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt; {
     <a href="borrow.md#0x2_borrow_Referent">Referent</a> {
         id: <a href="tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx),
-        value: <a href="dependencies/move-stdlib/option.md#0x1_option_some">option::some</a>(value)
+        value: <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value)
     }
 }
 </code></pre>
@@ -165,7 +164,7 @@ hot potato.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt;): (T, <a href="borrow.md#0x2_borrow_Borrow">Borrow</a>) {
-    <b>let</b> value = <a href="dependencies/move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.value);
+    <b>let</b> value = self.value.extract();
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
 
     (value, <a href="borrow.md#0x2_borrow_Borrow">Borrow</a> {
@@ -200,7 +199,7 @@ Put an object and the <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></co
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&value) == obj, <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>);
     <b>assert</b>!(self.id == ref, <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>);
-    <a href="dependencies/move-stdlib/option.md#0x1_option_fill">option::fill</a>(&<b>mut</b> self.value, value);
+    self.value.fill(value);
 }
 </code></pre>
 
@@ -226,7 +225,7 @@ Unpack the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> str
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_destroy">destroy</a>&lt;T: key + store&gt;(self: <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt;): T {
     <b>let</b> <a href="borrow.md#0x2_borrow_Referent">Referent</a> { id: _, value } = self;
-    <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(value)
+    value.destroy_some()
 }
 </code></pre>
 

@@ -4,7 +4,7 @@
 
 module 0x42::m {
 
-    macro fun for($start: u64, $stop: u64, $body: |u64|) {
+    macro fun `for`($start: u64, $stop: u64, $body: |u64|) {
         let mut i = $start;
         let stop = $stop;
         while (i < stop) {
@@ -15,13 +15,13 @@ module 0x42::m {
 
     macro fun new<$T>($len: u64, $f: |u64| -> $T): vector<$T> {
         let mut v = vector[];
-        for!(0, $len, |i| v.push_back($f(i)));
+        `for`!(0, $len, |i| v.push_back($f(i)));
         v
     }
 
     macro fun for_each<$T>($v: &vector<$T>, $body: |&$T|) {
         let v = $v;
-        for!(0, v.length(), |i| $body(v.borrow(i)))
+        `for`!(0, v.length(), |i| $body(v.borrow(i)))
     }
 
     macro fun fold<$T, $U>(

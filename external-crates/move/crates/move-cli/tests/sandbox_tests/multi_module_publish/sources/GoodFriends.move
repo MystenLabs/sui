@@ -1,6 +1,5 @@
 module 0x2::A {
-    friend 0x2::B;
-    public(friend) fun foo() {}
+    public(package) fun foo() {}
 }
 
 module 0x2::B {

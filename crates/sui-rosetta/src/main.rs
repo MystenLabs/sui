@@ -129,7 +129,7 @@ impl RosettaServerCommand {
             RosettaServerCommand::StartOfflineServer { env, addr } => {
                 info!("Starting Rosetta Offline Server.");
                 let server = RosettaOfflineServer::new(env);
-                server.serve(addr).await??;
+                server.serve(addr).await;
             }
             RosettaServerCommand::StartOnlineRemoteServer {
                 env,
@@ -144,7 +144,7 @@ impl RosettaServerCommand {
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
 
             RosettaServerCommand::StartOnlineServer {
@@ -170,14 +170,14 @@ impl RosettaServerCommand {
                     mysten_metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
-                let _node = SuiNode::start(&config, registry_service, None).await?;
+                let _node = SuiNode::start(config, registry_service, None).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await??;
+                rosetta.serve(addr).await;
             }
         };
         Ok(())

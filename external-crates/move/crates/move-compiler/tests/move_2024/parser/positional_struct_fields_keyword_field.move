@@ -1,6 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     // keyword instead of a type
     public struct Foo(fun)
-}
 }

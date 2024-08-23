@@ -1,12 +1,11 @@
 // check that `use`'s are filtered out correctly in non-test mode
-address 0x1 {
-module P {
+module 0x1::P {
     public struct Foo has drop {}
 
     public fun build_foo(): Foo { Foo {} }
 }
 
-module Q {
+module 0x1::Q {
     #[test_only]
     use 0x1::P::{Self, Foo};
 
@@ -23,5 +22,4 @@ module Q {
     public fun bad(): Foo {
         P::build_foo()
     }
-}
 }

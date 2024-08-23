@@ -13,7 +13,7 @@ module sui::ed25519_tests {
         let sig = x"cce72947906dbae4c166fc01fd096432784032be43db540909bc901dbc057992b4d655ca4f4355cf0868e1266baacf6919902969f063e74162f8f04bc4056105";
 
         let verify = ed25519::ed25519_verify(&sig, &pk, &msg);
-        assert!(verify == true, 0);
+        assert!(verify == true);
     }
 
     #[test]
@@ -23,14 +23,14 @@ module sui::ed25519_tests {
         let invalid_sig = x"cde72947906dbae4c166fc01fd096432784032be43db540909bc901dbc057992b4d655ca4f4355cf0868e1266baacf6919902969f063e74162f8f04bc4056105";
 
         let verify = ed25519::ed25519_verify(&invalid_sig, &pk, &msg);
-        assert!(verify == false, 0);
-    
+        assert!(verify == false);
+
         let pk = x"cc62332e34bb2d5cd69f60efbb2a36cb916c7eb458301ea36636c4dbb012bd88";
         let sig = x"cce72947906dbae4c166fc01fd096432784032be43db540909bc901dbc057992b4d655ca4f4355cf0868e1266baacf6919902969f063e74162f8f04bc4056105";
         let other_msg = x"415f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3";
 
         let verify = ed25519::ed25519_verify(&sig, &pk, &other_msg);
-        assert!(verify == false, 0);
+        assert!(verify == false);
     }
 
     #[test]
@@ -40,6 +40,6 @@ module sui::ed25519_tests {
         let sig = x"cce72947906dbae4c166fc01fd096432784032be43db540909bc901dbc057992b4d655ca4f4355cf0868e1266baacf6919902969f063e74162f8f04bc4056105";
 
         let verify = ed25519::ed25519_verify(&sig, &pk, &msg);
-        assert!(verify == false, 0)
+        assert!(verify == false)
     }
 }

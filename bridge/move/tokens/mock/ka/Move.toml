@@ -1,0 +1,11 @@
+[package]
+name = "BridgedKa"
+version = "0.0.1"
+edition = "legacy"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../crates/sui-framework/packages/move-stdlib" }
+Sui = { local = "../../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+bridged_ka = "0x0"

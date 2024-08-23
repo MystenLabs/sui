@@ -1,9 +1,0 @@
-[package]
-name = "utils"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../crates/sui-framework//packages/sui-framework" }
-
-[addresses]
-utils =  "0x0"

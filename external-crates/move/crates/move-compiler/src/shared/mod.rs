@@ -3,19 +3,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
+    cfgir::{
+        ast as G,
+        visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor, CFGIRVisitorObj},
+    },
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, WarningFilters,
+        Diagnostic, Diagnostics, DiagnosticsFormat, WarningFilters,
     },
-    editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
+    editions::{
+        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
+        FeatureGate, Flavor,
+    },
     expansion::ast as E,
+    hlir::ast as H,
     naming::ast as N,
+    parser::ast as P,
+    shared::{
+        files::{FileName, MappedFiles},
+        ide::{IDEAnnotation, IDEInfo},
+    },
     sui_mode,
-    typing::visitor::{TypingVisitor, TypingVisitorObj},
+    typing::{
+        ast as T,
+        visitor::{TypingVisitor, TypingVisitorObj},
+    },
 };
 use clap::*;
+use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
@@ -25,13 +41,21 @@ use std::{
     fmt,
     hash::Hash,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicUsize, Ordering as AtomicOrdering},
+        Arc,
+    },
 };
+use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod files;
+pub mod ide;
 pub mod known_attributes;
+pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
+pub mod string_utils;
 pub mod unique_map;
 pub mod unique_set;
 
@@ -79,6 +103,10 @@ pub trait TName: Eq + Ord + Clone {
     fn drop_loc(self) -> (Self::Loc, Self::Key);
     fn add_loc(loc: Self::Loc, key: Self::Key) -> Self;
     fn borrow(&self) -> (&Self::Loc, &Self::Key);
+    fn with_loc(self, loc: Self::Loc) -> Self {
+        let (_old_loc, base) = self.drop_loc();
+        Self::add_loc(loc, base)
+    }
 }
 
 pub trait Identifier {
@@ -161,6 +189,10 @@ pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
+pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
+pub const FILTER_DEPRECATED: &str = "deprecated_usage";
+pub const FILTER_IDE_PATH_AUTOCOMPLETE: &str = "ide_path_autocomplete";
+pub const FILTER_IDE_DOT_AUTOCOMPLETE: &str = "ide_dot_autocomplete";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -169,6 +201,12 @@ pub struct NamedAddressMapIndex(usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
+
+impl Default for NamedAddressMaps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl NamedAddressMaps {
     pub fn new() -> Self {
@@ -197,13 +235,6 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexedPackagePath {
-    pub package: Option<Symbol>,
-    pub path: Symbol,
-    pub named_address_map: NamedAddressMapIndex,
-}
-
 /// None for the default 'allow'.
 /// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
 pub type FilterPrefix = Option<Symbol>;
@@ -226,6 +257,9 @@ pub struct CompilationEnv {
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
+    mapped_files: MappedFiles,
+    save_hooks: Vec<SaveHook>,
+    pub ide_information: IDEInfo,
 }
 
 macro_rules! known_code_filter {
@@ -246,15 +280,16 @@ impl CompilationEnv {
     pub fn new(
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
+        save_hooks: Vec<SaveHook>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
-        use crate::diagnostics::codes::{TypeSafety, UnusedItem};
+        use crate::diagnostics::codes::{TypeSafety, UnusedItem, IDE};
         visitors.extend([
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
+        let mut known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
             (
                 FILTER_ALL.into(),
                 BTreeSet::from([WarningFilter::All(None)]),
@@ -298,7 +333,15 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
+            known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
+            known_code_filter!(FILTER_DEPRECATED, TypeSafety::DeprecatedUsage),
         ]);
+        if flags.ide_mode() {
+            known_filters_.extend([
+                known_code_filter!(FILTER_IDE_PATH_AUTOCOMPLETE, IDE::PathAutocomplete),
+                known_code_filter!(FILTER_IDE_DOT_AUTOCOMPLETE, IDE::DotAutocomplete),
+            ]);
+        }
         let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
 
@@ -330,20 +373,53 @@ impl CompilationEnv {
         } else {
             vec![]
         };
+        let mut diags = Diagnostics::new();
+        if flags.json_errors() {
+            diags.set_format(DiagnosticsFormat::JSON);
+        }
         Self {
             flags,
             warning_filter,
-            diags: Diagnostics::new(),
+            diags,
             visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
+            mapped_files: MappedFiles::empty(),
+            save_hooks,
+            ide_information: IDEInfo::new(),
         }
     }
 
+    pub fn add_source_file(
+        &mut self,
+        file_hash: FileHash,
+        file_name: FileName,
+        source_text: Arc<str>,
+    ) {
+        self.mapped_files.add(file_hash, file_name, source_text)
+    }
+
+    pub fn mapped_files(&self) -> &MappedFiles {
+        &self.mapped_files
+    }
+
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
+        if diag.info().severity() <= Severity::NonblockingError
+            && self
+                .diags
+                .any_syntax_error_with_primary_loc(diag.primary_loc())
+        {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
+            return;
+        }
+
         if !self.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
@@ -392,10 +468,7 @@ impl CompilationEnv {
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
-        match self.diags.max_severity() {
-            Some(max) if max >= threshold => true,
-            Some(_) | None => false,
-        }
+        self.diags.max_severity_at_or_above_severity(threshold)
     }
 
     pub fn check_diags_at_or_above_severity(
@@ -410,12 +483,14 @@ impl CompilationEnv {
     }
 
     /// Should only be called after compilation is finished
+    pub fn take_final_diags(&mut self) -> Diagnostics {
+        std::mem::take(&mut self.diags)
+    }
+
+    /// Should only be called after compilation is finished
     pub fn take_final_warning_diags(&mut self) -> Diagnostics {
-        let final_diags = std::mem::take(&mut self.diags);
-        debug_assert!(final_diags
-            .max_severity()
-            .map(|s| s == Severity::Warning)
-            .unwrap_or(true));
+        let final_diags = self.take_final_diags();
+        debug_assert!(final_diags.max_severity_at_or_under_severity(Severity::Warning));
         final_diags
     }
 
@@ -462,12 +537,7 @@ impl CompilationEnv {
         attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
     ) -> anyhow::Result<()> {
-        let prev = self.known_filters.insert(attr_name, BTreeMap::new());
-        anyhow::ensure!(
-            prev.is_none(),
-            "A known filter attr for '{attr_name:?}' already exists"
-        );
-        let filter_attr = self.known_filters.get_mut(&attr_name).unwrap();
+        let filter_attr = self.known_filters.entry(attr_name).or_default();
         for filter in filters {
             let (prefix, n) = match filter {
                 WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
@@ -514,11 +584,20 @@ impl CompilationEnv {
     // supported, and `true` otherwise.
     pub fn check_feature(
         &mut self,
-        feature: FeatureGate,
         package: Option<Symbol>,
+        feature: FeatureGate,
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
+    }
+
+    // Returns an error string if if the feature isn't supported, or None otherwise.
+    pub fn feature_edition_error_msg(
+        &mut self,
+        feature: FeatureGate,
+        package: Option<Symbol>,
+    ) -> Option<String> {
+        feature_edition_error_msg(self.package_config(package).edition, feature)
     }
 
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
@@ -544,6 +623,72 @@ impl CompilationEnv {
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
+    }
+
+    pub fn save_parser_ast(&self, ast: &P::Program) {
+        for hook in &self.save_hooks {
+            hook.save_parser_ast(ast)
+        }
+    }
+
+    pub fn save_expansion_ast(&self, ast: &E::Program) {
+        for hook in &self.save_hooks {
+            hook.save_expansion_ast(ast)
+        }
+    }
+
+    pub fn save_naming_ast(&self, ast: &N::Program) {
+        for hook in &self.save_hooks {
+            hook.save_naming_ast(ast)
+        }
+    }
+
+    pub fn save_typing_ast(&self, ast: &T::Program) {
+        for hook in &self.save_hooks {
+            hook.save_typing_ast(ast)
+        }
+    }
+
+    pub fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        for hook in &self.save_hooks {
+            hook.save_typing_info(info)
+        }
+    }
+
+    pub fn save_hlir_ast(&self, ast: &H::Program) {
+        for hook in &self.save_hooks {
+            hook.save_hlir_ast(ast)
+        }
+    }
+
+    pub fn save_cfgir_ast(&self, ast: &G::Program) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_ast(ast)
+        }
+    }
+
+    // -- IDE Information --
+
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
+    }
+
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        if self.flags().ide_test_mode() {
+            for entry in info.annotations.iter() {
+                let diag = entry.clone().into();
+                self.add_diag(diag);
+            }
+        }
+        self.ide_information.extend(info);
+    }
+
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        if self.flags().ide_test_mode() {
+            let diag = (loc, info.clone()).into();
+            self.add_diag(diag);
+        }
+        self.ide_information.add_ide_annotation(loc, info);
     }
 }
 
@@ -604,6 +749,12 @@ pub struct Flags {
     )]
     warnings_are_errors: bool,
 
+    /// If set, report errors as json.
+    #[clap(
+        long = cli::JSON_ERRORS,
+    )]
+    json_errors: bool,
+
     /// If set, all warnings are silenced
     #[clap(
         long = cli::SILENCE_WARNINGS,
@@ -630,6 +781,14 @@ pub struct Flags {
     /// included only in tests, without creating the unit test code regular tests do.
     #[clap(skip)]
     keep_testing_functions: bool,
+
+    /// If set, we are in IDE testing mode. This will report IDE annotations as diagnostics.
+    #[clap(skip = false)]
+    ide_test_mode: bool,
+
+    /// If set, we are in IDE mode.
+    #[clap(skip = false)]
+    ide_mode: bool,
 }
 
 impl Flags {
@@ -640,7 +799,10 @@ impl Flags {
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
+            json_errors: false,
             keep_testing_functions: false,
+            ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -650,8 +812,11 @@ impl Flags {
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
+            json_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
+            ide_mode: false,
+            ide_test_mode: false,
         }
     }
 
@@ -683,6 +848,27 @@ impl Flags {
         }
     }
 
+    pub fn set_json_errors(self, value: bool) -> Self {
+        Self {
+            json_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_test_mode(self, value: bool) -> Self {
+        Self {
+            ide_test_mode: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_mode(self, value: bool) -> Self {
+        Self {
+            ide_mode: value,
+            ..self
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -707,8 +893,20 @@ impl Flags {
         self.warnings_are_errors
     }
 
+    pub fn json_errors(&self) -> bool {
+        self.json_errors
+    }
+
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn ide_test_mode(&self) -> bool {
+        self.ide_test_mode
+    }
+
+    pub fn ide_mode(&self) -> bool {
+        self.ide_mode
     }
 }
 
@@ -742,6 +940,7 @@ impl Default for PackageConfig {
 pub struct Visitors {
     pub typing: Vec<RefCell<TypingVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
+    pub cfgir: Vec<RefCell<CFGIRVisitorObj>>,
 }
 
 impl Visitors {
@@ -750,14 +949,174 @@ impl Visitors {
         let mut vs = Visitors {
             typing: vec![],
             abs_int: vec![],
+            cfgir: vec![],
         };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
                 Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
+                Visitor::CFGIRVisitor(f) => vs.cfgir.push(RefCell::new(f)),
             }
         }
         vs
+    }
+}
+
+//**************************************************************************************************
+// Save Hooks
+//**************************************************************************************************
+
+#[derive(Clone)]
+pub struct SaveHook(Rc<RefCell<SavedInfo>>);
+
+#[derive(Clone)]
+pub(crate) struct SavedInfo {
+    flags: BTreeSet<SaveFlag>,
+    parser: Option<P::Program>,
+    expansion: Option<E::Program>,
+    naming: Option<N::Program>,
+    typing: Option<T::Program>,
+    typing_info: Option<Arc<program_info::TypingProgramInfo>>,
+    hlir: Option<H::Program>,
+    cfgir: Option<G::Program>,
+}
+
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SaveFlag {
+    Parser,
+    Expansion,
+    Naming,
+    Typing,
+    TypingInfo,
+    HLIR,
+    CFGIR,
+}
+
+impl SaveHook {
+    pub fn new(flags: impl IntoIterator<Item = SaveFlag>) -> Self {
+        let flags = flags.into_iter().collect();
+        Self(Rc::new(RefCell::new(SavedInfo {
+            flags,
+            parser: None,
+            expansion: None,
+            naming: None,
+            typing: None,
+            typing_info: None,
+            hlir: None,
+            cfgir: None,
+        })))
+    }
+
+    pub(crate) fn save_parser_ast(&self, ast: &P::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.parser.is_none() && r.flags.contains(&SaveFlag::Parser) {
+            r.parser = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_expansion_ast(&self, ast: &E::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.expansion.is_none() && r.flags.contains(&SaveFlag::Expansion) {
+            r.expansion = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_naming_ast(&self, ast: &N::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
+            r.naming = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_typing_ast(&self, ast: &T::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing.is_none() && r.flags.contains(&SaveFlag::Typing) {
+            r.typing = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing_info.is_none() && r.flags.contains(&SaveFlag::TypingInfo) {
+            r.typing_info = Some(info.clone())
+        }
+    }
+
+    pub(crate) fn save_hlir_ast(&self, ast: &H::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.hlir.is_none() && r.flags.contains(&SaveFlag::HLIR) {
+            r.hlir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_cfgir_ast(&self, ast: &G::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
+            r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub fn take_parser_ast(&self) -> P::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Parser),
+            "Parser AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.parser.take().unwrap()
+    }
+
+    pub fn take_expansion_ast(&self) -> E::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Expansion),
+            "Expansion AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.expansion.take().unwrap()
+    }
+
+    pub fn take_naming_ast(&self) -> N::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Naming),
+            "Naming AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.naming.take().unwrap()
+    }
+
+    pub fn take_typing_ast(&self) -> T::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Typing),
+            "Typing AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing.take().unwrap()
+    }
+
+    pub fn take_typing_info(&self) -> Arc<program_info::TypingProgramInfo> {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::TypingInfo),
+            "Typing info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing_info.take().unwrap()
+    }
+
+    pub fn take_hlir_ast(&self) -> H::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::HLIR),
+            "HLIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.hlir.take().unwrap()
+    }
+
+    pub fn take_cfgir_ast(&self) -> G::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIR),
+            "CFGIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir.take().unwrap()
     }
 }
 
@@ -860,3 +1219,48 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+//**************************************************************************************************
+// Virtual file system support
+//**************************************************************************************************
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackagePath<P> {
+    pub package: Option<Symbol>,
+    pub path: P,
+    pub named_address_map: NamedAddressMapIndex,
+}
+
+pub type IndexedPhysicalPackagePath = IndexedPackagePath<Symbol>;
+
+pub type IndexedVfsPackagePath = IndexedPackagePath<VfsPath>;
+
+pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, VfsError> {
+    // we need to canonicalized paths for virtual file systems as some of them (e.g., implementation
+    // of the physical one) cannot handle relative paths
+    fn canonicalize(p: String) -> String {
+        // dunce's version of canonicalize does a better job on Windows
+        match dunce::canonicalize(&p) {
+            Ok(s) => s.to_string_lossy().to_string(),
+            Err(_) => p,
+        }
+    }
+
+    vfs_path.join(canonicalize(path))
+}
+
+impl IndexedPhysicalPackagePath {
+    pub fn to_vfs_path(self, vfs_root: &VfsPath) -> Result<IndexedVfsPackagePath, VfsError> {
+        let IndexedPhysicalPackagePath {
+            package,
+            path,
+            named_address_map,
+        } = self;
+
+        Ok(IndexedVfsPackagePath {
+            package,
+            path: vfs_path_from_str(path.to_string(), vfs_root)?,
+            named_address_map,
+        })
+    }
+}

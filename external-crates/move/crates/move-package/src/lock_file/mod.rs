@@ -3,7 +3,7 @@
 
 use std::{
     fs::{self, File},
-    io::Write,
+    io::{Seek, SeekFrom, Write},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
@@ -75,6 +75,7 @@ impl LockFile {
             .context("Creating lock file")?;
         let lock_string = std::fs::read_to_string(lock_file)?;
         lock.write_all(lock_string.as_bytes())?;
+        lock.seek(SeekFrom::Start(0))?;
 
         Ok(LockFile { file: lock })
     }

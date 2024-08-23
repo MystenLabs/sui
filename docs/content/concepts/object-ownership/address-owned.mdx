@@ -16,7 +16,7 @@ public fun transfer<T: key>(obj: T, recipient: address)
 public fun public_transfer<T: key + store>(obj: T, recipient: address)
 ```
 
-You should use the `sui::transfer::transfer` function if you are defining a [custom transfer policy](../dynamic-fields/transfers/custom-rules.mdx) for the object. Use the `sui::transfer::public_transfer` function to create an address-owned object if the object has the `store` capability.
+You should use the `sui::transfer::transfer` function if you are defining a [custom transfer policy](../transfers/custom-rules.mdx) for the object. Use the `sui::transfer::public_transfer` function to create an address-owned object if the object has the `store` capability.
 
 After you declare an object as address-owned, its ownership can change over the life of that object - either by adding it as a dynamic object field, transferring it to a different address, or making it immutable. Importantly though, after you create an object and set its ownership, it cannot be shared.
 
@@ -24,7 +24,7 @@ After you declare an object as address-owned, its ownership can change over the 
 
 You can access address-owned objects in two different ways, depending on whether or not the address owner of the object corresponds to an object ID.
 
-If the address owner of the object corresponds to an object ID, then you must access and dynamically authenticate it during the execution of the transaction using the mechanisms defined in [Transfer to Object](../dynamic-fields/transfers/transfer-to-object.mdx).
+If the address owner of the object corresponds to an object ID, then you must access and dynamically authenticate it during the execution of the transaction using the mechanisms defined in [Transfer to Object](../transfers/transfer-to-object.mdx).
 
 If the address owner of the object is a signature-derived address (an account address), then you can use and access it directly as an owned object during the execution of a transaction that address signs. Other addresses cannot access owned objects in any way in a transaction - even to just read the object.
 

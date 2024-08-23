@@ -343,10 +343,12 @@ fn test_move_object_size_for_gas_metering() {
 #[test]
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let package = Object::new_package(
         &[module],
         TransactionDigest::genesis_marker(),
-        ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
+        config.max_move_package_size(),
+        config.move_binary_format_version(),
         &[], // empty dependencies for empty package (no modules)
     )
     .unwrap();

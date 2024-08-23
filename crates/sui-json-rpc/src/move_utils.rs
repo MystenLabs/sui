@@ -10,7 +10,7 @@ use jsonrpsee::RpcModule;
 #[cfg(test)]
 use mockall::automock;
 use move_binary_format::{
-    file_format_common::VERSION_MAX,
+    binary_config::BinaryConfig,
     normalized::{Module as NormalizedModule, Type},
 };
 use move_core_types::identifier::Identifier;
@@ -93,15 +93,15 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
+                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
                         normalize_modules(
-                        p.serialized_module_map().values(),
-                        /* max_binary_format_version */ VERSION_MAX,
-                        /* no_extraneous_module_bytes */ false,
-                    )
-                    .map_err(|e| {
-                        error!("Failed to call get_move_modules_by_package for package: {package:?}");
-                        Error::from(e)
-                    })
+                            p.serialized_module_map().values(),
+                            &binary_config,
+                        )
+                        .map_err(|e| {
+                            error!("Failed to call get_move_modules_by_package for package: {package:?}");
+                            Error::from(e)
+                        })
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",
@@ -231,12 +231,9 @@ impl MoveUtilsServer for MoveUtils {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
-                        normalize_modules(
-                            p.serialized_module_map().values(),
-                            /* max_binary_format_version */ VERSION_MAX,
-                            /* no_extraneous_module_bytes */ false,
-                        )
-                        .map_err(Error::from)
+                        let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
+                        normalize_modules(p.serialized_module_map().values(), &binary_config)
+                            .map_err(Error::from)
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",

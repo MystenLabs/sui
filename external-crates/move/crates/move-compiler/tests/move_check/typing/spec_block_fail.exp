@@ -2,7 +2,7 @@ warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/typing/spec_block_fail.move:3:10
   │
 3 │         (spec {}: u64);
-  │          ^^^^^^^ Specification blocks are deprecated
+  │          ^^^^^^^ Specification blocks are deprecated and are no longer used
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/spec_block_fail.move:3:19
@@ -18,7 +18,7 @@ warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/typing/spec_block_fail.move:4:10
   │
 4 │         (spec {}: &u64);
-  │          ^^^^^^^ Specification blocks are deprecated
+  │          ^^^^^^^ Specification blocks are deprecated and are no longer used
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/spec_block_fail.move:4:19
@@ -34,7 +34,7 @@ warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/typing/spec_block_fail.move:5:10
   │
 5 │         (spec {}: (u64, u64));
-  │          ^^^^^^^ Specification blocks are deprecated
+  │          ^^^^^^^ Specification blocks are deprecated and are no longer used
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/spec_block_fail.move:5:19

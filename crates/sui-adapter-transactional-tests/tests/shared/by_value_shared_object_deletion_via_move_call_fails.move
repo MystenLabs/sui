@@ -6,15 +6,12 @@
 //# publish
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -112,7 +109,7 @@ module t2::o2 {
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: TransferObjects([Input(1)], Input(2));
 
-// Try to transfer the shared object 
+// Try to transfer the shared object
 //# programmable --inputs 0 object(10,0) @0x0
 //> 0: t2::o2::id<sui::coin::Coin<sui::sui::SUI>>(Input(1));
 //> 1: SplitCoins(Result(0), [Input(0)]);

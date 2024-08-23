@@ -8,8 +8,8 @@ import { stdout } from 'process'
 import { basename } from 'path'
 
 function usage(): void {
-  stdout.write('\nUsage:\n\n')
-  stdout.write(`    node ${basename(__filename)} move_file\n\n`)
+    stdout.write('\nUsage:\n\n')
+    stdout.write(`    node ${basename(__filename)} move_file\n\n`)
 }
 
 if (process.argv.length !== 3) {

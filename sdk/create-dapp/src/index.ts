@@ -96,7 +96,7 @@ async function collectFiles(template: string, dAppName: string) {
 				if (entry === 'package.json') {
 					const json = JSON.parse(content.toString());
 					json.name = dAppName;
-					json.dependencies['@mysten/sui.js'] = dependencies['@mysten/sui.js'];
+					json.dependencies['@mysten/sui'] = dependencies['@mysten/sui'];
 					json.dependencies['@mysten/dapp-kit'] = dependencies['@mysten/dapp-kit'];
 
 					content = Buffer.from(JSON.stringify(json, null, 2));

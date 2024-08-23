@@ -78,7 +78,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 })
                 .await
             }
-            QueryType::Range { start, end, step } => {
+            QueryType::Range {
+                start,
+                end,
+                step,
+                percentile,
+            } => {
                 retry(backoff.clone(), || async {
                     range_query(
                         &auth_header,
@@ -87,6 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
                         timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&start)?,
                         timestamp_string_to_unix_seconds::<UtcNowOnceProvider>(&end)?,
                         step,
+                        percentile,
                     )
                     .await
                     .map_err(backoff::Error::transient)

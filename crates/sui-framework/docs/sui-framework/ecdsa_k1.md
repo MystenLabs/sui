@@ -1,7 +1,6 @@
-
-<a name="0x2_ecdsa_k1"></a>
-
-# Module `0x2::ecdsa_k1`
+---
+title: Module `0x2::ecdsa_k1`
+---
 
 
 
@@ -25,7 +24,7 @@
 Error if the public key cannot be recovered from the signature.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EFailToRecoverPubKey">EFailToRecoverPubKey</a>: u64 = 0;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EFailToRecoverPubKey">EFailToRecoverPubKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -35,7 +34,7 @@ Error if the public key cannot be recovered from the signature.
 Error if the public key is invalid.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: u64 = 2;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -45,7 +44,7 @@ Error if the public key is invalid.
 Error if the signature is invalid.
 
 
-<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidSignature">EInvalidSignature</a>: u64 = 1;
+<pre><code><b>const</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidSignature">EInvalidSignature</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -85,7 +84,7 @@ key, otherwise throw error. This is similar to ecrecover in Ethereum, can only b
 applied to Secp256k1 signatures. May abort with <code><a href="ecdsa_k1.md#0x2_ecdsa_k1_EFailToRecoverPubKey">EFailToRecoverPubKey</a></code> or <code><a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidSignature">EInvalidSignature</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">secp256k1_ecrecover</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">secp256k1_ecrecover</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -94,7 +93,7 @@ applied to Secp256k1 signatures. May abort with <code><a href="ecdsa_k1.md#0x2_e
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">secp256k1_ecrecover</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">secp256k1_ecrecover</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
@@ -111,7 +110,7 @@ If the compressed public key is valid, return the 65-bytes uncompressed public k
 otherwise throw error. May abort with <code><a href="ecdsa_k1.md#0x2_ecdsa_k1_EInvalidPubKey">EInvalidPubKey</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">decompress_pubkey</a>(pubkey: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">decompress_pubkey</a>(pubkey: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -120,7 +119,7 @@ otherwise throw error. May abort with <code><a href="ecdsa_k1.md#0x2_ecdsa_k1_EI
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">decompress_pubkey</a>(pubkey: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">decompress_pubkey</a>(pubkey: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
 </code></pre>
 
 
@@ -142,7 +141,7 @@ https://github.com/MystenLabs/fastcrypto/blob/74aec4886e62122a5b769464c2bea5f803
 If the signature is valid to the pubkey and hashed message, return true. Else false.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_verify">secp256k1_verify</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool
+<pre><code><b>public</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_verify">secp256k1_verify</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool
 </code></pre>
 
 
@@ -151,7 +150,7 @@ If the signature is valid to the pubkey and hashed message, return true. Else fa
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_verify">secp256k1_verify</a>(signature: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_verify">secp256k1_verify</a>(signature: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, msg: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="hash.md#0x2_hash">hash</a>: u8): bool;
 </code></pre>
 
 

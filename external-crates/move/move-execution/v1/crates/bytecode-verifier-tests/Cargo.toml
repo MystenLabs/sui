@@ -1,0 +1,26 @@
+[package]
+name = "bytecode-verifier-tests-v1"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem bytecode verifier tests"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dev-dependencies]
+petgraph.workspace = true
+fail = { workspace = true, features = ["failpoints"] }
+hex.workspace = true
+
+move-binary-format = { workspace = true, features = ["fuzzing"] }
+# referred to via path for execution versioning
+move-bytecode-verifier = { path = "../move-bytecode-verifier", package = "move-bytecode-verifier-v1" }
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+move-abstract-interpreter = { path = "../../../v2/crates/move-abstract-interpreter", package = "move-abstract-interpreter-v2" }
+
+[features]
+fuzzing = ["move-binary-format/fuzzing"]

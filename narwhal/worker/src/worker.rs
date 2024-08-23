@@ -478,8 +478,11 @@ impl Worker {
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
+            .replace(0, |protocol| match protocol {
+                Protocol::Ip4(ip) if ip.is_loopback() => None,
+                _ => Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)),
+            })
+            .unwrap_or(address);
 
         let tx_server_handle = TxServer::spawn(
             address.clone(),

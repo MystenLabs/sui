@@ -24,7 +24,6 @@ use simplelog::{
 
 use codespan_reporting::diagnostic::Severity;
 use move_docgen::DocgenOptions;
-use move_errmapgen::ErrmapOptions;
 use move_model::options::ModelBuilderOptions;
 use move_stackless_bytecode::options::{AutoTraceLevel, ProverOptions};
 
@@ -49,8 +48,6 @@ pub struct Options {
     pub verbosity_level: LevelFilter,
     /// Whether to run the documentation generator instead of the prover.
     pub run_docgen: bool,
-    /// Whether to run the error map generator instead of the prover.
-    pub run_errmapgen: bool,
     /// Whether to run the internal reference escape analysis instead of the prover
     pub run_escape: bool,
     /// The paths to the Move sources.
@@ -70,10 +67,6 @@ pub struct Options {
     pub docgen: DocgenOptions,
     /// Options for the prover.
     pub prover: ProverOptions,
-    /// Options for the error map generator.
-    /// TODO: this currently create errors during deserialization, so skip them for this.
-    #[serde(skip_serializing)]
-    pub errmapgen: ErrmapOptions,
 }
 
 impl Default for Options {
@@ -81,7 +74,6 @@ impl Default for Options {
         Self {
             output_path: "output.bpl".to_string(),
             run_docgen: false,
-            run_errmapgen: false,
             run_escape: false,
             verbosity_level: LevelFilter::Info,
             move_sources: vec![],
@@ -90,7 +82,6 @@ impl Default for Options {
             model_builder: ModelBuilderOptions::default(),
             prover: ProverOptions::default(),
             docgen: DocgenOptions::default(),
-            errmapgen: ErrmapOptions::default(),
             experimental_pipeline: false,
         }
     }
@@ -292,13 +283,6 @@ impl Options {
                     .action(clap::ArgAction::SetTrue)
                     .help("runs the ABI generator instead of the prover. \
                     Generated ABIs will be written into the directory `./abi` unless configured otherwise via toml"),
-            )
-            .arg(
-                Arg::new("errmapgen")
-                    .long("errmapgen")
-                    .action(clap::ArgAction::SetTrue)
-                    .help("runs the error map generator instead of the prover. \
-                    The generated error map will be written to `errmap` unless configured otherwise"),
             )
             .arg(
                 Arg::new("packedtypesgen")
@@ -649,9 +633,6 @@ impl Options {
                 .get_one::<String>("docgen-template")
                 .map(|s| s.to_string())
                 .unwrap()]
-        }
-        if matches.get_flag("errmapgen") {
-            options.run_errmapgen = true;
         }
         if matches.get_flag("escape") {
             options.run_escape = true;

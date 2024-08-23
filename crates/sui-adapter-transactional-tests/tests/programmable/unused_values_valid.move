@@ -7,13 +7,10 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
-    struct R has key, store { id: UID }
-    struct Droppable has drop {}
-    struct Cup<T> has copy, drop { t: T }
-    struct Copyable has copy {}
+    public struct R has key, store { id: UID }
+    public struct Droppable has drop {}
+    public struct Cup<T> has copy, drop { t: T }
+    public struct Copyable has copy {}
 
     public fun r(ctx: &mut TxContext): R {
         R { id: object::new(ctx) }

@@ -8,5 +8,5 @@ warning[W00001]: DEPRECATED. will be removed
    · │
 16 │ │         ensures exists<S<u64>>(0x1) == exists<R>(0x1);
 17 │ │     }
-   │ ╰─────^ Specification blocks are deprecated
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 

@@ -1,8 +1,11 @@
 processed 4 tasks
 
-task 0 'print-bytecode'. lines 1-24:
+task 0, lines 1-24:
+//# print-bytecode
 // Move bytecode v6
 module 1.m {
+
+
 
 
 entry foo() {
@@ -24,12 +27,16 @@ B3:
 	10: Branch(11)
 B4:
 	11: Ret
+
 }
 }
 
-task 1 'print-bytecode'. lines 26-45:
+task 1, lines 26-45:
+//# print-bytecode
 // Move bytecode v6
 module 2.m {
+
+
 
 
 entry foo() {
@@ -48,12 +55,16 @@ B2:
 	8: StLoc[0](loc0: u64)
 B3:
 	9: Ret
+
 }
 }
 
-task 2 'print-bytecode'. lines 47-65:
+task 2, lines 47-65:
+//# print-bytecode
 // Move bytecode v6
 module 3.m {
+
+
 
 
 entry foo() {
@@ -81,12 +92,16 @@ B4:
 	15: StLoc[0](loc0: u64)
 B5:
 	16: Ret
+
 }
 }
 
-task 3 'print-bytecode'. lines 67-82:
+task 3, lines 67-82:
+//# print-bytecode
 // Move bytecode v6
 module 4.m {
+
+
 
 
 entry foo() {
@@ -106,5 +121,6 @@ B2:
 	9: Ret
 B3:
 	10: Ret
+
 }
 }

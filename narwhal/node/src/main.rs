@@ -11,8 +11,8 @@ mod benchmark_client;
 use benchmark_client::{parse_url, url_to_multiaddr, Client, OperatingMode};
 use clap::{Parser, Subcommand};
 use config::{
-    ChainIdentifier, Committee, CommitteeBuilder, Epoch, Export, Import, Parameters,
-    PrometheusMetricsParameters, WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
+    Committee, CommitteeBuilder, Epoch, Export, Import, Parameters, PrometheusMetricsParameters,
+    WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
 };
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::{Context, Result};
@@ -554,7 +554,7 @@ async fn run(
 
     // Make the data store.
     let certificate_store_cache_metrics =
-        CertificateStoreCacheMetrics::new(&registry_service.default_registry());
+        Arc::new(CertificateStoreCacheMetrics::new(registry_service.clone()));
     let store = NodeStorage::reopen(store_path, Some(certificate_store_cache_metrics.clone()));
 
     let client = NetworkClient::new_from_keypair(&primary_network_keypair);
@@ -572,7 +572,6 @@ async fn run(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
-                    ChainIdentifier::unknown(),
                     ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache,
                     client.clone(),
@@ -621,7 +620,6 @@ async fn run(
                     primary_keypair.copy(),
                     primary_network_keypair,
                     committee.clone(),
-                    ChainIdentifier::unknown(),
                     ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache.clone(),
                     client.clone(),

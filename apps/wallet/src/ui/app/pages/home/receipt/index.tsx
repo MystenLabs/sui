@@ -9,7 +9,7 @@ import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { Check32 } from '@mysten/icons';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';

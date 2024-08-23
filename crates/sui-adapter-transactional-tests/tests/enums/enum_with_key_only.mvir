@@ -1,0 +1,45 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --addresses test=0x0
+
+//# publish 
+module 0x0.f {
+    import 0x2.transfer;
+
+    enum X has key {
+        A { } 
+    }
+
+    public transfer() {
+        let x: Self.X;
+        label l0:
+            x = X.A { };
+            transfer.transfer<Self.X>(move(x), 0x0);
+        return;
+    }
+
+    public share() {
+        let x: Self.X;
+        label l0:
+            x = X.A { };
+            transfer.share_object<Self.X>(move(x));
+        return;
+    }
+
+    public freezer() {
+        let x: Self.X;
+        label l0:
+            x = X.A { };
+            transfer.freeze_object<Self.X>(move(x));
+        return;
+    }
+}
+
+//# set-address test object(1,0)
+
+//# run test::f::transfer
+
+//# run test::f::share
+
+//# run test::f::freezer

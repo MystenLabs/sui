@@ -10,7 +10,7 @@
 //# publish --upgradeable --sender A
 module Test_DepDepV1::DepDepM1 {
 
-    struct Obj has key, store { id: sui::object::UID, v: u64 }
+    public struct Obj has key, store { id: sui::object::UID, v: u64 }
 
     public fun foo(ctx: &mut sui::tx_context::TxContext) {
         sui::transfer::share_object(Obj { id: sui::object::new(ctx), v: 42 })
@@ -20,7 +20,7 @@ module Test_DepDepV1::DepDepM1 {
 //# upgrade --package Test_DepDepV1 --upgrade-capability 1,1 --sender A
 module Test_DepDepV2::DepDepM1 {
 
-    struct Obj has key, store { id: sui::object::UID, v: u64 }
+    public struct Obj has key, store { id: sui::object::UID, v: u64 }
 
     public fun foo(ctx: &mut sui::tx_context::TxContext) {
         sui::transfer::share_object(Obj { id: sui::object::new(ctx), v: 7 })
@@ -30,7 +30,7 @@ module Test_DepDepV2::DepDepM1 {
 //# upgrade --package Test_DepDepV2 --upgrade-capability 1,1 --sender A
 module Test_DepDepV3::DepDepM1 {
 
-    struct Obj has key, store { id: sui::object::UID, v: u64 }
+    public struct Obj has key, store { id: sui::object::UID, v: u64 }
 
     public fun foo(ctx: &mut sui::tx_context::TxContext) {
         sui::transfer::share_object(Obj { id: sui::object::new(ctx), v: 0 })

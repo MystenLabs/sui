@@ -10,7 +10,7 @@ use sui_data_ingestion::{
     ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, DynamoDBProgressStore,
     KVStoreTaskConfig, KVStoreWorker,
 };
-use sui_data_ingestion_core::DataIngestionMetrics;
+use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -143,12 +143,16 @@ async fn main() -> Result<()> {
             }
         };
     }
+    let reader_options = ReaderOptions {
+        batch_size: config.remote_read_batch_size,
+        ..Default::default()
+    };
     executor
         .run(
             config.path,
             config.remote_store_url,
             config.remote_store_options,
-            config.remote_read_batch_size,
+            reader_options,
             exit_receiver,
         )
         .await?;

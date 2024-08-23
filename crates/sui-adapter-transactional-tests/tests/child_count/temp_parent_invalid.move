@@ -9,14 +9,12 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::TxContext;
-
-    struct S has key, store {
+    public struct S has key, store {
         id: sui::object::UID,
     }
 
     public entry fun t(ctx: &mut TxContext) {
-        let parent = sui::object::new(ctx);
+        let mut parent = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
         sui::dynamic_object_field::add(&mut parent, 0, child);
         sui::object::delete(parent);

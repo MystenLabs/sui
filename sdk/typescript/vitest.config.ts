@@ -5,8 +5,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	test: {
-		minThreads: 1,
-		maxThreads: 8,
+		minWorkers: 1,
+		maxWorkers: 4,
 		hookTimeout: 1000000,
 		testTimeout: 1000000,
 		env: {
@@ -15,7 +15,7 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			'@mysten/bcs': new URL('../bcs/src', import.meta.url).toString(),
+			'@mysten/bcs': new URL('../bcs/src', import.meta.url).pathname,
 		},
 	},
 });

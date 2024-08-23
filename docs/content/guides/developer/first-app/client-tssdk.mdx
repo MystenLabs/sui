@@ -2,7 +2,7 @@
 title: Client App with Sui TypeScript SDK
 ---
 
-This exercise walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. If you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
+This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, the instruction walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. You can use it to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
 
 {@include: ../../../snippets/info-pnpm-required.mdx}
 
@@ -10,9 +10,15 @@ This exercise walks you through setting up dApp Kit in a React App, allowing you
 pnpm create @mysten/dapp --template react-client-dapp
 ```
 
+or
+
+```bash
+yarn create @mysten/dapp --template react-client-dapp
+```
+
 ## What is the Sui TypeScript SDK?
 
-The Sui TypeScript SDK (@mysten/sui.js) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
+The Sui TypeScript SDK (@mysten/sui) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
 
 For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript).
 
@@ -33,7 +39,7 @@ npm init vite
 Now that you have a React app, you can install the necessary dependencies to use dApp Kit:
 
 ```bash npm2yarn
-npm install @mysten/sui.js @mysten/dapp-kit @tanstack/react-query
+npm install @mysten/sui @mysten/dapp-kit @tanstack/react-query
 ```
 
 ## Setting up Provider components
@@ -58,11 +64,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 ```
 
-Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui.js` to all the hooks in dApp Kit. This provider manages which network dApp Kit connects to, and can accept configuration for multiple networks. This exercise connects to `devnet`.
+Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in dApp Kit. This provider manages which network dApp Kit connects to, and can accept configuration for multiple networks. This exercise connects to `devnet`.
 
 ```ts
 import { SuiClientProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
@@ -88,7 +94,7 @@ Finally, set up the `WalletProvider` from `@mysten/dapp-kit`, and import styles 
 import '@mysten/dapp-kit/dist/index.css';
 
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
@@ -194,7 +200,7 @@ function OwnedObjects({ address }: { address: string }) {
 		<ul>
 			{data.data.map((object) => (
 				<li key={object.data?.objectId}>
-					<a href={`https://suiexplorer.com/object/${object.data?.objectId}`}>
+					<a href={`https://example-explorer.com/object/${object.data?.objectId}`}>
 						{object.data?.objectId}
 					</a>
 				</li>
@@ -208,7 +214,7 @@ You now have a dApp connected to wallets and can query data from RPC nodes.
 
 ## Related links
 
-The next step from here is to start interacting with Move modules, constructing transaction blocks, and making Move calls. This exercise continues in the end to end example.
+The next step from here is to start interacting with Move modules, constructing transaction blocks, and making Move calls. This exercise continues in the Counter end-to-end example.
 
 - [End-to-End Example](../app-examples/e2e-counter.mdx): Continue this exercise by creating an app.
 - [Sui 101](../sui-101.mdx): Learn the basics of the Sui network and how to interact with on-chain objects using Move.

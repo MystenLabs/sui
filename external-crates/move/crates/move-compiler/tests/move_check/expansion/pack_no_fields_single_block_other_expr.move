@@ -1,11 +1,11 @@
 module 0x42::M {
     struct S { f: u64 }
-    struct G {}
+    struct G has drop {}
     fun foo() {
-        let f = 0;
-        let s = S 0;
-        let s = S f;
-        let g = G ();
-        let g = G { {} };
+        let _f = 0;
+        let _s = S 0;
+        let _s = S f;
+        let _g = G ();
+        let _g = G { {} };
     }
 }

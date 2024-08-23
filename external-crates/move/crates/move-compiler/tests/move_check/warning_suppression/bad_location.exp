@@ -5,7 +5,7 @@ error[E02015]: invalid attribute
   │       ^^^^^
   │       │
   │       Known attribute 'allow' is not expected with a use
-  │       Expected to be used with one of the following: module, constant, struct, function
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 warning[W09001]: unused alias
   ┌─ tests/move_check/warning_suppression/bad_location.move:5:15
@@ -22,5 +22,5 @@ error[E02015]: invalid attribute
   │       ^^^^^
   │       │
   │       Known attribute 'allow' is not expected with a friend
-  │       Expected to be used with one of the following: module, constant, struct, function
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
 

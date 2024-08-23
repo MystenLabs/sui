@@ -1,7 +1,6 @@
-
-<a name="0x2_prover"></a>
-
-# Module `0x2::prover`
+---
+title: Module `0x2::prover`
+---
 
 
 

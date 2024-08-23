@@ -17,7 +17,7 @@ mod checked {
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
-        TransactionKind, VersionedProtocolMessage as _,
+        TransactionKind,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -186,13 +186,9 @@ mod checked {
         // Overrides the gas objects in the transaction.
         gas_override: &[ObjectRef],
     ) -> SuiResult<SuiGasStatus> {
-        // Cheap validity checks that is ok to run multiple times during processing.
-        transaction.check_version_supported(protocol_config)?;
         let gas = if gas_override.is_empty() {
-            transaction.validity_check(protocol_config)?;
             transaction.gas()
         } else {
-            transaction.validity_check_no_gas_check(protocol_config)?;
             gas_override
         };
 
@@ -397,6 +393,8 @@ mod checked {
                 }
                 // We skip checking a deleted shared object because it no longer exists
                 ObjectReadResultKind::DeletedSharedObject(_, _) => (),
+                // We skip checking shared objects from cancelled transactions since we are not reading it.
+                ObjectReadResultKind::CancelledTransactionSharedObject(_) => (),
             }
         }
 
@@ -561,10 +559,10 @@ mod checked {
             return Ok(());
         };
 
-        // We use a custom config with metering enabled
-        let is_metered = true;
-        // Use the same verifier and meter for all packages
-        let mut verifier = sui_execution::verifier(protocol_config, is_metered, metrics);
+        // Use the same verifier and meter for all packages, custom configured for signing.
+        let for_signing = true;
+        let mut verifier = sui_execution::verifier(protocol_config, for_signing, metrics);
+        let mut meter = verifier.meter(protocol_config.meter_config_for_signing());
 
         // Measure time for verifying all packages in the PTB
         let shared_meter_verifier_timer = metrics
@@ -573,7 +571,9 @@ mod checked {
 
         let verifier_status = pt
             .non_system_packages_to_be_published()
-            .try_for_each(|module_bytes| verifier.meter_module_bytes(protocol_config, module_bytes))
+            .try_for_each(|module_bytes| {
+                verifier.meter_module_bytes(protocol_config, module_bytes, meter.as_mut())
+            })
             .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
 
         match verifier_status {

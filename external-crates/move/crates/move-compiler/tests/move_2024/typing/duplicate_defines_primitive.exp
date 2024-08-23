@@ -4,6 +4,6 @@ error[E10004]: invalid usage of known attribute
 2 │ module a::m {}
   │           - Previously declared here
 3 │ 
-4 │ #[defines_primitive(u64)]
-  │   ^^^^^^^^^^^^^^^^^^^^^^ Duplicate definer annotated for primitive type 'u64'
+4 │ #[defines_primitive(signer)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate definer annotated for primitive type 'signer'
 

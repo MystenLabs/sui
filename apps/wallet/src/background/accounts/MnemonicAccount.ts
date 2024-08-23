@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
-import { type Keypair } from '@mysten/sui.js/cryptography';
+import { type Keypair } from '@mysten/sui/cryptography';
 
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import {

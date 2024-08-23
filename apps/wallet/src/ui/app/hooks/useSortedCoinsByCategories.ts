@@ -3,8 +3,8 @@
 
 import { usePinnedCoinTypes } from '_app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_app/hooks/useRecognizedPackages';
-import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type CoinBalance as CoinBalanceType } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useMemo } from 'react';
 
 function sortCoins(balances: CoinBalanceType[]) {

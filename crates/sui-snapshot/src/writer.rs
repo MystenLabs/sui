@@ -9,6 +9,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use byteorder::{BigEndian, ByteOrder};
+use fastcrypto::hash::MultisetHash;
 use futures::StreamExt;
 use integer_encoding::VarInt;
 use object_store::path::Path;
@@ -24,10 +25,13 @@ use std::sync::Arc;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::CHAIN_IDENTIFIER;
+use sui_core::state_accumulator::StateAccumulator;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::mpsc;
@@ -255,6 +259,7 @@ impl StateSnapshotWriterV1 {
         self,
         epoch: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
+        root_state_hash: ECMHLiveObjectSetDigest,
     ) -> Result<()> {
         let system_state_object = get_sui_system_state(&perpetual_db)?;
 
@@ -267,8 +272,13 @@ impl StateSnapshotWriterV1 {
             chain_identifier.chain(),
         );
         let include_wrapped_tombstone = !protocol_config.simplified_unwrap_then_delete();
-        self.write_internal(epoch, include_wrapped_tombstone, perpetual_db)
-            .await
+        self.write_internal(
+            epoch,
+            include_wrapped_tombstone,
+            perpetual_db,
+            root_state_hash,
+        )
+        .await
     }
 
     pub(crate) async fn write_internal(
@@ -276,6 +286,7 @@ impl StateSnapshotWriterV1 {
         epoch: u64,
         include_wrapped_tombstone: bool,
         perpetual_db: Arc<AuthorityPerpetualTables>,
+        root_state_hash: ECMHLiveObjectSetDigest,
     ) -> Result<()> {
         self.setup_epoch_dir(epoch).await?;
 
@@ -293,6 +304,7 @@ impl StateSnapshotWriterV1 {
                 sender,
                 Self::bucket_func,
                 include_wrapped_tombstone,
+                root_state_hash,
             )
         });
         write_handler.await?.context(format!(
@@ -361,6 +373,7 @@ impl StateSnapshotWriterV1 {
         sender: Sender<FileMetadata>,
         bucket_func: F,
         include_wrapped_tombstone: bool,
+        root_state_hash: ECMHLiveObjectSetDigest,
     ) -> Result<()>
     where
         F: Fn(&LiveObject) -> u32,
@@ -368,7 +381,9 @@ impl StateSnapshotWriterV1 {
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
             path_to_filesystem(self.local_staging_dir.clone(), &self.epoch_dir(epoch))?;
+        let mut acc = Accumulator::default();
         for object in perpetual_db.iter_live_object_set(include_wrapped_tombstone) {
+            StateAccumulator::accumulate_live_object(&mut acc, &object);
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
                 entry.insert(LiveObjectSetWriterV1::new(
@@ -383,6 +398,11 @@ impl StateSnapshotWriterV1 {
                 .context("Unexpected missing bucket writer")?;
             writer.write(&object)?;
         }
+        assert_eq!(
+            ECMHLiveObjectSetDigest::from(acc.digest()),
+            root_state_hash,
+            "Root state hash mismatch!"
+        );
         let mut files = vec![];
         for (_, writer) in object_writers.into_iter() {
             files.extend(writer.done()?);

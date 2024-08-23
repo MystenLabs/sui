@@ -8,13 +8,10 @@
 //# publish
 
 module test::m {
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
 
-    struct S has key { id: UID }
+    public struct S has key { id: UID }
 
-    struct S2 has key, store { id: UID }
+    public struct S2 has key, store { id: UID }
 
     public fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);

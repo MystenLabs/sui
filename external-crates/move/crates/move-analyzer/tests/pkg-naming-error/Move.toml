@@ -1,0 +1,13 @@
+[package]
+name = "PkgNamingError"
+edition = "legacy"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+Symbols = { local = "../symbols" }
+
+[addresses]
+PkgNamingError = "0xABBA"
+# the following is a different package name than specified in the dependency's source
+# which may crash the analyzer if not handled correctly
+SymbolsRenamed = "0xCAFE"

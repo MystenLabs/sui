@@ -17,8 +17,8 @@ use crate::{
 };
 
 /// Commit one leader.  
-#[test]
-fn try_direct_commit() {
+#[tokio::test]
+async fn try_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -36,8 +36,8 @@ fn try_direct_commit() {
     let incomplete_wave_leader_round = 6;
     build_dag(context, dag_state, None, voting_round_wave_2);
 
-    // Leader rounds are the first rounds of each wave. In this case rounds 0, 3 & 6.
-    let mut leader_rounds: Vec<u32> = (0..num_rounds_in_dag)
+    // Leader rounds are the first rounds of each wave. In this case rounds 3 & 6.
+    let mut leader_rounds: Vec<u32> = (1..num_rounds_in_dag)
         .map(|r| committer.leader_round(r))
         .collect::<HashSet<_>>()
         .into_iter()
@@ -57,7 +57,7 @@ fn try_direct_commit() {
             if let LeaderStatus::Commit(ref committed_block) = leader_status {
                 assert_eq!(committed_block.author(), leader.authority)
             } else {
-                panic!("Expected a committed leader")
+                panic!("Expected a committed leader at round {}", round)
             };
         } else {
             // The base committer should mark the potential leader in r6 as undecided
@@ -73,8 +73,8 @@ fn try_direct_commit() {
 }
 
 /// Ensure idempotent replies.
-#[test]
-fn idempotence() {
+#[tokio::test]
+async fn idempotence() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -117,8 +117,8 @@ fn idempotence() {
 }
 
 /// Commit one by one each leader as the dag progresses in ideal conditions.
-#[test]
-fn multiple_direct_commit() {
+#[tokio::test]
+async fn multiple_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -158,8 +158,8 @@ fn multiple_direct_commit() {
 }
 
 /// We directly skip the leader if it has enough blame.
-#[test]
-fn direct_skip() {
+#[tokio::test]
+async fn direct_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -210,8 +210,8 @@ fn direct_skip() {
 }
 
 /// Indirect-commit the first leader.
-#[test]
-fn indirect_commit() {
+#[tokio::test]
+async fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -352,8 +352,8 @@ fn indirect_commit() {
 }
 
 /// Commit the first leader, indirectly skip the 2nd, and commit the 3rd leader.
-#[test]
-fn indirect_skip() {
+#[tokio::test]
+async fn indirect_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -482,8 +482,8 @@ fn indirect_skip() {
 }
 
 /// If there is no leader with enough support nor blame, we commit nothing.
-#[test]
-fn undecided() {
+#[tokio::test]
+async fn undecided() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);
@@ -570,8 +570,8 @@ fn undecided() {
 // This test scenario has one authority that is acting in a byzantine manner. It
 // will be sending multiple different blocks to different validators for a round.
 // The commit rule should handle this and correctly commit the expected blocks.
-#[test]
-fn test_byzantine_direct_commit() {
+#[tokio::test]
+async fn test_byzantine_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(4).0);

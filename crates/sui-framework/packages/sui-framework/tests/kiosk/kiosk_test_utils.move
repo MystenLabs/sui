@@ -3,17 +3,14 @@
 
 #[test_only]
 module sui::kiosk_test_utils {
-    use std::vector;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, UID};
     use sui::package::{Self, Publisher};
-    use sui::tx_context::{Self, TxContext};
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
 
-    struct OTW has drop {}
-    struct Asset has key, store { id: UID }
+    public struct OTW has drop {}
+    public struct Asset has key, store { id: UID }
 
     /// Prepare: dummy context
     public fun ctx(): TxContext { tx_context::dummy() }
@@ -43,7 +40,7 @@ module sui::kiosk_test_utils {
     /// Prepare: Asset
     public fun get_asset(ctx: &mut TxContext): (Asset, ID) {
         let uid = object::new(ctx);
-        let id = object::uid_to_inner(&uid);
+        let id = uid.to_inner();
         (Asset { id: uid }, id)
     }
 
@@ -53,28 +50,28 @@ module sui::kiosk_test_utils {
     }
 
     public fun return_publisher(publisher: Publisher) {
-        package::burn_publisher(publisher)
+        publisher.burn_publisher()
     }
 
     /// Cleanup: TransferPolicy
     public fun return_policy(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
-        let profits = policy::destroy_and_withdraw(policy, cap, ctx);
-        coin::burn_for_testing(profits)
+        let profits = policy.destroy_and_withdraw(cap, ctx);
+        profits.burn_for_testing()
     }
 
     /// Cleanup: Kiosk
     public fun return_kiosk(kiosk: Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext): u64 {
-        let profits = kiosk::close_and_withdraw(kiosk, cap, ctx);
-        coin::burn_for_testing(profits)
+        let profits = kiosk.close_and_withdraw(cap, ctx);
+        profits.burn_for_testing()
     }
 
     /// Cleanup: vector<Asset>
-    public fun return_assets(assets: vector<Asset>) {
-        while (vector::length(&assets) > 0) {
-            let Asset { id } = vector::pop_back(&mut assets);
-            object::delete(id)
+    public fun return_assets(mut assets: vector<Asset>) {
+        while (assets.length() > 0) {
+            let Asset { id } = assets.pop_back();
+            id.delete()
         };
 
-        vector::destroy_empty(assets)
+        assets.destroy_empty()
     }
 }

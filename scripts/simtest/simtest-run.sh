@@ -20,7 +20,7 @@ if [ -z "$NUM_CPUS" ]; then
 fi
 
 # filter out some tests that give spurious failures.
-TEST_FILTER="(not test(~batch_verification_tests))"
+TEST_FILTER="(not (test(~batch_verification_tests)))"
 
 DATE=$(date +%s)
 SEED="$DATE"
@@ -33,12 +33,21 @@ SIMTEST_LOGS_DIR=~/simtest_logs
 LOG_DIR="${SIMTEST_LOGS_DIR}/${DATE}"
 LOG_FILE="$LOG_DIR/log"
 
+# By default run 1 iteration for each test, if not specified.
+: ${TEST_NUM:=1}
+
+echo ""
+echo "================================================"
+echo "Running e2e simtests with $TEST_NUM iterations"
+echo "================================================"
+date
+
 # This command runs many different tests, so it already uses all CPUs fairly efficiently, and
 # don't need to be done inside of the for loop below.
 # TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
 MSIM_TEST_SEED="$SEED" \
+MSIM_TEST_NUM=${TEST_NUM} \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-MSIM_TEST_NUM=30 \
 scripts/simtest/cargo-simtest simtest \
   --color always \
   --test-threads "$NUM_CPUS" \
@@ -47,6 +56,12 @@ scripts/simtest/cargo-simtest simtest \
   --package sui-e2e-tests \
   --profile simtestnightly \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+
+echo ""
+echo "============================================="
+echo "Running $NUM_CPUS stress simtests in parallel"
+echo "============================================="
+date
 
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
@@ -70,10 +85,18 @@ done
 # wait for all the jobs to end
 wait
 
+echo ""
+echo "==========================="
+echo "Running determinism simtest"
+echo "==========================="
+date
+
 # Check for determinism in stress simtests
 LOG_FILE="$LOG_DIR/determinism-log"
+echo "Using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
 MSIM_TEST_SEED="$SEED" \
+MSIM_TEST_NUM=1 \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 MSIM_TEST_CHECK_DETERMINISM=1
 scripts/simtest/cargo-simtest simtest \
@@ -83,8 +106,13 @@ scripts/simtest/cargo-simtest simtest \
   --profile simtestnightly \
   -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
 
+echo ""
+echo "============================================="
 echo "All tests completed, checking for failures..."
-grep -qHn FAIL "$LOG_DIR"/*
+echo "============================================="
+date
+
+grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/*
 
 # if grep found no failures exit now
 [ $? -eq 1 ] && echo "No test failures detected" && exit 0
@@ -93,7 +121,7 @@ echo "Failures detected, printing logs..."
 
 # read all filenames in $LOG_DIR that contain the string "FAIL" into a bash array
 # and print the line number and filename for each
-readarray -t FAILED_LOG_FILES < <(grep -l FAIL "$LOG_DIR"/*)
+readarray -t FAILED_LOG_FILES < <(grep -El 'TIMEOUT|FAIL' "$LOG_DIR"/*)
 
 # iterate over the array and print the contents of each file
 for LOG_FILE in "${FAILED_LOG_FILES[@]}"; do

@@ -2780,7 +2780,7 @@ async fn test_object_no_id_error() {
     // fail (it's defined in test-only code hence cannot be checked by transactional testing
     // framework which goes through "normal" publishing path which excludes tests).
     path.extend(["src", "unit_tests", "data", "object_no_id"]);
-    let res = build_config.build(path);
+    let res = build_config.build(&path);
 
     matches!(res.err(), Some(SuiError::ExecutionError(err_str)) if
                  err_str.contains("SuiMoveVerificationError")
@@ -2791,7 +2791,7 @@ pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Ve
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
     BuildConfig::new_for_testing()
-        .build(path)
+        .build(&path)
         .unwrap()
         .get_package_bytes(with_unpublished_deps)
 }
@@ -2803,10 +2803,10 @@ pub fn build_package(
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", code_dir]);
-    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let digest = compiled_package.get_package_digest(with_unpublished_deps);
     let modules = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
     (digest.to_vec(), modules, dependencies)
 }
 
@@ -2824,9 +2824,9 @@ pub async fn build_and_try_publish_test_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
 
-    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();

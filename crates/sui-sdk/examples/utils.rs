@@ -40,7 +40,6 @@ struct FaucetResponse {
 
 pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet faucet
 
-// if you use the sui-test-validator and use the local network; if it does not work, try with port 5003.
 // const SUI_FAUCET: &str = "http://127.0.0.1:9123/gas";
 
 /// Return a sui client to interact with the APIs,
@@ -56,7 +55,7 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
     if coin.is_none() {
         request_tokens_from_faucet(active_address, &client).await?;
     }
-    let wallet = retrieve_wallet().await?;
+    let wallet = retrieve_wallet()?;
     let addresses = wallet.get_addresses();
     let addresses = addresses
         .into_iter()
@@ -78,7 +77,7 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
 pub async fn setup_for_read() -> Result<(SuiClient, SuiAddress), anyhow::Error> {
     let client = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version is: {}", client.api_version());
-    let mut wallet = retrieve_wallet().await?;
+    let mut wallet = retrieve_wallet()?;
     assert!(wallet.get_addresses().len() >= 2);
     let active_address = wallet.active_address()?;
 
@@ -267,7 +266,7 @@ pub async fn split_coin_digest(
     Ok(transaction_response.digest)
 }
 
-pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
+pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir()?.join(SUI_KEYSTORE_FILENAME);
 
@@ -311,8 +310,7 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     client_config.active_address = Some(default_active_address);
     client_config.save(&wallet_conf)?;
 
-    let wallet =
-        WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None).await?;
+    let wallet = WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None)?;
 
     Ok(wallet)
 }

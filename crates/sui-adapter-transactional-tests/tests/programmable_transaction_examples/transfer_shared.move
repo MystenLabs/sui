@@ -8,11 +8,7 @@
 //# publish
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -31,4 +27,3 @@ module t2::o2 {
 
 //# programmable --sender A --inputs object(2,0) @B
 //> TransferObjects([Input(0)], Input(1))
-

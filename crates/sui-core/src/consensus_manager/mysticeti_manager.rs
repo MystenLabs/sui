@@ -1,23 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use consensus_config::{AuthorityIndex, Committee, Parameters};
-use consensus_core::{CommitConsumer, ConsensusAuthority};
-use fastcrypto::traits::KeyPair;
-use mysten_metrics::{RegistryID, RegistryService};
+use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
+use fastcrypto::ed25519;
+use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
+use sui_protocol_config::ConsensusNetwork;
 use sui_types::{
-    base_types::AuthorityName,
-    committee::EpochId,
-    crypto::{AuthorityKeyPair, NetworkKeyPair},
-    sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::{mpsc::unbounded_channel, Mutex};
+use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
@@ -34,46 +33,67 @@ use crate::{
 pub mod mysticeti_manager_tests;
 
 pub struct MysticetiManager {
-    keypair: AuthorityKeyPair,
+    protocol_keypair: ProtocolKeyPair,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
+    // TODO: switch to parking_lot::Mutex.
     running: Mutex<Running>,
-    metrics: ConsensusManagerMetrics,
+    metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
+    boot_counter: Mutex<u64>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
-    consensus_handler: ArcSwapOption<MysticetiConsensusHandler>,
+    // TODO: switch to parking_lot::Mutex.
+    consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
 }
 
 impl MysticetiManager {
+    /// NOTE: Mysticeti protocol key uses Ed25519 instead of BLS.
+    /// But for security, the protocol keypair must be different from the network keypair.
     pub fn new(
-        keypair: AuthorityKeyPair,
-        network_keypair: NetworkKeyPair,
+        protocol_keypair: ed25519::Ed25519KeyPair,
+        network_keypair: ed25519::Ed25519KeyPair,
         storage_base_path: PathBuf,
-        metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
+        metrics: Arc<ConsensusManagerMetrics>,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
         Self {
-            keypair,
-            network_keypair,
+            protocol_keypair: ProtocolKeyPair::new(protocol_keypair),
+            network_keypair: NetworkKeyPair::new(network_keypair),
             storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
             registry_service,
             authority: ArcSwapOption::empty(),
             client,
-            consensus_handler: ArcSwapOption::empty(),
+            consensus_handler: Mutex::new(None),
+            boot_counter: Mutex::new(0),
         }
     }
 
-    #[allow(unused)]
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
+    }
+
+    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
+        if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
+            match type_str.to_lowercase().as_str() {
+                "anemo" => return ConsensusNetwork::Anemo,
+                "tonic" => return ConsensusNetwork::Tonic,
+                _ => {
+                    info!(
+                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
+                        type_str
+                    );
+                }
+            }
+        }
+        epoch_store.protocol_config().consensus_network()
     }
 }
 
@@ -81,7 +101,7 @@ impl MysticetiManager {
 impl ConsensusManagerTrait for MysticetiManager {
     async fn start(
         &self,
-        _config: &NodeConfig,
+        config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
@@ -90,6 +110,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let committee: Committee = system_state.get_mysticeti_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
+        let network_type = self.pick_network(&epoch_store);
 
         let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,
@@ -102,70 +123,73 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
-        // TODO(mysticeti): Fill in the other fields
-        let parameters = Parameters {
-            db_path: Some(self.get_store_path(epoch)),
-            ..Default::default()
+        let consensus_config = config
+            .consensus_config()
+            .expect("consensus_config should exist");
+
+        let mut parameters = Parameters {
+            db_path: self.get_store_path(epoch),
+            ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
-        let name: AuthorityName = self.keypair.public().into();
+        // Disable the automated last known block sync for mainnet for now
+        if epoch_store.get_chain_identifier().chain() == sui_protocol_config::Chain::Mainnet {
+            parameters.sync_last_known_own_block_timeout = Duration::ZERO;
+        };
 
-        let authority_index: AuthorityIndex = committee
-            .to_authority_index(
-                epoch_store
-                    .committee()
-                    .authority_index(&name)
-                    .expect("Should have valid index for own authority") as usize,
-            )
-            .expect("Should have valid index for own authority");
+        let own_protocol_key = self.protocol_keypair.public();
+        let (own_index, _) = committee
+            .authorities()
+            .find(|(_, a)| a.protocol_key == own_protocol_key)
+            .expect("Own authority should be among the consensus authorities!");
 
-        let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
+        let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
-        // is the one we want to go with.
-        #[allow(clippy::disallowed_methods)]
-        let (commit_sender, commit_receiver) = unbounded_channel();
+        let (commit_sender, commit_receiver) = unbounded_channel("consensus_output");
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let consumer = CommitConsumer::new(
             commit_sender,
             // TODO(mysticeti): remove dependency on narwhal executor
-            consensus_handler.last_executed_sub_dag_index().await,
+            consensus_handler.last_executed_sub_dag_index() as CommitIndex,
         );
+        let monitor = consumer.monitor();
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
+        let boot_counter = *self.boot_counter.lock().await;
         let authority = ConsensusAuthority::start(
-            authority_index,
+            network_type,
+            own_index,
             committee.clone(),
             parameters.clone(),
             protocol_config.clone(),
-            self.keypair.copy(),
-            self.network_keypair.copy(),
+            self.protocol_keypair.clone(),
+            self.network_keypair.clone(),
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),
+            boot_counter,
         )
         .await;
+        let client = authority.transaction_client();
+
+        // Now increment the boot counter
+        let mut boot_counter = self.boot_counter.lock().await;
+        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 
         self.authority
             .swap(Some(Arc::new((authority, registry_id))));
 
-        // create the client to send transactions to Mysticeti and update it.
-        self.client.set(
-            self.authority
-                .load()
-                .as_ref()
-                .expect("ConsensusAuthority should have been created by now.")
-                .0
-                .transaction_client(),
-        );
+        // Initialize the client to send transactions to this Mysticeti instance.
+        self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
-        self.consensus_handler.store(Some(Arc::new(handler)));
+        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        *consensus_handler = Some(handler);
     }
 
     async fn shutdown(&self) {
@@ -173,6 +197,9 @@ impl ConsensusManagerTrait for MysticetiManager {
         else {
             return;
         };
+
+        // Stop consensus submissions.
+        self.client.clear();
 
         // swap with empty to ensure there is no other reference to authority and we can safely do Arc unwrap
         let r = self.authority.swap(None).unwrap();
@@ -184,7 +211,10 @@ impl ConsensusManagerTrait for MysticetiManager {
         authority.stop().await;
 
         // drop the old consensus handler to force stop any underlying task running.
-        self.consensus_handler.store(None);
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        if let Some(mut handler) = consensus_handler.take() {
+            handler.abort().await;
+        }
 
         // unregister the registry id
         self.registry_service.remove(registry_id);
@@ -192,9 +222,5 @@ impl ConsensusManagerTrait for MysticetiManager {
 
     async fn is_running(&self) -> bool {
         Running::False != *self.running.lock().await
-    }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
     }
 }

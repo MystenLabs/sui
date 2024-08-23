@@ -29,7 +29,7 @@ module axelar::utils {
 
     /// Add a prefix to the bytes.
     public fun to_sui_signed(bytes: vector<u8>): vector<u8> {
-        let res = vector[];
+        let mut res = vector[];
         vector::append(&mut res, PREFIX);
         vector::append(&mut res, bytes);
         res
@@ -38,7 +38,7 @@ module axelar::utils {
     /// Compute operators hash from the list of `operators` (public keys).
     /// This hash is used in `Axelar.epoch_for_hash`.
     public fun operators_hash(operators: &vector<vector<u8>>, weights: &vector<u128>, threshold: u128): vector<u8> {
-        let data = bcs::to_bytes(operators);
+        let mut data = bcs::to_bytes(operators);
         vector::append(&mut data, bcs::to_bytes(weights));
         vector::append(&mut data, bcs::to_bytes(&threshold));
         hash::keccak256(&data)

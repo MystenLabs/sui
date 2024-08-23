@@ -167,6 +167,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -251,6 +252,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -316,6 +318,7 @@ impl TestCaseImpl for CoinIndexTest {
                 args,
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -355,6 +358,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -386,6 +390,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -455,6 +460,7 @@ impl TestCaseImpl for CoinIndexTest {
                 ],
                 None,
                 rgp * 2_000_000,
+                None,
             )
             .await
             .unwrap();
@@ -625,7 +631,7 @@ async fn publish_managed_coin_package(
     let compiled_package = compile_managed_coin_package();
     let all_module_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let params = rpc_params![
         ctx.get_wallet_address(),
@@ -701,6 +707,7 @@ async fn add_to_envelope(
             ],
             None,
             rgp * 2_000_000,
+            None,
         )
         .await
         .unwrap();

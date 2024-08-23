@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
-use sui_core::execution_cache::ExecutionCacheRead;
+use sui_core::execution_cache::ObjectCacheRead;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -23,6 +23,7 @@ use sui_storage::key_value_store::{
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
 };
+use sui_types::bridge::Bridge;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::digests::{ChainIdentifier, TransactionDigest, TransactionEventsDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -87,7 +88,7 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead>;
+    fn get_cache_reader(&self) -> &Arc<dyn ObjectCacheRead>;
 
     fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync>;
 
@@ -167,6 +168,9 @@ pub trait StateRead: Send + Sync {
     fn get_system_state(&self) -> StateReadResult<SuiSystemState>;
     fn get_or_latest_committee(&self, epoch: Option<BigInt<u64>>) -> StateReadResult<Committee>;
 
+    // bridge_api
+    fn get_bridge(&self) -> StateReadResult<Bridge>;
+
     // coin_api
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> StateReadResult<TransactionDigest>;
     fn get_owned_coins(
@@ -230,11 +234,6 @@ pub trait StateRead: Send + Sync {
     ) -> StateReadResult<Option<VerifiedCheckpoint>>;
 
     fn get_latest_checkpoint_sequence_number(&self) -> StateReadResult<CheckpointSequenceNumber>;
-
-    fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> StateReadResult<Option<Vec<(ObjectID, SequenceNumber)>>>;
 
     fn get_chain_identifier(&self) -> StateReadResult<ChainIdentifier>;
 }
@@ -306,8 +305,8 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead> {
-        self.get_cache_reader()
+    fn get_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
+        self.get_object_cache_reader()
     }
 
     fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
@@ -428,13 +427,19 @@ impl StateRead for AuthorityState {
     }
     fn get_system_state(&self) -> StateReadResult<SuiSystemState> {
         Ok(self
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?)
     }
     fn get_or_latest_committee(&self, epoch: Option<BigInt<u64>>) -> StateReadResult<Committee> {
         Ok(self
             .committee_store()
             .get_or_latest_committee(epoch.map(|e| *e))?)
+    }
+
+    fn get_bridge(&self) -> StateReadResult<Bridge> {
+        self.get_cache_reader()
+            .get_bridge_object_unsafe()
+            .map_err(|err| err.into())
     }
 
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> StateReadResult<TransactionDigest> {
@@ -554,13 +559,6 @@ impl StateRead for AuthorityState {
 
     fn get_latest_checkpoint_sequence_number(&self) -> StateReadResult<CheckpointSequenceNumber> {
         Ok(self.get_latest_checkpoint_sequence_number()?)
-    }
-
-    fn loaded_child_object_versions(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> StateReadResult<Option<Vec<(ObjectID, SequenceNumber)>>> {
-        Ok(self.loaded_child_object_versions(transaction_digest)?)
     }
 
     fn get_chain_identifier(&self) -> StateReadResult<ChainIdentifier> {

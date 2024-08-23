@@ -16,6 +16,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -29,7 +30,7 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub async fn new(
+    pub fn new(
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
@@ -182,13 +183,13 @@ impl WalletContext {
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
     ) -> Result<(u64, SuiObjectData), anyhow::Error> {
-        for o in self.gas_objects(address).await.unwrap() {
+        for o in self.gas_objects(address).await? {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
+            "No non-argument gas objects found for this address with value >= budget {budget}. Run sui client gas to check for gas objects."
         ))
     }
 
@@ -276,6 +277,11 @@ impl WalletContext {
         let client = self.get_client().await?;
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)
+    }
+
+    /// Add an account
+    pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
+        self.config.keystore.add_key(alias, keypair).unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext

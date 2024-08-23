@@ -8,14 +8,12 @@
 
 //# publish
 module test::m {
-    use sui::transfer::{Self, Receiving};
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID};
+    use sui::transfer::Receiving;
 
-    struct Parent has key { id: UID }
-    struct S has key { id: UID }
-    struct Cup<phantom T> has key { id: UID }
-    struct Store has key, store { id: UID }
+    public struct Parent has key { id: UID }
+    public struct S has key { id: UID }
+    public struct Cup<phantom T> has key { id: UID }
+    public struct Store has key, store { id: UID }
 
     public fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);

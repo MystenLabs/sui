@@ -1,6 +1,7 @@
 [package]
 name = "CustomPropertiesManifest"
 published-at = "0x777"
+edition = "2024.beta"
 
 [addresses]
 main = "0x0"

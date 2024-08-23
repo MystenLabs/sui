@@ -29,10 +29,10 @@ export function Navigation() {
 					data-testid="nav-tokens"
 					to="./tokens"
 					className={makeLinkClsNoDisabled}
-					title="Tokens"
+					title="Home"
 				>
 					<Tokens32 className="w-8 h-8" />
-					<span className={st.title}>Coins</span>
+					<span className={st.title}>Home</span>
 				</NavLink>
 				<NavLink
 					to="./nfts"

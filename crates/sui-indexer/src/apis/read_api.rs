@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::error::SuiRpcInputError;
@@ -23,15 +24,13 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
-use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
-
 #[derive(Clone)]
-pub(crate) struct ReadApi {
-    inner: IndexerReader,
+pub(crate) struct ReadApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
 }
 
-impl ReadApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection + 'static> ReadApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self { inner }
     }
 
@@ -62,7 +61,7 @@ impl ReadApi {
 }
 
 #[async_trait]
-impl ReadApiServer for ReadApi {
+impl<T: R2D2Connection + 'static> ReadApiServer for ReadApi<T> {
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -186,6 +185,17 @@ impl ReadApiServer for ReadApi {
         .into())
     }
 
+    async fn try_get_object_before_version(
+        &self,
+        _: ObjectID,
+        _: SequenceNumber,
+    ) -> RpcResult<SuiPastObjectResponse> {
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
+    }
+
     async fn try_multi_get_past_objects(
         &self,
         _past_objects: Vec<SuiGetPastObjectRequest>,
@@ -257,16 +267,6 @@ impl ReadApiServer for ReadApi {
             .map_err(Into::into)
     }
 
-    async fn get_loaded_child_objects(
-        &self,
-        _digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        Err(jsonrpsee::types::error::CallError::Custom(
-            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
-        )
-        .into())
-    }
-
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
@@ -296,7 +296,7 @@ impl ReadApiServer for ReadApi {
     }
 }
 
-impl SuiRpcModule for ReadApi {
+impl<T: R2D2Connection> SuiRpcModule for ReadApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

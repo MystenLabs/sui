@@ -5,15 +5,13 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
@@ -60,7 +58,7 @@ module tto::M1 {
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@4
 
 // Cannot try and receive the object with an invalid owner even if it has the right type
-//# run tto::M1::send_back --summarize --args object(3,0) receiving(2,1)@6 --sender A 
+//# run tto::M1::send_back --summarize --args object(3,0) receiving(2,1)@6 --sender A
 
 // Can run still receive and send back so state is all good still, and version number hasn't been incremented for the object
 //# run tto::M1::send_back --args object(2,0) receiving(2,1)@6

@@ -5,19 +5,17 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
-    struct Duo<phantom T: key> has drop {
+    public struct Duo<phantom T: key> has drop {
         r1: Receiving<T>,
         r2: Receiving<T>,
     }
@@ -39,7 +37,7 @@ module tto::M1 {
 
     public fun receive_duo(parent: &mut A, d: Duo<B>): (B, B) {
         let Duo { r1, r2 } = d;
-        let r1 = transfer::receive(&mut parent.id, r1);
+        let mut r1 = transfer::receive(&mut parent.id, r1);
         let r2 = transfer::receive(&mut r1.id, r2);
         (r1, r2)
     }
@@ -54,11 +52,11 @@ module tto::M1 {
 //# view-object 2,2
 
 // Can drop duo
-//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) 
+//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2))
 
 // receive the objects and return them. Error since we need to do something with the returned objects
-//# programmable --inputs object(2,0) receiving(2,2) receiving(2,2) 
+//# programmable --inputs object(2,0) receiving(2,2) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2));
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 

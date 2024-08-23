@@ -82,7 +82,7 @@ fn main() {
     assert!(verified);
 }
 ```
-The proof shows that an input (7) which, when hashed with the Poseidon hash function, gives a certain output (which in this case is `inputs[0] = 7061949393491957813657776856458368574501817871421526214197139795307327923534`).
+The proof shows that an input (7) which, when hashed with the Poseidon hash function, gives a certain output (which in this case is `inputs[0].to_string() = 7061949393491957813657776856458368574501817871421526214197139795307327923534`).
 
 ### Verification in Sui
 
@@ -90,16 +90,19 @@ The API in Sui for verifying a proof expects a special processed verification ke
 
 The output of the `prepare_verifying_key` function is a vector with four byte arrays, which corresponds to the `vk_gamma_abc_g1_bytes`, `alpha_g1_beta_g2_bytes`, `gamma_g2_neg_pc_bytes`, `delta_g2_neg_pc_bytes`.
 
-To verify a proof, you also need two more inputs, `proof_inputs_bytes` and `proof_points_bytes`, which contain the public inputs and the proof respectively. These are serializations of the `inputs` and `proof` values from the previous example, which you can compute in Rust as follows:
+To verify a proof, you also need two more inputs, `public_inputs_bytes` and `proof_points_bytes`, which contain the public inputs and the proof respectively. These are serializations of the `inputs` and `proof` values from the previous example, which you can compute in Rust as follows:
 
 ```rust
-let mut proof_inputs_bytes = Vec::new();
-inputs.serialize_compressed(&mut proof_inputs_bytes).unwrap();
+let mut vk_bytes = Vec::new();
+params.vk.serialize_compressed(&mut vk_bytes).unwrap();
+
+let mut public_inputs_bytes = Vec::new();
+for i in 0..inputs.len() { // if there is more than one public input, serialize one by one
+    inputs[i].serialize_compressed(&mut inputs_bytes).unwrap();
+}
 
 let mut proof_points_bytes = Vec::new();
-proof.a.serialize_compressed(&mut proof_points_bytes).unwrap();
-proof.b.serialize_compressed(&mut proof_points_bytes).unwrap();
-proof.c.serialize_compressed(&mut proof_points_bytes).unwrap();
+proof.serialize_compressed(&mut proof_points_bytes).unwrap();
 ```
 
 The following example smart contract prepares a verification key and verifies the corresponding proof. This example uses the BN254 elliptic curve construction, which is given as the first parameter to the `prepare_verifying_key` and `verify_groth16_proof` functions. You can use the `bls12381` function instead for BLS12-381 construction.
@@ -114,8 +117,8 @@ module test::groth16_test {
         is_verified: bool,
     }
 
-    public fun verify_proof(vk: vector<u8>, public_inputs_bytes: vector<u8>, proof_points_bytes: vector<u8>) {
-        let pvk = groth16::prepare_verifying_key(&groth16::bn254(), &vk);
+    public fun verify_proof(vk_bytes: vector<u8>, public_inputs_bytes: vector<u8>, proof_points_bytes: vector<u8>) {
+        let pvk = groth16::prepare_verifying_key(&groth16::bn254(), &vk_bytes);
         let public_inputs = groth16::public_proof_inputs_from_bytes(public_inputs_bytes);
         let proof_points = groth16::proof_points_from_bytes(proof_points_bytes);
         event::emit(VerifiedEvent {is_verified: groth16::verify_groth16_proof(&groth16::bn254(), &pvk, &public_inputs, &proof_points)});

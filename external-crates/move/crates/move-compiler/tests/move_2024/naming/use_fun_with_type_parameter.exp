@@ -4,7 +4,7 @@ error[E02017]: invalid 'use fun' declaration
 2 │     fun foo<T>(x: T) {
   │             - But 'T' was declared as a type parameter here
 3 │         use fun foo as T.foo;
-  │         ^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun'. Cannot associate a method a type parameter
+  │         ^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun'. Cannot associate a method with a type parameter
 
 error[E04023]: invalid method call
   ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:4:9

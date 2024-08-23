@@ -14,6 +14,11 @@ module.exports = withNextra({
 				destination: '/typescript',
 				statusCode: 302,
 			},
+			{
+				source: '/dapp-kit/zksend',
+				destination: '/dapp-kit/stashed',
+				statusCode: 302,
+			},
 		];
 	},
 });

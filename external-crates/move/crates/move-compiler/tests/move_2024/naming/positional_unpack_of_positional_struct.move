@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     public struct Foo(u64) has copy, drop;
 
     fun x() {
@@ -9,6 +8,3 @@ module M {
         abort 0
     }
 }
-}
-
-

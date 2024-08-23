@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "2024.2.0"
+version = "2024.7.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -14,20 +14,24 @@ async-graphql-axum.workspace = true
 async-graphql-value.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
+bin-version.workspace = true
 chrono.workspace = true
 clap.workspace = true
+const-str.workspace = true
 diesel.workspace = true
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto-zkp.workspace = true
 futures.workspace = true
 hex.workspace = true
 http.workspace = true
 hyper.workspace = true
+itertools.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-markdown-gen.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 move-core-types.workspace = true
@@ -47,14 +51,19 @@ sui-sdk.workspace = true
 sui-types.workspace = true
 tap.workspace = true
 telemetry-subscribers.workspace = true
+tempfile.workspace = true
 tracing.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio-util = { workspace = true, features = ["rt"] }
 toml.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+im.workspace = true
+downcast = "0.11.0"
 
+sui-graphql-config.workspace = true
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
 
@@ -65,7 +74,7 @@ bcs.workspace = true
 simulacrum.workspace = true  # todo: cleanup test only deps
 sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
-sui-indexer.workspace = true
+sui-indexer = { workspace = true, default-features = true }
 sui-rest-api.workspace = true
 sui-swarm-config.workspace = true
 test-cluster.workspace = true
@@ -80,8 +89,11 @@ insta.workspace = true
 serde_json.workspace = true
 sui-framework.workspace = true
 tower.workspace = true
+sui-test-transaction-builder.workspace = true
+
 
 [features]
-default = ["pg_backend"]
+default = ["pg_backend", "postgres-feature"]
+postgres-feature = ["diesel/postgres", "diesel/postgres_backend"]
 pg_integration = []
 pg_backend = []

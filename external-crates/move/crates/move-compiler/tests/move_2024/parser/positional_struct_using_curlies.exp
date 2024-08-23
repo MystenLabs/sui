@@ -1,7 +1,7 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/positional_struct_using_curlies.move:4:29
+  ┌─ tests/move_2024/parser/positional_struct_using_curlies.move:3:29
   │
-4 │     public struct Foo { u64 }
+3 │     public struct Foo { u64 }
   │                             ^
   │                             │
   │                             Unexpected '}'

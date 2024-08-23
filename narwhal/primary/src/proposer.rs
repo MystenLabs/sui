@@ -23,7 +23,7 @@ use types::{
     error::{DagError, DagResult},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
-use types::{now, ConditionalBroadcastReceiver, HeaderV1, HeaderV2, SystemMessage};
+use types::{now, ConditionalBroadcastReceiver, HeaderV1};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -69,8 +69,6 @@ pub struct Proposer {
     rx_parents: Receiver<(Vec<Certificate>, Round)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
-    /// Receives system messages to include in the next header.
-    rx_system_messages: Receiver<SystemMessage>,
     /// Sends newly created headers to the `Certifier`.
     tx_headers: Sender<Header>,
 
@@ -89,12 +87,10 @@ pub struct Proposer {
     /// Holds the batches' digests waiting to be included in the next header.
     /// Digests are roughly oldest to newest, and popped in FIFO order from the front.
     digests: VecDeque<OurDigestMessage>,
-    /// Holds the system messages waiting to be included in the next header.
-    system_messages: Vec<SystemMessage>,
 
     /// Holds the map of proposed previous round headers and their digest messages, to ensure that
     /// all batches' digest included will eventually be re-sent.
-    proposed_headers: BTreeMap<Round, (Header, VecDeque<OurDigestMessage>, Vec<SystemMessage>)>,
+    proposed_headers: BTreeMap<Round, (Header, VecDeque<OurDigestMessage>)>,
     /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
     rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
@@ -104,10 +100,6 @@ pub struct Proposer {
     /// The consensus leader schedule to be used in order to resolve the leader needed for the
     /// protocol advancement.
     leader_schedule: LeaderSchedule,
-
-    /// If true, generates HeaderV2 headers. Otherwise generates HeaderV1.
-    /// TODO: remove after protocol upgrade is complete.
-    use_header_v2: bool,
 }
 
 impl Proposer {
@@ -126,7 +118,6 @@ impl Proposer {
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round)>,
         rx_our_digests: Receiver<OurDigestMessage>,
-        rx_system_messages: Receiver<SystemMessage>,
         tx_headers: Sender<Header>,
         tx_narwhal_round_updates: watch::Sender<Round>,
         rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
@@ -134,7 +125,6 @@ impl Proposer {
         leader_schedule: LeaderSchedule,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(protocol_config, &committee);
-        let use_header_v2 = protocol_config.narwhal_header_v2();
         spawn_logged_monitored_task!(
             async move {
                 Self {
@@ -149,7 +139,6 @@ impl Proposer {
                     rx_shutdown,
                     rx_parents,
                     rx_our_digests,
-                    rx_system_messages,
                     tx_headers,
                     tx_narwhal_round_updates,
                     proposer_store,
@@ -158,12 +147,10 @@ impl Proposer {
                     last_parents: genesis,
                     last_leader: None,
                     digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
-                    system_messages: Vec::new(),
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
                     metrics,
                     leader_schedule,
-                    use_header_v2,
                 }
                 .run()
                 .await;
@@ -219,7 +206,6 @@ impl Proposer {
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
-        let system_messages = std::mem::take(&mut self.system_messages);
         let parents = std::mem::take(&mut self.last_parents);
 
         // Here we check that the timestamp we will include in the header is consistent with the
@@ -241,34 +227,18 @@ impl Proposer {
             sleep(Duration::from_millis(drift_ms)).await;
         }
 
-        let header: Header = if self.use_header_v2 {
-            HeaderV2::new(
-                self.authority_id,
-                this_round,
-                this_epoch,
-                header_digests
-                    .iter()
-                    .map(|m| (m.digest, (m.worker_id, m.timestamp)))
-                    .collect(),
-                system_messages.clone(),
-                parents.iter().map(|x| x.digest()).collect(),
-            )
-            .await
-            .into()
-        } else {
-            HeaderV1::new(
-                self.authority_id,
-                this_round,
-                this_epoch,
-                header_digests
-                    .iter()
-                    .map(|m| (m.digest, (m.worker_id, m.timestamp)))
-                    .collect(),
-                parents.iter().map(|x| x.digest()).collect(),
-            )
-            .await
-            .into()
-        };
+        let header: Header = HeaderV1::new(
+            self.authority_id,
+            this_round,
+            this_epoch,
+            header_digests
+                .iter()
+                .map(|m| (m.digest, (m.worker_id, m.timestamp)))
+                .collect(),
+            parents.iter().map(|x| x.digest()).collect(),
+        )
+        .await
+        .into();
 
         let leader_and_support = if this_round % 2 == 0 {
             let authority = self.leader_schedule.leader(this_round);
@@ -340,10 +310,8 @@ impl Proposer {
 
         // Register the header by the current round, to remember that we need to commit
         // it, or re-include the batch digests and system messages that it contains.
-        self.proposed_headers.insert(
-            this_round,
-            (header.clone(), header_digests, system_messages),
-        );
+        self.proposed_headers
+            .insert(this_round, (header.clone(), header_digests));
 
         Ok(header)
     }
@@ -595,32 +563,26 @@ impl Proposer {
                     // them in FIFO order.
                     // Oldest to newest payloads.
                     let mut digests_to_resend = VecDeque::new();
-                    // Oldest to newest system messages.
-                    let mut system_messages_to_resend = Vec::new();
                     // Oldest to newest rounds.
                     let mut retransmit_rounds = Vec::new();
 
                     // Iterate in order of rounds of our own headers.
-                    for (header_round, (_header, included_digests, included_system_messages)) in &mut self.proposed_headers {
+                    for (header_round, (_header, included_digests)) in &mut self.proposed_headers {
                         // Stop once we have processed headers at and below last committed round.
                         if *header_round > max_committed_round {
                             break;
                         }
                         // Add payloads and system messages from oldest to newest.
                         digests_to_resend.append(included_digests);
-                        system_messages_to_resend.append(included_system_messages);
                         retransmit_rounds.push(*header_round);
                     }
 
                     if !retransmit_rounds.is_empty() {
                         let num_digests_to_resend = digests_to_resend.len();
-                        let num_system_messages_to_resend = system_messages_to_resend.len();
                         // Since all of the values are roughly newer than existing stored values,
                         // prepend for the next header.
                         digests_to_resend.append(&mut self.digests);
                         self.digests = digests_to_resend;
-                        system_messages_to_resend.append(&mut self.system_messages);
-                        self.system_messages = system_messages_to_resend;
 
                         // Now delete the headers with batches we re-transmit
                         for round in &retransmit_rounds {
@@ -628,7 +590,7 @@ impl Proposer {
                         }
 
                         debug!(
-                            "Retransmit {num_digests_to_resend} batches and {num_system_messages_to_resend} system messages in undelivered headers {retransmit_rounds:?} at commit round {commit_round:?}, remaining headers {}",
+                            "Retransmit {num_digests_to_resend} batches in undelivered headers {retransmit_rounds:?} at commit round {commit_round:?}, remaining headers {}",
                             self.proposed_headers.len()
                         );
 
@@ -739,12 +701,6 @@ impl Proposer {
                     // crashes and re-starts.
                     let _ = message.ack_channel.take().unwrap().send(());
                     self.digests.push_back(message);
-                }
-
-                // Receive system messages.
-                Some(message) = self.rx_system_messages.recv() => {
-                    debug!("Proposer received system message, round={}", self.round);
-                    self.system_messages.push(message);
                 }
 
                 // Check whether any timer expired.

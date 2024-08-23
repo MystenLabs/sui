@@ -8,7 +8,6 @@ use crate::workload::Workload;
 pub(crate) mod benchmark_context;
 pub mod command;
 pub(crate) mod mock_account;
-pub(crate) mod mock_consensus;
 pub(crate) mod mock_storage;
 pub(crate) mod single_node;
 pub(crate) mod tx_generator;
@@ -23,21 +22,22 @@ pub async fn run_benchmark(
     component: Component,
     checkpoint_size: usize,
     print_sample_tx: bool,
+    skip_signing: bool,
 ) {
-    let mut ctx = BenchmarkContext::new(
-        workload.clone(),
-        component,
-        checkpoint_size,
-        print_sample_tx,
-    )
-    .await;
+    let mut ctx = BenchmarkContext::new(workload.clone(), component, print_sample_tx).await;
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
+    if matches!(component, Component::TxnSigning) {
+        ctx.benchmark_transaction_signing(transactions, print_sample_tx)
+            .await;
+        return;
+    }
+
+    let transactions = ctx.certify_transactions(transactions, skip_signing).await;
+    ctx.validator()
+        .assigned_shared_object_versions(&transactions)
+        .await;
     match component {
-        Component::TxnSigning => {
-            ctx.benchmark_transaction_signing(transactions, print_sample_tx)
-                .await;
-        }
         Component::CheckpointExecutor => {
             ctx.benchmark_checkpoint_executor(transactions, checkpoint_size)
                 .await;

@@ -37,6 +37,7 @@ sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-swarm-config.workspace = true
+sui-surfer.workspace = true
 telemetry-subscribers.workspace = true
 roaring.workspace = true
 regex.workspace = true

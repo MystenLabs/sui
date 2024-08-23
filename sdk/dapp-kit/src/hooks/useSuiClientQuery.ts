@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui/client';
 import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 
@@ -20,14 +20,14 @@ export type SuiRpcMethods = {
 				name: K;
 				result: R;
 				params: P;
-		  }
+			}
 		: SuiClient[K] extends () => Promise<infer R>
-		? {
-				name: K;
-				result: R;
-				params: undefined | object;
-		  }
-		: never;
+			? {
+					name: K;
+					result: R;
+					params: undefined | object;
+				}
+			: never;
 };
 
 export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods, TData> = PartialBy<

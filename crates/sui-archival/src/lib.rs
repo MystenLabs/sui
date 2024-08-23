@@ -19,6 +19,7 @@ use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -334,6 +335,30 @@ pub async fn write_manifest<S: ObjectStorePutExt>(
     let path = Path::from(MANIFEST_FILENAME);
     let bytes = finalize_manifest(manifest)?;
     put(&remote_store, &path, bytes).await?;
+    Ok(())
+}
+
+pub async fn read_manifest_as_json(remote_store_config: ObjectStoreConfig) -> Result<String> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(1).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let manifest = archive_reader.get_manifest().await?;
+    let json = serde_json::to_string(&manifest).expect("Failed to serialize object");
+    Ok(json)
+}
+
+pub async fn write_manifest_from_json(
+    remote_store_config: ObjectStoreConfig,
+    json_manifest_path: std::path::PathBuf,
+) -> Result<()> {
+    let manifest: Manifest = serde_json::from_str(&fs::read_to_string(json_manifest_path)?)?;
+    let store = remote_store_config.make()?;
+    write_manifest(manifest, store).await?;
     Ok(())
 }
 

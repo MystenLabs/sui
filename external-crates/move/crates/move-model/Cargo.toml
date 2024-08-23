@@ -20,7 +20,6 @@ move-symbol-pool.workspace = true
 # external dependencies
 codespan.workspace = true
 codespan-reporting.workspace = true
-internment.workspace = true
 itertools.workspace = true
 log.workspace = true
 num.workspace = true

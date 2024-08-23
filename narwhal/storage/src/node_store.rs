@@ -3,15 +3,15 @@
 
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
-use crate::randomness_store::{EncG, PkG, RandomnessStore, SingletonKey};
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
     CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
     ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
-use fastcrypto_tbls::dkg;
+use fastcrypto::groups;
 use fastcrypto_tbls::nodes::PartyId;
+use fastcrypto_tbls::{dkg, dkg_v0};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +26,10 @@ use types::{
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
 pub type PayloadToken = u8;
 
+// Types used in deprecated random beacon tables.
+type PkG = groups::bls12381::G2Element;
+type EncG = groups::bls12381::G2Element;
+
 /// All the data stores of the node.
 #[derive(Clone)]
 pub struct NodeStorage {
@@ -35,7 +39,6 @@ pub struct NodeStorage {
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
-    pub randomness_store: RandomnessStore,
 }
 
 impl NodeStorage {
@@ -64,7 +67,7 @@ impl NodeStorage {
     /// Open or reopen all the storage of the node.
     pub fn reopen<Path: AsRef<std::path::Path> + Send>(
         store_path: Path,
-        certificate_store_cache_metrics: Option<CertificateStoreCacheMetrics>,
+        certificate_store_cache_metrics: Option<Arc<CertificateStoreCacheMetrics>>,
     ) -> Self {
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::new("consensus");
@@ -120,11 +123,13 @@ impl NodeStorage {
             // This can be removed when DBMap supports removing tables.
             _sub_dag_index_map,
             committed_sub_dag_map,
-            processed_messages_map,
-            used_messages_map,
-            confirmations_map,
-            dkg_output_map,
-            randomness_round_map,
+            // random beacon related tables are deprecated.
+            // These can be removed when DBMap supports removing tables.
+            _processed_messages_map,
+            _used_messages_map,
+            _confirmations_map,
+            _dkg_output_map,
+            _randomness_round_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
@@ -136,11 +141,11 @@ impl NodeStorage {
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
             Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>,
-            Self::PROCESSED_MESSAGES_CF;<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
-            Self::USED_MESSAGES_CF;<SingletonKey, dkg::UsedProcessedMessages<PkG, EncG>>,
+            Self::PROCESSED_MESSAGES_CF;<PartyId, dkg_v0::ProcessedMessage<PkG, EncG>>,
+            Self::USED_MESSAGES_CF;<u32, dkg_v0::UsedProcessedMessages<PkG, EncG>>,
             Self::CONFIRMATIONS_CF;<PartyId, dkg::Confirmation<EncG>>,
-            Self::DKG_OUTPUT_CF;<SingletonKey, dkg::Output<PkG, EncG>>,
-            Self::RANDOMNESS_ROUND_CF;<SingletonKey, RandomnessRound>
+            Self::DKG_OUTPUT_CF;<u32, dkg::Output<PkG, EncG>>,
+            Self::RANDOMNESS_ROUND_CF;<u32, RandomnessRound>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
@@ -162,13 +167,6 @@ impl NodeStorage {
             last_committed_map,
             committed_sub_dag_map,
         ));
-        let randomness_store = RandomnessStore::new(
-            processed_messages_map,
-            used_messages_map,
-            confirmations_map,
-            dkg_output_map,
-            randomness_round_map,
-        );
 
         Self {
             proposer_store,
@@ -177,7 +175,6 @@ impl NodeStorage {
             payload_store,
             batch_store,
             consensus_store,
-            randomness_store,
         }
     }
 }

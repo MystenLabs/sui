@@ -5,7 +5,7 @@ import { type Wallet } from '_src/shared/qredo-api';
 import { BadgeLabel } from '_src/ui/app/components/BadgeLabel';
 import { Text } from '_src/ui/app/shared/text';
 import { CheckFill16 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cn from 'clsx';
 
 export type QredoAccountItemProps = Wallet & {

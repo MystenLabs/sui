@@ -12,23 +12,21 @@ module sui_system::sui_system_state_inner {
     use sui_system::validator::Validator;
     use sui_system::validator_wrapper::ValidatorWrapper;
 
-    friend sui_system::sui_system;
-
     const SYSTEM_STATE_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
     const SYSTEM_STATE_VERSION_V2: u64 = 18446744073709551606;  // u64::MAX - 9
 
-    struct SystemParameters has store {
+    public struct SystemParameters has store {
         epoch_duration_ms: u64,
         extra_fields: Bag,
     }
 
-    struct ValidatorSet has store {
+    public struct ValidatorSet has store {
         active_validators: vector<Validator>,
         inactive_validators: Table<ID, ValidatorWrapper>,
         extra_fields: Bag,
     }
 
-    struct SuiSystemStateInner has store {
+    public struct SuiSystemStateInner has store {
         epoch: u64,
         protocol_version: u64,
         system_state_version: u64,
@@ -41,7 +39,7 @@ module sui_system::sui_system_state_inner {
         extra_fields: Bag,
     }
 
-    struct SuiSystemStateInnerV2 has store {
+    public struct SuiSystemStateInnerV2 has store {
         new_dummy_field: u64,
         epoch: u64,
         protocol_version: u64,
@@ -55,7 +53,7 @@ module sui_system::sui_system_state_inner {
         extra_fields: Bag,
     }
 
-    public(friend) fun create(
+    public(package) fun create(
         validators: vector<Validator>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
@@ -82,7 +80,7 @@ module sui_system::sui_system_state_inner {
         system_state
     }
 
-    public(friend) fun advance_epoch(
+    public(package) fun advance_epoch(
         self: &mut SuiSystemStateInnerV2,
         new_epoch: u64,
         next_protocol_version: u64,
@@ -103,9 +101,9 @@ module sui_system::sui_system_state_inner {
         storage_rebate
     }
 
-    public(friend) fun protocol_version(self: &SuiSystemStateInnerV2): u64 { self.protocol_version }
-    public(friend) fun system_state_version(self: &SuiSystemStateInnerV2): u64 { self.system_state_version }
-    public(friend) fun genesis_system_state_version(): u64 {
+    public(package) fun protocol_version(self: &SuiSystemStateInnerV2): u64 { self.protocol_version }
+    public(package) fun system_state_version(self: &SuiSystemStateInnerV2): u64 { self.system_state_version }
+    public(package) fun genesis_system_state_version(): u64 {
         SYSTEM_STATE_VERSION_V1
     }
 
@@ -117,7 +115,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    public(friend) fun v1_to_v2(v1: SuiSystemStateInner): SuiSystemStateInnerV2 {
+    public(package) fun v1_to_v2(v1: SuiSystemStateInner): SuiSystemStateInnerV2 {
         let SuiSystemStateInner {
             epoch,
             protocol_version,

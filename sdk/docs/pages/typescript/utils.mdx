@@ -1,4 +1,4 @@
-# The `@mysten/sui.js/utils` package
+# The `@mysten/sui/utils` package
 
 This package contains some utilities that simplify common operations when working with the Sui
 TypeScript SDK.
@@ -25,6 +25,8 @@ You can use the following helpers to format various values:
 - `normalizeStructTag`
 - `normalizeSuiAddress`
 - `normalizeSuiObjectId`
+- `normalizeSuiNSName`
+- `normalizeSuiNSName`
 
 ## Validators
 
@@ -35,12 +37,13 @@ case, or exists on chain).
 - `isValidSuiAddress`
 - `isValidSuiObjectId`
 - `isValidTransactionDigest`
+- `isValidSuiNSName`
 
 ## Encoding
 
 The following methods are re-exported to help with converting between commonly used encodings
 
-- `fromHEX`: Serializes a Uint8Array to a hex string
-- `toHEX`: Deserializes a hex string to a Uint8Array
-- `fromB64`: Serializes a Uint8Array to a base64 string
-- `toB64`: Deserializes a base64 string to a Uint8Array
+- `fromHEX`: Deserializes a hex string to a Uint8Array
+- `toHEX`: Serializes a Uint8Array to a hex string
+- `fromB64`: Deserializes a base64 string to a Uint8Array
+- `toB64`: Serializes a Uint8Array to a base64 string

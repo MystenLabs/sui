@@ -1,0 +1,12 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/parser/pattern_ellipsis_invalid.move:9:16
+  │
+9 │         match (x) {
+  │                ^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/pattern_ellipsis_invalid.move:10:13
+   │
+10 │             ..
+   │             ^ Expected a call argument expression
+

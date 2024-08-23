@@ -3,8 +3,9 @@
 
 use anyhow::Result;
 use fastcrypto::traits::EncodeDecodeBase64;
+use tokio::sync::Mutex;
 
-use sui_indexer::framework::Handler;
+use sui_data_ingestion_core::Worker;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary};
@@ -15,46 +16,55 @@ use crate::tables::CheckpointEntry;
 use crate::FileType;
 
 pub struct CheckpointHandler {
+    state: Mutex<State>,
+}
+
+struct State {
     checkpoints: Vec<CheckpointEntry>,
 }
 
 #[async_trait::async_trait]
-impl Handler for CheckpointHandler {
-    fn name(&self) -> &str {
-        "checkpoint"
-    }
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+impl Worker for CheckpointHandler {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        self.process_checkpoint_transactions(checkpoint_summary, checkpoint_transactions);
+        self.process_checkpoint_transactions(&checkpoint_summary, &checkpoint_transactions)
+            .await;
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
-    fn read(&mut self) -> Result<Vec<CheckpointEntry>> {
-        let cloned = self.checkpoints.clone();
-        self.checkpoints.clear();
+    async fn read(&self) -> Result<Vec<CheckpointEntry>> {
+        let mut state = self.state.lock().await;
+        let cloned = state.checkpoints.clone();
+        state.checkpoints.clear();
         Ok(cloned)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Checkpoint)
     }
+
+    fn name(&self) -> &str {
+        "checkpoint"
+    }
 }
 
 impl CheckpointHandler {
     pub fn new() -> Self {
         CheckpointHandler {
-            checkpoints: vec![],
+            state: Mutex::new(State {
+                checkpoints: vec![],
+            }),
         }
     }
-    fn process_checkpoint_transactions(
-        &mut self,
+    async fn process_checkpoint_transactions(
+        &self,
         summary: &CertifiedCheckpointSummary,
         checkpoint_transactions: &[CheckpointTransaction],
     ) {
@@ -105,6 +115,7 @@ impl CheckpointHandler {
             timestamp_ms: *timestamp_ms,
             validator_signature: summary.auth_sig().signature.encode_base64(),
         };
-        self.checkpoints.push(checkpoint_entry);
+        let mut state = self.state.lock().await;
+        state.checkpoints.push(checkpoint_entry);
     }
 }

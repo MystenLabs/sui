@@ -14,7 +14,6 @@ thiserror.workspace = true
 tracing.workspace = true
 
 fastcrypto.workspace = true
-fastcrypto-tbls.workspace = true
 mysten-util-mem.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-network.workspace = true

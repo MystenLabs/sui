@@ -7,8 +7,6 @@ module axelar::channel {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
-    friend axelar::validators;
-
     /// Generic target for the messaging system.
     ///
     /// This struct is required on the Sui side to be the destination for the
@@ -52,7 +50,7 @@ module axelar::channel {
     /// The `T` parameter allows wrapping a Capability or a piece of data into
     /// the channel to be used when the message is consumed (eg authorize a
     /// `mint` call using a stored `AdminCap`).
-    struct Channel<T: store> has store {
+    public struct Channel<T: store> has store {
         /// Unique ID of the target object which allows message targeting
         /// by comparing against `id_bytes`.
         id: UID,
@@ -69,7 +67,7 @@ module axelar::channel {
 
     /// A HotPotato - call received from the Gateway. Must be delivered to the
     /// matching Channel, otherwise the TX fails.
-    struct ApprovedCall {
+    public struct ApprovedCall {
         /// ID of the call approval, guaranteed to be unique by Axelar.
         cmd_id: address,
         /// The target Channel's UID.
@@ -98,7 +96,7 @@ module axelar::channel {
     /// Destroy a `Channel<T>` releasing the T. Not constrained and can be performed
     /// by any party as long as they own a Channel.
     public fun destroy_channel<T: store>(self: Channel<T>): T {
-        let Channel { id, processed_call_approvals, data } = self;
+        let Channel { id, mut processed_call_approvals, data } = self;
         while (!linked_table::is_empty(&processed_call_approvals)) {
             linked_table::pop_back(&mut processed_call_approvals);
         };
@@ -109,7 +107,7 @@ module axelar::channel {
 
     /// Create a new `ApprovedCall` object to be sent to another chain. Is called
     /// by the gateway when a message is "picked up" by the relayer.
-    public(friend) fun create_approved_call(
+    public(package) fun create_approved_call(
         cmd_id: address,
         source_chain: String,
         source_address: String,

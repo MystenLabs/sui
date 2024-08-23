@@ -9,6 +9,12 @@ use std::{cmp::Ordering, fmt::Debug, iter::IntoIterator};
 #[derive(Clone)]
 pub struct UniqueSet<T: TName>(UniqueMap<T, ()>);
 
+impl<T: TName> Default for UniqueSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: TName> UniqueSet<T> {
     pub fn new() -> Self {
         Self(UniqueMap::new())

@@ -18,7 +18,7 @@ use strum_macros::EnumIter;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
-use sui_indexer::framework::Handler;
+use sui_data_ingestion_core::Worker;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
@@ -111,6 +111,12 @@ pub struct AnalyticsIndexerConfig {
     // Type of data to write i.e. checkpoint, object, transaction, etc
     #[clap(long, value_enum, long, global = true)]
     pub file_type: FileType,
+    #[clap(
+        long,
+        default_value = "https://checkpoints.mainnet.sui.io",
+        global = true
+    )]
+    pub remote_store_url: String,
     // Directory to contain the package cache for pipelines
     #[clap(
         long,
@@ -406,6 +412,12 @@ impl From<OwnerType> for ParquetValue {
     }
 }
 
+impl From<Option<OwnerType>> for ParquetValue {
+    fn from(value: Option<OwnerType>) -> Self {
+        value.map(|v| v.to_string()).into()
+    }
+}
+
 impl From<ObjectStatus> for ParquetValue {
     fn from(value: ObjectStatus) -> Self {
         Self::Str(value.to_string())
@@ -475,19 +487,14 @@ impl FileMetadata {
 }
 
 pub struct Processor {
-    pub processor: Box<dyn Handler>,
+    pub processor: Box<dyn Worker>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
 #[async_trait::async_trait]
-impl Handler for Processor {
+impl Worker for Processor {
     #[inline]
-    fn name(&self) -> &str {
-        self.processor.name()
-    }
-
-    #[inline]
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint_data: CheckpointData) -> Result<()> {
         self.processor.process_checkpoint(checkpoint_data).await
     }
 }
@@ -527,6 +534,7 @@ impl Processor {
 pub async fn read_store_for_checkpoint(
     remote_store_config: ObjectStoreConfig,
     file_type: FileType,
+    dir_prefix: Option<Path>,
 ) -> Result<CheckpointSequenceNumber> {
     let remote_object_store = remote_store_config.make()?;
     let remote_store_is_empty = remote_object_store
@@ -536,7 +544,8 @@ pub async fn read_store_for_checkpoint(
         .common_prefixes
         .is_empty();
     info!("Remote store is empty: {remote_store_is_empty}");
-    let prefix = file_type.dir_prefix();
+    let file_type_prefix = file_type.dir_prefix();
+    let prefix = join_paths(dir_prefix, &file_type_prefix);
     let epoch_dirs = find_all_dirs_with_epoch_prefix(&remote_object_store, Some(&prefix)).await?;
     let epoch = epoch_dirs.last_key_value().map(|(k, _v)| *k).unwrap_or(0);
     let epoch_prefix = prefix.child(format!("epoch_{}", epoch));
@@ -874,7 +883,12 @@ pub async fn get_starting_checkpoint_seq_num(
     let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
         starting_checkpoint_seq_num
     } else {
-        read_store_for_checkpoint(config.remote_store_config.clone(), file_type).await?
+        read_store_for_checkpoint(
+            config.remote_store_config.clone(),
+            file_type,
+            config.remote_store_path_prefix,
+        )
+        .await?
     };
     Ok(checkpoint)
 }
@@ -894,4 +908,15 @@ pub async fn make_analytics_processor(
         FileType::DynamicField => make_dynamic_field_processor(config, metrics).await,
         FileType::WrappedObject => make_wrapped_object_processor(config, metrics).await,
     }
+}
+
+pub fn join_paths(base: Option<Path>, child: &Path) -> Path {
+    base.map(|p| {
+        let mut out_path = p.clone();
+        for part in child.parts() {
+            out_path = out_path.child(part)
+        }
+        out_path
+    })
+    .unwrap_or(child.clone())
 }

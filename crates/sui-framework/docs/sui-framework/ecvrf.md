@@ -1,7 +1,6 @@
-
-<a name="0x2_ecvrf"></a>
-
-# Module `0x2::ecvrf`
+---
+title: Module `0x2::ecvrf`
+---
 
 
 
@@ -22,7 +21,7 @@
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a>: u64 = 1;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -31,7 +30,7 @@
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: u64 = 3;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -40,7 +39,7 @@
 
 
 
-<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: u64 = 2;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -56,7 +55,7 @@
 Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and corresponds to the given output. May abort with <code><a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a></code>, <code><a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a></code> or <code><a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="hash.md#0x2_hash">hash</a>: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, alpha_string: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="hash.md#0x2_hash">hash</a>: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, alpha_string: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -65,7 +64,7 @@ Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and cor
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="hash.md#0x2_hash">hash</a>: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, alpha_string: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="hash.md#0x2_hash">hash</a>: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, alpha_string: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, public_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): bool;
 </code></pre>
 
 

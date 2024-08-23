@@ -8,20 +8,16 @@
 
 //# publish
 module test::m1 {
-    use std::vector;
     use sui::coin;
-    use sui::transfer;
 
     public fun ret_one_amount(): u64 {
         100
     }
 
-    public fun transfer(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
-        while (!vector::is_empty(&v)) {
-            let c = vector::pop_back(&mut v);
+    public fun transfer_(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
+        v.do!(|c| {
             transfer::public_transfer(c, r);
-        };
-        vector::destroy_empty(v);
+        });
     }
 }
 
@@ -73,7 +69,7 @@ module test::m1 {
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
 //> 2: MakeMoveVec<sui::coin::Coin<sui::sui::SUI>>([NestedResult(1,0), NestedResult(1,1)]);
-//> test::m1::transfer(Result(2), Input(2));
+//> test::m1::transfer_(Result(2), Input(2));
 
 //# view-object 3,0
 

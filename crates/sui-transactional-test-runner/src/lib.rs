@@ -24,6 +24,7 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::VersionNumber;
+use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
@@ -32,6 +33,7 @@ use sui_types::error::ExecutionError;
 use sui_types::error::SuiError;
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
+use sui_types::executable_transaction::{ExecutableTransaction, VerifiedExecutableTransaction};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
@@ -39,6 +41,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::InputObjects;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
@@ -47,8 +50,10 @@ use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    telemetry_subscribers::init_for_testing();
-    run_test_impl::<SuiTestAdapter>(path, Some(&*PRE_COMPILED)).await?;
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
+    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone()))).await?;
     Ok(())
 }
 
@@ -65,6 +70,14 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)>;
+
+    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects>;
+
+    fn prepare_txn(
+        &self,
+        transaction: Transaction,
+        input_objects: InputObjects,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)>;
 
     async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint>;
@@ -114,9 +127,41 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             Some(&self.fullnode),
             transaction,
             with_shared,
+            false,
         )
         .await?;
         Ok((effects.into_data(), execution_error))
+    }
+
+    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects> {
+        let tx = VerifiedExecutableTransaction::new_unchecked(
+            ExecutableTransaction::new_from_data_and_sig(
+                transaction.data().clone(),
+                sui_types::executable_transaction::CertificateProof::Checkpoint(0, 0),
+            ),
+        );
+
+        let epoch_store = self.validator.load_epoch_store_one_call_per_task().clone();
+        self.validator.read_objects_for_execution(&tx, &epoch_store)
+    }
+
+    fn prepare_txn(
+        &self,
+        transaction: Transaction,
+        input_objects: InputObjects,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let tx = VerifiedExecutableTransaction::new_unchecked(
+            ExecutableTransaction::new_from_data_and_sig(
+                transaction.data().clone(),
+                sui_types::executable_transaction::CertificateProof::Checkpoint(0, 0),
+            ),
+        );
+
+        let epoch_store = self.validator.load_epoch_store_one_call_per_task().clone();
+        let (_, effects, error) =
+            self.validator
+                .prepare_certificate_for_benchmark(&tx, input_objects, &epoch_store)?;
+        Ok((effects, error))
     }
 
     async fn dev_inspect_transaction_block(
@@ -172,7 +217,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     }
 
     async fn advance_epoch(&mut self, _create_random_state: bool) -> anyhow::Result<()> {
-        unimplemented!("advance_epoch not supported")
+        self.validator.reconfigure_for_testing().await;
+        self.fullnode.reconfigure_for_testing().await;
+        Ok(())
     }
 
     async fn request_gas(
@@ -207,6 +254,10 @@ impl ReadStore for ValidatorWithFullnode {
         _epoch: sui_types::committee::EpochId,
     ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
         todo!()
+    }
+
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        Ok(self.validator.epoch_store_for_testing().epoch())
     }
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
@@ -279,7 +330,7 @@ impl ReadStore for ValidatorWithFullnode {
     ) -> sui_types::storage::error::Result<Option<Arc<sui_types::transaction::VerifiedTransaction>>>
     {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_transaction_block(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -289,7 +340,7 @@ impl ReadStore for ValidatorWithFullnode {
         tx_digest: &TransactionDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_executed_effects(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -299,7 +350,7 @@ impl ReadStore for ValidatorWithFullnode {
         event_digest: &TransactionEventsDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
         self.validator
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_events(event_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -349,6 +400,18 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         Ok(self.execute_transaction(transaction)?)
+    }
+
+    async fn read_input_objects(&self, _transaction: Transaction) -> SuiResult<InputObjects> {
+        unimplemented!("read_input_objects not supported in simulator mode")
+    }
+
+    fn prepare_txn(
+        &self,
+        _transaction: Transaction,
+        _input_objects: InputObjects,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        unimplemented!("prepare_txn not supported in simulator mode")
     }
 
     async fn dev_inspect_transaction_block(

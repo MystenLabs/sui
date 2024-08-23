@@ -5,21 +5,23 @@ use crate::gas_charger::GasCharger;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
-use sui_types::digests::ObjectDigest;
+use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, PackageObject};
+use sui_types::layout_resolver::LayoutResolver;
+use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
-use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
@@ -30,6 +32,7 @@ use sui_types::{
     object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
+    SUI_DENY_LIST_OBJECT_ID,
 };
 use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
 
@@ -59,6 +62,14 @@ pub struct TemporaryStore<'backing> {
     /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
     /// any of the objects referenced in this set.
     receiving_objects: Vec<ObjectRef>,
+
+    // TODO: Now that we track epoch here, there are a few places we don't need to pass it around.
+    /// The current epoch.
+    cur_epoch: EpochId,
+
+    /// The set of per-epoch config objects that were loaded during execution, and are not in the
+    /// input objects. This allows us to commit them to the effects.
+    loaded_per_epoch_config_objects: RwLock<BTreeSet<ObjectID>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -70,6 +81,7 @@ impl<'backing> TemporaryStore<'backing> {
         receiving_objects: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
+        cur_epoch: EpochId,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
@@ -101,6 +113,8 @@ impl<'backing> TemporaryStore<'backing> {
             wrapped_object_containers: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
+            cur_epoch,
+            loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
         }
     }
 
@@ -110,8 +124,12 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn update_object_version_and_prev_tx(&mut self) {
-        self.execution_results
-            .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
+        self.execution_results.update_version_and_previous_tx(
+            self.lamport_timestamp,
+            self.tx_digest,
+            &self.input_objects,
+            self.protocol_config.reshare_at_same_initial_version(),
+        );
 
         #[cfg(debug_assertions)]
         {
@@ -129,11 +147,10 @@ impl<'backing> TemporaryStore<'backing> {
             events: TransactionEvents {
                 data: results.user_events,
             },
-            max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_runtime_objects,
-            no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
+            binary_config: to_binary_config(self.protocol_config),
         }
     }
 
@@ -213,145 +230,8 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        if self.protocol_config.enable_effects_v2() {
-            self.into_effects_v2(
-                shared_object_refs,
-                transaction_digest,
-                transaction_dependencies,
-                gas_cost_summary,
-                status,
-                gas_charger,
-                epoch,
-            )
-        } else {
-            let shared_object_refs = shared_object_refs
-                .into_iter()
-                .map(|shared_input| match shared_input {
-                    SharedInput::Existing(oref) => oref,
-                    SharedInput::Deleted(_) => {
-                        unreachable!("Shared object deletion not supported in effects v1")
-                    }
-                })
-                .collect();
-            self.into_effects_v1(
-                shared_object_refs,
-                transaction_digest,
-                transaction_dependencies,
-                gas_cost_summary,
-                status,
-                gas_charger,
-                epoch,
-            )
-        }
-    }
+        assert!(self.protocol_config.enable_effects_v2());
 
-    fn into_effects_v1(
-        self,
-        shared_object_refs: Vec<ObjectRef>,
-        transaction_digest: &TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
-        gas_cost_summary: GasCostSummary,
-        status: ExecutionStatus,
-        gas_charger: &mut GasCharger,
-        epoch: EpochId,
-    ) -> (InnerTemporaryStore, TransactionEffects) {
-        let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
-            let object = &self.execution_results.written_objects[&coin_id];
-            (object.compute_object_reference(), object.owner)
-        } else {
-            (
-                (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                Owner::AddressOwner(SuiAddress::default()),
-            )
-        };
-        let lampot_version = self.lamport_timestamp;
-
-        let mut created = vec![];
-        let mut mutated = vec![];
-        let mut unwrapped = vec![];
-        let mut deleted = vec![];
-        let mut unwrapped_then_deleted = vec![];
-        let mut wrapped = vec![];
-        // It is important that we constructs `modified_at_versions` and `deleted_at_versions`
-        // separately, and merge them latter to achieve the exact same order as in v1.
-        let mut modified_at_versions = vec![];
-        let mut deleted_at_versions = vec![];
-        self.execution_results
-            .written_objects
-            .iter()
-            .for_each(|(id, object)| {
-                let object_ref = object.compute_object_reference();
-                let owner = object.owner;
-                if let Some(old_object_meta) = self.get_object_modified_at(id) {
-                    modified_at_versions.push((*id, old_object_meta.version));
-                    mutated.push((object_ref, owner));
-                } else if self.execution_results.created_object_ids.contains(id) {
-                    created.push((object_ref, owner));
-                } else {
-                    unwrapped.push((object_ref, owner));
-                }
-            });
-        self.execution_results
-            .modified_objects
-            .iter()
-            .filter(|id| !self.execution_results.written_objects.contains_key(id))
-            .for_each(|id| {
-                let old_object_meta = self.get_object_modified_at(id).unwrap();
-                deleted_at_versions.push((*id, old_object_meta.version));
-                if self.execution_results.deleted_object_ids.contains(id) {
-                    deleted.push((*id, lampot_version, ObjectDigest::OBJECT_DIGEST_DELETED));
-                } else {
-                    wrapped.push((*id, lampot_version, ObjectDigest::OBJECT_DIGEST_WRAPPED));
-                }
-            });
-        self.execution_results
-            .deleted_object_ids
-            .iter()
-            .filter(|id| !self.execution_results.modified_objects.contains(id))
-            .for_each(|id| {
-                unwrapped_then_deleted.push((
-                    *id,
-                    lampot_version,
-                    ObjectDigest::OBJECT_DIGEST_DELETED,
-                ));
-            });
-        modified_at_versions.extend(deleted_at_versions);
-
-        let inner = self.into_inner();
-        let effects = TransactionEffects::new_from_execution_v1(
-            status,
-            epoch,
-            gas_cost_summary,
-            modified_at_versions,
-            shared_object_refs,
-            *transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
-            updated_gas_object_info,
-            if inner.events.data.is_empty() {
-                None
-            } else {
-                Some(inner.events.digest())
-            },
-            transaction_dependencies.into_iter().collect(),
-        );
-        (inner, effects)
-    }
-
-    fn into_effects_v2(
-        self,
-        shared_object_refs: Vec<SharedInput>,
-        transaction_digest: &TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
-        gas_cost_summary: GasCostSummary,
-        status: ExecutionStatus,
-        gas_charger: &mut GasCharger,
-        epoch: EpochId,
-    ) -> (InnerTemporaryStore, TransactionEffects) {
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
@@ -361,6 +241,8 @@ impl<'backing> TemporaryStore<'backing> {
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
+        // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
+        let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -369,6 +251,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_cost_summary,
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
+            loaded_per_epoch_config_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -544,32 +427,11 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
-        if self.protocol_config.enable_effects_v2() {
-            TransactionEffects::estimate_effects_size_upperbound_v2(
-                self.execution_results.written_objects.len(),
-                self.execution_results.modified_objects.len(),
-                self.input_objects.len(),
-            )
-        } else {
-            let num_deletes = self.execution_results.deleted_object_ids.len()
-                + self
-                    .execution_results
-                    .modified_objects
-                    .iter()
-                    .filter(|id| {
-                        // Filter for wrapped objects.
-                        !self.execution_results.written_objects.contains_key(id)
-                            && !self.execution_results.deleted_object_ids.contains(id)
-                    })
-                    .count();
-            // In the worst case, the number of deps is equal to the number of input objects
-            TransactionEffects::estimate_effects_size_upperbound_v1(
-                self.execution_results.written_objects.len(),
-                self.mutable_input_refs.len(),
-                num_deletes,
-                self.input_objects.len(),
-            )
-        }
+        TransactionEffects::estimate_effects_size_upperbound_v2(
+            self.execution_results.written_objects.len(),
+            self.execution_results.modified_objects.len(),
+            self.input_objects.len(),
+        )
     }
 
     pub fn written_objects_size(&self) -> usize {
@@ -1094,6 +956,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
         } else {
+            let _scope = monitored_scope("Execution::read_child_object");
             self.store
                 .read_child_object(parent, child, child_version_upper_bound)
         }
@@ -1156,6 +1019,24 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
+    }
+
+    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult {
+        let result = check_coin_deny_list_v2_during_execution(
+            written_objects,
+            self.cur_epoch,
+            self.store.as_object_store(),
+        );
+        // The denylist object is only loaded if there are regulated transfers.
+        // And also if we already have it in the input there is no need to commit it again in the effects.
+        if result.num_non_gas_coin_owners > 0
+            && !self.input_objects.contains_key(&SUI_DENY_LIST_OBJECT_ID)
+        {
+            self.loaded_per_epoch_config_objects
+                .write()
+                .insert(SUI_DENY_LIST_OBJECT_ID);
+        }
+        result
     }
 }
 

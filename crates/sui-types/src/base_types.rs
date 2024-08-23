@@ -25,6 +25,7 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
+use crate::id::RESOLVED_SUI_ID;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -44,10 +45,9 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -58,6 +58,8 @@ use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::ser::Error;
+use serde::ser::SerializeSeq;
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
@@ -324,6 +326,12 @@ impl MoveObjectType {
             && self.name().as_str() == "DenyCap"
     }
 
+    pub fn is_coin_deny_cap_v2(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "coin"
+            && self.name().as_str() == "DenyCapV2"
+    }
+
     pub fn is_dynamic_field(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
@@ -366,6 +374,14 @@ impl MoveObjectType {
         }
     }
 
+    pub fn other(&self) -> Option<&StructTag> {
+        if let MoveObjectType_::Other(s) = &self.0 {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
     /// Returns the string representation of this object's type using the canonical display.
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         StructTag::from(self.clone()).to_canonical_string(with_prefix)
@@ -402,6 +418,34 @@ impl From<MoveObjectType> for TypeTag {
     fn from(o: MoveObjectType) -> TypeTag {
         let s: StructTag = o.into();
         TypeTag::Struct(Box::new(s))
+    }
+}
+
+/// Whether this type is valid as a primitive (pure) transaction input.
+pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    use TypeTag as T;
+
+    match t {
+        T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => true,
+        T::Vector(inner) => is_primitive_type_tag(inner),
+        T::Struct(st) => {
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params: type_args,
+            } = &**st;
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        T::Signer => false,
     }
 }
 
@@ -467,6 +511,17 @@ impl ObjectInfo {
             type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
+        }
+    }
+
+    pub fn from_object(object: &Object) -> Self {
+        Self {
+            object_id: object.id(),
+            version: object.version(),
+            digest: object.digest(),
+            type_: object.into(),
+            owner: object.owner,
+            previous_transaction: object.previous_transaction,
         }
     }
 }
@@ -583,11 +638,7 @@ impl SuiAddress {
         let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-        // this converts an address seed from bigint to bytes, length can be shorter than 32 bytes and left unpadded.
-        hasher.update(
-            big_int_str_to_bytes(inputs.get_address_seed())
-                .map_err(|_| SuiError::InvalidAddress)?,
-        );
+        hasher.update(inputs.get_address_seed().unpadded());
         Ok(SuiAddress(hasher.finalize().digest))
     }
 }
@@ -713,6 +764,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::ZkLoginAuthenticator(zklogin) => {
                 SuiAddress::try_from_unpadded(&zklogin.inputs)
             }
+            GenericSignature::PasskeyAuthenticator(s) => Ok(SuiAddress::from(&s.get_pk()?)),
         }
     }
 }
@@ -891,7 +943,7 @@ impl TxContext {
     }
 
     /// Returns whether the type signature is &mut TxContext, &TxContext, or none of the above.
-    pub fn kind(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> TxContextKind {
+    pub fn kind(view: &CompiledModule, s: &SignatureToken) -> TxContextKind {
         use SignatureToken as S;
         let (kind, s) = match s {
             S::MutableReference(s) => (TxContextKind::Mutable, s),
@@ -899,7 +951,7 @@ impl TxContext {
             _ => return TxContextKind::None,
         };
 
-        let S::Struct(idx) = &**s else {
+        let S::Datatype(idx) = &**s else {
             return TxContextKind::None;
         };
 
@@ -979,6 +1031,10 @@ impl TxContext {
 impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
+    pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
+    pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
+    pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
+        SequenceNumber(SequenceNumber::MAX.value() + 3);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1025,6 +1081,16 @@ impl SequenceNumber {
         assert_ne!(max_input.0, u64::MAX);
 
         SequenceNumber(max_input.0 + 1)
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self == &SequenceNumber::CANCELLED_READ
+            || self == &SequenceNumber::CONGESTED
+            || self == &SequenceNumber::RANDOMNESS_UNAVAILABLE
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self < &SequenceNumber::MAX
     }
 }
 
@@ -1318,4 +1384,88 @@ impl fmt::Display for ObjectType {
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }
+}
+
+// SizeOneVec is a wrapper around Vec<T> that enforces the size of the vec to be 1.
+// This seems pointless, but it allows us to have fields in protocol messages that are
+// current enforced to be of size 1, but might later allow other sizes, and to have
+// that constraint enforced in the serialization/deserialization layer, instead of
+// requiring manual input validation.
+#[derive(Debug, Deserialize, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[serde(try_from = "Vec<T>")]
+pub struct SizeOneVec<T> {
+    e: T,
+}
+
+impl<T> SizeOneVec<T> {
+    pub fn new(e: T) -> Self {
+        Self { e }
+    }
+
+    pub fn element(&self) -> &T {
+        &self.e
+    }
+
+    pub fn element_mut(&mut self) -> &mut T {
+        &mut self.e
+    }
+
+    pub fn into_inner(self) -> T {
+        self.e
+    }
+
+    pub fn iter(&self) -> std::iter::Once<&T> {
+        std::iter::once(&self.e)
+    }
+}
+
+impl<T> Serialize for SizeOneVec<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(1))?;
+        seq.serialize_element(&self.e)?;
+        seq.end()
+    }
+}
+
+impl<T> TryFrom<Vec<T>> for SizeOneVec<T> {
+    type Error = anyhow::Error;
+
+    fn try_from(mut v: Vec<T>) -> Result<Self, Self::Error> {
+        if v.len() != 1 {
+            Err(anyhow!("Expected a vec of size 1"))
+        } else {
+            Ok(SizeOneVec {
+                e: v.pop().unwrap(),
+            })
+        }
+    }
+}
+
+#[test]
+fn test_size_one_vec_is_transparent() {
+    let regular = vec![42u8];
+    let size_one = SizeOneVec::new(42u8);
+
+    // Vec -> SizeOneVec serialization is transparent
+    let regular_ser = bcs::to_bytes(&regular).unwrap();
+    let size_one_deser = bcs::from_bytes::<SizeOneVec<u8>>(&regular_ser).unwrap();
+    assert_eq!(size_one, size_one_deser);
+
+    // other direction works too
+    let size_one_ser = bcs::to_bytes(&SizeOneVec::new(43u8)).unwrap();
+    let regular_deser = bcs::from_bytes::<Vec<u8>>(&size_one_ser).unwrap();
+    assert_eq!(regular_deser, vec![43u8]);
+
+    // we get a deserialize error when deserializing a vec with size != 1
+    let empty_ser = bcs::to_bytes(&Vec::<u8>::new()).unwrap();
+    bcs::from_bytes::<SizeOneVec<u8>>(&empty_ser).unwrap_err();
+
+    let size_greater_than_one_ser = bcs::to_bytes(&vec![1u8, 2u8]).unwrap();
+    bcs::from_bytes::<SizeOneVec<u8>>(&size_greater_than_one_ser).unwrap_err();
 }

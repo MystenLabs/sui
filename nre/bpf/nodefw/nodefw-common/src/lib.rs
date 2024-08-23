@@ -11,7 +11,7 @@
 // but we must ensure the fields are pod type files. nothing crazy.
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Rule {
     pub ttl: u64,
     pub port: u16,

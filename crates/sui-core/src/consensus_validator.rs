@@ -3,16 +3,18 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use consensus_core::{TransactionVerifier, ValidationError};
 use eyre::WrapErr;
+use fastcrypto_tbls::dkg;
 use mysten_metrics::monitored_scope;
-use mysticeti_core::{block_validator::BlockVerifier, types::StatementBlock};
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::{
+    error::SuiError,
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+};
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -71,12 +73,25 @@ impl SuiTxValidator {
                     ckpt_messages.push(signature.clone());
                     ckpt_batch.push(signature.summary);
                 }
+                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
+                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                        warn!("batch verification error: DKG Message too large");
+                        return Err(SuiError::InvalidDkgMessageSize.into());
+                    }
+                }
+                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
+                    if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
+                        warn!("batch verification error: DKG Confirmation too large");
+                        return Err(SuiError::InvalidDkgMessageSize.into());
+                    }
+                }
+
+                ConsensusTransactionKind::CapabilityNotification(_) => {}
+
                 ConsensusTransactionKind::EndOfPublish(_)
-                | ConsensusTransactionKind::CapabilityNotification(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
-                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
-                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => {}
+                | ConsensusTransactionKind::CapabilityNotificationV2(_)
+                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
             }
         }
 
@@ -108,7 +123,7 @@ impl SuiTxValidator {
         // all certificates had valid signatures, schedule them for execution prior to sequencing
         // which is unnecessary for owned object transactions.
         // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via Narwhal output.
+        // via consensus output.
         // self.transaction_manager
         //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
         //     .wrap_err("Failed to schedule certificates for execution")
@@ -155,6 +170,8 @@ impl TransactionVerifier for SuiTxValidator {
         _protocol_config: &ProtocolConfig,
         batch: &[&[u8]],
     ) -> Result<(), ValidationError> {
+        let _scope = monitored_scope("ValidateBatch");
+
         let txs = batch
             .iter()
             .map(|tx| {
@@ -169,20 +186,6 @@ impl TransactionVerifier for SuiTxValidator {
     }
 }
 
-#[async_trait]
-impl BlockVerifier for SuiTxValidator {
-    type Error = eyre::Report;
-
-    async fn verify(&self, b: &StatementBlock) -> Result<(), Self::Error> {
-        let txs = b
-            .shared_transactions()
-            .map(|(_locator, tx)| tx_from_bytes(tx.data()).map(|tx| tx.kind))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        self.validate_transactions(txs)
-    }
-}
-
 pub struct SuiTxValidatorMetrics {
     certificate_signatures_verified: IntCounter,
     checkpoint_signatures_verified: IntCounter,
@@ -193,13 +196,13 @@ impl SuiTxValidatorMetrics {
         Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
-                "Number of certificates verified in narwhal batch verifier",
+                "Number of certificates verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
             checkpoint_signatures_verified: register_int_counter_with_registry!(
                 "checkpoint_signatures_verified",
-                "Number of checkpoint verified in narwhal batch verifier",
+                "Number of checkpoint verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
@@ -232,7 +235,8 @@ mod tests {
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.
         let mut objects = test_gas_objects();
-        objects.push(Object::shared_for_testing());
+        let shared_object = Object::shared_for_testing();
+        objects.push(shared_object.clone());
 
         let latest_protocol_config = &latest_protocol_version();
 
@@ -242,11 +246,11 @@ mod tests {
                 .build();
 
         let state = TestAuthorityBuilder::new()
-            .with_network_config(&network_config)
+            .with_network_config(&network_config, 0)
             .build()
             .await;
         let name1 = state.name;
-        let certificates = test_certificates(&state).await;
+        let certificates = test_certificates(&state, shared_object).await;
 
         let first_transaction = certificates[0].clone();
         let first_transaction_bytes: Vec<u8> = bcs::to_bytes(

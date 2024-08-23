@@ -4,7 +4,7 @@
 
 module 0x42::m {
 
-    macro fun for($start: u64, $stop: u64, $body: |u64|) {
+    macro fun `for`($start: u64, $stop: u64, $body: |u64|) {
         let mut i = $start;
         let stop = $stop;
         while (i < stop) {
@@ -25,7 +25,7 @@ module 0x42::m {
 
     entry fun t0() {
         let mut count = 0;
-        0x42::m::for!(0, 10, |x| count = count + x*x);
+        0x42::m::`for`!(0, 10, |x| count = count + x*x);
         assert!(count == 285, 0);
 
         let es = vector[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];

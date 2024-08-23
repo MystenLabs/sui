@@ -87,7 +87,7 @@ const Rpc = () => {
         <div className="mx-8">
           <div className="">
             <h1 className="fixed bg-white dark:bg-ifm-background-color-dark w-full py-4 top-14">
-              Sui API Reference - Version: {openrpc.info.version}
+              Sui JSON-RPC Reference - Version: {openrpc.info.version}
             </h1>
             <ScrollSpy>
               <div className="">

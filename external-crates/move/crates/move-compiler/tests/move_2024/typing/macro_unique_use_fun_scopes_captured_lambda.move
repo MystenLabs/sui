@@ -4,7 +4,8 @@ module a::m {
     use fun into as u64.into;
 
     public macro fun apply($f: |u64| -> u64, $x: u64): u64 {
-        $f($x.into())
+        let x = $x;
+        $f(x.into())
     }
 }
 

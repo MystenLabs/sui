@@ -4,6 +4,9 @@
 use anyhow::anyhow;
 use mysten_metrics::histogram::Histogram;
 
+pub use bridge::BridgeReadApiClient;
+pub use bridge::BridgeReadApiOpenRpc;
+pub use bridge::BridgeReadApiServer;
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;
 pub use coin::CoinReadApiServer;
@@ -33,6 +36,7 @@ pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
 
+mod bridge;
 mod coin;
 mod extended;
 mod governance;

@@ -9,17 +9,24 @@ Sui provides a command line interface (CLI) tool to interact with the Sui networ
 
 ## Update CLI
 
-To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](/guides/developer/getting-started/sui-environment.mdx).
+To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](./contribute/sui-environment.mdx).
 
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
 ```
+
+:::info
+
+The `--features gas-profiler` flag is necessary only if you want to run gas profiles for transactions.
+
+:::
 
 ## Sui CLI commands
 
 There are a number of top-level commands available, but the five most useful to users are the following. Use the `help` flag for the commands that are not documented yet. For example, `sui validator --help`.  
 
 - **[Sui Client CLI](./cli/client.mdx):** Use the `sui client` commands to interact with the Sui network.
+- **[Sui Client PTB CLI](./cli/ptb.mdx):** Use the `sui client ptb` command to build and execute PTBs.
 - **[Sui Console CLI](./cli/console.mdx):** Use `sui console` to open an interactive console with the currently active network.
 - **[Sui Keytool CLI](./cli/keytool.mdx):** Use the `sui keytool` commands to access cryptography utilities.
 - **[Sui Move CLI](./cli/move.mdx):** Use the `sui move` commands to work with the Move programming language.

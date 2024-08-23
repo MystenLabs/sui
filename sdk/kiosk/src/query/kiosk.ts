@@ -7,8 +7,8 @@ import type {
 	SuiObjectData,
 	SuiObjectDataFilter,
 	SuiObjectResponse,
-} from '@mysten/sui.js/client';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { isValidSuiAddress } from '@mysten/sui/utils';
 
 import type {
 	FetchKioskOptions,
@@ -54,7 +54,7 @@ export async function fetchKiosk(
 		options.withListingPrices
 			? getAllObjects(client, kioskData.listingIds, {
 					showContent: true,
-			  })
+				})
 			: Promise.resolve([]),
 		options.withObjects
 			? getAllObjects(client, kioskData.itemIds, options.objectOptions || { showDisplay: true })

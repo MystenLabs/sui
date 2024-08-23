@@ -18,7 +18,7 @@ fn compile_module_string_impl(
     let compiled_module = compile_module(module, &deps)?.0;
 
     let mut serialized_module = Vec::<u8>::new();
-    compiled_module.serialize(&mut serialized_module)?;
+    compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
     let deserialized_module = CompiledModule::deserialize_with_defaults(&serialized_module)
         .map_err(|e| e.finish(Location::Undefined))?;
     assert_eq!(compiled_module, deserialized_module);

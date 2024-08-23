@@ -8,12 +8,7 @@
 /// Actions:
 /// - spend - spend the token in the shop
 module examples::loyalty {
-    use std::option;
-    use sui::transfer;
-    use sui::object::{Self, UID};
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{Self, TxContext};
-
     use sui::token::{Self, ActionRequest, Token};
 
     /// Token amount does not match the `GIFT_PRICE`.
@@ -23,15 +18,15 @@ module examples::loyalty {
     const GIFT_PRICE: u64 = 10;
 
     /// The OTW for the Token / Coin.
-    struct LOYALTY has drop {}
+    public struct LOYALTY has drop {}
 
     /// This is the Rule requirement for the `GiftShop`. The Rules don't need
     /// to be separate applications, some rules make sense to be part of the
     /// application itself, like this one.
-    struct GiftShop has drop {}
+    public struct GiftShop has drop {}
 
     /// The Gift object - can be purchased for 10 tokens.
-    struct Gift has key, store {
+    public struct Gift has key, store {
         id: UID
     }
 
@@ -48,7 +43,7 @@ module examples::loyalty {
             ctx
         );
 
-        let (policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
+        let (mut policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
 
         // but we constrain spend by this shop:
         token::add_rule_for_action<LOYALTY, GiftShop>(
@@ -92,7 +87,7 @@ module examples::loyalty {
         assert!(token::value(&token) == GIFT_PRICE, EIncorrectAmount);
 
         let gift = Gift { id: object::new(ctx) };
-        let req = token::spend(token, ctx);
+        let mut req = token::spend(token, ctx);
 
         // only required because we've set this rule
         token::add_approval(GiftShop {}, &mut req, ctx);

@@ -1,0 +1,10 @@
+warning[Lint W99007]: struct with id but missing key ability
+   ┌─ tests/sui_mode/linter/false_negative_lint_missing_key.move:22:5
+   │  
+22 │ ╭     struct Wrapper {
+23 │ │         id: UID,
+24 │ │     }
+   │ ╰─────^ Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.
+   │  
+   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

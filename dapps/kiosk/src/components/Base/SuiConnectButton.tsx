@@ -4,5 +4,5 @@
 import { ConnectButton } from '@mysten/dapp-kit';
 
 export function SuiConnectButton() {
-	return <ConnectButton />;
+	return <ConnectButton className="flex-shrink-0" />;
 }

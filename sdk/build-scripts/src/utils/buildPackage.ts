@@ -127,7 +127,7 @@ async function buildImportDirectories({ exports, sideEffects }: PackageJSON) {
 	const ignoredWorkspaces = [];
 
 	for (const [exportName, exportMap] of Object.entries(exports)) {
-		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+$/)) {
+		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+/)) {
 			continue;
 		}
 
@@ -135,7 +135,7 @@ async function buildImportDirectories({ exports, sideEffects }: PackageJSON) {
 		const parts = exportName.split('/');
 		exportDirs.add(parts[1]);
 
-		if (parts.length === 2) {
+		if (parts.length >= 2 && !exportDir.endsWith('.css')) {
 			ignoredWorkspaces.push(path.relative(path.resolve(process.cwd(), '../..'), exportDir));
 		}
 

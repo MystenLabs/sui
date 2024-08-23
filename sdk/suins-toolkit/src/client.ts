@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui/client';
 
 import type { DataFields, NameObject, NetworkType, SuiNSContract } from './types/objects.js';
 import { DEVNET_JSON_FILE, GCS_URL, TESTNET_JSON_FILE } from './utils/constants.js';

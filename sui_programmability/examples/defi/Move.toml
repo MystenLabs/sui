@@ -1,9 +1,0 @@
-[package]
-name = "DeFi"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
-
-[addresses]
-defi = "0x0"

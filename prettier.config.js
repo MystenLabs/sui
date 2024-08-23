@@ -20,14 +20,13 @@ module.exports = {
 	],
 	overrides: [
 		{
-			files: 'apps/explorer/**/*',
+			files: 'sdk/**/*',
 			options: {
-				plugins: ['prettier-plugin-tailwindcss'],
-				tailwindConfig: './apps/explorer/tailwind.config.ts',
+				proseWrap: 'always',
 			},
 		},
 		{
-			files: 'sdk/**/*',
+			files: 'external-crates/move/documentation/book/**/*',
 			options: {
 				proseWrap: 'always',
 			},

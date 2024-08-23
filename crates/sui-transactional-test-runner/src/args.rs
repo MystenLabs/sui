@@ -1,26 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::test_adapter::{FakeID, SuiTestAdapter};
 use anyhow::{bail, ensure};
 use clap;
+use clap::{Args, Parser};
 use move_command_line_common::parser::{parse_u256, parse_u64};
 use move_command_line_common::values::{ParsableValue, ParsedValue};
 use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
+use move_compiler::editions::Flavor;
 use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
-use move_transactional_test_runner::tasks::SyntaxChoice;
+use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
-use crate::test_adapter::{FakeID, SuiTestAdapter};
-
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
-#[derive(Debug, clap::Parser)]
+#[derive(Clone, Debug, clap::Parser)]
 pub struct SuiRunArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
@@ -64,6 +65,8 @@ pub struct SuiInitArgs {
     pub object_snapshot_min_checkpoint_lag: Option<usize>,
     #[clap(long = "object-snapshot-max-checkpoint-lag")]
     pub object_snapshot_max_checkpoint_lag: Option<usize>,
+    #[clap(long = "flavor")]
+    pub flavor: Option<Flavor>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -194,36 +197,123 @@ pub struct SetRandomStateCommand {
     pub randomness_initial_version: u64,
 }
 
-#[derive(Debug, clap::Parser)]
-pub enum SuiSubcommand {
-    #[clap(name = "view-object")]
+#[derive(Debug)]
+pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     ViewObject(ViewObjectCommand),
-    #[clap(name = "transfer-object")]
     TransferObject(TransferObjectCommand),
-    #[clap(name = "consensus-commit-prologue")]
     ConsensusCommitPrologue(ConsensusCommitPrologueCommand),
-    #[clap(name = "programmable")]
     ProgrammableTransaction(ProgrammableTransactionCommand),
-    #[clap(name = "upgrade")]
     UpgradePackage(UpgradePackageCommand),
-    #[clap(name = "stage-package")]
     StagePackage(StagePackageCommand),
-    #[clap(name = "set-address")]
     SetAddress(SetAddressCommand),
-    #[clap(name = "create-checkpoint")]
     CreateCheckpoint(CreateCheckpointCommand),
-    #[clap(name = "advance-epoch")]
     AdvanceEpoch(AdvanceEpochCommand),
-    #[clap(name = "advance-clock")]
     AdvanceClock(AdvanceClockCommand),
-    #[clap(name = "set-random-state")]
     SetRandomState(SetRandomStateCommand),
-    #[clap(name = "view-checkpoint")]
     ViewCheckpoint,
-    #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
-    #[clap(name = "force-object-snapshot-catchup")]
     ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup),
+    Bench(RunCommand<ExtraValueArgs>, ExtraRunArgs),
+}
+
+impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
+    for SuiSubcommand<ExtraValueArgs, ExtraRunArgs>
+{
+    fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
+        Ok(match matches.subcommand() {
+            Some(("view-object", matches)) => {
+                SuiSubcommand::ViewObject(ViewObjectCommand::from_arg_matches(matches)?)
+            }
+            Some(("transfer-object", matches)) => {
+                SuiSubcommand::TransferObject(TransferObjectCommand::from_arg_matches(matches)?)
+            }
+            Some(("consensus-commit-prologue", matches)) => SuiSubcommand::ConsensusCommitPrologue(
+                ConsensusCommitPrologueCommand::from_arg_matches(matches)?,
+            ),
+            Some(("programmable", matches)) => SuiSubcommand::ProgrammableTransaction(
+                ProgrammableTransactionCommand::from_arg_matches(matches)?,
+            ),
+            Some(("upgrade", matches)) => {
+                SuiSubcommand::UpgradePackage(UpgradePackageCommand::from_arg_matches(matches)?)
+            }
+            Some(("stage-package", matches)) => {
+                SuiSubcommand::StagePackage(StagePackageCommand::from_arg_matches(matches)?)
+            }
+            Some(("set-address", matches)) => {
+                SuiSubcommand::SetAddress(SetAddressCommand::from_arg_matches(matches)?)
+            }
+            Some(("create-checkpoint", matches)) => {
+                SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand::from_arg_matches(matches)?)
+            }
+            Some(("advance-epoch", matches)) => {
+                SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand::from_arg_matches(matches)?)
+            }
+            Some(("advance-clock", matches)) => {
+                SuiSubcommand::AdvanceClock(AdvanceClockCommand::from_arg_matches(matches)?)
+            }
+            Some(("set-random-state", matches)) => {
+                SuiSubcommand::SetRandomState(SetRandomStateCommand::from_arg_matches(matches)?)
+            }
+            Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
+            Some(("run-graphql", matches)) => {
+                SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
+            }
+            Some(("force-object-snapshot-catchup", matches)) => {
+                SuiSubcommand::ForceObjectSnapshotCatchup(
+                    ForceObjectSnapshotCatchup::from_arg_matches(matches)?,
+                )
+            }
+            Some(("bench", matches)) => SuiSubcommand::Bench(
+                RunCommand::from_arg_matches(matches)?,
+                ExtraRunArgs::from_arg_matches(matches)?,
+            ),
+            _ => {
+                return Err(clap::Error::raw(
+                    clap::error::ErrorKind::InvalidSubcommand,
+                    "Invalid submcommand",
+                ));
+            }
+        })
+    }
+
+    fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
+        *self = Self::from_arg_matches(matches)?;
+        Ok(())
+    }
+}
+
+impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
+    for SuiSubcommand<ExtraValueArgs, ExtraRunArgs>
+{
+    fn command() -> clap::Command {
+        clap::Command::new("sui_sub_command")
+            .subcommand(ViewObjectCommand::command().name("view-object"))
+            .subcommand(TransferObjectCommand::command().name("transfer-object"))
+            .subcommand(ConsensusCommitPrologueCommand::command().name("consensus-commit-prologue"))
+            .subcommand(ProgrammableTransactionCommand::command().name("programmable"))
+            .subcommand(UpgradePackageCommand::command().name("upgrade"))
+            .subcommand(StagePackageCommand::command().name("stage-package"))
+            .subcommand(SetAddressCommand::command().name("set-address"))
+            .subcommand(CreateCheckpointCommand::command().name("create-checkpoint"))
+            .subcommand(AdvanceEpochCommand::command().name("advance-epoch"))
+            .subcommand(AdvanceClockCommand::command().name("advance-clock"))
+            .subcommand(SetRandomStateCommand::command().name("set-random-state"))
+            .subcommand(clap::Command::new("view-checkpoint"))
+            .subcommand(RunGraphqlCommand::command().name("run-graphql"))
+            .subcommand(ForceObjectSnapshotCatchup::command().name("force-object-snapshot-catchup"))
+            .subcommand(
+                RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
+            )
+    }
+
+    fn command_for_update() -> clap::Command {
+        todo!()
+    }
+}
+
+impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::Parser
+    for SuiSubcommand<ExtraValueArgs, ExtraRunArgs>
+{
 }
 
 #[derive(Clone, Debug)]
@@ -234,6 +324,7 @@ pub enum SuiExtraValueArgs {
     ImmShared(FakeID, Option<SequenceNumber>),
 }
 
+#[derive(Clone)]
 pub enum SuiValue {
     MoveValue(MoveValue),
     Object(FakeID, Option<SequenceNumber>),

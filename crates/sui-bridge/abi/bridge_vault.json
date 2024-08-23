@@ -11,6 +11,28 @@
     "type": "constructor"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -28,10 +50,6 @@
     ],
     "name": "OwnershipTransferred",
     "type": "event"
-  },
-  {
-    "stateMutability": "payable",
-    "type": "fallback"
   },
   {
     "inputs": [],
@@ -62,7 +80,7 @@
       },
       {
         "internalType": "address",
-        "name": "targetAddress",
+        "name": "recipientAddress",
         "type": "address"
       },
       {
@@ -80,7 +98,7 @@
     "inputs": [
       {
         "internalType": "address payable",
-        "name": "targetAddress",
+        "name": "recipientAddress",
         "type": "address"
       },
       {

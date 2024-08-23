@@ -66,3 +66,15 @@ impl<P: ProgressStore> ProgressStoreWrapper<P> {
         self.pending_state.clone()
     }
 }
+
+pub struct ShimProgressStore(pub u64);
+
+#[async_trait]
+impl ProgressStore for ShimProgressStore {
+    async fn load(&mut self, _: String) -> Result<CheckpointSequenceNumber> {
+        Ok(self.0)
+    }
+    async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
+        Ok(())
+    }
+}

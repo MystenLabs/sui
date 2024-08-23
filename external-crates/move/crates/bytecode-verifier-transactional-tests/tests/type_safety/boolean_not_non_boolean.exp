@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'run'. lines 1-12:
+task 0, lines 1-12:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: BOOLEAN_OP_TYPE_MISMATCH_ERROR,
     sub_status: None,

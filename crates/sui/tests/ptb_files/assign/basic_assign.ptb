@@ -1,0 +1,8 @@
+--assign x 10
+--assign y 11
+--split-coins gas [x, y]
+--assign coins
+--assign c0 coins.0
+--assign "c1" coins.1
+--merge-coins gas [c0, c1]
+

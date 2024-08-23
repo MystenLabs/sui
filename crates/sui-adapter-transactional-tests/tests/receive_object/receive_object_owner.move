@@ -5,20 +5,18 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
     use sui::dynamic_object_field as dof;
 
     const KEY: u64 = 0;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: u64,
     }
 
     public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx), value: 0 };
+        let mut a = A { id: object::new(ctx), value: 0 };
         dof::add(&mut a.id, KEY, A { id: object::new(ctx), value: 0 });
         transfer::public_transfer(a, tx_context::sender(ctx));
     }

@@ -4,17 +4,14 @@
 /// Similar to `sui::table` but the values are linked together, allowing for ordered insertion and
 /// removal
 module sui::linked_table {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
     // Attempted to remove the front or back of an empty table
     const ETableIsEmpty: u64 = 1;
 
-    struct LinkedTable<K: copy + drop + store, phantom V: store> has key, store {
+    public struct LinkedTable<K: copy + drop + store, phantom V: store> has key, store {
         /// the ID of this table
         id: UID,
         /// the number of key-value pairs in the table
@@ -25,7 +22,7 @@ module sui::linked_table {
         tail: Option<K>,
     }
 
-    struct Node<K: copy + drop + store, V: store> has store {
+    public struct Node<K: copy + drop + store, V: store> has store {
         /// the previous key
         prev: Option<K>,
         /// the next key
@@ -63,11 +60,11 @@ module sui::linked_table {
         k: K,
         value: V,
     ) {
-        let old_head = option::swap_or_fill(&mut table.head, k);
-        if (option::is_none(&table.tail)) option::fill(&mut table.tail, k);
+        let old_head = table.head.swap_or_fill(k);
+        if (table.tail.is_none()) table.tail.fill(k);
         let prev = option::none();
-        let next = if (option::is_some(&old_head)) {
-            let old_head_k = option::destroy_some(old_head);
+        let next = if (old_head.is_some()) {
+            let old_head_k = old_head.destroy_some();
             field::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k).prev = option::some(k);
             option::some(old_head_k)
         } else {
@@ -86,10 +83,10 @@ module sui::linked_table {
         k: K,
         value: V,
     ) {
-        if (option::is_none(&table.head)) option::fill(&mut table.head, k);
-        let old_tail = option::swap_or_fill(&mut table.tail, k);
-        let prev = if (option::is_some(&old_tail)) {
-            let old_tail_k = option::destroy_some(old_tail);
+        if (table.head.is_none()) table.head.fill(k);
+        let old_tail = table.tail.swap_or_fill(k);
+        let prev = if (old_tail.is_some()) {
+            let old_tail_k = old_tail.destroy_some();
             field::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k).next = option::some(k);
             option::some(old_tail_k)
         } else {
@@ -100,6 +97,7 @@ module sui::linked_table {
         table.size = table.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the table `table: &LinkedTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -107,6 +105,7 @@ module sui::linked_table {
         &field::borrow<K, Node<K, V>>(&table.id, k).value
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the table `table: &mut LinkedTable<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -140,31 +139,31 @@ module sui::linked_table {
     public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>, k: K): V {
         let Node<K, V> { prev, next, value } = field::remove(&mut table.id, k);
         table.size = table.size - 1;
-        if (option::is_some(&prev)) {
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, *option::borrow(&prev)).next = next
+        if (prev.is_some()) {
+            field::borrow_mut<K, Node<K, V>>(&mut table.id, *prev.borrow()).next = next
         };
-        if (option::is_some(&next)) {
-            field::borrow_mut<K, Node<K, V>>(&mut table.id, *option::borrow(&next)).prev = prev
+        if (next.is_some()) {
+            field::borrow_mut<K, Node<K, V>>(&mut table.id, *next.borrow()).prev = prev
         };
-        if (option::borrow(&table.head) == &k) table.head = next;
-        if (option::borrow(&table.tail) == &k) table.tail = prev;
+        if (table.head.borrow() == &k) table.head = next;
+        if (table.tail.borrow() == &k) table.tail = prev;
         value
     }
 
     /// Removes the front of the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// Aborts with `ETableIsEmpty` if the table is empty
     public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-        assert!(option::is_some(&table.head), ETableIsEmpty);
-        let head = *option::borrow(&table.head);
-        (head, remove(table, head))
+        assert!(table.head.is_some(), ETableIsEmpty);
+        let head = *table.head.borrow();
+        (head, table.remove(head))
     }
 
     /// Removes the back of the table `table: &mut LinkedTable<K, V>` and returns the value.
     /// Aborts with `ETableIsEmpty` if the table is empty
     public fun pop_back<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-        assert!(option::is_some(&table.tail), ETableIsEmpty);
-        let tail = *option::borrow(&table.tail);
-        (tail, remove(table, tail))
+        assert!(table.tail.is_some(), ETableIsEmpty);
+        let tail = *table.tail.borrow();
+        (tail, table.remove(tail))
     }
 
     /// Returns true iff there is a value associated with the key `k: K` in table
@@ -188,13 +187,13 @@ module sui::linked_table {
     public fun destroy_empty<K: copy + drop + store, V: store>(table: LinkedTable<K, V>) {
         let LinkedTable { id, size, head: _, tail: _ } = table;
         assert!(size == 0, ETableNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability
     public fun drop<K: copy + drop + store, V: drop + store>(table: LinkedTable<K, V>) {
         let LinkedTable { id, size: _, head: _, tail: _ } = table;
-        object::delete(id)
+        id.delete()
     }
 }

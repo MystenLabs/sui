@@ -1,0 +1,219 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        value: U8,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: U16,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: U32,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: U64,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: U128,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: U256,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        value: Bool,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        value: Address,
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 10,
+        },
+        value: Vector(
+            U8,
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 15,
+        },
+        value: Struct(
+            ParsedStructType {
+                fq_name: ParsedFqName {
+                    module: ParsedModuleId {
+                        address: Named(
+                            "sui",
+                        ),
+                        name: "object",
+                    },
+                    name: "ID",
+                },
+                type_args: [],
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 16,
+        },
+        value: Struct(
+            ParsedStructType {
+                fq_name: ParsedFqName {
+                    module: ParsedModuleId {
+                        address: Numerical(
+                            0x2,
+                        ),
+                        name: "object",
+                    },
+                    name: "UID",
+                },
+                type_args: [],
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 26,
+        },
+        value: Struct(
+            ParsedStructType {
+                fq_name: ParsedFqName {
+                    module: ParsedModuleId {
+                        address: Numerical(
+                            3,
+                        ),
+                        name: "staking_pool",
+                    },
+                    name: "StakedSui",
+                },
+                type_args: [],
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 28,
+        },
+        value: Struct(
+            ParsedStructType {
+                fq_name: ParsedFqName {
+                    module: ParsedModuleId {
+                        address: Numerical(
+                            0x2,
+                        ),
+                        name: "coin",
+                    },
+                    name: "Coin",
+                },
+                type_args: [
+                    Struct(
+                        ParsedStructType {
+                            fq_name: ParsedFqName {
+                                module: ParsedModuleId {
+                                    address: Numerical(
+                                        2,
+                                    ),
+                                    name: "sui",
+                                },
+                                name: "SUI",
+                            },
+                            type_args: [],
+                        },
+                    ),
+                ],
+            },
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 68,
+        },
+        value: Struct(
+            ParsedStructType {
+                fq_name: ParsedFqName {
+                    module: ParsedModuleId {
+                        address: Named(
+                            "sui",
+                        ),
+                        name: "table",
+                    },
+                    name: "Table",
+                },
+                type_args: [
+                    Struct(
+                        ParsedStructType {
+                            fq_name: ParsedFqName {
+                                module: ParsedModuleId {
+                                    address: Named(
+                                        "sui",
+                                    ),
+                                    name: "object",
+                                },
+                                name: "ID",
+                            },
+                            type_args: [],
+                        },
+                    ),
+                    Vector(
+                        Struct(
+                            ParsedStructType {
+                                fq_name: ParsedFqName {
+                                    module: ParsedModuleId {
+                                        address: Numerical(
+                                            0x1,
+                                        ),
+                                        name: "option",
+                                    },
+                                    name: "Option",
+                                },
+                                type_args: [
+                                    U32,
+                                ],
+                            },
+                        ),
+                    ),
+                ],
+            },
+        ),
+    },
+]

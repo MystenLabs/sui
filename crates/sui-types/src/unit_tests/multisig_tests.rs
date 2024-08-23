@@ -11,6 +11,7 @@ use crate::{
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::bitmap_to_u16,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
+    signature_verification::VerifiedDigestCache,
     utils::{
         keys, load_test_vectors, make_transaction_data, make_zklogin_tx, DEFAULT_ADDRESS_SEED,
         SHORT_ADDRESS_SEED,
@@ -23,18 +24,15 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use fastcrypto_zkp::bn254::{
-    utils::big_int_str_to_bytes,
-    zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK},
-};
+use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-use std::str::FromStr;
-
+use std::{str::FromStr, sync::Arc};
 #[test]
 fn test_combine_sigs() {
     let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
@@ -389,8 +387,8 @@ fn zklogin_in_multisig_works_with_both_addresses() {
     bytes.extend([iss_bytes.len() as u8]);
     bytes.extend(iss_bytes);
     // length here is 31 bytes and left unpadded.
-    let address_seed_bytes = big_int_str_to_bytes(SHORT_ADDRESS_SEED).unwrap();
-    bytes.extend(address_seed_bytes);
+    let address_seed = Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap();
+    bytes.extend(address_seed.unpadded());
 
     let pk1 = PublicKey::ZkLogin(ZkLoginPublicIdentifier(bytes));
     let pk2 = skp.public();
@@ -420,8 +418,13 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         .into_iter()
         .collect();
 
-    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
-    let res = multisig.verify_claims(intent_msg, multisig_address, &aux_verify_data);
+    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(30));
+    let res = multisig.verify_claims(
+        intent_msg,
+        multisig_address,
+        &aux_verify_data,
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
     // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
     assert!(
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
@@ -429,8 +432,11 @@ fn zklogin_in_multisig_works_with_both_addresses() {
 
     // initialize zklogin pk (pk1_padd) with padded address seed
     let pk1_padded = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, SHORT_ADDRESS_SEED)
-            .unwrap(),
+        ZkLoginPublicIdentifier::new(
+            &OIDCProvider::Twitch.get_config().iss,
+            &Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
     );
     let multisig_pk_padded = MultiSigPublicKey::new(vec![pk1_padded, pk2], vec![1; 2], 1).unwrap();
     let multisig_address_padded = SuiAddress::from(&multisig_pk_padded);
@@ -453,8 +459,12 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         multisig_pk_padded,
     );
 
-    let res =
-        multisig_padded.verify_claims(intent_msg_padded, multisig_address_padded, &aux_verify_data);
+    let res = multisig_padded.verify_claims(
+        intent_msg_padded,
+        multisig_address_padded,
+        &aux_verify_data,
+        Arc::new(VerifiedDigestCache::new_empty()),
+    );
     assert!(
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
@@ -464,13 +474,19 @@ fn zklogin_in_multisig_works_with_both_addresses() {
 fn test_derive_multisig_address() {
     // consistency test with typescript: /sdk/typescript/test/unit/cryptography/multisig.test.ts
     let pk1 = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
-            .unwrap(),
+        ZkLoginPublicIdentifier::new(
+            &OIDCProvider::Twitch.get_config().iss,
+            &Bn254FrElement::from_str(DEFAULT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
     );
     // address seed here is padded with leading 0 to 32 bytes.
     let pk2 = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, SHORT_ADDRESS_SEED)
-            .unwrap(),
+        ZkLoginPublicIdentifier::new(
+            &OIDCProvider::Twitch.get_config().iss,
+            &Bn254FrElement::from_str(SHORT_ADDRESS_SEED).unwrap(),
+        )
+        .unwrap(),
     );
     assert_eq!(pk1.as_ref().len(), pk2.as_ref().len());
 

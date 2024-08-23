@@ -4,12 +4,12 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
+use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{ProtocolConfigResponse, SuiLoadedChildObjectsResponse};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::sui_serde::BigInt;
@@ -77,6 +77,19 @@ pub trait ReadApi {
     /// Note there is no software-level guarantee/SLA that objects with past versions
     /// can be retrieved by this API, even if the object and version exists/existed.
     /// The result may vary across nodes depending on their pruning policies.
+    /// Returns the latest object information with a version less than or equal to the given version
+    #[method(name = "tryGetObjectBeforeVersion", deprecated = "true")]
+    async fn try_get_object_before_version(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// the version of the queried object
+        version: SequenceNumber,
+    ) -> RpcResult<SuiPastObjectResponse>;
+
+    /// Note there is no software-level guarantee/SLA that objects with past versions
+    /// can be retrieved by this API, even if the object and version exists/existed.
+    /// The result may vary across nodes depending on their pruning policies.
     /// Return the object information for a specified version
     #[method(name = "tryMultiGetPastObjects")]
     async fn try_multi_get_past_objects(
@@ -86,12 +99,6 @@ pub trait ReadApi {
         /// options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
-
-    #[method(name = "getLoadedChildObjects")]
-    async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<SuiLoadedChildObjectsResponse>;
 
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]

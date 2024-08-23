@@ -161,7 +161,7 @@ pub mod random {
 
     /// Given a value, produce a random probability using the value as a seed, with
     /// an additional seed that is constant only for the current test thread.
-    pub fn deterministic_probabilty<T: Hash>(value: T, chance: f32) -> bool {
+    pub fn deterministic_probability<T: Hash>(value: T, chance: f32) -> bool {
         thread_local! {
             // a random seed that is shared by the whole test process, so that equal `value`
             // inputs produce different outputs when the test seed changes
@@ -178,9 +178,9 @@ pub mod random {
             })
     }
 
-    /// Like deterministic_probabilty, but only returns true once for each unique value. May eventually
+    /// Like deterministic_probability, but only returns true once for each unique value. May eventually
     /// consume all memory if there are a large number of unique, failing values.
-    pub fn deterministic_probabilty_once<T: Hash + Serialize>(value: T, chance: f32) -> bool {
+    pub fn deterministic_probability_once<T: Hash + Serialize>(value: T, chance: f32) -> bool {
         thread_local! {
             static FAILING_VALUES: RefCell<HashSet<(msim::task::NodeId, Vec<u8>)>> = RefCell::new(HashSet::new());
         }
@@ -192,7 +192,7 @@ pub mod random {
             let mut failing_values = failing_values.borrow_mut();
             if failing_values.contains(&key) {
                 false
-            } else if deterministic_probabilty(value, chance) {
+            } else if deterministic_probability(value, chance) {
                 failing_values.insert(key);
                 true
             } else {

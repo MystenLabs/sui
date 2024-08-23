@@ -1,0 +1,3 @@
+.filledField input {
+	text-overflow: ellipsis;
+}

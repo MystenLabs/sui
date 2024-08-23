@@ -1,0 +1,5 @@
+# Nested array inside an array but the inner array is bound to variables
+# Again, since we don't typecheck this will be a runtime PTB error
+--make-move-vec <address> [@0x1]
+--assign a 
+--make-move-vec <vector<address>> [a, a] 

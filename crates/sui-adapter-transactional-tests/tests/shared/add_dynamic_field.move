@@ -8,12 +8,9 @@
 
 //# publish
 module a::m {
-    use sui::transfer;
     use sui::dynamic_field::{add, remove};
-    use sui::object;
-    use sui::tx_context:: TxContext;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: object::UID,
     }
 
@@ -21,12 +18,12 @@ module a::m {
         transfer::public_share_object(Obj { id: object::new(ctx) })
     }
 
-    public entry fun add_dynamic_field(obj: Obj) {
+    public entry fun add_dynamic_field(mut obj: Obj) {
         add<u64, u64>(&mut obj.id, 0, 0);
         transfer::public_share_object(obj);
     }
 
-    public entry fun add_and_remove_dynamic_field(obj: Obj) {
+    public entry fun add_and_remove_dynamic_field(mut obj: Obj) {
         add<u64, u64>(&mut obj.id, 0, 0);
         remove<u64, u64>(&mut obj.id, 0 );
         transfer::public_share_object(obj);

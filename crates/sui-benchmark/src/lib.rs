@@ -17,9 +17,7 @@ use std::{
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-    authority_client::{
-        make_authority_clients_with_timeout_config, AuthorityAPI, NetworkAuthorityClient,
-    },
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
@@ -28,7 +26,6 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
-use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::ConciseableName;
 use sui_types::committee::CommitteeTrait;
@@ -256,25 +253,17 @@ impl LocalValidatorAggregatorProxy {
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+        let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
-            .build()
-            .unwrap();
-
-        let committee = genesis.committee_with_network();
-        let clients = make_authority_clients_with_timeout_config(
-            &committee,
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
-        )
-        .unwrap();
+            .build_network_clients();
+        let committee = genesis.committee().unwrap();
 
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
-            committee.committee,
+            committee,
         )
         .await
     }
@@ -363,17 +352,29 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            let ticket = self
+                .qd
+                .submit_transaction(
+                    sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                        transaction: tx.clone(),
+                        include_events: true,
+                        include_input_objects: false,
+                        include_output_objects: false,
+                        include_auxiliary_data: false,
+                    },
+                )
+                .await?;
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
+                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
-                        events,
+                        events.unwrap_or_default(),
                     ));
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
@@ -405,7 +406,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let mut futures = FuturesUnordered::new();
         for (name, client) in self.clients.iter() {
-            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
+            let fut = client
+                .handle_transaction(tx.clone(), None)
+                .map(|r| (r, *name));
             futures.push(fut);
         }
         auth_agg
@@ -519,7 +522,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate_v2(certificate)
+                    .handle_certificate_v2(certificate, None)
                     .map(move |r| (r, name))
                     .await
             });

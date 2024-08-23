@@ -4,15 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{anyhow, Result};
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
+use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_data_ingestion_core::Worker;
 
-use sui_indexer::framework::Handler;
-use sui_json_rpc_types::{SuiMoveStruct, SuiMoveValue};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
@@ -30,14 +30,22 @@ pub mod transaction_handler;
 pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
 
+const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
+    "0x1::string::String",
+    "0x1::ascii::String",
+    "0x2::url::Url",
+    "0x2::object::ID",
+];
+
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Handler {
+pub trait AnalyticsHandler<S>: Worker {
     /// Read back rows which are ready to be persisted. This function
     /// will be invoked by the analytics processor after every call to
     /// process_checkpoint
-    fn read(&mut self) -> Result<Vec<S>>;
+    async fn read(&self) -> Result<Vec<S>>;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
+    fn name(&self) -> &str;
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {
@@ -147,11 +155,11 @@ impl ObjectStatusTracker {
 
     fn get_object_status(&self, object_id: &ObjectID) -> Option<ObjectStatus> {
         if self.mutated.contains(object_id) {
-            Some(ObjectStatus::Created)
-        } else if self.deleted.contains(object_id) {
             Some(ObjectStatus::Mutated)
-        } else if self.created.contains(object_id) {
+        } else if self.deleted.contains(object_id) {
             Some(ObjectStatus::Deleted)
+        } else if self.created.contains(object_id) {
+            Some(ObjectStatus::Created)
         } else {
             None
         }
@@ -168,7 +176,7 @@ async fn get_move_struct<T: PackageStore>(
         .await?
     {
         MoveTypeLayout::Struct(move_struct_layout) => {
-            MoveStruct::simple_deserialize(contents, &move_struct_layout)
+            BoundedVisitor::deserialize_struct(contents, &move_struct_layout)
         }
         _ => Err(anyhow!("Object is not a move struct")),
     }?;
@@ -181,15 +189,86 @@ pub struct WrappedStruct {
     struct_tag: Option<StructTag>,
 }
 
+fn parse_struct(
+    path: &str,
+    move_struct: MoveStruct,
+    all_structs: &mut BTreeMap<String, WrappedStruct>,
+) {
+    let mut wrapped_struct = WrappedStruct {
+        struct_tag: Some(move_struct.type_),
+        ..Default::default()
+    };
+    for (k, v) in move_struct.fields {
+        parse_struct_field(
+            &format!("{}.{}", path, &k),
+            v,
+            &mut wrapped_struct,
+            all_structs,
+        );
+    }
+    all_structs.insert(path.to_string(), wrapped_struct);
+}
+
 fn parse_struct_field(
     path: &str,
-    sui_move_value: SuiMoveValue,
+    move_value: MoveValue,
     curr_struct: &mut WrappedStruct,
     all_structs: &mut BTreeMap<String, WrappedStruct>,
 ) {
-    match sui_move_value {
-        SuiMoveValue::Struct(move_struct) => parse_struct(path, move_struct, all_structs),
-        SuiMoveValue::Vector(fields) => {
+    match move_value {
+        MoveValue::Struct(move_struct) => {
+            let values = move_struct
+                .fields
+                .iter()
+                .map(|(id, value)| (id.to_string(), value))
+                .collect::<BTreeMap<_, _>>();
+            let struct_name = format!(
+                "0x{}::{}::{}",
+                move_struct.type_.address.short_str_lossless(),
+                move_struct.type_.module,
+                move_struct.type_.name
+            );
+            if "0x2::object::UID" == struct_name {
+                if let Some(MoveValue::Struct(id_struct)) = values.get("id").cloned() {
+                    let id_values = id_struct
+                        .fields
+                        .iter()
+                        .map(|(id, value)| (id.to_string(), value))
+                        .collect::<BTreeMap<_, _>>();
+                    if let Some(MoveValue::Address(address) | MoveValue::Signer(address)) =
+                        id_values.get("bytes").cloned()
+                    {
+                        curr_struct.object_id = Some(ObjectID::from_address(*address))
+                    }
+                }
+            } else if "0x1::option::Option" == struct_name {
+                // Option in sui move is implemented as vector of size 1
+                if let Some(MoveValue::Vector(vec_values)) = values.get("vec").cloned() {
+                    if let Some(first_value) = vec_values.first() {
+                        parse_struct_field(
+                            &format!("{}[0]", path),
+                            first_value.clone(),
+                            curr_struct,
+                            all_structs,
+                        );
+                    }
+                }
+            } else if !WRAPPED_INDEXING_DISALLOW_LIST.contains(&&*struct_name) {
+                // Do not index most common struct types i.e. string, url, etc
+                parse_struct(path, move_struct, all_structs)
+            }
+        }
+        MoveValue::Variant(v) => {
+            for (k, field) in v.fields.iter() {
+                parse_struct_field(
+                    &format!("{}.{}", path, k),
+                    field.clone(),
+                    curr_struct,
+                    all_structs,
+                );
+            }
+        }
+        MoveValue::Vector(fields) => {
             for (index, field) in fields.iter().enumerate() {
                 parse_struct_field(
                     &format!("{}[{}]", path, &index),
@@ -199,76 +278,47 @@ fn parse_struct_field(
                 );
             }
         }
-        SuiMoveValue::Option(option_sui_move_value) => {
-            if option_sui_move_value.is_some() {
-                parse_struct_field(
-                    path,
-                    option_sui_move_value.unwrap(),
-                    curr_struct,
-                    all_structs,
-                );
-            }
-        }
-        SuiMoveValue::UID { id } => curr_struct.object_id = Some(id),
         _ => {}
-    }
-}
-
-fn parse_struct(
-    path: &str,
-    sui_move_struct: SuiMoveStruct,
-    all_structs: &mut BTreeMap<String, WrappedStruct>,
-) {
-    let mut wrapped_struct = WrappedStruct::default();
-    match sui_move_struct {
-        SuiMoveStruct::WithTypes { type_, fields } => {
-            wrapped_struct.struct_tag = Some(type_);
-            for (k, v) in fields {
-                parse_struct_field(
-                    &format!("{}.{}", path, &k),
-                    v,
-                    &mut wrapped_struct,
-                    all_structs,
-                );
-            }
-            all_structs.insert(path.to_string(), wrapped_struct);
-        }
-        SuiMoveStruct::WithFields(fields) => {
-            for (k, v) in fields {
-                parse_struct_field(
-                    &format!("{}.{}", path, &k),
-                    v,
-                    &mut wrapped_struct,
-                    all_structs,
-                );
-            }
-            all_structs.insert(path.to_string(), wrapped_struct);
-        }
-        SuiMoveStruct::Runtime(values) => {
-            for (index, field) in values.iter().enumerate() {
-                parse_struct_field(
-                    &format!("{}[{}]", path, &index),
-                    field.clone(),
-                    &mut wrapped_struct,
-                    all_structs,
-                );
-            }
-            all_structs.insert(path.to_string(), wrapped_struct);
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::handlers::parse_struct;
+    use move_core_types::account_address::AccountAddress;
+    use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
+    use move_core_types::identifier::Identifier;
+    use move_core_types::language_storage::StructTag;
     use std::collections::BTreeMap;
-    use sui_json_rpc_types::SuiMoveStruct;
+    use std::str::FromStr;
     use sui_types::base_types::ObjectID;
 
     #[tokio::test]
-    async fn test_wrapped_object_parsing_simple() -> anyhow::Result<()> {
-        let input = r#"{"x":{"y":{"id":{"id":"0x100"},"size":"15"},"id":{"id":"0x200"}},"id":{"id":"0x300"}}"#;
-        let move_struct: SuiMoveStruct = serde_json::from_str(input).unwrap();
+    async fn test_wrapped_object_parsing() -> anyhow::Result<()> {
+        let uid_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::object::UID")?,
+            fields: vec![(
+                Identifier::from_str("id")?,
+                MoveValue::Struct(MoveStruct {
+                    type_: StructTag::from_str("0x2::object::ID")?,
+                    fields: vec![(
+                        Identifier::from_str("bytes")?,
+                        MoveValue::Signer(AccountAddress::from_hex_literal("0x300")?),
+                    )],
+                }),
+            )],
+        });
+        let balance_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::balance::Balance")?,
+            fields: vec![(Identifier::from_str("value")?, MoveValue::U32(10))],
+        });
+        let move_struct = MoveStruct {
+            type_: StructTag::from_str("0x2::test::Test")?,
+            fields: vec![
+                (Identifier::from_str("id")?, uid_field),
+                (Identifier::from_str("principal")?, balance_field),
+            ],
+        };
         let mut all_structs = BTreeMap::new();
         parse_struct("$", move_struct, &mut all_structs);
         assert_eq!(
@@ -276,68 +326,62 @@ mod tests {
             Some(ObjectID::from_hex_literal("0x300")?)
         );
         assert_eq!(
-            all_structs.get("$.x").unwrap().object_id,
-            Some(ObjectID::from_hex_literal("0x200")?)
-        );
-        assert_eq!(
-            all_structs.get("$.x.y").unwrap().object_id,
-            Some(ObjectID::from_hex_literal("0x100")?)
+            all_structs.get("$.principal").unwrap().struct_tag,
+            Some(StructTag::from_str("0x2::balance::Balance")?)
         );
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_wrapped_object_parsing_with_array() -> anyhow::Result<()> {
-        let input = r#"{"ema_prices":{"id":{"id":"0x100"},"size":"0"},"id":{"id":"0x200"},"prices":{"id":{"id":"0x300"},"size":"11"},"primary_price_update_policy":{"id":{"id":"0x400"},"rules":{"contents":[{"name":"910f30cbc7f601f75a5141a01265cd47c62d468707c5e1aecb32a18f448cb25a::rule::Rule"}]}},"secondary_price_update_policy":{"id":{"id":"0x500"},"rules":{"contents":[]}}}"#;
-        let move_struct: SuiMoveStruct = serde_json::from_str(input).unwrap();
+    async fn test_wrapped_object_parsing_within_enum() -> anyhow::Result<()> {
+        let uid_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::object::UID")?,
+            fields: vec![(
+                Identifier::from_str("id")?,
+                MoveValue::Struct(MoveStruct {
+                    type_: StructTag::from_str("0x2::object::ID")?,
+                    fields: vec![(
+                        Identifier::from_str("bytes")?,
+                        MoveValue::Signer(AccountAddress::from_hex_literal("0x300")?),
+                    )],
+                }),
+            )],
+        });
+        let balance_field = MoveValue::Struct(MoveStruct {
+            type_: StructTag::from_str("0x2::balance::Balance")?,
+            fields: vec![(Identifier::from_str("value")?, MoveValue::U32(10))],
+        });
+        let move_enum = MoveVariant {
+            type_: StructTag::from_str("0x2::test::TestEnum")?,
+            variant_name: Identifier::from_str("TestVariant")?,
+            tag: 0,
+            fields: vec![
+                (Identifier::from_str("field0")?, MoveValue::U64(10)),
+                (Identifier::from_str("principal")?, balance_field),
+            ],
+        };
+        let move_struct = MoveStruct {
+            type_: StructTag::from_str("0x2::test::Test")?,
+            fields: vec![
+                (Identifier::from_str("id")?, uid_field),
+                (
+                    Identifier::from_str("enum_field")?,
+                    MoveValue::Variant(move_enum),
+                ),
+            ],
+        };
         let mut all_structs = BTreeMap::new();
         parse_struct("$", move_struct, &mut all_structs);
         assert_eq!(
             all_structs.get("$").unwrap().object_id,
-            Some(ObjectID::from_hex_literal("0x200")?)
-        );
-        assert_eq!(
-            all_structs.get("$.ema_prices").unwrap().object_id,
-            Some(ObjectID::from_hex_literal("0x100")?)
-        );
-        assert_eq!(
-            all_structs.get("$.prices").unwrap().object_id,
             Some(ObjectID::from_hex_literal("0x300")?)
         );
         assert_eq!(
             all_structs
-                .get("$.primary_price_update_policy")
+                .get("$.enum_field.principal")
                 .unwrap()
-                .object_id,
-            Some(ObjectID::from_hex_literal("0x400")?)
-        );
-        assert_eq!(
-            all_structs
-                .get("$.secondary_price_update_policy")
-                .unwrap()
-                .object_id,
-            Some(ObjectID::from_hex_literal("0x500")?)
-        );
-        assert_eq!(
-            all_structs
-                .get("$.secondary_price_update_policy.rules")
-                .unwrap()
-                .object_id,
-            None
-        );
-        assert_eq!(
-            all_structs
-                .get("$.primary_price_update_policy.rules")
-                .unwrap()
-                .object_id,
-            None
-        );
-        assert_eq!(
-            all_structs
-                .get("$.primary_price_update_policy.rules.contents[0]")
-                .unwrap()
-                .object_id,
-            None
+                .struct_tag,
+            Some(StructTag::from_str("0x2::balance::Balance")?)
         );
         Ok(())
     }

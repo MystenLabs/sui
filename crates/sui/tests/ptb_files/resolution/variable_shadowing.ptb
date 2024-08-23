@@ -1,0 +1,6 @@
+--assign s @0x1
+--move-call sui::coin::destroy_zero<sui::sui::SUI> s
+--assign s @0x2
+# Make sure that the second usage of 's' here is not the same as the first definition of 's' 
+--make-move-vec <address> [s]
+

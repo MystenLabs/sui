@@ -30,8 +30,7 @@ async fn main() -> anyhow::Result<()> {
         // TODO make this configurable
         Some(Duration::from_secs(10)), // request times out after 10 secs
         None,
-    )
-    .await?;
+    )?;
 
     // Init metrics server
     let registry_service = start_prometheus_server(config.metrics_address);

@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     public struct Foo<T>(T, u64) has drop;
 
     public struct Bar<T> {
@@ -29,5 +28,4 @@ module M {
     fun underscores(y: Foo<u64>): u64 {
         y.1_0 + y.1_0_0
     }
-}
 }

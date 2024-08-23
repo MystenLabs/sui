@@ -4,7 +4,7 @@
 import { useAppSelector } from '_hooks';
 import { setAttributes } from '_src/shared/experimentation/features';
 import { useGrowthBook } from '@growthbook/growthbook-react';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
+import { fromB64, toB64 } from '@mysten/sui/utils';
 import * as Sentry from '@sentry/browser';
 import { useEffect } from 'react';
 import Browser from 'webextension-polyfill';

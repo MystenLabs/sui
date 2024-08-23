@@ -12,9 +12,9 @@ use move_compiler::{
     command_line::compiler::move_check_for_errors,
     diagnostics::*,
     editions::{Edition, Flavor},
+    linters::{self, LintLevel},
     shared::{Flags, NumericalAddress, PackageConfig, PackagePaths},
-    sui_mode::linters::{known_filters, linter_visitors},
-    Compiler, PASS_PARSER,
+    sui_mode, Compiler, PASS_PARSER,
 };
 
 /// Shared flag to keep any temporary results of the test
@@ -23,10 +23,12 @@ const KEEP_TMP: &str = "KEEP";
 const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
+const IDE_EXT: &str = "ide";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
 const MOVE_2024_DIR: &str = "move_2024";
+const DEV_DIR: &str = "development";
 
 fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
@@ -50,16 +52,19 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
-    let lint = path.components().any(|c| c.as_os_str() == LINTER_DIR);
-    let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
+    let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
+    let lint = path_contains(LINTER_DIR);
+    let flavor = if path_contains(SUI_MODE_DIR) {
         Flavor::Sui
     } else {
         Flavor::default()
     };
-    let edition = if path.components().any(|c| c.as_os_str() == MOVE_2024_DIR) {
+    let edition = if path_contains(MOVE_2024_DIR) {
         Edition::E2024_ALPHA
+    } else if path_contains(DEV_DIR) {
+        Edition::DEVELOPMENT
     } else {
-        Edition::default()
+        Edition::LEGACY
     };
     let config = PackageConfig {
         flavor,
@@ -74,14 +79,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // file.
     if path.with_extension(TEST_EXT).exists() {
         let test_exp_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let test_out_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -101,16 +104,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // `path.migration` file.
     if path.with_extension(MIGRATION_EXT).exists() {
         let migration_exp_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            EXP_EXT
         );
         let migration_out_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -130,14 +129,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // A cross-module unused case that should run without unused warnings suppression
     if path.with_extension(UNUSED_EXT).exists() {
         let unused_exp_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let unused_out_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         run_test(
             path,
@@ -149,15 +146,33 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         )?;
     }
 
+    // A cross-module unused case that should run without unused warnings suppression
+    if path.with_extension(IDE_EXT).exists() {
+        let ide_exp_path = format!(
+            "{}.{IDE_EXT}.{EXP_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        let ide_out_path = format!(
+            "{}.{IDE_EXT}.{OUT_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        run_test(
+            path,
+            Path::new(&ide_exp_path),
+            Path::new(&ide_out_path),
+            Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
+            config.clone(),
+            lint,
+        )?;
+    }
+
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
-
-    let flags = Flags::empty();
 
     config
         .warning_filter
         .union(&WarningFilters::unused_warnings_filter_for_test());
-    run_test(path, &exp_path, &out_path, flags, config, lint)?;
+    run_test(path, &exp_path, &out_path, Flags::empty(), config, lint)?;
     Ok(())
 }
 
@@ -179,19 +194,20 @@ pub fn run_test_inner(
     exp_path: &Path,
     out_path: &Path,
     flags: Flags,
-    default_config: PackageConfig,
+    package_config: PackageConfig,
     lint: bool,
     migration_mode: bool,
 ) -> anyhow::Result<()> {
+    let flavor = package_config.flavor;
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
-    let named_address_map = default_testing_addresses(default_config.flavor);
+    let named_address_map = default_testing_addresses(flavor);
     let deps = vec![PackagePaths {
         name: Some(("stdlib".into(), PackageConfig::default())),
         paths: move_stdlib::move_stdlib_files(),
         named_address_map: named_address_map.clone(),
     }];
     let name = if migration_mode {
-        let mut config = default_config.clone();
+        let mut config = package_config.clone();
         config.edition = Edition::E2024_MIGRATION;
         Some(("test".into(), config))
     } else {
@@ -205,16 +221,22 @@ pub fn run_test_inner(
 
     let flags = flags.set_sources_shadow_deps(true);
 
-    let mut compiler = Compiler::from_package_paths(targets, deps)
+    let mut compiler = Compiler::from_package_paths(None, targets, deps)
         .unwrap()
         .set_flags(flags)
-        .set_default_config(default_config);
+        .set_default_config(package_config);
 
+    if flavor == Flavor::Sui {
+        let (prefix, filters) = sui_mode::linters::known_filters();
+        compiler = compiler.add_custom_known_filters(prefix, filters);
+        if lint {
+            compiler = compiler.add_visitors(sui_mode::linters::linter_visitors(LintLevel::All))
+        }
+    }
+    let (prefix, filters) = linters::known_filters();
+    compiler = compiler.add_custom_known_filters(prefix, filters);
     if lint {
-        let (prefix, filters) = known_filters();
-        compiler = compiler
-            .add_visitors(linter_visitors())
-            .add_custom_known_filters(prefix, filters);
+        compiler = compiler.add_visitors(linters::linter_visitors(LintLevel::All))
     }
 
     let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;
@@ -225,7 +247,7 @@ pub fn run_test_inner(
         if migration_mode {
             report_migration_to_buffer(&files, diags)
         } else {
-            report_diagnostics_to_buffer(&files, diags)
+            report_diagnostics_to_buffer(&files, diags, /* ansi_color */ false)
         }
     } else {
         vec![]

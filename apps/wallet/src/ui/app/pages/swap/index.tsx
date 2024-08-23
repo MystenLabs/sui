@@ -40,8 +40,8 @@ import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/co
 import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
-import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type DryRunTransactionBlockResponse } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import clsx from 'clsx';
@@ -470,9 +470,8 @@ export function SwapPageContent() {
 									<GasFeeSection
 										totalGas={totalGas || ''}
 										activeCoinType={activeCoinType}
-										amount={amount}
 										isValid={isValid}
-										averages={averages}
+										balanceChanges={balanceChanges}
 									/>
 								</div>
 							</Form>

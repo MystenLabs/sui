@@ -1,14 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use clap::*;
+use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
-use std::{
-    fmt::Display,
-    fs::create_dir_all,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Display, fs::create_dir_all, io::Write, path::Path};
 
 // TODO get a stable path to this stdlib
 // pub const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
@@ -29,7 +26,7 @@ pub struct New {
 }
 
 impl New {
-    pub fn execute_with_defaults(self, path: Option<PathBuf>) -> anyhow::Result<()> {
+    pub fn execute_with_defaults(self, path: Option<&Path>) -> anyhow::Result<()> {
         self.execute(
             path,
             std::iter::empty::<(&str, &str)>(),
@@ -40,29 +37,29 @@ impl New {
 
     pub fn execute(
         self,
-        path: Option<PathBuf>,
+        path: Option<&Path>,
         deps: impl IntoIterator<Item = (impl Display, impl Display)>,
         addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
         custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
         let Self { name } = self;
-        let p: PathBuf;
-        let path: &Path = match path {
-            Some(path) => {
-                p = path;
-                &p
-            }
-            None => Path::new(&name),
-        };
+
+        if !Identifier::is_valid(&name) {
+            return Err(anyhow!(
+                "Invalid package name. Package name must start with a lowercase letter \
+                 and consist only of lowercase letters, numbers, and underscores."
+            ));
+        }
+
+        let path = path.unwrap_or_else(|| Path::new(&name));
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         writeln!(
             w,
             r#"[package]
 name = "{name}"
-
-# edition = "2024.alpha" # To use the Move 2024 edition, currently in alpha
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 

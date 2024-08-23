@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use axum::http::header;
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -105,7 +104,7 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
             .client()
             .post(url.to_owned())
             .header(reqwest::header::CONTENT_ENCODING, "snappy")
-            .header(header::CONTENT_TYPE, PROTOBUF_FORMAT)
+            .header(reqwest::header::CONTENT_TYPE, PROTOBUF_FORMAT)
             .body(compressed)
             .send()
             .await?;

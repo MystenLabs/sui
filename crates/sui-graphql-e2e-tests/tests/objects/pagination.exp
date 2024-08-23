@@ -1,58 +1,66 @@
 processed 14 tasks
 
-task 1 'publish'. lines 6-23:
+task 1, lines 6-19:
+//# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 25-25:
+task 2, line 21:
+//# run Test::M1::create --args 0 @A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 27-27:
+task 3, line 23:
+//# run Test::M1::create --args 1 @A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'run'. lines 29-29:
+task 4, line 25:
+//# run Test::M1::create --args 2 @A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'run'. lines 31-31:
+task 5, line 27:
+//# run Test::M1::create --args 3 @A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'run'. lines 33-33:
+task 6, line 29:
+//# run Test::M1::create --args 4 @A
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'create-checkpoint'. lines 35-35:
+task 7, line 31:
+//# create-checkpoint
 Checkpoint created: 1
 
-task 8 'run-graphql'. lines 37-47:
+task 8, lines 33-43:
+//# run-graphql
 Response: {
   "data": {
     "address": {
       "objects": {
         "edges": [
           {
-            "cursor": "IAWFdWXz745y+2XoPW1GdARLfvQv5ujXSPEVGREUc1W9AQAAAAAAAAA="
+            "cursor": "IA0aEaJEDlKDSC1RffR0g05xlej/ngllhWVEzxP/GJRzAQAAAAAAAAA="
           },
           {
-            "cursor": "IAg/vruXXAMQsg3RWcFqbFDdB8aTSAIK1qambJEWenlQAQAAAAAAAAA="
+            "cursor": "ICQBOGJKQBVnTSjPn8d4hczgW9e+v+DLOnn6QGDo6U7zAQAAAAAAAAA="
           },
           {
-            "cursor": "IHqFyjDt4mM+1DWvCPYE9uPmoTsIMr+ZuM3R2hYK8IFFAQAAAAAAAAA="
+            "cursor": "ID3HvUbFPVmeQdDWVsKCpPr3nh9mRKSj7N245yafRVURAQAAAAAAAAA="
           },
           {
-            "cursor": "IMn8enyJ0IxjUr7vyFrVtUWeLq1G6T3NDA1z3aO6OlJRAQAAAAAAAAA="
+            "cursor": "ILwUdsEdxfOAmqkMcN3XldEVIQbAQF/kmEzvivjUOCMYAQAAAAAAAAA="
           },
           {
-            "cursor": "IPLbxsMur09B9zAV7Q83E22l4Q1uyCsSwnJnPYzAwIcLAQAAAAAAAAA="
+            "cursor": "IOilIztfYgbUm3NYHLbi80gIwVDLSHfs90ZoTKUdnHk9AQAAAAAAAAA="
           }
         ]
       }
@@ -60,17 +68,18 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 49-59:
+task 9, lines 45-55:
+//# run-graphql
 Response: {
   "data": {
     "address": {
       "objects": {
         "edges": [
           {
-            "cursor": "IAWFdWXz745y+2XoPW1GdARLfvQv5ujXSPEVGREUc1W9AQAAAAAAAAA="
+            "cursor": "IA0aEaJEDlKDSC1RffR0g05xlej/ngllhWVEzxP/GJRzAQAAAAAAAAA="
           },
           {
-            "cursor": "IAg/vruXXAMQsg3RWcFqbFDdB8aTSAIK1qambJEWenlQAQAAAAAAAAA="
+            "cursor": "ICQBOGJKQBVnTSjPn8d4hczgW9e+v+DLOnn6QGDo6U7zAQAAAAAAAAA="
           }
         ]
       }
@@ -78,22 +87,8 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 61-73:
-Response: {
-  "data": {
-    "address": {
-      "objects": {
-        "edges": [
-          {
-            "cursor": "IPLbxsMur09B9zAV7Q83E22l4Q1uyCsSwnJnPYzAwIcLAQAAAAAAAAA="
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 11 'run-graphql'. lines 75-85:
+task 10, lines 57-69:
+//# run-graphql --cursors @{obj_5_0}
 Response: {
   "data": {
     "address": {
@@ -104,14 +99,18 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 87-97:
+task 11, lines 71-81:
+//# run-graphql --cursors @{obj_4_0}
 Response: {
   "data": {
     "address": {
       "objects": {
         "edges": [
           {
-            "cursor": "IAWFdWXz745y+2XoPW1GdARLfvQv5ujXSPEVGREUc1W9AQAAAAAAAAA="
+            "cursor": "ICQBOGJKQBVnTSjPn8d4hczgW9e+v+DLOnn6QGDo6U7zAQAAAAAAAAA="
+          },
+          {
+            "cursor": "ID3HvUbFPVmeQdDWVsKCpPr3nh9mRKSj7N245yafRVURAQAAAAAAAAA="
           }
         ]
       }
@@ -119,17 +118,34 @@ Response: {
   }
 }
 
-task 13 'run-graphql'. lines 99-108:
+task 12, lines 83-93:
+//# run-graphql --cursors @{obj_3_0}
 Response: {
   "data": {
     "address": {
       "objects": {
         "edges": [
           {
-            "cursor": "IMn8enyJ0IxjUr7vyFrVtUWeLq1G6T3NDA1z3aO6OlJRAQAAAAAAAAA="
+            "cursor": "IA0aEaJEDlKDSC1RffR0g05xlej/ngllhWVEzxP/GJRzAQAAAAAAAAA="
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 13, lines 95-104:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "edges": [
+          {
+            "cursor": "ILwUdsEdxfOAmqkMcN3XldEVIQbAQF/kmEzvivjUOCMYAQAAAAAAAAA="
           },
           {
-            "cursor": "IPLbxsMur09B9zAV7Q83E22l4Q1uyCsSwnJnPYzAwIcLAQAAAAAAAAA="
+            "cursor": "IOilIztfYgbUm3NYHLbi80gIwVDLSHfs90ZoTKUdnHk9AQAAAAAAAAA="
           }
         ]
       }

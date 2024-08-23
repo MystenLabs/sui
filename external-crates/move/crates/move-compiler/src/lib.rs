@@ -10,14 +10,6 @@ extern crate move_ir_types;
 #[macro_use(symbol)]
 extern crate move_symbol_pool;
 
-pub const STACK_LIMIT: usize = 42 * 1_000_000_000;
-
-macro_rules! with_large_stack {
-    ($e:expr) => {
-        stacker::grow($crate::STACK_LIMIT, || $e)
-    };
-}
-
 pub mod cfgir;
 pub mod command_line;
 pub mod compiled_unit;
@@ -27,6 +19,7 @@ pub mod expansion;
 pub mod hlir;
 pub mod interface_generator;
 pub mod ir_translation;
+pub mod linters;
 pub mod naming;
 pub mod parser;
 pub mod shared;

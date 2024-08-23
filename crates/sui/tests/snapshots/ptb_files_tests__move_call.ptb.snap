@@ -1,0 +1,24 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────────╮
+│ PTB Preview                                    │
+├───────────────┬────────────────────────────────┤
+│ command       │ values                         │
+├───────────────┼────────────────────────────────┤
+│ assign        │ a none                         │
+│ make-move-vec │ <0x1::option::Option<u64>> [a] │
+│ move-call     │ 0x1::option::is_none<u64> a    │
+│ assign        │ a none                         │
+│ move-call     │ 0x1::option::is_none<u64> none │
+│ assign        │ a none                         │
+│ move-call     │ 0x1::option::is_none<u64> a    │
+╰───────────────┴────────────────────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([0])
+Command 0: MakeMoveVec(Some0x1::option::Option<u64>,[Input(0)])
+Command 1: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
+Command 2: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
+Command 3: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))

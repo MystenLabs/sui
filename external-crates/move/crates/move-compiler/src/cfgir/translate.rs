@@ -7,24 +7,29 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
+        visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
     diagnostics::Diagnostics,
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent},
+    expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
-    parser::ast::{ConstantName, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, CompilationEnv},
+    parser::ast::{ConstantName, FunctionName},
+    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
@@ -38,8 +43,8 @@ enum NamedBlockType {
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    info: &'env TypingProgramInfo,
     current_package: Option<Symbol>,
-    struct_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -47,29 +52,11 @@ struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(
-        env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
-        modules: &UniqueMap<ModuleIdent, H::ModuleDefinition>,
-    ) -> Self {
-        let all_modules = modules
-            .key_cloned_iter()
-            .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .hlir
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !modules.contains_key(mident))
-            }));
-        let struct_declared_abilities = UniqueMap::maybe_from_iter(
-            all_modules
-                .map(|(m, mdef)| (m, mdef.structs.ref_map(|_s, sdef| sdef.abilities.clone()))),
-        )
-        .unwrap();
+    pub fn new(env: &'env mut CompilationEnv, info: &'env TypingProgramInfo) -> Self {
         Context {
             env,
+            info,
             current_package: None,
-            struct_declared_abilities,
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -135,17 +122,23 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: H::Program,
 ) -> G::Program {
-    let H::Program { modules: hmodules } = prog;
+    let H::Program {
+        modules: hmodules,
+        info,
+    } = prog;
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &hmodules);
+    let mut context = Context::new(compilation_env, &info);
 
     let modules = modules(&mut context, hmodules);
 
-    let program = G::Program { modules };
-    visit_program(&mut context, &program);
+    let mut program = G::Program {
+        modules,
+        info: info.clone(),
+    };
+    visit_program(&mut context, &mut program);
     program
 }
 
@@ -168,10 +161,11 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         dependency_order,
         friends,
         structs,
+        enums,
         functions: hfunctions,
         constants: hconstants,
     } = mdef;
@@ -187,10 +181,11 @@ fn module(
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
+            enums,
             constants,
             functions,
         },
@@ -329,12 +324,16 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
             C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(exp) | C::Assign(_, exp) => dep_exp(set, exp),
+            C::Abort(exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
             C::Mutate(lhs, rhs) => {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
             }
-            C::Break(_) | C::Continue(_) | C::Jump { .. } | C::JumpIf { .. } => (),
+            C::Break(_)
+            | C::Continue(_)
+            | C::Jump { .. }
+            | C::JumpIf { .. }
+            | C::VariantSwitch { .. } => (),
         }
     }
 
@@ -350,6 +349,16 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
                 dep_exp(set, cond);
                 dep_block(set, if_block);
                 dep_block(set, else_block)
+            }
+            S::VariantMatch {
+                subject,
+                enum_name: _,
+                arms,
+            } => {
+                dep_exp(set, subject);
+                for (_, arm) in arms {
+                    dep_block(set, arm);
+                }
             }
             S::While {
                 cond: (cond_block, cond_exp),
@@ -440,7 +449,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, H::SingleType>,
+    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
@@ -449,7 +458,7 @@ fn constant_(
     let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
     context.clear_block_state();
 
-    let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+    let binfo = block_info.iter().map(destructure_tuple);
     let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
     assert!(infinite_loop_starts.is_empty(), "{}", ICE_MSG);
     assert!(errors.is_empty(), "{}", ICE_MSG);
@@ -462,9 +471,10 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        info: context.info,
+        package: context.current_package,
         module,
         member: cfgir::MemberName::Constant(name.0),
-        struct_declared_abilities: &context.struct_declared_abilities,
         attributes,
         entry: None,
         visibility: H::Visibility::Internal,
@@ -564,6 +574,7 @@ fn function(
         index,
         attributes,
         visibility,
+        compiled_visibility,
         entry,
         signature,
         body,
@@ -585,6 +596,7 @@ fn function(
         index,
         attributes,
         visibility,
+        compiled_visibility,
         entry,
         signature,
         body,
@@ -611,16 +623,17 @@ fn function_body(
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
-            let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+            let binfo = block_info.iter().map(destructure_tuple);
 
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
 
             let function_context = super::CFGContext {
+                info: context.info,
+                package: context.current_package,
                 module,
                 member: cfgir::MemberName::Function(name.0),
-                struct_declared_abilities: &context.struct_declared_abilities,
                 attributes,
                 entry,
                 visibility,
@@ -662,6 +675,7 @@ fn function_body(
 
 type BlockList = Vec<(Label, BasicBlock)>;
 
+#[growing_stack]
 fn block(context: &mut Context, stmts: H::Block) -> BlockList {
     let (start_block, blocks) = block_(context, stmts);
     [(context.new_label(), start_block)]
@@ -670,6 +684,7 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
         .collect()
 }
 
+#[growing_stack]
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut current_block: BasicBlock = VecDeque::new();
     let mut blocks = Vec::new();
@@ -687,7 +702,7 @@ fn finalize_blocks(
     blocks: BlockList,
 ) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
     // Given the in-order vector of blocks we'd like to emit, we do three things:
-    // 1. Generate an in-order mat from that list.
+    // 1. Generate an in-order map from that list.
     // 2. Generate block info for the blocks in order.
     // 3. Discard the in-order vector in favor of a (remapped) BTreeMap for CFG.
 
@@ -734,6 +749,7 @@ fn finalize_blocks(
     (out_label, out_blocks, block_info)
 }
 
+#[growing_stack]
 fn statement(
     context: &mut Context,
     sp!(sloc, stmt): H::Statement,
@@ -778,6 +794,49 @@ fn statement(
 
             (test_block, new_blocks)
         }
+
+        S::VariantMatch {
+            subject,
+            enum_name,
+            arms,
+        } => {
+            let subject = *subject;
+
+            let phi_label = context.new_label();
+
+            let mut arm_blocks = BlockList::new();
+
+            let arms = arms
+                .into_iter()
+                .map(|(variant_name, arm_block)| {
+                    let arm_label = context.new_label();
+                    let (arm_entry_block, arm_entry_blocks) = block_(
+                        context,
+                        with_last(arm_block, make_jump(sloc, phi_label, false)),
+                    );
+                    let mut blocks = [(arm_label, arm_entry_block)]
+                        .into_iter()
+                        .chain(arm_entry_blocks)
+                        .collect::<BlockList>();
+                    arm_blocks.append(&mut blocks);
+                    (variant_name, arm_label)
+                })
+                .collect::<Vec<_>>();
+
+            arm_blocks.push((phi_label, current_block));
+
+            let test_block = VecDeque::from([sp(
+                sloc,
+                C::VariantSwitch {
+                    subject,
+                    enum_name,
+                    arms,
+                },
+            )]);
+
+            (test_block, arm_blocks)
+        }
+
         // We could turn these into loops earlier and elide this case.
         S::While {
             name,
@@ -896,78 +955,105 @@ fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
     sp(loc, H::Command_::Jump { target, from_user })
 }
 
+// Added to dodge a clippy complaint
+fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
+    (fst, snd)
+}
+
 //**************************************************************************************************
 // Visitors
 //**************************************************************************************************
 
-fn visit_program(context: &mut Context, prog: &G::Program) {
-    if context.env.visitors().abs_int.is_empty() {
+fn visit_program(context: &mut Context, prog: &mut G::Program) {
+    if context.env.visitors().abs_int.is_empty() && context.env.visitors().cfgir.is_empty() {
         return;
     }
 
-    for (mident, mdef) in prog.modules.key_cloned_iter() {
-        visit_module(context, prog, mident, mdef)
-    }
-}
+    AbsintVisitor.visit(context.env, prog);
 
-fn visit_module(
-    context: &mut Context,
-    prog: &G::Program,
-    mident: ModuleIdent,
-    mdef: &G::ModuleDefinition,
-) {
-    context
-        .env
-        .add_warning_filter_scope(mdef.warning_filter.clone());
-    for (name, fdef) in mdef.functions.key_cloned_iter() {
-        visit_function(context, prog, mident, name, fdef)
-    }
-    context.env.pop_warning_filter_scope();
-}
-
-fn visit_function(
-    context: &mut Context,
-    prog: &G::Program,
-    mident: ModuleIdent,
-    name: FunctionName,
-    fdef: &G::Function,
-) {
-    let G::Function {
-        warning_filter,
-        index: _,
-        attributes,
-        visibility,
-        entry,
-        signature,
-        body,
-    } = fdef;
-    let G::FunctionBody_::Defined {
-        locals,
-        start,
-        blocks,
-        block_info,
-    } = &body.value
-    else {
-        return;
-    };
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
-    let function_context = super::CFGContext {
-        module: mident,
-        member: cfgir::MemberName::Function(name.0),
-        struct_declared_abilities: &context.struct_declared_abilities,
-        attributes,
-        entry: *entry,
-        visibility: *visibility,
-        signature,
-        locals,
-        infinite_loop_starts: &infinite_loop_starts,
-    };
-    let mut ds = Diagnostics::new();
-    for visitor in &context.env.visitors().abs_int {
+    for visitor in &context.env.visitors().cfgir {
         let mut v = visitor.borrow_mut();
-        ds.extend(v.verify(context.env, prog, &function_context, &cfg));
+        v.visit(context.env, prog)
     }
-    context.env.add_diags(ds);
-    context.env.pop_warning_filter_scope();
+}
+
+struct AbsintVisitor;
+struct AbsintVisitorContext<'a> {
+    env: &'a mut CompilationEnv,
+    info: Arc<TypingProgramInfo>,
+    current_package: Option<Symbol>,
+}
+
+impl CFGIRVisitorConstructor for AbsintVisitor {
+    type Context<'a> = AbsintVisitorContext<'a>;
+
+    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+        AbsintVisitorContext {
+            env,
+            info: program.info.clone(),
+            current_package: None,
+        }
+    }
+}
+
+impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
+    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &mut G::ModuleDefinition) -> bool {
+        self.current_package = mdef.package_name;
+        false
+    }
+
+    fn visit_function_custom(
+        &mut self,
+        mident: ModuleIdent,
+        name: FunctionName,
+        fdef: &mut G::Function,
+    ) -> bool {
+        let G::Function {
+            warning_filter: _,
+            index: _,
+            attributes,
+            compiled_visibility: _,
+            visibility,
+            entry,
+            signature,
+            body,
+        } = fdef;
+        let G::FunctionBody_::Defined {
+            locals,
+            start,
+            blocks,
+            block_info,
+        } = &body.value
+        else {
+            return true;
+        };
+        let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
+        let function_context = super::CFGContext {
+            info: &self.info,
+            package: self.current_package,
+            module: mident,
+            member: cfgir::MemberName::Function(name.0),
+            attributes,
+            entry: *entry,
+            visibility: *visibility,
+            signature,
+            locals,
+            infinite_loop_starts: &infinite_loop_starts,
+        };
+        let mut ds = Diagnostics::new();
+        for visitor in &self.env.visitors().abs_int {
+            let mut v = visitor.borrow_mut();
+            ds.extend(v.verify(self.env, &function_context, &cfg));
+        }
+        self.env.add_diags(ds);
+        true
+    }
 }

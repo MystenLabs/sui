@@ -7,7 +7,6 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
 import { bytesEqual, PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
@@ -70,20 +69,16 @@ describe('Publickey', () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
 		const sig1 = await k1.signPersonalMessage(data);
-		const sig2 = await k2.signTransactionBlock(data);
+		const sig2 = await k2.signTransaction(data);
 
-		expect(await pk1.verifyWithIntent(data, sig1.signature, IntentScope.PersonalMessage)).toEqual(
-			false,
-		);
-		expect(await pk2.verifyWithIntent(data, sig2.signature, IntentScope.TransactionData)).toEqual(
-			true,
-		);
+		expect(await pk1.verifyWithIntent(data, sig1.signature, 'PersonalMessage')).toEqual(false);
+		expect(await pk2.verifyWithIntent(data, sig2.signature, 'TransactionData')).toEqual(true);
 
 		expect(
 			await pk1.verifyWithIntent(
-				bcs.ser(['vector', 'u8'], data).toBytes(),
+				bcs.vector(bcs.U8).serialize(data).toBytes(),
 				sig1.signature,
-				IntentScope.PersonalMessage,
+				'PersonalMessage',
 			),
 		).toEqual(true);
 	});
@@ -92,20 +87,20 @@ describe('Publickey', () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
 		const sig1 = await k1.signPersonalMessage(data);
-		const sig2 = await k2.signTransactionBlock(data);
+		const sig2 = await k2.signTransaction(data);
 
 		expect(await pk2.verifyPersonalMessage(data, sig2.signature)).toEqual(false);
 		expect(await pk1.verifyPersonalMessage(data, sig1.signature)).toEqual(true);
 	});
 
-	it('`verifyTransactionBlock()` should correctly verify a signed transaction block', async () => {
+	it('`verifyTransaction()` should correctly verify a signed transaction block', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
 		const sig1 = await k1.signPersonalMessage(data);
-		const sig2 = await k2.signTransactionBlock(data);
+		const sig2 = await k2.signTransaction(data);
 
-		expect(await pk1.verifyTransactionBlock(data, sig1.signature)).toEqual(false);
-		expect(await pk2.verifyTransactionBlock(data, sig2.signature)).toEqual(true);
+		expect(await pk1.verifyTransaction(data, sig1.signature)).toEqual(false);
+		expect(await pk2.verifyTransaction(data, sig2.signature)).toEqual(true);
 	});
 
 	it('`toSuiBytes()` should return the correct byte representation of the public key with the signature scheme flag', async () => {

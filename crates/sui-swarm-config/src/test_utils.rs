@@ -13,7 +13,8 @@ use sui_types::{
     },
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
-        EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
+        CheckpointVersionSpecificData, EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint,
+        VerifiedCheckpointContents,
     },
 };
 
@@ -100,7 +101,8 @@ impl CommitteeFixture {
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data: None,
             timestamp_ms: 0,
-            version_specific_data: Vec::new(),
+            version_specific_data: bcs::to_bytes(&CheckpointVersionSpecificData::empty_for_tests())
+                .unwrap(),
             checkpoint_commitments: Default::default(),
         };
 
@@ -130,7 +132,7 @@ impl CommitteeFixture {
 
         let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
             .unwrap()
-            .verify(self.committee())
+            .try_into_verified(self.committee())
             .unwrap();
 
         checkpoint
@@ -182,7 +184,10 @@ impl CommitteeFixture {
                     epoch_rolling_gas_cost_summary: Default::default(),
                     end_of_epoch_data: None,
                     timestamp_ms: 0,
-                    version_specific_data: Vec::new(),
+                    version_specific_data: bcs::to_bytes(
+                        &CheckpointVersionSpecificData::empty_for_tests(),
+                    )
+                    .unwrap(),
                     checkpoint_commitments: Default::default(),
                 };
 
@@ -232,7 +237,8 @@ impl CommitteeFixture {
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data,
             timestamp_ms: 0,
-            version_specific_data: Vec::new(),
+            version_specific_data: bcs::to_bytes(&CheckpointVersionSpecificData::empty_for_tests())
+                .unwrap(),
             checkpoint_commitments: Default::default(),
         };
 

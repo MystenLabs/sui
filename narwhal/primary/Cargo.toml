@@ -29,7 +29,6 @@ tracing.workspace = true
 tap.workspace = true
 
 fastcrypto.workspace = true
-fastcrypto-tbls.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }

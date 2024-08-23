@@ -1,0 +1,24 @@
+module 0x42::m {
+    public struct A { x: u64 }
+
+    fun t00(s: A): u64 {
+        match (s) {
+            A { x: 0 } => 0,
+            A { x } => x,
+        }
+    }
+
+    fun t01(s: &A, default: &u64): &u64 {
+        match (s) {
+            A { x: 0 } => default,
+            A { x } => x,
+        }
+    }
+
+    fun t02(s: &mut A, default: &mut u64): &mut u64 {
+        match (s) {
+            A { x: 0 } => default,
+            A { x } => x,
+        }
+    }
+}

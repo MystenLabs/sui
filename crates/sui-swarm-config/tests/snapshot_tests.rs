@@ -133,7 +133,6 @@ fn network_config_snapshot_matches() {
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
             consensus_config.address = Multiaddr::empty();
             consensus_config.db_path = PathBuf::from("/tmp/foo/");
-            consensus_config.internal_worker_address = Some(Multiaddr::empty());
             consensus_config
                 .narwhal_config
                 .prometheus_metrics

@@ -1,0 +1,97 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[5:14]
+ 4 │ --assign d
+ 5 │ --assign a b c
+   ·              ┬
+   ·              ╰── Unexpected identifier 'c'
+ 6 │ --assign a b c e f
+   ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+   ╭─[6:14]
+ 5 │ --assign a b c
+ 6 │ --assign a b c e f
+   ·              ┬
+   ·              ╰── Unexpected identifier 'c'
+ 7 │ --assign
+   ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+   ╭─[8:1]
+ 7 │ --assign
+ 8 │ --assign gas 1
+   · ────┬───
+   ·     ╰── Expected an identifier but found command '--assign'
+ 9 │ --assign none 2
+   ╰────
+
+  × Error when processing PTB
+   ╭─[8:10]
+ 7 │ --assign
+ 8 │ --assign gas 1
+   ·          ─┬─
+   ·           ╰── Expected a variable name but found reserved word 'gas'.
+ 9 │ --assign none 2
+   ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+    ╭─[9:10]
+  8 │ --assign gas 1
+  9 │ --assign none 2
+    ·          ──┬─
+    ·            ╰── Expected a variable name but found reserved word 'none'.
+ 10 │ --assign a
+    ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+    ╭─[14:14]
+ 13 │ --assign d
+ 14 │ --assign a b c
+    ·              ┬
+    ·              ╰── Unexpected identifier 'c'
+ 15 │ --assign a b c e f
+    ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+    ╭─[15:14]
+ 14 │ --assign a b c
+ 15 │ --assign a b c e f
+    ·              ┬
+    ·              ╰── Unexpected identifier 'c'
+ 16 │ --assign gas 1
+    ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+    ╭─[16:10]
+ 15 │ --assign a b c e f
+ 16 │ --assign gas 1
+    ·          ─┬─
+    ·           ╰── Expected a variable name but found reserved word 'gas'.
+ 17 │ --assign none 2 
+    ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+
+  × Error when processing PTB
+    ╭─[17:10]
+ 16 │ --assign gas 1
+ 17 │ --assign none 2 
+    ·          ──┬─
+    ·            ╰── Expected a variable name but found reserved word 'none'.
+    ╰────
+  help: Variable names cannot be 'address', 'bool', 'vector', 'some',
+        'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
+

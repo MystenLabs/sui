@@ -9,13 +9,11 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
-
-    struct S has key, store {
+    public struct S has key, store {
         id: sui::object::UID,
     }
 
-    struct R has key {
+    public struct R has key {
         id: sui::object::UID,
         s: S,
     }

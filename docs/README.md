@@ -48,4 +48,4 @@ Sui is for the community. Contribute for the benefit of all.
 
 ## License
 
-The Sui Documentation is distributed under the [LICENSE](CC BY 4.0 license).
+The Sui Documentation is distributed under the [CC BY 4.0 license](../LICENSE-docs).

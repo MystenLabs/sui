@@ -5,7 +5,7 @@ use clap::Parser;
 #[cfg(feature = "unit_test")]
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
-use std::path::PathBuf;
+use std::path::Path;
 use sui_move_build::set_sui_flavor;
 
 #[cfg(feature = "build")]
@@ -15,6 +15,7 @@ pub mod coverage;
 #[cfg(feature = "disassemble")]
 pub mod disassemble;
 pub mod manage_package;
+pub mod migrate;
 pub mod new;
 #[cfg(feature = "unit_test")]
 pub mod unit_test;
@@ -28,6 +29,7 @@ pub enum Command {
     #[cfg(feature = "disassemble")]
     Disassemble(disassemble::Disassemble),
     ManagePackage(manage_package::ManagePackage),
+    Migrate(migrate::Migrate),
     New(new::New),
     #[cfg(feature = "unit_test")]
     Test(unit_test::Test),
@@ -41,7 +43,7 @@ pub struct Calib {
 }
 
 pub fn execute_move_command(
-    package_path: Option<PathBuf>,
+    package_path: Option<&Path>,
     mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
@@ -56,6 +58,7 @@ pub fn execute_move_command(
         #[cfg(feature = "disassemble")]
         Command::Disassemble(c) => c.execute(package_path, build_config),
         Command::ManagePackage(c) => c.execute(package_path, build_config),
+        Command::Migrate(c) => c.execute(package_path, build_config),
         Command::New(c) => c.execute(package_path),
 
         #[cfg(feature = "unit_test")]

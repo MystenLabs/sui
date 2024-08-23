@@ -24,7 +24,7 @@ function PageTitle({ title = '', back, after }: PageTitleProps) {
 						return;
 					}
 					navigate(-1);
-			  }
+				}
 			: undefined;
 	return (
 		<div className="flex items-center relative gap-5 w-full">

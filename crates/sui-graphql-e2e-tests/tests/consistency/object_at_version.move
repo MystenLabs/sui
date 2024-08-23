@@ -14,20 +14,16 @@
 // checkpoint 4. The object would only be visible at version 6 from objects_snapshot, and at version
 // 7 from objects_history.
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         o: Object
     }
@@ -223,6 +219,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Querying objects by version doesn't require it to be in the snapshot table.
 {
   object_within_available_range: object(
     address: "@{obj_2_0}"

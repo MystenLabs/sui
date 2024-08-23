@@ -9,7 +9,7 @@ use sui_types::digests::{ObjectDigest, TransactionDigest};
 
 pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) struct Digest([u8; BASE58_DIGEST_LENGTH]);
 
 #[derive(thiserror::Error, Debug)]
@@ -22,8 +22,12 @@ pub(crate) enum Error {
 }
 
 impl Digest {
-    pub(crate) fn to_vec(&self) -> Vec<u8> {
+    pub(crate) fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        &self.0
     }
 }
 

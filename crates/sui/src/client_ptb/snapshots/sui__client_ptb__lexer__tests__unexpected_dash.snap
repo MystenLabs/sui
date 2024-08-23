@@ -1,0 +1,16 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: tokens
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Lexeme(
+            Unexpected,
+            "-",
+        ),
+    },
+]

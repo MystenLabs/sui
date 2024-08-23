@@ -2,11 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_proc_macros::growing_stack;
+
 use crate::{
     cfgir::{
         ast::remap_labels,
         cfg::{MutForwardCFG, CFG},
     },
+    expansion::ast::Mutability,
     hlir::ast::{BasicBlocks, Command_, FunctionSignature, Label, SingleType, Value, Var},
     parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
@@ -16,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -33,6 +36,7 @@ fn optimize_(start: Label, blocks: &mut BasicBlocks) -> bool {
     inline_single_target_blocks(&single_target_labels, start, blocks)
 }
 
+#[growing_stack]
 fn find_single_target_labels(start: Label, blocks: &BasicBlocks) -> BTreeSet<Label> {
     use Command_ as C;
     let mut counts = BTreeMap::new();

@@ -7,14 +7,12 @@
 
 //# publish
 module a::m {
-    use sui::object;
-    use sui::tx_context::{Self, TxContext};
 
-    struct S has key, store {
+    public struct S has key, store {
         id: object::UID,
     }
 
-    struct T has key, store {
+    public struct T has key, store {
         id: object::UID,
         s: S,
     }
