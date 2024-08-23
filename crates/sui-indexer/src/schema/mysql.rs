@@ -159,6 +159,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    full_objects_history (object_id, object_version) {
+        object_id -> Blob,
+        object_version -> Bigint,
+        serialized_object -> Nullable<Mediumblob>,
+    }
+}
+
+diesel::table! {
     objects (object_id) {
         object_id -> Blob,
         object_version -> Bigint,
