@@ -7801,7 +7801,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=220f52a15804a768610ac0ae3b8da7de4a5c4d2b#220f52a15804a768610ac0ae3b8da7de4a5c4d2b"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b320996d8dfb99b273fe31c0222c659332283c99#b320996d8dfb99b273fe31c0222c659332283c99"
 dependencies = [
  "ahash 0.7.8",
  "async-task",
@@ -7830,7 +7830,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=220f52a15804a768610ac0ae3b8da7de4a5c4d2b#220f52a15804a768610ac0ae3b8da7de4a5c4d2b"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b320996d8dfb99b273fe31c0222c659332283c99#b320996d8dfb99b273fe31c0222c659332283c99"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2 1.0.78",
@@ -7947,6 +7947,7 @@ dependencies = [
  "prometheus",
  "prometheus-closure-metric",
  "scopeguard",
+ "simple-server-timing-header",
  "tap",
  "tokio",
  "tracing",
@@ -7986,6 +7987,7 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
+ "simple-server-timing-header",
  "telemetry-subscribers",
  "tokio",
  "tower",
@@ -11992,6 +11994,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32fea41aca09ee824cc9724996433064c89f7777e60762749a4170a14abbfa21"
 
 [[package]]
+name = "simple-server-timing-header"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e78919e05c9b8e123d435a4ad104b488ad1585631830e413830985c214086e"
+
+[[package]]
 name = "simple_asn1"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13670,6 +13678,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "mysten-metrics",
+ "mysten-service",
  "once_cell",
  "prometheus",
  "serde",
@@ -14075,8 +14084,10 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
+ "mysten-service",
  "narwhal-network",
  "narwhal-worker",
+ "parking_lot 0.12.1",
  "prometheus",
  "reqwest 0.12.5",
  "serde",

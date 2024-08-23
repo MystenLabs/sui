@@ -17,6 +17,7 @@ use move_core_types::language_storage::StructTag;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
@@ -721,10 +722,12 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
-                transaction_kv_store.get_tx(digest).await.map_err(|err| {
+                let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
-                })
+                });
+                add_server_timing("tx_kv_lookup");
+                ret
             })
             .await
             .map_err(Error::from)??;

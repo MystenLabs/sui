@@ -16,7 +16,7 @@ use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, Quor
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
+use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -165,7 +165,7 @@ where
                 transaction,
                 response.effects_cert.executed_epoch(),
             );
-            Self::execute_finalized_tx_locally_with_timeout(
+            let executed_locally = Self::execute_finalized_tx_locally_with_timeout(
                 &self.validator_state,
                 &epoch_store,
                 &executable_tx,
@@ -173,7 +173,9 @@ where
                 &self.metrics,
             )
             .await
-            .is_ok()
+            .is_ok();
+            add_server_timing("local_execution");
+            executed_locally
         } else {
             false
         };
@@ -279,6 +281,7 @@ where
             self.metrics.wait_for_finality_timeout.inc();
             return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
+        add_server_timing("wait_for_finality");
 
         drop(_txn_finality_timer);
         drop(_wait_for_finality_gauge);
