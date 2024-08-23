@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    register_histogram_with_registry, register_int_gauge_with_registry, Histogram, IntGauge,
-    Registry,
-};
+use mysten_metrics::histogram::Histogram;
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::sync::Arc;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::Pipe;
@@ -86,13 +84,11 @@ impl Inner {
             )
             .unwrap(),
 
-            checkpoint_summary_age_ms: register_histogram_with_registry!(
+            checkpoint_summary_age_ms: Histogram::new_in_registry(
                 "checkpoint_summary_age_ms",
                 "Age of checkpoints summaries when they arrive and are verified.",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
+            ),
         }
         .pipe(Arc::new)
     }

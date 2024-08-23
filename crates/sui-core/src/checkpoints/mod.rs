@@ -1511,7 +1511,7 @@ impl CheckpointBuilder {
                 timestamp_ms,
                 matching_randomness_rounds,
             );
-            summary.report_checkpoint_age(&self.metrics.last_created_checkpoint_age);
+            summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
             if last_checkpoint_of_epoch {
                 info!(
                     checkpoint_seq = sequence_number,
@@ -1894,7 +1894,7 @@ impl CheckpointAggregator {
                         .set(current.summary.sequence_number as i64);
                     current
                         .summary
-                        .report_checkpoint_age(&self.metrics.last_certified_checkpoint_age);
+                        .report_checkpoint_age_ms(&self.metrics.last_certified_checkpoint_age_ms);
                     result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;
