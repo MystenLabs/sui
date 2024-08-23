@@ -48,7 +48,7 @@ macro_rules! get_or_add_item_macro {
     }};
 }
 
-pub const TABLE_MAX_SIZE: usize = u16::max_value() as usize;
+pub const TABLE_MAX_SIZE: usize = u16::MAX as usize;
 fn get_or_add_item_ref<K: Clone + Eq + Hash>(
     m: &mut HashMap<K, TableIndex>,
     k: &K,

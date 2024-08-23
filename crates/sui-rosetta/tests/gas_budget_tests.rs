@@ -28,6 +28,7 @@ mod rosetta_client;
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 enum TransactionIdentifierResponseResult {
+    #[allow(unused)]
     Success(TransactionIdentifierResponse),
     Error(RosettaSubmitGasError),
 }

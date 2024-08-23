@@ -354,7 +354,7 @@ impl BridgeAction {
     // Digest of BridgeAction (with Keccak256 hasher)
     pub fn digest(&self) -> BridgeActionDigest {
         let mut hasher = Keccak256::default();
-        hasher.update(&self.to_bytes());
+        hasher.update(self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
     }
 

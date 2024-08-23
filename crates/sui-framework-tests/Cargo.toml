@@ -7,6 +7,9 @@ description = "Runs Move tests for sui-framework"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [[test]]
 name = "move_tests"
 harness = false

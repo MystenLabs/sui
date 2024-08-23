@@ -693,7 +693,7 @@ fn get_genesis_agg<A: Clone>(
         .build_custom_clients(clients)
 }
 
-fn get_agg_at_epoch<A: Clone>(
+fn get_agg_at_epoch<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,

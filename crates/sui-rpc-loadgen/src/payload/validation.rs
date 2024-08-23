@@ -16,7 +16,7 @@ use tracing::log::warn;
 
 const LOADGEN_QUERY_MAX_RESULT_LIMIT: usize = 25;
 
-pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
+pub(crate) fn cross_validate_entities<U>(entities: &[Vec<U>], entity_name: &str)
 where
     U: PartialEq + Debug,
 {

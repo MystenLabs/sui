@@ -102,9 +102,9 @@ impl axum::response::IntoResponse for BcsRejection {
                 "Expected request with `Content-Type: application/bcs`",
             )
                 .into_response(),
-            BcsRejection::DeserializationError(_) => (
+            BcsRejection::DeserializationError(e) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Failed to deserialize the BCS body into the target type",
+                format!("Failed to deserialize the BCS body into the target type: {e}"),
             )
                 .into_response(),
             BcsRejection::BytesRejection(bytes_rejection) => bytes_rejection.into_response(),

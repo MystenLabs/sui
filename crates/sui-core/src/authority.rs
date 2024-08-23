@@ -3651,12 +3651,12 @@ impl AuthorityState {
                     .rev()
                     .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
                     .skip(usize::from(cursor.is_some()));
-                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+                return Ok(iter.take(limit.unwrap_or(usize::MAX)).collect());
             } else {
                 let iter = iter
                     .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
                     .skip(usize::from(cursor.is_some()));
-                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+                return Ok(iter.take(limit.unwrap_or(usize::MAX)).collect());
             }
         }
         self.get_indexes()?
@@ -5469,7 +5469,6 @@ impl NodeStateDump {
         Ok(path)
     }
 
-    #[cfg(not(release))]
     pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let file = File::open(path)?;
         serde_json::from_reader(file).map_err(|e| anyhow::anyhow!(e))

@@ -157,7 +157,7 @@ impl FunctionGenerationContext {
 
     pub fn incr_instruction_count(&mut self) -> Option<()> {
         self.bytecode_len += 1;
-        if self.bytecode_len >= (u16::max_value() - 1) as u64 {
+        if self.bytecode_len >= (u16::MAX - 1) as u64 {
             return None;
         }
         Some(())
@@ -357,25 +357,23 @@ impl<'a> BytecodeGenerator<'a> {
                 }
                 BytecodeType::U8(instruction) => {
                     // Generate a random u8 constant to load
-                    Some(instruction(self.rng.gen_range(0..u8::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u8::MAX)))
                 }
                 BytecodeType::U16(instruction) => {
                     // Generate a random u16 constant to load
-                    Some(instruction(self.rng.gen_range(0..u16::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u16::MAX)))
                 }
                 BytecodeType::U32(instruction) => {
                     // Generate a random u32 constant to load
-                    Some(instruction(self.rng.gen_range(0..u32::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u32::MAX)))
                 }
                 BytecodeType::U64(instruction) => {
                     // Generate a random u64 constant to load
-                    Some(instruction(self.rng.gen_range(0..u64::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u64::MAX)))
                 }
                 BytecodeType::U128(instruction) => {
                     // Generate a random u128 constant to load
-                    Some(instruction(Box::new(
-                        self.rng.gen_range(0..u128::max_value()),
-                    )))
+                    Some(instruction(Box::new(self.rng.gen_range(0..u128::MAX))))
                 }
                 BytecodeType::U256(instruction) => {
                     // Generate a random u256 constant to load
@@ -442,7 +440,7 @@ impl<'a> BytecodeGenerator<'a> {
                     || unsatisfied_preconditions == 0
                 {
                     // The size of matches cannot be greater than the number of bytecode instructions
-                    debug_assert!(matches.len() < usize::max_value());
+                    debug_assert!(matches.len() < usize::MAX);
                     matches.push((*stack_effect, instruction));
                 }
             }
@@ -572,7 +570,7 @@ impl<'a> BytecodeGenerator<'a> {
         exact: bool,
     ) -> Option<AbstractState> {
         // Bytecode will never be generated this large
-        debug_assert!(bytecode.len() < usize::max_value());
+        debug_assert!(bytecode.len() < usize::MAX);
         debug!("**********************");
         debug!("State1: {}", state);
         debug!("Next instr: {:?}", instruction);
