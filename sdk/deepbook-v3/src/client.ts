@@ -432,4 +432,107 @@ export class DeepBookClient {
 
 		return Number(adjusted_mid_price.toFixed(9));
 	}
+
+	/**
+	 * @description Get the trade parameters for a given pool, including taker fee, maker fee, and stake required.
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ takerFee: number, makerFee: number, stakeRequired: number }>}
+	 */
+	async poolTradeParams(poolKey: string) {
+		const tx = new Transaction();
+
+		tx.add(this.deepBook.poolTradeParams(poolKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const takerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const makerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const stakeRequired = Number(
+			bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])),
+		);
+
+		return {
+			takerFee: Number(takerFee / FLOAT_SCALAR),
+			makerFee: Number(makerFee / FLOAT_SCALAR),
+			stakeRequired: Number(stakeRequired / DEEP_SCALAR),
+		};
+	}
+
+	/**
+	 * @description Get the account information for a given pool and balance manager
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the account information
+	 */
+	async account(poolKey: string, managerKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.account(poolKey, managerKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const ID = bcs.struct('ID', {
+			bytes: bcs.Address,
+		});
+
+		const Balances = bcs.struct('Balances', {
+			base: bcs.u64(),
+			quote: bcs.u64(),
+			deep: bcs.u64(),
+		});
+
+		const VecSet = bcs.struct('VecSet', {
+			constants: bcs.vector(bcs.U128),
+		});
+
+		const Account = bcs.struct('Account', {
+			epoch: bcs.u64(),
+			open_orders: VecSet,
+			taker_volume: bcs.u128(),
+			maker_volume: bcs.u128(),
+			active_stake: bcs.u64(),
+			inactive_stake: bcs.u64(),
+			created_proposal: bcs.bool(),
+			voted_proposal: bcs.option(ID),
+			unclaimed_rebates: Balances,
+			settled_balances: Balances,
+			owed_balances: Balances,
+		});
+
+		const accountInformation = res.results![0].returnValues![0][0];
+		const accountInfo = Account.parse(new Uint8Array(accountInformation));
+
+		return {
+			epoch: accountInfo.epoch,
+			open_orders: accountInfo.open_orders,
+			taker_volume: Number(accountInfo.taker_volume) / baseScalar,
+			maker_volume: Number(accountInfo.maker_volume) / baseScalar,
+			active_stake: Number(accountInfo.active_stake) / DEEP_SCALAR,
+			inactive_stake: Number(accountInfo.inactive_stake) / DEEP_SCALAR,
+			created_proposal: accountInfo.created_proposal,
+			voted_proposal: accountInfo.voted_proposal,
+			unclaimed_rebates: {
+				base: Number(accountInfo.unclaimed_rebates.base) / baseScalar,
+				quote: Number(accountInfo.unclaimed_rebates.quote) / quoteScalar,
+				deep: Number(accountInfo.unclaimed_rebates.deep) / DEEP_SCALAR,
+			},
+			settled_balances: {
+				base: Number(accountInfo.settled_balances.base) / baseScalar,
+				quote: Number(accountInfo.settled_balances.quote) / quoteScalar,
+				deep: Number(accountInfo.settled_balances.deep) / DEEP_SCALAR,
+			},
+			owed_balances: {
+				base: Number(accountInfo.owed_balances.base) / baseScalar,
+				quote: Number(accountInfo.owed_balances.quote) / quoteScalar,
+				deep: Number(accountInfo.owed_balances.deep) / DEEP_SCALAR,
+			},
+		};
+	}
 }
