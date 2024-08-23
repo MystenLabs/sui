@@ -432,4 +432,31 @@ export class DeepBookClient {
 
 		return Number(adjusted_mid_price.toFixed(9));
 	}
+
+	/**
+	 * @description Get the trade parameters for a given pool, including taker fee, maker fee, and stake required.
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ takerFee: number, makerFee: number, stakeRequired: number }>}
+	 */
+	async poolTradeParams(poolKey: string) {
+		const tx = new Transaction();
+
+		tx.add(this.deepBook.poolTradeParams(poolKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const takerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const makerFee = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const stakeRequired = Number(
+			bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])),
+		);
+
+		return {
+			takerFee: Number(takerFee / FLOAT_SCALAR),
+			makerFee: Number(makerFee / FLOAT_SCALAR),
+			stakeRequired: Number(stakeRequired / DEEP_SCALAR),
+		};
+	}
 }
