@@ -3,6 +3,12 @@
 
 #[defines_primitive(u256)]
 module std::u256 {
+    /// Returns the bitwise not of the value.
+    /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
+    public fun not(x: u256): u256 {
+        x ^ max_value!()
+    }
+
     /// Return the larger of `x` and `y`
     public fun max(x: u256, y: u256): u256 {
         std::macros::num_max!(x, y)
@@ -29,7 +35,7 @@ module std::u256 {
     }
 
     /// Maximum value for a `u256`
-    public macro fun max_value(): u128 {
+    public macro fun max_value(): u256 {
         0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF
     }
 

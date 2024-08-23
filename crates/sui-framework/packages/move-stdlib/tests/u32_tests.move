@@ -28,6 +28,11 @@ module std::u32_tests {
     ];
 
     #[test]
+    fun test_not() {
+        integer_tests::test_not!(MAX, CASES);
+    }
+
+    #[test]
     fun test_max() {
         integer_tests::test_max!(MAX, CASES);
     }

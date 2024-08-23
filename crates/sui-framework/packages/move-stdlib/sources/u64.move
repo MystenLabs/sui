@@ -3,6 +3,12 @@
 
 #[defines_primitive(u64)]
 module std::u64 {
+    /// Returns the bitwise not of the value.
+    /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
+    public fun not(x: u64): u64 {
+        x ^ max_value!()
+    }
+
     /// Return the larger of `x` and `y`
     public fun max(x: u64, y: u64): u64 {
         std::macros::num_max!(x, y)

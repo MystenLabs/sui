@@ -3,6 +3,12 @@
 
 #[defines_primitive(u128)]
 module std::u128 {
+    /// Returns the bitwise not of the value.
+    /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
+    public fun not(x: u128): u128 {
+        x ^ max_value!()
+    }
+
     /// Return the larger of `x` and `y`
     public fun max(x: u128, y: u128): u128 {
         std::macros::num_max!(x, y)

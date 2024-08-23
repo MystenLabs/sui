@@ -17,6 +17,28 @@ module std::integer_tests {
         }
     }
 
+    public(package) macro fun test_not($max: _, $cases: vector<_>) {
+        let max = $max;
+        let cases = $cases;
+        assert_eq!(max.not(), 0);
+        cases!(max, cases, |case_pred, case, case_succ| {
+            assert_eq!(case_pred.not().not(), case_pred);
+            assert_eq!(case_pred.not() | case_pred, max);
+            assert_eq!(case_pred.not() ^ case_pred, max);
+            assert_eq!(case_pred.not() & case_pred, 0);
+
+            assert_eq!(case.not().not(), case);
+            assert_eq!(case.not() | case, max);
+            assert_eq!(case.not() ^ case, max);
+            assert_eq!(case.not() & case, 0);
+
+            assert_eq!(case_succ.not().not(), case_succ);
+            assert_eq!(case_succ.not() | case_succ, max);
+            assert_eq!(case_succ.not() ^ case_succ, max);
+            assert_eq!(case_succ.not() & case_succ, 0);
+        })
+    }
+
     public(package) macro fun test_max($max: _, $cases: vector<_>) {
         let max = $max;
         let cases = $cases;
