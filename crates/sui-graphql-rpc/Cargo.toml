@@ -19,7 +19,7 @@ bin-version.workspace = true
 chrono.workspace = true
 clap.workspace = true
 const-str.workspace = true
-diesel.workspace = true
+diesel = { workspace = true, features = ["i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
