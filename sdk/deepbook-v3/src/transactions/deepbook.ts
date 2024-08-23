@@ -595,4 +595,40 @@ export class DeepBookContract {
 
 		return [baseCoinResult, quoteCoinResult, deepCoinResult] as const;
 	};
+
+	/**
+	 * @description Get the trade parameters for a given pool, including taker fee, maker fee, and stake required.
+	 * @param {string} poolKey Key of the pool
+	 * @returns A function that takes a Transaction object
+	 */
+	poolTradeParams = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::pool_trade_params`,
+			arguments: [tx.object(pool.address)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
+
+	/**
+	 * @description Get the account information for a given pool and balance manager
+	 * @param {string} poolKey Key of the pool
+	 * @param {string} managerKey The key of the BalanceManager
+	 * @returns A function that takes a Transaction object
+	 */
+	account = (poolKey: string, managerKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+		const managerId = this.#config.getBalanceManager(managerKey).address;
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::account`,
+			arguments: [tx.object(pool.address), tx.object(managerId)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
 }
