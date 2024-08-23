@@ -227,10 +227,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             epoch_flags,
         )
         .unwrap();
-        let expensive_safety_checks = match self.expensive_safety_checks {
-            None => ExpensiveSafetyCheckConfig::default(),
-            Some(config) => config,
-        };
+        let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
         let cache_traits =
             build_execution_cache(&epoch_start_configuration, &registry, &authority_store);

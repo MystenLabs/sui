@@ -12,15 +12,15 @@
 //!
 //! Overall the binary format is structured in a number of sections:
 //! - **Header**: this must start at offset 0 in the binary. It contains a blob that starts every
-//! Diem binary, followed by the version of the VM used to compile the code, and last is the
-//! number of tables present in this binary.
+//!     Diem binary, followed by the version of the VM used to compile the code, and last is the
+//!     number of tables present in this binary.
 //! - **Table Specification**: it's a number of tuple of the form
-//! `(table type, starting_offset, byte_count)`. The number of entries is specified in the
-//! header (last entry in header). There can only be a single entry per table type. The
-//! `starting offset` is from the beginning of the binary. Tables must cover the entire size of
-//! the binary blob and cannot overlap.
+//!     `(table type, starting_offset, byte_count)`. The number of entries is specified in the
+//!     header (last entry in header). There can only be a single entry per table type. The
+//!     `starting offset` is from the beginning of the binary. Tables must cover the entire size of
+//!     the binary blob and cannot overlap.
 //! - **Table Content**: the serialized form of the specific entries in the table. Those roughly
-//! map to the structs defined in this module. Entries in each table must be unique.
+//!     map to the structs defined in this module. Entries in each table must be unique.
 //!
 //! We have two formats: one for modules here represented by `CompiledModule`, another
 //! for transaction scripts which is `CompiledScript`. Building those tables and passing them

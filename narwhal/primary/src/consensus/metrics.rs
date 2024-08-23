@@ -37,7 +37,7 @@ pub struct ConsensusMetrics {
     /// all the nodes are expected to report the same results. For every leader of each round the
     /// output can be one of the following:
     /// * committed: the leader has been found and its subdag will get committed - no matter if the leader
-    /// is committed on its time or not (part of recursion)
+    ///     is committed on its time or not (part of recursion)
     /// * not_found: the leader has not been found on the commit path and doesn't get committed
     /// * no_path: the leader exists but there is no path that leads to it
     pub leader_election: IntCounterVec,
@@ -135,9 +135,9 @@ pub struct ChannelMetrics {
     /// occupancy of the channel from the `Consensus` to `SubscriberHandler`.
     /// See also:
     /// * tx_committed_certificates in primary, where the committed certificates
-    /// from `Consensus` are sent to `primary::StateHandler`
+    ///     from `Consensus` are sent to `primary::StateHandler`
     /// * tx_new_certificates where the newly accepted certificates are sent
-    /// from `primary::Synchronizer` to `Consensus`
+    ///     from `primary::Synchronizer` to `Consensus`
     pub tx_sequence: IntGauge,
 }
 

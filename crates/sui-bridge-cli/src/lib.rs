@@ -313,7 +313,7 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
     }
 }
 
-fn encode_call_data(function_selector: &str, params: &Vec<String>) -> Vec<u8> {
+fn encode_call_data(function_selector: &str, params: &[String]) -> Vec<u8> {
     let left = function_selector
         .find('(')
         .expect("Invalid function selector, no left parentheses");

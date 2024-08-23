@@ -1803,7 +1803,7 @@ impl SuiProgrammableTransactionBlock {
     }
 
     fn resolve_input_type(
-        inputs: &Vec<CallArg>,
+        inputs: &[CallArg],
         commands: &[Command],
         module_cache: &impl GetModule,
     ) -> Vec<Option<MoveTypeLayout>> {

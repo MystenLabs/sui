@@ -13,7 +13,7 @@ pub enum VMState {
 }
 
 thread_local! {
-    static STATE: RefCell<VMState> = RefCell::new(VMState::OTHER);
+    static STATE: RefCell<VMState> = const { RefCell::new(VMState::OTHER) };
 }
 
 pub fn set_state(state: VMState) -> VMState {

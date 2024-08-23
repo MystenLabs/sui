@@ -20,13 +20,8 @@ use sui_move_natives::test_scenario::InMemoryTestStore;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    error::SuiResult,
-    gas_model::tables::initial_cost_schedule_for_unit_tests,
-    in_memory_storage::InMemoryStorage,
+    gas_model::tables::initial_cost_schedule_for_unit_tests, in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
-    object::Object,
-    storage::ChildObjectResolver,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -60,28 +55,6 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
         )
-    }
-}
-
-struct DummyChildObjectStore {}
-
-impl ChildObjectResolver for DummyChildObjectStore {
-    fn read_child_object(
-        &self,
-        _parent: &ObjectID,
-        _child: &ObjectID,
-        _child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        Ok(None)
-    }
-    fn get_object_received_at_version(
-        &self,
-        _owner: &ObjectID,
-        _receiving_object_id: &ObjectID,
-        _receive_object_at_version: SequenceNumber,
-        _epoch_id: sui_types::committee::EpochId,
-    ) -> SuiResult<Option<Object>> {
-        Ok(None)
     }
 }
 

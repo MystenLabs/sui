@@ -173,19 +173,18 @@ impl Type {
 
     /// Returns true if this is any number type.
     pub fn is_number(&self) -> bool {
-        if let Type::Primitive(p) = self {
-            if let PrimitiveType::U8
-            | PrimitiveType::U16
-            | PrimitiveType::U32
-            | PrimitiveType::U64
-            | PrimitiveType::U128
-            | PrimitiveType::U256
-            | PrimitiveType::Num = p
-            {
-                return true;
-            }
-        }
-        false
+        matches!(
+            self,
+            Type::Primitive(
+                PrimitiveType::U8
+                    | PrimitiveType::U16
+                    | PrimitiveType::U32
+                    | PrimitiveType::U64
+                    | PrimitiveType::U128
+                    | PrimitiveType::U256
+                    | PrimitiveType::Num,
+            )
+        )
     }
     /// Returns true if this is an address or signer type.
     pub fn is_signer_or_address(&self) -> bool {
@@ -780,6 +779,7 @@ impl TypeUnificationAdapter {
     /// - any type parameter on the LHS with index < P will be treated as concrete types and
     /// - only type parameters on the LHS with index >= P are treated as variables and thus,
     ///   participate in the type unification process.
+    ///
     /// The same rule applies to the RHS parameters via `treat_rhs_type_param_as_var_after_index`.
     fn new<'a, I>(
         lhs_types: I,
@@ -982,6 +982,7 @@ impl TypeInstantiationDerivation {
     /// - be assigned with a concrete type already and hence, ceases to be a type parameter, or
     /// - does not have any matching instantiation and hence, either remains a type parameter or is
     ///   represented as a type error.
+    ///
     /// But in anyway, these type parameters no longer participate in type unification anymore.
     ///
     /// If `target_lhs` is True, derive instantiations for the type parameter with
@@ -1043,6 +1044,7 @@ impl TypeInstantiationDerivation {
     ///     - finds all possible instantiations for parameter at index 2 (`inst_param_2`)
     ///     - for each instantiation in `inst_param_2`,
     ///       - ......
+    ///
     /// The process continues until all type parameters are analyzed (i.e., reaching the type
     /// parameter at index `N`).
     ///

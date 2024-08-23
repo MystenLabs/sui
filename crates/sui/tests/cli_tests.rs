@@ -691,7 +691,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Try a transfer
     // This should fail due to mismatch of object being sent
-    let args = vec![
+    let args = [
         SuiJsonValue::new(json!(obj))?,
         SuiJsonValue::new(json!(address2))?,
     ];
@@ -712,7 +712,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Try a transfer with explicitly set gas price.
     // It should fail due to that gas price is below RGP.
-    let args = vec![
+    let args = [
         SuiJsonValue::new(json!(created_obj))?,
         SuiJsonValue::new(json!(address2))?,
     ];
@@ -740,7 +740,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // assert!(err_string.contains(&format!("Expected argument of type {package_addr}::object_basics::Object, but found type {framework_addr}::coin::Coin<{framework_addr}::sui::SUI>")));
 
     // Try a proper transfer
-    let args = vec![
+    let args = [
         SuiJsonValue::new(json!(created_obj))?,
         SuiJsonValue::new(json!(address2))?,
     ];

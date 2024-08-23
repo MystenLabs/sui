@@ -713,7 +713,7 @@ fn convert_attribute_value_u64(
 ) -> Option<(Loc, u64)> {
     use E::{AttributeValue_ as EAV, Value_ as EV};
     match value {
-        sp!(vloc, EAV::Value(sp!(_, EV::InferredNum(u)))) if *u <= U256::from(std::u64::MAX) => {
+        sp!(vloc, EAV::Value(sp!(_, EV::InferredNum(u)))) if *u <= U256::from(u64::MAX) => {
             Some((*vloc, u.down_cast_lossy()))
         }
         sp!(vloc, EAV::Value(sp!(_, EV::U64(u)))) => Some((*vloc, *u)),

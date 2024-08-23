@@ -236,9 +236,7 @@ pub fn module_frame_generation(
     let mut module = generate_module(&mut rng, generation_options.clone());
     // Either get the number of iterations provided by the user, or iterate "infinitely"--up to
     // u128::MAX number of times.
-    let iters = num_iters
-        .map(|x| x as u128)
-        .unwrap_or_else(|| std::u128::MAX);
+    let iters = num_iters.map(|x| x as u128).unwrap_or_else(|| u128::MAX);
 
     while generated < iters && sender.send(module).is_ok() {
         module = generate_module(&mut rng, generation_options.clone());

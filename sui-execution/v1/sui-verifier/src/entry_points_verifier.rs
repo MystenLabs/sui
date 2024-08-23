@@ -27,7 +27,7 @@ use crate::{verification_failure, INIT_FN_NAME};
 /// - The function can have at most two parameters:
 ///   - mandatory &mut TxContext or &TxContext (see `is_tx_context`) in the last position
 ///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the first
-///   position
+///     position
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true

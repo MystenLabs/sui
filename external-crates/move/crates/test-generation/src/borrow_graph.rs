@@ -67,7 +67,7 @@ impl BorrowGraph {
             }
             self.partition_map.insert(self.partition_counter, vec![n]);
             // Implication of `checked_add`
-            debug_assert!(self.partitions.len() < usize::max_value());
+            debug_assert!(self.partitions.len() < usize::MAX);
             self.partitions.push(self.partition_counter);
             Ok(())
         } else {

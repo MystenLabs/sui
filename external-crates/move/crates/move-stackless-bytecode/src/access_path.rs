@@ -6,6 +6,7 @@
 //! memory. Some examples of concrete paths are:
 //! * `0x7/M::T/f` (i.e., the field `f` of the `M::T` resource stored at address `0x7`
 //! * `Formal(0)/[2]` (i.e., the value stored at index 2 of the array bound the 0th formal of the current procedure)
+//!
 //! An abstract path is similar; it consists of the following components:
 //! * A *root*, which is either an abstract address or a local
 //! * Zero or more *offsets*, where an offset is a field, an unknown vector index, or an abstract struct type

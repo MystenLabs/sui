@@ -1029,12 +1029,12 @@ impl<'a> InflightDropGuard<'a> {
         adapter
             .metrics
             .sequencing_certificate_inflight
-            .with_label_values(&[&tx_type])
+            .with_label_values(&[tx_type])
             .inc();
         adapter
             .metrics
             .sequencing_certificate_attempt
-            .with_label_values(&[&tx_type])
+            .with_label_values(&[tx_type])
             .inc();
         Self {
             adapter,
