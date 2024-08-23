@@ -48,7 +48,6 @@ static DEBUGGING_ENABLED: Lazy<bool> =
 static LOGGING_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
     Mutex::new(
         OpenOptions::new()
-            .write(true)
             .create(true)
             .append(true)
             .open(&*FILE_PATH)

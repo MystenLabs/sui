@@ -20,8 +20,7 @@ use sui_move_natives::test_scenario::InMemoryTestStore;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    gas_model::tables::initial_cost_schedule_for_unit_tests,
-    in_memory_storage::InMemoryStorage,
+    gas_model::tables::initial_cost_schedule_for_unit_tests, in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
 };
 

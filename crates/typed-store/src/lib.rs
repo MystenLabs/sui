@@ -34,7 +34,7 @@ pub type StoreError = typed_store_error::TypedStoreError;
 ///
 /// 1. Flexible configuration:
 ///     a. Static options specified at struct definition
-/// 
+///
 /// The definer of the struct can specify the default options for each table using annotations
 /// We can also supply column family options on the default ones
 /// A user defined function of signature () -> Options can be provided for each table

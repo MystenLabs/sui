@@ -23,6 +23,9 @@ move-clippy = [
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
     "-Aclippy::new_without_default",
+    "-Aclippy::question_mark",
+    "-Aclippy::unnecessary_get_then_check",
+    "-Aclippy::needless_borrows_for_generic_args",
 ]
 
 mysql-clippy = [

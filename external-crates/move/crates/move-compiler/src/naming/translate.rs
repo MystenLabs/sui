@@ -3197,7 +3197,7 @@ fn unique_pattern_binders(
 ) -> Vec<(Mutability, P::Var)> {
     use E::MatchPattern_ as EP;
 
-    fn report_duplicate(context: &mut Context, var: P::Var, locs: &Vec<(Mutability, Loc)>) {
+    fn report_duplicate(context: &mut Context, var: P::Var, locs: &[(Mutability, Loc)]) {
         assert!(locs.len() > 1, "ICE pattern duplicate detection error");
         let (_, first_loc) = locs.first().unwrap();
         let mut diag = diag!(
