@@ -7,20 +7,46 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use tokio::time::sleep;
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+};
+use tokio::{sync::mpsc, time::sleep};
 
 use crate::{
-    authority::test_authority_builder::TestAuthorityBuilder,
-    checkpoints::CheckpointServiceNoop,
+    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
+    checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop},
     consensus_handler::ConsensusHandlerInitializer,
     consensus_manager::{
-        mysticeti_manager::MysticetiManager,
-        narwhal_manager::narwhal_manager_tests::checkpoint_service_for_testing,
-        ConsensusManagerMetrics, ConsensusManagerTrait,
+        mysticeti_manager::MysticetiManager, ConsensusManagerMetrics, ConsensusManagerTrait,
     },
     consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     mysticeti_adapter::LazyMysticetiClient,
+    state_accumulator::StateAccumulator,
 };
+
+pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
+    let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
+    let epoch_store = state.epoch_store_for_testing();
+    let accumulator = Arc::new(StateAccumulator::new_for_tests(
+        state.get_accumulator_store().clone(),
+        &epoch_store,
+    ));
+    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
+
+    let (checkpoint_service, _) = CheckpointService::spawn(
+        state.clone(),
+        state.get_checkpoint_store().clone(),
+        epoch_store.clone(),
+        state.get_transaction_cache_reader().clone(),
+        Arc::downgrade(&accumulator),
+        Box::new(output),
+        Box::new(certified_output),
+        CheckpointMetrics::new_for_tests(),
+        3,
+        100_000,
+    );
+    checkpoint_service
+}
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_mysticeti_manager() {

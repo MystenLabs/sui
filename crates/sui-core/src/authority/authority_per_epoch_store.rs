@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_config::node::{ConsensusProtocol, ExpensiveSafetyCheckConfig};
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -66,7 +66,6 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
-use crate::consensus_manager::ConsensusManager;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
@@ -1732,14 +1731,8 @@ impl AuthorityPerEpochStore {
     }
 
     fn get_max_accumulated_txn_cost_per_object_in_commit(&self) -> Option<u64> {
-        match ConsensusManager::get_consensus_protocol_in_epoch(self) {
-            ConsensusProtocol::Narwhal => self
-                .protocol_config()
-                .max_accumulated_txn_cost_per_object_in_narwhal_commit_as_option(),
-            ConsensusProtocol::Mysticeti => self
-                .protocol_config()
-                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
-        }
+        self.protocol_config()
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
     }
 
     fn should_defer(
