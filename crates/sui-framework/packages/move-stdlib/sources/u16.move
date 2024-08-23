@@ -57,6 +57,11 @@ module std::u16 {
         std::macros::num_sqrt!<u16, u32>(x, 16)
     }
 
+    /// Maximum value for a `u16`
+    public macro fun max_value(): u16 {
+        0xFFFF
+    }
+
     /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
     public macro fun range_do($start: u16, $stop: u16, $f: |u16|) {
         std::macros::range_do!($start, $stop, $f)

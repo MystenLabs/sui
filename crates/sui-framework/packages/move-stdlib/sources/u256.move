@@ -28,6 +28,11 @@ module std::u256 {
         std::macros::num_pow!(base, exponent)
     }
 
+    /// Maximum value for a `u256`
+    public macro fun max_value(): u128 {
+        0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF
+    }
+
     /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
     public macro fun range_do($start: u256, $stop: u256, $f: |u256|) {
         std::macros::range_do!($start, $stop, $f)
