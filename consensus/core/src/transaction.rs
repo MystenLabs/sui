@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
-use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -215,11 +214,7 @@ impl TransactionClient {
 /// before acceptance of the block.
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch can be voted on
-    fn verify_batch(
-        &self,
-        protocol_config: &ProtocolConfig,
-        batch: &[&[u8]],
-    ) -> Result<(), ValidationError>;
+    fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 }
 
 #[derive(Debug, Error)]
@@ -233,11 +228,7 @@ pub enum ValidationError {
 pub(crate) struct NoopTransactionVerifier;
 
 impl TransactionVerifier for NoopTransactionVerifier {
-    fn verify_batch(
-        &self,
-        _protocol_config: &ProtocolConfig,
-        _batch: &[&[u8]],
-    ) -> Result<(), ValidationError> {
+    fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 }
