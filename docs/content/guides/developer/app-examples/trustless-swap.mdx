@@ -1102,9 +1102,7 @@ The paths option under `compilerOptions` is what defines the aliasing for TypeSc
   {@inject: examples/trading/frontend/vite.config.ts}
 </details>
 
-Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory. 
-
-This aligns with the `tsconfig.json` setup, ensuring that both TypeScript and Vite understand how to resolve `@/` imports.
+Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory.
 
 ### Adding Tailwind CSS
 
@@ -1354,6 +1352,10 @@ At this point, you have a basic routing setup. Run your app and ensure you can:
 - Navigate between the `Manage Objects` and `Escrows` pages.
 - Connect and disconnect your wallet.
 
+Note, the styles should be applied. The `Header` component should look like this: 
+
+![Header component](./images/styles.png)
+
 :::
 
 ### Type definitions
@@ -1371,7 +1373,7 @@ At this point, you have a basic routing setup. Run your app and ensure you can:
 
 ### Display owned objects
 
-The first role of the UI is to display the owned objects of the connected wallet account. 
+Now, display the objects owned by the connected wallet address. This is the `Manage Objects` page.
 
 <details>
   <summary>
