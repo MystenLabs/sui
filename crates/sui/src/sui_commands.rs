@@ -493,7 +493,7 @@ impl SuiCommand {
                     PersistedConfig::read(&bridge_committee_config_path).map_err(|err| {
                         err.context(format!(
                             "Cannot open Bridge Committee config file at {:?}",
-                            network_config_path
+                            bridge_committee_config_path
                         ))
                     })?;
 
