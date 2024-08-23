@@ -567,7 +567,6 @@ impl Distribution<U256> for Standard {
 // Rand impl below are inspired by u128 impl found in https://rust-random.github.io/rand/src/rand/distributions/uniform.rs.html
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct UniformU256 {
     low: U256,
     range: U256,

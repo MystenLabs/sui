@@ -135,6 +135,7 @@ SET object_version = EXCLUDED.object_version,
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
     pub parallel_objects_chunk_size: usize,
+    #[allow(unused)]
     pub epochs_to_keep: Option<u64>,
 }
 

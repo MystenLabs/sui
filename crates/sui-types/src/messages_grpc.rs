@@ -233,6 +233,7 @@ impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {
 /// If `wait_for_effects` is true, it is guaranteed that:
 ///  - Number of responses will be equal to the number of input transactions.
 ///  - The order of the responses matches the order of the input transactions.
+///
 /// Otherwise, `responses` will be empty.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HandleSoftBundleCertificatesResponseV3 {

@@ -71,9 +71,10 @@ pub struct AuthorityPerpetualTables {
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
     /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
-    /// are known to be final in the network, but may not have been executed locally yet.
+    ///     are known to be final in the network, but may not have been executed locally yet.
     /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
-    /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    ///     it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    ///
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,

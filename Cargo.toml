@@ -237,6 +237,9 @@ overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
 opt-level = 1
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)', 'cfg(fail_points)'] }
+
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
@@ -345,7 +348,6 @@ hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 hex = "0.4.3"
 hex-literal = "0.3.4"
-highlight = "all"
 http = "1"
 http-body = "1"
 humantime = "2.1.0"
@@ -384,8 +386,8 @@ more-asserts = "0.3.1"
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99", package = "msim" }
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b320996d8dfb99b273fe31c0222c659332283c99", package = "msim-macros" }
 multiaddr = "0.17.0"
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nonempty = "0.9.0"
 notify = "6.1.1"
 ntest = "0.9.0"
@@ -398,12 +400,12 @@ ouroboros = "0.17"
 parking_lot = "0.12.1"
 parquet = "52"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
+pprof = { version = "0.13.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
 prometheus = "0.13.3"
-prometheus-http-query = { version = "0.8", default_features = false, features = [
+prometheus-http-query = { version = "0.8", default-features = false, features = [
     "rustls-tls",
 ] }
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
@@ -418,7 +420,7 @@ rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.13"
 regex = "1.7.1"
-reqwest = { version = "0.12", default_features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "json",
     "rustls-tls",
@@ -426,10 +428,10 @@ reqwest = { version = "0.12", default_features = false, features = [
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
-rusoto_core = { version = "0.48.0", default_features = false, features = [
+rusoto_core = { version = "0.48.0", default-features = false, features = [
     "rustls",
 ] }
-rusoto_kms = { version = "0.48.0", default_features = false, features = [
+rusoto_kms = { version = "0.48.0", default-features = false, features = [
     "rustls",
 ] }
 russh = "0.38.0"

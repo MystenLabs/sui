@@ -336,6 +336,7 @@ impl Inner {
 /// - Validating and accepting certificates received from peers.
 /// - Triggering fetching for certificates and batches.
 /// - Broadcasting created certificates.
+///
 /// `Synchronizer` contains most of the certificate processing logic in Narwhal.
 #[derive(Clone)]
 pub struct Synchronizer {
@@ -1516,9 +1517,7 @@ impl State {
     ) -> Option<((u64, CertificateDigest), Option<SuspendedCertificate>)> {
         // Accept suspended certificates at and below gc round because their parents will not
         // be accepted into the DAG store anymore, in sanitize_certificate().
-        let Some(((round, digest), _children)) = self.missing.first_key_value() else {
-            return None;
-        };
+        let ((round, digest), _children) = self.missing.first_key_value()?;
         // Note that gc_round is the highest round where certificates are gc'ed, and which will
         // never be in a consensus commit. It's safe to gc up to gc_round, so anything suspended on gc_round + 1
         // can safely be accepted as their parents (of gc_round) have already been removed from the DAG.

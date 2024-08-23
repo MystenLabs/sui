@@ -61,6 +61,7 @@ use tracing::{error, info};
 ///     - epoch_1/
 ///        - 101000.chk
 ///        - ...
+///
 /// Blob File Disk Format
 ///┌──────────────────────────────┐
 ///│       magic <4 byte>         │

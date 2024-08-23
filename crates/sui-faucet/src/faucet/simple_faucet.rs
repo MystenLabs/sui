@@ -328,6 +328,7 @@ impl SimpleFaucet {
     /// Check if the gas coin is still valid. A valid gas coin
     /// 1. Exists presently
     /// 2. is a gas coin
+    ///
     /// If the coin is valid, return Ok(Some(GasCoin))
     /// If the coin invalid, return Ok(None)
     /// If the fullnode returns an unexpected error, returns Err(e)
@@ -1303,7 +1304,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![coin_amount];
+        let amounts = &[coin_amount];
 
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
@@ -1384,7 +1385,7 @@ mod tests {
         .await
         .unwrap();
 
-        let amounts = &vec![1; 1];
+        let amounts = &[1; 1];
         // Create a vector containing five randomly generated addresses
         let target_addresses: Vec<SuiAddress> = (0..5)
             .map(|_| SuiAddress::random_for_testing_only())

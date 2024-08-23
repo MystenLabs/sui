@@ -69,11 +69,6 @@ struct Examples {
     examples: Vec<ExamplePairing>,
 }
 
-#[derive(serde::Serialize)]
-struct Value {
-    value: String,
-}
-
 impl Examples {
     fn new(name: &str, examples: Vec<ExamplePairing>) -> Self {
         Self {

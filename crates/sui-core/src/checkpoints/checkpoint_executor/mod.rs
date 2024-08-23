@@ -94,7 +94,7 @@ pub struct CheckpointTimeoutConfig {
 // the function is still very cheap to call so this is okay.
 thread_local! {
     static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<CheckpointTimeoutConfig> =
-        once_cell::sync::OnceCell::new();
+        const { once_cell::sync::OnceCell::new() };
 }
 
 #[cfg(msim)]

@@ -78,9 +78,7 @@ impl SharedObjectCongestionTracker {
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
-        let Some(tx_cost) = self.get_tx_cost(cert) else {
-            return None;
-        };
+        let tx_cost = self.get_tx_cost(cert)?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {

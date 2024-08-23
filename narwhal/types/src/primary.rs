@@ -1729,6 +1729,7 @@ pub struct FetchCertificatesRequest {
     /// This contains per authority serialized RoaringBitmap for the round diffs between
     /// - rounds of certificates to be skipped from the response and
     /// - the GC round.
+    ///
     /// These rounds are skipped because the requestor already has them.
     pub skip_rounds: Vec<(AuthorityIdentifier, Vec<u8>)>,
     /// Maximum number of certificates that should be returned.

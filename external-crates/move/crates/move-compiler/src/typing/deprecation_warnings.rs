@@ -19,6 +19,7 @@ const NOTE_STR: &str = "note";
 #[derive(Debug, Clone)]
 pub struct Deprecation {
     // The source location of the deprecation attribute
+    #[allow(unused)]
     pub source_location: Loc,
     // The type of the member that is deprecated (function, constant, etc.)
     pub location: AttributePosition,

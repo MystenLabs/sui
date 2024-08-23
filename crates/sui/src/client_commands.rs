@@ -2715,6 +2715,7 @@ pub async fn execute_dry_run(
 /// Call a dry run with the transaction data to estimate the gas budget.
 /// The estimated gas budget is computed as following:
 /// * the maximum between A and B, where:
+///
 /// A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
 /// B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
 /// overhead

@@ -277,6 +277,7 @@ pub enum AggregatorProcessCertificateError {
 }
 
 pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> GroupedErrors {
+    #[allow(clippy::mutable_key_type)]
     let mut grouped_errors = HashMap::new();
     for (error, names, stake) in errors {
         let entry = grouped_errors.entry(error).or_insert((0, vec![]));

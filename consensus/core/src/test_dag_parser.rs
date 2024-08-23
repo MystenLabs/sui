@@ -425,7 +425,7 @@ mod tests {
         let (_, (round, connections)) = result.unwrap();
 
         let skipped_slot = Slot::new_for_test(0, 0); // A0
-        let mut expected_references = vec![
+        let mut expected_references = [
             dag_builder.last_ancestors.clone(),
             dag_builder.last_ancestors.clone(),
             dag_builder
