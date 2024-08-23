@@ -16,8 +16,8 @@ chrono.workspace = true
 serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
-diesel = { workspace = true, optional = true }
-diesel-derive-enum = { workspace = true, optional = true }
+diesel = { workspace = true, features = ["chrono", "r2d2", "serde_json"] }
+diesel-derive-enum.workspace = true
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
