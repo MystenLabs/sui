@@ -42,6 +42,7 @@ mysql-clippy = [
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
     "-Aclippy::new_without_default",
+    "-Aclippy::unnecessary_get_then_check",
 ]
 
 [build]
