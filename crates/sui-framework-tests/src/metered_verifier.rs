@@ -9,6 +9,7 @@ use std::{
     time::Instant,
 };
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
+use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_framework::BuiltInFramework;
 use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
@@ -34,8 +35,10 @@ fn test_metered_move_bytecode_verifier() {
     let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
 
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let mut verifier_config = protocol_config.verifier_config(/* for_signing */ true);
-    let mut meter_config = protocol_config.meter_config_for_signing();
+    let signing_config = VerifierSigningConfig::default();
+    let mut verifier_config =
+        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let mut meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = SuiVerifierMeter::new(meter_config.clone());
@@ -200,9 +203,11 @@ fn test_metered_move_bytecode_verifier() {
     let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
+    let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
-    let meter_config = protocol_config.meter_config_for_signing();
+    let verifier_config =
+        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let meter_config = signing_config.meter_config_for_signing();
 
     // Check if the same meter is indeed used multiple invocations of the verifier
     let mut meter = SuiVerifierMeter::new(meter_config);
@@ -227,9 +232,11 @@ fn test_metered_move_bytecode_verifier() {
 fn test_meter_system_packages() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 
+    let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
-    let meter_config = protocol_config.meter_config_for_signing();
+    let verifier_config =
+        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let mut meter = SuiVerifierMeter::new(meter_config);
@@ -281,9 +288,11 @@ fn test_meter_system_packages() {
 fn test_build_and_verify_programmability_examples() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 
+    let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let verifier_config = protocol_config.verifier_config(/* for_signing */ true);
-    let meter_config = protocol_config.meter_config_for_signing();
+    let verifier_config =
+        protocol_config.verifier_config(Some(signing_config.limits_for_signing()));
+    let meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
     let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples");
