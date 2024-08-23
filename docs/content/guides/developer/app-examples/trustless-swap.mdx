@@ -1086,15 +1086,18 @@ The UI design consists of three parts:
 
 The first step is to set up the client app. Run the following command to scaffold a new app.
 
-```bash
-pnpm create @mysten/dapp --template react-client-dapp
-```
-
-or
-
-```bash
-yarn create @mysten/dapp --template react-client-dapp
-```
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn create @mysten/dapp --template react-client-dapp
+    ```
+  </TabItem>
+</Tabs>
 
 ### Setting up import aliases
 
@@ -1122,15 +1125,18 @@ Vite also needs to be aware of the aliasing to resolve imports correctly during 
 
 To streamline the styling process and keep the codebase clean and maintainable, we’ll be using Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command to add Tailwind CSS and its dependencies:
 
-```bash
-pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
-```
-
-or
-
-```bash
-yarn add tailwindcss@latest postcss@latest autoprefixer@latest
-```
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm add tailwindcss@latest postcss@latest autoprefixer@latest
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn add tailwindcss@latest postcss@latest autoprefixer@latest
+    ```
+  </TabItem>
+</Tabs>
 
 Next, generate the Tailwind CSS configuration file by running:
 
@@ -1208,15 +1214,18 @@ The imported template only has a single page. To add more pages, you need to set
 
 First install the necessary dependencies:
 
-```bash
-pnpm add react-router-dom react-hot-toast
-```
-
-or
-
-```bash
-yarn add react-router-dom react-hot-toast
-```
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm add react-router-dom react-hot-toast
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn add react-router-dom react-hot-toast
+    ```
+  </TabItem>
+</Tabs>
 
 <details>
   <summary>
