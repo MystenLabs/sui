@@ -153,17 +153,14 @@ module std::option {
     /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
     public macro fun do<$T>($o: Option<$T>, $f: |$T|) {
         let o = $o;
-        if (o.is_some()) {
-            $f(o.destroy_some());
-        }
+        if (o.is_some()) $f(o.destroy_some())
+        else o.destroy_none()
     }
 
     /// Execute a closure on the value inside `t` if it holds one.
     public macro fun do_ref<$T>($o: &Option<$T>, $f: |&$T|) {
         let o = $o;
-        if (o.is_some()) {
-            $f(o.borrow());
-        }
+        if (o.is_some()) $f(o.borrow());
     }
 
     /// Execute a closure on the mutable reference to the value inside `t` if it holds one.
@@ -174,7 +171,7 @@ module std::option {
 
     /// Select the first `Some` value from the two options, or `None` if both are `None`.
     /// Equivalent to Rust's `a.or(b)`.
-    public macro fun or<$T>($o: Option<$T>, $default: Option<$T>): Option<$T> {
+    public macro fun or<$T: drop>($o: Option<$T>, $default: Option<$T>): Option<$T> {
         let o = $o;
         if (o.is_some()) o
         else $default
@@ -184,8 +181,12 @@ module std::option {
     /// Equivalent to Rust's `t.and_then(f)`.
     public macro fun and<$T, $U>($o: Option<$T>, $f: |$T| -> Option<$U>): Option<$U> {
         let o = $o;
-        if (o.is_some()) $f(o.extract())
-        else none()
+        if (o.is_some()) {
+            $f(o.destroy_some())
+        } else {
+            o.destroy_none();
+            none()
+        }
     }
 
     /// If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.
@@ -199,9 +200,13 @@ module std::option {
     /// Map an `Option<T>` to `Option<U>` by applying a function to a contained value.
     /// Equivalent to Rust's `t.map(f)`.
     public macro fun map<$T, $U>($o: Option<$T>, $f: |$T| -> $U): Option<$U> {
-        let mut o = $o;
-        if (o.is_some()) some($f(o.extract()))
-        else none()
+        let o = $o;
+        if (o.is_some()) {
+            some($f(o.destroy_some()))
+        } else {
+            o.destroy_none();
+            none()
+        }
     }
 
     /// Map an `Option<T>` value to `Option<U>` by applying a function to a contained value by reference.
