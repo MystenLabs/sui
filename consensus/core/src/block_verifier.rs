@@ -145,9 +145,7 @@ impl BlockVerifier for SignedBlockVerifier {
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
 
         let max_transaction_size_limit =
-            self.context
-                .protocol_config
-                .consensus_max_transaction_size_bytes() as usize;
+            self.context.protocol_config.max_transaction_size_bytes() as usize;
         for t in &batch {
             if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
                 return Err(ConsensusError::TransactionTooLarge {
@@ -166,10 +164,10 @@ impl BlockVerifier for SignedBlockVerifier {
             });
         }
 
-        let total_transactions_size_limit =
-            self.context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize;
+        let total_transactions_size_limit = self
+            .context
+            .protocol_config
+            .max_transactions_in_block_bytes() as usize;
         if batch.iter().map(|t| t.len()).sum::<usize>() > total_transactions_size_limit
             && total_transactions_size_limit > 0
         {

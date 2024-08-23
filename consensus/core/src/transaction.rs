@@ -45,7 +45,7 @@ impl TransactionConsumer {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes(),
+                .max_transactions_in_block_bytes(),
             max_consumed_transactions_per_request: context
                 .protocol_config
                 .max_num_transactions_in_block(),
@@ -157,9 +157,7 @@ impl TransactionClient {
         (
             Self {
                 sender,
-                max_transaction_size: context
-                    .protocol_config
-                    .consensus_max_transaction_size_bytes(),
+                max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
             },
             receiver,
         )
@@ -329,14 +327,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -347,14 +340,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -426,14 +414,9 @@ mod tests {
 
             let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
             assert!(
-                total_size
-                    <= context
-                        .protocol_config
-                        .consensus_max_transactions_in_block_bytes(),
+                total_size <= context.protocol_config.max_transactions_in_block_bytes(),
                 "Should have fetched transactions up to {}",
-                context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes()
+                context.protocol_config.max_transactions_in_block_bytes()
             );
 
             all_transactions.extend(transactions);
