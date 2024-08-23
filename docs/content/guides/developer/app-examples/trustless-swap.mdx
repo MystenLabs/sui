@@ -960,17 +960,9 @@ app.get('/escrows', async (req, res) => {
 
 Now that you have an indexer and an API service, you can deploy your move package and start the indexer and API service.
 
-1. Install dependencies by running
+1. Install dependencies by running `pnpm install --ignore-workspace` or `yarn install --ignore-workspace`.
 
-    ```
-    pnpm install --ignore-workspace
-    ```
-
-2. Setup the database by running
-
-    ```
-    pnpm db:setup:dev
-    ```
+2. Setup the database by running `pnpm db:setup:dev` or `yarn db:setup:dev`.
 
 3. Deploy the Sui package
 
@@ -1032,18 +1024,10 @@ Now that you have an indexer and an API service, you can deploy your move packag
       npx ts-node helpers/create-demo-escrows.ts
       ```
 
-  If you want to reset the database (start from scratch), run:
-
-  ```
-  pnpm db:reset:dev && pnpm db:setup:dev
-  ```
+  If you want to reset the database (start from scratch), run `pnpm db:reset:dev && pnpm db:setup:dev` or `yarn db:reset:dev && yarn db:setup:dev`.
 </details>
 
-4. Run both the API and the indexer
-
-    ```
-    pnpm dev
-    ```
+4. Run both the API and the indexer by running `pnpm dev` or `yarn dev`.
 
 5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
 
