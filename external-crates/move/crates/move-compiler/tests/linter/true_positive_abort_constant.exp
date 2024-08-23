@@ -1,16 +1,75 @@
-warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
   ┌─ tests/linter/true_positive_abort_constant.move:6:15
   │
 6 │         abort 100 // Should trigger: using a numeric literal
-  │               ^^^ Prefer using a named constant.
+  │               ^^^ Prefer using a named constant or clever error constant here.
   │
   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02009]: Prefer using named constants with 'abort' and 'assert' for clarity
-   ┌─ tests/linter/true_positive_abort_constant.move:11:16
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:10:15
    │
-11 │         assert!(x == false, 2); // Should trigger: using a numeric literal
-   │                ^^^^^^^^^^^^^^^ Prefer using a named constant.
+10 │         abort 1 + 2 // Should trigger
+   │               ^^^^^ Prefer using a named constant or clever error constant here.
    │
    = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:15:15
+   │
+15 │         abort 0 // Should trigger
+   │               ^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:19:15
+   │
+19 │         abort 0x1F // Should trigger
+   │               ^^^^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:23:15
+   │
+23 │         abort 1 + ERROR_NOT_OWNER // Should trigger
+   │               ^^^^^^^^^^^^^^^^^^^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:27:15
+   │
+27 │         abort ERROR_NOT_OWNER + ERROR_NOT_OWNER // Should trigger
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:32:15
+   │
+32 │         abort x
+   │               ^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04009]: Prefer using named constants with 'abort' and 'assert' for clarity
+   ┌─ tests/linter/true_positive_abort_constant.move:36:15
+   │
+36 │         abort error_code // trigger, since it's a dynamic value, not a constant
+   │               ^^^^^^^^^^ Prefer using a named constant or clever error constant here.
+   │
+   = This warning can be suppressed with '#[allow(lint(abort_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/linter/true_positive_abort_constant.move:52:24
+   │
+52 │         assert!(false, true); // Should trigger
+   │                        ^^^^
+   │                        │
+   │                        Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+   │                        If you want to use a non-u64 as an abort code, you must use a '#[error]' attribute on a constant
+   │
+   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 

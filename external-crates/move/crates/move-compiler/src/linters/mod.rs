@@ -12,10 +12,20 @@ use crate::{
 };
 
 pub mod constant_naming;
+<<<<<<< HEAD
 mod meaningless_math_operation;
 mod unnecessary_while_loop;
 mod unneeded_return;
 pub mod abort_constant;
+||||||| parent of 047a300271 (Rework a couple things + update tests)
+pub mod meaningless_math_operation;
+pub mod unnecessary_while_loop;
+pub mod unnecessary_while_loop;
+pub mod unnecessary_while_loop;
+=======
+pub mod meaningless_math_operation;
+pub mod unnecessary_while_loop;
+>>>>>>> 047a300271 (Rework a couple things + update tests)
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -206,7 +216,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             ),
             WarningFilter::code(
                 Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Correctness as u8,
+                LinterDiagnosticCategory::Style as u8,
                 ABORT_CONSTANT_DIAG_CODE,
                 Some(ABORT_CONSTANT_FILTER_NAME),
             ),

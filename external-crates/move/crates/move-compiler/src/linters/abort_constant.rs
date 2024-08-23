@@ -2,27 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Lint to encourage the use of named constants with 'abort' and 'assert' for enhanced code readability.
-//! Detects cases where numeric literals are used directly and issues a warning.
-//! Provides the `is_named_constant` helper function to determine if an expression represents a named constant.
+//! Detects cases where non-constants are used and issues a warning.
 use crate::{
     diag,
     diagnostics::{
         codes::{custom, DiagnosticInfo, Severity},
         WarningFilters,
     },
+    linters::{LinterDiagnosticCategory, ABORT_CONSTANT_DIAG_CODE, LINT_WARNING_PREFIX},
     shared::CompilationEnv,
     typing::{
         ast::{self as T, BuiltinFunction_, ExpListItem, UnannotatedExp_},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
-
-use super::{LinterDiagnosticCategory, ABORT_CONSTANT_DIAG_CODE, LINT_WARNING_PREFIX};
+use move_proc_macros::growing_stack;
 
 const ABORT_CONSTANT_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagnosticCategory::Suspicious as u8,
+    LinterDiagnosticCategory::Style as u8,
     ABORT_CONSTANT_DIAG_CODE,
     "Prefer using named constants with 'abort' and 'assert' for clarity",
 );
@@ -45,6 +44,7 @@ impl TypingVisitorContext for Context<'_> {
     fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.env.add_warning_filter_scope(filter)
     }
+
     fn pop_warning_filter_scope(&mut self) {
         self.env.pop_warning_filter_scope()
     }
@@ -66,22 +66,26 @@ impl TypingVisitorContext for Context<'_> {
 }
 
 impl Context<'_> {
-    fn check_named_constant(&mut self, arg_exp: &Box<T::Exp>) {
-        if !Self::is_named_constant(&arg_exp.exp.value) {
+    fn check_named_constant(&mut self, arg_exp: &T::Exp) {
+        if !Self::contains_non_constant(arg_exp) {
             let diag = diag!(
                 ABORT_CONSTANT_DIAG,
-                (arg_exp.exp.loc, "Prefer using a named constant.")
+                (
+                    arg_exp.exp.loc,
+                    "Prefer using a named constant or clever error constant here."
+                )
             );
             self.env.add_diag(diag);
         }
     }
 
-    fn is_named_constant(exp: &UnannotatedExp_) -> bool {
-        match exp {
+    #[growing_stack]
+    fn contains_non_constant(exp: &T::Exp) -> bool {
+        match &exp.exp.value {
             UnannotatedExp_::Constant(_, _) => true,
             UnannotatedExp_::ExpList(exp_list) => {
-                exp_list.get(1).map_or(false, |item| {
-                    matches!(item, ExpListItem::Single(exp, _) if matches!(exp.exp.value, UnannotatedExp_::Constant(_, _)))
+                exp_list.iter().any(|item| {
+                    matches!(item, ExpListItem::Single(exp, _) if !Self::contains_non_constant(exp))
                 })
             }
             _ => false,
