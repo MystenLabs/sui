@@ -223,6 +223,18 @@ module std::option_tests {
     }
 
     #[test]
+    fun or_no_drop() {
+        let none = option::none<NoDrop>().or!(option::some(NoDrop {}));
+        let some = option::some(NoDrop {}).or!(option::some(NoDrop {}));
+
+        assert!(none.is_some());
+        assert!(some.is_some());
+
+        let NoDrop {} = none.destroy_some();
+        let NoDrop {} = some.destroy_some();
+    }
+
+    #[test]
     fun and_no_drop() {
         let none = option::none<NoDrop>().and!(|e| {
             let NoDrop {} = e;
@@ -255,5 +267,14 @@ module std::option_tests {
     fun destroy_or() {
         assert!(option::none().destroy_or!(10) == 10);
         assert!(option::some(5).destroy_or!(10) == 5);
+    }
+
+    #[test]
+    fun destroy_or_no_drop() {
+        let none = option::none<NoDrop>().destroy_or!(NoDrop {});
+        let some = option::some(NoDrop {}).destroy_or!(NoDrop {});
+
+        let NoDrop {} = some;
+        let NoDrop {} = none;
     }
 }

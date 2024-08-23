@@ -171,10 +171,14 @@ module std::option {
 
     /// Select the first `Some` value from the two options, or `None` if both are `None`.
     /// Equivalent to Rust's `a.or(b)`.
-    public macro fun or<$T: drop>($o: Option<$T>, $default: Option<$T>): Option<$T> {
+    public macro fun or<$T>($o: Option<$T>, $default: Option<$T>): Option<$T> {
         let o = $o;
-        if (o.is_some()) o
-        else $default
+        if (o.is_some()) {
+            o
+        } else {
+            o.destroy_none();
+            $default
+        }
     }
 
     /// If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.
@@ -239,7 +243,11 @@ module std::option {
     /// deprecated in favor of this function.
     public macro fun destroy_or<$T>($o: Option<$T>, $default: $T): $T {
         let o = $o;
-        if (o.is_some()) o.destroy_some()
-        else $default
+        if (o.is_some()) {
+            o.destroy_some()
+        } else {
+            o.destroy_none();
+            $default
+        }
     }
 }
