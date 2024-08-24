@@ -3,7 +3,6 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use expect_test::expect;
     use fastcrypto::encoding::{Base64, Encoding};
     use rand::rngs::StdRng;
     use rand::SeedableRng;

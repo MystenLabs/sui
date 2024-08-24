@@ -84,8 +84,8 @@ fn check_mutation_dry_run(
     let mut available_budget: u64 = max_tx_payload_size;
     // Keep track of the variables and their length
     let mut variables_length = HashMap::<String, u64>::new();
-    // if the args do not use variables, count the values' sizes directly
-    let mut direct_values = 0;
+    // if the tx related args do not use variables, count the values' sizes directly
+    let mut tx_args_lengths = 0;
 
     // traversing each dryRun or executeTxBlcok node and checks the payload against the available
     // budget
@@ -96,7 +96,7 @@ fn check_mutation_dry_run(
             max_tx_payload_size,
             &mut available_budget,
             &mut variables_length,
-            &mut direct_values,
+            &mut tx_args_lengths,
             &op.node.selection_set.node.items,
             &doc.fragments,
         )?;
@@ -107,7 +107,8 @@ fn check_mutation_dry_run(
     // size, as well as the values of the txBytes and signatures that were given as strings and not
     // variables. The end result is the read part of the query, which needs to be lower than the
     // max_query_payload_size
-    if (payload_size - vars_length.values().sum() - direct_values) > max_query_payload_size {
+    let vars_length: u64 = variables_length.values().sum();
+    if (payload_size - vars_length - tx_args_lengths) > max_query_payload_size {
         log_metric(
             ctx,
             "The read part of the query payload is too large.",
@@ -133,7 +134,7 @@ fn check_mutation_dry_run(
         max_tx_payload_size: u64,
         available_budget: &mut u64,
         variables_length: &mut HashMap<String, u64>,
-        direct_values: &mut u64,
+        tx_args_length: &mut u64,
         items: &[Positioned<Selection>],
         fragments: &HashMap<Name, Positioned<FragmentDefinition>>,
     ) -> ServerResult<()> {
@@ -148,7 +149,7 @@ fn check_mutation_dry_run(
                                 arg,
                                 available_budget,
                                 variables_length,
-                                direct_values,
+                                tx_args_length,
                                 variables,
                                 max_tx_payload_size,
                             )?;
@@ -170,7 +171,7 @@ fn check_mutation_dry_run(
                         max_tx_payload_size,
                         available_budget,
                         variables_length,
-                        direct_values,
+                        tx_args_length,
                         &def.node.selection_set.node.items,
                         fragments,
                     )?;
@@ -182,7 +183,7 @@ fn check_mutation_dry_run(
                         max_tx_payload_size,
                         available_budget,
                         variables_length,
-                        direct_values,
+                        tx_args_length,
                         &f.node.selection_set.node.items,
                         fragments,
                     )?;
@@ -192,13 +193,16 @@ fn check_mutation_dry_run(
         Ok(())
     }
 
-    /// Check the size of this node's txBytes and/or signatures against the available budget.
+    /// Check the size of this argument's txBytes and/or signatures against the available budget.
+    /// If the argument is a variable, store the length of the variable in `variables_length` or
+    /// fetch it from the hashmap. If the argument is a direct string value, add its length to the
+    /// `tx_args_length` counter.
     fn check_argument(
         ctx: &ExtensionContext<'_>,
         node: &(Positioned<Name>, Positioned<Value>),
         available_budget: &mut u64,
         variables_length: &mut HashMap<String, u64>,
-        direct_values: &mut u64,
+        tx_args_length: &mut u64,
         variables: &Variables,
         max_tx_payload_size: u64,
     ) -> ServerResult<()> {
@@ -208,7 +212,7 @@ fn check_mutation_dry_run(
                 .or_insert(get_value_str_len(ctx, &node.1.node, variables)?)
         } else {
             let node_len = get_value_str_len(ctx, &node.1.node, variables)?;
-            *direct_values += node_len;
+            *tx_args_length += node_len;
             node_len
         };
 
