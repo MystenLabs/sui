@@ -83,11 +83,11 @@ fn check_mutation_dry_run(
     // SAFETY max_tx_payload_size is u32, so it's safe to convert to u64
     let mut available_budget: u64 = max_tx_payload_size;
     // Keep track of the variables and their length
-    let mut variables_length = HashMap::<String, u64>::new();
-    // if the tx related args do not use variables, count the values' sizes directly
+    let mut variables_length = HashMap::new();
+    // If the tx related args do not use variables, add their size to this counter
     let mut tx_args_lengths = 0;
 
-    // traversing each dryRun or executeTxBlcok node and checks the payload against the available
+    // Traverses each dryRun or executeTxBlock node and checks the payload against the available
     // budget
     for (_name, op) in doc.operations.iter() {
         traverse_and_check_tx_payload(
@@ -101,7 +101,9 @@ fn check_mutation_dry_run(
             &doc.fragments,
         )?;
     }
-    // the tx payload is within max allowed, now check if the read part of the query is ok.
+
+    // The tx payload is within max allowed, now check if the read part of the query is ok.
+
     // The payload size contains the whole (non-resolved) query, including the variables. Thus the
     // size of the variables related to tx mutation/dry run needs to be subtracted from the payload
     // size, as well as the values of the txBytes and signatures that were given as strings and not
@@ -124,7 +126,7 @@ fn check_mutation_dry_run(
         ));
     }
 
-    /// Traverse the items of the query and check if the available tx budget is not exhausted.
+    /// Traverse the nodes of the query and check if the available tx budget is not exhausted.
     ///
     /// The value of the txBytes and signatures fields are subtracted from the available budget for
     /// each node that is either a dryRun (which has only txBytes) or executeTransactionBlock node.
@@ -194,9 +196,8 @@ fn check_mutation_dry_run(
     }
 
     /// Check the size of this argument's txBytes and/or signatures against the available budget.
-    /// If the argument is a variable, store the length of the variable in `variables_length` or
-    /// fetch it from the hashmap. If the argument is a direct string value, add its length to the
-    /// `tx_args_length` counter.
+    /// If the argument is a variable, store it or fetch it from `variables_length`.
+    /// If the argument is a string value, add its length to the`tx_args_length` counter.
     fn check_argument(
         ctx: &ExtensionContext<'_>,
         node: &(Positioned<Name>, Positioned<Value>),
@@ -686,8 +687,8 @@ fn get_value_str_len(
 ) -> Result<u64, ServerError> {
     match arg {
         GqlValue::String(s) => s.len().try_into().map_err(|_| {
-    let query_id: &Uuid = ctx.data_unchecked();
-    let session_id: &SocketAddr = ctx.data_unchecked();
+            let query_id: &Uuid = ctx.data_unchecked();
+            let session_id: &SocketAddr = ctx.data_unchecked();
                     info!(
                         query_id = %query_id,
                         session_id = %session_id,
@@ -701,12 +702,8 @@ fn get_value_str_len(
                     s.len()
                 ),
             )
-            // anyhow::anyhow!(
-            //     "The size of the string is too large to convert from usize to u64: {} bytes",
-            //     s.len()
-            // )
         }),
-        GqlValue::List(arr) => arr.iter().map(|v| get_value_str_len(ctx, v, variables)).sum(),
+        GqlValue::List(arr) => get_value_str_len_from_list(arr, ctx, variables),
         // the variables are expected to be strings
         GqlValue::Variable(v) => match variables.get(v) {
             Some(value) => get_value_str_len(ctx, &value.clone().into_value(), variables),
@@ -714,6 +711,26 @@ fn get_value_str_len(
         },
         _ => Ok(0),
     }
+}
+
+/// Get the length of a list of strings. The list is expected to contain only strings.
+fn get_value_str_len_from_list(
+    arr: &[Value],
+    ctx: &ExtensionContext<'_>,
+    variables: &Variables,
+) -> Result<u64, ServerError> {
+    let mut var_size = 0;
+    for v in arr {
+        if let Value::String(_) = v {
+            var_size += get_value_str_len(ctx, v, variables)?
+        } else {
+            return Err(graphql_error(
+                code::BAD_USER_INPUT,
+                "The list of strings is expected to contain only strings and not nested lists",
+            ));
+        }
+    }
+    Ok(var_size)
 }
 
 /// Check if the argument in a node is a GqlValue::Variable or not and return its name

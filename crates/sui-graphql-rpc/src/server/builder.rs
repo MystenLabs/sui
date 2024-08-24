@@ -1105,7 +1105,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
-                .context_data(PayloadSize(115))
+                .context_data(PayloadSize(query.len() as u64))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
