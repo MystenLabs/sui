@@ -1089,28 +1089,28 @@ pub mod tests {
         assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
     }
 
-    pub async fn test_query_mutation_payload_impl() {
-        async fn execute_request(
-            max_tx_payload_size: u32,
-            max_query_payload_size: u32,
-            query: &str,
-        ) -> Response {
-            let service_config = ServiceConfig {
-                limits: Limits {
-                    max_tx_payload_size,
-                    max_query_payload_size,
-                    ..Default::default()
-                },
+    async fn execute_request(
+        max_tx_payload_size: u32,
+        max_query_payload_size: u32,
+        query: &str,
+    ) -> Response {
+        let service_config = ServiceConfig {
+            limits: Limits {
+                max_tx_payload_size,
+                max_query_payload_size,
                 ..Default::default()
-            };
+            },
+            ..Default::default()
+        };
 
-            let schema = prep_schema(None, Some(service_config))
-                .context_data(PayloadSize(query.len() as u64))
-                .extension(QueryLimitsChecker)
-                .build_schema();
-            schema.execute(query).await
-        }
+        let schema = prep_schema(None, Some(service_config))
+            .context_data(PayloadSize(query.len() as u64))
+            .extension(QueryLimitsChecker)
+            .build_schema();
+        schema.execute(query).await
+    }
 
+    pub async fn test_mutation_payload_read_part_too_big_impl() {
         // Should fail: read part of query is too big
         let err: Vec<_> = execute_request(200, 10, "mutation { executeTransactionBlock(txBytes: \"AAA\", signatures: \"BBB\") { effects { status } } }")
             .await
@@ -1126,7 +1126,9 @@ pub mod tests {
                     .to_string()
             ]
         );
+    }
 
+    pub async fn test_mutation_tx_payload_exceeded_impl() {
         // Should fail: tx_bytes part of query is too big
         let err: Vec<_> = execute_request(10, 200, "mutation { executeTransactionBlock(txBytes: \"AAABGKHSA\", signatures: \"BBB\") { effects { status } } }")
             .await
@@ -1142,7 +1144,9 @@ pub mod tests {
                     .to_string()
             ]
         );
+    }
 
+    pub async fn test_dry_run_payload_tx_exceeded_impl() {
         // dryRunTransactionBlock check, should fail
         let err: Vec<_> = execute_request(
             10,
@@ -1162,7 +1166,9 @@ pub mod tests {
                     .to_string()
             ]
         );
+    }
 
+    pub async fn test_query_mutation_payload_impl() {
         // Should fail: query size too big
         let err: Vec<_> = execute_request(10, 10, "query { dryRunTransactionBlock(txBytes: \"AAAABAS\") { error transaction { digest } } }")
             .await

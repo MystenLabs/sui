@@ -941,6 +941,24 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn test_query_mutation_payload_read_part_too_big() {
+        test_mutation_payload_read_part_too_big_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_mutation_tx_payload_exceeded() {
+        test_mutation_tx_payload_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_dry_run_transaction_payload_exceeded() {
+        test_dry_run_payload_tx_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_query_mutation_payload_vars_fail() {
         // Set max mutation payload size to 10 bytes
         // This request should fail as we're passing the actual txBytes and sigs corresponding to a
