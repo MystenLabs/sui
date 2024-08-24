@@ -80,9 +80,8 @@ fn check_mutation_dry_run(
     }
 
     // Keep track of the remaining mutation/dry run bytes budget
-    // SAFETY max_tx_payload_size is u32, so it's safe to convert to u64
-    let mut available_budget: u64 = max_tx_payload_size;
-    // Keep track of the variables and their length
+    let mut available_budget = max_tx_payload_size;
+    // Keep track of the args as variables and their length
     let mut variables_length = HashMap::new();
     // If the tx related args do not use variables, add their size to this counter
     let mut tx_args_lengths = 0;
