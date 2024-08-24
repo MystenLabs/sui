@@ -49,12 +49,11 @@ pub(crate) struct ShowUsage;
 ///
 /// The function iterates through the nodes of a query, and for each node it checks if it is a
 /// `dryRunTransactionBlock` or a `executeTransactionBlock` node. Then, it does the following:
-///  - extracts the `txBytes` and `signatures` arguments from the `executeTransactionBlock`
-///  node and checks if the sum of their lengths is less than the `max_tx_payload_size`.
-///  - extracts the `txBytes` argument from the `dryRunTransactionBlock` node and checks if its
-///  length is less than the `max_tx_payload_size`.
-///  - subtracts the value of txBytes and signatures from a total available budget, and uses the
-///  total available budget to stop early if the tx payload is exceeded.
+///  - extracts the lengths `txBytes` and `signatures` arguments from the `executeTransactionBlock`
+///    node.
+///  - extracts the `txBytes` lengh from the `dryRunTransactionBlock` node
+///  - subtracts the values of txBytes and signatures from a total available budget, and check if
+///    the budget is not exhausted.
 ///
 /// Finally, it checks if the total payload size (a.k.a the content-length header) minus the
 /// tx related payload from above is less than the `max_query_payload_size`. This verifies
@@ -68,6 +67,7 @@ fn check_mutation_dry_run(
 ) -> ServerResult<()> {
     let PayloadSize(payload_size) = ctx.data_unchecked();
     if *payload_size > (max_query_payload_size + max_tx_payload_size) {
+        log_metric(ctx, "The query payload size is too large: ", *payload_size);
         return Err(graphql_error(
             code::BAD_USER_INPUT,
             format!(
@@ -84,25 +84,30 @@ fn check_mutation_dry_run(
     let mut available_budget: u64 = max_tx_payload_size;
     // Keep track of the variables and their length
     let mut variables_length = HashMap::<String, u64>::new();
+    // if the args do not use variables, count the values' sizes directly
+    let mut direct_values = 0;
 
-    // traversing each dryRun or executeTxBlcok node in the query against the tx payload size
+    // traversing each dryRun or executeTxBlcok node and checks the payload against the available
+    // budget
     for (_name, op) in doc.operations.iter() {
         traverse_and_check_tx_payload(
+            ctx,
             variables,
             max_tx_payload_size,
             &mut available_budget,
             &mut variables_length,
+            &mut direct_values,
             &op.node.selection_set.node.items,
             &doc.fragments,
         )?;
     }
     // the tx payload is within max allowed, now check if the read part of the query is ok.
-
-    let vars_length = variables_length.values().sum::<u64>();
-    // Check if the total payload size (a.k.a the content-length header) minus the values of
-    // the txBytes and sigs variables is less than the `max_query_payload_size`. This verifies
-    // that the "read" part of the query is within the set limits.
-    if (payload_size - vars_length) > max_query_payload_size {
+    // The payload size contains the whole (non-resolved) query, including the variables. Thus the
+    // size of the variables related to tx mutation/dry run needs to be subtracted from the payload
+    // size, as well as the values of the txBytes and signatures that were given as strings and not
+    // variables. The end result is the read part of the query, which needs to be lower than the
+    // max_query_payload_size
+    if (payload_size - vars_length.values().sum() - direct_values) > max_query_payload_size {
         log_metric(
             ctx,
             "The read part of the query payload is too large.",
@@ -123,10 +128,12 @@ fn check_mutation_dry_run(
     /// The value of the txBytes and signatures fields are subtracted from the available budget for
     /// each node that is either a dryRun (which has only txBytes) or executeTransactionBlock node.
     fn traverse_and_check_tx_payload(
+        ctx: &ExtensionContext<'_>,
         variables: &Variables,
         max_tx_payload_size: u64,
         available_budget: &mut u64,
         variables_length: &mut HashMap<String, u64>,
+        direct_values: &mut u64,
         items: &[Positioned<Selection>],
         fragments: &HashMap<Name, Positioned<FragmentDefinition>>,
     ) -> ServerResult<()> {
@@ -136,10 +143,12 @@ fn check_mutation_dry_run(
                     if f.node.name.node == DRY_RUN_TX_BLOCK || f.node.name.node == EXECUTE_TX_BLOCK
                     {
                         for arg in &f.node.arguments {
-                            check_node(
+                            check_argument(
+                                ctx,
                                 arg,
                                 available_budget,
                                 variables_length,
+                                direct_values,
                                 variables,
                                 max_tx_payload_size,
                             )?;
@@ -150,26 +159,30 @@ fn check_mutation_dry_run(
                     let name = &fs.node.fragment_name.node;
                     let def = fragments.get(name).ok_or_else(|| {
                         graphql_error_at_pos(
-                            code::INTERNAL_SERVER_ERROR,
+                            code::BAD_USER_INPUT,
                             format!("Fragment {name} referred to but not found in document"),
                             fs.pos,
                         )
                     })?;
                     traverse_and_check_tx_payload(
+                        ctx,
                         variables,
                         max_tx_payload_size,
                         available_budget,
                         variables_length,
+                        direct_values,
                         &def.node.selection_set.node.items,
                         fragments,
                     )?;
                 }
                 Selection::InlineFragment(f) => {
                     traverse_and_check_tx_payload(
+                        ctx,
                         variables,
                         max_tx_payload_size,
                         available_budget,
                         variables_length,
+                        direct_values,
                         &f.node.selection_set.node.items,
                         fragments,
                     )?;
@@ -179,39 +192,35 @@ fn check_mutation_dry_run(
         Ok(())
     }
 
-    fn check_node(
+    /// Check the size of this node's txBytes and/or signatures against the available budget.
+    fn check_argument(
+        ctx: &ExtensionContext<'_>,
         node: &(Positioned<Name>, Positioned<Value>),
         available_budget: &mut u64,
         variables_length: &mut HashMap<String, u64>,
+        direct_values: &mut u64,
         variables: &Variables,
         max_tx_payload_size: u64,
     ) -> ServerResult<()> {
-        let node_name = node.0.node.to_string();
-        let node_len = if is_variable(&node.1.node) {
-            if let Some(v) = variables_length.get(&node_name) {
-                *v
-            } else {
-                let node_len = get_value_str_len(&node.1.node, variables).map_err(|_| {
-                    graphql_error_at_pos(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Error getting size of variable: {}", node_name),
-                        node.1.pos,
-                    )
-                })?;
-                variables_length.insert(node_name.clone(), node_len);
-                node_len
-            }
+        let arg_len = if let Some(arg_name) = is_variable(&node.1.node) {
+            *variables_length
+                .entry(arg_name.to_string())
+                .or_insert(get_value_str_len(ctx, &node.1.node, variables)?)
         } else {
-            get_value_str_len(&node.1.node, variables).map_err(|_| {
-                graphql_error_at_pos(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Error getting size of variable: {}", node_name),
-                    node.1.pos,
-                )
-            })?
+            let node_len = get_value_str_len(ctx, &node.1.node, variables)?;
+            *direct_values += node_len;
+            node_len
         };
 
-        if node_len >= *available_budget {
+        if arg_len > *available_budget {
+            log_metric(
+                ctx,
+                &format!(
+                    "Maximum allowed transaction payload size exceeded. Maximum allowed is {} bytes.",
+                    max_tx_payload_size
+                ),
+                arg_len,
+            );
             return Err(graphql_error_at_pos(
                 code::BAD_USER_INPUT,
                 format!(
@@ -221,7 +230,7 @@ fn check_mutation_dry_run(
                 node.1.pos,
             ));
         }
-        *available_budget -= node_len;
+        *available_budget -= arg_len;
 
         Ok(())
     }
@@ -229,7 +238,7 @@ fn check_mutation_dry_run(
     Ok(())
 }
 
-/// Helper function for logging mutation dry run check
+/// Helper function for logging mutation & dry run check
 fn log_metric(ctx: &ExtensionContext<'_>, message: &str, payload_size: u64) {
     let metrics: &Metrics = ctx.data_unchecked();
     let query_id: &Uuid = ctx.data_unchecked();
@@ -666,25 +675,48 @@ impl Extension for QueryLimitsCheckerExt {
 /// This is specifically designed to work with the txBytes and signatures
 /// of the executeTransactionBlock and dryRunTransactionBlock nodes, which are strings or list of
 /// strings.
-fn get_value_str_len(arg: &GqlValue, variables: &Variables) -> Result<u64, anyhow::Error> {
+fn get_value_str_len(
+    ctx: &ExtensionContext<'_>,
+    arg: &GqlValue,
+    variables: &Variables,
+) -> Result<u64, ServerError> {
     match arg {
         GqlValue::String(s) => s.len().try_into().map_err(|_| {
-            anyhow::anyhow!(
-                "The size of the string is too large to convert from usize to u64: {} bytes",
-                s.len()
+    let query_id: &Uuid = ctx.data_unchecked();
+    let session_id: &SocketAddr = ctx.data_unchecked();
+                    info!(
+                        query_id = %query_id,
+                        session_id = %session_id,
+                        error_code = code::INTERNAL_SERVER_ERROR,
+                        "Error converting string length to u64 of txBytes or signatures argument"
+                    );
+            graphql_error(
+                code::BAD_USER_INPUT,
+                format!(
+                    "The size of the string in variable is too large to convert from usize to u64: {} bytes",
+                    s.len()
+                ),
             )
+            // anyhow::anyhow!(
+            //     "The size of the string is too large to convert from usize to u64: {} bytes",
+            //     s.len()
+            // )
         }),
-        GqlValue::List(arr) => arr.iter().map(|v| get_value_str_len(v, variables)).sum(),
+        GqlValue::List(arr) => arr.iter().map(|v| get_value_str_len(ctx, v, variables)).sum(),
         // the variables are expected to be strings
         GqlValue::Variable(v) => match variables.get(v) {
-            Some(value) => get_value_str_len(&value.clone().into_value(), variables),
+            Some(value) => get_value_str_len(ctx, &value.clone().into_value(), variables),
             None => Ok(0),
         },
         _ => Ok(0),
     }
 }
 
-/// Check if the argument in a node is a GqlValue::Variable or not
-fn is_variable(arg: &GqlValue) -> bool {
-    matches!(arg, GqlValue::Variable(_))
+/// Check if the argument in a node is a GqlValue::Variable or not and return its name
+fn is_variable(arg: &GqlValue) -> Option<&Name> {
+    if let GqlValue::Variable(name) = arg {
+        Some(name)
+    } else {
+        None
+    }
 }
