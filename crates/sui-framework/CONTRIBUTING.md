@@ -9,8 +9,7 @@ If changes need to be made to the framework's Move code, additional actions need
 Run the following commands in Sui's [root directory](../../) and accept the changes, if any (if you do not have `cargo-insta` command installed, please run the `cargo install cargo-insta` command first):
 
 ``` bash
-cargo insta test -p sui-cost --review
-cargo insta test -p sui-config --review
+cargo insta test -p sui-swarm-config --review
 ```
 
 Please use your best judgment to decide if the changes between old and new versions of the snapshots look "reasonable" (e.g., a minor change in gas costs). When in doubt, please reach out to a member of Sui core team.
