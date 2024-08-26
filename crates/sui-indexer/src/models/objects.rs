@@ -47,7 +47,6 @@ pub struct StoredObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
     pub object_digest: Vec<u8>,
-    pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
     /// The full type of this object, including package id, module, name and type parameters.
@@ -62,9 +61,6 @@ pub struct StoredObject {
     // TODO deal with overflow
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
 }
 
 #[derive(Queryable, Insertable, Selectable, Debug, Identifiable, Clone, QueryableByName)]
@@ -74,7 +70,6 @@ pub struct StoredObjectSnapshot {
     pub object_version: i64,
     pub object_status: i16,
     pub object_digest: Option<Vec<u8>>,
-    pub checkpoint_sequence_number: i64,
     pub owner_type: Option<i16>,
     pub owner_id: Option<Vec<u8>>,
     pub object_type: Option<String>,
@@ -85,9 +80,6 @@ pub struct StoredObjectSnapshot {
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
 }
 
 impl From<StoredObject> for StoredObjectSnapshot {
@@ -97,7 +89,6 @@ impl From<StoredObject> for StoredObjectSnapshot {
             object_version: o.object_version,
             object_status: ObjectStatus::Active as i16,
             object_digest: Some(o.object_digest),
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
             owner_type: Some(o.owner_type),
             object_type_package: o.object_type_package,
             object_type_module: o.object_type_module,
@@ -108,9 +99,6 @@ impl From<StoredObject> for StoredObjectSnapshot {
             coin_type: o.coin_type,
             coin_balance: o.coin_balance,
             df_kind: o.df_kind,
-            df_name: o.df_name,
-            df_object_type: o.df_object_type,
-            df_object_id: o.df_object_id,
         }
     }
 }
@@ -122,7 +110,6 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
             object_version: o.object_version,
             object_status: ObjectStatus::WrappedOrDeleted as i16,
             object_digest: None,
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
             owner_type: None,
             owner_id: None,
             object_type: None,
@@ -133,9 +120,6 @@ impl From<StoredDeletedObject> for StoredObjectSnapshot {
             coin_type: None,
             coin_balance: None,
             df_kind: None,
-            df_name: None,
-            df_object_type: None,
-            df_object_id: None,
         }
     }
 }
@@ -158,42 +142,35 @@ pub struct StoredHistoryObject {
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
     pub df_kind: Option<i16>,
-    pub df_name: Option<Vec<u8>>,
-    pub df_object_type: Option<String>,
-    pub df_object_id: Option<Vec<u8>>,
 }
 
-impl From<StoredObject> for StoredHistoryObject {
-    fn from(o: StoredObject) -> Self {
-        Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
-            object_status: ObjectStatus::Active as i16,
-            object_digest: Some(o.object_digest),
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
-            owner_type: Some(o.owner_type),
-            object_type_package: o.object_type_package,
-            object_type_module: o.object_type_module,
-            object_type_name: o.object_type_name,
-            owner_id: o.owner_id,
-            object_type: o.object_type,
-            serialized_object: Some(o.serialized_object),
-            coin_type: o.coin_type,
-            coin_balance: o.coin_balance,
-            df_kind: o.df_kind,
-            df_name: o.df_name,
-            df_object_type: o.df_object_type,
-            df_object_id: o.df_object_id,
-        }
-    }
-}
+// TODOggao: is this From used
+// impl From<StoredObject> for StoredHistoryObject {
+//     fn from(o: StoredObject) -> Self {
+//         Self {
+//             object_id: o.object_id,
+//             object_version: o.object_version,
+//             object_status: ObjectStatus::Active as i16,
+//             object_digest: Some(o.object_digest),
+//             owner_type: Some(o.owner_type),
+//             object_type_package: o.object_type_package,
+//             object_type_module: o.object_type_module,
+//             object_type_name: o.object_type_name,
+//             owner_id: o.owner_id,
+//             object_type: o.object_type,
+//             serialized_object: Some(o.serialized_object),
+//             coin_type: o.coin_type,
+//             coin_balance: o.coin_balance,
+//             df_kind: o.df_kind,
+//         }
+//     }
+// }
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct StoredDeletedObject {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub checkpoint_sequence_number: i64,
 }
 
 impl From<IndexedDeletedObject> for StoredDeletedObject {
@@ -201,7 +178,6 @@ impl From<IndexedDeletedObject> for StoredDeletedObject {
         Self {
             object_id: o.object_id.to_vec(),
             object_version: o.object_version as i64,
-            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
         }
     }
 }
@@ -215,16 +191,17 @@ pub struct StoredDeletedHistoryObject {
     pub checkpoint_sequence_number: i64,
 }
 
-impl From<StoredDeletedObject> for StoredDeletedHistoryObject {
-    fn from(o: StoredDeletedObject) -> Self {
-        Self {
-            object_id: o.object_id,
-            object_version: o.object_version,
-            object_status: ObjectStatus::WrappedOrDeleted as i16,
-            checkpoint_sequence_number: o.checkpoint_sequence_number,
-        }
-    }
-}
+// TODOggao: is this From used
+// impl From<StoredDeletedObject> for StoredDeletedHistoryObject {
+//     fn from(o: StoredDeletedObject) -> Self {
+//         Self {
+//             object_id: o.object_id,
+//             object_version: o.object_version,
+//             object_status: ObjectStatus::WrappedOrDeleted as i16,
+//             checkpoint_sequence_number: o.checkpoint_sequence_number,
+//         }
+//     }
+// }
 
 impl From<IndexedObject> for StoredObject {
     fn from(o: IndexedObject) -> Self {
@@ -246,7 +223,6 @@ impl From<IndexedObject> for StoredObject {
             object_id: object.id().to_vec(),
             object_version: object.version().value() as i64,
             object_digest: object.digest().into_inner().to_vec(),
-            checkpoint_sequence_number: checkpoint_sequence_number as i64,
             owner_type: owner_type as i16,
             owner_id: owner_id.map(|id| id.to_vec()),
             object_type: object
@@ -262,9 +238,6 @@ impl From<IndexedObject> for StoredObject {
                 DynamicFieldType::DynamicField => 0,
                 DynamicFieldType::DynamicObject => 1,
             }),
-            df_name: df_info.as_ref().map(|n| bcs::to_bytes(&n.name).unwrap()),
-            df_object_type: df_info.as_ref().map(|v| v.object_type.clone()),
-            df_object_id: df_info.as_ref().map(|v| v.object_id.to_vec()),
         }
     }
 }

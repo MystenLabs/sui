@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use axum::handler::HandlerWithoutStateExt;
 use core::result::Result::Ok;
 use diesel::dsl::{max, min};
 use diesel::r2d2::R2D2Connection;
@@ -48,7 +49,7 @@ use crate::schema::{
     event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
     objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
     tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    tx_recipients, tx_senders, objects_snapshot_watermark
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -316,18 +317,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         .context("Failed reading transaction range from PostgresDB")
     }
 
-    fn get_latest_object_snapshot_checkpoint_sequence_number(
-        &self,
-    ) -> Result<Option<u64>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            objects_snapshot::dsl::objects_snapshot
-                .select(max(objects_snapshot::checkpoint_sequence_number))
-                .first::<Option<i64>>(conn)
-                .map(|v| v.map(|v| v as u64))
-        })
-        .context("Failed reading latest object snapshot checkpoint sequence number from PostgresDB")
-    }
-
     fn persist_display_updates(
         &self,
         display_updates: BTreeMap<String, StoredDisplay>,
@@ -379,8 +368,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         objects::object_id.eq(excluded(objects::object_id)),
                         objects::object_version.eq(excluded(objects::object_version)),
                         objects::object_digest.eq(excluded(objects::object_digest)),
-                        objects::checkpoint_sequence_number
-                            .eq(excluded(objects::checkpoint_sequence_number)),
                         objects::owner_type.eq(excluded(objects::owner_type)),
                         objects::owner_id.eq(excluded(objects::owner_id)),
                         objects::object_type.eq(excluded(objects::object_type)),
@@ -388,15 +375,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         objects::coin_type.eq(excluded(objects::coin_type)),
                         objects::coin_balance.eq(excluded(objects::coin_balance)),
                         objects::df_kind.eq(excluded(objects::df_kind)),
-                        objects::df_name.eq(excluded(objects::df_name)),
-                        objects::df_object_type.eq(excluded(objects::df_object_type)),
-                        objects::df_object_id.eq(excluded(objects::df_object_id)),
                     ),
                     |excluded: StoredObject| (
                         objects::object_id.eq(excluded.object_id.clone()),
                         objects::object_version.eq(excluded.object_version),
                         objects::object_digest.eq(excluded.object_digest.clone()),
-                        objects::checkpoint_sequence_number.eq(excluded.checkpoint_sequence_number),
                         objects::owner_type.eq(excluded.owner_type),
                         objects::owner_id.eq(excluded.owner_id.clone()),
                         objects::object_type.eq(excluded.object_type.clone()),
@@ -404,9 +387,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         objects::coin_type.eq(excluded.coin_type.clone()),
                         objects::coin_balance.eq(excluded.coin_balance),
                         objects::df_kind.eq(excluded.df_kind),
-                        objects::df_name.eq(excluded.df_name.clone()),
-                        objects::df_object_type.eq(excluded.df_object_type.clone()),
-                        objects::df_object_id.eq(excluded.df_object_id.clone()),
                     ),
                     conn
                 );
@@ -499,8 +479,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded(objects_snapshot::object_status)),
                             objects_snapshot::object_digest
                                 .eq(excluded(objects_snapshot::object_digest)),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                             objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
                             objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
                             objects_snapshot::object_type_package
@@ -517,18 +495,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                             objects_snapshot::coin_balance
                                 .eq(excluded(objects_snapshot::coin_balance)),
                             objects_snapshot::df_kind.eq(excluded(objects_snapshot::df_kind)),
-                            objects_snapshot::df_name.eq(excluded(objects_snapshot::df_name)),
-                            objects_snapshot::df_object_type
-                                .eq(excluded(objects_snapshot::df_object_type)),
-                            objects_snapshot::df_object_id
-                                .eq(excluded(objects_snapshot::df_object_id)),
                         ),
                         |excluded: StoredObjectSnapshot| (
                             objects_snapshot::object_version.eq(excluded.object_version),
                             objects_snapshot::object_status.eq(excluded.object_status),
                             objects_snapshot::object_digest.eq(excluded.object_digest),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded.checkpoint_sequence_number),
                             objects_snapshot::owner_type.eq(excluded.owner_type),
                             objects_snapshot::owner_id.eq(excluded.owner_id),
                             objects_snapshot::object_type_package.eq(excluded.object_type_package),
@@ -539,9 +510,6 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                             objects_snapshot::coin_type.eq(excluded.coin_type),
                             objects_snapshot::coin_balance.eq(excluded.coin_balance),
                             objects_snapshot::df_kind.eq(excluded.df_kind),
-                            objects_snapshot::df_name.eq(excluded.df_name),
-                            objects_snapshot::df_object_type.eq(excluded.df_object_type),
-                            objects_snapshot::df_object_id.eq(excluded.df_object_id),
                         ),
                         conn
                     );
@@ -654,6 +622,27 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             PG_DB_COMMIT_SLEEP_DURATION
         )?;
         Ok(())
+    }
+
+    fn persist_objects_snapshot_watermark(
+        &self,
+        watermark: u64,
+    ) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::update(objects_snapshot_watermark::table)
+                    .insert
+                    .execute(conn)
+                    .map_err(|e| {
+                        IndexerError::DatabaseError(format!(
+                            "Failed to persist checkpoint digest with error: {}",
+                            e
+                        ))
+                    })
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )?;
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
@@ -1671,15 +1660,6 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
     async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_chain_identifier())
             .await
-    }
-
-    async fn get_latest_object_snapshot_checkpoint_sequence_number(
-        &self,
-    ) -> Result<Option<u64>, IndexerError> {
-        self.execute_in_blocking_worker(|this| {
-            this.get_latest_object_snapshot_checkpoint_sequence_number()
-        })
-        .await
     }
 
     async fn persist_objects(

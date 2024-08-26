@@ -45,6 +45,7 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::db::{ConnectionConfig, ConnectionPool, ConnectionPoolConfig};
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
+use crate::schema::objects_snapshot_watermark;
 use crate::store::diesel_macro::*;
 use crate::{
     errors::IndexerError,
@@ -1578,9 +1579,9 @@ impl<U: R2D2Connection> IndexerReader<U> {
         })?
         .unwrap_or_default();
         let latest_object_snapshot_checkpoint_sequence = run_query!(&self.pool, |conn| {
-            objects_snapshot::table
-                .select(objects_snapshot::checkpoint_sequence_number)
-                .order(objects_snapshot::checkpoint_sequence_number.desc())
+            objects_snapshot_watermark::table
+                .select(objects_snapshot_watermark::latest_checkpoint)
+                .order(objects_snapshot_watermark::latest_checkpoint.desc())
                 .first::<i64>(conn)
                 .optional()
         })?

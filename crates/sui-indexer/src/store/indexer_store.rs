@@ -59,6 +59,11 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64)
         -> Result<(), IndexerError>;
 
+    async fn persist_objects_snapshot_watermark(
+        &self,
+        watermark: u64,
+    ) -> Result<(), IndexerError>;
+
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,

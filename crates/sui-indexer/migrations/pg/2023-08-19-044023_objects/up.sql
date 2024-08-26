@@ -2,7 +2,6 @@ CREATE TABLE objects (
     object_id                   bytea         PRIMARY KEY,
     object_version              bigint        NOT NULL,
     object_digest               bytea         NOT NULL,
-    checkpoint_sequence_number  bigint        NOT NULL,
     -- Immutable/Address/Object/Shared, see types.rs
     owner_type                  smallint      NOT NULL,
     -- bytes of SuiAddress/ObjectID of the owner ID.
@@ -23,20 +22,12 @@ CREATE TABLE objects (
     coin_balance                bigint,
     -- DynamicField/DynamicObject, see types.rs
     -- Non-null when the object is a dynamic field
-    df_kind                     smallint,
-    -- bcs serialized DynamicFieldName
-    -- Non-null when the object is a dynamic field
-    df_name                     bytea,
-    -- object_type in DynamicFieldInfo.
-    df_object_type              text,
-    -- object_id in DynamicFieldInfo.
-    df_object_id                bytea
+    df_kind                     smallint
 );
 
 -- OwnerType: 1: Address, 2: Object, see types.rs
 CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
-CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);
 CREATE INDEX objects_package_module_name_full_type ON objects (object_type_package, object_type_module, object_type_name, object_type);
 CREATE INDEX objects_owner_package_module_name_full_type ON objects (owner_id, object_type_package, object_type_module, object_type_name, object_type);
 
@@ -60,9 +51,6 @@ CREATE TABLE objects_history (
     coin_type                   text,
     coin_balance                bigint,
     df_kind                     smallint,
-    df_name                     bytea,
-    df_object_type              text,
-    df_object_id                bytea,
     CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id, object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number);
 CREATE INDEX objects_history_id_version ON objects_history (object_id, object_version, checkpoint_sequence_number);
@@ -83,7 +71,6 @@ CREATE TABLE objects_snapshot (
     object_version              bigint        NOT NULL,
     object_status               smallint      NOT NULL,
     object_digest               bytea,
-    checkpoint_sequence_number  bigint        NOT NULL,
     owner_type                  smallint,
     owner_id                    bytea,
     object_type                 text,
@@ -93,14 +80,14 @@ CREATE TABLE objects_snapshot (
     serialized_object           bytea,
     coin_type                   text,
     coin_balance                bigint,
-    df_kind                     smallint,
-    df_name                     bytea,
-    df_object_type              text,
-    df_object_id                bytea
+    df_kind                     smallint
 );
-CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (checkpoint_sequence_number);
 CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, object_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_snapshot_coin_owner ON objects_snapshot (owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_snapshot_coin_only ON objects_snapshot (coin_type, object_id) WHERE coin_type IS NOT NULL;
 CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type);
 CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id, object_type_package, object_type_module, object_type_name, object_type);
+
+CREATE TABLE objects_snapshot_watermark (
+    latest_checkpoint           bigint        PRIMARY KEY
+);

@@ -27,7 +27,7 @@ diesel::table! {
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
         min_tx_sequence_number -> Nullable<Int8>,
-        max_tx_sequence_number -> Nullable<Int8>
+        max_tx_sequence_number -> Nullable<Int8>,
     }
 }
 
@@ -181,7 +181,6 @@ diesel::table! {
         object_id -> Bytea,
         object_version -> Int8,
         object_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
@@ -192,9 +191,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -215,9 +211,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -238,9 +231,6 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
     }
 }
 
@@ -250,7 +240,6 @@ diesel::table! {
         object_version -> Int8,
         object_status -> Int2,
         object_digest -> Nullable<Bytea>,
-        checkpoint_sequence_number -> Int8,
         owner_type -> Nullable<Int2>,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
@@ -261,9 +250,12 @@ diesel::table! {
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
         df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
-        df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    objects_snapshot_watermark (latest_checkpoint) {
+        latest_checkpoint -> Int8,
     }
 }
 
