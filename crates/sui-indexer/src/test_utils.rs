@@ -40,12 +40,12 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer<T: R2D2Connection + Send + 'static>(
+pub async fn start_test_indexer(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: PathBuf,
-) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<diesel::PgConnection>, JoinHandle<Result<(), IndexerError>>) {
     start_test_indexer_impl(
         db_url,
         rpc_url,
@@ -60,14 +60,14 @@ pub async fn start_test_indexer<T: R2D2Connection + Send + 'static>(
 /// Starts an indexer reader or writer for testing depending on the `reader_writer_config`. If
 /// `reset_database` is true, the database instance named in `db_url` will be dropped and
 /// reinstantiated.
-pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
+pub async fn start_test_indexer_impl(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     reset_database: bool,
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
-) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
+) -> (PgIndexerStore<diesel::PgConnection>, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
@@ -109,7 +109,7 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
 
         // Open in default mode
         let blocking_pool =
-            new_connection_pool_with_config::<T>(&default_db_url, Some(5), pool_config).unwrap();
+            new_connection_pool_with_config::<diesel::PgConnection>(&default_db_url, Some(5), pool_config).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -127,7 +127,7 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
     }
 
     let blocking_pool =
-        new_connection_pool_with_config::<T>(parsed_url.expose_secret(), Some(5), pool_config)
+        new_connection_pool_with_config::<diesel::PgConnection>(parsed_url.expose_secret(), Some(5), pool_config)
             .unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
@@ -143,7 +143,7 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
             tokio::spawn(
-                async move { Indexer::start_reader::<T>(&config, &registry, db_url).await },
+                async move { Indexer::start_reader::<diesel::PgConnection>(&config, &registry, db_url).await },
             )
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
@@ -153,7 +153,7 @@ pub async fn start_test_indexer_impl<T: R2D2Connection + 'static>(
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                Indexer::start_writer_with_config::<PgIndexerStore<T>, T>(
+                Indexer::start_writer_with_config::<PgIndexerStore<diesel::PgConnection>, diesel::PgConnection>(
                     &config,
                     store_clone,
                     indexer_metrics,

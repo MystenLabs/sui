@@ -47,7 +47,6 @@ tokio = { workspace = true, features = ["full"] }
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
-diesel.workspace = true
 uuid.workspace = true
 url.workspace = true
 
