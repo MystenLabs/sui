@@ -227,7 +227,7 @@ impl Cluster for LocalNewCluster {
             (options.pg_address.clone(), indexer_address)
         {
             // Start in writer mode
-            start_test_indexer::<diesel::PgConnection>(
+            start_test_indexer(
                 Some(pg_address.clone()),
                 fullnode_url.clone(),
                 ReaderWriterConfig::writer_mode(None),
@@ -236,7 +236,7 @@ impl Cluster for LocalNewCluster {
             .await;
 
             // Start in reader mode
-            start_test_indexer::<diesel::PgConnection>(
+            start_test_indexer(
                 Some(pg_address),
                 fullnode_url.clone(),
                 ReaderWriterConfig::reader_mode(indexer_address.to_string()),
