@@ -47,7 +47,7 @@ pub async fn handle_sui_transactions_loop(
         if !data.is_empty() {
             // unwrap: token_transfers is not empty
             let last_ckp = txns.last().map(|tx| tx.checkpoint).unwrap_or_default();
-            while let Err(err) = write(&pg_pool, data.clone()) {
+            while let Err(err) = write(&pg_pool, data.clone()).await {
                 error!("Failed to write sui transactions to DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -57,7 +57,7 @@ pub async fn handle_sui_transactions_loop(
 
         // update sui progress store using the latest cursor
         if let Some(cursor) = cursor {
-            while let Err(err) = update_sui_progress_store(&pg_pool, cursor) {
+            while let Err(err) = update_sui_progress_store(&pg_pool, cursor).await {
                 error!("Failed to update sui progress tore DB: {:?}", err);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
