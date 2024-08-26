@@ -19,7 +19,7 @@ use tracing::error;
 
 #[derive(Clone)]
 pub(crate) struct PgExecutor {
-    pub inner: IndexerReader<diesel::PgConnection>,
+    pub inner: IndexerReader,
     pub limits: Limits,
     pub metrics: Metrics,
 }
@@ -32,11 +32,7 @@ pub(crate) struct PgConnection<'c> {
 pub(crate) struct ByteaLiteral<'a>(pub &'a [u8]);
 
 impl PgExecutor {
-    pub(crate) fn new(
-        inner: IndexerReader<diesel::PgConnection>,
-        limits: Limits,
-        metrics: Metrics,
-    ) -> Self {
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
         Self {
             inner,
             limits,
@@ -214,7 +210,7 @@ mod tests {
     #[test]
     fn test_query_cost() {
         let connection_config = ConnectionConfig::default();
-        let pool = new_connection_pool::<diesel::PgConnection>(
+        let pool = new_connection_pool(
             &connection_config.db_url,
             Some(connection_config.db_pool_size),
         )
