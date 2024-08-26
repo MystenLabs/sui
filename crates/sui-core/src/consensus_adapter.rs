@@ -10,7 +10,6 @@ use futures::pin_mut;
 use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::{TransactionProto, TransactionsClient};
-use narwhal_worker::LazyNarwhalClient;
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -218,41 +217,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
-#[async_trait::async_trait]
-impl SubmitToConsensus for LazyNarwhalClient {
-    async fn submit_to_consensus(
-        &self,
-        transactions: &[ConsensusTransaction],
-        _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let transactions = transactions
-            .iter()
-            .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
-            .collect::<Vec<_>>();
-        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
-        // Narwhal shuts down, so there should be no correctness issue.
-        let client = {
-            let c = self.client.load();
-            if c.is_some() {
-                c
-            } else {
-                self.client.store(Some(self.get().await));
-                self.client.load()
-            }
-        };
-        let client = client.as_ref().unwrap().load();
-        client
-            .submit_transactions(transactions)
-            .await
-            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
-            .tap_err(|r| {
-                // Will be logged by caller as well.
-                warn!("Submit transaction failed with: {:?}", r);
-            })?;
-        Ok(())
-    }
-}
-
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
@@ -372,7 +336,7 @@ impl ConsensusAdapter {
             }
         }
         debug!(
-            "Submitting {:?} recovered pending consensus transactions to Narwhal",
+            "Submitting {:?} recovered pending consensus transactions to consensus",
             recovered.len()
         );
         for transaction in recovered {
@@ -1133,8 +1097,8 @@ mod adapter_tests {
     use super::position_submit_certificate;
     use crate::consensus_adapter::{
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-        LazyNarwhalClient,
     };
+    use crate::mysticeti_adapter::LazyMysticetiClient;
     use fastcrypto::traits::KeyPair;
     use rand::Rng;
     use rand::{rngs::StdRng, SeedableRng};
@@ -1171,9 +1135,7 @@ mod adapter_tests {
 
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Arc::new(LazyNarwhalClient::new(
-                "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-            )),
+            Arc::new(LazyMysticetiClient::new()),
             *committee.authority_by_index(0).unwrap(),
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -1203,9 +1165,7 @@ mod adapter_tests {
 
         // Without submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Arc::new(LazyNarwhalClient::new(
-                "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-            )),
+            Arc::new(LazyMysticetiClient::new()),
             *committee.authority_by_index(0).unwrap(),
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

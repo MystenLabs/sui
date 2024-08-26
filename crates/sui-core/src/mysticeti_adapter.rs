@@ -21,6 +21,7 @@ use crate::{
 /// Gets a client to submit transactions to Mysticeti, or waits for one to be available.
 /// This hides the complexities of async consensus initialization and submitting to different
 /// instances of consensus across epochs.
+// TODO: rename to LazyConsensusClient?
 #[derive(Default, Clone)]
 pub struct LazyMysticetiClient {
     client: Arc<ArcSwapOption<TransactionClient>>,

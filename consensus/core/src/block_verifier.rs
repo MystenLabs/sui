@@ -145,9 +145,7 @@ impl BlockVerifier for SignedBlockVerifier {
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
 
         let max_transaction_size_limit =
-            self.context
-                .protocol_config
-                .consensus_max_transaction_size_bytes() as usize;
+            self.context.protocol_config.max_transaction_size_bytes() as usize;
         for t in &batch {
             if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
                 return Err(ConsensusError::TransactionTooLarge {
@@ -166,10 +164,10 @@ impl BlockVerifier for SignedBlockVerifier {
             });
         }
 
-        let total_transactions_size_limit =
-            self.context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize;
+        let total_transactions_size_limit = self
+            .context
+            .protocol_config
+            .max_transactions_in_block_bytes() as usize;
         if batch.iter().map(|t| t.len()).sum::<usize>() > total_transactions_size_limit
             && total_transactions_size_limit > 0
         {
@@ -180,7 +178,7 @@ impl BlockVerifier for SignedBlockVerifier {
         }
 
         self.transaction_verifier
-            .verify_batch(&self.context.protocol_config, &batch)
+            .verify_batch(&batch)
             .map_err(|e| ConsensusError::InvalidTransaction(format!("{e:?}")))
     }
 
@@ -238,11 +236,7 @@ mod test {
 
     impl TransactionVerifier for TxnSizeVerifier {
         // Fails verification if any transaction is < 4 bytes.
-        fn verify_batch(
-            &self,
-            _protocol_config: &sui_protocol_config::ProtocolConfig,
-            transactions: &[&[u8]],
-        ) -> Result<(), ValidationError> {
+        fn verify_batch(&self, transactions: &[&[u8]]) -> Result<(), ValidationError> {
             for txn in transactions {
                 if txn.len() < 4 {
                     return Err(ValidationError::InvalidTransaction(format!(
