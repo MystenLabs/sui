@@ -6,7 +6,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::spawn_monitored_task;
-use narwhal_worker::LazyNarwhalClient;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
@@ -46,7 +45,10 @@ use tokio::task::JoinHandle;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::{
+    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    mysticeti_adapter::LazyMysticetiClient,
+};
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -119,9 +121,8 @@ impl AuthorityServer {
     }
 
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
-        let consensus_address = new_local_tcp_address_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Arc::new(LazyNarwhalClient::new(consensus_address)),
+            Arc::new(LazyMysticetiClient::new()),
             state.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,

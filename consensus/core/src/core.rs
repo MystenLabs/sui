@@ -1239,12 +1239,7 @@ mod test {
             let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
             assert_eq!(format!("Transaction {i}"), transaction);
         }
-        assert!(
-            total
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes()
-        );
+        assert!(total <= context.protocol_config.max_transactions_in_block_bytes());
 
         // genesis blocks should be referenced
         let all_genesis = genesis_blocks(context);

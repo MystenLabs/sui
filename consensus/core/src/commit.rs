@@ -261,7 +261,7 @@ pub struct CommitRef {
 }
 
 impl CommitRef {
-    pub(crate) fn new(index: CommitIndex, digest: CommitDigest) -> Self {
+    pub fn new(index: CommitIndex, digest: CommitDigest) -> Self {
         Self { index, digest }
     }
 }
@@ -305,8 +305,8 @@ pub struct CommittedSubDag {
 }
 
 impl CommittedSubDag {
-    /// Create new (empty) sub-dag.
-    pub(crate) fn new(
+    /// Creates a new committed sub dag.
+    pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,

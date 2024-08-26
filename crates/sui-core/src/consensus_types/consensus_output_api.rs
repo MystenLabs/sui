@@ -82,7 +82,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                             ) {
                                 Ok(transaction) => transaction,
                                 Err(err) => {
-                                    // This should have been prevented by Narwhal batch verification.
+                                    // This should have been prevented by transaction verifications in consensus.
                                     panic!(
                                         "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
                                         err, cert, digest, serialized_transaction
