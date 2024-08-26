@@ -6,7 +6,7 @@ use criterion::{measurement::Measurement, Criterion};
 use move_binary_format::CompiledModule;
 use move_compiler::{
     editions::Edition,
-    shared::{PackageConfig, PackagePaths},
+    shared::PackagePaths,
     Compiler, FullyCompiledProgram,
 };
 use move_core_types::{
