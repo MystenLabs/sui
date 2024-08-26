@@ -3,14 +3,18 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, BoolExpressionMethods, Connection, ExpressionMethods, RunQueryDsl};
+use diesel::{dsl::sql, BoolExpressionMethods, ExpressionMethods};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use dotenvy::dotenv;
 use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
+use std::env;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
 };
 use sui_types::full_checkpoint_content::CheckpointData;
+use tokio::sync::oneshot;
 use tracing::info;
 
 use suins_indexer::{
@@ -20,10 +24,6 @@ use suins_indexer::{
     schema::domains,
     PgConnectionPool,
 };
-
-use dotenvy::dotenv;
-use std::env;
-use tokio::sync::oneshot;
 
 struct SuinsIndexerWorker {
     pg_pool: PgConnectionPool,
@@ -40,7 +40,7 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(
+    async fn commit_to_db(
         &self,
         updates: &[VerifiedDomain],
         removals: &[String],
@@ -50,51 +50,58 @@ impl SuinsIndexerWorker {
             return Ok(());
         }
 
-        let connection = &mut self.pg_pool.get().unwrap();
+        let mut connection = self.pg_pool.get().await.unwrap();
 
-        connection.transaction(|tx| {
-            if !updates.is_empty() {
-                // Bulk insert all updates and override with data.
-                diesel::insert_into(domains::table)
-                    .values(updates)
-                    .on_conflict(domains::name)
-                    .do_update()
-                    .set((
-                        domains::expiration_timestamp_ms
-                            .eq(sql(&format_update_field_query("expiration_timestamp_ms"))),
-                        domains::nft_id.eq(sql(&format_update_field_query("nft_id"))),
-                        domains::target_address
-                            .eq(sql(&format_update_field_query("target_address"))),
-                        domains::data.eq(sql(&format_update_field_query("data"))),
-                        domains::last_checkpoint_updated
-                            .eq(sql(&format_update_field_query("last_checkpoint_updated"))),
-                        domains::field_id.eq(sql(&format_update_field_query("field_id"))),
-                        // We always want to respect the subdomain_wrapper re-assignment, even if the checkpoint is older.
-                        // That prevents a scenario where we first process a later checkpoint that did an update to the name record (e..g change target address),
-                        // without first executing the checkpoint that created the subdomain wrapper.
-                        // Since wrapper re-assignment can only happen every 2 days, we can't write invalid data here.
-                        domains::subdomain_wrapper_id
-                            .eq(sql(&format_update_subdomain_wrapper_query())),
-                    ))
-                    .execute(tx)
-                    .unwrap_or_else(|_| panic!("Failed to process updates: {:?}", updates));
-            }
+        connection
+            .transaction::<_, anyhow::Error, _>(|conn| {
+                async move {
+                    if !updates.is_empty() {
+                        // Bulk insert all updates and override with data.
+                        diesel::insert_into(domains::table)
+                            .values(updates)
+                            .on_conflict(domains::name)
+                            .do_update()
+                            .set((
+                                domains::expiration_timestamp_ms
+                                    .eq(sql(&format_update_field_query("expiration_timestamp_ms"))),
+                                domains::nft_id.eq(sql(&format_update_field_query("nft_id"))),
+                                domains::target_address
+                                    .eq(sql(&format_update_field_query("target_address"))),
+                                domains::data.eq(sql(&format_update_field_query("data"))),
+                                domains::last_checkpoint_updated
+                                    .eq(sql(&format_update_field_query("last_checkpoint_updated"))),
+                                domains::field_id.eq(sql(&format_update_field_query("field_id"))),
+                                // We always want to respect the subdomain_wrapper re-assignment, even if the checkpoint is older.
+                                // That prevents a scenario where we first process a later checkpoint that did an update to the name record (e..g change target address),
+                                // without first executing the checkpoint that created the subdomain wrapper.
+                                // Since wrapper re-assignment can only happen every 2 days, we can't write invalid data here.
+                                domains::subdomain_wrapper_id
+                                    .eq(sql(&format_update_subdomain_wrapper_query())),
+                            ))
+                            .execute(conn)
+                            .await
+                            .unwrap_or_else(|_| panic!("Failed to process updates: {:?}", updates));
+                    }
 
-            if !removals.is_empty() {
-                // We want to remove from the database all name records that were removed in the checkpoint
-                // but only if the checkpoint is newer than the last time the name record was updated.
-                diesel::delete(domains::table)
-                    .filter(
-                        domains::field_id
-                            .eq_any(removals)
-                            .and(domains::last_checkpoint_updated.le(checkpoint_seq_num as i64)),
-                    )
-                    .execute(tx)
-                    .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
-            }
+                    if !removals.is_empty() {
+                        // We want to remove from the database all name records that were removed in the checkpoint
+                        // but only if the checkpoint is newer than the last time the name record was updated.
+                        diesel::delete(domains::table)
+                            .filter(domains::field_id.eq_any(removals).and(
+                                domains::last_checkpoint_updated.le(checkpoint_seq_num as i64),
+                            ))
+                            .execute(conn)
+                            .await
+                            .unwrap_or_else(|_| {
+                                panic!("Failed to process deletions: {:?}", removals)
+                            });
+                    }
 
-            Ok(())
-        })
+                    Ok(())
+                }
+                .scope_boxed()
+            })
+            .await
     }
 }
 
@@ -109,7 +116,8 @@ impl Worker for SuinsIndexerWorker {
         if checkpoint_seq_number % 1000 == 0 {
             info!("Checkpoint sequence number: {}", checkpoint_seq_number);
         }
-        self.commit_to_db(&updates, &removals, checkpoint_seq_number)?;
+        self.commit_to_db(&updates, &removals, checkpoint_seq_number)
+            .await?;
         Ok(())
     }
 }
@@ -148,7 +156,7 @@ async fn main() -> Result<()> {
 
     let worker_pool = WorkerPool::new(
         SuinsIndexerWorker {
-            pg_pool: get_connection_pool(),
+            pg_pool: get_connection_pool().await,
             indexer: indexer_setup,
         },
         "suins_indexing".to_string(), /* task name used as a key in the progress store */
