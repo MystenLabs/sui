@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
-use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -46,7 +45,7 @@ impl TransactionConsumer {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes(),
+                .max_transactions_in_block_bytes(),
             max_consumed_transactions_per_request: context
                 .protocol_config
                 .max_num_transactions_in_block(),
@@ -158,9 +157,7 @@ impl TransactionClient {
         (
             Self {
                 sender,
-                max_transaction_size: context
-                    .protocol_config
-                    .consensus_max_transaction_size_bytes(),
+                max_transaction_size: context.protocol_config.max_transaction_size_bytes(),
             },
             receiver,
         )
@@ -215,11 +212,7 @@ impl TransactionClient {
 /// before acceptance of the block.
 pub trait TransactionVerifier: Send + Sync + 'static {
     /// Determines if this batch can be voted on
-    fn verify_batch(
-        &self,
-        protocol_config: &ProtocolConfig,
-        batch: &[&[u8]],
-    ) -> Result<(), ValidationError>;
+    fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 }
 
 #[derive(Debug, Error)]
@@ -233,11 +226,7 @@ pub enum ValidationError {
 pub(crate) struct NoopTransactionVerifier;
 
 impl TransactionVerifier for NoopTransactionVerifier {
-    fn verify_batch(
-        &self,
-        _protocol_config: &ProtocolConfig,
-        _batch: &[&[u8]],
-    ) -> Result<(), ValidationError> {
+    fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
     }
 }
@@ -338,14 +327,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -356,14 +340,9 @@ mod tests {
         // ensure their total size is less than `max_bytes_to_fetch`
         let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
-            total_size
-                <= context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes(),
+            total_size <= context.protocol_config.max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
-            context
-                .protocol_config
-                .consensus_max_transactions_in_block_bytes()
+            context.protocol_config.max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -435,14 +414,9 @@ mod tests {
 
             let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
             assert!(
-                total_size
-                    <= context
-                        .protocol_config
-                        .consensus_max_transactions_in_block_bytes(),
+                total_size <= context.protocol_config.max_transactions_in_block_bytes(),
                 "Should have fetched transactions up to {}",
-                context
-                    .protocol_config
-                    .consensus_max_transactions_in_block_bytes()
+                context.protocol_config.max_transactions_in_block_bytes()
             );
 
             all_transactions.extend(transactions);

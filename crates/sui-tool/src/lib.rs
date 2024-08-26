@@ -489,58 +489,11 @@ async fn get_object_impl(
 }
 
 pub(crate) fn make_anemo_config() -> anemo_cli::Config {
-    use narwhal_types::*;
     use sui_network::discovery::*;
     use sui_network::state_sync::*;
 
     // TODO: implement `ServiceInfo` generation in anemo-build and use here.
     anemo_cli::Config::new()
-        // Narwhal primary-to-primary
-        .add_service(
-            "PrimaryToPrimary",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "SendCertificate",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        send_certificate,
-                        SendCertificateRequest
-                    ),
-                )
-                .add_method(
-                    "RequestVote",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        request_vote,
-                        RequestVoteRequest
-                    ),
-                )
-                .add_method(
-                    "FetchCertificates",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        fetch_certificates,
-                        FetchCertificatesRequest
-                    ),
-                ),
-        )
-        // Narwhal worker-to-worker
-        .add_service(
-            "WorkerToWorker",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "ReportBatch",
-                    anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
-                )
-                .add_method(
-                    "RequestBatches",
-                    anemo_cli::ron_method!(
-                        WorkerToWorkerClient,
-                        request_batches,
-                        RequestBatchesRequest
-                    ),
-                ),
-        )
         // Sui discovery
         .add_service(
             "Discovery",
