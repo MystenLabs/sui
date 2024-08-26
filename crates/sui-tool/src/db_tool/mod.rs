@@ -263,6 +263,7 @@ pub fn print_last_consensus_index(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: implement for consensus.
 pub fn print_consensus_commit(
     _path: &Path,
     _opt: PrintConsensusCommitOptions,
