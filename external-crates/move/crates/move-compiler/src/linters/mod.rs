@@ -93,7 +93,6 @@ macro_rules! lints {
     }
 }
 
-// Example usage:
 lints!(
     (
         ConstantNaming,
