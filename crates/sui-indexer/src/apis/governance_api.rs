@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
 
 use cached::{proc_macro::cached, SizedCache};
-use diesel::r2d2::R2D2Connection;
 use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
 use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
@@ -24,12 +23,12 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub struct GovernanceReadApi<T: R2D2Connection + 'static> {
-    inner: IndexerReader<T>,
+pub struct GovernanceReadApi {
+    inner: IndexerReader,
 }
 
-impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
-    pub fn new(inner: IndexerReader<T>) -> Self {
+impl GovernanceReadApi {
+    pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 
@@ -176,7 +175,7 @@ impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
     result = true
 )]
 pub async fn exchange_rates(
-    state: &GovernanceReadApi<impl R2D2Connection>,
+    state: &GovernanceReadApi,
     system_state_summary: &SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
@@ -262,7 +261,7 @@ pub async fn exchange_rates(
 }
 
 #[async_trait]
-impl<T: R2D2Connection + 'static> GovernanceReadApiServer for GovernanceReadApi<T> {
+impl GovernanceReadApiServer for GovernanceReadApi {
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
@@ -301,7 +300,7 @@ impl<T: R2D2Connection + 'static> GovernanceReadApiServer for GovernanceReadApi<
     }
 }
 
-impl<T: R2D2Connection> SuiRpcModule for GovernanceReadApi<T> {
+impl SuiRpcModule for GovernanceReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

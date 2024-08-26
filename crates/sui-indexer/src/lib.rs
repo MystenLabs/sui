@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use diesel::r2d2::R2D2Connection;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
 use mysten_metrics::spawn_monitored_task;
@@ -151,9 +150,9 @@ impl Default for IndexerConfig {
     }
 }
 
-pub async fn build_json_rpc_server<T: R2D2Connection>(
+pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,
-    reader: IndexerReader<T>,
+    reader: IndexerReader,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {

@@ -11,11 +11,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::{max, min};
-use diesel::r2d2::R2D2Connection;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
-use downcast::Any;
 use itertools::Itertools;
 use tap::TapFallible;
 use tracing::info;
@@ -61,7 +59,6 @@ use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
 
-#[cfg(feature = "postgres-feature")]
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
@@ -139,15 +136,15 @@ pub struct PgIndexerStoreConfig {
     pub epochs_to_keep: Option<u64>,
 }
 
-pub struct PgIndexerStore<T: R2D2Connection + 'static> {
-    blocking_cp: ConnectionPool<T>,
+pub struct PgIndexerStore {
+    blocking_cp: ConnectionPool,
     metrics: IndexerMetrics,
-    partition_manager: PgPartitionManager<T>,
+    partition_manager: PgPartitionManager,
     config: PgIndexerStoreConfig,
 }
 
-impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
-    fn clone(&self) -> PgIndexerStore<T> {
+impl Clone for PgIndexerStore {
+    fn clone(&self) -> PgIndexerStore {
         Self {
             blocking_cp: self.blocking_cp.clone(),
             metrics: self.metrics.clone(),
@@ -157,8 +154,8 @@ impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
     }
 }
 
-impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
-    pub fn new(blocking_cp: ConnectionPool<T>, metrics: IndexerMetrics) -> Self {
+impl PgIndexerStore {
+    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -186,7 +183,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         }
     }
 
-    pub fn blocking_cp(&self) -> ConnectionPool<T> {
+    pub fn blocking_cp(&self) -> ConnectionPool {
         self.blocking_cp.clone()
     }
 
@@ -1652,7 +1649,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 }
 
 #[async_trait]
-impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
+impl IndexerStore for PgIndexerStore {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
             .await

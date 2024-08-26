@@ -3,34 +3,30 @@
 
 use std::time::Duration;
 
-use diesel::r2d2::R2D2Connection;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::errors::IndexerError;
 use crate::store::pg_partition_manager::PgPartitionManager;
+use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
 
 use super::checkpoint_handler::CheckpointHandler;
 
-pub struct Pruner<S, T: R2D2Connection + 'static> {
-    pub store: S,
-    pub partition_manager: PgPartitionManager<T>,
+pub struct Pruner {
+    pub store: PgIndexerStore,
+    pub partition_manager: PgPartitionManager,
     pub epochs_to_keep: u64,
     pub metrics: IndexerMetrics,
 }
 
-impl<S, T> Pruner<S, T>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+impl Pruner {
     pub fn new(
-        store: S,
+        store: PgIndexerStore,
         epochs_to_keep: u64,
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
-        let blocking_cp = CheckpointHandler::<S, T>::pg_blocking_cp(store.clone()).unwrap();
+        let blocking_cp = CheckpointHandler::pg_blocking_cp(store.clone()).unwrap();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())?;
         Ok(Self {
             store,

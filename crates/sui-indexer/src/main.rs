@@ -35,11 +35,8 @@ async fn main() -> Result<(), IndexerError> {
         .unwrap(),
         indexer_config.rpc_client_url.as_str(),
     )?;
-    #[cfg(feature = "postgres-feature")]
+
     sui_indexer::db::setup_postgres::setup(indexer_config.clone(), registry.clone()).await?;
 
-    #[cfg(feature = "mysql-feature")]
-    #[cfg(not(feature = "postgres-feature"))]
-    sui_indexer::db::setup_mysql::setup(indexer_config, registry).await?;
     Ok(())
 }
