@@ -46,15 +46,6 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::Text)]
     pub event_type: String,
 
-    #[diesel(sql_type = diesel::sql_types::Binary)]
-    pub event_type_package: Vec<u8>,
-
-    #[diesel(sql_type = diesel::sql_types::Text)]
-    pub event_type_module: String,
-
-    #[diesel(sql_type = diesel::sql_types::Text)]
-    pub event_type_name: String,
-
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
 
@@ -79,9 +70,6 @@ impl From<IndexedEvent> for StoredEvent {
             package: event.package.to_vec(),
             module: event.module.clone(),
             event_type: event.event_type.clone(),
-            event_type_package: event.event_type_package.to_vec(),
-            event_type_module: event.event_type_module.clone(),
-            event_type_name: event.event_type_name.clone(),
             bcs: event.bcs.clone(),
             timestamp_ms: event.timestamp_ms as i64,
         }

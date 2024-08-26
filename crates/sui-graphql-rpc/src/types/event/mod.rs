@@ -223,9 +223,6 @@ impl Event {
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
-            event_type_package: native_event.type_.address.to_vec(),
-            event_type_module: native_event.type_.module.to_string(),
-            event_type_name: native_event.type_.name.to_string(),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };
