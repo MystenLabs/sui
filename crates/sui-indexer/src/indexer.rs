@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::env;
 
 use anyhow::Result;
-use diesel::r2d2::R2D2Connection;
 use prometheus::Registry;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -27,7 +26,7 @@ use crate::handlers::objects_snapshot_processor::{
 use crate::handlers::pruner::Pruner;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
-use crate::store::IndexerStore;
+use crate::store::{IndexerStore, PgIndexerStore};
 use crate::IndexerConfig;
 
 pub(crate) const DOWNLOAD_QUEUE_SIZE: usize = 200;
@@ -40,16 +39,13 @@ const CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT: usize = 20000000;
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer<
-        S: IndexerStore + Sync + Send + Clone + 'static,
-        T: R2D2Connection + 'static,
-    >(
+    pub async fn start_writer(
         config: &IndexerConfig,
-        store: S,
+        store: PgIndexerStore,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config::<S, T>(
+        Indexer::start_writer_with_config(
             config,
             store,
             metrics,
@@ -59,12 +55,9 @@ impl Indexer {
         .await
     }
 
-    pub async fn start_writer_with_config<
-        S: IndexerStore + Sync + Send + Clone + 'static,
-        T: R2D2Connection + 'static,
-    >(
+    pub async fn start_writer_with_config(
         config: &IndexerConfig,
-        store: S,
+        store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
         cancel: CancellationToken,
@@ -100,14 +93,13 @@ impl Indexer {
         };
 
         // Start objects snapshot processor, which is a separate pipeline with its ingestion pipeline.
-        let (object_snapshot_worker, object_snapshot_watermark) =
-            start_objects_snapshot_processor::<S, T>(
-                store.clone(),
-                metrics.clone(),
-                snapshot_config,
-                cancel.clone(),
-            )
-            .await?;
+        let (object_snapshot_worker, object_snapshot_watermark) = start_objects_snapshot_processor(
+            store.clone(),
+            metrics.clone(),
+            snapshot_config,
+            cancel.clone(),
+        )
+        .await?;
 
         let epochs_to_keep = std::env::var("EPOCHS_TO_KEEP")
             .map(|s| s.parse::<u64>().ok())
@@ -118,7 +110,7 @@ impl Indexer {
                 epochs_to_keep
             );
             assert!(epochs_to_keep > 0, "Epochs to keep must be positive");
-            let pruner: Pruner<S, T> = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
+            let pruner = Pruner::new(store.clone(), epochs_to_keep, metrics.clone())?;
             spawn_monitored_task!(pruner.start(CancellationToken::new()));
         }
 
@@ -126,7 +118,7 @@ impl Indexer {
         // then we persist protocol configs for protocol versions not yet in the db.
         // Otherwise, we would do the persisting in `commit_checkpoint` while the first cp is
         // being indexed.
-        if let Some(chain_id) = store.get_chain_identifier().await? {
+        if let Some(chain_id) = IndexerStore::get_chain_identifier(&store).await? {
             store.persist_protocol_configs_and_feature_flags(chain_id)?;
         }
 
@@ -146,8 +138,7 @@ impl Indexer {
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker =
-            new_handlers::<S, T>(store, metrics, primary_watermark, cancel.clone()).await?;
+        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "primary".to_string(), download_queue_size);
 
         executor.register(worker_pool).await?;
@@ -174,7 +165,7 @@ impl Indexer {
         Ok(())
     }
 
-    pub async fn start_reader<T: R2D2Connection + 'static>(
+    pub async fn start_reader(
         config: &IndexerConfig,
         registry: &Registry,
         db_url: String,
@@ -183,7 +174,7 @@ impl Indexer {
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let indexer_reader = IndexerReader::<T>::new(db_url)?;
+        let indexer_reader = IndexerReader::new(db_url)?;
         let handle = build_json_rpc_server(registry, indexer_reader, config, None)
             .await
             .expect("Json rpc server should not run into errors upon start.");

@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use cached::{Cached, SizedCache};
-use diesel::r2d2::R2D2Connection;
+use diesel::PgConnection;
 use diesel::{
     dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
     QueryDsl, RunQueryDsl, TextExpressionMethods,
@@ -66,20 +66,14 @@ pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
 pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
-pub struct IndexerReader<T>
-where
-    T: R2D2Connection + 'static,
-{
-    pool: ConnectionPool<T>,
-    package_resolver: PackageResolver<T>,
+pub struct IndexerReader {
+    pool: ConnectionPool,
+    package_resolver: PackageResolver,
     package_obj_type_cache: Arc<Mutex<SizedCache<String, Option<ObjectID>>>>,
 }
 
-impl<T> Clone for IndexerReader<T>
-where
-    T: R2D2Connection,
-{
-    fn clone(&self) -> IndexerReader<T> {
+impl Clone for IndexerReader {
+    fn clone(&self) -> IndexerReader {
         IndexerReader {
             pool: self.pool.clone(),
             package_resolver: self.package_resolver.clone(),
@@ -88,11 +82,10 @@ where
     }
 }
 
-pub type PackageResolver<T> =
-    Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver<T>>>>;
+pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>;
 
 // Impl for common initialization and utilities
-impl<U: R2D2Connection + 'static> IndexerReader<U> {
+impl IndexerReader {
     pub fn new<T: Into<String>>(db_url: T) -> Result<Self> {
         let config = ConnectionPoolConfig::default();
         Self::new_with_config(db_url, config)
@@ -102,7 +95,7 @@ impl<U: R2D2Connection + 'static> IndexerReader<U> {
         db_url: T,
         config: ConnectionPoolConfig,
     ) -> Result<Self> {
-        let manager = ConnectionManager::<U>::new(db_url);
+        let manager = ConnectionManager::<PgConnection>::new(db_url);
 
         let connection_config = ConnectionConfig {
             statement_timeout: config.statement_timeout,
@@ -145,13 +138,13 @@ impl<U: R2D2Connection + 'static> IndexerReader<U> {
         .expect("propagate any panics")
     }
 
-    pub fn get_pool(&self) -> ConnectionPool<U> {
+    pub fn get_pool(&self) -> ConnectionPool {
         self.pool.clone()
     }
 }
 
 // Impl for reading data from the DB
-impl<U: R2D2Connection> IndexerReader<U> {
+impl IndexerReader {
     fn get_object_from_db(
         &self,
         object_id: &ObjectID,
@@ -1570,12 +1563,12 @@ impl<U: R2D2Connection> IndexerReader<U> {
         ))
     }
 
-    pub fn package_resolver(&self) -> PackageResolver<U> {
+    pub fn package_resolver(&self) -> PackageResolver {
         self.package_resolver.clone()
     }
 }
 
-impl<U: R2D2Connection> sui_types::storage::ObjectStore for IndexerReader<U> {
+impl sui_types::storage::ObjectStore for IndexerReader {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -1594,8 +1587,8 @@ impl<U: R2D2Connection> sui_types::storage::ObjectStore for IndexerReader<U> {
     }
 }
 
-fn get_single_obj_id_from_package_publish<U: R2D2Connection>(
-    reader: &IndexerReader<U>,
+fn get_single_obj_id_from_package_publish(
+    reader: &IndexerReader,
     package_id: ObjectID,
     obj_type: String,
 ) -> Result<Option<ObjectID>, IndexerError> {

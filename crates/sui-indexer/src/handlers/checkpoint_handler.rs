@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use diesel::r2d2::R2D2Connection;
 use itertools::Itertools;
 use tap::tap::TapFallible;
 use tokio::sync::watch;
@@ -55,16 +54,12 @@ use super::TransactionObjectChangesToCommit;
 
 const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
-pub async fn new_handlers<S, T>(
-    state: S,
+pub async fn new_handlers(
+    state: PgIndexerStore,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
-) -> Result<CheckpointHandler<S, T>, IndexerError>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+) -> Result<CheckpointHandler, IndexerError> {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
         .parse::<usize>()
@@ -97,22 +92,18 @@ where
     ))
 }
 
-pub struct CheckpointHandler<S, T: R2D2Connection + 'static> {
-    state: S,
+pub struct CheckpointHandler {
+    state: PgIndexerStore,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
     // buffers for packages that are being indexed but not committed to DB,
     // they will be periodically GCed to avoid OOM.
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver<T>>>>,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver>>>,
 }
 
 #[async_trait]
-impl<S, T> Worker for CheckpointHandler<S, T>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+impl Worker for CheckpointHandler {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
         let time_now_ms = chrono::Utc::now().timestamp_millis();
         let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
@@ -134,7 +125,7 @@ where
             checkpoint.checkpoint_summary.timestamp_ms
         );
         let checkpoint_data = Self::index_checkpoint(
-            self.state.clone().into(),
+            &self.state,
             checkpoint.clone(),
             Arc::new(self.metrics.clone()),
             Self::index_packages(&[checkpoint], &self.metrics),
@@ -155,13 +146,9 @@ where
     }
 }
 
-impl<S, T> CheckpointHandler<S, T>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+impl CheckpointHandler {
     fn new(
-        state: S,
+        state: PgIndexerStore,
         metrics: IndexerMetrics,
         indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
         package_tx: watch::Receiver<Option<CheckpointSequenceNumber>>,
@@ -186,7 +173,7 @@ where
     }
 
     async fn index_epoch(
-        state: Arc<S>,
+        state: &PgIndexerStore,
         data: &CheckpointData,
     ) -> Result<Option<EpochToCommit>, IndexerError> {
         let checkpoint_object_store = EpochEndIndexingObjectStore::new(data);
@@ -270,7 +257,7 @@ where
     }
 
     async fn index_checkpoint(
-        state: Arc<S>,
+        state: &PgIndexerStore,
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,
         packages: Vec<IndexedPackage>,
@@ -678,14 +665,8 @@ where
             .collect()
     }
 
-    pub(crate) fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
-        let state_as_any = state.as_any();
-        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
-            return Ok(pg_state.blocking_cp());
-        }
-        Err(IndexerError::UncategorizedError(anyhow::anyhow!(
-            "Failed to downcast state to PgIndexerStore"
-        )))
+    pub(crate) fn pg_blocking_cp(state: PgIndexerStore) -> Result<ConnectionPool, IndexerError> {
+        Ok(state.blocking_cp())
     }
 }
 

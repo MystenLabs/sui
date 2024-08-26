@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::error::SuiRpcInputError;
@@ -25,12 +24,12 @@ use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
 #[derive(Clone)]
-pub(crate) struct ReadApi<T: R2D2Connection + 'static> {
-    inner: IndexerReader<T>,
+pub(crate) struct ReadApi {
+    inner: IndexerReader,
 }
 
-impl<T: R2D2Connection + 'static> ReadApi<T> {
-    pub fn new(inner: IndexerReader<T>) -> Self {
+impl ReadApi {
+    pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 
@@ -61,7 +60,7 @@ impl<T: R2D2Connection + 'static> ReadApi<T> {
 }
 
 #[async_trait]
-impl<T: R2D2Connection + 'static> ReadApiServer for ReadApi<T> {
+impl ReadApiServer for ReadApi {
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -296,7 +295,7 @@ impl<T: R2D2Connection + 'static> ReadApiServer for ReadApi<T> {
     }
 }
 
-impl<T: R2D2Connection> SuiRpcModule for ReadApi<T> {
+impl SuiRpcModule for ReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

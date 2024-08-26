@@ -226,12 +226,6 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install MySql (Windows)
-        shell: bash
-        run: |
-          choco install mysql --force --params '/Password:root'
-          echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Server 8.0\lib" >> $GITHUB_ENV
-
       - name: cargo build
         shell: bash
         run: |
@@ -375,9 +369,6 @@ jobs:
       - name: cargo clippy
         run: cargo xclippy -D warnings
 
-      - name: cargo mysql-clippy
-        run: cargo mysql-clippy -D warnings
-
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
@@ -426,36 +417,6 @@ jobs:
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
         run: cargo build -p sui-execution
-
-  #indexer:
-  #  name: indexer
-  #  needs: diff
-  #  if: needs.diff.outputs.isRust == 'true'
-  #  timeout-minutes: 45
-  #  runs-on: [ubuntu-ghcloud]
-  #  services:
-  #    postgres:
-  #      image: postgres
-  #      env:
-  #        POSTGRES_PASSWORD: postgrespw
-  #      options: >-
-  #        --health-cmd pg_isready
-  #        --health-interval 10s
-  #        --health-timeout 5s
-  #        --health-retries 5
-  #      ports:
-  #        - 5432:5432
-  #  steps:
-  #    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-  #      with:
-  #        ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-  #    - name: integration-test-with-postgres
-  #      #We only have 1 instance of postgres DB, can only run test in single thread
-  #      run: |
-  #        cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
-  #      env:
-  #        POSTGRES_HOST: localhost
-  #        POSTGRES_PORT: 5432
 
   graphql-rpc:
     name: graphql-rpc
