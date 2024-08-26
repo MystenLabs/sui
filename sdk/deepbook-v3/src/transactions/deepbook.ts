@@ -614,6 +614,23 @@ export class DeepBookContract {
 	};
 
 	/**
+	 * @description Get the book parameters for a given pool, including tick size, lot size, and min size.
+	 * @param {string} poolKey Key of the pool
+	 * @returns A function that takes a Transaction object
+	 */
+	poolBookParams = (poolKey: string) => (tx: Transaction) => {
+		const pool = this.#config.getPool(poolKey);
+		const baseCoin = this.#config.getCoin(pool.baseCoin);
+		const quoteCoin = this.#config.getCoin(pool.quoteCoin);
+
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::pool::pool_book_params`,
+			arguments: [tx.object(pool.address)],
+			typeArguments: [baseCoin.type, quoteCoin.type],
+		});
+	};
+
+	/**
 	 * @description Get the account information for a given pool and balance manager
 	 * @param {string} poolKey Key of the pool
 	 * @param {string} managerKey The key of the BalanceManager
