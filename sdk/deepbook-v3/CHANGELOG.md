@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.4.1
+
+### Patch Changes
+
+- 3221141: Book param function and package upgrade
+
 ## 0.4.0
 
 ### Minor Changes
