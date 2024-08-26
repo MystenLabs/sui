@@ -1,0 +1,129 @@
+warning[Lint W04004]: unneeded return
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:4:17
+  │
+4 │     if (cond) { return 5 } else { abort 0 }
+  │                 ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+  │
+  = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:4:35
+  │
+4 │     if (cond) { return 5 } else { abort 0 }
+  │                                   ^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:8:17
+  │
+8 │     if (cond) { return 5 } else { return 0 }
+  │                 ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+  │
+  = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:8:35
+  │
+8 │     if (cond) { return 5 } else { return 0 }
+  │                                   ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+  │
+  = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:12:5
+   │
+12 │     return if (cond) { 5 } else { 0 }
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:16:5
+   │
+16 │     return if (cond) { return 5 } else { 0 }
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:20:5
+   │
+20 │     return if (cond) { 5 } else { return 0 }
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:29:5
+   │  
+29 │ ╭     return match (e) {
+30 │ │         E::V0 => 0,
+31 │ │         E::V1 => 1,
+32 │ │     }
+   │ ╰─────^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │  
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:37:18
+   │
+37 │         E::V0 => return 0,
+   │                  ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:44:18
+   │
+44 │         E::V0 => return 0,
+   │                  ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:45:18
+   │
+45 │         E::V1 => return 1,
+   │                  ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:51:18
+   │
+51 │         E::V0 => return 0,
+   │                  ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:52:18
+   │
+52 │         E::V1 => abort 0,
+   │                  ^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:57:5
+   │  
+57 │ ╭     return match (e) {
+58 │ │         E::V0 => 0,
+59 │ │         E::V1 => abort 0,
+60 │ │     }
+   │ ╰─────^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │  
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:64:5
+   │  
+64 │ ╭     return match (e) {
+65 │ │         E::V0 => if (true) { return 0 } else { 1 },
+66 │ │         E::V1 => 2,
+67 │ │     }
+   │ ╰─────^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │  
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

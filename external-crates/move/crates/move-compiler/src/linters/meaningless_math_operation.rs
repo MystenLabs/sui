@@ -7,26 +7,14 @@ use crate::{
     cfgir::ast as G,
     cfgir::visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     hlir::ast::{self as H, Value_},
+    linters::StyleCodes,
     parser::ast::BinOp_,
     shared::CompilationEnv,
 };
 use move_core_types::u256::U256;
 use move_ir_types::location::Loc;
-
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, MEANINGLESS_MATH_DIAG_CODE};
-
-const MEANINGLESS_MATH_OP_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    MEANINGLESS_MATH_DIAG_CODE,
-    "math operation can be simplified",
-);
 
 pub struct MeaninglessMathOperation;
 
@@ -67,7 +55,7 @@ impl CFGIRVisitorContext for Context<'_> {
         if let Some(meaningless_operand) = is_unchanged {
             let msg = "This operation has no effect and can be removed";
             self.env.add_diag(diag!(
-                MEANINGLESS_MATH_OP_DIAG,
+                StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (meaningless_operand, "Because of this operand"),
             ));
@@ -83,7 +71,7 @@ impl CFGIRVisitorContext for Context<'_> {
         if let Some(zero_operand) = is_always_zero {
             let msg = "This operation is always zero and can be replaced with '0'";
             self.env.add_diag(diag!(
-                MEANINGLESS_MATH_OP_DIAG,
+                StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (zero_operand, "Because of this operand"),
             ));
@@ -97,7 +85,7 @@ impl CFGIRVisitorContext for Context<'_> {
         if let Some(one_operand) = is_always_one {
             let msg = "This operation is always one and can be replaced with '1'";
             self.env.add_diag(diag!(
-                MEANINGLESS_MATH_OP_DIAG,
+                StyleCodes::MeaninglessMath.diag_info(),
                 (exp.exp.loc, msg),
                 (one_operand, "Because of this operand"),
             ));
