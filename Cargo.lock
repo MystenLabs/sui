@@ -13002,6 +13002,7 @@ dependencies = [
  "bin-version",
  "clap",
  "diesel",
+ "diesel-async",
  "ethers",
  "futures",
  "hex-literal 0.3.4",
