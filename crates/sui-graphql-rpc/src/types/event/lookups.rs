@@ -58,7 +58,7 @@ pub(crate) fn select_event_type(event_type: &TypeFilter, sender: Option<SuiAddre
             let (table, col_name) = if tag.type_params.is_empty() {
                 ("event_struct_name", "type_name")
             } else {
-                ("event_struct_name_instantiation", "type_instantiation")
+                ("event_struct_instantiation", "type_instantiation")
             };
 
             filter!(
