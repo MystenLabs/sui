@@ -14,6 +14,15 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Lint W04005]: use named constants with 'abort' and 'assert'
+  ┌─ tests/linter/move_2024/unneeded_return_branch.move:4:41
+  │
+4 │     if (cond) { return 5 } else { abort 0 }
+  │                                         ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+  = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return_branch.move:8:17
   │
@@ -105,6 +114,15 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Lint W04005]: use named constants with 'abort' and 'assert'
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:52:24
+   │
+52 │         E::V1 => abort 0,
+   │                        ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return_branch.move:57:5
    │  
@@ -115,6 +133,15 @@ warning[Lint W04004]: unneeded return
    │ ╰─────^ Remove unnecessary 'return', the expression is already in a 'return' position
    │  
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04005]: use named constants with 'abort' and 'assert'
+   ┌─ tests/linter/move_2024/unneeded_return_branch.move:59:24
+   │
+59 │         E::V1 => abort 0,
+   │                        ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+   = This warning can be suppressed with '#[allow(lint(abort_without_constant))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return_branch.move:64:5
