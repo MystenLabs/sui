@@ -4,9 +4,7 @@
 use crate::abi::{
     EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
 };
-use crate::config::BridgeNodeConfig;
-use crate::config::EthConfig;
-use crate::config::SuiConfig;
+use crate::config::{default_ed25519_key_pair, BridgeNodeConfig, EthConfig, SuiConfig};
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::server::APPLICATION_JSON;
@@ -195,6 +193,7 @@ pub fn generate_bridge_node_config_and_write_to_file(
         approved_governance_actions: vec![],
         run_client,
         db_path: None,
+        metrics_key_pair: default_ed25519_key_pair(),
     };
     if run_client {
         config.sui.bridge_client_key_path = Some(PathBuf::from("/path/to/your/bridge_client_key"));
