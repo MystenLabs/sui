@@ -665,7 +665,7 @@ impl EthBridgeEnvironment {
             .arg("--block-time")
             .arg("1") // 1 second block time
             .arg("--slots-in-an-epoch")
-            .arg("1") // 3 slots in an epoch
+            .arg("1") // 1 slots in an epoch
             .spawn()
             .expect("Failed to start anvil");
 

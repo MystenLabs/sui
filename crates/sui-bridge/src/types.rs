@@ -135,12 +135,6 @@ impl core::fmt::Display for BridgeCommittee {
             )?;
         }
         Ok(())
-        // if self.value() < 26 {
-        //     let c = (b'A' + self.value() as u8) as char;
-        //     f.write_str(c.to_string().as_str())
-        // } else {
-        //     write!(f, "[{:02}]", self.value())
-        // }
     }
 }
 
