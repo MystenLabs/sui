@@ -55,10 +55,18 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        Ok(ChainIdentifier::query(ctx.data_unchecked())
-            .await
-            .extend()?
-            .to_string())
+        // we want to panic if the chain identifier is missing, as there's something wrong with
+        // the service.
+        let chain_id: ChainIdentifier = *ctx.data_unchecked();
+
+        if let Some(id) = chain_id.0 {
+            Ok(id.to_string())
+        } else {
+            Err(Error::Internal(
+                "Chain identifier not initialized.".to_string(),
+            ))
+            .extend()
+        }
     }
 
     /// Range of checkpoints that the RPC has data available for (for data
