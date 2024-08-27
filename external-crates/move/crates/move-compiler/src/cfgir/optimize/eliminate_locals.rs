@@ -125,7 +125,7 @@ mod count {
                 exp(context, el)
             }
             C::Return { exp: e, .. }
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
             | C::VariantSwitch { subject: e, .. } => exp(context, e),
@@ -302,7 +302,7 @@ mod eliminate {
                 exp(context, el)
             }
             C::Return { exp: e, .. }
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
             | C::VariantSwitch { subject: e, .. } => exp(context, e),

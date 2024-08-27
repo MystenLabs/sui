@@ -1080,7 +1080,7 @@ fn value(
             let cond = bind_exp(context, block, cond_value);
             let code = bind_exp(context, block, code_value);
             let if_block = make_block!();
-            let else_block = make_block!(make_command(eloc, C::Abort(code)));
+            let else_block = make_block!(make_command(eloc, C::Abort(code.exp.loc, code)));
             block.push_back(sp(
                 eloc,
                 S::IfElse {
@@ -1117,7 +1117,7 @@ fn value(
             let mut else_block = make_block!();
             let code = value(context, &mut else_block, None, ecode);
             let if_block = make_block!();
-            else_block.push_back(make_command(eloc, C::Abort(code)));
+            else_block.push_back(make_command(eloc, C::Abort(code.exp.loc, code)));
             block.push_back(sp(
                 eloc,
                 S::IfElse {
@@ -1896,7 +1896,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         }
         E::Abort(rhs) => {
             let exp = value(context, block, None, *rhs);
-            block.push_back(make_command(eloc, C::Abort(exp)));
+            block.push_back(make_command(eloc, C::Abort(exp.exp.loc, exp)));
         }
         E::Give(name, rhs) => {
             let out_name = translate_block_label(name);

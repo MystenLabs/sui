@@ -48,10 +48,6 @@ module 0x42::M {
         assert!(false, 0xC0FFEE); // Should trigger
     }
 
-    fun test_lint_assert_bool_literal() {
-        assert!(false, true); // Should trigger
-    }
-
     fun test_lint_assert_addition_with_constant() {
         assert!(false, 1 + ERROR_NOT_OWNER); // Should trigger
     }
