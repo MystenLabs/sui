@@ -10,6 +10,7 @@ pub struct Task {
     pub checkpoint: u64,
     pub target_checkpoint: u64,
     pub timestamp: u64,
+    pub completed: bool,
 }
 
 pub trait Tasks {

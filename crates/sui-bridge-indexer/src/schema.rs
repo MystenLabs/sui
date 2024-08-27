@@ -8,6 +8,7 @@ diesel::table! {
         checkpoint -> Int8,
         target_checkpoint -> Int8,
         timestamp -> Nullable<Timestamp>,
+        completed -> Bool
     }
 }
 
