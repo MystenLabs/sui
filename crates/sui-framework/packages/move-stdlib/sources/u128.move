@@ -63,6 +63,26 @@ module std::u128 {
         std::macros::num_sqrt!<u128, u256>(x, 128)
     }
 
+    /// Try to convert a `u128` to a `u8`. Returns `None` if the value is too large.
+    public fun try_as_u8(x: u128): Option<u8> {
+        std::macros::try_as_u8!(x)
+    }
+
+    /// Try to convert a `u128` to a `u16`. Returns `None` if the value is too large.
+    public fun try_as_u16(x: u128): Option<u16> {
+        std::macros::try_as_u16!(x)
+    }
+
+    /// Try to convert a `u128` to a `u32`. Returns `None` if the value is too large.
+    public fun try_as_u32(x: u128): Option<u32> {
+        std::macros::try_as_u32!(x)
+    }
+
+    /// Try to convert a `u128` to a `u64`. Returns `None` if the value is too large.
+    public fun try_as_u64(x: u128): Option<u64> {
+        std::macros::try_as_u64!(x)
+    }
+
     /// Maximum value for a `u128`
     public macro fun max_value(): u128 {
         0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF

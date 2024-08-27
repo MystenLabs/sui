@@ -63,6 +63,11 @@ module std::u16 {
         std::macros::num_sqrt!<u16, u32>(x, 16)
     }
 
+    /// Try to convert a `u16` to a `u8`. Returns `None` if the value is too large.
+    public fun try_as_u8(x: u16): Option<u8> {
+        std::macros::try_as_u8!(x)
+    }
+
     /// Maximum value for a `u16`
     public macro fun max_value(): u16 {
         0xFFFF

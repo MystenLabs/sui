@@ -34,6 +34,31 @@ module std::u256 {
         std::macros::num_pow!(base, exponent)
     }
 
+    /// Try to convert a `u256` to a `u8`. Returns `None` if the value is too large.
+    public fun try_as_u8(x: u256): Option<u8> {
+        std::macros::try_as_u8!(x)
+    }
+
+    /// Try to convert a `u256` to a `u16`. Returns `None` if the value is too large.
+    public fun try_as_u16(x: u256): Option<u16> {
+        std::macros::try_as_u16!(x)
+    }
+
+    /// Try to convert a `u256` to a `u32`. Returns `None` if the value is too large.
+    public fun try_as_u32(x: u256): Option<u32> {
+        std::macros::try_as_u32!(x)
+    }
+
+    /// Try to convert a `u256` to a `u64`. Returns `None` if the value is too large.
+    public fun try_as_u64(x: u256): Option<u64> {
+        std::macros::try_as_u64!(x)
+    }
+
+    /// Try to convert a `u256` to a `u128`. Returns `None` if the value is too large.
+    public fun try_as_u128(x: u256): Option<u128> {
+        std::macros::try_as_u128!(x)
+    }
+
     /// Maximum value for a `u256`
     public macro fun max_value(): u256 {
         0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF

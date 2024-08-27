@@ -182,6 +182,57 @@ module std::integer_tests {
         }
     }
 
+    public(package) macro fun test_try_as_u8<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u8(), option::some(0));
+        assert_eq!((1: $T).try_as_u8(), option::some(1));
+        assert_eq!((0xFF: $T).try_as_u8(), option::some(0xFF));
+        assert_eq!((0xFF + 1: $T).try_as_u8(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u8(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u16<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u16(), option::some(0));
+        assert_eq!((1: $T).try_as_u16(), option::some(1));
+        assert_eq!((0xFFFF: $T).try_as_u16(), option::some(0xFFFF));
+        assert_eq!((0xFFFF + 1: $T).try_as_u16(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u16(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u32<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u32(), option::some(0));
+        assert_eq!((1: $T).try_as_u32(), option::some(1));
+        assert_eq!((0xFFFF_FFFF: $T).try_as_u32(), option::some(0xFFFF_FFFF));
+        assert_eq!((0xFFFF_FFFF + 1: $T).try_as_u32(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u32(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u64<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u64(), option::some(0));
+        assert_eq!((1: $T).try_as_u64(), option::some(1));
+        assert_eq!((0xFFFF_FFFF_FFFF_FFFF: $T).try_as_u64(), option::some(0xFFFF_FFFF_FFFF_FFFF));
+        assert_eq!((0xFFFF_FFFF_FFFF_FFFF + 1: $T).try_as_u64(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u64(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u128<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u128(), option::some(0));
+        assert_eq!((1: $T).try_as_u128(), option::some(1));
+        assert_eq!(
+            (0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF: $T).try_as_u128(),
+            option::some(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF)
+        );
+        assert_eq!(
+            (0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF + 1: $T).try_as_u128(),
+            option::none()
+        );
+        let max = $max;
+        assert_eq!(max.try_as_u128(), option::none());
+    }
+
     public(package) macro fun sum_range<$T>($n: $T): $T {
         let n = $n;
         (n * (n + 1)) / 2

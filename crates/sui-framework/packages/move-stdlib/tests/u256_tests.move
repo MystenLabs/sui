@@ -71,6 +71,26 @@ module std::u256_tests {
     }
 
     #[test]
+    fun test_try_as_u8() {
+        integer_tests::test_try_as_u8!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u16() {
+        integer_tests::test_try_as_u16!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u32() {
+        integer_tests::test_try_as_u32!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u64() {
+        integer_tests::test_try_as_u64!<u256>(MAX);
+    }
+
+    #[test]
     fun test_dos() {
         integer_tests::test_dos!(MAX, CASES);
     }

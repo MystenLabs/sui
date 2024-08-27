@@ -77,6 +77,11 @@ module std::u16_tests {
     }
 
     #[test]
+    fun test_try_as_u8() {
+        integer_tests::test_try_as_u8!<u16>(MAX);
+    }
+
+    #[test]
     fun test_dos() {
         integer_tests::test_dos!(MAX, CASES);
     }
