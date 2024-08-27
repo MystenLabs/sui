@@ -58,6 +58,8 @@ cached.workspace = true
 secrecy = "0.8.0"
 downcast = "0.11.0"
 
+kv-indexer = { path = "kv-indexer" }
+
 [features]
 pg_integration = []
 default = ["postgres-feature"]

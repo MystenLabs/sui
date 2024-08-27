@@ -1,0 +1,16 @@
+[package]
+name = "kv-indexer"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+diesel.workspace = true
+diesel-derive-enum.workspace = true
+diesel_migrations.workspace = true
+tokio.workspace = true
+
+[features]
+postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]

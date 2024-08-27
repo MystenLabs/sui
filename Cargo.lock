@@ -6469,6 +6469,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kv-indexer"
+version = "0.1.0"
+dependencies = [
+ "diesel",
+ "diesel-derive-enum",
+ "diesel_migrations",
+ "tokio",
+]
+
+[[package]]
 name = "lalrpop"
 version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13579,6 +13589,7 @@ dependencies = [
  "futures",
  "itertools 0.10.5",
  "jsonrpsee",
+ "kv-indexer",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
