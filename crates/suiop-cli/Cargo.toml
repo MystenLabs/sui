@@ -49,6 +49,7 @@ tokio = {workspace = true, features = ["full"]}
 toml_edit.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
+octocrab = "0.38.0"
 
 [dev-dependencies]
 tempfile.workspace = true

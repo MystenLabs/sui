@@ -43,6 +43,8 @@ pub enum DockerAction {
         #[arg(short, long, default_value = DEFAULT_PATH)]
         path: PathBuf,
     },
+    #[command(name = "crawl", aliases=["c"])]
+    Crawl,
 }
 
 pub async fn docker_cmd(args: &DockerArgs) -> Result<()> {
@@ -56,6 +58,7 @@ pub async fn docker_cmd(args: &DockerArgs) -> Result<()> {
                 generate_ts_dockerfile(path)
             }
         },
+        DockerAction::Crawl => crawl_github_org_for_dockerfiles().await,
     }
 }
 
@@ -68,5 +71,25 @@ fn generate_ts_dockerfile(path: &Path) -> Result<()> {
     main_file
         .write_all(dockerfile_template.contents())
         .context("writing dockerfile")?;
+    Ok(())
+}
+
+async fn crawl_github_org_for_dockerfiles() -> Result<()> {
+    // make sure the GITHUB_TOKEN env var is set
+    let token = std::env::var("GITHUB_TOKEN").context("GITHUB_TOKEN env var not set")?;
+    let page = octocrab::OctocrabBuilder::default()
+        .personal_token(token)
+        .base_uri("https://api.github.com")?
+        .build()?
+        .search()
+        .code("path:docker org:MystenLabs")
+        // .sort("indexed")
+        .order("asc")
+        .send()
+        .await?;
+    println!(
+        "{:#?}",
+        page.items.into_iter().map(|x| x.path).collect::<Vec<_>>()
+    );
     Ok(())
 }
