@@ -1,12 +1,12 @@
-processed 17 tasks
+processed 21 tasks
 
 init:
-A: object(0,0)
+A: object(0,0), B: object(0,1)
 
 task 1, lines 10-26:
 //# publish
 created: object(1,0)
-mutated: object(0,1)
+mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 4795600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 28:
@@ -21,10 +21,10 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 32:
-//# run Test::M1::emit_2 --sender A --args 4
-events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [5, 0, 0, 0, 0, 0, 0, 0] }
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+//# run Test::M1::emit_2 --sender B --args 4
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [5, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5, line 34:
 //# create-checkpoint
@@ -37,19 +37,19 @@ Response: {
     "transactionBlocks": {
       "nodes": [
         {
-          "digest": "4U25VGAB2VkWrQVcYHmhcJ1auBMoR6wGJ1XkAVWThvRR"
+          "digest": "AXoD3PWjAdYov3o7FaWgAqJA8RmvQrjwxGxAi2MNEujz"
         },
         {
-          "digest": "8f5zsvxPTNvfW9HoQReViqMC8aWKfwQvP2UFt2uWxQs3"
+          "digest": "3nuQk9o2VVoqWbF6gS5vBTPwVLhMRbFJREDCvQJUavZ2"
         },
         {
-          "digest": "5qVugAqZ6ANMTadHevvJaUyU2c65paKm1n6UGCJHTAbD"
+          "digest": "5VAhspujQVcgJNvqe9Ed8BuFTeZdTRCCTzS6WwSZ9Dke"
         },
         {
-          "digest": "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"
+          "digest": "8n1pk5fYM7v7tvsh4dcKxLRy8uf3he24FZCwdEKi9cSj"
         },
         {
-          "digest": "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"
+          "digest": "4dqR1zeomDMNHbUAZjooSZXrosPEb67gvvsUFeUSet9v"
         }
       ]
     }
@@ -247,6 +247,80 @@ Response: {
           }
         }
       ]
+    }
+  }
+}
+
+task 17, lines 176-187:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "2"
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "3"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18, lines 189-200:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "4"
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "5"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 202-213:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": []
+    }
+  }
+}
+
+task 20, lines 215-226:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": []
     }
   }
 }

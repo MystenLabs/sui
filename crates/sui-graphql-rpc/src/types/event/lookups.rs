@@ -147,7 +147,7 @@ pub(crate) fn add_bounds(
     let mut has_select_lo = false;
     let select_lo = match (page.after(), has_digest_cte) {
         (Some(after), _) => {
-            // if both a digest and after cursor are present, then select the larger tx sequence
+            // If both a digest and after cursor are present, then select the larger tx sequence
             // number
             let select_tx_lo = if has_digest_cte {
                 format!("SELECT GREATEST({}, (SELECT eq FROM tx_eq))", after.tx)
@@ -195,7 +195,7 @@ pub(crate) fn add_bounds(
                 format!("SELECT {}", before.tx)
             };
             let ev_hi = format!(
-                // check for equality so that if the digest and before cursor are the same tx, we
+                // Check for equality so that if the digest and before cursor are the same tx, we
                 // don't miss the before cursor's event sequence number
                 "SELECT CASE WHEN (SELECT hi FROM tx_hi) = {before_tx} THEN {before_ev} ELSE {u64_max} END",
                 before_tx=before.tx,
