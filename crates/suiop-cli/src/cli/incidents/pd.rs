@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use chrono::{DateTime, Local, NaiveDateTime};
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use reqwest;
 use reqwest::header::HeaderMap;
 use reqwest::header::ACCEPT;
@@ -87,92 +87,101 @@ pub async fn fetch_incidents(
     Ok(all_incidents)
 }
 
+async fn print_incident(
+    incident: JsonValue,
+    priority: &ColoredString,
+    long_output: bool,
+) -> Result<()> {
+    let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
+    if long_output {
+        let date_format_out = "%m/%d/%Y %H:%M";
+        println!(
+            "Incident #: {} ({})",
+            incident["incident_number"]
+                .as_u64()
+                .expect("incident_number as_u64")
+                .to_string()
+                .bright_purple(),
+            priority
+        );
+        println!(
+            "Title: {}",
+            incident["title"].as_str().expect("title as_str").green()
+        );
+        if let JsonValue::String(created_at) = incident["created_at"].clone() {
+            println!(
+                "Created at: {}",
+                NaiveDateTime::parse_from_str(&created_at, date_format_in)?
+                    .format(date_format_out)
+                    .to_string()
+                    .yellow()
+            );
+        }
+        if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
+            println!(
+                "Resolved at: {}",
+                NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?
+                    .format(date_format_out)
+                    .to_string()
+                    .yellow()
+            );
+        }
+        println!(
+            "URL: {}",
+            incident["html_url"]
+                .as_str()
+                .expect("html_url as string")
+                .bright_purple()
+        );
+        println!("---");
+    } else {
+        let resolved_at = if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
+            let now = Utc::now().naive_utc();
+
+            Some(now - NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?)
+        } else {
+            None
+        };
+        println!(
+            "{}: ({}) {} {} ({})",
+            incident["incident_number"]
+                .as_u64()
+                .expect("incident_number as_u64")
+                .to_string()
+                .bright_purple(),
+            resolved_at
+                .map(|v| (v.num_days().to_string() + "d").yellow())
+                .unwrap_or("".to_string().yellow()),
+            priority,
+            incident["title"].as_str().expect("title").green(),
+            incident["html_url"]
+                .as_str()
+                .expect("html_url")
+                .bright_purple()
+        );
+    }
+    Ok(())
+}
+
 pub async fn print_recent_incidents(
     incidents: Vec<JsonValue>,
     long_output: bool,
     with_priority: bool,
 ) -> Result<()> {
-    let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
-    let date_format_out = "%m/%d/%Y %H:%M";
     for incident in incidents {
-        if long_output {
-            println!(
-                "Incident #: {}",
-                incident["incident_number"]
-                    .as_u64()
-                    .expect("incident_number as_u64")
-                    .to_string()
-                    .bright_purple()
-            );
-            println!(
-                "Title: {}",
-                incident["title"].as_str().expect("title as_str").green()
-            );
-            if let JsonValue::String(created_at) = incident["created_at"].clone() {
-                println!(
-                    "Created at: {}",
-                    NaiveDateTime::parse_from_str(&created_at, date_format_in)?
-                        .format(date_format_out)
-                        .to_string()
-                        .yellow()
-                );
-            }
-            if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
-                println!(
-                    "Resolved at: {}",
-                    NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?
-                        .format(date_format_out)
-                        .to_string()
-                        .yellow()
-                );
-            }
-            println!(
-                "URL: {}",
-                incident["html_url"]
-                    .as_str()
-                    .expect("html_url as string")
-                    .bright_purple()
-            );
-            println!("---");
-        } else {
-            let resolved_at =
-                if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
-                    let now = Utc::now().naive_utc();
-
-                    Some(now - NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?)
-                } else {
-                    None
-                };
-            let priority = match incident["priority"]["name"].as_str() {
-                Some("P0") => "P0".red(),
-                Some("P1") => "P1".magenta(),
-                Some("P2") => "P2".truecolor(255, 165, 0),
-                Some("P3") => "P3".yellow(),
-                Some("P4") => "P4".white(),
-                _ => "  ".white(),
-            };
-            if with_priority && priority == "  ".white() {
-                // skip incidents without priority
-                continue;
-            }
-            println!(
-                "{}: ({}) {} {} ({})",
-                incident["incident_number"]
-                    .as_u64()
-                    .expect("incident_number as_u64")
-                    .to_string()
-                    .bright_purple(),
-                resolved_at
-                    .map(|v| (v.num_days().to_string() + "d").yellow())
-                    .unwrap_or("".to_string().yellow()),
-                priority,
-                incident["title"].as_str().expect("title").green(),
-                incident["html_url"]
-                    .as_str()
-                    .expect("html_url")
-                    .bright_purple()
-            )
+        let priority = match incident["priority"]["name"].as_str() {
+            Some("P0") => "P0".red(),
+            Some("P1") => "P1".magenta(),
+            Some("P2") => "P2".truecolor(255, 165, 0),
+            Some("P3") => "P3".yellow(),
+            Some("P4") => "P4".white(),
+            _ => "  ".white(),
+        };
+        if with_priority && priority == "  ".white() {
+            // skip incidents without priority
+            continue;
         }
+        print_incident(incident, &priority, long_output).await?;
     }
     Ok(())
 }
