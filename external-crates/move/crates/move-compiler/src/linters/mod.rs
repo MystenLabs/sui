@@ -15,6 +15,7 @@ mod constant_naming;
 mod meaningless_math_operation;
 mod unnecessary_while_loop;
 mod unneeded_return;
+mod multiplication_overflow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -118,6 +119,12 @@ lints!(
         "unneeded_return",
         "unneeded return"
     ),
+    (
+        MultiplicationOverflow,
+        LinterDiagnosticCategory::Correctness,
+        "multiplication_overflow",
+        "potential overflow detected in multiplication operation"
+    )
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -149,6 +156,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
                 unneeded_return::UnneededReturnVisitor.visitor(),
+                multiplication_overflow::MultiplicationOverflow.visitor(),
             ]
         }
     }

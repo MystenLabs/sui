@@ -4,17 +4,14 @@
 //! This linter rule detects potential overflow in multiplication operations across various integer types.
 //! It handles both same-type and mixed-type multiplications, issuing warnings when overflow is possible.
 
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, MULTIPLICATION_OVERFLOW_DIAG_CODE};
 use crate::expansion::ast::ModuleIdent;
+use crate::linters::StyleCodes;
 use crate::naming::ast::Var_;
 use crate::parser::ast::FunctionName;
 use crate::typing::ast::{Function, LValue_};
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     expansion::ast::Value_,
     naming::ast::{BuiltinTypeName_, TypeName_, Type_},
     parser::ast::BinOp_,
@@ -27,14 +24,6 @@ use crate::{
 use move_ir_types::location::Loc;
 use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
-
-const MULTIPLICATION_OVERFLOW_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Correctness as u8,
-    MULTIPLICATION_OVERFLOW_DIAG_CODE,
-    "Potential overflow detected in multiplication operation",
-);
 
 pub struct MultiplicationOverflow;
 
@@ -91,14 +80,13 @@ impl Context<'_> {
     fn check_for_overflow(&mut self, exp: &T::Exp) {
         let potential_overflows = self.collect_and_check_mul_expressions(exp);
         for loc in potential_overflows {
-            let diag = diag!(
-                MULTIPLICATION_OVERFLOW_DIAG,
+            self.env.add_diag(diag!(
+                StyleCodes::MultiplicationOverflow.diag_info(),
                 (
                     loc,
                     "Potential overflow detected in multiplication operation"
                 )
-            );
-            self.env.add_diag(diag);
+            ));
         }
     }
 
