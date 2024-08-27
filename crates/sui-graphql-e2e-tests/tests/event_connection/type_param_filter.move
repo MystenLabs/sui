@@ -14,26 +14,26 @@ module Test::M1 {
         value: T
     }
 
-    public fun emit_T1(value: u64) {
+    public fun emit_T1() {
         event::emit(EventA<T1> { value: T1 {} })
     }
 
-    public fun emit_T2(value: u64) {
+    public fun emit_T2() {
         event::emit(EventA<T2> { value: T2 {} })
     }
 
-    public fun emit_both(value: u64) {
+    public fun emit_both() {
         event::emit(EventA<T1> { value: T1 {} });
         event::emit(EventA<T2> { value: T2 {} })
     }
 }
 
 
-//# run Test::M1::emit_T1 --sender A --args 20
+//# run Test::M1::emit_T1 --sender A
 
-//# run Test::M1::emit_T2 --sender A --args 20
+//# run Test::M1::emit_T2 --sender A
 
-//# run Test::M1::emit_both --sender A --args 20
+//# run Test::M1::emit_both --sender A
 
 //# create-checkpoint
 
@@ -64,6 +64,21 @@ module Test::M1 {
 //# run-graphql
 {
   events(filter: {eventType: "@{Test}::M1::EventA<@{Test}::M1::T1>"}) {
+    nodes {
+      type {
+        repr
+      }
+      sender {
+        address
+      }
+      json
+    }
+  }
+}
+
+//# run-graphql
+{
+  events(filter: {eventType: "@{Test}::M1::EventA<@{Test}::M1::T2>", transactionDigest: "9nu1ivpL9hHcbJ9GwGfmD3Kuet5w74t2GBp8f1Ggy3UD"}) {
     nodes {
       type {
         repr
