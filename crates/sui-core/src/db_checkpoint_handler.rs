@@ -326,7 +326,7 @@ impl DBCheckpointHandler {
                     db_path,
                     &self.input_object_store,
                     &object_store,
-                    NonZeroUsize::new(20).unwrap(),
+                    NonZeroUsize::new(100).unwrap(),
                 )
                 .await?;
 
