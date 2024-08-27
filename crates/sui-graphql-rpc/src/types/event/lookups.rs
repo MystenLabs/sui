@@ -210,7 +210,7 @@ pub(crate) fn add_bounds(
             } else {
                 format!("SELECT {}", tx_hi)
             },
-            format!("SELECT {}", u64::MAX.to_string()),
+            format!("SELECT {}", u64::MAX),
         ),
     };
 
