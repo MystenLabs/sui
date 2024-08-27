@@ -7,6 +7,7 @@ use crate::{
     raw_query::RawQuery,
     types::{
         cursor::Page,
+        digest::Digest,
         sui_address::SuiAddress,
         type_filter::{ModuleFilter, TypeFilter},
     },
@@ -14,7 +15,7 @@ use crate::{
 
 use std::fmt::Write;
 
-use super::{Cursor, EventFilter};
+use super::Cursor;
 
 fn select_ev(sender: Option<SuiAddress>, from: &str) -> RawQuery {
     let query = query!(format!(
@@ -52,7 +53,7 @@ pub(crate) fn select_event_type(event_type: &TypeFilter, sender: Option<SuiAddre
             )
         }
         TypeFilter::ByType(tag) => {
-            let package = tag.address.to_vec();
+            let package = tag.address;
             let module = tag.module.to_string();
             let mut name = tag.name.as_str().to_owned();
             let (table, col_name) = if tag.type_params.is_empty() {
@@ -120,13 +121,13 @@ pub(crate) fn select_emit_module(
 /// number.
 pub(crate) fn add_bounds(
     mut query: RawQuery,
-    filter: &EventFilter,
+    tx_digest_filter: &Option<Digest>,
     page: &Page<Cursor>,
     tx_hi: u64,
 ) -> RawQuery {
     let mut ctes = vec![];
 
-    if let Some(digest) = filter.transaction_digest {
+    if let Some(digest) = tx_digest_filter {
         ctes.push(format!(
             r#"
             tx_eq AS (
@@ -142,9 +143,9 @@ pub(crate) fn add_bounds(
     let (after_tx, after_ev) = page.after().map(|x| (x.tx, x.e)).unwrap_or((0, 0));
 
     let select_lo = if !ctes.is_empty() {
-        format!("SELECT GREATEST({}, (SELECT eq FROM tx_eq))", after_tx)
+        format!("SELECT GREATEST({after_tx}, (SELECT eq FROM tx_eq))")
     } else {
-        format!("SELECT {}", after_tx)
+        format!("SELECT {after_tx}")
     };
 
     ctes.push(format!(
@@ -192,7 +193,7 @@ pub(crate) fn add_bounds(
     // This is needed to make sure that if a transaction digest is specified, the corresponding
     // `tx_eq` must yield a non-empty result. Otherwise, the CTE setup will fallback to defaults
     // and we will return an unexpected response.
-    if filter.transaction_digest.is_some() {
+    if tx_digest_filter.is_some() {
         query = filter!(query, "EXISTS (SELECT 1 FROM tx_eq)");
     }
 

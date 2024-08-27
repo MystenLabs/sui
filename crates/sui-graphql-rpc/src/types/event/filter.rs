@@ -20,6 +20,8 @@ pub(crate) struct EventFilter {
     /// PTB and emits an event.
     ///
     /// Modules can be filtered by their package, or package::module.
+    /// We currently do not support filtering by emitting module and event type
+    /// at the same time so if both are provided in one filter, the query will error.
     pub emitting_module: Option<ModuleFilter>,
 
     /// This field is used to specify the type of event emitted.

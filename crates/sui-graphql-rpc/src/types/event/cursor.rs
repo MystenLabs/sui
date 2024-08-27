@@ -34,9 +34,9 @@ pub(crate) struct EventKey {
 
 pub(crate) type Cursor = cursor::JsonCursor<EventKey>;
 
-/// Results from raw queries in Diesel can only be deserialized into structs that implements
+/// Results from raw queries in Diesel can only be deserialized into structs that implement
 /// `QueryableByName`. This struct is used to represent a row of `tx_sequence_number` and
-/// `event_sequence_number` returned from subqueries against ev lookup tables.
+/// `event_sequence_number` returned from subqueries against event lookup tables.
 #[derive(Clone, Debug)]
 pub struct EvLookup {
     pub tx: i64,
@@ -76,6 +76,36 @@ impl Paginated<Cursor> for StoredEvent {
     }
 }
 
+impl RawPaginated<Cursor> for StoredEvent {
+    fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "ROW(tx_sequence_number, event_sequence_number) >= ({}, {})",
+                cursor.tx, cursor.e
+            )
+        )
+    }
+
+    fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "ROW(tx_sequence_number, event_sequence_number) <= ({}, {})",
+                cursor.tx, cursor.e
+            )
+        )
+    }
+
+    fn order(asc: bool, query: RawQuery) -> RawQuery {
+        if asc {
+            query.order_by("tx_sequence_number ASC, event_sequence_number ASC")
+        } else {
+            query.order_by("tx_sequence_number DESC, event_sequence_number DESC")
+        }
+    }
+}
+
 impl Target<Cursor> for StoredEvent {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(EventKey {
@@ -92,11 +122,7 @@ impl Checkpointed for Cursor {
     }
 }
 
-impl ScanLimited for Cursor {
-    fn is_scan_limited(&self) -> bool {
-        false
-    }
-}
+impl ScanLimited for Cursor {}
 
 impl Target<Cursor> for EvLookup {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {

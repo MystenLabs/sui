@@ -7,6 +7,7 @@ use diesel::{
 };
 
 use crate::data::DieselBackend;
+use std::fmt::{Display, Write};
 
 pub(crate) type RawSqlQuery = BoxedSqlQuery<'static, DieselBackend, SqlQuery>;
 
@@ -76,12 +77,13 @@ impl RawQuery {
     }
 
     // Adds a `WITH` clause to the query.
-    pub(crate) fn with<T: ToString>(mut self, ctes: T) -> Self {
-        self.with = match self.with {
-            Some(cte) => Some(format!("{}, {}", cte, ctes.to_string())),
-            None => Some(ctes.to_string()),
-        };
-
+    pub(crate) fn with<T: Display>(mut self, ctes: T) -> Self {
+        if let Some(with) = &mut self.with {
+            // SAFETY: write! to String always succeeds
+            write!(with, ", {ctes}").unwrap();
+        } else {
+            self.with = Some(ctes.to_string())
+        }
         self
     }
 
@@ -112,11 +114,11 @@ impl RawQuery {
     /// function is not intended to be called directly, and instead should be used through the
     /// `query!` macro.
     pub(crate) fn finish(self) -> (String, Vec<String>) {
-        let mut select = self.select;
-
-        if let Some(with) = self.with {
-            select = format!("WITH {} {}", with, select);
-        }
+        let mut select = if let Some(with) = self.with {
+            "WITH ".to_owned() + &with + " " + &self.select
+        } else {
+            self.select
+        };
 
         if let Some(where_) = self.where_ {
             select.push_str(" WHERE ");

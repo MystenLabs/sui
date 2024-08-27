@@ -115,12 +115,15 @@ impl Event {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        // Initializes query with the select statement and table-relevant filters
-        let mut query = match (filter.sender, &filter.emitting_module, &filter.event_type) {
-            (None, None, None) => query!("SELECT * FROM events"),
-            (Some(sender), None, None) => select_sender(sender),
-            (sender, None, Some(event_type)) => select_event_type(event_type, sender),
-            (sender, Some(module), None) => select_emit_module(module, sender),
+        // Construct tx and ev sequence number query with table-relevant filters, if they exist.
+        // The resulting query will look something like `SELECT tx_sequence_number, event_sequence_number FROM lookup_table WHERE ...`.
+        // If no filter is provided we don't need to use any lookup tables and can just query `events` table, as can be seen
+        // in the code below.
+        let query_constraint = match (filter.sender, &filter.emitting_module, &filter.event_type) {
+            (None, None, None) => None,
+            (Some(sender), None, None) => Some(select_sender(sender)),
+            (sender, None, Some(event_type)) => Some(select_event_type(event_type, sender)),
+            (sender, Some(module), None) => Some(select_emit_module(module, sender)),
             (_, Some(_), Some(_)) => {
                 return Err(Error::Client(
                     "Filtering by both emitting module and event type is not supported".to_string(),
@@ -136,36 +139,46 @@ impl Event {
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
                 })?;
 
-                query = add_bounds(query, &filter, &page, (tx_hi - 1) as u64);
+                let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
+                    if let Some(filter_query) =  query_constraint {
+                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, (tx_hi - 1) as u64);
 
-                let (prev, next, results) =
-                    page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query)?;
+                        let (prev, next, results) =
+                            page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query)?;
 
-                let ev_lookups = results
-                    .into_iter()
-                    .map(|x| (x.tx, x.ev))
-                    .collect::<Vec<(i64, i64)>>();
+                        let ev_lookups = results
+                            .into_iter()
+                            .map(|x| (x.tx, x.ev))
+                            .collect::<Vec<(i64, i64)>>();
 
-                if ev_lookups.is_empty() {
-                    return Ok::<_, diesel::result::Error>((prev, next, vec![]));
-                }
+                        if ev_lookups.is_empty() {
+                            return Ok::<_, diesel::result::Error>((prev, next, vec![]));
+                        }
 
-                // Unlike a multi-get on a single column which can be serviced by a query `IN
-                // (...)`, because events have a composite primary key, the query planner tends
-                // to perform a sequential scan when given a list of tuples to lookup. A query
-                // using `UNION ALL` allows us to leverage the index on the composite key.
-                let mut events: Vec<StoredEvent> = conn.results(move || {
-                    // Diesel's DSL does not current support chained `UNION ALL`, so we have to turn
-                    // to `RawQuery` here.
-                    let query_string = ev_lookups.iter()
-                    .map(|&(tx, ev)| {
-                        format!("SELECT * FROM events WHERE tx_sequence_number = {} AND event_sequence_number = {}", tx, ev)
-                    })
-                    .collect::<Vec<String>>()
-                    .join(" UNION ALL ");
+                        // Unlike a multi-get on a single column which can be serviced by a query `IN
+                        // (...)`, because events have a composite primary key, the query planner tends
+                        // to perform a sequential scan when given a list of tuples to lookup. A query
+                        // using `UNION ALL` allows us to leverage the index on the composite key.
+                        let events = conn.results(move || {
+                            // Diesel's DSL does not current support chained `UNION ALL`, so we have to turn
+                            // to `RawQuery` here.
+                            let query_string = ev_lookups.iter()
+                                .map(|&(tx, ev)| {
+                                    format!("SELECT * FROM events WHERE tx_sequence_number = {} AND event_sequence_number = {}", tx, ev)
+                                })
+                                .collect::<Vec<String>>()
+                                .join(" UNION ALL ");
 
-                    query!(query_string).into_boxed()
-                })?;
+                            query!(query_string).into_boxed()
+                        })?;
+                        (prev, next, events)
+                    } else {
+                        // No filter is provided so we add bounds to the basic `SELECT * FROM events` query and call it a day.
+                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, (tx_hi - 1) as u64);
+                        let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query)?;
+                        let events = events_iter.collect::<Vec<StoredEvent>>();
+                        (prev, next, events)
+                    };
 
                 // UNION ALL does not guarantee order, so we need to sort the results. Whether
                 // `first` or `last, the result set is always sorted in ascending order.

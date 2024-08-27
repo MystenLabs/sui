@@ -3,23 +3,23 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-37:
+task 1, lines 6-34:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6604400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 39:
+task 2, line 36:
 //# run Test::M2::emit_emit_a --sender A --args 20
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 41:
+task 3, line 38:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 43-60:
+task 4, lines 40-57:
 //# run-graphql
 Response: {
   "data": {
@@ -45,23 +45,23 @@ Response: {
   }
 }
 
-task 5, line 62:
+task 5, line 59:
 //# run Test::M2::emit_b --sender A --args 42
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [] }, contents: [42, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 64:
+task 6, line 61:
 //# run Test::M2::emit_b --sender B --args 43
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: B, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [] }, contents: [43, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7, line 66:
+task 7, line 63:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 68-85:
+task 8, lines 65-82:
 //# run-graphql
 Response: {
   "data": {
@@ -87,7 +87,7 @@ Response: {
   }
 }
 
-task 9, lines 87-104:
+task 9, lines 84-101:
 //# run-graphql
 Response: {
   "data": {
@@ -113,7 +113,7 @@ Response: {
   }
 }
 
-task 10, lines 106-123:
+task 10, lines 103-120:
 //# run-graphql
 Response: {
   "data": {
@@ -154,7 +154,7 @@ Response: {
   }
 }
 
-task 11, lines 125-142:
+task 11, lines 122-139:
 //# run-graphql
 Response: {
   "data": {
