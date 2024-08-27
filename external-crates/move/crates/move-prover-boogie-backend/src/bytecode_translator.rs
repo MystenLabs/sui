@@ -349,6 +349,7 @@ impl<'env> StructTranslator<'env> {
     fn translate(&self) {
         let writer = self.parent.writer;
         let struct_env = self.struct_env;
+        if struct_env.is_native() { return; }
         let env = struct_env.module_env.env;
 
         let qid = struct_env
