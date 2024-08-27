@@ -1272,6 +1272,8 @@ input EventFilter {
 	PTB and emits an event.
 	
 	Modules can be filtered by their package, or package::module.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	emittingModule: String
 	"""
@@ -3312,7 +3314,9 @@ type Query {
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
-	The events that exist in the network.
+	Query events that are emitted in the network.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
 	"""
