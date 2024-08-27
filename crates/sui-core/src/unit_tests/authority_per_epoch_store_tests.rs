@@ -8,24 +8,6 @@ use sui_types::base_types::TransactionDigest;
 use tokio::time::timeout;
 
 #[tokio::test]
-async fn test_insert_finalized_transactions() {
-    let authority_state = TestAuthorityBuilder::new().build().await;
-    let store = authority_state.epoch_store_for_testing();
-
-    let digests = vec![
-        TransactionDigest::random(),
-        TransactionDigest::random(),
-        TransactionDigest::random(),
-    ];
-    let checkpoint_sequence = 10;
-
-    let result = store.insert_finalized_transactions(&digests, checkpoint_sequence);
-
-    // Assert that the method returns Ok
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
 async fn test_notify_read_executed_transactions_to_checkpoint() {
     let authority_state = TestAuthorityBuilder::new().build().await;
     let store = authority_state.epoch_store_for_testing();

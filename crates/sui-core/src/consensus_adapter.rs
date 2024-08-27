@@ -921,6 +921,9 @@ impl ConsensusAdapter {
                 vec![]
             };
 
+            // We wait for each transaction individually to be processed by consensus or executed in a checkpoint. We could equally just
+            // get notified in aggregate when all transactions are processed, but with this approach can get notified in a more fine-grained way
+            // as transactions can be marked as processed in different ways. This is mostly a concern for the soft-bundle transactions.
             notifications.push(async move {
                 tokio::select! {
                     processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
