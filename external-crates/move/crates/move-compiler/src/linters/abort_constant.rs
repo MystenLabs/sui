@@ -6,29 +6,18 @@
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
+use crate::linters::StyleCodes;
 use crate::{
     cfgir::{
         ast as G,
         visitor::{CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     editions::FeatureGate,
     hlir::ast as H,
-    linters::{LinterDiagnosticCategory, ABORT_CONSTANT_DIAG_CODE, LINT_WARNING_PREFIX},
     shared::CompilationEnv,
 };
-
-const ABORT_CONSTANT_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Style as u8,
-    ABORT_CONSTANT_DIAG_CODE,
-    "use named constants with 'abort' and 'assert'",
-);
 
 pub struct AssertAbortNamedConstants;
 
@@ -78,7 +67,10 @@ impl Context<'_> {
         );
 
         if !is_constant {
-            let mut diag = diag!(ABORT_CONSTANT_DIAG, (loc, "Prefer using a named constant."));
+            let mut diag = diag!(
+                StyleCodes::AbortConstant.diag_info(),
+                (loc, "Prefer using a named constant.")
+            );
 
             if self
                 .env
