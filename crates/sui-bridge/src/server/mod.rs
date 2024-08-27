@@ -20,6 +20,7 @@ use axum::{
 };
 use axum::{http::StatusCode, routing::get, Router};
 use ethers::types::Address as EthAddress;
+use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     traits::ToFromBytes,
@@ -38,6 +39,7 @@ pub(crate) mod mock_handler;
 pub const APPLICATION_JSON: &str = "application/json";
 
 pub const PING_PATH: &str = "/ping";
+pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 
 // Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_hash/:event_index";
@@ -58,22 +60,27 @@ pub const ADD_TOKENS_ON_SUI_PATH: &str =
 pub const ADD_TOKENS_ON_EVM_PATH: &str =
     "/sign/add_tokens_on_evm/:chain_id/:nonce/:native/:token_ids/:token_addresses/:token_sui_decimals/:token_prices";
 
-/// BridgeNode's public metadata that is acceesible via the `/ping` endpoint.
+// BridgeNode's public metadata that is accessible via the `/ping` endpoint.
 // Be careful with what to put here, as it is public.
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize)]
 pub struct BridgeNodePublicMetadata {
     pub version: Option<String>,
+    pub metrics_pubkey: Option<Arc<Ed25519PublicKey>>,
 }
 
 impl BridgeNodePublicMetadata {
-    pub fn new(version: String) -> Self {
+    pub fn new(version: String, metrics_pubkey: Ed25519PublicKey) -> Self {
         Self {
             version: Some(version),
+            metrics_pubkey: Some(metrics_pubkey.into()),
         }
     }
 
     pub fn empty_for_testing() -> Self {
-        Self { version: None }
+        Self {
+            version: None,
+            metrics_pubkey: None,
+        }
     }
 }
 
@@ -103,6 +110,7 @@ pub(crate) fn make_router(
     Router::new()
         .route("/", get(health_check))
         .route(PING_PATH, get(ping))
+        .route(METRICS_KEY_PATH, get(metrics_key_fetch))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
         .route(
@@ -155,8 +163,18 @@ async fn ping(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
-) -> Result<Json<BridgeNodePublicMetadata>, BridgeError> {
-    Ok(Json(metadata.as_ref().clone()))
+) -> Result<Json<Arc<BridgeNodePublicMetadata>>, BridgeError> {
+    Ok(Json(metadata))
+}
+
+async fn metrics_key_fetch(
+    State((_handler, _metrics, metadata)): State<(
+        Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
+        Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
+    )>,
+) -> Result<Json<Option<Arc<Ed25519PublicKey>>>, BridgeError> {
+    Ok(Json(metadata.metrics_pubkey.clone()))
 }
 
 #[instrument(level = "error", skip_all, fields(tx_hash_hex=tx_hash_hex, event_idx=event_idx))]
