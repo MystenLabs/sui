@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{data::DieselBackend, filter};
 use async_graphql::*;
-use diesel::{
-    expression::{is_aggregate::No, ValidGrouping},
-    query_builder::QueryFragment,
-    AppearsOnTable, Expression, ExpressionMethods, QuerySource,
-};
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
 use sui_types::{
@@ -61,29 +56,6 @@ pub(crate) enum ModuleFilter {
 pub(crate) enum Error {
     #[error("Invalid filter, expected: {0}")]
     InvalidFormat(&'static str),
-}
-
-/// Trait for a field that can be used in a query.
-pub(crate) trait Field<Type, QS: QuerySource>:
-    ExpressionMethods
-    + Expression<SqlType = Type>
-    + QueryFragment<DieselBackend>
-    + AppearsOnTable<QS>
-    + ValidGrouping<(), IsAggregate = No>
-    + Send
-    + 'static
-{
-}
-
-impl<T, Type, QS: QuerySource> Field<Type, QS> for T where
-    T: ExpressionMethods
-        + Expression<SqlType = Type>
-        + QueryFragment<DieselBackend>
-        + AppearsOnTable<QS>
-        + ValidGrouping<(), IsAggregate = No>
-        + Send
-        + 'static
-{
 }
 
 impl TypeFilter {
