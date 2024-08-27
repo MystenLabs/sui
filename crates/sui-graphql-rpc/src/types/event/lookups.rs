@@ -114,11 +114,13 @@ pub(crate) fn select_emit_module(
 }
 
 /// Given a `RawQuery` representing a query for events, adds ctes and corresponding filters to
-/// constrain the query. If a transaction digest is specified, we add a `tx_eq` CTE from which the
-/// lower and upper bounds will draw from. This also means an additional check that the `tx_eq` CTE
-/// returns a non-empty result. Otherwise, the lower bound is determined from `page.after()` or 0 by
-/// default. The upper bound is determined by `page.before()`, or the current latest tx sequence
-/// number.
+/// constrain the query. By default, if neither a transaction digest nor an `after` cursor are
+/// specified, then the events query will only have an upper bound, determined by the `before`
+/// cursor or the current latest tx sequence number. If a transaction digest is specified, we add a
+/// `tx_eq` CTE that the lower and upper bounds will compare to. This also means an additional check
+/// that the `tx_eq` CTE returns a non-empty result.
+///
+/// `tx_hi` represents the current latest tx sequence number.
 pub(crate) fn add_bounds(
     mut query: RawQuery,
     tx_digest_filter: &Option<Digest>,
@@ -127,6 +129,7 @@ pub(crate) fn add_bounds(
 ) -> RawQuery {
     let mut ctes = vec![];
 
+    let mut has_digest_cte = false;
     if let Some(digest) = tx_digest_filter {
         ctes.push(format!(
             r#"
@@ -138,52 +141,80 @@ pub(crate) fn add_bounds(
         "#,
             bytea_literal(digest.as_slice())
         ));
-    }
+        has_digest_cte = true;
+    };
 
-    let (after_tx, after_ev) = page.after().map(|x| (x.tx, x.e)).unwrap_or((0, 0));
+    let mut has_select_lo = false;
+    let select_lo = match (page.after(), has_digest_cte) {
+        (Some(after), _) => {
+            // if both a digest and after cursor are present, then select the larger tx sequence
+            // number
+            let select_tx_lo = if has_digest_cte {
+                format!("SELECT GREATEST({}, (SELECT eq FROM tx_eq))", after.tx)
+            } else {
+                format!("SELECT {}", after.tx)
+            };
+            // If `tx_lo` matches `after` cursor, then we should use the `after` cursor's event
+            // sequence number
+            let select_ev_lo = format!(
+                "SELECT CASE WHEN (SELECT lo FROM tx_lo) = {after_tx} THEN 0 ELSE {after_ev} END",
+                after_tx = after.tx,
+                after_ev = after.e
+            );
+            Some(format!(
+                r#"
+                tx_lo AS ({select_tx_lo} AS lo),
+                ev_lo AS ({select_ev_lo} AS lo)
+                "#
+            ))
+        }
+        // No `after` cursor, has digest
+        (None, true) => Some(
+            r#"
+            tx_lo AS (SELECT eq AS lo FROM tx_eq),
+            ev_lo AS (SELECT 0 AS lo)
+            "#
+            .to_string(),
+        ),
+        // Neither, don't need lower bounds
+        (None, false) => None,
+    };
 
-    let select_lo = if !ctes.is_empty() {
-        format!("SELECT GREATEST({after_tx}, (SELECT eq FROM tx_eq))")
-    } else {
-        format!("SELECT {after_tx}")
+    if let Some(select_lo) = select_lo {
+        ctes.push(select_lo);
+        has_select_lo = true;
+    };
+
+    let (select_tx_hi, select_ev_hi) = match page.before() {
+        Some(before) => {
+            let tx_hi = if has_digest_cte {
+                // Select the smaller of the digest or before cursor, to exclude txs between the two,
+                // if any
+                format!("SELECT LEAST({}, (SELECT eq FROM tx_eq))", before.tx)
+            } else {
+                format!("SELECT {}", before.tx)
+            };
+            let ev_hi = format!(
+                // check for equality so that if the digest and before cursor are the same tx, we
+                // don't miss the before cursor's event sequence number
+                "SELECT CASE WHEN (SELECT hi FROM tx_hi) = {before_tx} THEN {u64_max} ELSE {before_ev} END",
+                before_tx=before.tx,
+                u64_max=u64::MAX,
+                before_ev=before.e
+            );
+            (tx_hi, ev_hi)
+        }
+        None => (
+            format!("SELECT {}", tx_hi.to_string()),
+            format!("SELECT {}", u64::MAX.to_string()),
+        ),
     };
 
     ctes.push(format!(
         r#"
-        tx_lo AS ({} AS lo),
-        ev_lo AS (
-            SELECT CASE
-                WHEN (SELECT lo FROM tx_lo) > {} THEN {} ELSE {}
-            END AS lo
-        )
+        tx_hi AS ({select_tx_hi} AS hi),
+        ev_hi AS ({select_ev_hi} AS hi)
     "#,
-        select_lo, after_tx, 0, after_ev
-    ));
-
-    let (before_tx, before_ev) = page
-        .before()
-        .map(|x| (x.tx, x.e))
-        .unwrap_or((tx_hi, u64::MAX));
-
-    let select_hi = if ctes.len() == 2 {
-        format!("SELECT LEAST({}, (SELECT eq FROM tx_eq))", before_tx)
-    } else {
-        format!("SELECT {}", before_tx)
-    };
-
-    ctes.push(format!(
-        r#"
-        tx_hi AS ({} AS hi),
-        ev_hi AS (
-            SELECT CASE
-                WHEN (SELECT hi FROM tx_hi) < {} THEN {} ELSE {}
-            END AS hi
-        )
-    "#,
-        select_hi,
-        before_tx,
-        u64::MAX,
-        before_ev
     ));
 
     for cte in ctes {
@@ -193,17 +224,21 @@ pub(crate) fn add_bounds(
     // This is needed to make sure that if a transaction digest is specified, the corresponding
     // `tx_eq` must yield a non-empty result. Otherwise, the CTE setup will fallback to defaults
     // and we will return an unexpected response.
-    if tx_digest_filter.is_some() {
+    if has_digest_cte {
         query = filter!(query, "EXISTS (SELECT 1 FROM tx_eq)");
     }
 
-    query
-        .filter("(SELECT lo FROM tx_lo) <= tx_sequence_number")
-        .filter("tx_sequence_number <= (SELECT hi FROM tx_hi)")
-        .filter(
-            "(ROW(tx_sequence_number, event_sequence_number) >= \
+    if has_select_lo {
+        query = query
+            .filter("(SELECT lo FROM tx_lo) <= tx_sequence_number")
+            .filter(
+                "(ROW(tx_sequence_number, event_sequence_number) >= \
      ((SELECT lo FROM tx_lo), (SELECT lo FROM ev_lo)))",
-        )
+            );
+    }
+
+    query
+        .filter("tx_sequence_number <= (SELECT hi FROM tx_hi)")
         .filter(
             "(ROW(tx_sequence_number, event_sequence_number) <= \
      ((SELECT hi FROM tx_hi), (SELECT hi FROM ev_hi)))",

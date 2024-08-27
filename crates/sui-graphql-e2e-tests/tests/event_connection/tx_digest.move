@@ -29,6 +29,8 @@ module Test::M1 {
 
 //# run Test::M1::emit_2 --sender A --args 2
 
+//# run Test::M1::emit_2 --sender A --args 4
+
 //# create-checkpoint
 
 //# run-graphql
@@ -42,7 +44,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-    events(filter: {transactionDigest: "5qVugAqZ6ANMTadHevvJaUyU2c65paKm1n6UGCJHTAbD"}) {
+    events(filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
         nodes {
             json
         }
@@ -51,7 +53,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-    events(filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+    events(filter: {transactionDigest: "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"}) {
         nodes {
             json
         }

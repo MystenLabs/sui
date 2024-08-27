@@ -138,10 +138,11 @@ impl Event {
                     dsl::checkpoints.select(dsl::network_total_transactions)
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
                 })?;
+                let tx_hi = tx_hi as u64 - 1;
 
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {
-                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, (tx_hi - 1) as u64);
+                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_hi as u64);
 
                         let (prev, next, results) =
                             page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query)?;
@@ -174,7 +175,7 @@ impl Event {
                         (prev, next, events)
                     } else {
                         // No filter is provided so we add bounds to the basic `SELECT * FROM events` query and call it a day.
-                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, (tx_hi - 1) as u64);
+                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi as u64);
                         let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query)?;
                         let events = events_iter.collect::<Vec<StoredEvent>>();
                         (prev, next, events)

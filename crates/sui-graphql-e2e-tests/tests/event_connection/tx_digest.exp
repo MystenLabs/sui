@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -21,10 +21,16 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 32:
+//# run Test::M1::emit_2 --sender A --args 4
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [5, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 34:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 34-41:
+task 6, lines 36-43:
 //# run-graphql
 Response: {
   "data": {
@@ -41,23 +47,16 @@ Response: {
         },
         {
           "digest": "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"
+        },
+        {
+          "digest": "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"
         }
       ]
     }
   }
 }
 
-task 6, lines 43-50:
-//# run-graphql
-Response: {
-  "data": {
-    "events": {
-      "nodes": []
-    }
-  }
-}
-
-task 7, lines 52-59:
+task 7, lines 45-52:
 //# run-graphql
 Response: {
   "data": {
@@ -71,6 +70,37 @@ Response: {
         {
           "json": {
             "new_value": "3"
+          }
+        },
+        {
+          "json": {
+            "new_value": "4"
+          }
+        },
+        {
+          "json": {
+            "new_value": "5"
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, lines 54-61:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "json": {
+            "new_value": "4"
+          }
+        },
+        {
+          "json": {
+            "new_value": "5"
           }
         }
       ]
