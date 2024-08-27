@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDateTime};
 use colored::Colorize;
 use reqwest;
 use reqwest::header::HeaderMap;
@@ -13,7 +13,7 @@ use serde_json::Value as JsonValue;
 use std::env;
 
 /// Fetch incidents from the API using the given parameters until {limit} incidents have been received.
-async fn fetch_incidents(
+pub async fn fetch_incidents(
     limit: usize,
     start_time: DateTime<Local>,
     _end_time: DateTime<Local>,
@@ -88,19 +88,14 @@ async fn fetch_incidents(
 }
 
 pub async fn print_recent_incidents(
-    long: bool,
-    limit: usize,
-    days: usize,
+    incidents: Vec<JsonValue>,
+    long_output: bool,
     with_priority: bool,
 ) -> Result<()> {
-    let current_time = Local::now();
-    let start_time = current_time - Duration::days(days as i64);
     let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
     let date_format_out = "%m/%d/%Y %H:%M";
-
-    let incidents = fetch_incidents(limit, start_time, current_time).await?;
     for incident in incidents {
-        if long {
+        if long_output {
             println!(
                 "Incident #: {}",
                 incident["incident_number"]
@@ -178,6 +173,13 @@ pub async fn print_recent_incidents(
                     .bright_purple()
             )
         }
+    }
+    Ok(())
+}
+
+pub async fn review_recent_incidents(incidents: Vec<JsonValue>) -> Result<()> {
+    for incident in incidents {
+        println!("{}", incident);
     }
     Ok(())
 }
