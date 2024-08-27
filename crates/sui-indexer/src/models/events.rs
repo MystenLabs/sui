@@ -31,9 +31,6 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
 
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    pub checkpoint_sequence_number: i64,
-
     #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
 
@@ -61,7 +58,6 @@ impl From<IndexedEvent> for StoredEvent {
             tx_sequence_number: event.tx_sequence_number as i64,
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
-            checkpoint_sequence_number: event.checkpoint_sequence_number as i64,
             senders: event
                 .senders
                 .into_iter()

@@ -115,10 +115,11 @@ impl Event {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        // Construct tx and ev sequence number query with table-relevant filters, if they exist.
-        // The resulting query will look something like `SELECT tx_sequence_number, event_sequence_number FROM lookup_table WHERE ...`.
-        // If no filter is provided we don't need to use any lookup tables and can just query `events` table, as can be seen
-        // in the code below.
+        // Construct tx and ev sequence number query with table-relevant filters, if they exist. The
+        // resulting query will look something like `SELECT tx_sequence_number,
+        // event_sequence_number FROM lookup_table WHERE ...`. If no filter is provided we don't
+        // need to use any lookup tables and can just query `events` table, as can be seen in the
+        // code below.
         let query_constraint = match (filter.sender, &filter.emitting_module, &filter.event_type) {
             (None, None, None) => None,
             (Some(sender), None, None) => Some(select_sender(sender)),
@@ -174,7 +175,8 @@ impl Event {
                         })?;
                         (prev, next, events)
                     } else {
-                        // No filter is provided so we add bounds to the basic `SELECT * FROM events` query and call it a day.
+                        // No filter is provided so we add bounds to the basic `SELECT * FROM
+                        // events` query and call it a day.
                         let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi as u64);
                         let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query)?;
                         let events = events_iter.collect::<Vec<StoredEvent>>();
@@ -230,7 +232,6 @@ impl Event {
             tx_sequence_number: stored_tx.tx_sequence_number,
             event_sequence_number: idx as i64,
             transaction_digest: stored_tx.transaction_digest.clone(),
-            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
             senders: vec![Some(native_event.sender.to_vec())],
             package: native_event.package_id.to_vec(),
             module: native_event.transaction_module.to_string(),

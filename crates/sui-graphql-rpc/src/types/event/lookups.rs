@@ -113,14 +113,14 @@ pub(crate) fn select_emit_module(
     }
 }
 
-/// Given a `RawQuery` representing a query for events, adds ctes and corresponding filters to
+/// Given a `RawQuery` representing a query for events, adds CTEs and corresponding filters to
 /// constrain the query. By default, if neither a transaction digest nor an `after` cursor are
 /// specified, then the events query will only have an upper bound, determined by the `before`
-/// cursor or the current latest tx sequence number. If a transaction digest is specified, we add a
+/// cursor or the current latest `tx_sequence_number`. If a transaction digest is specified, add a
 /// `tx_eq` CTE that the lower and upper bounds will compare to. This also means an additional check
 /// that the `tx_eq` CTE returns a non-empty result.
 ///
-/// `tx_hi` represents the current latest tx sequence number.
+/// `tx_hi` represents the current latest `tx_sequence_number`.
 pub(crate) fn add_bounds(
     mut query: RawQuery,
     tx_digest_filter: &Option<Digest>,
@@ -157,7 +157,7 @@ pub(crate) fn add_bounds(
             // If `tx_lo` matches `after` cursor, then we should use the `after` cursor's event
             // sequence number
             let select_ev_lo = format!(
-                "SELECT CASE WHEN (SELECT lo FROM tx_lo) = {after_tx} THEN 0 ELSE {after_ev} END",
+                "SELECT CASE WHEN (SELECT lo FROM tx_lo) = {after_tx} THEN {after_ev} ELSE 0 END",
                 after_tx = after.tx,
                 after_ev = after.e
             );
@@ -197,7 +197,7 @@ pub(crate) fn add_bounds(
             let ev_hi = format!(
                 // check for equality so that if the digest and before cursor are the same tx, we
                 // don't miss the before cursor's event sequence number
-                "SELECT CASE WHEN (SELECT hi FROM tx_hi) = {before_tx} THEN {u64_max} ELSE {before_ev} END",
+                "SELECT CASE WHEN (SELECT hi FROM tx_hi) = {before_tx} THEN {before_ev} ELSE {u64_max} END",
                 before_tx=before.tx,
                 u64_max=u64::MAX,
                 before_ev=before.e
@@ -205,7 +205,11 @@ pub(crate) fn add_bounds(
             (tx_hi, ev_hi)
         }
         None => (
-            format!("SELECT {}", tx_hi.to_string()),
+            if has_digest_cte {
+                format!("SELECT LEAST({}, (SELECT eq FROM tx_eq))", tx_hi)
+            } else {
+                format!("SELECT {}", tx_hi)
+            },
             format!("SELECT {}", u64::MAX.to_string()),
         ),
     };

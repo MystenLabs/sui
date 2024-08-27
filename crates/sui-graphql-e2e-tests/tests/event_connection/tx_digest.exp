@@ -1,4 +1,4 @@
-processed 9 tasks
+processed 17 tasks
 
 init:
 A: object(0,0)
@@ -56,30 +56,26 @@ Response: {
   }
 }
 
-task 7, lines 45-52:
+task 7, lines 45-55:
 //# run-graphql
 Response: {
   "data": {
     "events": {
-      "nodes": [
+      "edges": [
         {
-          "json": {
-            "new_value": "2"
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "2"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "3"
-          }
-        },
-        {
-          "json": {
-            "new_value": "4"
-          }
-        },
-        {
-          "json": {
-            "new_value": "5"
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "3"
+            }
           }
         }
       ]
@@ -87,20 +83,167 @@ Response: {
   }
 }
 
-task 8, lines 54-61:
+task 8, lines 57-68:
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": []
+    }
+  }
+}
+
+task 9, lines 70-83:
+//# run-graphql --cursors {"tx":1,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": []
+    }
+  }
+}
+
+task 10, lines 86-96:
 //# run-graphql
 Response: {
   "data": {
     "events": {
-      "nodes": [
+      "edges": [
         {
-          "json": {
-            "new_value": "4"
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "4"
+            }
           }
         },
         {
-          "json": {
-            "new_value": "5"
+          "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "5"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 98-108:
+//# run-graphql --cursors {"tx":4,"e":0,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "5"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 111-121:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "2"
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "3"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 123-134:
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "2"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 136-149:
+//# run-graphql --cursors {"tx":4,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": []
+    }
+  }
+}
+
+task 15, lines 152-162:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "4"
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MSwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "5"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 164-174:
+//# run-graphql --cursors {"tx":4,"e":1,"c":1}
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "json": {
+              "new_value": "4"
+            }
           }
         }
       ]

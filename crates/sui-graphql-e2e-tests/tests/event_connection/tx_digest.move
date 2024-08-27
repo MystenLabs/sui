@@ -45,17 +45,130 @@ module Test::M1 {
 //# run-graphql
 {
     events(filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
-        nodes {
-            json
+        edges {
+            cursor
+            node {
+                json
+            }
         }
     }
 }
 
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
+# When the tx digest and after cursor are on the same tx, we'll use the after cursor's event sequence number
+{
+    events(after: "@{cursor_0}" filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+//# run-graphql --cursors {"tx":1,"e":1,"c":1}
+# If the after cursor does not match the transaction digest's tx sequence number,
+# we will get an empty response, since it's not possible to fetch an event
+# that isn't of the same tx sequence number
+{
+    events(after: "@{cursor_0}" filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+
 //# run-graphql
 {
     events(filter: {transactionDigest: "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"}) {
-        nodes {
-            json
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+//# run-graphql --cursors {"tx":4,"e":0,"c":1}
+{
+    events(after: "@{cursor_0}" filter: {transactionDigest: "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+
+//# run-graphql
+{
+    events(last: 10 filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
+# When the tx digest and cursor are on the same tx, we'll use the cursor's event sequence number
+{
+    events(last: 10 before: "@{cursor_0}" filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+//# run-graphql --cursors {"tx":4,"e":1,"c":1}
+# If the cursor does not match the transaction digest's tx sequence number,
+# we will get an empty response, since it's not possible to fetch an event
+# that isn't of the same tx sequence number
+{
+    events(last: 10 before: "@{cursor_0}" filter: {transactionDigest: "Ar4ascrErFfQAEPEcNxhMfJok8FvkhSocVjPBm9vUQa2"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+
+//# run-graphql
+{
+    events(last: 10 filter: {transactionDigest: "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
+        }
+    }
+}
+
+//# run-graphql --cursors {"tx":4,"e":1,"c":1}
+{
+    events(last: 10 before: "@{cursor_0}" filter: {transactionDigest: "5bEKPHKVsqMpFrsjQXnkZc8R8naYjoKs9oErx8rc4CdC"}) {
+        edges {
+            cursor
+            node {
+                json
+            }
         }
     }
 }
