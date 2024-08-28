@@ -358,7 +358,7 @@ fn maybe_unmark_infinite_loop_starts(
         {
             infinite_loop_starts.remove(&cur_loop_start);
         }
-        C::Return { .. } | C::Abort(_) => {
+        C::Return { .. } | C::Abort(_, _) => {
             infinite_loop_starts.remove(&cur_loop_start);
         }
 
