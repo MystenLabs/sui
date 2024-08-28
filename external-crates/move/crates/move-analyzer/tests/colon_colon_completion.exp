@@ -123,7 +123,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 5 -------------------
 use line: 22, use_col: 11
@@ -140,7 +140,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 7 -------------------
 use line: 23, use_col: 25
@@ -176,7 +176,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 10 -------------------
 use line: 25, use_col: 9
@@ -418,7 +418,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 15 -------------------
 use line: 28, use_col: 13
@@ -815,7 +815,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 29 -------------------
 use line: 25, use_col: 16
@@ -954,7 +954,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 32 -------------------
 use line: 41, use_col: 20
@@ -974,7 +974,7 @@ EnumMember 'SomeNamedVariant{}'
 EnumMember 'SomePositionalVariant()'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
+    INSERT TEXT: 'SomeVariant'
 
 -- test 34 -------------------
 use line: 55, use_col: 38
