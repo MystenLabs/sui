@@ -290,28 +290,28 @@ impl JsonRpcMetrics {
             get_stake_sui_latency: register_histogram_with_registry!(
                 "get_stake_sui_latency",
                 "The latency of get stake sui, in ms",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             get_delegated_sui_latency: register_histogram_with_registry!(
                 "get_delegated_sui_latency",
                 "The latency of get delegated sui, in ms",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             orchestrator_latency_ms: register_histogram_with_registry!(
                 "json_rpc_orchestrator_latency",
                 "The latency of submitting transaction via transaction orchestrator, in ms",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             post_orchestrator_latency_ms: register_histogram_with_registry!(
                 "json_rpc_post_orchestrator_latency",
                 "The latency of response processing after transaction orchestrator, in ms",
-                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
