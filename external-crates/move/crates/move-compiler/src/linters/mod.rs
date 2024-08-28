@@ -11,21 +11,11 @@ use crate::{
     typing::visitor::TypingVisitor,
 };
 
-pub mod constant_naming;
-<<<<<<< HEAD
-mod meaningless_math_operation;
-mod unnecessary_while_loop;
-mod unneeded_return;
 pub mod abort_constant;
-||||||| parent of 047a300271 (Rework a couple things + update tests)
+pub mod constant_naming;
 pub mod meaningless_math_operation;
 pub mod unnecessary_while_loop;
-pub mod unnecessary_while_loop;
-pub mod unnecessary_while_loop;
-=======
-pub mod meaningless_math_operation;
-pub mod unnecessary_while_loop;
->>>>>>> 047a300271 (Rework a couple things + update tests)
+pub mod unneeded_return;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -130,38 +120,19 @@ lints!(
         "unneeded return"
     ),
     (
-        AssertAbortNamedConstants,
+        AbortWithoutConstant,
         LinterDiagnosticCategory::Style,
         "abort_without_constant",
-        "abort with named constant"
+        "'abort' or 'assert' without named constant"
     ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
-<<<<<<< HEAD
-||||||| parent of 3c440e0213 ([move][move-linter] implement abort constant rules)
-pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
-pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
-pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true";
-pub const WHILE_TRUE_TO_LOOP_DIAG_CODE: u8 = 4;
-pub const MEANINGLESS_MATH_FILTER_NAME: &str = "unnecessary_math";
-pub const MEANINGLESS_MATH_DIAG_CODE: u8 = 8;
-=======
-pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
-pub const CONSTANT_NAMING_DIAG_CODE: u8 = 1;
-pub const WHILE_TRUE_TO_LOOP_FILTER_NAME: &str = "while_true";
-pub const WHILE_TRUE_TO_LOOP_DIAG_CODE: u8 = 4;
-pub const MEANINGLESS_MATH_FILTER_NAME: &str = "unnecessary_math";
-pub const MEANINGLESS_MATH_DIAG_CODE: u8 = 8;
-pub const ABORT_CONSTANT_FILTER_NAME: &str = "abort_without_constant";
-pub const ABORT_CONSTANT_DIAG_CODE: u8 = 9;
->>>>>>> 3c440e0213 ([move][move-linter] implement abort constant rules)
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
-<<<<<<< HEAD
         STYLE_WARNING_FILTERS
             .iter()
             .map(|(category, code, filter_name)| {
@@ -173,55 +144,6 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
                 )
             })
             .collect(),
-||||||| parent of 3c440e0213 ([move][move-linter] implement abort constant rules)
-        vec![
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Style as u8,
-                CONSTANT_NAMING_DIAG_CODE,
-                Some(CONSTANT_NAMING_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Complexity as u8,
-                WHILE_TRUE_TO_LOOP_DIAG_CODE,
-                Some(WHILE_TRUE_TO_LOOP_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Complexity as u8,
-                MEANINGLESS_MATH_DIAG_CODE,
-                Some(MEANINGLESS_MATH_FILTER_NAME),
-            ),
-        ],
-=======
-        vec![
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Style as u8,
-                CONSTANT_NAMING_DIAG_CODE,
-                Some(CONSTANT_NAMING_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Complexity as u8,
-                WHILE_TRUE_TO_LOOP_DIAG_CODE,
-                Some(WHILE_TRUE_TO_LOOP_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Complexity as u8,
-                MEANINGLESS_MATH_DIAG_CODE,
-                Some(MEANINGLESS_MATH_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagnosticCategory::Style as u8,
-                ABORT_CONSTANT_DIAG_CODE,
-                Some(ABORT_CONSTANT_FILTER_NAME),
-            ),
-        ],
->>>>>>> 3c440e0213 ([move][move-linter] implement abort constant rules)
     )
 }
 
@@ -233,12 +155,8 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 constant_naming::ConstantNamingVisitor.visitor(),
                 unnecessary_while_loop::WhileTrueToLoop.visitor(),
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
-<<<<<<< HEAD
                 unneeded_return::UnneededReturnVisitor.visitor(),
-||||||| parent of 3c440e0213 ([move][move-linter] implement abort constant rules)
-=======
                 abort_constant::AssertAbortNamedConstants.visitor(),
->>>>>>> 3c440e0213 ([move][move-linter] implement abort constant rules)
             ]
         }
     }

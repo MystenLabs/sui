@@ -65,7 +65,7 @@ impl Context<'_> {
 
         if !is_constant {
             let mut diag = diag!(
-                StyleCodes::AbortConstant.diag_info(),
+                StyleCodes::AbortWithoutConstant.diag_info(),
                 (loc, "Prefer using a named constant.")
             );
 
