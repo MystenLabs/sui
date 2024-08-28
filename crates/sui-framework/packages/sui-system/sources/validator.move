@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_const)]
+#[allow(unused_const, deprecated_usage)]
 module sui_system::validator {
     use std::bcs;
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module sui_system::validator_tests {
     use sui::bag;
     use sui::balance;

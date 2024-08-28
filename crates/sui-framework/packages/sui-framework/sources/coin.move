@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(deprecated_usage)]
 /// Defines the `Coin` type - platform wide representation of fungible
 /// tokens and coins. `Coin` can be described as a secure wrapper around
 /// `Balance` type.

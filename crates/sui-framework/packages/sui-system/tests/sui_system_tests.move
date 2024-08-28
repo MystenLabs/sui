@@ -5,7 +5,7 @@
 // already tested by the other more themed tests such as `stake_tests` or
 // `rewards_distribution_tests`.
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module sui_system::sui_system_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui::sui::SUI;
