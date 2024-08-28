@@ -87,7 +87,7 @@ jobs:
           swap-size-gb: 256
       - name: Install Foundry
         run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup --version nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
@@ -109,7 +109,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install Foundry
         run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup --version nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
