@@ -18,6 +18,7 @@ use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
 use super::randomness::RandomnessWorkloadBuilder;
+use super::samm::SammWorkloadBuilder;
 use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
 
 pub struct WorkloadConfiguration;
@@ -41,6 +42,7 @@ impl WorkloadConfiguration {
                 batch_payment,
                 adversarial,
                 randomness,
+                samm,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
@@ -72,6 +74,7 @@ impl WorkloadConfiguration {
                         adversarial[i],
                         AdversarialPayloadCfg::from_str(&adversarial_cfg[i]).unwrap(),
                         randomness[i],
+                        samm[i],
                         batch_payment_size[i],
                         shared_counter_hotness_factor[i],
                         num_shared_counters.as_ref().map(|n| n[i]),
@@ -150,6 +153,7 @@ impl WorkloadConfiguration {
         adversarial_weight: u32,
         adversarial_cfg: AdversarialPayloadCfg,
         randomness_weight: u32,
+        samm_weight: u32,
         batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
         num_shared_counters: Option<u64>,
@@ -165,7 +169,8 @@ impl WorkloadConfiguration {
             + delegation_weight
             + batch_payment_weight
             + adversarial_weight
-            + randomness_weight;
+            + randomness_weight
+            + samm_weight;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
@@ -242,6 +247,16 @@ impl WorkloadConfiguration {
             workload_group,
         );
         workload_builders.push(randomness_workload);
+        let samm_workload = SammWorkloadBuilder::from(
+            samm_weight as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            reference_gas_price,
+            duration,
+            workload_group,
+        );
+        workload_builders.push(samm_workload);
 
         workload_builders
     }
