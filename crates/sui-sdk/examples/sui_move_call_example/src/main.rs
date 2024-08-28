@@ -5,21 +5,26 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
     rpc_types::SuiTransactionBlockResponseOptions,
     types::{
-        base_types::{ObjectID},
+        base_types::ObjectID,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         quorum_driver_types::ExecuteTransactionRequestType,
         transaction::{Argument, CallArg, Command, ProgrammableMoveCall, Transaction, TransactionData},
-        Identifier,
+        Identifier, TypeTag,
     },
 };
 use utils::setup_for_write;
 use bcs;
-use move_core_types::parser::parse_type_tag; // Import the parse_type_tag function
+use anyhow::Result;
+use std::str::FromStr;
+
+/// Helper function to parse a TypeTag from a string.
+fn parse_type_tag(tag_str: &str) -> Result<TypeTag> {
+    TypeTag::from_str(tag_str).map_err(|e| anyhow::anyhow!("Failed to parse TypeTag: {}", e))
+}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    // 1) get the Sui client, the sender and recipient that we will use
-    // for the transaction, and find the coin we use as gas
+    // 1) Get the Sui client, the sender, and the recipient that we will use for the transaction, and find the coin we use as gas
     let (sui, sender, _recipient) = setup_for_write().await?;
 
     // Find a coin to use as gas
@@ -29,12 +34,16 @@ async fn main() -> Result<(), anyhow::Error> {
     // Create a programmable transaction builder (PTB)
     let mut ptb = ProgrammableTransactionBuilder::new();
 
+    let pool_address: ObjectID = ObjectID::from_hex_literal("0x2decc59a6f05c5800e5c8a1135f9d133d1746f562bf56673e6e81ef4f7ccd3b7")?;
+    let pool_address_argument = CallArg::Object(pool_address.into());
+    ptb.input(pool_address_argument)?;
+
     // Create an Argument::Input for Pure 5 value of type u64
     let tick_from_mid = 5u64;
     let input_argument = CallArg::Pure(bcs::to_bytes(&tick_from_mid).unwrap());
     ptb.input(input_argument)?;
 
-    // Define the base_coin_type and quote_coin_type using parse_type_tag
+    // Define the base_coin_type and quote_coin_type using the helper function
     let base_coin_type = parse_type_tag("0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP")?;
     let quote_coin_type = parse_type_tag("0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI")?;
 
@@ -46,6 +55,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui_clock_object_id = ObjectID::from_hex_literal(
         "0x0000000000000000000000000000000000000000000000000000000000000006"
     )?;
+    let clock_argument = CallArg::Object(sui_clock_object_id.into());
+    ptb.input(clock_argument)?;
 
     ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
         package,
