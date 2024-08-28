@@ -199,6 +199,11 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
+
+    /// If a value is set, it determines if writes to DB can stall, which can halt the whole process.
+    /// By default, write stall is enabled on validators but not on fullnodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_db_write_stall: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
