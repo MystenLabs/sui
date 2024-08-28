@@ -88,6 +88,7 @@ pub struct ColumnFamilyMetrics {
     pub rocksdb_estimate_table_readers_mem: IntGaugeVec,
     pub rocksdb_mem_table_flush_pending: IntGaugeVec,
     pub rocksdb_compaction_pending: IntGaugeVec,
+    pub rocksdb_estimate_pending_compaction_bytes: IntGaugeVec,
     pub rocksdb_num_running_compactions: IntGaugeVec,
     pub rocksdb_num_running_flushes: IntGaugeVec,
     pub rocksdb_estimate_oldest_key_time: IntGaugeVec,
@@ -194,6 +195,14 @@ impl ColumnFamilyMetrics {
                 is pending because the desired compaction job is either waiting for
                 other dependent compactions to be finished or waiting for an available
                 compaction thread.",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_estimate_pending_compaction_bytes: register_int_gauge_vec_with_registry!(
+                "rocksdb_estimate_pending_compaction_bytes",
+                "Estimated total number of bytes compaction needs to rewrite to get all levels down
+                to under target size. Not valid for other compactions than level-based.",
                 &["cf_name"],
                 registry,
             )
