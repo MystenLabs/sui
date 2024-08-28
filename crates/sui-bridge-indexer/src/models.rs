@@ -3,8 +3,9 @@
 
 use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
+use std::str::FromStr;
 
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, TaskType};
 
 use crate::schema::{
     progress_store, sui_error_transactions, sui_progress_store, token_transfer, token_transfer_data,
@@ -19,15 +20,22 @@ pub struct ProgressStore {
     pub timestamp: Option<PgTimestamp>,
 }
 
-impl From<ProgressStore> for Task {
-    fn from(value: ProgressStore) -> Self {
-        Self {
+impl TryFrom<ProgressStore> for Task {
+    type Error = anyhow::Error;
+    fn try_from(value: ProgressStore) -> Result<Self, Self::Error> {
+        let task_name = value.task_name.split(" - ").collect::<Vec<_>>();
+        let task_type = task_name
+            .get(1)
+            .unwrap_or_else(|| panic!("Unexpected task name format : {}", value.task_name.clone()))
+            .to_string();
+        Ok(Self {
             task_name: value.task_name,
+            task_type: TaskType::from_str(&task_type)?,
             checkpoint: value.checkpoint as u64,
             target_checkpoint: value.target_checkpoint as u64,
             // Ok to unwrap, timestamp is defaulted to now() in database
             timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
-        }
+        })
     }
 }
 

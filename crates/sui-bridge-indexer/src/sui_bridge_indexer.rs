@@ -16,7 +16,7 @@ use sui_bridge::events::{
 };
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
 use sui_indexer_builder::sui_datasource::CheckpointTxnData;
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, TaskType};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
@@ -140,15 +140,17 @@ impl IndexerProgressStore for PgBridgePersistent {
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)
             .await?;
-        Ok(cp.into_iter().map(|d| d.into()).collect())
+        cp.into_iter().map(|d| d.try_into()).collect()
     }
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        indexer_name: String,
+        task_type: TaskType,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), anyhow::Error> {
+        let task_name = format!("{indexer_name} - {task_type} - {checkpoint}:{target_checkpoint}");
         let mut conn = self.pool.get().await?;
         diesel::insert_into(schema::progress_store::table)
             .values(models::ProgressStore {

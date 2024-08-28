@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
+use sui_indexer_builder::TaskConfig;
 
 /// config as loaded from `config.yaml`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -22,6 +24,8 @@ pub struct IndexerConfig {
     pub sui_rpc_url: Option<String>,
     pub back_fill_lot_size: u64,
     pub resume_from_checkpoint: Option<u64>,
+    #[serde(default)]
+    pub task_config_overrides: HashMap<String, TaskConfig>,
 }
 
 impl sui_config::Config for IndexerConfig {}

@@ -30,6 +30,7 @@ use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
 use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
+use sui_indexer_builder::TaskConfig;
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -87,20 +88,28 @@ async fn main() -> Result<()> {
     let subscription_end_block = u64::MAX;
 
     // Start the eth subscription indexer
-
     let eth_subscription_datasource = EthSubscriptionDatasource::new(
         config.eth_sui_bridge_contract_address.clone(),
         config.eth_ws_url.clone(),
         indexer_meterics.clone(),
     )?;
+
+    let eth_sub_indexer_name = "EthBridgeSubscriptionIndexer";
+    let task_config = config
+        .task_config_overrides
+        .get(eth_sub_indexer_name)
+        .cloned()
+        .unwrap_or_else(|| {
+            TaskConfig::default().with_backfill_strategy(BackfillStrategy::Disabled)
+        });
     let eth_subscription_indexer = IndexerBuilder::new(
-        "EthBridgeSubscriptionIndexer",
+        eth_sub_indexer_name,
         eth_subscription_datasource,
         EthDataMapper {
             metrics: indexer_meterics.clone(),
         },
     )
-    .with_backfill_strategy(BackfillStrategy::Disabled)
+    .with_task_config(task_config)
     .build(current_block, subscription_end_block, datastore.clone());
     let subscription_indexer_fut = spawn_logged_monitored_task!(eth_subscription_indexer.start());
 
@@ -111,15 +120,23 @@ async fn main() -> Result<()> {
         indexer_meterics.clone(),
         bridge_metrics.clone(),
     )?;
+    let eth_indexer_name = "EthBridgeSyncIndexer";
+    let task_config = config
+        .task_config_overrides
+        .get(eth_indexer_name)
+        .cloned()
+        .unwrap_or(TaskConfig {
+            disable_live_task: true,
+            backfill_strategy: BackfillStrategy::Partitioned { task_size: 1000 },
+        });
     let eth_sync_indexer = IndexerBuilder::new(
-        "EthBridgeSyncIndexer",
+        eth_indexer_name,
         eth_sync_datasource,
         EthDataMapper {
             metrics: indexer_meterics.clone(),
         },
     )
-    .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
-    .disable_live_task()
+    .with_task_config(task_config)
     .build(current_block, config.start_block, datastore.clone());
     let sync_indexer_fut = spawn_logged_monitored_task!(eth_sync_indexer.start());
 
@@ -139,13 +156,20 @@ async fn main() -> Result<()> {
             config.checkpoints_path.clone().into(),
             ingestion_metrics.clone(),
         );
+        let sui_indexer_name = "SuiBridgeIndexer";
+        let task_config = config
+            .task_config_overrides
+            .get(sui_indexer_name)
+            .cloned()
+            .unwrap_or(TaskConfig::default());
         let indexer = IndexerBuilder::new(
-            "SuiBridgeIndexer",
+            sui_indexer_name,
             sui_checkpoint_datasource,
             SuiBridgeDataMapper {
                 metrics: indexer_meterics.clone(),
             },
         )
+        .with_task_config(task_config)
         .build(
             config
                 .resume_from_checkpoint

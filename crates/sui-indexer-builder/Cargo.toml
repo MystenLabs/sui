@@ -16,3 +16,4 @@ sui-data-ingestion-core.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
+serde.workspace = true

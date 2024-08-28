@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{CustomTask, TaskConfig, TaskType};
 use std::cmp::{max, min};
 use std::sync::Arc;
 
 use anyhow::Error;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use mysten_metrics::{metered_channel, spawn_monitored_task};
@@ -16,21 +18,19 @@ type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
 
 pub struct IndexerBuilder<D, M> {
-    name: String,
+    indexer_name: String,
     datasource: D,
     data_mapper: M,
-    backfill_strategy: BackfillStrategy,
-    disable_live_task: bool,
+    task_config: TaskConfig,
 }
 
 impl<D, M> IndexerBuilder<D, M> {
     pub fn new(name: &str, datasource: D, data_mapper: M) -> IndexerBuilder<D, M> {
         IndexerBuilder {
-            name: name.into(),
+            indexer_name: name.into(),
             datasource,
             data_mapper,
-            backfill_strategy: BackfillStrategy::Simple,
-            disable_live_task: false,
+            task_config: TaskConfig::default(),
         }
     }
     pub fn build<R, P>(
@@ -43,24 +43,18 @@ impl<D, M> IndexerBuilder<D, M> {
         P: Persistent<R>,
     {
         Indexer {
-            name: self.name,
+            name: self.indexer_name,
             storage: persistent,
             datasource: self.datasource.into(),
-            backfill_strategy: self.backfill_strategy,
-            disable_live_task: self.disable_live_task,
+            task_config: self.task_config,
             start_from_checkpoint,
             data_mapper: self.data_mapper,
             genesis_checkpoint,
         }
     }
 
-    pub fn with_backfill_strategy(mut self, backfill: BackfillStrategy) -> Self {
-        self.backfill_strategy = backfill;
-        self
-    }
-
-    pub fn disable_live_task(mut self) -> Self {
-        self.disable_live_task = true;
+    pub fn with_task_config(mut self, config: TaskConfig) -> Self {
+        self.task_config = config;
         self
     }
 }
@@ -70,8 +64,7 @@ pub struct Indexer<P, D, M> {
     storage: P,
     datasource: Arc<D>,
     data_mapper: M,
-    backfill_strategy: BackfillStrategy,
-    disable_live_task: bool,
+    task_config: TaskConfig,
     start_from_checkpoint: u64,
     genesis_checkpoint: u64,
 }
@@ -92,7 +85,7 @@ impl<P, D, M> Indexer<P, D, M> {
         // Tasks are ordered in checkpoint descending order, realtime update task always come first
         // tasks won't be empty here, ok to unwrap.
         let live_task_future = match updated_tasks.live_task() {
-            Some(live_task) if !self.disable_live_task => {
+            Some(live_task) if !self.task_config.disable_live_task => {
                 let live_task_future = self.datasource.start_ingestion_task(
                     live_task.task_name.clone(),
                     live_task.checkpoint,
@@ -146,7 +139,7 @@ impl<P, D, M> Indexer<P, D, M> {
         let latest_task = backfill_tasks.first();
 
         // 1, create and update live task if needed
-        if !self.disable_live_task {
+        if !self.task_config.disable_live_task {
             let from_checkpoint = max(
                 self.start_from_checkpoint,
                 latest_task
@@ -158,7 +151,8 @@ impl<P, D, M> Indexer<P, D, M> {
                 None => {
                     self.storage
                         .register_task(
-                            format!("{} - Live", self.name),
+                            self.name.clone(),
+                            TaskType::Live,
                             from_checkpoint,
                             i64::MAX as u64,
                         )
@@ -203,31 +197,24 @@ impl<P, D, M> Indexer<P, D, M> {
     where
         P: Persistent<R>,
     {
-        match self.backfill_strategy {
+        match self.task_config.backfill_strategy {
             BackfillStrategy::Simple => {
                 self.storage
-                    .register_task(
-                        format!("{} - backfill - {from_cp}:{to_cp}", self.name),
-                        from_cp,
-                        to_cp,
-                    )
+                    .register_task(self.name.clone(), TaskType::Backfill, from_cp, to_cp)
                     .await
             }
             BackfillStrategy::Partitioned { task_size } => {
                 while from_cp < self.start_from_checkpoint {
                     let target_cp = min(from_cp + task_size - 1, to_cp);
                     self.storage
-                        .register_task(
-                            format!("{} - backfill - {from_cp}:{target_cp}", self.name),
-                            from_cp,
-                            target_cp,
-                        )
+                        .register_task(self.name.clone(), TaskType::Backfill, from_cp, target_cp)
                         .await?;
                     from_cp = target_cp + 1;
                 }
                 Ok(())
             }
             BackfillStrategy::Disabled => Ok(()),
+            BackfillStrategy::Custom { .. } => Ok(()),
         }
     }
 }
@@ -250,7 +237,8 @@ pub trait IndexerProgressStore: Send {
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        indexer_name: String,
+        task_type: TaskType,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), anyhow::Error>;
@@ -312,9 +300,11 @@ pub trait Datasource<T: Send>: Sync + Send {
     ) -> Result<JoinHandle<Result<(), Error>>, Error>;
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum BackfillStrategy {
     Simple,
     Partitioned { task_size: u64 },
+    Custom { custom_tasks: Vec<CustomTask> },
     Disabled,
 }
 

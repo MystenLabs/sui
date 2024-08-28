@@ -6,7 +6,7 @@ use prometheus::Registry;
 use sui_indexer_builder::indexer_builder::{
     BackfillStrategy, IndexerBuilder, IndexerProgressStore,
 };
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, TaskConfig, TaskType};
 
 mod indexer_test_utils;
 
@@ -52,8 +52,12 @@ async fn indexer_partitioned_backfill_task_test() {
     let data = (0..=50u64).collect::<Vec<_>>();
     let datasource = TestDatasource { data: data.clone() };
     let persistent = InMemoryPersistent::new();
+
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
-        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 })
+        .with_task_config(
+            TaskConfig::default()
+                .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 }),
+        )
         .build(35, 0, persistent.clone());
     indexer.start().await.unwrap();
 
@@ -92,13 +96,17 @@ async fn indexer_partitioned_task_with_data_already_in_db_test() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
+            task_type: TaskType::Backfill,
             checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
-        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 })
+        .with_task_config(
+            TaskConfig::default()
+                .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 }),
+        )
         .build(25, 0, persistent.clone());
     indexer.start().await.unwrap();
 
@@ -128,13 +136,17 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
+            task_type: TaskType::Backfill,
             checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
-        .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 })
+        .with_task_config(
+            TaskConfig::default()
+                .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 10 }),
+        )
         .build(35, 0, persistent.clone());
     indexer.start().await.unwrap();
 
@@ -168,13 +180,14 @@ async fn resume_test() {
         "test_indexer - backfill - 30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 30".to_string(),
+            task_type: TaskType::Backfill,
             checkpoint: 10,
             target_checkpoint: 30,
             timestamp: 0,
         },
     );
     let indexer = IndexerBuilder::new("test_indexer", datasource, NoopDataMapper)
-        .with_backfill_strategy(BackfillStrategy::Simple)
+        .with_task_config(TaskConfig::default().with_backfill_strategy(BackfillStrategy::Simple))
         .build(30, 0, persistent.clone());
     indexer.start().await.unwrap();
 

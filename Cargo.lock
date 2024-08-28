@@ -13686,6 +13686,7 @@ dependencies = [
  "async-trait",
  "mysten-metrics",
  "prometheus",
+ "serde",
  "sui-data-ingestion-core",
  "sui-types",
  "telemetry-subscribers",

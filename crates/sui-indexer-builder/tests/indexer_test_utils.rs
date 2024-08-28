@@ -15,7 +15,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_indexer_builder::indexer_builder::{
     DataMapper, DataSender, Datasource, IndexerProgressStore, Persistent,
 };
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, TaskType};
 
 pub struct TestDatasource<T> {
     pub data: Vec<T>,
@@ -88,13 +88,13 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         Ok(())
     }
 
-    async fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
+    async fn tasks(&self, indexer_name: &str) -> Result<Vec<Task>, Error> {
         let mut tasks = self
             .progress_store
             .lock()
             .await
             .values()
-            .filter(|task| task.task_name.starts_with(task_prefix))
+            .filter(|task| task.task_name.starts_with(indexer_name))
             .cloned()
             .collect::<Vec<_>>();
         tasks.sort_by(|t1, t2| t2.checkpoint.cmp(&t1.checkpoint));
@@ -103,21 +103,24 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
 
     async fn register_task(
         &mut self,
-        task_name: String,
+        indexer_name: String,
+        task_type: TaskType,
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), Error> {
+        let task_name = format!("{indexer_name} - {task_type} - {checkpoint}:{target_checkpoint}");
         let existing = self.progress_store.lock().await.insert(
             task_name.clone(),
             Task {
-                task_name: task_name.clone(),
+                task_name,
+                task_type,
                 checkpoint,
                 target_checkpoint,
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
             },
         );
         if existing.is_some() {
-            return Err(anyhow!("Task {task_name} already exists"));
+            return Err(anyhow!("Task {indexer_name} already exists"));
         }
         Ok(())
     }
