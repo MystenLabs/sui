@@ -81,8 +81,12 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let module_info =
-        TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
+    let module_info = TypingProgramInfo::new(
+        &compilation_env,
+        pre_compiled_lib,
+        &modules,
+        module_use_funs,
+    );
     let prog = T::Program {
         modules,
         info: Arc::new(module_info),
