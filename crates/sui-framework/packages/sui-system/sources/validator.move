@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_const, deprecated_usage)]
+#[allow(unused_const)]
 module sui_system::validator {
     use std::bcs;
 
@@ -73,6 +73,7 @@ module sui_system::validator {
     /// Max gas price a validator can set is 100K MIST.
     const MAX_VALIDATOR_GAS_PRICE: u64 = 100_000;
 
+    #[allow(deprecated_usage)]
     public struct ValidatorMetadata has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
@@ -160,6 +161,7 @@ module sui_system::validator {
         reward_amount: u64,
     }
 
+    #[allow(deprecated_usage)]
     public(package) fun new_metadata(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -203,6 +205,7 @@ module sui_system::validator {
         metadata
     }
 
+    #[allow(deprecated_usage)]
     public(package) fun new(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -429,10 +432,12 @@ module sui_system::validator {
         &self.metadata.description
     }
 
+    #[allow(deprecated_usage)]
     public fun image_url(self: &Validator): &Url {
         &self.metadata.image_url
     }
 
+    #[allow(deprecated_usage)]
     public fun project_url(self: &Validator): &Url {
         &self.metadata.project_url
     }
@@ -640,6 +645,7 @@ module sui_system::validator {
         self.metadata.description = description.to_ascii_string().to_string();
     }
 
+    #[allow(deprecated_usage)]
     /// Update image url of the validator.
     public(package) fun update_image_url(self: &mut Validator, image_url: vector<u8>) {
         assert!(
@@ -649,6 +655,7 @@ module sui_system::validator {
         self.metadata.image_url = url::new_unsafe_from_bytes(image_url);
     }
 
+    #[allow(deprecated_usage)]
     /// Update project url of the validator.
     public(package) fun update_project_url(self: &mut Validator, project_url: vector<u8>) {
         assert!(
@@ -879,7 +886,7 @@ module sui_system::validator {
     // validation in the process.
     // Note: `proof_of_possession` MUST be a valid signature using sui_address and
     // protocol_pubkey_bytes. To produce a valid PoP, run [fn test_proof_of_possession].
-    #[test_only]
+    #[test_only, allow(deprecated_usage)]
     public(package) fun new_for_testing(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
