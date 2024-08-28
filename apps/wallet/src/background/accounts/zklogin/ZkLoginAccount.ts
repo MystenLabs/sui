@@ -103,7 +103,9 @@ export class ZkLoginAccount
 	}: {
 		provider: ZkLoginProvider;
 	}): Promise<Omit<ZkLoginAccountSerialized, 'id'>> {
-		const jwt = await zkLoginAuthenticate({ provider, prompt: true });
+		const epoch = await getCurrentEpoch();
+		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
+		const jwt = await zkLoginAuthenticate({ provider, prompt: true, nonce });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
 		if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
@@ -125,6 +127,15 @@ export class ZkLoginAccount
 		};
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
+		const activeNetwork = await networkEnv.getActiveNetwork();
+		const a: CredentialData = {
+			ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
+			jwt,
+			maxEpoch,
+			randomness,
+			minEpoch: Number(epoch),
+			network: activeNetwork,
+		};
 		return {
 			type: 'zkLogin',
 			address: computeZkLoginAddress({
@@ -261,26 +272,31 @@ export class ZkLoginAccount
 		);
 	}
 
-	async #doLogin() {
-		const { provider, claims } = await this.getStoredData();
-		const { sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
-		const epoch = await getCurrentEpoch();
-		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
-		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
-		const decodedJWT = decodeJwt(jwt);
-		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
-			throw new Error("Logged in account doesn't match with saved account");
-		}
+	async #doLogin(acquiredCredentialsData?: CredentialData) {
+		let credentialsData: CredentialData;
 		const ephemeralValue = (await this.getEphemeralValue()) || {};
 		const activeNetwork = await networkEnv.getActiveNetwork();
-		const credentialsData: CredentialData = {
-			ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
-			minEpoch: Number(epoch),
-			maxEpoch,
-			network: activeNetwork,
-			randomness: randomness.toString(),
-			jwt,
-		};
+		if (!acquiredCredentialsData) {
+			const { provider, claims } = await this.getStoredData();
+			const { sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
+			const epoch = await getCurrentEpoch();
+			const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
+			const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
+			const decodedJWT = decodeJwt(jwt);
+			if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
+				throw new Error("Logged in account doesn't match with saved account");
+			}
+			credentialsData = {
+				ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
+				minEpoch: Number(epoch),
+				maxEpoch,
+				network: activeNetwork,
+				randomness: randomness.toString(),
+				jwt,
+			};
+		} else {
+			credentialsData = acquiredCredentialsData;
+		}
 		ephemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
 		await this.setEphemeralValue(ephemeralValue);
 		await this.onUnlocked();
