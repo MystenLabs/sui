@@ -33,8 +33,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Define the pool address, baseCoin type, and quoteCoin type
     let pool_address = ObjectID::from_hex_literal("0x2decc59a6f05c5800e5c8a1135f9d133d1746f562bf56673e6e81ef4f7ccd3b7")?;
     let pool_object: SuiObjectResponse = sui.read_api().get_object_with_options(pool_address, SuiObjectDataOptions::full_content()).await?;
-    let pool_object_ref = pool_object.object() // Accessing the object reference directly
-        .ok_or_else(|| anyhow!("Failed to get pool object reference"))?;
+    let pool_object_ref = pool_object.object()?;
     let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref.reference().clone()));
     ptb.input(pool_input)?;
 
@@ -48,8 +47,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "0x0000000000000000000000000000000000000000000000000000000000000006"
     )?;
     let sui_clock_object: SuiObjectResponse = sui.read_api().get_object_with_options(sui_clock_object_id, SuiObjectDataOptions::full_content()).await?;
-    let sui_clock_object_ref = sui_clock_object.object()
-        .ok_or_else(|| anyhow!("Failed to get clock object reference"))?;
+    let sui_clock_object_ref = sui_clock_object.object()?;
     let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref.reference().clone()));
     ptb.input(clock_input)?;
 
