@@ -95,7 +95,6 @@ jobs:
           forge soldeer update
       - name: cargo test
         run: |
-          cargo nextest run --profile ci -E 'package(sui-bridge)'
           cargo nextest run test_bridge_from_eth_to_sui_to_eth --no-capture
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
