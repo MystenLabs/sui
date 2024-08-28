@@ -49,11 +49,8 @@ impl CFGIRVisitorContext for Context<'_> {
     }
 
     fn visit_command_custom(&mut self, cmd: &mut H::Command) -> bool {
-        match &cmd.value {
-            H::Command_::Abort(loc, abort_exp) => {
-                self.check_named_constant(abort_exp, *loc);
-            }
-            _ => {}
+        if let H::Command_::Abort(loc, abort_exp) = &cmd.value {
+            self.check_named_constant(abort_exp, *loc);
         }
         false
     }
