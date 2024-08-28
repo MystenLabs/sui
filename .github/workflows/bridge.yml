@@ -44,7 +44,7 @@ env:
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
   # Some integration tests can produce too much INFO logs that are infeasible to be printed on failure.
-  RUST_LOG: error
+  RUST_LOG: info
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
 

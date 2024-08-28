@@ -501,6 +501,7 @@ pub mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_bridge_events_when_init() {
+
         telemetry_subscribers::init_for_testing();
         init_all_struct_tags();
         let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
