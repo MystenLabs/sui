@@ -45,7 +45,6 @@ static JSON_RPC_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
 /// AllowedPeers is a mapping of public key to AllowedPeer data
 pub type AllowedPeers = Arc<RwLock<HashMap<Ed25519PublicKey, AllowedPeer>>>;
 
-/// A AllowedPeer is the collated sui chain data we have about validators
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AllowedPeer {
     pub name: String,
@@ -188,14 +187,9 @@ impl SuiNodeProvider {
     /// get_bridge_validators will retrieve known bridge validators
     async fn get_bridge_validators(url: String) -> Result<BridgeSummary> {
         let rpc_method = "suix_getLatestBridge";
-        let observe = || {
-            let timer = JSON_RPC_DURATION
-                .with_label_values(&[rpc_method])
-                .start_timer();
-            || {
-                timer.observe_duration();
-            }
-        }();
+        let _timer = JSON_RPC_DURATION
+            .with_label_values(&[rpc_method])
+            .start_timer();
         let client = reqwest::Client::builder().build().unwrap();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
@@ -212,7 +206,6 @@ impl SuiNodeProvider {
                 JSON_RPC_STATE
                     .with_label_values(&[rpc_method, "failed_get"])
                     .inc();
-                observe();
                 "unable to perform json rpc"
             })?;
 
@@ -220,7 +213,6 @@ impl SuiNodeProvider {
             JSON_RPC_STATE
                 .with_label_values(&[rpc_method, "failed_body_extract"])
                 .inc();
-            observe();
             "unable to extract body bytes from json rpc"
         })?;
 
@@ -228,14 +220,12 @@ impl SuiNodeProvider {
         struct ResponseBody {
             result: BridgeSummary,
         }
-
-        let body: ResponseBody = match serde_json::from_slice(&raw) {
-            Ok(b) => b,
+        let summary: BridgeSummary = match serde_json::from_slice::<ResponseBody>(&raw) {
+            Ok(b) => b.result,
             Err(error) => {
                 JSON_RPC_STATE
                     .with_label_values(&[rpc_method, "failed_json_decode"])
                     .inc();
-                observe();
                 bail!(
                     "unable to decode json: {error} response from json rpc: {:?}",
                     raw
@@ -245,8 +235,7 @@ impl SuiNodeProvider {
         JSON_RPC_STATE
             .with_label_values(&[rpc_method, "success"])
             .inc();
-        observe();
-        Ok(body.result)
+        Ok(summary)
     }
 
     /// poll_peer_list will act as a refresh interval for our cache
@@ -295,7 +284,6 @@ impl SuiNodeProvider {
                             "{} sui bridge peers managed to make it on the allow list",
                             allow.len()
                         );
-                        info!("confirming the structure of our map {:?}", allow);
 
                         JSON_RPC_STATE
                             .with_label_values(&["update_bridge_peer_count", "success"])
@@ -352,8 +340,8 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
             let client = client.clone();
             async move {
                 debug!(
-                    "Extracting metrics public key for bridge node with sui address {}",
-                    cm.sui_address
+                    address =% cm.sui_address,
+                    "Extracting metrics public key for bridge node",
                 );
 
                 // Convert the Vec<u8> to a String and handle errors properly
@@ -361,8 +349,8 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                     Ok(url) => url,
                     Err(_) => {
                         error!(
-                            "Invalid UTF-8 sequence in http_rest_url for node with addr {}",
-                            cm.sui_address
+                            address =% cm.sui_address,
+                            "Invalid UTF-8 sequence in http_rest_url for bridge node ",
                         );
                         return None;
                     }
@@ -371,7 +359,7 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                 let mut bridge_url = match Url::parse(&url_str) {
                     Ok(url) => url,
                     Err(_) => {
-                        error!("Unable to parse http_rest_url: {}", url_str);
+                        error!(url_str, "Unable to parse http_rest_url");
                         return None;
                     }
                 };
@@ -381,7 +369,7 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                 let bridge_host = match bridge_url.host_str() {
                     Some(host) => host,
                     None => {
-                        error!("Hostname is missing from http_rest_url {}", url_str);
+                        error!(url_str, "Hostname is missing from http_rest_url");
                         return None;
                     }
                 };
@@ -394,7 +382,7 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                 let metrics_pub_key: String = match serde_json::from_slice(&raw) {
                     Ok(key) => key,
                     Err(error) => {
-                        error!("Failed to deserialize response: {:?}", error);
+                        error!(?error, "Failed to deserialize response");
                         return None;
                     }
                 };
@@ -402,18 +390,15 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                     Ok(pubkey_bytes) => pubkey_bytes,
                     Err(error) => {
                         error!(
-                            "unable to decode public key for bridge node {:?} error: {error}",
-                            bridge_name
+                            ?error,
+                            bridge_name, "unable to decode public key for bridge node",
                         );
                         return None;
                     }
                 };
                 match Ed25519PublicKey::from_bytes(&metrics_bytes) {
                     Ok(metrics_key) => {
-                        debug!(
-                            "adding metrics key {:?} for sui address {:?}",
-                            metrics_key, bridge_request_url
-                        );
+                        debug!(bridge_request_url, ?metrics_key, "adding metrics key");
                         Some((
                             metrics_key.clone(),
                             AllowedPeer {
@@ -424,8 +409,8 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                     }
                     Err(error) => {
                         error!(
-                            "unable to decode public key for bridge node {:?} error: {error}",
-                            bridge_request_url
+                            ?error,
+                            bridge_request_url, "unable to decode public key for bridge node",
                         );
                         None
                     }
