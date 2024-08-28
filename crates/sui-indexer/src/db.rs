@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
+use crate::indexer_schema_version::IndexerSchemaConfig;
 use crate::{run_query_async, spawn_read_only_blocking};
 use diesel::migration::{Migration, MigrationSource};
 use diesel::pg::Pg;
@@ -141,7 +142,18 @@ pub struct StoredMigration {
     pub version: String,
 }
 
-pub async fn check_db_migration_consistency(pool: ConnectionPool) -> Result<(), IndexerError> {
+fn get_migration_timestamp(full_name: &str) -> String {
+    let processed = full_name.replace("-", "");
+    let first_non_digit = processed
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(processed.len());
+    processed[..first_non_digit].to_string()
+}
+
+pub async fn check_db_migration_consistency(
+    pool: ConnectionPool,
+    indexer_schema_version: u64,
+) -> Result<(), IndexerError> {
     info!("Starting compatibility check");
     let query = "SELECT version FROM __diesel_schema_migrations ORDER BY version";
     let mut db_migrations: Vec<_> = run_query_async!(&pool, move |conn| {
@@ -153,18 +165,21 @@ pub async fn check_db_migration_consistency(pool: ConnectionPool) -> Result<(), 
     db_migrations.sort();
     info!("Migration Records from the DB: {:?}", db_migrations);
 
-    let known_migrations: Vec<_> = MIGRATIONS
+    let mut known_migrations: Vec<_> = MIGRATIONS
         .migrations()
         .unwrap()
         .into_iter()
-        .map(|m: Box<dyn Migration<Pg>>| {
-            let full_name = m.name().to_string().replace("-", "");
-            let first_non_digit = full_name
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(full_name.len());
-            full_name[..first_non_digit].to_string()
-        })
+        .map(|m: Box<dyn Migration<Pg>>| get_migration_timestamp(&m.name().to_string()))
         .collect();
+    // Based on the schema config which is derived from the schema version,
+    // we obtain the last migration record for this version, and does not
+    // include the rest of the migrations for the consistency check with the DB.
+    let schema_config = IndexerSchemaConfig::get_for_version(indexer_schema_version);
+    let last_migration_pos = known_migrations
+        .iter()
+        .position(|m| m == &get_migration_timestamp(schema_config.last_schema_migration()))
+        .expect("Last migration not found in known migrations");
+    known_migrations.truncate(last_migration_pos + 1);
     info!(
         "Migration Records from local schema: {:?}",
         known_migrations
@@ -200,7 +215,6 @@ pub mod setup_postgres {
     use crate::IndexerConfig;
     use anyhow::anyhow;
     use diesel::migration::MigrationSource;
-
     use diesel::RunQueryDsl;
     use diesel_migrations::MigrationHarness;
     use prometheus::Registry;
@@ -304,7 +318,7 @@ pub mod setup_postgres {
             info!("Reset Postgres database complete.");
         }
 
-        check_db_migration_consistency(blocking_cp.clone()).await?;
+        check_db_migration_consistency(blocking_cp.clone(), indexer_config.schema_version).await?;
 
         let indexer_metrics = IndexerMetrics::new(&registry);
         mysten_metrics::init_metrics(&registry);
@@ -328,7 +342,11 @@ pub mod setup_postgres {
             }
         });
         if indexer_config.fullnode_sync_worker {
-            let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
+            let store = PgIndexerStore::new(
+                blocking_cp,
+                indexer_metrics.clone(),
+                indexer_config.schema_version,
+            );
             return Indexer::start_writer(&indexer_config, store, indexer_metrics).await;
         } else if indexer_config.rpc_server_worker {
             return Indexer::start_reader(&indexer_config, &registry, db_url.to_string()).await;

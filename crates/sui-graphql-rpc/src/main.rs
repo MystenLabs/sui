@@ -60,6 +60,7 @@ async fn main() {
             node_rpc_url,
             prom_host,
             prom_port,
+            indexer_schema_version,
         } => {
             let connection =
                 ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
@@ -81,9 +82,14 @@ async fn main() {
 
             let cancellation_token_clone = cancellation_token.clone();
             let graphql_service_handle = tracker.spawn(async move {
-                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
-                    .await
-                    .unwrap();
+                start_graphiql_server(
+                    &server_config,
+                    &VERSION,
+                    indexer_schema_version,
+                    cancellation_token_clone,
+                )
+                .await
+                .unwrap();
             });
 
             // Wait for shutdown signal

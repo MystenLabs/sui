@@ -84,11 +84,12 @@ pub(crate) struct Server {
 impl Server {
     /// Start the GraphQL service and any background tasks it is dependent on. When a cancellation
     /// signal is received, the method waits for all tasks to complete before returning.
-    pub async fn run(mut self) -> Result<(), Error> {
+    pub async fn run(mut self, indexer_schema_version: u64) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
         // Compatibility check
-        check_db_migration_consistency(self.db_reader.inner.get_pool()).await?;
+        check_db_migration_consistency(self.db_reader.inner.get_pool(), indexer_schema_version)
+            .await?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.

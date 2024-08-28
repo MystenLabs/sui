@@ -59,6 +59,7 @@ use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
 
+use crate::indexer_schema_version::IndexerSchemaConfig;
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
@@ -134,8 +135,11 @@ pub struct PgIndexerStoreConfig {
     pub parallel_objects_chunk_size: usize,
     #[allow(unused)]
     pub epochs_to_keep: Option<u64>,
+    #[allow(unused)]
+    pub schema_config: IndexerSchemaConfig,
 }
 
+#[derive(Clone)]
 pub struct PgIndexerStore {
     blocking_cp: ConnectionPool,
     metrics: IndexerMetrics,
@@ -143,19 +147,8 @@ pub struct PgIndexerStore {
     config: PgIndexerStoreConfig,
 }
 
-impl Clone for PgIndexerStore {
-    fn clone(&self) -> PgIndexerStore {
-        Self {
-            blocking_cp: self.blocking_cp.clone(),
-            metrics: self.metrics.clone(),
-            partition_manager: self.partition_manager.clone(),
-            config: self.config.clone(),
-        }
-    }
-}
-
 impl PgIndexerStore {
-    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics, schema_version: u64) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -169,10 +162,12 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| None);
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
+        let schema_config = IndexerSchemaConfig::get_for_version(schema_version);
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
             epochs_to_keep,
+            schema_config,
         };
 
         Self {

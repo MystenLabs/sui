@@ -3,7 +3,12 @@
 
 #![allow(clippy::all)]
 
-mod pg;
+mod pg_v1;
+mod pg_v2;
+
+// Always use the latest version of the schema.
+// This forces any change to the schema to be reflected in the code.
+use pg_v2 as pg;
 
 pub use pg::chain_identifier;
 pub use pg::checkpoints;

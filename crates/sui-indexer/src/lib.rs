@@ -20,16 +20,16 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use url::Url;
 
-use sui_json_rpc::ServerType;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
-
 use crate::apis::{
     CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, MoveUtilsApi, ReadApi,
     TransactionBuilderApi, WriteApi,
 };
 use crate::indexer_reader::IndexerReader;
+use crate::indexer_schema_version::CUR_SCHEMA_VERSION;
 use errors::IndexerError;
+use sui_json_rpc::ServerType;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
 
 pub mod apis;
 pub mod db;
@@ -37,6 +37,7 @@ pub mod errors;
 pub mod handlers;
 pub mod indexer;
 pub mod indexer_reader;
+pub mod indexer_schema_version;
 pub mod metrics;
 pub mod models;
 pub mod schema;
@@ -90,6 +91,13 @@ pub struct IndexerConfig {
     pub name_service_registry_id: Option<ObjectID>,
     #[clap(long)]
     pub name_service_reverse_registry_id: Option<ObjectID>,
+    /// Schema version to use for the indexer. This must be provided to make sure
+    /// we never accidentally run the indexer with a schema version that is not
+    /// ready to release.
+    /// TODO: Allowing default value for now to avoid breaking changes. Once this change
+    /// is in prod we should make this a required field without a default value.
+    #[clap(long, default_value_t = CUR_SCHEMA_VERSION)]
+    pub schema_version: u64,
 }
 
 impl IndexerConfig {
@@ -146,6 +154,7 @@ impl Default for IndexerConfig {
             name_service_package_address: None,
             name_service_registry_id: None,
             name_service_reverse_registry_id: None,
+            schema_version: CUR_SCHEMA_VERSION,
         }
     }
 }

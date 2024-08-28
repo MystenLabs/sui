@@ -17,6 +17,7 @@ use crate::db::{new_connection_pool_with_config, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
+use crate::indexer_schema_version::NEXT_SCHEMA_VERSION;
 use crate::store::PgIndexerStore;
 use crate::{IndexerConfig, IndexerMetrics};
 
@@ -127,7 +128,11 @@ pub async fn start_test_indexer_impl(
 
     let blocking_pool =
         new_connection_pool_with_config(parsed_url.expose_secret(), Some(5), pool_config).unwrap();
-    let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
+    let store = PgIndexerStore::new(
+        blocking_pool.clone(),
+        indexer_metrics.clone(),
+        NEXT_SCHEMA_VERSION,
+    );
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {

@@ -152,7 +152,7 @@ pub struct Version {
     /// The commit sha for this release.
     pub sha: &'static str,
     /// The full version string.
-    /// Note that this extra field is used only for the uptime_metric function which requries a
+    /// Note that this extra field is used only for the uptime_metric function which requires a
     /// &'static str.
     pub full: &'static str,
 }

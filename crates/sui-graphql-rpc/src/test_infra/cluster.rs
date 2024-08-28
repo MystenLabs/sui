@@ -13,6 +13,7 @@ use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
 pub use sui_indexer::handlers::objects_snapshot_processor::SnapshotLagConfig;
+use sui_indexer::indexer_schema_version::NEXT_SCHEMA_VERSION;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
@@ -230,9 +231,14 @@ pub async fn start_graphql_server_with_fn_rpc(
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config, &Version::for_testing(), cancellation_token)
-            .await
-            .unwrap();
+        start_graphiql_server(
+            &server_config,
+            &Version::for_testing(),
+            NEXT_SCHEMA_VERSION,
+            cancellation_token,
+        )
+        .await
+        .unwrap();
     })
 }
 
