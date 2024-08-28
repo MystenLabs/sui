@@ -698,17 +698,25 @@ fn variant_completion(symbols: &Symbols, vinfo: &VariantInfo) -> Option<Completi
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let insert_text = if *is_positional {
-        format!("{vname}({field_snippet})")
+    let (insert_text, insert_text_format) = if field_names.is_empty() {
+        (format!("{vname}"), InsertTextFormat::PLAIN_TEXT)
+    } else if *is_positional {
+        (
+            format!("{vname}({field_snippet})"),
+            InsertTextFormat::SNIPPET,
+        )
     } else {
-        format!("{vname}{{{field_snippet}}}")
+        (
+            format!("{vname}{{{field_snippet}}}"),
+            InsertTextFormat::SNIPPET,
+        )
     };
 
     Some(CompletionItem {
         label,
         kind: Some(CompletionItemKind::ENUM_MEMBER),
         insert_text: Some(insert_text),
-        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        insert_text_format: Some(insert_text_format),
         ..Default::default()
     })
 }
