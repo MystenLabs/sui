@@ -6,7 +6,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::rest_index::RestIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
-use crate::verify_indexes::verify_indexes;
+use crate::verify_indexes::{fix_indexes, verify_indexes};
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
@@ -2709,6 +2709,8 @@ impl AuthorityState {
             validator_tx_finalizer,
         });
 
+        let state_clone = Arc::downgrade(&state);
+        spawn_monitored_task!(fix_indexes(state_clone));
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
         spawn_monitored_task!(execution_process(
