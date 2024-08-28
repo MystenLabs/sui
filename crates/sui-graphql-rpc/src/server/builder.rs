@@ -411,6 +411,7 @@ impl ServerBuilder {
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.service.name_service.clone();
+        let move_registry_config = config.service.move_registry.clone();
         let zklogin_config = config.service.zklogin.clone();
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
@@ -465,7 +466,8 @@ impl ServerBuilder {
             .context_data(name_service_config)
             .context_data(zklogin_config)
             .context_data(metrics.clone())
-            .context_data(config.clone());
+            .context_data(config.clone())
+            .context_data(move_registry_config.clone());
 
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
