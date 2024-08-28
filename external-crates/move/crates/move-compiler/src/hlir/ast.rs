@@ -254,7 +254,8 @@ pub struct Label(pub usize);
 pub enum Command_ {
     Assign(AssignCase, Vec<LValue>, Exp),
     Mutate(Box<Exp>, Box<Exp>),
-    Abort(Exp),
+    // Hold location of argument to abort before any inlining or value propagation
+    Abort(Loc, Exp),
     Return {
         from_user: bool,
         exp: Exp,
@@ -478,7 +479,9 @@ impl Command_ {
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
-            Abort(_) | Return { .. } | Jump { .. } | JumpIf { .. } | VariantSwitch { .. } => true,
+            Abort(_, _) | Return { .. } | Jump { .. } | JumpIf { .. } | VariantSwitch { .. } => {
+                true
+            }
         }
     }
 
@@ -492,7 +495,7 @@ impl Command_ {
             | Jump { .. }
             | JumpIf { .. }
             | VariantSwitch { .. } => false,
-            Abort(_) | Return { .. } => true,
+            Abort(_, _) | Return { .. } => true,
         }
     }
 
@@ -505,7 +508,7 @@ impl Command_ {
 
             Mutate(_, _)
             | Return { .. }
-            | Abort(_)
+            | Abort(_, _)
             | JumpIf { .. }
             | Jump { .. }
             | VariantSwitch { .. } => false,
@@ -521,7 +524,7 @@ impl Command_ {
             Mutate(_, _) | Assign(_, _, _) | IgnoreAndPop { .. } => {
                 panic!("ICE Should not be last command in block")
             }
-            Abort(_) | Return { .. } => (),
+            Abort(_, _) | Return { .. } => (),
             Jump { target, .. } => {
                 successors.insert(*target);
             }
@@ -548,7 +551,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
-            Break(_) | Continue(_) | Abort(_) | Return { .. } => true,
+            Break(_) | Continue(_) | Abort(_, _) | Return { .. } => true,
             Jump { .. } | JumpIf { .. } | VariantSwitch { .. } => {
                 panic!("ICE found jump/jump-if/variant-switch in hlir")
             }
@@ -1342,7 +1345,7 @@ impl AstDebug for Command_ {
                 w.write(" = ");
                 rhs.ast_debug(w);
             }
-            C::Abort(e) => {
+            C::Abort(_, e) => {
                 w.write("abort ");
                 e.ast_debug(w);
             }
