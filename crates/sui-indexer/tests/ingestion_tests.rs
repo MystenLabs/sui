@@ -88,21 +88,6 @@ mod ingestion_tests {
         Ok(())
     }
 
-    /// Wait for the indexer to catch up to the given epoch id.
-    async fn wait_for_epoch(pg_store: &PgIndexerStore, epoch: u64) -> Result<(), IndexerError> {
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while {
-                let cp_opt = pg_store.get_latest_epoch_id().unwrap();
-                cp_opt.is_none() || (cp_opt.unwrap() < epoch)
-            } {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-        .await
-        .expect("Timeout waiting for indexer to catchup to epoch");
-        Ok(())
-    }
-
     #[tokio::test]
     pub async fn test_transaction_table() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
