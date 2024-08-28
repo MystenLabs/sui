@@ -139,7 +139,6 @@ impl Event {
                     dsl::checkpoints.select(dsl::network_total_transactions)
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
                 })?;
-                let tx_hi = tx_hi as u64 - 1;
 
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {

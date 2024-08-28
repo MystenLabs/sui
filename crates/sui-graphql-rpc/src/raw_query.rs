@@ -7,7 +7,6 @@ use diesel::{
 };
 
 use crate::data::DieselBackend;
-use std::fmt::{Display, Write};
 
 pub(crate) type RawSqlQuery = BoxedSqlQuery<'static, DieselBackend, SqlQuery>;
 
@@ -25,8 +24,6 @@ pub(crate) type RawSqlQuery = BoxedSqlQuery<'static, DieselBackend, SqlQuery>;
 /// increases exposure to SQL injection attacks.
 #[derive(Clone)]
 pub(crate) struct RawQuery {
-    /// The `WITH` clause of the query.
-    with: Option<String>,
     /// The `SELECT` and `FROM` clauses of the query.
     select: String,
     /// The `WHERE` clause of the query.
@@ -45,7 +42,6 @@ impl RawQuery {
     /// Constructs a new `RawQuery` with the given `SELECT` clause and binds.
     pub(crate) fn new(select: impl Into<String>, binds: Vec<String>) -> Self {
         Self {
-            with: None,
             select: select.into(),
             where_: None,
             order_by: Vec::new(),
@@ -76,17 +72,6 @@ impl RawQuery {
         self
     }
 
-    // Adds a `WITH` clause to the query.
-    pub(crate) fn with<T: Display>(mut self, ctes: T) -> Self {
-        if let Some(with) = &mut self.with {
-            // SAFETY: write! to String always succeeds
-            write!(with, ", {ctes}").unwrap();
-        } else {
-            self.with = Some(ctes.to_string())
-        }
-        self
-    }
-
     /// Adds an `ORDER BY` clause to the query.
     pub(crate) fn order_by<T: ToString>(mut self, order: T) -> Self {
         self.order_by.push(order.to_string());
@@ -114,11 +99,7 @@ impl RawQuery {
     /// function is not intended to be called directly, and instead should be used through the
     /// `query!` macro.
     pub(crate) fn finish(self) -> (String, Vec<String>) {
-        let mut select = if let Some(with) = self.with {
-            "WITH ".to_owned() + &with + " " + &self.select
-        } else {
-            self.select
-        };
+        let mut select = self.select;
 
         if let Some(where_) = self.where_ {
             select.push_str(" WHERE ");
