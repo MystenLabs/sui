@@ -1,0 +1,13 @@
+[package]
+name = "sui_move_call_example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+bcs = "0.1"
+sui-sdk = { git = "https://github.com/MystenLabs/sui.git", branch = "main" }
+shared-crypto = { git = "https://github.com/MystenLabs/sui.git", branch = "main" }
+sui-config = { git = "https://github.com/MystenLabs/sui.git", branch = "main" }
+sui-keys = { git = "https://github.com/MystenLabs/sui.git", branch = "main" }
