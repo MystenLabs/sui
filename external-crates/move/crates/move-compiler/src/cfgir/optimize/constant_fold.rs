@@ -64,7 +64,7 @@ fn optimize_cmd(
             c1 || c2
         }
         C::Return { exp: e, .. }
-        | C::Abort(e)
+        | C::Abort(_, e)
         | C::JumpIf { cond: e, .. }
         | C::VariantSwitch { subject: e, .. } => optimize_exp(consts, e),
         C::IgnoreAndPop { exp: e, .. } => {

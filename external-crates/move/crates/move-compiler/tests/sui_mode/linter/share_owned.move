@@ -44,16 +44,18 @@ module a::test2 {
 }
 
 module sui::object {
+    const ZERO: u64 = 0;
     struct UID has store {
         id: address,
     }
     public fun delete(_: UID) {
-        abort 0
+        abort ZERO
     }
 }
 
 module sui::transfer {
+    const ZERO: u64 = 0;
     public fun public_share_object<T: key>(_: T) {
-        abort 0
+        abort ZERO
     }
 }

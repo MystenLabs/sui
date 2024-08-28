@@ -251,7 +251,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             exp(context, er);
             exp(context, el)
         }
-        C::Abort(e)
+        C::Abort(_, e)
         | C::IgnoreAndPop { exp: e, .. }
         | C::JumpIf { cond: e, .. }
         | C::VariantSwitch { subject: e, .. } => exp(context, e),
