@@ -3,7 +3,10 @@
 
 #![allow(clippy::all)]
 
-mod pg;
+mod pg_v1;
+mod pg_v2;
+
+use pg_v1 as pg;
 
 pub use pg::chain_identifier;
 pub use pg::checkpoints;
@@ -39,3 +42,42 @@ pub use pg::tx_senders;
 pub use pg::events_partition_0;
 pub use pg::objects_history_partition_0;
 pub use pg::transactions_partition_0;
+
+#[macro_export]
+macro_rules! for_all_tables {
+    ($action:path) => {
+        $action!(
+            chain_identifier,
+            checkpoints,
+            display,
+            epochs,
+            event_emit_module,
+            event_emit_package,
+            event_senders,
+            event_struct_instantiation,
+            event_struct_module,
+            event_struct_name,
+            event_struct_package,
+            events,
+            feature_flags,
+            objects_history,
+            objects_snapshot,
+            objects_version,
+            packages,
+            protocol_configs,
+            pruner_cp_watermark,
+            transactions,
+            tx_calls_fun,
+            tx_calls_mod,
+            tx_calls_pkg,
+            tx_changed_objects,
+            tx_digests,
+            tx_input_objects,
+            tx_kinds,
+            tx_recipients,
+            tx_senders
+        );
+    };
+}
+
+pub use for_all_tables;

@@ -21,6 +21,7 @@ diesel-derive-enum = { workspace = true, features = ["postgres"] }
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
+once_cell.workspace = true
 prometheus.workspace = true
 serde.workspace = true
 serde_json.workspace = true

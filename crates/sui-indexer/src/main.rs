@@ -5,6 +5,7 @@ use clap::Parser;
 use tracing::{info, warn};
 
 use sui_indexer::errors::IndexerError;
+use sui_indexer::indexer_schema_version::set_schema_version_at_startup;
 use sui_indexer::metrics::start_prometheus_server;
 use sui_indexer::IndexerConfig;
 
@@ -17,6 +18,8 @@ async fn main() -> Result<(), IndexerError> {
     warn!("WARNING: Sui indexer is still experimental and we expect occasional breaking changes that require backfills.");
 
     let mut indexer_config = IndexerConfig::parse();
+    set_schema_version_at_startup(indexer_config.schema_version);
+
     // TODO: remove. Temporary safeguard to migrate to `rpc_client_url` usage
     if indexer_config.rpc_client_url.contains("testnet") {
         indexer_config.remote_store_url = Some("https://checkpoints.testnet.sui.io".to_string());

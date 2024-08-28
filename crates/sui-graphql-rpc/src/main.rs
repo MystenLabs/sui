@@ -10,6 +10,7 @@ use sui_graphql_rpc::config::{
     ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
+use sui_indexer::indexer_schema_version::set_schema_version_at_startup;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -60,6 +61,7 @@ async fn main() {
             node_rpc_url,
             prom_host,
             prom_port,
+            indexer_schema_version,
         } => {
             let connection =
                 ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
@@ -69,6 +71,7 @@ async fn main() {
                 .init();
             let tracker = TaskTracker::new();
             let cancellation_token = CancellationToken::new();
+            set_schema_version_at_startup(indexer_schema_version);
 
             println!("Starting server...");
             let server_config = ServerConfig {

@@ -3,6 +3,7 @@
 
 use clap::*;
 use std::path::PathBuf;
+use sui_indexer::indexer_schema_version::MAX_SCHEMA_VERSION;
 
 #[derive(Parser)]
 #[clap(
@@ -50,5 +51,10 @@ pub enum Command {
         /// RPC url to the Node for tx execution
         #[clap(long)]
         node_rpc_url: Option<String>,
+
+        /// The schema version of the indexer DB.
+        /// TODO: Remove the default value later.
+        #[clap(long, default_value_t = MAX_SCHEMA_VERSION)]
+        indexer_schema_version: u64,
     },
 }

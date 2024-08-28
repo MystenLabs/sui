@@ -13644,6 +13644,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "ntest",
+ "once_cell",
  "prometheus",
  "rayon",
  "regex",
