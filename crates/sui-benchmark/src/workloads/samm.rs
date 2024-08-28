@@ -230,7 +230,12 @@ impl Workload<dyn Payload> for SammWorkload {
             .expect("Not enough gas to initialize samm workload");
         let owner_address = gas.1;
         info!("owner address {owner_address:?}");
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        let mut path = if let Ok(ptn_path) = std::env::var("PTN_MOVE_DIR") {
+            PathBuf::from(ptn_path)
+        } else {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        };
         path.push("src/workloads/data/samm");
         let SystemState {
             reference_gas_price,
@@ -271,7 +276,11 @@ impl Workload<dyn Payload> for SammWorkload {
             .await
             .unwrap()
             .compute_object_reference();
-        path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path = if let Ok(ptn_path) = std::env::var("PTN_MOVE_DIR") {
+            PathBuf::from(ptn_path)
+        } else {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        };
         path.push("src/workloads/data/samm/test_coins");
         let gas_budget = protocol_config.max_tx_gas();
         let transaction = TestTransactionBuilder::new(gas.1, updated_gas_ref, reference_gas_price)
