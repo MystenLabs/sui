@@ -45,7 +45,7 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
-To actually test your code, you need to add test functions. Start with adding a basic test function to the `my_module.move` file, inside the module definition:
+To actually test your code, you need to add test functions. Start with adding a basic test function to the `example.move` file, inside the module definition:
 
 {@inject: examples/move/first_package/sources/example.move#first-test}
 
@@ -63,7 +63,7 @@ After running the `test` command, however, you get a compilation error instead o
 
 ```shell
 error[E06001]: unused value without 'drop'
-   ┌─ ./sources/my_module.move:59:65
+   ┌─ ./sources/example.move:59:65
    │
  9 │       public struct Sword has key, store {
    │                     ----- To satisfy the constraint, the 'drop' ability would need to be added here
@@ -132,7 +132,7 @@ The `test_scenario` module provides a scenario that emulates a series of Sui tra
 
 An instance of the `Scenario` struct contains a per-address object pool emulating Sui object storage, with helper functions provided to manipulate objects in the pool. After the first transaction finishes, subsequent test transactions start with the `test_scenario::next_tx` function. This function takes an instance of the `Scenario` struct representing the current scenario and an address of a user as arguments.
 
-Update your `my_module.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
+Update your `example.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
 
 {@inject: examples/move/first_package/sources/example.move#fun=sword_create noComments}
 
