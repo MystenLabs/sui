@@ -77,6 +77,7 @@ impl SamplingInterval {
 pub struct ColumnFamilyMetrics {
     pub rocksdb_total_sst_files_size: IntGaugeVec,
     pub rocksdb_total_blob_files_size: IntGaugeVec,
+    pub rocksdb_current_size_active_mem_tables: IntGaugeVec,
     pub rocksdb_size_all_mem_tables: IntGaugeVec,
     pub rocksdb_num_snapshots: IntGaugeVec,
     pub rocksdb_oldest_snapshot_time: IntGaugeVec,
@@ -86,6 +87,7 @@ pub struct ColumnFamilyMetrics {
     pub rocksdb_block_cache_usage: IntGaugeVec,
     pub rocksdb_block_cache_pinned_usage: IntGaugeVec,
     pub rocksdb_estimate_table_readers_mem: IntGaugeVec,
+    pub rocksdb_num_immutable_mem_tables: IntGaugeVec,
     pub rocksdb_mem_table_flush_pending: IntGaugeVec,
     pub rocksdb_compaction_pending: IntGaugeVec,
     pub rocksdb_estimate_pending_compaction_bytes: IntGaugeVec,
@@ -94,6 +96,7 @@ pub struct ColumnFamilyMetrics {
     pub rocksdb_estimate_oldest_key_time: IntGaugeVec,
     pub rocksdb_background_errors: IntGaugeVec,
     pub rocksdb_estimated_num_keys: IntGaugeVec,
+    pub rocksdb_base_level: IntGaugeVec,
 }
 
 impl ColumnFamilyMetrics {
@@ -109,6 +112,13 @@ impl ColumnFamilyMetrics {
             rocksdb_total_blob_files_size: register_int_gauge_vec_with_registry!(
                 "rocksdb_total_blob_files_size",
                 "The storage size occupied by the blob files in the column family",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_current_size_active_mem_tables: register_int_gauge_vec_with_registry!(
+                "rocksdb_current_size_active_mem_tables",
+                "The current approximate size of active memtable (bytes).",
                 &["cf_name"],
                 registry,
             )
@@ -178,6 +188,13 @@ impl ColumnFamilyMetrics {
                 registry,
             )
             .unwrap(),
+            rocksdb_num_immutable_mem_tables: register_int_gauge_vec_with_registry!(
+                "rocksdb_num_immutable_mem_tables",
+                "The number of immutable memtables that have not yet been flushed.",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
             rocksdb_mem_table_flush_pending: register_int_gauge_vec_with_registry!(
                 "rocksdb_mem_table_flush_pending",
                 "A 1 or 0 flag indicating whether a memtable flush is pending.
@@ -243,7 +260,13 @@ impl ColumnFamilyMetrics {
                 registry,
             )
             .unwrap(),
-
+            rocksdb_base_level: register_int_gauge_vec_with_registry!(
+                "rocksdb_base_level",
+                "The number of level to which L0 data will be compacted.",
+                &["cf_name"],
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
