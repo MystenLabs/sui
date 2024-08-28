@@ -251,50 +251,41 @@ impl SuiNodeProvider {
 
             loop {
                 interval.tick().await;
-
-                match Self::get_validators(rpc_url.to_owned()).await {
-                    Ok(summary) => {
-                        let peers = extract(summary);
-                        // maintain the tls acceptor set
-                        let mut allow = nodes.write().unwrap();
-                        allow.clear();
-                        allow.extend(peers);
-                        info!(
-                            "{} sui peers managed to make it on the allow list",
-                            allow.len()
-                        );
-                        JSON_RPC_STATE
-                            .with_label_values(&["update_peer_count", "success"])
-                            .inc_by(allow.len() as f64);
-                    }
+                let sui_validators_summary = match Self::get_validators(rpc_url.to_owned()).await {
+                    Ok(summary) => summary,
                     Err(error) => {
                         JSON_RPC_STATE
                             .with_label_values(&["update_peer_count", "failed"])
                             .inc();
-                        error!("unable to refresh peer list: {error}")
+                        error!("unable to refresh peer list: {error}");
+                        continue;
                     }
-                }
-                match Self::get_bridge_validators(rpc_url.to_owned()).await {
-                    Ok(summary) => {
-                        let extracted = extract_bridge(summary).await;
-                        let mut allow = nodes.write().unwrap();
-                        allow.clear();
-                        allow.extend(extracted);
-                        info!(
-                            "{} sui bridge peers managed to make it on the allow list",
-                            allow.len()
-                        );
+                };
+                let bridge_validators_summary =
+                    match Self::get_bridge_validators(rpc_url.to_owned()).await {
+                        Ok(summary) => summary,
+                        Err(error) => {
+                            JSON_RPC_STATE
+                                .with_label_values(&["update_bridge_peer_count", "failed"])
+                                .inc();
+                            error!("unable to refresh sui bridge peer list: {error}");
+                            continue;
+                        }
+                    };
+                // iff both the `sui_validators` and `bridge_validators` lists are up to date, then clear and update the allow list
+                {
+                    let sui_validators = extract(sui_validators_summary);
+                    let bridge_validators = extract_bridge(bridge_validators_summary).await;
 
-                        JSON_RPC_STATE
-                            .with_label_values(&["update_bridge_peer_count", "success"])
-                            .inc_by(allow.len() as f64);
-                    }
-                    Err(error) => {
-                        JSON_RPC_STATE
-                            .with_label_values(&["update_bridge_peer_count", "failed"])
-                            .inc();
-                        error!("unable to refresh sui bridge peer list: {error}")
-                    }
+                    let mut allow = nodes.write().unwrap();
+                    allow.clear();
+                    allow.extend(sui_validators);
+                    allow.extend(bridge_validators);
+
+                    info!("{} peers managed to make it on the allow list", allow.len());
+                    JSON_RPC_STATE
+                        .with_label_values(&["update_peer_count", "success"])
+                        .inc_by(allow.len() as f64);
                 }
             }
         });
