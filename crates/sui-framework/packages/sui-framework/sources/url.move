@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[deprecated(note = b"`sui::url` module is deprecated, use `std::string` instead")]
 /// URL: standard Uniform Resource Locator string
 module sui::url {
     use std::ascii::String;
