@@ -201,7 +201,7 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        db::{get_pool_connection, new_connection_pool, reset_database},
+        db::{get_pool_connection, new_connection_pool, reset_database, ConnectionPoolConfig},
         models::objects::StoredObject,
         schema::objects,
         types::IndexedObject,
@@ -210,11 +210,9 @@ mod tests {
     #[test]
     fn test_query_cost() {
         let connection_config = ConnectionConfig::default();
-        let pool = new_connection_pool(
-            &connection_config.db_url,
-            Some(connection_config.db_pool_size),
-        )
-        .unwrap();
+        let mut pool_config = ConnectionPoolConfig::default();
+        pool_config.set_pool_size(connection_config.db_pool_size);
+        let pool = new_connection_pool(&connection_config.db_url, &pool_config).unwrap();
         let mut conn = get_pool_connection(&pool).unwrap();
         reset_database(&mut conn).unwrap();
 
