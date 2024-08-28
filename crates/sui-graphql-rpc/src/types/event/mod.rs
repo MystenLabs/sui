@@ -3,27 +3,32 @@
 
 use std::str::FromStr;
 
-use super::cursor::{self, Page, Paginated, ScanLimited, Target};
-use super::digest::Digest;
-use super::type_filter::{ModuleFilter, TypeFilter};
+use super::cursor::{Page, Target};
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
-    move_value::MoveValue, sui_address::SuiAddress,
+    move_value::MoveValue,
 };
-use crate::consistency::Checkpointed;
-use crate::data::{self, QueryExecutor};
+use crate::data::{self, DbConnection, QueryExecutor};
+use crate::query;
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use diesel::{BoolExpressionMethods, ExpressionMethods, NullableExpressionMethods, QueryDsl};
-use serde::{Deserialize, Serialize};
+use cursor::EvLookup;
+use diesel::{ExpressionMethods, QueryDsl};
+use lookups::{add_bounds, select_emit_module, select_event_type, select_sender};
 use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
-use sui_indexer::schema::{events, transactions, tx_senders};
+use sui_indexer::schema::{checkpoints, events};
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress, event::Event as NativeEvent, parse_sui_struct_tag,
 };
+
+mod cursor;
+mod filter;
+mod lookups;
+pub(crate) use cursor::Cursor;
+pub(crate) use filter::EventFilter;
 
 /// A Sui node emits one of the following events:
 /// Move event
@@ -40,55 +45,7 @@ pub(crate) struct Event {
     pub checkpoint_viewed_at: u64,
 }
 
-/// Contents of an Event's cursor.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub(crate) struct EventKey {
-    /// Transaction Sequence Number
-    tx: u64,
-
-    /// Event Sequence Number
-    e: u64,
-
-    /// The checkpoint sequence number this was viewed at.
-    #[serde(rename = "c")]
-    checkpoint_viewed_at: u64,
-}
-
-pub(crate) type Cursor = cursor::JsonCursor<EventKey>;
 type Query<ST, GB> = data::Query<ST, events::table, GB>;
-
-#[derive(InputObject, Clone, Default)]
-pub(crate) struct EventFilter {
-    pub sender: Option<SuiAddress>,
-    pub transaction_digest: Option<Digest>,
-    // Enhancement (post-MVP)
-    // after_checkpoint
-    // before_checkpoint
-    /// Events emitted by a particular module. An event is emitted by a
-    /// particular module if some function in the module is called by a
-    /// PTB and emits an event.
-    ///
-    /// Modules can be filtered by their package, or package::module.
-    pub emitting_module: Option<ModuleFilter>,
-
-    /// This field is used to specify the type of event emitted.
-    ///
-    /// Events can be filtered by their type's package, package::module,
-    /// or their fully qualified type name.
-    ///
-    /// Generic types can be queried by either the generic type name, e.g.
-    /// `0x2::coin::Coin`, or by the full type name, such as
-    /// `0x2::coin::Coin<0x2::sui::SUI>`.
-    pub event_type: Option<TypeFilter>,
-    // Enhancement (post-MVP)
-    // pub start_time
-    // pub end_time
-
-    // Enhancement (post-MVP)
-    // pub any
-    // pub all
-    // pub not
-}
 
 #[Object]
 impl Event {
@@ -158,64 +115,82 @@ impl Event {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
+        // Construct tx and ev sequence number query with table-relevant filters, if they exist. The
+        // resulting query will look something like `SELECT tx_sequence_number,
+        // event_sequence_number FROM lookup_table WHERE ...`. If no filter is provided we don't
+        // need to use any lookup tables and can just query `events` table, as can be seen in the
+        // code below.
+        let query_constraint = match (filter.sender, &filter.emitting_module, &filter.event_type) {
+            (None, None, None) => None,
+            (Some(sender), None, None) => Some(select_sender(sender)),
+            (sender, None, Some(event_type)) => Some(select_event_type(event_type, sender)),
+            (sender, Some(module), None) => Some(select_emit_module(module, sender)),
+            (_, Some(_), Some(_)) => {
+                return Err(Error::Client(
+                    "Filtering by both emitting module and event type is not supported".to_string(),
+                ))
+            }
+        };
+
+        use checkpoints::dsl;
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_query::<StoredEvent, _, _, _>(conn, checkpoint_viewed_at, move || {
-                    let mut query = events::dsl::events.into_boxed();
+                let tx_hi: i64 = conn.first(move || {
+                    dsl::checkpoints.select(dsl::network_total_transactions)
+                        .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
+                })?;
 
-                    // Bound events by the provided `checkpoint_viewed_at`. From EXPLAIN
-                    // ANALYZE, using the checkpoint sequence number directly instead of
-                    // translating into a transaction sequence number bound is more efficient.
-                    query = query.filter(
-                        events::dsl::checkpoint_sequence_number.le(checkpoint_viewed_at as i64),
-                    );
+                let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
+                    if let Some(filter_query) =  query_constraint {
+                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_hi);
 
-                    // The transactions table doesn't have an index on the senders column, so use
-                    // `tx_senders`.
-                    if let Some(sender) = &filter.sender {
-                        query = query.filter(
-                            events::dsl::tx_sequence_number.eq_any(
-                                tx_senders::dsl::tx_senders
-                                    .select(tx_senders::dsl::tx_sequence_number)
-                                    .filter(tx_senders::dsl::sender.eq(sender.into_vec())),
-                            ),
-                        )
-                    }
+                        let (prev, next, results) =
+                            page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query)?;
 
-                    if let Some(digest) = &filter.transaction_digest {
-                        // Since the event filter takes in a single tx_digest, we know that
-                        // there will only be one corresponding transaction. We can use
-                        // single_value() to tell the query planner that we expect only one
-                        // instead of a range of values, which will subsequently speed up query
-                        // execution time.
-                        query = query.filter(
-                            events::dsl::tx_sequence_number.nullable().eq(
-                                transactions::dsl::transactions
-                                    .select(transactions::dsl::tx_sequence_number)
-                                    .filter(
-                                        transactions::dsl::transaction_digest.eq(digest.to_vec()),
-                                    )
-                                    .single_value(),
-                            ),
-                        )
-                    }
+                        let ev_lookups = results
+                            .into_iter()
+                            .map(|x| (x.tx, x.ev))
+                            .collect::<Vec<(i64, i64)>>();
 
-                    if let Some(module) = &filter.emitting_module {
-                        query = module.apply(query, events::dsl::package, events::dsl::module);
-                    }
+                        if ev_lookups.is_empty() {
+                            return Ok::<_, diesel::result::Error>((prev, next, vec![]));
+                        }
 
-                    if let Some(type_) = &filter.event_type {
-                        query = type_.apply(
-                            query,
-                            events::dsl::event_type,
-                            events::dsl::event_type_package,
-                            events::dsl::event_type_module,
-                            events::dsl::event_type_name,
-                        );
-                    }
+                        // Unlike a multi-get on a single column which can be serviced by a query `IN
+                        // (...)`, because events have a composite primary key, the query planner tends
+                        // to perform a sequential scan when given a list of tuples to lookup. A query
+                        // using `UNION ALL` allows us to leverage the index on the composite key.
+                        let events = conn.results(move || {
+                            // Diesel's DSL does not current support chained `UNION ALL`, so we have to turn
+                            // to `RawQuery` here.
+                            let query_string = ev_lookups.iter()
+                                .map(|&(tx, ev)| {
+                                    format!("SELECT * FROM events WHERE tx_sequence_number = {} AND event_sequence_number = {}", tx, ev)
+                                })
+                                .collect::<Vec<String>>()
+                                .join(" UNION ALL ");
 
-                    query
-                })
+                            query!(query_string).into_boxed()
+                        })?;
+                        (prev, next, events)
+                    } else {
+                        // No filter is provided so we add bounds to the basic `SELECT * FROM
+                        // events` query and call it a day.
+                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi);
+                        let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query)?;
+                        let events = events_iter.collect::<Vec<StoredEvent>>();
+                        (prev, next, events)
+                    };
+
+                // UNION ALL does not guarantee order, so we need to sort the results. Whether
+                // `first` or `last, the result set is always sorted in ascending order.
+                events.sort_by(|a, b| {
+                        a.tx_sequence_number.cmp(&b.tx_sequence_number)
+                            .then_with(|| a.event_sequence_number.cmp(&b.event_sequence_number))
+                });
+
+
+                Ok::<_, diesel::result::Error>((prev, next, events))
             })
             .await?;
 
@@ -256,16 +231,12 @@ impl Event {
             tx_sequence_number: stored_tx.tx_sequence_number,
             event_sequence_number: idx as i64,
             transaction_digest: stored_tx.transaction_digest.clone(),
-            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
             senders: vec![Some(native_event.sender.to_vec())],
             package: native_event.package_id.to_vec(),
             module: native_event.transaction_module.to_string(),
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
-            event_type_package: native_event.type_.address.to_vec(),
-            event_type_module: native_event.type_.module.to_string(),
-            event_type_name: native_event.type_.name.to_string(),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };
@@ -306,54 +277,3 @@ impl Event {
         })
     }
 }
-
-impl Paginated<Cursor> for StoredEvent {
-    type Source = events::table;
-
-    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        use events::dsl::{event_sequence_number as event, tx_sequence_number as tx};
-        query.filter(
-            tx.gt(cursor.tx as i64)
-                .or(tx.eq(cursor.tx as i64).and(event.ge(cursor.e as i64))),
-        )
-    }
-
-    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        use events::dsl::{event_sequence_number as event, tx_sequence_number as tx};
-        query.filter(
-            tx.lt(cursor.tx as i64)
-                .or(tx.eq(cursor.tx as i64).and(event.le(cursor.e as i64))),
-        )
-    }
-
-    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
-        use events::dsl;
-        if asc {
-            query
-                .order_by(dsl::tx_sequence_number.asc())
-                .then_order_by(dsl::event_sequence_number.asc())
-        } else {
-            query
-                .order_by(dsl::tx_sequence_number.desc())
-                .then_order_by(dsl::event_sequence_number.desc())
-        }
-    }
-}
-
-impl Target<Cursor> for StoredEvent {
-    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
-        Cursor::new(EventKey {
-            tx: self.tx_sequence_number as u64,
-            e: self.event_sequence_number as u64,
-            checkpoint_viewed_at,
-        })
-    }
-}
-
-impl Checkpointed for Cursor {
-    fn checkpoint_viewed_at(&self) -> u64 {
-        self.checkpoint_viewed_at
-    }
-}
-
-impl ScanLimited for Cursor {}

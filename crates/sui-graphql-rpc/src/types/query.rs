@@ -422,7 +422,9 @@ impl Query {
         .extend()
     }
 
-    /// The events that exist in the network.
+    /// Query events that are emitted in the network.
+    /// We currently do not support filtering by emitting module and event type
+    /// at the same time so if both are provided in one filter, the query will error.
     async fn events(
         &self,
         ctx: &Context<'_>,
