@@ -11,6 +11,8 @@ import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken,
  */
 const LOG_LEVEL = 'log';
 
+const DEBUGGER_TYPE = 'move-debug';
+
 /** 
  * Called when the extension is activated.
 */
@@ -20,7 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const provider = new MoveConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('move-debug', provider));
 	context.subscriptions.push(
-		vscode.debug.registerDebugAdapterDescriptorFactory('move-debug', {
+		vscode.debug.registerDebugAdapterDescriptorFactory(DEBUGGER_TYPE, {
 			createDebugAdapterDescriptor: (session: vscode.DebugSession) => {
 				return new vscode.DebugAdapterExecutable(
 					process.execPath,  // This uses the Node.js executable that runs VS Code itself
@@ -55,7 +57,7 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 				try {
 					let traceInfo = await findTraceInfo(editor);
-					config.type = 'move-debug';
+					config.type = DEBUGGER_TYPE;
 					config.name = 'Launch';
 					config.request = 'launch';
 					config.source = '${file}';
@@ -119,6 +121,8 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
 
 /**
  * Finds the root directory of the package containing the active file.
+ * TODO: once `trace-adapter` is in npm registry, we can use the implementation of this function 
+ * from `trace-adapter`.
  * 
  * @param active_file_path path to a file active in the editor.
  * @returns root directory of the package containing the active file.

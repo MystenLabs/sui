@@ -128,7 +128,7 @@ export class Runtime extends EventEmitter {
     }
 
     /**
-     * Hanles step/next adapter action.
+     * Handles step/next adapter action.
      * 
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
