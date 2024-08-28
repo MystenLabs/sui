@@ -2,33 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{str::FromStr, time::Duration};
-
-use anyhow::bail;
+use anyhow::{bail, Result};
 use futures::{future, stream::StreamExt};
-use sui_config::{
-    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME,
-};
+use reqwest::Client;
+use serde_json::json;
+use shared_crypto::intent::Intent;
+use sui_config::{sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc_types::{Coin, SuiObjectDataOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
+    rpc_types::SuiTransactionBlockResponseOptions,
+    SuiClient, SuiClientBuilder,
+    types::{
+        base_types::{ObjectID, SuiAddress},
+        crypto::SignatureScheme::ED25519,
+        digests::TransactionDigest,
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        quorum_driver_types::ExecuteTransactionRequestType,
+        transaction::{Argument, Command, Transaction, TransactionData},
+    },
 };
 use tracing::info;
-
-use reqwest::Client;
-use serde_json::json;
-use shared_crypto::intent::Intent;
-use sui_sdk::types::{
-    base_types::{ObjectID, SuiAddress},
-    crypto::SignatureScheme::ED25519,
-    digests::TransactionDigest,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    quorum_driver_types::ExecuteTransactionRequestType,
-    transaction::{Argument, Command, Transaction, TransactionData},
-};
-
-use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
 
 #[derive(serde::Deserialize)]
 struct FaucetResponse {
