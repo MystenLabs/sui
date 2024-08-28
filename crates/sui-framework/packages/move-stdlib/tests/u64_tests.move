@@ -72,6 +72,12 @@ module std::u64_tests {
     }
 
     #[test]
+    fun test_to_string() {
+        assert_eq!(0u64.to_string(), b"0".to_string());
+        assert_eq!(MAX.to_string(), b"18446744073709551615".to_string());
+    }
+
+    #[test]
     fun test_dos() {
         integer_tests::test_dos!(MAX, CASES);
     }

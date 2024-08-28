@@ -72,6 +72,12 @@ module std::u128_tests {
     }
 
     #[test]
+    fun test_to_string() {
+        assert_eq!(0u128.to_string(), b"0".to_string());
+        assert_eq!(MAX.to_string(), b"340282366920938463463374607431768211455".to_string());
+    }
+
+    #[test]
     fun test_dos() {
         integer_tests::test_dos!(MAX, CASES);
     }

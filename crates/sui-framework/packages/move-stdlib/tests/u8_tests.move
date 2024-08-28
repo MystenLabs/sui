@@ -68,6 +68,12 @@ module std::u8_tests {
     }
 
     #[test]
+    fun test_to_string() {
+        assert_eq!(0u8.to_string(), b"0".to_string());
+        assert_eq!(MAX.to_string(), b"255".to_string());
+    }
+
+    #[test]
     fun test_dos() {
         let mut sum = 0u16;
         255u8.do_eq!(|i| sum = sum + (i as u16));
