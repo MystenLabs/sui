@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, Registry,
 };
-
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 
 #[derive(Clone)]
 pub struct OracleMetrics {
@@ -78,18 +77,22 @@ impl OracleMetrics {
                 registry,
             )
             .unwrap(),
-            uploaded_values: HistogramVec::new_in_registry(
+            uploaded_values: register_histogram_vec_with_registry!(
                 "oracle_uploaded_values",
                 "Values uploaded on chain",
                 &["feed"],
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
-            downloaded_values: HistogramVec::new_in_registry(
+            )
+            .unwrap(),
+            downloaded_values: register_histogram_vec_with_registry!(
                 "oracle_downloaded_values",
                 "Values downloaded on chain",
                 &["feed"],
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             total_gas_cost: register_int_counter_with_registry!(
                 "oracle_total_gas_cost",
                 "Total number of gas used, before gas rebate",
@@ -102,11 +105,13 @@ impl OracleMetrics {
                 registry,
             )
             .unwrap(),
-            computation_gas_used: Histogram::new_in_registry(
+            computation_gas_used: register_histogram_with_registry!(
                 "oracle_computation_gas_used",
                 "computation gas used",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             total_data_points_uploaded: register_int_counter_with_registry!(
                 "oracle_total_data_points_uploaded",
                 "Total number of data points uploaded",

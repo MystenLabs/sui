@@ -327,7 +327,7 @@ impl CheckpointExecutor {
                             sequence_number = ?checkpoint.sequence_number,
                             "Received checkpoint summary from state sync"
                         );
-                        checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
+                        checkpoint.report_checkpoint_age(&self.metrics.checkpoint_contents_age, &self.metrics.checkpoint_contents_age_ms);
                     },
                     Err(RecvError::Lagged(num_skipped)) => {
                         debug!(
@@ -411,7 +411,10 @@ impl CheckpointExecutor {
         self.metrics
             .last_executed_checkpoint_timestamp_ms
             .set(checkpoint.timestamp_ms as i64);
-        checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
+        checkpoint.report_checkpoint_age(
+            &self.metrics.last_executed_checkpoint_age,
+            &self.metrics.last_executed_checkpoint_age_ms,
+        );
     }
 
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
@@ -741,7 +744,9 @@ async fn execute_checkpoint(
 
     let tx_count = execution_digests.len();
     debug!("Number of transactions in the checkpoint: {:?}", tx_count);
-    metrics.checkpoint_transaction_count.report(tx_count as u64);
+    metrics
+        .checkpoint_transaction_count
+        .observe(tx_count as f64);
 
     let checkpoint_acc = execute_transactions(
         execution_digests,
@@ -1244,8 +1249,8 @@ async fn execute_transactions(
 
     let prepare_elapsed = prepare_start.elapsed();
     metrics
-        .checkpoint_prepare_latency_us
-        .report(prepare_elapsed.as_micros() as u64);
+        .checkpoint_prepare_latency
+        .observe(prepare_elapsed.as_secs_f64());
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
         info!(
             "Checkpoint preparation for execution took {:?}",
@@ -1274,8 +1279,8 @@ async fn execute_transactions(
 
     let exec_elapsed = exec_start.elapsed();
     metrics
-        .checkpoint_exec_latency_us
-        .report(exec_elapsed.as_micros() as u64);
+        .checkpoint_exec_latency
+        .observe(exec_elapsed.as_secs_f64());
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
         info!("Checkpoint execution took {:?}", exec_elapsed);
     }
