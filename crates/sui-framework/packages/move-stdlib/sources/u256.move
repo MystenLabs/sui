@@ -5,7 +5,7 @@
 module std::u256 {
     /// Returns the bitwise not of the value.
     /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
-    public fun not(x: u256): u256 {
+    public fun bitwise_not(x: u256): u256 {
         x ^ max_value!()
     }
 

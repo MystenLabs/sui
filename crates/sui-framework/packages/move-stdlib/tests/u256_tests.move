@@ -29,8 +29,8 @@ module std::u256_tests {
     ];
 
     #[test]
-    fun test_not() {
-        integer_tests::test_not!(MAX, CASES);
+    fun test_bitwise_not() {
+        integer_tests::test_bitwise_not!(MAX, CASES);
     }
 
     #[test]
