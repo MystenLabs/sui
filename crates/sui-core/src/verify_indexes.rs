@@ -4,11 +4,13 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
+use sui_storage::indexes::CoinIndexKey;
 use sui_storage::{indexes::CoinInfo, IndexStore};
 use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
 
+use crate::authority::AuthorityState;
 use crate::{authority::authority_store_tables::LiveObject, state_accumulator::AccumulatorStore};
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
@@ -86,5 +88,56 @@ pub fn verify_indexes(store: &dyn AccumulatorStore, indexes: Arc<IndexStore>) ->
 
     info!("Finished running index verification checks");
 
+    Ok(())
+}
+
+pub async fn fix_indexes(authority_state: Arc<AuthorityState>) -> Result<()> {
+    let is_violation = |coin_index_key: &CoinIndexKey,
+                        state: &Arc<AuthorityState>|
+     -> anyhow::Result<bool> {
+        if let Some(object) = state.get_object_store().get_object(&coin_index_key.2)? {
+            if matches!(object.owner, Owner::AddressOwner(real_owner_id) | Owner::ObjectOwner(real_owner_id) if coin_index_key.0 == real_owner_id)
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    };
+
+    tracing::info!("Starting fixing coin index");
+    // populate candidate list without locking. Some entries are benign
+    let authority_state_clone = authority_state.clone();
+    let candidates = tokio::task::spawn_blocking(move || {
+        let mut batch = vec![];
+        if let Some(indexes) = &authority_state_clone.indexes {
+            for (coin_index_key, _) in indexes.tables().coin_index().unbounded_iter() {
+                if is_violation(&coin_index_key, &authority_state_clone)? {
+                    batch.push(coin_index_key);
+                }
+            }
+        }
+        Ok::<Vec<_>, anyhow::Error>(batch)
+    })
+    .await??;
+
+    if let Some(indexes) = &authority_state.indexes {
+        for chunk in candidates.chunks(100) {
+            let _locks = indexes
+                .caches
+                .locks
+                .acquire_locks(chunk.iter().map(|key| key.0))
+                .await;
+            let mut batch = vec![];
+            for key in chunk {
+                if is_violation(key, &authority_state)? {
+                    batch.push(key);
+                }
+            }
+            let mut wb = indexes.tables().coin_index().batch();
+            wb.delete_batch(indexes.tables().coin_index(), batch)?;
+            wb.write()?;
+        }
+    }
+    tracing::info!("Finished fix for the coin index");
     Ok(())
 }
