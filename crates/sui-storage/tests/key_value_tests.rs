@@ -528,8 +528,9 @@ mod simtests {
 
         let server_data = Arc::new(Mutex::new(data));
         test_server(server_data).await;
+        let metrics = KeyValueStoreMetrics::new_for_tests();
 
-        let store = HttpKVStore::new("http://10.10.10.10:8080").unwrap();
+        let store = HttpKVStore::new("http://10.10.10.10:8080", 1000, metrics.clone()).unwrap();
 
         // send one request to warm up the client (and open a connection)
         store.multi_get(&[*tx.digest()], &[], &[]).await.unwrap();
@@ -551,6 +552,16 @@ mod simtests {
         assert_eq!(
             result,
             (vec![Some(tx), None], vec![Some(fx)], vec![Some(events)])
+        );
+
+        // the tx was fetched twice, so there should be one cache hit
+        assert_eq!(
+            metrics
+                .key_value_store_num_fetches_success
+                .get_metric_with_label_values(&["http_cache", "url"])
+                .unwrap()
+                .get(),
+            1
         );
 
         let result = store.multi_get(&[random_digest], &[], &[]).await.unwrap();
