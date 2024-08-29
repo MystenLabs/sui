@@ -6,7 +6,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, reopened, synchronize]
+    # types: [opened, reopened, synchronize]
 
 jobs:
   diff:

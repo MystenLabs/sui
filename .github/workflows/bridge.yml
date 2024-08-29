@@ -8,8 +8,8 @@ on:
       - 'testnet'
       - 'mainnet'
       - 'releases/sui-*-release'
-  pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]
+  # pull_request:
+  #   types: [ opened, synchronize, reopened, ready_for_review ]
   workflow_dispatch:
     inputs:
       sui_repo_ref:
