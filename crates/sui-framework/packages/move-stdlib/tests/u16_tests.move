@@ -73,7 +73,10 @@ module std::u16_tests {
 
     #[test]
     fun test_to_string() {
-        assert_eq!(0u16.to_string(), b"0".to_string());
+        integer_tests::test_to_string!<u16>();
+        assert_eq!((MAX / 2).to_string(), b"32767".to_string());
+        assert_eq!((MAX / 2 + 1).to_string(), b"32768".to_string());
+        assert_eq!(MAX_PRED.to_string(), b"65534".to_string());
         assert_eq!(MAX.to_string(), b"65535".to_string());
     }
 

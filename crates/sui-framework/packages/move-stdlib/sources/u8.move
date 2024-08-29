@@ -3,7 +3,7 @@
 
 #[defines_primitive(u8)]
 module std::u8 {
-    use std::string::String;
+    use std::string;
 
     /// Return the larger of `x` and `y`
     public fun max(x: u8, y: u8): u8 {
@@ -59,17 +59,8 @@ module std::u8 {
         std::macros::num_sqrt!<u8, u16>(x, 8)
     }
 
-    public fun to_string(mut value: u8): String {
-        if (value == 0) {
-            return b"0".to_string()
-        };
-        let mut buffer = vector[];
-        while (value != 0) {
-            buffer.push_back(((48 + value % 10) as u8));
-            value = value / 10;
-        };
-        buffer.reverse();
-        buffer.to_string()
+    public fun to_string(x: u8): string::String {
+        std::macros::num_to_string!(x)
     }
 
     /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)

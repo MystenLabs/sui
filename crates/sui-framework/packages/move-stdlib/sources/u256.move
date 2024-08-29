@@ -3,7 +3,7 @@
 
 #[defines_primitive(u256)]
 module std::u256 {
-    use std::string::String;
+    use std::string;
 
     /// Return the larger of `x` and `y`
     public fun max(x: u256, y: u256): u256 {
@@ -30,17 +30,8 @@ module std::u256 {
         std::macros::num_pow!(base, exponent)
     }
 
-    public fun to_string(mut value: u256): String {
-        if (value == 0) {
-            return b"0".to_string()
-        };
-        let mut buffer = vector[];
-        while (value != 0) {
-            buffer.push_back(((48 + value % 10) as u8));
-            value = value / 10;
-        };
-        buffer.reverse();
-        buffer.to_string()
+    public fun to_string(x: u256): string::String {
+        std::macros::num_to_string!(x)
     }
 
     /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)

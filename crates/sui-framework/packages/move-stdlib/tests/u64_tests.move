@@ -73,7 +73,10 @@ module std::u64_tests {
 
     #[test]
     fun test_to_string() {
-        assert_eq!(0u64.to_string(), b"0".to_string());
+        integer_tests::test_to_string!<u64>();
+        assert_eq!((MAX / 2).to_string(), b"9223372036854775807".to_string());
+        assert_eq!((MAX / 2 + 1).to_string(), b"9223372036854775808".to_string());
+        assert_eq!(MAX_PRED.to_string(), b"18446744073709551614".to_string());
         assert_eq!(MAX.to_string(), b"18446744073709551615".to_string());
     }
 
