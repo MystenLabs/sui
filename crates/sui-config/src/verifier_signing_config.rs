@@ -12,6 +12,9 @@ pub const DEFAULT_MAX_PER_PKG_METER_UNITS: usize = 2_200_000;
 pub const DEFAULT_MAX_BACK_EDGES_PER_FUNCTION: usize = 10_000;
 pub const DEFAULT_MAX_BACK_EDGES_PER_MODULE: usize = 10_000;
 
+/// This holds limits that are only set and used by the verifier during signing _only_. There are
+/// additional limits in the `MeterConfig` and `VerifierConfig` that are used during both signing
+/// and execution, however those limits cannot be set here and must be protocol versioned.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct VerifierSigningConfig {
