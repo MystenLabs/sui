@@ -3,8 +3,8 @@ name: Documentation
 on:
   push:
     branches: [ main, extensions ]
-  # pull_request:
-  #   types: [opened, synchronize, reopened, ready_for_review]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 
 jobs:

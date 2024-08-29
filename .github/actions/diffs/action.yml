@@ -74,6 +74,5 @@ runs:
           - 'narwhal/**'
           - 'nre/**'
           - 'sui-execution/**'
-          - '.github/workflows/**'
         isMoveAutoFormatter:
           - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
