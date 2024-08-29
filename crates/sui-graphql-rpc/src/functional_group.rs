@@ -101,6 +101,7 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Query", "protocolConfig"), G::SystemState),
             (("Query", "resolveSuinsAddress"), G::NameService),
             (("Query", "packageByName"), G::MoveRegistry),
+            (("Query", "typeByName"), G::MoveRegistry),
             (("Subscription", "events"), G::Subscriptions),
             (("Subscription", "transactions"), G::Subscriptions),
             (("SystemStateSummary", "safeMode"), G::SystemState),

@@ -3,4 +3,5 @@
 
 pub(crate) mod error;
 pub(crate) mod named_move_package;
+pub(crate) mod named_type;
 pub(crate) mod on_chain;
