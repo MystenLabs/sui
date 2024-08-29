@@ -2695,7 +2695,11 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
-                56 => {}
+                56 => {
+                    // Disable congestion control
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::None;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
