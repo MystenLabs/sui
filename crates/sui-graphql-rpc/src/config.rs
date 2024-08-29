@@ -1,16 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::str::FromStr;
 
 use crate::functional_group::FunctionalGroup;
 use async_graphql::*;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_graphql_config::GraphQLConfig;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+
+// Move Registry constants
+pub(crate) const MOVE_REGISTRY_MODULE: &IdentStr = ident_str!("name");
+pub(crate) const MOVE_REGISTRY_TYPE: &IdentStr = ident_str!("Name");
+// TODO(manos): Replace with actual package id on mainnet.
+const MOVE_REGISTRY_PACKAGE: &str =
+    "0x1a841abe817c38221596856bc975b3b84f2f68692191e9247e185213d3d02fd8";
+// TODO(manos): Replace with actual registry table id on mainnet.
+const MOVE_REGISTRY_TABLE_ID: &str =
+    "0x250b60446b8e7b8d9d7251600a7228dbfda84ccb4b23a56a700d833e221fae4f";
+const DEFAULT_PAGE_LIMIT: u16 = 50;
 
 /// The combination of all configurations for the GraphQL service.
 #[GraphQLConfig]
@@ -52,6 +67,7 @@ pub struct ServiceConfig {
     pub(crate) name_service: NameServiceConfig,
     pub(crate) background_tasks: BackgroundTasksConfig,
     pub(crate) zklogin: ZkLoginConfig,
+    pub(crate) move_registry: MoveRegistryConfig,
 }
 
 #[GraphQLConfig]
@@ -104,6 +120,22 @@ pub struct BackgroundTasksConfig {
     /// How often the watermark task checks the indexer database to update the checkpoint and epoch
     /// watermarks.
     pub watermark_update_ms: u64,
+}
+
+#[GraphQLConfig]
+#[derive(Clone)]
+pub(crate) struct MoveRegistryConfig {
+    pub(crate) external_api_url: Option<String>,
+    pub(crate) resolution_type: ResolutionType,
+    pub(crate) page_limit: u16,
+    pub(crate) package_address: SuiAddress,
+    pub(crate) registry_id: ObjectID,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub(crate) enum ResolutionType {
+    Internal,
+    External,
 }
 
 /// The Version of the service. `year.month` represents the major release.
@@ -360,6 +392,14 @@ impl ConnectionConfig {
     pub fn server_address(&self) -> String {
         format!("{}:{}", self.host, self.port)
     }
+
+    pub fn host(&self) -> String {
+        self.host.clone()
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 }
 
 impl ServiceConfig {
@@ -374,6 +414,29 @@ impl ServiceConfig {
                 env: ZkLoginEnv::Test,
             },
             ..Default::default()
+        }
+    }
+
+    pub fn dot_move_test_defaults(
+        external: bool,
+        endpoint: Option<String>,
+        pkg_address: Option<SuiAddress>,
+        object_id: Option<ObjectID>,
+        page_limit: Option<u16>,
+    ) -> Self {
+        Self {
+            move_registry: MoveRegistryConfig {
+                resolution_type: if external {
+                    ResolutionType::External
+                } else {
+                    ResolutionType::Internal
+                },
+                external_api_url: endpoint,
+                package_address: pkg_address.unwrap_or_default(),
+                registry_id: object_id.unwrap_or(ObjectID::random()),
+                page_limit: page_limit.unwrap_or(50),
+            },
+            ..Self::test_defaults()
         }
     }
 }
@@ -402,6 +465,24 @@ impl BackgroundTasksConfig {
     pub fn test_defaults() -> Self {
         Self {
             watermark_update_ms: 100, // Set to 100ms for testing
+        }
+    }
+}
+
+impl MoveRegistryConfig {
+    pub(crate) fn new(
+        resolution_type: ResolutionType,
+        external_api_url: Option<String>,
+        page_limit: u16,
+        package_address: SuiAddress,
+        registry_id: ObjectID,
+    ) -> Self {
+        Self {
+            resolution_type,
+            external_api_url,
+            page_limit,
+            package_address,
+            registry_id,
         }
     }
 }
@@ -501,6 +582,20 @@ impl Default for BackgroundTasksConfig {
 impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.full)
+    }
+}
+
+// TODO: Keeping the values as is, because we'll remove the default getters
+// when we refactor to use `[GraphqlConfig]` macro.
+impl Default for MoveRegistryConfig {
+    fn default() -> Self {
+        Self::new(
+            ResolutionType::Internal,
+            None,
+            DEFAULT_PAGE_LIMIT,
+            SuiAddress::from_str(MOVE_REGISTRY_PACKAGE).unwrap(),
+            ObjectID::from_str(MOVE_REGISTRY_TABLE_ID).unwrap(),
+        )
     }
 }
 
