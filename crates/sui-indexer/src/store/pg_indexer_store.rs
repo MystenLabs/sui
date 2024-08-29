@@ -26,9 +26,9 @@ use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
-use crate::models::checkpoints::StoredChainIdentifier;
 use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::checkpoints::StoredCpTx;
+use crate::models::checkpoints::{StoredChainIdentifier, StoredCheckpointV1};
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
@@ -41,12 +41,12 @@ use crate::models::objects::{
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
-    chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
-    event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
-    event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
-    objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
-    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    chain_identifier, checkpoints, checkpoints_v1, display, epochs, event_emit_module,
+    event_emit_package, event_senders, event_struct_instantiation, event_struct_module,
+    event_struct_name, event_struct_package, events, feature_flags, objects, objects_history,
+    objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
+    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -59,6 +59,7 @@ use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
 
+use crate::indexer_schema_version::get_schema_config;
 use diesel::upsert::excluded;
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
@@ -704,31 +705,37 @@ impl PgIndexerStore {
             tracing::error!("Failed to persist pruner_cp_watermark with error: {}", e);
         })?;
 
-        let stored_checkpoints = checkpoints
-            .iter()
-            .map(StoredCheckpoint::from)
-            .collect::<Vec<_>>();
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for stored_checkpoint_chunk in
-                    stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                for checkpoint_chunk in
+                    checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
+                    if get_schema_config().drop_checkpoint_max_tx_sequence_number() {
+                        let stored_checkpoint_chunk = checkpoint_chunk
+                            .iter()
+                            .map(StoredCheckpoint::from)
+                            .collect::<Vec<_>>();
+                        insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
+                    } else {
+                        let stored_checkpoint_chunk = checkpoint_chunk
+                            .iter()
+                            .map(StoredCheckpointV1::from)
+                            .collect::<Vec<_>>();
+                        insert_or_ignore_into!(checkpoints_v1::table, stored_checkpoint_chunk, conn);
+                    }
                     let time_now_ms = chrono::Utc::now().timestamp_millis();
-                    for stored_checkpoint in stored_checkpoint_chunk {
+                    for checkpoint in checkpoint_chunk {
                         self.metrics
                             .db_commit_lag_ms
-                            .set(time_now_ms - stored_checkpoint.timestamp_ms);
+                            .set(time_now_ms - checkpoint.timestamp_ms as i64);
                         self.metrics.max_committed_checkpoint_sequence_number.set(
-                            stored_checkpoint.sequence_number,
+                            checkpoint.sequence_number as i64,
                         );
                         self.metrics.committed_checkpoint_timestamp_ms.set(
-                            stored_checkpoint.timestamp_ms,
+                            checkpoint.timestamp_ms as i64,
                         );
-                    }
-                    for stored_checkpoint in stored_checkpoint_chunk {
-                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", stored_checkpoint.sequence_number, time_now_ms, stored_checkpoint.timestamp_ms);
+                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", checkpoint.sequence_number, time_now_ms, checkpoint.timestamp_ms);
                     }
                 }
                 Ok::<(), IndexerError>(())
@@ -740,7 +747,7 @@ impl PgIndexerStore {
             info!(
                 elapsed,
                 "Persisted {} checkpoints",
-                stored_checkpoints.len()
+                checkpoints.len()
             );
         })
         .tap_err(|e| {

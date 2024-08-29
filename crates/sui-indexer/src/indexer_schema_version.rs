@@ -24,8 +24,10 @@ pub fn get_schema_config() -> &'static IndexerSchemaConfig {
     CUR_SCHEMA_CONFIG.get().unwrap().as_ref().unwrap()
 }
 
-#[derive(Debug)]
-struct FeatureFlags {}
+#[derive(Debug, Default)]
+struct FeatureFlags {
+    drop_checkpoint_max_tx_sequence_number: bool,
+}
 
 #[derive(Debug)]
 pub struct IndexerSchemaConfig {
@@ -50,7 +52,7 @@ impl IndexerSchemaConfig {
         );
 
         let mut cfg = Self {
-            feature_flags: FeatureFlags {},
+            feature_flags: FeatureFlags::default(),
             last_schema_migration: "",
         };
         for cur in 1..=version {
@@ -61,10 +63,17 @@ impl IndexerSchemaConfig {
                 }
                 2 => {
                     // Add new feature flags here.
+                    cfg.last_schema_migration =
+                        "2024-08-29-021809_drop_max_tx_sequence_number_checkpoints";
+                    cfg.feature_flags.drop_checkpoint_max_tx_sequence_number = true;
                 }
                 _ => panic!("unsupported version {:?}", version),
             }
         }
         cfg
+    }
+
+    pub fn drop_checkpoint_max_tx_sequence_number(&self) -> bool {
+        self.feature_flags.drop_checkpoint_max_tx_sequence_number
     }
 }

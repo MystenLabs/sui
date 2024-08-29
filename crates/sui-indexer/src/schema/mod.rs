@@ -5,8 +5,9 @@
 
 mod pg_v1;
 mod pg_v2;
+use pg_v2 as pg;
 
-use pg_v1 as pg;
+pub use pg_v1::checkpoints as checkpoints_v1;
 
 pub use pg::chain_identifier;
 pub use pg::checkpoints;
