@@ -25,6 +25,7 @@ concurrency:
 jobs:
 
   diff:
+    name: Determine PR eligibility for ${{ github.event.pull_request.number }}
     runs-on: [ ubuntu-latest ]
     outputs:
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
@@ -37,7 +38,7 @@ jobs:
         id: diff
 
   release-notes-description-check:
-    name: release-notes-check
+    name: Release Notes Check
     needs: diff
     if: needs.diff.outputs.isReleaseNotesEligible == 'true'
     runs-on: [ ubuntu-latest ]
