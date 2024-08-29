@@ -10,7 +10,6 @@ import re
 import subprocess
 import sys
 from typing import NamedTuple
-import urllib.request
 
 RE_NUM = re.compile("[0-9_]+")
 
@@ -120,23 +119,7 @@ def git(*args):
     return subprocess.check_output(["git"] + list(args)).decode().strip()
 
 
-def extract_notes_from_rebase_commit(commit):
-    # we'll need to go one level deeper to find the PR number
-    url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
-    headers = {
-        "Accept": "application/vnd.github.v3+json",
-    }
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as response:
-        data = json.load(response)
-        if len(data) == 0:
-            return None, ""
-        pr_number = data[0]["number"]
-        pr_notes = data[0]["body"] if data[0]["body"] else ""
-        return pr_number, pr_notes
-
-
-def extract_notes(commit, seen):
+def extract_notes(commit):
     """Get release notes from a commit message.
 
     Find the 'Release notes' section in the commit message, and
@@ -150,29 +133,19 @@ def extract_notes(commit, seen):
     """
     message = git("show", "-s", "--format=%B", commit)
 
-    # Extract PR number from squashed commits
+    # Extract PR number
     match = RE_PR.match(message)
     pr = match.group(1) if match else None
-
     result = {}
 
-    notes = ""
-    if pr is None:
-        # Extract PR number from rebase commits if it's not a squashed commit
-        pr, notes = extract_notes_from_rebase_commit(commit)
-    else:
-        # Otherwise, find the release notes section from the squashed commit message
-        match = RE_HEADING.search(message)
-        if not match:
-            return pr, result
-        notes = match.group(1)
-
-    if pr in seen:
-        # a PR can be in multiple commits if it's from a rebase,
-        # so we only want to process it once
+    # Find the release notes section
+    match = RE_HEADING.search(message)
+    if not match:
         return pr, result
 
     start = 0
+    notes = match.group(1)
+
     while True:
         # Find the next possible release note
         match = RE_NOTE.search(notes, start)
@@ -232,7 +205,7 @@ def do_check(commit):
 
     """
 
-    _, notes = extract_notes(commit, set())
+    _, notes = extract_notes(commit)
     issues = []
     for impacted, note in notes.items():
         if impacted not in NOTE_ORDER:
@@ -287,10 +260,8 @@ def do_generate(from_, to):
     if not commits:
         return
 
-    seen_prs = set()
     for commit in commits.split("\n"):
-        pr, notes = extract_notes(commit, seen_prs)
-        seen_prs.add(pr)
+        pr, notes = extract_notes(commit)
         for impacted, note in notes.items():
             if note.checked:
                 results[impacted].append((pr, note.note))
