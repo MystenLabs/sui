@@ -674,6 +674,7 @@ impl PathExpander for Move2024PathExpander {
                 PN::Single(path_entry!(name, tyargs, is_macro))
                     if !is_valid_datatype_or_constant_name(&name.to_string()) =>
                 {
+                    self.ide_autocomplete_suggestion(context, loc);
                     (EN::Name(name), tyargs, is_macro)
                 }
                 _ => {
@@ -1036,6 +1037,7 @@ impl PathExpander for LegacyPathExpander {
                 make_access_result(sp(name.loc, access), tyargs, is_macro)
             }
             (Access::Term, single_entry!(name, tyargs, is_macro)) => {
+                self.ide_autocomplete_suggestion(context, loc);
                 make_access_result(sp(name.loc, EN::Name(name)), tyargs, is_macro)
             }
             (Access::Module, single_entry!(_name, _tyargs, _is_macro)) => {
