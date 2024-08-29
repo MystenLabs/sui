@@ -17,6 +17,7 @@ http.workspace = true
 multiaddr.workspace = true
 serde.workspace = true
 snap.workspace = true
+hyper-util.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-stream.workspace = true
 tonic.workspace = true

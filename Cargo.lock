@@ -7972,6 +7972,7 @@ dependencies = [
  "eyre",
  "futures",
  "http 1.1.0",
+ "hyper-util",
  "multiaddr",
  "pin-project-lite",
  "serde",
