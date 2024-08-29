@@ -1349,6 +1349,10 @@ enum Feature {
 	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
+	"""
+	Named packages service (utilizing dotmove package registry).
+	"""
+	MOVE_REGISTRY
 }
 
 
@@ -3346,6 +3350,14 @@ type Query {
 	Resolves a SuiNS `domain` name to an address, if it has been bound.
 	"""
 	resolveSuinsAddress(domain: String!): Address
+	"""
+	Fetch a package by its name (using dot move service)
+	"""
+	packageByName(name: String!): MovePackage
+	"""
+	Fetch a type that includes dot move service names in it.
+	"""
+	typeByName(name: String!): MoveType!
 	"""
 	The coin metadata associated with the given coin type.
 	"""

@@ -47,11 +47,15 @@ pub struct ExecutorCluster {
 }
 
 pub struct Cluster {
+    pub network: NetworkCluster,
+    pub graphql_server_join_handle: JoinHandle<()>,
+    pub graphql_client: SimpleClient,
+}
+
+pub struct NetworkCluster {
     pub validator_fullnode_handle: TestCluster,
     pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
-    pub graphql_server_join_handle: JoinHandle<()>,
-    pub graphql_client: SimpleClient,
     pub cancellation_token: CancellationToken,
 }
 
@@ -59,10 +63,54 @@ pub struct Cluster {
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
+    service_config: ServiceConfig,
 ) -> Cluster {
+    let network_cluster = start_network_cluster(
+        graphql_connection_config.clone(),
+        internal_data_source_rpc_port,
+    )
+    .await;
+
+    let fn_rpc_url: String = network_cluster
+        .validator_fullnode_handle
+        .rpc_url()
+        .to_string();
+
+    let graphql_server_handle = start_graphql_server_with_fn_rpc(
+        graphql_connection_config.clone(),
+        Some(fn_rpc_url),
+        Some(network_cluster.cancellation_token.clone()),
+        service_config,
+    )
+    .await;
+
+    let server_url = format!(
+        "http://{}:{}/",
+        graphql_connection_config.host, graphql_connection_config.port
+    );
+
+    // Starts graphql client
+    let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
+
+    Cluster {
+        network: network_cluster,
+        graphql_server_join_handle: graphql_server_handle,
+        graphql_client: client,
+    }
+}
+
+/// Starts a validator, fullnode, indexer (using data ingestion). Re-using GraphQL's ConnectionConfig for convenience.
+/// This does not start any GraphQL services, only the network cluster. You can start a GraphQL service
+/// calling `start_graphql_server`.
+pub async fn start_network_cluster(
+    graphql_connection_config: ConnectionConfig,
+    internal_data_source_rpc_port: Option<u16>,
+) -> NetworkCluster {
     let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
     let db_url = graphql_connection_config.db_url.clone();
     let cancellation_token = CancellationToken::new();
+
     // Starts validator+fullnode
     let val_fn =
         start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
@@ -79,30 +127,10 @@ pub async fn start_cluster(
     )
     .await;
 
-    // Starts graphql server
-    let fn_rpc_url = val_fn.rpc_url().to_string();
-    let graphql_server_handle = start_graphql_server_with_fn_rpc(
-        graphql_connection_config.clone(),
-        Some(fn_rpc_url),
-        Some(cancellation_token.clone()),
-    )
-    .await;
-
-    let server_url = format!(
-        "http://{}:{}/",
-        graphql_connection_config.host, graphql_connection_config.port
-    );
-
-    // Starts graphql client
-    let client = SimpleClient::new(server_url);
-    wait_for_graphql_server(&client).await;
-
-    Cluster {
+    NetworkCluster {
         validator_fullnode_handle: val_fn,
         indexer_store: pg_store,
         indexer_join_handle: pg_handle,
-        graphql_server_join_handle: graphql_server_handle,
-        graphql_client: client,
         cancellation_token,
     }
 }
@@ -145,6 +173,7 @@ pub async fn serve_executor(
     let graphql_server_handle = start_graphql_server(
         graphql_connection_config.clone(),
         cancellation_token.clone(),
+        ServiceConfig::test_defaults(),
     )
     .await;
 
@@ -172,20 +201,27 @@ pub async fn serve_executor(
 pub async fn start_graphql_server(
     graphql_connection_config: ConnectionConfig,
     cancellation_token: CancellationToken,
+    service_config: ServiceConfig,
 ) -> JoinHandle<()> {
-    start_graphql_server_with_fn_rpc(graphql_connection_config, None, Some(cancellation_token))
-        .await
+    start_graphql_server_with_fn_rpc(
+        graphql_connection_config,
+        None,
+        Some(cancellation_token),
+        service_config,
+    )
+    .await
 }
 
 pub async fn start_graphql_server_with_fn_rpc(
     graphql_connection_config: ConnectionConfig,
     fn_rpc_url: Option<String>,
     cancellation_token: Option<CancellationToken>,
+    service_config: ServiceConfig,
 ) -> JoinHandle<()> {
     let cancellation_token = cancellation_token.unwrap_or_default();
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
-        service: ServiceConfig::test_defaults(),
+        service: service_config,
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {
@@ -224,7 +260,7 @@ async fn start_validator_with_fullnode(
 }
 
 /// Repeatedly ping the GraphQL server for 10s, until it responds
-async fn wait_for_graphql_server(client: &SimpleClient) {
+pub async fn wait_for_graphql_server(client: &SimpleClient) {
     tokio::time::timeout(Duration::from_secs(10), async {
         while client.ping().await.is_err() {
             tokio::time::sleep(Duration::from_millis(500)).await;
@@ -236,7 +272,7 @@ async fn wait_for_graphql_server(client: &SimpleClient) {
 
 /// Ping the GraphQL server until its background task has updated the checkpoint watermark to the
 /// desired checkpoint.
-async fn wait_for_graphql_checkpoint_catchup(
+pub async fn wait_for_graphql_checkpoint_catchup(
     client: &SimpleClient,
     checkpoint: u64,
     base_timeout: Duration,
@@ -296,8 +332,15 @@ impl Cluster {
     /// Sends a cancellation signal to the graphql and indexer services and waits for them to
     /// shutdown.
     pub async fn cleanup_resources(self) {
+        self.network.cleanup_resources().await;
+        let _ = self.graphql_server_join_handle.await;
+    }
+}
+
+impl NetworkCluster {
+    pub async fn cleanup_resources(self) {
         self.cancellation_token.cancel();
-        let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
+        let _ = self.indexer_join_handle.await;
     }
 }
 
