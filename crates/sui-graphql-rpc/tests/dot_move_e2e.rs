@@ -30,6 +30,9 @@ mod tests {
     const DEMO_PKG_V3: &str = "tests/dot_move/demo_v3/";
 
     const DB_NAME: &str = "sui_graphql_rpc_e2e_tests";
+    const DEMO_TYPE: &str = "::demo::V1Type";
+    const DEMO_TYPE_V2: &str = "::demo::V2Type";
+    const DEMO_TYPE_V3: &str = "::demo::V3Type";
 
     #[derive(Clone, Debug)]
     struct UpgradeCap(ObjectID, SequenceNumber, ObjectDigest);
@@ -119,12 +122,15 @@ mod tests {
         // Same query is used across both nodes, since we're testing on top of the same data, just with a different
         // lookup approach.
         let query = format!(
-            r#"{{ valid_latest: {}, v1: {}, v2: {}, v3: {}, v4: {} }}"#,
+            r#"{{ valid_latest: {}, v1: {}, v2: {}, v3: {}, v4: {}, v1_type: {}, v2_type: {}, v3_type: {} }}"#,
             name_query(&name),
             name_query(&format!("{}{}", &name, "/v1")),
             name_query(&format!("{}{}", &name, "/v2")),
             name_query(&format!("{}{}", &name, "/v3")),
             name_query(&format!("{}{}", &name, "/v4")),
+            type_query(&format!("{}{}", &name, DEMO_TYPE)),
+            type_query(&format!("{}{}", &name, DEMO_TYPE_V2)),
+            type_query(&format!("{}{}", &name, DEMO_TYPE_V3)),
         );
 
         let internal_resolution = internal_client
@@ -176,6 +182,27 @@ mod tests {
         assert!(
             query_result["data"]["v4"].is_null(),
             "V4 should not have been found"
+        );
+
+        assert_eq!(
+            query_result["data"]["v1_type"]["layout"]["struct"]["type"]
+                .as_str()
+                .unwrap(),
+            format!("{}{}", v1, DEMO_TYPE)
+        );
+
+        assert_eq!(
+            query_result["data"]["v2_type"]["layout"]["struct"]["type"]
+                .as_str()
+                .unwrap(),
+            format!("{}{}", v2, DEMO_TYPE_V2)
+        );
+
+        assert_eq!(
+            query_result["data"]["v3_type"]["layout"]["struct"]["type"]
+                .as_str()
+                .unwrap(),
+            format!("{}{}", v3, DEMO_TYPE_V3)
         );
     }
 
@@ -455,6 +482,10 @@ mod tests {
 
     fn name_query(name: &str) -> String {
         format!(r#"packageByName(name: "{}") {{ address, version }}"#, name)
+    }
+
+    fn type_query(named_type: &str) -> String {
+        format!(r#"typeByName(name: "{}") {{ layout }}"#, named_type)
     }
 
     fn gql_default_config(db_name: &str, port: u16, prom_port: u16) -> ConnectionConfig {
