@@ -22,8 +22,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-jobs:
+env:
+  SUI_COMMIT: ${{ inputs.sui_repo_ref || github.event.pull_request.head.sha }}
 
+jobs:
   diff:
     name: Determine PR eligibility for ${{ github.event.pull_request.number }}
     runs-on: [ ubuntu-latest ]
@@ -52,4 +54,4 @@ jobs:
       - name: Validate PR's release notes
         shell: bash
         run: |
-          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check ${{ env.SUI_COMMIT }}
