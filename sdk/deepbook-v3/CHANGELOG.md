@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.4.2
+
+### Patch Changes
+
+- 339b8eb: Try catch for getOrder function
+
 ## 0.4.1
 
 ### Patch Changes
