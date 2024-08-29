@@ -84,13 +84,26 @@ mod tests {
 
         // Initialize the internal and external clients of GraphQL.
 
-        // The first cluster uses internal resolution (mimics mainnet, does not rely on external chain).
+        // The first cluster uses internal resolution (mimics our base network, does not rely on external chain).
         let internal_client = init_dot_move_gql(
             8000,
             9184,
             ServiceConfig::dot_move_test_defaults(
                 false,
                 None,
+                Some(pkg_id.into()),
+                Some(registry_id.0),
+                None,
+            ),
+        )
+        .await;
+
+        let external_client = init_dot_move_gql(
+            8001,
+            9185,
+            ServiceConfig::dot_move_test_defaults(
+                true, // external resolution
+                Some(internal_client.url()),
                 Some(pkg_id.into()),
                 Some(registry_id.0),
                 None,
@@ -138,7 +151,13 @@ mod tests {
             .await
             .unwrap();
 
+        let external_resolution = external_client
+            .execute(query.clone(), vec![])
+            .await
+            .unwrap();
+
         test_results(internal_resolution, &v1, &v2, &v3, "internal resolution");
+        test_results(external_resolution, &v1, &v2, &v3, "external resolution");
 
         network_cluster.cleanup_resources().await;
         eprintln!("Tests have finished successfully now!");

@@ -9,6 +9,7 @@ use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
+use crate::data::move_registry_data_loader::MoveRegistryDataLoader;
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
 use crate::data::{DataLoader, Db};
 use crate::extensions::directive_checker::DirectiveChecker;
@@ -467,7 +468,8 @@ impl ServerBuilder {
             .context_data(zklogin_config)
             .context_data(metrics.clone())
             .context_data(config.clone())
-            .context_data(move_registry_config.clone());
+            .context_data(move_registry_config.clone())
+            .context_data(MoveRegistryDataLoader::new(move_registry_config));
 
         if config.internal_features.feature_gate {
             builder = builder.extension(FeatureGate);
