@@ -135,11 +135,9 @@ def extract_notes(commit):
     
     # Get pull request from the head sha
     commit_url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
-    gh_token = "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"
     commit_curl_command = [
         "curl", "-s",
         "-H", "Accept: application/vnd.github.groot-preview+json",
-        "-H", f"Authorization: token {gh_token}",
         commit_url
     ]
 
@@ -154,7 +152,6 @@ def extract_notes(commit):
     pull_curl_command = [
         "curl", "-s",
         "-H", "Accept: application/vnd.github.groot-preview+json",
-        "-H", f"Authorization: token {gh_token}",
         pull_url
     ]
 
