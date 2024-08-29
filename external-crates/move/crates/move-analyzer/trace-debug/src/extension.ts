@@ -11,6 +11,9 @@ import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken,
  */
 const LOG_LEVEL = 'log';
 
+/**
+ * Describes debugger configuration name defined in package.json
+ */
 const DEBUGGER_TYPE = 'move-debug';
 
 /**
