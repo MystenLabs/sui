@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+tap.workspace = true
 tokio = { workspace = true, features = ["full"] }
 async-trait.workspace = true
 mysten-metrics.workspace = true
