@@ -18,8 +18,8 @@ module dotmove::dotmove {
     public struct AppRecord has store {
         // The Capability object used for managing the `AppRecord`.
         app_cap_id: ID,
-        // The mainnet `AppInfo` object.
-        // This is optional until a `mainnet` package is mapped to a record, making 
+        // The core `AppInfo` object.
+        // This is optional until a `mainnet` (base network) package is mapped to a record, making 
         // the record immutable.
         app_info: Option<AppInfo>,
         // This is what being resolved across networks.
