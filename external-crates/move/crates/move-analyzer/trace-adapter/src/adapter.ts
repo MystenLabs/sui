@@ -13,20 +13,29 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
 import { Runtime, RuntimeEvents } from './runtime';
 
-const LOG_LEVEL_LOG = 'log';
-const LOG_LEVEL_VERBOSE = 'verbose';
-const LOG_LEVEL_NONE = 'none';
+const enum LogLevel {
+    Log = 'log',
+    Verbose = 'verbose',
+    None = 'none'
+}
 
+/**
+ * Converts a log level string to a Logger.LogLevel.
+ *
+ * @param level log level as string
+ * @returns log level as Logger.LogLevel
+ */
 function convertLoggerLogLevel(level: string): Logger.LogLevel {
     switch (level) {
-        case LOG_LEVEL_LOG:
+        case LogLevel.Log:
             return Logger.LogLevel.Log;
-        case LOG_LEVEL_VERBOSE:
+        case LogLevel.Verbose:
             return Logger.LogLevel.Verbose;
         default:
             return Logger.LogLevel.Stop;
     }
 }
+
 /**
  * This interface describes the move-debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
@@ -129,7 +138,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments): Promise<void> {
-        logger.setup(convertLoggerLogLevel(args.logLevel ?? LOG_LEVEL_NONE), false);
+        logger.setup(convertLoggerLogLevel(args.logLevel ?? LogLevel.None), false);
         logger.log("Launching trace viewer for file: " + args.source + " and trace: " + args.traceInfo);
         try {
             await this.runtime.start(args.source, args.traceInfo, args.stopOnEntry || false);

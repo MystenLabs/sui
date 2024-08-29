@@ -24,8 +24,8 @@ interface IRuntimeStackFrame {
     name: string;
     // Path to the file containing the function.
     file: string;
-    // Current line in the file correponding to currently viewed instruction.   
-    line: number;
+    // Current line in the file correponding to currently viewed instruction.
+    line: number; // 1-based
 }
 
 /**
@@ -68,10 +68,10 @@ export class Runtime extends EventEmitter {
 
     /**
      * Start a trace viewing session and set up the initial state of the runtime.
-     * 
+     *
      * @param source  path to the Move source file whose traces are to be viewed.
      * @param traceInfo  trace selected for viewing.
-     * 
+     *
      */
     public async start(source: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
         logger.log("Starting runtime for file: " + source + " and trace: " + traceInfo);
@@ -120,7 +120,7 @@ export class Runtime extends EventEmitter {
 
     /**
      * Handles "get current stack" adapter action.
-     * 
+     *
      * @returns current frame stack.
      */
     public stack(): IRuntimeStack {
@@ -129,7 +129,7 @@ export class Runtime extends EventEmitter {
 
     /**
      * Handles step/next adapter action.
-     * 
+     *
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
      */
@@ -204,7 +204,7 @@ export class Runtime extends EventEmitter {
 
     /**
      * Handles "step out" adapter action.
-     * 
+     *
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
      */
     public stepOut(): boolean {
@@ -235,7 +235,7 @@ export class Runtime extends EventEmitter {
 
     /**
      * Creates a new runtime stack frame based on info from the `OpenFrame` trace event.
-     * 
+     *
      * @param frameID frame identifier from the trace event.
      * @param funName function name.
      * @param modInfo information about module containing the function.
@@ -274,7 +274,7 @@ export class Runtime extends EventEmitter {
 
     /**
      * Emits an event to the adapter.
-     * 
+     *
      * @param event string representing the event.
      * @param args optional arguments to be passed with the event.
      */
@@ -287,7 +287,7 @@ export class Runtime extends EventEmitter {
 
 /**
  * Finds the root directory of the package containing the active file.
- * 
+ *
  * @param active_file_path path to a file active in the editor.
  * @returns root directory of the package containing the active file.
  */
@@ -315,7 +315,7 @@ async function findPkgRoot(active_file_path: string): Promise<string | undefined
 
 /**
  * Find the package name in the manifest file.
- * 
+ *
  * @param pkgRoot root directory of the package.
  * @returns package name.
  */
@@ -328,7 +328,7 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
 
 /**
  * Creates a map from a file hash to file information for all Move source files in a directory.
- * 
+ *
  * @param directory path to the directory containing Move source files.
  * @param filesMap map to update with file information.
  */
@@ -356,7 +356,7 @@ function hashToFileMap(directory: string, filesMap: Map<string, IFileInfo>) {
 
 /**
  * Computes the SHA-256 hash of a file's contents.
- * 
+ *
  * @param fileContents contents of the file.
  */
 function fileHash(fileContents: string): Uint8Array {
