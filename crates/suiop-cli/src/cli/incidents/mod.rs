@@ -3,9 +3,10 @@
 
 mod jira;
 mod pd;
+mod slack;
 
 use anyhow::Result;
-use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use chrono::{Duration, Local};
 use clap::Parser;
 use jira::generate_follow_up_tasks;
 use pd::{fetch_incidents, print_recent_incidents, review_recent_incidents};
