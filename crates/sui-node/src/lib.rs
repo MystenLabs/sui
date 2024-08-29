@@ -1934,7 +1934,11 @@ fn build_kv_store(
     };
 
     let base_url = base_url.join(network_str)?.to_string();
-    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
+    let http_store = HttpKVStore::new_kv(
+        &base_url,
+        config.transaction_kv_store_read_config.cache_size,
+        metrics.clone(),
+    )?;
     info!("using local key-value store with fallback to http key-value store");
     Ok(Arc::new(FallbackTransactionKVStore::new_kv(
         db_store,
