@@ -270,8 +270,12 @@ export class DeepBookClient {
 			expire_timestamp: bcs.u64(),
 		});
 
-		const orderInformation = res.results![0].returnValues![0][0];
-		return Order.parse(new Uint8Array(orderInformation));
+		try {
+			const orderInformation = res.results![0].returnValues![0][0];
+			return Order.parse(new Uint8Array(orderInformation));
+		} catch (e) {
+			return null;
+		}
 	}
 
 	/**
