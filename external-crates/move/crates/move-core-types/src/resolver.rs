@@ -7,8 +7,8 @@ use crate::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
-use std::fmt::Debug;
 use std::sync::Arc;
+use std::{collections::BTreeSet, fmt::Debug};
 
 /// Traits for resolving Move modules and resources from persistent storage
 
@@ -40,6 +40,11 @@ pub trait LinkageResolver {
     ) -> Result<ModuleId, Self::Error> {
         Ok(module_id.clone())
     }
+
+    /// Return the transitive closure of all package dependencies of the current linkage context.
+    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
+        Ok(BTreeSet::new())
+    }
 }
 
 /// A persistent storage backend that can resolve modules by address + name.
@@ -55,6 +60,8 @@ pub trait ModuleResolver {
     type Error: Debug;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error>;
 }
 
 /// A persistent storage backend that can resolve resources by address + type
@@ -113,12 +120,20 @@ impl<T: ModuleResolver + ?Sized> ModuleResolver for &T {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
     }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        (**self).get_package(id)
+    }
 }
 
 impl<T: ModuleResolver + ?Sized> ModuleResolver for Arc<T> {
     type Error = T::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
+    }
+
+    fn get_package(&self, id: &AccountAddress) -> Result<Option<Vec<Vec<u8>>>, Self::Error> {
+        (**self).get_package(id)
     }
 }
 
@@ -139,5 +154,9 @@ impl<T: LinkageResolver + ?Sized> LinkageResolver for &T {
         struct_: &IdentStr,
     ) -> Result<ModuleId, Self::Error> {
         (**self).defining_module(module_id, struct_)
+    }
+
+    fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
+        (**self).all_package_dependencies()
     }
 }

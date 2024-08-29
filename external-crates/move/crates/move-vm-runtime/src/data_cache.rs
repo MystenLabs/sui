@@ -12,7 +12,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::data_store::DataStore;
-use std::collections::btree_map::BTreeMap;
+use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 pub struct AccountDataCache {
     module_map: BTreeMap<Identifier, Vec<u8>>,
@@ -127,6 +127,26 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
         }
     }
 
+    fn load_package(&self, package_id: &AccountAddress) -> VMResult<Vec<Vec<u8>>> {
+        if let Some(account_cache) = self.module_map.get(package_id) {
+            return Ok(account_cache.module_map.values().cloned().collect());
+        }
+        match self.remote.get_package(package_id) {
+            Ok(Some(bytes)) => Ok(bytes),
+            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+                .with_message(format!("Cannot find {:?} in data cache", package_id))
+                .finish(Location::Undefined)),
+            Err(err) => {
+                let msg = format!("Unexpected storage error: {:?}", err);
+                Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(msg)
+                        .finish(Location::Undefined),
+                )
+            }
+        }
+    }
+
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()> {
         let account_cache = self
             .module_map
@@ -138,5 +158,19 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
             .insert(module_id.name().to_owned(), blob);
 
         Ok(())
+    }
+
+    fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {
+        match self.remote.all_package_dependencies() {
+            Ok(addrs) => Ok(addrs),
+            Err(err) => {
+                let msg = format!("Unexpected storage error: {:?}", err);
+                Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(msg)
+                        .finish(Location::Undefined),
+                )
+            }
+        }
     }
 }

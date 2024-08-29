@@ -24,7 +24,8 @@ use move_core_types::{
 use crate::{
     loader::{
         arena::{self, ArenaPointer},
-        Loader, ModuleDefinitionResolver,
+        package_cache::VTableKey,
+        Loader, Loader, ModuleDefinitionResolver, Resolver,
     },
     native_functions::{NativeFunction, UnboxedNativeFunction},
 };
@@ -336,7 +337,18 @@ pub enum Bytecode {
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ...,
     /// return_value(k)```
-    Call(ArenaPointer<Function>),
+    KnownCall(*const Function),
+    /// Call an unknown (inter-package) function. The stack has the arguments pushed first to
+    /// last. The arguments are consumed and pushed to the locals of the function.
+    /// Return values are pushed on the stack and available to the caller.
+    ///
+    /// Stack transition:
+    ///
+    /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ..., return_value(k)```
+    ///
+    /// The VTableKey must be resolved in the current package context to resolve it to a function
+    /// that can be executed.
+    VirtualCall(VTableKey),
     CallGeneric(FunctionInstantiationIndex),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
@@ -936,7 +948,12 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::Call(a) => write!(f, "Call({})", a.to_ref().name),
+            Bytecode::KnownCall(a) => write!(f, "Call({})", arena::to_ref(*a).name),
+            Bytecode::VirtualCall(a) => write!(
+                f,
+                "Call(~{}::{}::{})",
+                a.package_key, a.module_name, a.function_name
+            ),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
             Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),

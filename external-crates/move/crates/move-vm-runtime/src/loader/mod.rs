@@ -2,10 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod arena;
-pub mod ast;
-pub mod translate;
-
 use crate::{
     loader::{
         arena::{Arena, ArenaPointer},
@@ -32,7 +28,6 @@ use move_core_types::{
     annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    metadata::Metadata,
     runtime_value as R,
     vm_status::StatusCode,
 };
@@ -232,6 +227,23 @@ impl ModuleCache {
         let link_context = data_store.link_context();
         let runtime_id = module.self_id();
 
+        let loaded_module =
+            self.load_module_no_insert(cursor, natives, data_store, storage_id, module)?;
+        self.loaded_modules
+            .insert((link_context, runtime_id), loaded_module)
+    }
+
+    fn load_module_no_insert(
+        &mut self,
+        cursor: &CacheCursor,
+        natives: &NativeFunctions,
+        data_store: &impl DataStore,
+        storage_id: ModuleId,
+        module: &CompiledModule,
+    ) -> PartialVMResult<LoadedModule> {
+        let link_context = data_store.link_context();
+        let runtime_id = module.self_id();
+
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
         for (idx, struct_def) in module.struct_defs().iter().enumerate() {
@@ -407,10 +419,7 @@ impl ModuleCache {
             }
         }
 
-        let loaded_module =
-            translate::module(cursor, natives, link_context, storage_id, module, self)?;
-        self.loaded_modules
-            .insert((link_context, runtime_id), loaded_module)
+        translate::module(cursor, natives, link_context, storage_id, module, self)
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
@@ -821,16 +830,6 @@ impl Loader {
 
     pub(crate) fn vm_config(&self) -> &VMConfig {
         &self.vm_config
-    }
-
-    /// Copies metadata out of a modules bytecode if available.
-    pub(crate) fn get_metadata(&self, module: ModuleId, key: &[u8]) -> Option<Metadata> {
-        let cache = self.module_cache.read();
-        cache
-            .compiled_modules
-            .get(&module)
-            .and_then(|module| module.metadata.iter().find(|md| md.key == key))
-            .cloned()
     }
 
     //

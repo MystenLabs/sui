@@ -34,6 +34,7 @@ hex.workspace = true
 proptest.workspace = true
 move-ir-compiler.workspace = true
 move-compiler.workspace = true
+move-vm-test-utils.workspace = true
 
 [features]
 default = []

@@ -6,6 +6,7 @@ use crate::{
     loader::{
         arena::{self, ArenaPointer},
         ast::*,
+        package_cache::{self, VTableKey},
         CacheCursor, ModuleCache,
     },
     native_functions::NativeFunctions,
@@ -22,14 +23,24 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::loaded_data::runtime_types::Type;
-use std::collections::{btree_map, BTreeMap, HashMap};
+use parking_lot::RwLock;
+use std::{
+    collections::{btree_map, BTreeMap, HashMap},
+    fmt::Debug,
+    hash::Hash,
+};
+
+use super::{
+    package_cache::{LoadedPackage, PackageCache},
+    type_cache::TypeCache,
+};
 
 struct Context<'a> {
     link_context: AccountAddress,
-    cache: &'a ModuleCache,
+    cache: &'a LoadedPackage,
     module: &'a CompiledModule,
-    function_map: HashMap<Identifier, ArenaPointer<Function>>,
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+    type_cache: &'a RwLock<TypeCache>,
 }
 
 struct DebugFlags {
@@ -38,267 +49,9 @@ struct DebugFlags {
 }
 
 const DEBUG_FLAGS: DebugFlags = DebugFlags {
-    function_list_sizes: false,
-    function_resolution: false,
+    function_list_sizes: true,
+    function_resolution: true,
 };
-
-pub fn module(
-    cursor: &CacheCursor,
-    natives: &NativeFunctions,
-    link_context: AccountAddress,
-    storage_id: ModuleId,
-    module: &CompiledModule,
-    cache: &mut ModuleCache,
-) -> Result<LoadedModule, PartialVMError> {
-    let self_id = module.self_id();
-
-    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
-    // helper to build the sparse signature vector
-    fn cache_signatures(
-        instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
-        module: &CompiledModule,
-        instantiation_idx: SignatureIndex,
-        cache: &ModuleCache,
-    ) -> Result<(), PartialVMError> {
-        if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
-            let instantiation = module
-                .signature_at(instantiation_idx)
-                .0
-                .iter()
-                .map(|ty| cache.make_type(module, ty))
-                .collect::<Result<Vec<_>, _>>()?;
-            e.insert(instantiation);
-        }
-        Ok(())
-    }
-
-    let mut type_refs = vec![];
-    let mut structs = vec![];
-    let mut struct_instantiations = vec![];
-    let mut enums = vec![];
-    let mut enum_instantiations = vec![];
-    let mut function_refs: Vec<ArenaPointer<Function>> = vec![];
-    let mut function_instantiations = vec![];
-    let mut field_handles = vec![];
-    let mut field_instantiations: Vec<FieldInstantiation> = vec![];
-
-    for datatype_handle in module.datatype_handles() {
-        let struct_name = module.identifier_at(datatype_handle.name);
-        let module_handle = module.module_handle_at(datatype_handle.module);
-        let runtime_id = module.module_id_for_handle(module_handle);
-        type_refs.push(cache.resolve_type_by_name(struct_name, &runtime_id)?.0);
-    }
-
-    for struct_def in module.struct_defs() {
-        let idx = type_refs[struct_def.struct_handle.0 as usize];
-        let field_count = cache.datatypes.binaries[idx.0].get_struct()?.fields.len() as u16;
-        structs.push(StructDef { field_count, idx });
-    }
-
-    for struct_inst in module.struct_instantiations() {
-        let def = struct_inst.def.0 as usize;
-        let struct_def = &structs[def];
-        let field_count = struct_def.field_count;
-
-        let instantiation_idx = struct_inst.type_parameters;
-        cache_signatures(
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-            cache,
-        )?;
-        struct_instantiations.push(StructInstantiation {
-            field_count,
-            def: struct_def.idx,
-            instantiation_idx,
-        });
-    }
-
-    for enum_def in module.enum_defs() {
-        let idx = type_refs[enum_def.enum_handle.0 as usize];
-        let enum_type = cache.datatypes.binaries[idx.0].get_enum()?;
-        let variant_count = enum_type.variants.len() as u16;
-        let variants = enum_type
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(tag, variant_type)| VariantDef {
-                tag: tag as u16,
-                field_count: variant_type.fields.len() as u16,
-                field_types: variant_type.fields.clone(),
-            })
-            .collect();
-        enums.push(EnumDef {
-            variant_count,
-            variants,
-            idx,
-        });
-    }
-
-    for enum_inst in module.enum_instantiations() {
-        let def = enum_inst.def.0 as usize;
-        let enum_def = &enums[def];
-        let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
-        let instantiation_idx = enum_inst.type_parameters;
-        cache_signatures(
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-            cache,
-        )?;
-
-        enum_instantiations.push(EnumInstantiation {
-            variant_count_map,
-            def: enum_def.idx,
-            instantiation_idx,
-        });
-    }
-
-    if DEBUG_FLAGS.function_list_sizes {
-        println!("pushing {} functions", module.function_defs().len());
-    }
-    let loaded_functions = cache
-        .arena
-        .alloc_slice(module.function_defs().iter().enumerate().map(|(ndx, fun)| {
-            let findex = FunctionDefinitionIndex(ndx as TableIndex);
-            alloc_function(natives, findex, fun, module)
-        }));
-
-    for fun in arena::mut_to_ref_slice(loaded_functions) {
-        cache
-            .functions
-            .push(ArenaPointer::new(fun as *const Function));
-    }
-
-    let function_map = arena::mut_to_ref_slice(loaded_functions)
-        .iter()
-        .map(|function| {
-            (
-                function.name.clone(),
-                ArenaPointer::new(function as *const Function),
-            )
-        })
-        .collect::<HashMap<_, _>>();
-
-    if DEBUG_FLAGS.function_list_sizes {
-        println!("handle size: {}", module.function_handles().len());
-    }
-
-    for func_handle in module.function_handles() {
-        let func_name = module.identifier_at(func_handle.name);
-        let module_handle = module.module_handle_at(func_handle.module);
-        let runtime_id = module.module_id_for_handle(module_handle);
-        if runtime_id == self_id {
-            // module has not been published yet, loop through the functions
-            if DEBUG_FLAGS.function_list_sizes {
-                println!("cache function size: {}", cache.functions.len());
-            }
-            for (idx, function) in cache.functions.iter().enumerate().rev() {
-                if idx < cursor.last_function {
-                    return Err(PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
-                        .with_message(format!(
-                            "Cannot find {:?}::{:?} in publishing module",
-                            runtime_id, func_name
-                        )));
-                }
-                if function.to_ref().name.as_ident_str() == func_name {
-                    if DEBUG_FLAGS.function_resolution {
-                        println!("pushing {}", function.to_ref().name.as_ident_str());
-                    }
-                    function_refs.push(*function);
-                    break;
-                }
-            }
-        } else {
-            if DEBUG_FLAGS.function_resolution {
-                println!("resolving {}", func_name);
-            }
-            function_refs.push(cache.resolve_function_by_name(
-                func_name,
-                &runtime_id,
-                link_context,
-            )?);
-        }
-    }
-
-    if DEBUG_FLAGS.function_list_sizes {
-        println!("ref size: {}", function_refs.len());
-    }
-
-    let single_signature_token_map = BTreeMap::new();
-    let mut context = Context {
-        link_context,
-        cache,
-        module,
-        function_map,
-        single_signature_token_map,
-    };
-
-    for (alloc, fun) in arena::to_mut_ref_slice(loaded_functions)
-        .iter_mut()
-        .zip(module.function_defs())
-    {
-        if let Some(code_unit) = &fun.code {
-            alloc.code = code(&mut context, &code_unit.code)?;
-        }
-    }
-
-    let Context {
-        link_context: _,
-        cache: _,
-        module,
-        function_map,
-        single_signature_token_map,
-    } = context;
-
-    for func_inst in module.function_instantiations() {
-        let handle = function_refs[func_inst.handle.0 as usize];
-
-        let instantiation_idx = func_inst.type_parameters;
-        cache_signatures(
-            &mut instantiation_signatures,
-            module,
-            instantiation_idx,
-            cache,
-        )?;
-        function_instantiations.push(FunctionInstantiation {
-            handle,
-            instantiation_idx,
-        });
-    }
-
-    for f_handle in module.field_handles() {
-        let def_idx = f_handle.owner;
-        let owner = structs[def_idx.0 as usize].idx;
-        let offset = f_handle.field as usize;
-        field_handles.push(FieldHandle { offset, owner });
-    }
-
-    for f_inst in module.field_instantiations() {
-        let fh_idx = f_inst.handle;
-        let owner = field_handles[fh_idx.0 as usize].owner;
-        let offset = field_handles[fh_idx.0 as usize].offset;
-
-        field_instantiations.push(FieldInstantiation { offset, owner });
-    }
-
-    Ok(LoadedModule {
-        id: storage_id,
-        type_refs,
-        structs,
-        struct_instantiations,
-        enums,
-        enum_instantiations,
-        function_instantiations,
-        field_handles,
-        field_instantiations,
-        function_map,
-        single_signature_token_map,
-        instantiation_signatures,
-        variant_handles: module.variant_handles().to_vec(),
-        variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
-    })
-}
 
 pub fn alloc_function(
     natives: &NativeFunctions,
@@ -353,7 +106,7 @@ pub fn alloc_function(
 }
 
 fn code(context: &mut Context, code: &[FF::Bytecode]) -> PartialVMResult<*const [Bytecode]> {
-    let result: *mut [Bytecode] = context.cache.arena.alloc_slice(
+    let result: *mut [Bytecode] = context.cache.package_arena.alloc_slice(
         code.iter()
             .map(|bc| bytecode(context, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
@@ -365,7 +118,13 @@ fn code(context: &mut Context, code: &[FF::Bytecode]) -> PartialVMResult<*const 
 fn bytecode(context: &mut Context, bytecode: &FF::Bytecode) -> PartialVMResult<Bytecode> {
     let bytecode = match bytecode {
         // Calls -- these get compiled to something more-direct here
-        FF::Bytecode::Call(ndx) => Bytecode::KnownCall(call(context, *ndx)?),
+        FF::Bytecode::Call(ndx) => {
+            let call_type = call(context, *ndx)?;
+            match call_type {
+                CallType::Known(func) => Bytecode::KnownCall(func.to_ref()),
+                CallType::Virtual(vtable) => Bytecode::VirtualCall(vtable),
+            }
+        }
 
         // For now, generic calls retain an index so we can look up their signature as well.
         FF::Bytecode::CallGeneric(ndx) => Bytecode::CallGeneric(*ndx),
@@ -500,18 +259,23 @@ fn bytecode(context: &mut Context, bytecode: &FF::Bytecode) -> PartialVMResult<B
 fn call(
     context: &mut Context,
     function_handle_index: FunctionHandleIndex,
-) -> PartialVMResult<ArenaPointer<Function>> {
+) -> PartialVMResult<CallType> {
     let func_handle = context.module.function_handle_at(function_handle_index);
     let func_name = context.module.identifier_at(func_handle.name);
     let module_handle = context.module.module_handle_at(func_handle.module);
     let runtime_id = context.module.module_id_for_handle(module_handle);
-    if runtime_id == context.module.self_id() {
-        Ok(*context.function_map.get(func_name).unwrap())
-    } else {
-        context
-            .cache
-            .resolve_function_by_name(func_name, &runtime_id, context.link_context)
+    let vtable_key = VTableKey {
+        package_key: *runtime_id.address(),
+        module_name: runtime_id.name().to_owned(),
+        function_name: func_name.to_owned(),
+    };
+    if DEBUG_FLAGS.function_resolution {
+        println!("Resolving function: {:?}", vtable_key);
     }
+    Ok(match context.cache.try_resolve_function(&vtable_key) {
+        Some(func) => CallType::Known(func),
+        None => CallType::Virtual(vtable_key),
+    })
 }
 
 fn check_vector_type(
@@ -536,8 +300,257 @@ fn check_vector_type(
         };
         context.single_signature_token_map.insert(
             *signature_index,
-            context.cache.make_type(context.module, ty)?,
+            context.type_cache.read().make_type(context.module, ty)?,
         );
     }
     Ok(())
+}
+
+pub enum CallType {
+    Known(ArenaPointer<Function>),
+    Virtual(VTableKey),
+}
+
+impl Debug for CallType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CallType::Known(fun) => write!(f, "Known({})", fun.to_ref().name),
+            CallType::Virtual(vtable) => write!(
+                f,
+                "Virtual({}::{}::{})",
+                vtable.package_key, vtable.module_name, vtable.function_name
+            ),
+        }
+    }
+}
+
+pub fn module(
+    natives: &NativeFunctions,
+    package_id: AccountAddress,
+    module: &CompiledModule,
+    package_cache: &mut LoadedPackage,
+    type_cache: &RwLock<TypeCache>,
+) -> Result<LoadedModule, PartialVMError> {
+    let self_id = module.self_id();
+    println!("Loading module: {}", self_id);
+
+    let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
+    // helper to build the sparse signature vector
+    fn cache_signatures(
+        instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+        module: &CompiledModule,
+        instantiation_idx: SignatureIndex,
+        type_cache: &RwLock<TypeCache>,
+    ) -> Result<(), PartialVMError> {
+        if let btree_map::Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
+            let instantiation = module
+                .signature_at(instantiation_idx)
+                .0
+                .iter()
+                .map(|ty| type_cache.read().make_type(module, ty))
+                .collect::<Result<Vec<_>, _>>()?;
+            e.insert(instantiation);
+        }
+        Ok(())
+    }
+
+    let mut type_refs = vec![];
+    let mut structs = vec![];
+    let mut struct_instantiations = vec![];
+    let mut enums = vec![];
+    let mut enum_instantiations = vec![];
+    let mut function_instantiations = vec![];
+    let mut field_handles = vec![];
+    let mut field_instantiations: Vec<FieldInstantiation> = vec![];
+
+    for datatype_handle in module.datatype_handles() {
+        let struct_name = module.identifier_at(datatype_handle.name);
+        let module_handle = module.module_handle_at(datatype_handle.module);
+        let runtime_id = module.module_id_for_handle(module_handle);
+        type_refs.push(
+            type_cache
+                .read()
+                .resolve_type_by_name(&(
+                    *runtime_id.address(),
+                    runtime_id.name().to_owned(),
+                    struct_name.to_owned(),
+                ))?
+                .0,
+        );
+    }
+
+    for struct_def in module.struct_defs() {
+        let idx = type_refs[struct_def.struct_handle.0 as usize];
+        let field_count = type_cache.read().cached_types.binaries[idx.0]
+            .get_struct()?
+            .fields
+            .len() as u16;
+        structs.push(StructDef { field_count, idx });
+    }
+
+    for struct_inst in module.struct_instantiations() {
+        let def = struct_inst.def.0 as usize;
+        let struct_def = &structs[def];
+        let field_count = struct_def.field_count;
+
+        let instantiation_idx = struct_inst.type_parameters;
+        cache_signatures(
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+            type_cache,
+        )?;
+        struct_instantiations.push(StructInstantiation {
+            field_count,
+            def: struct_def.idx,
+            instantiation_idx,
+        });
+    }
+
+    for enum_def in module.enum_defs() {
+        let idx = type_refs[enum_def.enum_handle.0 as usize];
+        let datatype = &type_cache.read().cached_types.binaries[idx.0];
+        let enum_type = datatype.get_enum()?;
+        let variant_count = enum_type.variants.len() as u16;
+        let variants = enum_type
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(tag, variant_type)| VariantDef {
+                tag: tag as u16,
+                field_count: variant_type.fields.len() as u16,
+                field_types: variant_type.fields.clone(),
+            })
+            .collect();
+        enums.push(EnumDef {
+            variant_count,
+            variants,
+            idx,
+        });
+    }
+
+    for enum_inst in module.enum_instantiations() {
+        let def = enum_inst.def.0 as usize;
+        let enum_def = &enums[def];
+        let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
+        let instantiation_idx = enum_inst.type_parameters;
+        cache_signatures(
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+            type_cache,
+        )?;
+
+        enum_instantiations.push(EnumInstantiation {
+            variant_count_map,
+            def: enum_def.idx,
+            instantiation_idx,
+        });
+    }
+
+    if DEBUG_FLAGS.function_list_sizes {
+        println!("pushing {} functions", module.function_defs().len());
+    }
+    let loaded_functions =
+        package_cache
+            .package_arena
+            .alloc_slice(module.function_defs().iter().enumerate().map(|(ndx, fun)| {
+                let findex = FunctionDefinitionIndex(ndx as TableIndex);
+                alloc_function(natives, findex, fun, module)
+            }));
+
+    package_cache.insert_and_make_module_vtable(
+        self_id.name().to_owned(),
+        arena::mut_to_ref_slice(loaded_functions)
+            .iter()
+            .map(|function| {
+                (
+                    function.name.clone(),
+                    ArenaPointer::new(function as *const Function),
+                )
+            }),
+    )?;
+
+    if DEBUG_FLAGS.function_list_sizes {
+        println!("handle size: {}", module.function_handles().len());
+    }
+
+    let single_signature_token_map = BTreeMap::new();
+    let mut context = Context {
+        link_context: package_id,
+        cache: package_cache,
+        module,
+        single_signature_token_map,
+        type_cache,
+    };
+
+    for (alloc, fun) in arena::to_mut_ref_slice(loaded_functions)
+        .iter_mut()
+        .zip(module.function_defs())
+    {
+        if let Some(code_unit) = &fun.code {
+            alloc.code = code(&mut context, &code_unit.code)?;
+        }
+    }
+
+    for func_inst in context.module.function_instantiations() {
+        let handle = call(&mut context, func_inst.handle)?;
+
+        let instantiation_idx = func_inst.type_parameters;
+        cache_signatures(
+            &mut instantiation_signatures,
+            module,
+            instantiation_idx,
+            type_cache,
+        )?;
+        let CallType::Known(ptr) = handle else {
+            panic!("virtual function instantiation -- not impelemented yet")
+        };
+
+        function_instantiations.push(FunctionInstantiation {
+            handle: ArenaPointer::new(ptr.to_ref()),
+            instantiation_idx,
+        });
+    }
+
+    for f_handle in module.field_handles() {
+        let def_idx = f_handle.owner;
+        let owner = structs[def_idx.0 as usize].idx;
+        let offset = f_handle.field as usize;
+        field_handles.push(FieldHandle { offset, owner });
+    }
+
+    for f_inst in module.field_instantiations() {
+        let fh_idx = f_inst.handle;
+        let owner = field_handles[fh_idx.0 as usize].owner;
+        let offset = field_handles[fh_idx.0 as usize].offset;
+
+        field_instantiations.push(FieldInstantiation { offset, owner });
+    }
+
+    let Context {
+        link_context: _,
+        cache: _,
+        module,
+        single_signature_token_map,
+        type_cache: _,
+    } = context;
+
+    Ok(LoadedModule {
+        id: self_id,
+        type_refs,
+        structs,
+        struct_instantiations,
+        enums,
+        enum_instantiations,
+        function_instantiations,
+        field_handles,
+        field_instantiations,
+        // TODO: Remove this field
+        function_map: HashMap::new(),
+        single_signature_token_map,
+        instantiation_signatures,
+        variant_handles: module.variant_handles().to_vec(),
+        variant_instantiation_handles: module.variant_instantiation_handles().to_vec(),
+    })
 }

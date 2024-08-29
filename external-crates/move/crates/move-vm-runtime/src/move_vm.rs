@@ -82,23 +82,6 @@ impl MoveVM {
             .map(|(compiled, _)| compiled)
     }
 
-    /// Attempts to discover metadata in a given module with given key. Availability
-    /// of this data may depend on multiple aspects. In general, no hard assumptions of
-    /// availability should be made, but typically, one can expect that
-    /// the modules which have been involved in the execution of the last session are available.
-    ///
-    /// This is called by an adapter to extract, for example, debug information out of
-    /// the metadata section of the code for post mortem analysis. Notice that because
-    /// of ownership of the underlying binary representation of modules hidden behind an rwlock,
-    /// this actually has to hand back a copy of the associated metadata, so metadata should
-    /// be organized keeping this in mind.
-    ///
-    /// TODO: in the new loader architecture, as the loader is visible to the adapter, one would
-    ///   call this directly via the loader instead of the VM.
-    pub fn get_module_metadata(&self, module: ModuleId, key: &[u8]) -> Option<Metadata> {
-        self.runtime.loader().get_metadata(module, key)
-    }
-
     pub fn get_runtime(&self) -> &VMRuntime {
         &self.runtime
     }

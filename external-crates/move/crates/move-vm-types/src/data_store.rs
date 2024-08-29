@@ -6,6 +6,7 @@ use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
+use std::collections::BTreeSet;
 
 /// Provide an implementation for bytecodes related to data with a given data store.
 ///
@@ -34,6 +35,12 @@ pub trait DataStore {
     /// Get the serialized format of a `CompiledModule` given a `ModuleId`.
     fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>>;
 
+    /// Get the serialized format of a package's modules given a package id.
+    fn load_package(&self, package_id: &AccountAddress) -> VMResult<Vec<Vec<u8>>>;
+
     /// Publish a module.
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()>;
+
+    /// Gives the transitive dependencies (as stored package IDs) of the linking context.
+    fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>>;
 }
