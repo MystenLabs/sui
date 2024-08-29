@@ -6,6 +6,8 @@ use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
 use sui_json_rpc::name_service::NameServiceError;
 
+use crate::types::dot_move::error::MoveRegistryError;
+
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 /// `<https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>`
@@ -76,12 +78,15 @@ pub enum Error {
     Client(String),
     #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
+    #[error(transparent)]
+    MoveNameRegistry(#[from] MoveRegistryError),
 }
 
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
             Error::NameService(_)
+            | Error::MoveNameRegistry(_)
             | Error::CursorNoFirstLast
             | Error::PageTooLarge(_, _)
             | Error::ProtocolVersionUnsupported(_, _)

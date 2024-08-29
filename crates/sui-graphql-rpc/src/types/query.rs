@@ -12,6 +12,8 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
+use super::dot_move::named_move_package::NamedMovePackage;
+use super::dot_move::named_type::NamedType;
 use super::move_package::{
     self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
 };
@@ -540,6 +542,27 @@ impl Query {
                 address: a.into(),
                 checkpoint_viewed_at: checkpoint,
             }))
+    }
+
+    /// Fetch a package by its name (using dot move service)
+    async fn package_by_name(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        NamedMovePackage::query(ctx, &name, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Fetch a type that includes dot move service names in it.
+    async fn type_by_name(&self, ctx: &Context<'_>, name: String) -> Result<MoveType> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        let type_tag = NamedType::query(ctx, &name, checkpoint).await?;
+
+        Ok(MoveType::new(type_tag))
     }
 
     /// The coin metadata associated with the given coin type.
