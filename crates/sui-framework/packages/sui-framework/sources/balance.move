@@ -47,6 +47,12 @@ module sui::balance {
         Supply { value: 0 }
     }
 
+    /// Destroy an empty supply
+    public fun destroy_zero_supply<T: drop>(self: Supply<T>) {
+        assert!(self.value == 0, ENonZero);
+        let Supply { value: _ } = self;
+    }
+
     /// Increase supply by `value` and create a new `Balance<T>` with this value.
     public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
         assert!(value < (18446744073709551615u64 - self.value), EOverflow);
