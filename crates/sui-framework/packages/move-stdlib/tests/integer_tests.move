@@ -5,7 +5,6 @@
 #[test_only]
 module std::integer_tests {
     use std::unit_test::assert_eq;
-    use std::string;
 
     public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
         let mut cases = $cases;
@@ -167,12 +166,12 @@ module std::integer_tests {
     }
 
     public(package) macro fun test_to_string<$T>() {
-        assert_eq!((0: $T).to_string(), string::utf8(b"0"));
-        assert_eq!((1: $T).to_string(), string::utf8(b"1"));
-        assert_eq!((10: $T).to_string(), string::utf8(b"10"));
-        assert_eq!((11: $T).to_string(), string::utf8(b"11"));
-        assert_eq!((100: $T).to_string(), string::utf8(b"100"));
-        assert_eq!((111: $T).to_string(), string::utf8(b"111"));
+        assert_eq!((0: $T).to_string(), b"0".to_string());
+        assert_eq!((1: $T).to_string(), b"1".to_string());
+        assert_eq!((10: $T).to_string(), b"10".to_string());
+        assert_eq!((11: $T).to_string(), b"11".to_string());
+        assert_eq!((100: $T).to_string(), b"100".to_string());
+        assert_eq!((111: $T).to_string(), b"111".to_string());
     }
 
     public(package) macro fun test_dos_case<$T>($case: $T) {

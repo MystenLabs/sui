@@ -3,7 +3,7 @@
 
 #[defines_primitive(u8)]
 module std::u8 {
-    use std::string;
+    use std::string::String;
 
     /// Return the larger of `x` and `y`
     public fun max(x: u8, y: u8): u8 {
@@ -59,7 +59,7 @@ module std::u8 {
         std::macros::num_sqrt!<u8, u16>(x, 8)
     }
 
-    public fun to_string(x: u8): string::String {
+    public fun to_string(x: u8): String {
         std::macros::num_to_string!(x)
     }
 
