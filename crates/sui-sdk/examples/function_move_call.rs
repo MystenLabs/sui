@@ -1,22 +1,22 @@
-mod utils;
 use anyhow::anyhow;
 use shared_crypto::intent::Intent;
 use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse};
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse, SuiObjectData};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
     rpc_types::SuiTransactionBlockResponseOptions,
     types::{
-        base_types::ObjectID,
+        base_types::{ObjectID, SequenceNumber, ObjectDigest},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         quorum_driver_types::ExecuteTransactionRequestType,
         transaction::{Argument, CallArg, Command, ProgrammableMoveCall, Transaction, TransactionData, ObjectArg},
         Identifier, TypeTag,
     },
 };
+use sui_sdk::types::base_types::ObjectRef;
+mod utils;
 use utils::setup_for_write;
 use std::str::FromStr;
-use bcs;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -33,8 +33,15 @@ async fn main() -> Result<(), anyhow::Error> {
     // Define the pool address, baseCoin type, and quoteCoin type
     let pool_address = ObjectID::from_hex_literal("0x2decc59a6f05c5800e5c8a1135f9d133d1746f562bf56673e6e81ef4f7ccd3b7")?;
     let pool_object: SuiObjectResponse = sui.read_api().get_object_with_options(pool_address, SuiObjectDataOptions::full_content()).await?;
-    let pool_object_ref = pool_object.object()?;
-    let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref.reference().clone()));
+    let pool_data: &SuiObjectData = pool_object.data.as_ref().ok_or(anyhow!("Missing data in pool object response"))?;
+
+    let pool_object_ref: ObjectRef = (
+        pool_data.object_id.clone(),
+        SequenceNumber::from(pool_data.version),
+        ObjectDigest::from(pool_data.digest.clone())
+    );
+
+    let pool_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(pool_object_ref));
     ptb.input(pool_input)?;
 
     // Create an Argument::Input for Pure 5 value of type u64
@@ -47,8 +54,15 @@ async fn main() -> Result<(), anyhow::Error> {
         "0x0000000000000000000000000000000000000000000000000000000000000006"
     )?;
     let sui_clock_object: SuiObjectResponse = sui.read_api().get_object_with_options(sui_clock_object_id, SuiObjectDataOptions::full_content()).await?;
-    let sui_clock_object_ref = sui_clock_object.object()?;
-    let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref.reference().clone()));
+    let clock_data: &SuiObjectData = sui_clock_object.data.as_ref().ok_or(anyhow!("Missing data in clock object response"))?;
+
+    let sui_clock_object_ref: ObjectRef = (
+        clock_data.object_id.clone(),
+        SequenceNumber::from(clock_data.version),
+        ObjectDigest::from(clock_data.digest.clone())
+    );
+
+    let clock_input = CallArg::Object(ObjectArg::ImmOrOwnedObject(sui_clock_object_ref));
     ptb.input(clock_input)?;
 
     // Correctly use TypeTag for base_coin_type and quote_coin_type
