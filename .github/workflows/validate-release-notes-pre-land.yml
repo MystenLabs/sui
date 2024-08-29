@@ -52,4 +52,4 @@ jobs:
       - name: Validate PR's release notes
         shell: bash
         run: |
-          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python ./scripts/release_notes.py check ${{ github.event.pull_request.head.sha }}

@@ -45,7 +45,7 @@ INTERESTING_DIRECTORIES = [
     "narwhal",
     "nre",
     "sui-execution",
-    ".github",
+    "scripts",
 ]
 
 # Start release notes with these sections, if they contain relevant
@@ -121,9 +121,9 @@ def git(*args):
 
 
 def extract_notes(commit):
-    """Get release notes from a commit message.
+    """Get release notes from a body of the PR
 
-    Find the 'Release notes' section in the commit message, and
+    Find the 'Release notes' section in PR body, and
     extract the notes for each impacted area (area that has been
     ticked).
 
@@ -132,15 +132,40 @@ def extract_notes(commit):
     whether it has a note and whether it was checked (ticked).
 
     """
-    message = git("show", "-s", "--format=%B", commit)
+    
+    # Get pull request from the head sha
+    commit_url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
+    gh_token = "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"
+    commit_curl_command = [
+        "curl", "-s",
+        "-H", "Accept: application/vnd.github.groot-preview+json",
+        "-H", f"Authorization: token {gh_token}",
+        commit_url
+    ]
 
-    # Extract PR number
-    match = RE_PR.match(message)
-    pr = match.group(1) if match else None
+    # Execute the curl command and pipe the output to jq to get the PR number
+    commit_jq_command = ["jq", "-r", ".[0].number"]
+    commit_result = subprocess.run(commit_curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    pr = subprocess.run(commit_jq_command, input=commit_result.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+    pr = pr.rstrip()
+
+    # Get Release Notes, via body of the PR
+    pull_url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
+    pull_curl_command = [
+        "curl", "-s",
+        "-H", "Accept: application/vnd.github.groot-preview+json",
+        "-H", f"Authorization: token {gh_token}",
+        pull_url
+    ]
+
+    # Execute the curl command and pipe the output to jq
+    pull_jq_command = ["jq", "-r", ".body"]
+    pull_result = subprocess.run(pull_curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    notes = subprocess.run(pull_jq_command, input=pull_result.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+
+    # # Find the release notes section
     result = {}
-
-    # Find the release notes section
-    match = RE_HEADING.search(message)
+    match = RE_HEADING.search(notes)
     if not match:
         return pr, result
 
