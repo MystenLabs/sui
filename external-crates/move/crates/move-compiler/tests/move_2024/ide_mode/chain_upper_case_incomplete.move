@@ -1,7 +1,7 @@
 module 0x42::m1 {
-    fun bar() {}
+    public fun bar() {}
 
-    fun foo() {
+    public fun foo() {
         B
     }
 }
