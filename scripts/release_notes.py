@@ -133,31 +133,30 @@ def extract_notes(commit):
     """
     
     # Get pull request from the head sha
-    commit_url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
-    commit_curl_command = [
+    url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
+    curl_command = [
         "curl", "-s",
         "-H", "Accept: application/vnd.github.groot-preview+json",
-        commit_url
+        url
     ]
 
-    # Execute the curl command and pipe the output to jq to get the PR number
-    commit_jq_command = ["jq", "-r", ".[0].number"]
-    commit_result = subprocess.run(commit_curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    pr = subprocess.run(commit_jq_command, input=commit_result.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
-    pr = pr.rstrip()
+    # Execute the curl command
+    result = subprocess.run(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    json_data = json.loads(result.stdout)
+    pr = json_data[0].get("number")
 
     # Get Release Notes, via body of the PR
-    pull_url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
-    pull_curl_command = [
+    url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
+    curl_command = [
         "curl", "-s",
         "-H", "Accept: application/vnd.github.groot-preview+json",
-        pull_url
+        url
     ]
 
-    # Execute the curl command and pipe the output to jq
-    pull_jq_command = ["jq", "-r", ".body"]
-    pull_result = subprocess.run(pull_curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    notes = subprocess.run(pull_jq_command, input=pull_result.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+    # Execute the curl command
+    result = subprocess.run(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    json_data = json.loads(result.stdout)
+    notes = json_data.get("body")
 
     # # Find the release notes section
     result = {}
