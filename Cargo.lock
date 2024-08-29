@@ -14784,6 +14784,7 @@ dependencies = [
  "integer-encoding",
  "itertools 0.10.5",
  "lru 0.10.0",
+ "moka",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
