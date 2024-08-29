@@ -6,14 +6,14 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken, DebugSession } from 'vscode';
 
-/** 
- * Log level for the debug adapter. 
+/**
+ * Log level for the debug adapter.
  */
 const LOG_LEVEL = 'log';
 
 const DEBUGGER_TYPE = 'move-debug';
 
-/** 
+/**
  * Called when the extension is activated.
 */
 export function activate(context: vscode.ExtensionContext) {
@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 /**
- * Called when the extension is deactivated. 
+ * Called when the extension is deactivated.
  */
 export function deactivate() { }
 
@@ -86,7 +86,7 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 /**
  * Finds the trace information for the current active editor.
- * 
+ *
  * @param editor active text editor.
  * @returns trace information of the form `<package>::<module>::<function>`.
  * @throws Error with a descriptive error message if the trace information cannot be found.
@@ -121,9 +121,9 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
 
 /**
  * Finds the root directory of the package containing the active file.
- * TODO: once `trace-adapter` is in npm registry, we can use the implementation of this function 
+ * TODO: once `trace-adapter` is in npm registry, we can use the implementation of this function
  * from `trace-adapter`.
- * 
+ *
  * @param active_file_path path to a file active in the editor.
  * @returns root directory of the package containing the active file.
  */
@@ -154,7 +154,7 @@ async function findPkgRoot(active_file_path: string): Promise<string | undefined
  * module declarations of the form `module <package>::<module>`.
  * We cannot rely on the directory structure to find modules because
  * trace info is generated based on module names in the source files.
- * 
+ *
  * @param file_content content of the file.
  * @returns modules in the file content of the form `<package>::<module>`.
  */
@@ -168,7 +168,7 @@ function findModules(file_content: string): string[] {
 
 /**
  * Find all functions that have a corresponding trace file.
- * 
+ *
  * @param pkg_root root directory of the package.
  * @param pkg_modules modules in the package of the form `<package>::<module>`.
  * @returns list of functions of the form `<package>::<module>::<function>`.
@@ -202,7 +202,7 @@ function findTracedFunctions(pkg_root: string, pkg_modules: string[]): string[] 
 
 /**
  * Prompts the user to select a function to debug from a list of traced functions.
- * 
+ *
  * @param tracedFunctions list of traced functions of the form `<package>::<module>::<function>`.
  * @returns single function to debug of the form `<package>::<module>::<function>`.
  */

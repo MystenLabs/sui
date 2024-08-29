@@ -120,7 +120,7 @@ interface ITrace {
 
 /**
  * Reads a Move VM execution trace from a JSON file.
- * 
+ *
  * @param traceFilePath path to the trace JSON file.
  * @returns execution trace.
  */

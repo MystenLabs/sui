@@ -95,7 +95,7 @@ export function readAllSourceMaps(directory: string, filesMap: Map<string, IFile
 
 /**
  * Reads a Move VM source map from a JSON file.
- * 
+ *
  * @param sourceMapPath path to the source map JSON file.
  * @param filesMap map from file hash to file information.
  * @returns source map.
@@ -122,7 +122,10 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
         const funName = fileInfo.content.slice(nameStart, nameEnd);
         const pcLocs: ILoc[] = [];
         let prevPC = 0;
-        let prevLoc = { line: 0, column: 0 };
+        // we need to initialize `prevLoc` to make the compiler happy but it's never
+        // going to be used as the first PC in the frame is always 0 so the inner
+        // loop never gets executed during first iteration of the outer loopq
+        let prevLoc = { line: -1, column: -1 };
         // create a list of locations for each PC, even those not explicitly listed
         // in the source map
         for (const [pc, defLocation] of Object.entries(funEntry.code_map)) {
@@ -141,9 +144,9 @@ function readSourceMap(sourceMapPath: string, filesMap: Map<string, IFileInfo>):
 }
 
 /**
- * Computes source file location (line/colum) from the byte offset 
+ * Computes source file location (line/colum) from the byte offset
  * (assumes that lines and columns are 1-based).
- * 
+ *
  * @param fileInfo  source file information.
  * @param offset  byte offset in the source file.
  * @returns Source file location (line/column).
