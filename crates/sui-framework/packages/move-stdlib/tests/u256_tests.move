@@ -66,6 +66,15 @@ module std::u256_tests {
     }
 
     #[test]
+    fun test_to_string() {
+        integer_tests::test_to_string!<u256>();
+        assert_eq!((MAX / 2).to_string(), b"57896044618658097711785492504343953926634992332820282019728792003956564819967".to_string());
+        assert_eq!((MAX / 2 + 1).to_string(), b"57896044618658097711785492504343953926634992332820282019728792003956564819968".to_string());
+        assert_eq!(MAX_PRED.to_string(), b"115792089237316195423570985008687907853269984665640564039457584007913129639934".to_string());
+        assert_eq!(MAX.to_string(), b"115792089237316195423570985008687907853269984665640564039457584007913129639935".to_string());
+    }
+
+    #[test]
     fun test_dos() {
         integer_tests::test_dos!(MAX, CASES);
     }
