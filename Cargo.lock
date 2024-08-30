@@ -7974,6 +7974,7 @@ dependencies = [
  "http 1.1.0",
  "hyper-util",
  "multiaddr",
+ "once_cell",
  "pin-project-lite",
  "serde",
  "snap",

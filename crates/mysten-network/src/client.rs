@@ -7,6 +7,7 @@ use crate::{
 };
 use eyre::{eyre, Context, Result};
 use hyper_util::client::legacy::connect::{dns::Name, HttpConnector};
+use once_cell::sync::OnceCell;
 use std::{
     collections::HashMap,
     fmt,
@@ -22,7 +23,7 @@ use std::{
 use tokio::task::JoinHandle;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::Service;
-use tracing::trace;
+use tracing::{info, trace};
 
 pub async fn connect(address: &Multiaddr) -> Result<Channel> {
     let channel = endpoint_from_multiaddr(address)?.connect().await?;
@@ -78,6 +79,8 @@ struct MyEndpoint {
     endpoint: Endpoint,
 }
 
+static DISABLE_CACHING_RESOLVER: OnceCell<bool> = OnceCell::new();
+
 impl MyEndpoint {
     fn new(endpoint: Endpoint) -> Self {
         Self { endpoint }
@@ -97,13 +100,23 @@ impl MyEndpoint {
     }
 
     fn connect_lazy(self) -> Channel {
-        let mut http = HttpConnector::new_with_resolver(CachingResolver::new());
-        http.enforce_http(false);
-        http.set_nodelay(true);
-        http.set_keepalive(None);
-        http.set_connect_timeout(None);
+        let disable_caching_resolver = *DISABLE_CACHING_RESOLVER.get_or_init(|| {
+            let disable_caching_resolver = std::env::var("DISABLE_CACHING_RESOLVER").is_ok();
+            info!("DISABLE_CACHING_RESOLVER: {disable_caching_resolver}");
+            disable_caching_resolver
+        });
 
-        self.endpoint.connect_with_connector_lazy(http)
+        if disable_caching_resolver {
+            self.endpoint.connect_lazy()
+        } else {
+            let mut http = HttpConnector::new_with_resolver(CachingResolver::new());
+            http.enforce_http(false);
+            http.set_nodelay(true);
+            http.set_keepalive(None);
+            http.set_connect_timeout(None);
+
+            self.endpoint.connect_with_connector_lazy(http)
+        }
     }
 
     async fn connect(self) -> Result<Channel> {
