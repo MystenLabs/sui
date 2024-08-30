@@ -13,9 +13,7 @@ use crate::{get_metrics, spawn_logged_monitored_task};
 
 static THREAD_STALL_MONITOR: Once = Once::new();
 
-const MONITOR_INTERVAL_MS: u64 = 50;
-const MONITOR_INTERVAL: Duration = Duration::from_millis(MONITOR_INTERVAL_MS);
-const WATCHDOG_INTERVAL: Duration = Duration::from_millis((MONITOR_INTERVAL_MS / 2) + 1);
+const MONITOR_INTERVAL: Duration = Duration::from_millis(50);
 const ALERT_THRESHOLD: Duration = Duration::from_millis(500);
 
 // These funcs are extern in order to be easily findable by debuggers
@@ -51,8 +49,8 @@ extern "C" fn thread_monitor_report_stall_cleared(duration_ms: u64) {
 }
 
 /// Monitors temporary stalls in tokio scheduling every MONITOR_INTERVAL.
-/// Logs an error and increments a metric if more than 2 * MONITOR_INTERVAL has elapsed,
-/// which means the stall lasted longer than MONITOR_INTERVAL.
+/// Calls `thread_monitor_report_stall` if more than ALERT_THRESHOLD has elapsed.
+/// When the stall clears, we observer the duration in a histogram.
 pub fn start_thread_stall_monitor() {
     let mut called = true;
     THREAD_STALL_MONITOR.call_once(|| {
@@ -75,7 +73,7 @@ pub fn start_thread_stall_monitor() {
             let mut stall_duration = None;
 
             loop {
-                std::thread::sleep(WATCHDOG_INTERVAL);
+                std::thread::sleep(MONITOR_INTERVAL);
                 let now = Instant::now();
                 let last_update = *last_update.lock().unwrap();
                 let time_since_last_update = now - last_update;
