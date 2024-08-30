@@ -15,7 +15,7 @@ use crate::db::ConnectionPoolConfig;
     about = "An off-fullnode service serving data from Sui protocol"
 )]
 pub struct IndexerConfig {
-    #[clap(long, global = true)]
+    #[clap(long, alias = "db-url")]
     pub database_url: Url,
 
     #[clap(flatten)]
@@ -148,6 +148,10 @@ pub enum Command {
     Indexer {
         #[command(flatten)]
         ingestion_config: IngestionConfig,
+        #[command(flatten)]
+        snapshot_config: SnapshotLagConfig,
+        #[command(flatten)]
+        pruning_options: PruningOptions,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {

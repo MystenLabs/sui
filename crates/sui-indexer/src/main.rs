@@ -6,6 +6,7 @@ use sui_indexer::config::Command;
 use sui_indexer::db::{get_pool_connection, new_connection_pool, reset_database};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use sui_indexer::errors::IndexerError;
@@ -32,9 +33,21 @@ async fn main() -> Result<(), IndexerError> {
     spawn_connection_pool_metric_collector(indexer_metrics.clone(), connection_pool.clone());
 
     match opts.command {
-        Command::Indexer { ingestion_config } => {
+        Command::Indexer {
+            ingestion_config,
+            snapshot_config,
+            pruning_options,
+        } => {
             let store = PgIndexerStore::new(connection_pool, indexer_metrics.clone());
-            Indexer::start_writer(&ingestion_config, store, indexer_metrics).await?;
+            Indexer::start_writer_with_config(
+                &ingestion_config,
+                store,
+                indexer_metrics,
+                snapshot_config,
+                pruning_options,
+                CancellationToken::new(),
+            )
+            .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
             Indexer::start_reader(&json_rpc_config, &registry, connection_pool).await?;
