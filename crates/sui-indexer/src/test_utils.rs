@@ -53,7 +53,11 @@ pub async fn start_test_indexer(
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: PathBuf,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>, CancellationToken) {
+) -> (
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    CancellationToken,
+) {
     let token = CancellationToken::new();
     let (store, handle) = start_test_indexer_impl(
         db_url,
@@ -78,7 +82,6 @@ pub async fn start_test_indexer_impl(
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-
     let db_url = db_url.unwrap_or_else(|| {
         let pg_host = "localhost";
         let pg_port = "32770";
@@ -147,6 +150,8 @@ pub async fn start_test_indexer_impl(
             snapshot_config,
             epochs_to_keep,
         } => {
+            crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
+
             let store_clone = store.clone();
             let mut ingestion_config = IngestionConfig::default();
             ingestion_config.sources.data_ingestion_path = data_ingestion_path;
