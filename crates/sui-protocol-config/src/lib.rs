@@ -169,6 +169,7 @@ const MAX_PROTOCOL_VERSION: u64 = 56;
 //             Enable soft bundle on mainnet.
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
+// Version 56: Reduce minimum number of random beacon shares.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2695,7 +2696,10 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
-                56 => {}
+                56 => {
+                    // Reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(800);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
