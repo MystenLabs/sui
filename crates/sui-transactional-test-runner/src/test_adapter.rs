@@ -249,6 +249,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             object_snapshot_min_checkpoint_lag,
             object_snapshot_max_checkpoint_lag,
             flavor,
+            epochs_to_keep,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -264,6 +265,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
                     flavor,
+                    epochs_to_keep,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -303,6 +305,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
                     flavor,
+                    epochs_to_keep,
                 )
             }
             None => {
@@ -313,6 +316,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                     None,
                     None,
@@ -343,6 +347,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 object_snapshot_min_checkpoint_lag,
                 object_snapshot_max_checkpoint_lag,
                 path.to_path_buf(),
+                epochs_to_keep,
             )
             .await
         } else {
@@ -595,6 +600,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 show_usage,
                 show_headers,
                 show_service_version,
+                wait_for_checkpoint_pruned,
                 cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
@@ -608,6 +614,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 cluster
                     .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
                     .await;
+
+                if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
+                    cluster
+                        .wait_for_checkpoint_pruned(
+                            wait_for_checkpoint_pruned,
+                            Duration::from_secs(60),
+                        )
+                        .await;
+                }
 
                 let interpolated =
                     self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
@@ -2095,6 +2110,7 @@ async fn init_sim_executor(
     object_snapshot_min_checkpoint_lag: Option<usize>,
     object_snapshot_max_checkpoint_lag: Option<usize>,
     test_file_path: PathBuf,
+    epochs_to_keep: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2175,6 +2191,7 @@ async fn init_sim_executor(
     let graphql_port = 20000 + base_port;
     let graphql_prom_port = graphql_port + 1;
     let internal_data_port = graphql_prom_port + 1;
+
     let cluster = serve_executor(
         ConnectionConfig::ci_integration_test_cfg_with_db_name(
             db_name,
@@ -2188,6 +2205,7 @@ async fn init_sim_executor(
             object_snapshot_max_checkpoint_lag,
             Some(1),
         )),
+        epochs_to_keep,
         data_ingestion_path,
     )
     .await;
