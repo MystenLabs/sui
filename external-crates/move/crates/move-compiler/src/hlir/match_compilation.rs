@@ -592,11 +592,11 @@ fn resolve_result(
 
             let true_arm = resolve_result(context, init_subject, true_arm_result);
             let false_arm = resolve_result(context, init_subject, false_arm_result);
-            let result_type = true_arm.ty.clone();
+            let result_ty = context.output_type().clone();
 
             make_copy_bindings(
                 bindings,
-                make_if_else(lit_subject, true_arm, false_arm, result_type),
+                make_if_else(lit_subject, true_arm, false_arm, result_ty),
             )
         }
         WorkResult::LiteralSwitch {
@@ -622,7 +622,7 @@ fn resolve_result(
                 let work_result = context.work_result(result_ndx);
                 let match_arm = resolve_result(context, init_subject, work_result);
                 let test_exp = make_lit_test(lit_subject.clone(), key);
-                let result_ty = out_exp.ty.clone();
+                let result_ty = context.output_type().clone();
                 out_exp = make_if_else(test_exp, match_arm, out_exp, result_ty);
             }
             make_copy_bindings(bindings, out_exp)
