@@ -204,32 +204,68 @@ impl Default for SnapshotLagConfig {
 #[cfg(test)]
 mod test {
     use super::*;
-    use clap::{Command, FromArgMatches};
     use tap::Pipe;
 
+    fn parse_args<'a, T>(args: impl IntoIterator<Item = &'a str>) -> Result<T, clap::error::Error>
+    where
+        T: clap::Args + clap::FromArgMatches,
+    {
+        clap::Command::new("test")
+            .no_binary_name(true)
+            .pipe(T::augment_args)
+            .try_get_matches_from(args)
+            .and_then(|matches| T::from_arg_matches(&matches))
+    }
+
     #[test]
-    fn foo() {
-        //XXX ADD TESTS FOR THE CLI ARG PARSING
-        let m = Command::new("test")
-            .no_binary_name(true)
-            .pipe(NameServiceOptions::augment_args)
-            .try_get_matches_from(["--name-service-registry-id=0x1"])
-            // .try_get_matches_from(args)
-            .unwrap();
+    fn name_service() {
+        parse_args::<NameServiceOptions>(["--name-service-registry-id=0x1"]).unwrap();
+        parse_args::<NameServiceOptions>([
+            "--name-service-package-address",
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
+        ])
+        .unwrap();
+        parse_args::<NameServiceOptions>(["--name-service-reverse-registry-id=0x1"]).unwrap();
+        parse_args::<NameServiceOptions>([
+            "--name-service-registry-id=0x1",
+            "--name-service-package-address",
+            "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "--name-service-reverse-registry-id=0x3",
+        ])
+        .unwrap();
+        parse_args::<NameServiceOptions>([]).unwrap();
+    }
 
-        let conf = NameServiceOptions::from_arg_matches(&m).unwrap();
-        println!("{conf:#?}");
+    #[test]
+    fn ingestion_sources() {
+        parse_args::<IngestionSources>(["--data-ingestion-path=/tmp/foo"]).unwrap();
+        parse_args::<IngestionSources>(["--remote-store-url=http://example.com"]).unwrap();
+        parse_args::<IngestionSources>(["--rpc-client-url=http://example.com"]).unwrap();
 
-        let m = Command::new("test")
-            .no_binary_name(true)
-            .pipe(JsonRpcConfig::augment_args)
-            .try_get_matches_from(["--name-service-registry-id=0x1"])
-            // .try_get_matches_from(args)
-            .unwrap();
+        parse_args::<IngestionSources>([
+            "--data-ingestion-path=/tmp/foo",
+            "--remote-store-url=http://example.com",
+            "--rpc-client-url=http://example.com",
+        ])
+        .unwrap();
 
-        let conf = JsonRpcConfig::from_arg_matches(&m).unwrap();
-        println!("{conf:#?}");
+        // At least one must be present
+        parse_args::<IngestionSources>([]).unwrap_err();
+    }
 
-        // assert!(false);
+    #[test]
+    fn json_rpc_config() {
+        parse_args::<JsonRpcConfig>(["--rpc-client-url=http://example.com"]).unwrap();
+
+        // Can include name service options and bind address
+        parse_args::<JsonRpcConfig>([
+            "--rpc-address=127.0.0.1:8080",
+            "--name-service-registry-id=0x1",
+            "--rpc-client-url=http://example.com",
+        ])
+        .unwrap();
+
+        // fullnode rpc url must be present
+        parse_args::<JsonRpcConfig>([]).unwrap_err();
     }
 }
