@@ -120,7 +120,7 @@ pub async fn start_network_cluster(
     let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         val_fn.rpc_url().to_string(),
-        ReaderWriterConfig::writer_mode(None),
+        ReaderWriterConfig::writer_mode(None, None),
         /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
@@ -142,6 +142,7 @@ pub async fn serve_executor(
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
+    epochs_to_keep: Option<u64>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
@@ -162,7 +163,7 @@ pub async fn serve_executor(
     let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         format!("http://{}", executor_server_url),
-        ReaderWriterConfig::writer_mode(snapshot_config.clone()),
+        ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
         /* reset_database */ true,
         Some(data_ingestion_path),
         cancellation_token.clone(),
@@ -322,11 +323,60 @@ pub async fn wait_for_graphql_checkpoint_catchup(
     .expect("Timeout waiting for graphql to catchup to checkpoint");
 }
 
+/// Ping the GraphQL server for a checkpoint until an empty response is returned, indicating that
+/// the checkpoint has been pruned.
+pub async fn wait_for_graphql_checkpoint_pruned(
+    client: &SimpleClient,
+    checkpoint: u64,
+    base_timeout: Duration,
+) {
+    info!(
+        "Waiting for checkpoint to be pruned {}, base time out is {}",
+        checkpoint,
+        base_timeout.as_secs()
+    );
+    let query = format!(
+        r#"
+        {{
+            checkpoint(id: {{ sequenceNumber: {} }}) {{
+                sequenceNumber
+            }}
+        }}"#,
+        checkpoint
+    );
+
+    let timeout = base_timeout.mul_f64(checkpoint.max(1) as f64);
+
+    tokio::time::timeout(timeout, async {
+        loop {
+            let resp = client
+                .execute_to_graphql(query.to_string(), false, vec![], vec![])
+                .await
+                .unwrap()
+                .response_body_json();
+
+            let current_checkpoint = &resp["data"]["checkpoint"];
+            if current_checkpoint.is_null() {
+                break;
+            } else {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+    })
+    .await
+    .expect("Timeout waiting for checkpoint to be pruned");
+}
+
 impl Cluster {
     /// Waits for the indexer to index up to the given checkpoint, then waits for the graphql
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Waits for the indexer to prune a given checkpoint.
+    pub async fn wait_for_checkpoint_pruned(&self, checkpoint: u64, base_timeout: Duration) {
+        wait_for_graphql_checkpoint_pruned(&self.graphql_client, checkpoint, base_timeout).await
     }
 
     /// Sends a cancellation signal to the graphql and indexer services and waits for them to
@@ -349,6 +399,11 @@ impl ExecutorCluster {
     /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
+    }
+
+    /// Waits for the indexer to prune a given checkpoint.
+    pub async fn wait_for_checkpoint_pruned(&self, checkpoint: u64, base_timeout: Duration) {
+        wait_for_graphql_checkpoint_pruned(&self.graphql_client, checkpoint, base_timeout).await
     }
 
     /// The ObjectsSnapshotProcessor is a long-running task that periodically takes a snapshot of
