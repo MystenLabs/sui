@@ -252,7 +252,7 @@ pub fn build_from_resolution_graph(
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
         let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
-            .verifier_config(/* for_signing */ false);
+            .verifier_config(/* signing_limits */ None);
 
         for m in compiled_modules.iter_modules() {
             move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {

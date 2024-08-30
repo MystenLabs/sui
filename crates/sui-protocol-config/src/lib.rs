@@ -8,7 +8,7 @@ use std::{
 };
 
 use clap::*;
-use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
@@ -2714,11 +2714,15 @@ impl ProtocolConfig {
 
     // Extract the bytecode verifier config from this protocol config. `for_signing` indicates
     // whether this config is used for verification during signing or execution.
-    pub fn verifier_config(&self, for_signing: bool) -> VerifierConfig {
-        let (max_back_edges_per_function, max_back_edges_per_module) = if for_signing {
+    pub fn verifier_config(&self, signing_limits: Option<(usize, usize)>) -> VerifierConfig {
+        let (max_back_edges_per_function, max_back_edges_per_module) = if let Some((
+            max_back_edges_per_function,
+            max_back_edges_per_module,
+        )) = signing_limits
+        {
             (
-                Some(self.max_back_edges_per_function() as usize),
-                Some(self.max_back_edges_per_module() as usize),
+                Some(max_back_edges_per_function),
+                Some(max_back_edges_per_module),
             )
         } else {
             (None, None)
@@ -2746,16 +2750,6 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
-        }
-    }
-
-    /// MeterConfig for metering packages during signing. It is NOT stable between binaries and
-    /// cannot used during execution.
-    pub fn meter_config_for_signing(&self) -> MeterConfig {
-        MeterConfig {
-            max_per_fun_meter_units: Some(2_200_000),
-            max_per_mod_meter_units: Some(2_200_000),
-            max_per_pkg_meter_units: Some(2_200_000),
         }
     }
 

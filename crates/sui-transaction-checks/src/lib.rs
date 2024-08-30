@@ -9,6 +9,7 @@ pub use checked::*;
 mod checked {
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
+    use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{UserInputError, UserInputResult};
@@ -73,6 +74,7 @@ mod checked {
         input_objects: InputObjects,
         receiving_objects: &ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
+        verifier_signing_config: &VerifierSigningConfig,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_status = check_transaction_input_inner(
             protocol_config,
@@ -83,7 +85,12 @@ mod checked {
         )?;
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+        check_non_system_packages_to_be_published(
+            transaction,
+            protocol_config,
+            metrics,
+            verifier_signing_config,
+        )?;
 
         Ok((gas_status, input_objects.into_checked()))
     }
@@ -96,6 +103,7 @@ mod checked {
         receiving_objects: ReceivingObjects,
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
+        verifier_signing_config: &VerifierSigningConfig,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
@@ -109,7 +117,12 @@ mod checked {
         )?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+        check_non_system_packages_to_be_published(
+            transaction,
+            protocol_config,
+            metrics,
+            verifier_signing_config,
+        )?;
 
         Ok((gas_status, input_objects.into_checked()))
     }
@@ -549,6 +562,7 @@ mod checked {
         transaction: &TransactionData,
         protocol_config: &ProtocolConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
+        verifier_signing_config: &VerifierSigningConfig,
     ) -> UserInputResult<()> {
         // Only meter non-system programmable transaction blocks
         if transaction.is_system_tx() {
@@ -560,9 +574,9 @@ mod checked {
         };
 
         // Use the same verifier and meter for all packages, custom configured for signing.
-        let for_signing = true;
-        let mut verifier = sui_execution::verifier(protocol_config, for_signing, metrics);
-        let mut meter = verifier.meter(protocol_config.meter_config_for_signing());
+        let signing_limits = Some(verifier_signing_config.limits_for_signing());
+        let mut verifier = sui_execution::verifier(protocol_config, signing_limits, metrics);
+        let mut meter = verifier.meter(verifier_signing_config.meter_config_for_signing());
 
         // Measure time for verifying all packages in the PTB
         let shared_meter_verifier_timer = metrics

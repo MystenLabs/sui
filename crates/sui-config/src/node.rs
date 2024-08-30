@@ -5,6 +5,7 @@ use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
@@ -195,6 +196,9 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub enable_validator_tx_finalizer: bool,
+
+    #[serde(default)]
+    pub verifier_signing_config: VerifierSigningConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

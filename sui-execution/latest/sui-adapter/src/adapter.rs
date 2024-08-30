@@ -55,7 +55,7 @@ mod checked {
         MoveVM::new_with_config(
             natives,
             VMConfig {
-                verifier: protocol_config.verifier_config(/* for_signing */ false),
+                verifier: protocol_config.verifier_config(/* signing_limits */ None),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
