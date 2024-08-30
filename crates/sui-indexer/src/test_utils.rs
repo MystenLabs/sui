@@ -37,6 +37,8 @@ impl ReaderWriterConfig {
         }
     }
 
+    /// Instantiates a config for indexer in writer mode with the given snapshot config and epochs
+    /// to keep.
     pub fn writer_mode(
         snapshot_config: Option<SnapshotLagConfig>,
         epochs_to_keep: Option<u64>,
