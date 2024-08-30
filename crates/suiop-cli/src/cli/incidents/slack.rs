@@ -1,28 +1,39 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use lazy_static::lazy_static;
 use reqwest::{header, Client};
 use serde::Deserialize;
+use serde::Serialize;
+use std::fs::File;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
+lazy_static! {
+    static ref CHANNELS_FILEPATH: PathBuf = dirs::home_dir()
+        .expect("HOME env var not set")
+        .join(".suiop")
+        .join("channels");
+}
 
 pub struct Slack {
     client: Client,
     pub channels: Vec<Channel>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Channel {
-    id: String,
-    name: String,
+    pub id: String,
+    pub name: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct ResponseMetadata {
     next_cursor: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct ConversationsResponse {
     ok: bool,
     error: Option<String>,
@@ -31,7 +42,7 @@ struct ConversationsResponse {
 }
 
 impl Slack {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let token = std::env::var("SLACK_BOT_TOKEN").expect("Please set SLACK_BOT_TOKEN env var");
         let mut headers = header::HeaderMap::new();
         headers.insert(
@@ -43,14 +54,39 @@ impl Slack {
             .default_headers(headers)
             .build()
             .expect("failed to build reqwest client");
-        Self {
+        let mut s = Self {
             client,
             channels: vec![],
-        }
+        };
+        s.get_channels().await.expect("Failed to get channels");
+        s
+    }
+
+    pub async fn serialize_channels(&self) -> Result<()> {
+        let file = File::create(CHANNELS_FILEPATH.as_path())?;
+        serde_json::to_writer(file, &self.channels)?;
+        Ok(())
     }
 
     pub async fn get_channels(&mut self) -> Result<Vec<String>> {
         let mut channels: Vec<Channel> = vec![];
+        let file_path = CHANNELS_FILEPATH.as_path();
+        if let Ok(metadata) = file_path.metadata() {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = modified.elapsed() {
+                    // 1 day
+                    if elapsed.as_secs() < 24 * 60 * 60 {
+                        if let Ok(file) = File::open(file_path) {
+                            if let Ok(channels) = serde_json::from_reader::<_, Vec<Channel>>(file) {
+                                println!("Using cached channels");
+                                self.channels = channels;
+                                return Ok(self.channels.iter().map(|c| c.name.clone()).collect());
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let mut result: ConversationsResponse = self
             .client
@@ -80,6 +116,7 @@ impl Slack {
             channels.extend(extra_channels.into_iter());
         }
         self.channels = channels.iter().map(|c| (*c).clone()).collect();
+        self.serialize_channels().await?;
         let names = self.channels.iter().map(|c| c.name.clone()).collect();
         Ok(names)
     }

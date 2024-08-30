@@ -30,6 +30,7 @@ pub struct Incident {
     resolved_at: Option<String>,
     html_url: String,
     priority: Option<Priority>,
+    slack_channel: Option<String>,
 }
 
 impl Incident {
@@ -62,6 +63,9 @@ impl Incident {
                 );
             }
             println!("URL: {}", self.html_url.bright_purple());
+            if let Some(channel) = self.slack_channel.clone() {
+                println!("Predicted Slack channel: {}", channel.bright_purple());
+            }
             println!("---");
         } else {
             let resolved_at = if let Some(resolved_at) = self.resolved_at.clone() {
@@ -79,7 +83,7 @@ impl Incident {
                     .unwrap_or("".to_string().yellow()),
                 self.priority(),
                 self.title.green(),
-                self.html_url.bright_purple()
+                self.html_url.bright_purple(),
             );
         }
         Ok(())
@@ -104,6 +108,7 @@ pub async fn fetch_incidents(
     start_time: DateTime<Local>,
     _end_time: DateTime<Local>,
 ) -> Result<Vec<Incident>> {
+    let mut slack = super::slack::Slack::new().await;
     let url = "https://api.pagerduty.com/incidents";
 
     let mut headers = HeaderMap::new();
@@ -174,6 +179,17 @@ pub async fn fetch_incidents(
         .into_iter()
         .map(serde_json::from_value)
         .filter_map(|i| i.ok())
+        .map(|mut i: Incident| {
+            println!("Checking if incidents list contains {}", i.number);
+            let channel = slack
+                .channels
+                .iter()
+                .find(|c| c.name.contains(&i.number.to_string()));
+            println!("Found channel: {:?}", channel);
+            i.slack_channel = channel
+                .map(|channel| format!("https://mysten-labs.slack.com/archives/{}", &channel.id));
+            i
+        })
         .collect())
 }
 
@@ -193,29 +209,27 @@ pub async fn print_recent_incidents(
 }
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
-    // let mut to_review = vec![];
-    // for incident in incidents {
-    //     incident.print(false)?;
-    //     let ans = Confirm::new("Keep this incident for review?")
-    //         .with_default(false)
-    //         .prompt()
-    //         .expect("Unexpected response");
-    //     if ans {
-    //         to_review.push(incident);
-    //     }
-    // }
-    // println!(
-    //     "Incidents marked for review: {}",
-    //     to_review
-    //         .iter()
-    //         .map(|i| i.number.to_string())
-    //         .collect::<Vec<_>>()
-    //         .join(", ")
-    // );
-    let mut slack = super::slack::Slack::new();
-    let names = slack.get_channels().await?;
-    println!("{:#?}", names);
-    println!("{:#?}", names.len());
-    println!("{:#?}", slack.channels.len());
+    // TODO try to get the channel url that corresponds to each of the given channels
+
+    // finally allow incident selection
+    let mut to_review = vec![];
+    for incident in incidents {
+        incident.print(false)?;
+        let ans = Confirm::new("Keep this incident for review?")
+            .with_default(false)
+            .prompt()
+            .expect("Unexpected response");
+        if ans {
+            to_review.push(incident);
+        }
+    }
+    println!(
+        "Incidents marked for review: {}",
+        to_review
+            .iter()
+            .map(|i| i.number.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     Ok(())
 }
