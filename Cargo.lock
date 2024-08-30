@@ -13684,6 +13684,7 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "sui-data-ingestion-core",
+ "sui-indexer-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers",

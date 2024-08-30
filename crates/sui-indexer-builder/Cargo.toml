@@ -17,3 +17,9 @@ sui-data-ingestion-core.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
+
+[dev-dependencies]
+sui-indexer-builder = { workspace = true, features = ["test-utils"] }
+
+[features]
+test-utils = []
