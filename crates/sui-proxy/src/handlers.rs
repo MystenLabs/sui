@@ -71,3 +71,38 @@ pub async fn publish_metrics(
     timer.observe_duration();
     response
 }
+
+/// Publish handler which receives metrics from walrus nodes.  Nodes will call us at this endpoint
+/// and we relay them to the upstream tsdb
+///
+/// Clients will receive a response after successfully relaying the metrics upstream
+pub async fn walrus_metrics(
+    Extension(labels): Extension<Labels>,
+    Extension(client): Extension<ReqwestClient>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(SuiPeer {
+        name, public_key, ..
+    }): Extension<SuiPeer>,
+    Extension(relay): Extension<HistogramRelay>,
+    LenDelimProtobuf(data): LenDelimProtobuf,
+) -> (StatusCode, &'static str) {
+    HANDLER_HITS
+        .with_label_values(&["walrus_metrics", &name])
+        .inc();
+    let timer = HTTP_HANDLER_DURATION
+        .with_label_values(&["walrus_metrics", &name])
+        .start_timer();
+    let data = populate_labels(name, labels.network, labels.inventory_hostname, data);
+    relay.submit(data.clone());
+    let response = convert_to_remote_write(
+        client.clone(),
+        NodeMetric {
+            data,
+            peer_addr: Multiaddr::from(addr.ip()),
+            public_key,
+        },
+    )
+    .await;
+    timer.observe_duration();
+    response
+}

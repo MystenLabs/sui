@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{DynamicPeerValidationConfig, RemoteWriteConfig, StaticPeerValidationConfig};
-use crate::handlers::publish_metrics;
+use crate::handlers::{publish_metrics, walrus_metrics};
 use crate::histogram_relay::HistogramRelay;
 use crate::ip::{is_private, to_multiaddr};
 use crate::middleware::{
@@ -9,6 +9,7 @@ use crate::middleware::{
 };
 use crate::peers::{SuiNodeProvider, SuiPeer};
 use crate::var;
+use crate::walrus::WalrusProvider;
 use anyhow::Error;
 use anyhow::Result;
 use axum::{extract::DefaultBodyLimit, middleware, routing::post, Extension, Router};
@@ -91,26 +92,62 @@ pub struct Labels {
     pub inventory_hostname: String,
 }
 
+enum AllowerKinds {
+    AllowAll,
+    SuiNodeProvider(SuiNodeProvider),
+    WalrusProvider(WalrusProvider),
+}
+
 /// App will configure our routes. This fn is also used to instrument our tests
 pub fn app(
     labels: Labels,
     client: ReqwestClient,
     relay: HistogramRelay,
-    allower: Option<SuiNodeProvider>,
+    allowers: Vec<AllowerKinds>,
 ) -> Router {
     // build our application with a route and our sender mpsc
-    let mut router = Router::new()
-        .route("/publish/metrics", post(publish_metrics))
-        .route_layer(DefaultBodyLimit::max(var!(
-            "MAX_BODY_SIZE",
-            1024 * 1024 * 5
-        )))
-        .route_layer(middleware::from_fn(expect_mysten_proxy_header))
-        .route_layer(middleware::from_fn(expect_content_length));
-    if let Some(allower) = allower {
-        router = router
-            .route_layer(middleware::from_fn(expect_valid_public_key))
-            .layer(Extension(Arc::new(allower)));
+    let mut router = Router::new();
+    // this approach works because allowall and suinodeprovider both use the same route
+    if allowers.contains(AllowerKinds::AllowAll) && allowers.len() > 1 {
+        panic!("invariant violation, you cannot add AllowAll with other allowers at the same time");
+    }
+    for allower in allowers {
+        match allower {
+            AllowerKinds::AllowAll => {
+                router = router
+                    .route("/publish/metrics", post(publish_metrics))
+                    .route_layer(DefaultBodyLimit::max(var!(
+                        "MAX_BODY_SIZE",
+                        1024 * 1024 * 5
+                    )))
+                    .route_layer(middleware::from_fn(expect_mysten_proxy_header))
+                    .route_layer(middleware::from_fn(expect_content_length));
+            }
+            AllowerKinds::SuiNodeProvider(p) => {
+                router = router
+                    .route("/publish/metrics", post(publish_metrics))
+                    .route_layer(DefaultBodyLimit::max(var!(
+                        "MAX_BODY_SIZE",
+                        1024 * 1024 * 5
+                    )))
+                    .route_layer(middleware::from_fn(expect_mysten_proxy_header))
+                    .route_layer(middleware::from_fn(expect_content_length))
+                    .route_layer(middleware::from_fn(expect_valid_public_key))
+                    .layer(Extension(Arc::new(allower)));
+            }
+            AllowerKinds::WalrusProvider(p) => {
+                router = router
+                    .route("/walrus/metrics", post(walrus_metrics))
+                    .route_layer(DefaultBodyLimit::max(var!(
+                        "MAX_BODY_SIZE",
+                        1024 * 1024 * 5
+                    )))
+                    .route_layer(middleware::from_fn(expect_mysten_proxy_header)) // do you want this too? up to you
+                    .route_layer(middleware::from_fn(expect_content_length)) // ensure this is correct for your use case
+                    .route_layer(middleware::from_fn(expect_valid_public_key)) // you may need a new function here if you use different keys
+                    .layer(Extension(Arc::new(allower)));
+            }
+        }
     }
     router
         .layer(Extension(relay))
@@ -262,5 +299,22 @@ pub fn create_server_cert_enforce_peer(
             load_certs(&certificate_path),
             load_private_key(&private_key_path),
         )?;
+    Ok((c, Some(allower)))
+}
+
+/// Default allow mode for server, we don't verify clients, everything is accepted
+pub fn create_server_cert_walrus(
+    hostname: String,
+    static_peers: Option<StaticPeerValidationConfig>,
+) -> Result<(ServerConfig, Option<WalrusProvider>), sui_tls::rustls::Error> {
+    let CertKeyPair(server_certificate, _) = generate_self_cert(hostname);
+
+    let allower = WalrusProvider::new(static_peers);
+    // I don't know if SUI_VALIDATOR_SERVER_NAME should be used, it's a const of "sui".  What does walrus need?
+    let c = ClientCertVerifier::new(allower.clone(), SUI_VALIDATOR_SERVER_NAME.to_string())
+        .rustls_server_config(
+            vec![server_certificate.rustls_certificate()],
+            server_certificate.rustls_private_key(),
+        );
     Ok((c, Some(allower)))
 }

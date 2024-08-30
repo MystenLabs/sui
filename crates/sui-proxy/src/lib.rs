@@ -11,6 +11,7 @@ pub mod middleware;
 pub mod peers;
 pub mod prom_to_mimir;
 pub mod remote_write;
+pub mod walrus;
 
 /// var extracts environment variables at runtime with a default fallback value
 /// if a default is not provided, the value is simply an empty string if not found
