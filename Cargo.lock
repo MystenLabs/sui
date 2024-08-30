@@ -1854,7 +1854,7 @@ checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
 name = "bin-version"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "const-str",
  "git-version",
@@ -12434,7 +12434,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anemo",
  "anyhow",
@@ -12505,7 +12505,7 @@ dependencies = [
  "sui-package-management",
  "sui-protocol-config",
  "sui-replay",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-simulator",
  "sui-source-validation",
  "sui-swarm",
@@ -12649,7 +12649,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "arrow",
@@ -12701,7 +12701,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -12710,7 +12710,7 @@ dependencies = [
 
 [[package]]
 name = "sui-archival"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -12818,7 +12818,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-protocol-config",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-simulator",
  "sui-storage",
  "sui-surfer",
@@ -12836,7 +12836,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -12870,7 +12870,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",
@@ -12885,7 +12885,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -12902,7 +12902,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "telemetry-subscribers",
  "tokio",
@@ -12933,7 +12933,7 @@ dependencies = [
  "sui-data-ingestion-core",
  "sui-indexer-builder",
  "sui-json-rpc-types",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",
@@ -12945,7 +12945,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12969,7 +12969,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
@@ -13142,7 +13142,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13204,7 +13204,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -13248,7 +13248,7 @@ dependencies = [
  "sui-node",
  "sui-protocol-config",
  "sui-rest-api",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-simulator",
  "sui-storage",
  "sui-swarm",
@@ -13321,7 +13321,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13340,7 +13340,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -13377,7 +13377,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13440,7 +13440,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-config"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -13517,7 +13517,7 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
@@ -13557,7 +13557,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13600,7 +13600,7 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
@@ -13750,7 +13750,7 @@ dependencies = [
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-protocol-config",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-simulator",
  "sui-swarm-config",
  "sui-test-transaction-builder",
@@ -13811,7 +13811,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13828,7 +13828,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-package-resolver",
  "sui-rest-api",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "tokio",
 ]
@@ -13845,7 +13845,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "backoff",
@@ -13866,7 +13866,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -13908,7 +13908,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -13932,7 +13932,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-lsp"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "bin-version",
  "clap",
@@ -14062,7 +14062,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -14115,7 +14115,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14151,7 +14151,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14171,7 +14171,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -14181,7 +14181,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-dump"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14198,14 +14198,14 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "move-core-types",
  "move-package",
  "move-symbol-pool",
  "sui-json-rpc-types",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "thiserror",
  "tracing",
@@ -14348,7 +14348,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-protocol-config",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-storage",
  "sui-transaction-checks",
  "sui-types",
@@ -14393,7 +14393,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14421,7 +14421,7 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-node",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-swarm-config",
  "sui-types",
  "telemetry-subscribers",
@@ -14435,7 +14435,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14453,7 +14453,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
  "telemetry-subscribers",
  "test-cluster",
@@ -14484,7 +14484,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -14520,7 +14520,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -14567,7 +14567,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "async-trait",
  "bcs",
@@ -14630,7 +14630,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "colored",
@@ -14648,7 +14648,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move-build",
  "sui-package-management",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-test-transaction-builder",
  "sui-types",
  "tar",
@@ -14684,7 +14684,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move",
  "sui-move-build",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-source-validation",
  "telemetry-subscribers",
  "tempfile",
@@ -14755,7 +14755,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "async-trait",
  "bcs",
@@ -14853,13 +14853,13 @@ dependencies = [
  "shared-crypto",
  "sui-genesis-builder",
  "sui-move-build",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-types",
 ]
 
 [[package]]
 name = "sui-test-validator"
-version = "1.32.0"
+version = "1.32.1"
 
 [[package]]
 name = "sui-tls"
@@ -14884,7 +14884,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -14918,7 +14918,7 @@ dependencies = [
  "sui-package-dump",
  "sui-protocol-config",
  "sui-replay",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-snapshot",
  "sui-storage",
  "sui-types",
@@ -15170,7 +15170,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15204,7 +15204,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
@@ -15549,7 +15549,7 @@ dependencies = [
  "sui-macros",
  "sui-node",
  "sui-protocol-config",
- "sui-sdk 1.32.0",
+ "sui-sdk 1.32.1",
  "sui-simulator",
  "sui-swarm",
  "sui-swarm-config",
@@ -17372,7 +17372,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.32.0"
+version = "1.32.1"
 dependencies = [
  "anyhow",
  "camino",
