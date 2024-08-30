@@ -6,7 +6,24 @@ use crate::{
     multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
 };
 use eyre::{eyre, Context, Result};
+use hyper_util::client::legacy::connect::{dns::Name, HttpConnector};
+use once_cell::sync::OnceCell;
+use std::{
+    collections::HashMap,
+    fmt,
+    future::Future,
+    io,
+    net::{SocketAddr, ToSocketAddrs},
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{self, Poll},
+    time::Instant,
+    vec,
+};
+use tokio::task::JoinHandle;
 use tonic::transport::{Channel, Endpoint, Uri};
+use tower::Service;
+use tracing::{info, trace};
 
 pub async fn connect(address: &Multiaddr) -> Result<Channel> {
     let channel = endpoint_from_multiaddr(address)?.connect().await?;
@@ -62,6 +79,8 @@ struct MyEndpoint {
     endpoint: Endpoint,
 }
 
+static DISABLE_CACHING_RESOLVER: OnceCell<bool> = OnceCell::new();
+
 impl MyEndpoint {
     fn new(endpoint: Endpoint) -> Self {
         Self { endpoint }
@@ -81,7 +100,23 @@ impl MyEndpoint {
     }
 
     fn connect_lazy(self) -> Channel {
-        self.endpoint.connect_lazy()
+        let disable_caching_resolver = *DISABLE_CACHING_RESOLVER.get_or_init(|| {
+            let disable_caching_resolver = std::env::var("DISABLE_CACHING_RESOLVER").is_ok();
+            info!("DISABLE_CACHING_RESOLVER: {disable_caching_resolver}");
+            disable_caching_resolver
+        });
+
+        if disable_caching_resolver {
+            self.endpoint.connect_lazy()
+        } else {
+            let mut http = HttpConnector::new_with_resolver(CachingResolver::new());
+            http.enforce_http(false);
+            http.set_nodelay(true);
+            http.set_keepalive(None);
+            http.set_connect_timeout(None);
+
+            self.endpoint.connect_with_connector_lazy(http)
+        }
     }
 
     async fn connect(self) -> Result<Channel> {
@@ -122,4 +157,123 @@ fn apply_config_to_endpoint(config: &Config, mut endpoint: Endpoint) -> Endpoint
         .initial_stream_window_size(config.http2_initial_stream_window_size)
         .initial_connection_window_size(config.http2_initial_connection_window_size)
         .tcp_keepalive(config.tcp_keepalive)
+}
+
+type CacheEntry = (Instant, Vec<SocketAddr>);
+
+/// A caching resolver based on hyper_util GaiResolver
+#[derive(Clone)]
+pub struct CachingResolver {
+    cache: Arc<Mutex<HashMap<Name, CacheEntry>>>,
+}
+
+type SocketAddrs = vec::IntoIter<SocketAddr>;
+
+pub struct CachingFuture {
+    inner: JoinHandle<Result<SocketAddrs, io::Error>>,
+}
+
+impl CachingResolver {
+    pub fn new() -> Self {
+        CachingResolver {
+            cache: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+impl Default for CachingResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Service<Name> for CachingResolver {
+    type Response = SocketAddrs;
+    type Error = io::Error;
+    type Future = CachingFuture;
+
+    fn poll_ready(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), io::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, name: Name) -> Self::Future {
+        let blocking = {
+            let cache = self.cache.clone();
+            tokio::task::spawn_blocking(move || {
+                let entry = cache.lock().unwrap().get(&name).cloned();
+
+                if let Some((when, addrs)) = entry {
+                    trace!("cached host={:?}", name.as_str());
+
+                    if when.elapsed().as_secs() > 60 {
+                        trace!("refreshing cache for host={:?}", name.as_str());
+                        // Start a new task to update the cache later.
+                        tokio::task::spawn_blocking(move || {
+                            if let Ok(addrs) = (name.as_str(), 0).to_socket_addrs() {
+                                let addrs: Vec<_> = addrs.collect();
+                                trace!("updating cached host={:?}", name.as_str());
+                                cache
+                                    .lock()
+                                    .unwrap()
+                                    .insert(name, (Instant::now(), addrs.clone()));
+                            }
+                        });
+                    }
+
+                    Ok(addrs.into_iter())
+                } else {
+                    trace!("resolving host={:?}", name.as_str());
+                    match (name.as_str(), 0).to_socket_addrs() {
+                        Ok(addrs) => {
+                            let addrs: Vec<_> = addrs.collect();
+                            cache
+                                .lock()
+                                .unwrap()
+                                .insert(name, (Instant::now(), addrs.clone()));
+                            Ok(addrs.into_iter())
+                        }
+                        res => res,
+                    }
+                }
+            })
+        };
+
+        CachingFuture { inner: blocking }
+    }
+}
+
+impl fmt::Debug for CachingResolver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad("CachingResolver")
+    }
+}
+
+impl Future for CachingFuture {
+    type Output = Result<SocketAddrs, io::Error>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        Pin::new(&mut self.inner).poll(cx).map(|res| match res {
+            Ok(Ok(addrs)) => Ok(addrs),
+            Ok(Err(err)) => Err(err),
+            Err(join_err) => {
+                if join_err.is_cancelled() {
+                    Err(io::Error::new(io::ErrorKind::Interrupted, join_err))
+                } else {
+                    panic!("background task failed: {:?}", join_err)
+                }
+            }
+        })
+    }
+}
+
+impl fmt::Debug for CachingFuture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad("CachingFuture")
+    }
+}
+
+impl Drop for CachingFuture {
+    fn drop(&mut self) {
+        self.inner.abort();
+    }
 }
