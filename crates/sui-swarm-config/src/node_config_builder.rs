@@ -240,6 +240,7 @@ impl ValidatorConfigBuilder {
             state_accumulator_v2: self.state_accumulator_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
+            enable_db_write_stall: None,
         }
     }
 
@@ -523,6 +524,7 @@ impl FullnodeConfigBuilder {
             enable_soft_bundle: true,
             // This is a validator specific feature.
             enable_validator_tx_finalizer: false,
+            enable_db_write_stall: None,
         }
     }
 }
