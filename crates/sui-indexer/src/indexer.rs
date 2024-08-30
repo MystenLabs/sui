@@ -42,7 +42,7 @@ impl Indexer {
             store,
             metrics,
             snapshot_config,
-            None,
+            PruningOptions::default(),
             CancellationToken::new(),
         )
         .await
