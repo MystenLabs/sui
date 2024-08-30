@@ -13694,6 +13694,7 @@ dependencies = [
  "prometheus",
  "sui-data-ingestion-core",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tracing",

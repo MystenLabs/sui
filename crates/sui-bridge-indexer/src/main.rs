@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
     .build(current_block, subscription_end_block, datastore.clone());
     let subscription_indexer_fut = spawn_logged_monitored_task!(eth_subscription_indexer.start());
 
-    // Start the eth sync indexer
+    // Start the eth sync data source
     let eth_sync_datasource = EthSyncDatasource::new(
         config.eth_sui_bridge_contract_address.clone(),
         config.eth_rpc_url.clone(),
@@ -155,9 +155,9 @@ async fn main() -> Result<()> {
         );
         indexer.start().await?;
     }
-    // We are not waiting for the sui tasks to finish here, which is ok.
-    futures::future::join_all(vec![subscription_indexer_fut, sync_indexer_fut]).await;
-
+    // These tasks should not finish
+    subscription_indexer_fut.await.unwrap().unwrap();
+    sync_indexer_fut.await.unwrap().unwrap();
     Ok(())
 }
 
