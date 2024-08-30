@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    models::display::StoredDisplay,
+    models::{display::StoredDisplay, obj_indices::StoredObjectVersion},
     types::{
         EventIndex, IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent,
         IndexedObject, IndexedPackage, IndexedTransaction, TxIndex,
@@ -27,6 +27,7 @@ pub struct CheckpointDataToCommit {
     pub display_updates: BTreeMap<String, StoredDisplay>,
     pub object_changes: TransactionObjectChangesToCommit,
     pub object_history_changes: TransactionObjectChangesToCommit,
+    pub object_versions: Vec<StoredObjectVersion>,
     pub packages: Vec<IndexedPackage>,
     pub epoch: Option<EpochToCommit>,
 }
