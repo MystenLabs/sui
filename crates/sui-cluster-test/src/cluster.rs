@@ -154,6 +154,8 @@ pub struct LocalNewCluster {
     indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
+    #[allow(unused)]
+    cancellation_tokens: Vec<tokio_util::sync::DropGuard>,
 }
 
 impl LocalNewCluster {
@@ -223,26 +225,29 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        let mut cancellation_tokens = vec![];
         if let (Some(pg_address), Some(indexer_address)) =
             (options.pg_address.clone(), indexer_address)
         {
             // Start in writer mode
-            start_test_indexer(
+            let (_, _, writer_token) = start_test_indexer(
                 Some(pg_address.clone()),
                 fullnode_url.clone(),
                 ReaderWriterConfig::writer_mode(None, None),
                 data_ingestion_path.clone(),
             )
             .await;
+            cancellation_tokens.push(writer_token.drop_guard());
 
             // Start in reader mode
-            start_test_indexer(
+            let (_, _, reader_token) = start_test_indexer(
                 Some(pg_address),
                 fullnode_url.clone(),
                 ReaderWriterConfig::reader_mode(indexer_address.to_string()),
                 data_ingestion_path,
             )
             .await;
+            cancellation_tokens.push(reader_token.drop_guard());
         }
 
         if let Some(graphql_address) = &options.graphql_address {
@@ -275,6 +280,7 @@ impl Cluster for LocalNewCluster {
             faucet_key,
             config_directory: tempfile::tempdir()?,
             indexer_url: options.indexer_address.clone(),
+            cancellation_tokens,
         })
     }
 
