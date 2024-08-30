@@ -76,4 +76,9 @@ module std::u16 {
     public macro fun do_eq($stop: u16, $f: |u16|) {
         std::macros::do_eq!($stop, $f)
     }
+
+    // #[test_only]
+    public use fun std::integer::from_u16 as u16.to_int;
+    // #[test_only]
+    public use fun std::real::from_u16 as u16.to_real;
 }

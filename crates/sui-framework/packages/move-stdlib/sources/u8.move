@@ -76,4 +76,9 @@ module std::u8 {
     public macro fun do_eq($stop: u8, $f: |u8|) {
         std::macros::do_eq!($stop, $f)
     }
+
+    // #[test_only]
+    public use fun std::integer::from_u8 as u8.to_int;
+    // #[test_only]
+    public use fun std::real::from_u8 as u8.to_real;
 }

@@ -76,4 +76,9 @@ module std::u64 {
     public macro fun do_eq($stop: u64, $f: |u64|) {
         std::macros::do_eq!($stop, $f)
     }
+
+    // #[test_only]
+    public use fun std::integer::from_u64 as u64.to_int;
+    // #[test_only]
+    public use fun std::real::from_u64 as u64.to_real;
 }

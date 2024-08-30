@@ -76,4 +76,9 @@ module std::u32 {
     public macro fun do_eq($stop: u32, $f: |u32|) {
         std::macros::do_eq!($stop, $f)
     }
+
+    // #[test_only]
+    public use fun std::integer::from_u32 as u32.to_int;
+    // #[test_only]
+    public use fun std::real::from_u32 as u32.to_real;
 }

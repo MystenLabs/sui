@@ -25,128 +25,128 @@ options provided to the prover.
 {%- endif %}
 
 // Prover
-procedure {:inline 1} $0_prover_assume_(p: bool) {
+procedure {:inline 1} $0_prover_requires(p: bool) {
     assume p;
 }
-procedure {:inline 1} $0_prover_assert_(p: bool) {
+procedure {:inline 1} $0_prover_ensures(p: bool) {
     assert {:msg "assert_failed(0,0,0): assertion does not hold"} p;
 }
 
-type $0_integer_Integer = int;
-procedure {:inline 1} $0_integer_from_u8(x: int) returns (y: int) {
+type $1_integer_Integer = int;
+procedure {:inline 1} $1_integer_from_u8(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_from_u16(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_from_u16(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_from_u32(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_from_u32(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_from_u64(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_from_u64(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_from_u128(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_from_u128(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_from_u256(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_from_u256(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u8(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u8(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u16(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u16(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u32(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u32(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u64(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u64(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u128(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u128(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_to_u256(x: int) returns (y: int) {
+procedure {:inline 1} $1_integer_to_u256(x: int) returns (y: int) {
     y := x;
 }
-procedure {:inline 1} $0_integer_add(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_add(x: int, y: int) returns (z: int) {
     z := x + y;
 }
-procedure {:inline 1} $0_integer_sub(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_sub(x: int, y: int) returns (z: int) {
     z := x - y;
 }
-procedure {:inline 1} $0_integer_neg(x: int) returns (z: int) {
+procedure {:inline 1} $1_integer_neg(x: int) returns (z: int) {
     z := -x;
 }
-procedure {:inline 1} $0_integer_mul(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_mul(x: int, y: int) returns (z: int) {
     z := x * y;
 }
-procedure {:inline 1} $0_integer_div(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_div(x: int, y: int) returns (z: int) {
     z := x div y;
 }
-procedure {:inline 1} $0_integer_mod(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_mod(x: int, y: int) returns (z: int) {
     z := x mod y;
 }
-procedure {:inline 1} $0_integer_pow(x: int, y: int) returns (z: int) {
+procedure {:inline 1} $1_integer_pow(x: int, y: int) returns (z: int) {
     z := $pow(x, y);
 }
-procedure {:inline 1} $0_integer_eq(x: int, y: int) returns (z: bool) {
+procedure {:inline 1} $1_integer_eq(x: int, y: int) returns (z: bool) {
     z := x == y;
 }
-procedure {:inline 1} $0_integer_lt(x: int, y: int) returns (z: bool) {
+procedure {:inline 1} $1_integer_lt(x: int, y: int) returns (z: bool) {
     z := x < y;
 }
-procedure {:inline 1} $0_integer_gt(x: int, y: int) returns (z: bool) {
+procedure {:inline 1} $1_integer_gt(x: int, y: int) returns (z: bool) {
     z := x > y;
 }
-procedure {:inline 1} $0_integer_lte(x: int, y: int) returns (z: bool) {
+procedure {:inline 1} $1_integer_lte(x: int, y: int) returns (z: bool) {
     z := x <= y;
 }
-procedure {:inline 1} $0_integer_gte(x: int, y: int) returns (z: bool) {
+procedure {:inline 1} $1_integer_gte(x: int, y: int) returns (z: bool) {
     z := x >= y;
 }
-procedure {:inline 1} $0_integer_div_real(x: int, y: int) returns (z: real) {
+procedure {:inline 1} $1_integer_div_real(x: int, y: int) returns (z: real) {
     z := x / y;
 }
 
-type $0_real_Real = real;
-procedure {:inline 1} $0_real_from_integer(x: int) returns (y: real) {
+type $1_real_Real = real;
+procedure {:inline 1} $1_real_from_integer(x: int) returns (y: real) {
     y := real(x);
 }
-procedure {:inline 1} $0_real_to_integer(x: real) returns (y: int) {
+procedure {:inline 1} $1_real_to_integer(x: real) returns (y: int) {
     y := int(x);
 }
-procedure {:inline 1} $0_real_add(x: real, y: real) returns (z: real) {
+procedure {:inline 1} $1_real_add(x: real, y: real) returns (z: real) {
     z := x + y;
 }
-procedure {:inline 1} $0_real_sub(x: real, y: real) returns (z: real) {
+procedure {:inline 1} $1_real_sub(x: real, y: real) returns (z: real) {
     z := x - y;
 }
-procedure {:inline 1} $0_real_neg(x: real) returns (z: real) {
+procedure {:inline 1} $1_real_neg(x: real) returns (z: real) {
     z := -x;
 }
-procedure {:inline 1} $0_real_mul(x: real, y: real) returns (z: real) {
+procedure {:inline 1} $1_real_mul(x: real, y: real) returns (z: real) {
     z := x * y;
 }
-procedure {:inline 1} $0_real_div(x: real, y: real) returns (z: real) {
+procedure {:inline 1} $1_real_div(x: real, y: real) returns (z: real) {
     z := x / y;
 }
-procedure {:inline 1} $0_real_exp(x: real, y: real) returns (z: real) {
+procedure {:inline 1} $1_real_exp(x: real, y: real) returns (z: real) {
     z := x ** y;
 }
-procedure {:inline 1} $0_real_eq(x: real, y: real) returns (z: bool) {
+procedure {:inline 1} $1_real_eq(x: real, y: real) returns (z: bool) {
     z := x == y;
 }
-procedure {:inline 1} $0_real_lt(x: real, y: real) returns (z: bool) {
+procedure {:inline 1} $1_real_lt(x: real, y: real) returns (z: bool) {
     z := x < y;
 }
-procedure {:inline 1} $0_real_gt(x: real, y: real) returns (z: bool) {
+procedure {:inline 1} $1_real_gt(x: real, y: real) returns (z: bool) {
     z := x > y;
 }
-procedure {:inline 1} $0_real_lte(x: real, y: real) returns (z: bool) {
+procedure {:inline 1} $1_real_lte(x: real, y: real) returns (z: bool) {
     z := x <= y;
 }
-procedure {:inline 1} $0_real_gte(x: real, y: real) returns (z: bool) {
+procedure {:inline 1} $1_real_gte(x: real, y: real) returns (z: bool) {
     z := x >= y;
 }
 
