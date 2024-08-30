@@ -45,7 +45,6 @@ INTERESTING_DIRECTORIES = [
     "narwhal",
     "nre",
     "sui-execution",
-    ".github",
 ]
 
 # Start release notes with these sections, if they contain relevant
