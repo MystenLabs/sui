@@ -11,7 +11,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { normalizeStructTag, normalizeSuiAddress, SUI_TYPE_ARG, toB64 } from '@mysten/sui/utils';
 
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
+import { getContractIds, ZkBag } from './zk-bag.js';
 
 interface ZkSendLinkRedirect {
 	url: string;
@@ -70,7 +70,7 @@ export class ZkSendLinkBuilder {
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		sender,
 		redirect,
-		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : undefined,
+		contract = getContractIds(network),
 	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
@@ -306,7 +306,7 @@ export class ZkSendLinkBuilder {
 		network = 'mainnet',
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		transaction = new Transaction(),
-		contract: contractIds = MAINNET_CONTRACT_IDS,
+		contract: contractIds = getContractIds(network),
 	}: {
 		transaction?: Transaction;
 		client?: SuiClient;
