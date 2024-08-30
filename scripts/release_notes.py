@@ -212,7 +212,6 @@ def extract_protocol_version(commit):
 
         return match[0]
 
-
 def print_changelog(pr, log):
     if pr:
         print(f"https://github.com/MystenLabs/sui/pull/{pr}:")
@@ -220,7 +219,7 @@ def print_changelog(pr, log):
 
 
 def do_check(pr):
-    """Check if the release notes section of a given commit is complete.
+    """Check if the release notes section of a given PR is complete.
 
     This means that every impacted component has a non-empty note,
     every note is attached to a checked checkbox, and every impact
@@ -245,11 +244,10 @@ def do_check(pr):
     if not issues:
         return
 
-    print(f"Found issues with release notes in {pr}:")
+    print(f"Found issues with release notes in PR {pr}:")
     for issue in issues:
         print(issue)
     sys.exit(1)
-
 
 def do_generate(from_, to):
     """Generate release notes from git commits.
