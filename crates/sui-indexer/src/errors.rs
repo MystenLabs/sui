@@ -129,6 +129,16 @@ pub enum IndexerError {
 
     #[error(transparent)]
     NameServiceError(#[from] NameServiceError),
+
+    #[error(
+        "Migration record does not match the DB.\
+        Expecting `{local_migration_record}`,\
+        got: `{local_migration_record}` from the DB"
+    )]
+    DbMigrationRecordMismatch {
+        local_migration_record: String,
+        db_migration_record: String,
+    },
 }
 
 pub trait Context<T> {

@@ -1,13 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use crate::errors::IndexerError;
+use crate::{run_query_async, spawn_read_only_blocking};
+use diesel::migration::{Migration, MigrationSource};
+use diesel::pg::Pg;
 use diesel::query_dsl::RunQueryDsl;
 use diesel::r2d2::ConnectionManager;
 use diesel::r2d2::{Pool, PooledConnection};
-use diesel::PgConnection;
+use diesel::{sql_query, PgConnection, QueryableByName};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use std::cmp::max;
+use std::time::Duration;
+use tracing::info;
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
@@ -128,13 +135,64 @@ pub fn get_pool_connection(pool: &ConnectionPool) -> Result<PoolConnection, Inde
     })
 }
 
+#[derive(QueryableByName)]
+pub struct StoredMigration {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub version: String,
+}
+
+pub async fn check_db_migration_consistency(pool: ConnectionPool) -> Result<(), IndexerError> {
+    info!("Starting compatibility check");
+    let query = "SELECT version FROM __diesel_schema_migrations ORDER BY version";
+    let mut db_migrations: Vec<_> = run_query_async!(&pool, move |conn| {
+        sql_query(query).load::<StoredMigration>(conn)
+    })?
+    .into_iter()
+    .map(|m| m.version)
+    .collect();
+    db_migrations.sort();
+    info!("Migration Records from the DB: {:?}", db_migrations);
+
+    let known_migrations: Vec<_> = MIGRATIONS
+        .migrations()
+        .unwrap()
+        .into_iter()
+        .map(|m: Box<dyn Migration<Pg>>| {
+            let full_name = m.name().to_string().replace("-", "");
+            let first_non_digit = full_name
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(full_name.len());
+            full_name[..first_non_digit].to_string()
+        })
+        .collect();
+    info!(
+        "Migration Records from local schema: {:?}",
+        known_migrations
+    );
+    for i in 0..max(known_migrations.len(), db_migrations.len()) {
+        let local_migration_record = known_migrations.get(i).cloned().unwrap_or_default();
+        let db_migration_record = db_migrations.get(i).cloned().unwrap_or_default();
+        if known_migrations.get(i) != db_migrations.get(i) {
+            return Err(IndexerError::DbMigrationRecordMismatch {
+                local_migration_record,
+                db_migration_record,
+            });
+        }
+    }
+    info!("Compatibility check passed");
+    Ok(())
+}
+
 pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
     setup_postgres::reset_database(conn)?;
     Ok(())
 }
 
 pub mod setup_postgres {
-    use crate::db::{get_pool_connection, new_connection_pool, PoolConnection};
+    use crate::db::{
+        check_db_migration_consistency, get_pool_connection, new_connection_pool, PoolConnection,
+        MIGRATIONS,
+    };
     use crate::errors::IndexerError;
     use crate::indexer::Indexer;
     use crate::metrics::IndexerMetrics;
@@ -144,12 +202,10 @@ pub mod setup_postgres {
     use diesel::migration::MigrationSource;
 
     use diesel::RunQueryDsl;
-    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+    use diesel_migrations::MigrationHarness;
     use prometheus::Registry;
     use secrecy::ExposeSecret;
     use tracing::{error, info};
-
-    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
     pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
         info!("Resetting PG database ...");
@@ -247,6 +303,9 @@ pub mod setup_postgres {
             })?;
             info!("Reset Postgres database complete.");
         }
+
+        check_db_migration_consistency(blocking_cp.clone()).await?;
+
         let indexer_metrics = IndexerMetrics::new(&registry);
         mysten_metrics::init_metrics(&registry);
 
