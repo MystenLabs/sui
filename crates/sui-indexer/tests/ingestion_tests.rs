@@ -57,7 +57,7 @@ mod ingestion_tests {
                 .await;
         });
         // Starts indexer
-        let (pg_store, pg_handle) = start_test_indexer(
+        let (pg_store, pg_handle, _) = start_test_indexer(
             Some(DEFAULT_DB_URL.to_owned()),
             format!("http://{}", server_url),
             ReaderWriterConfig::writer_mode(None, None),

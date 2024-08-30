@@ -246,8 +246,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
+            snapshot_config,
             flavor,
             epochs_to_keep,
         ) = match task_opt.map(|t| t.command) {
@@ -262,8 +261,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
+                    snapshot_config,
                     flavor,
                     epochs_to_keep,
                 },
@@ -302,8 +300,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
+                    snapshot_config,
                     flavor,
                     epochs_to_keep,
                 )
@@ -318,8 +315,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     false,
                     None,
                     None,
-                    None,
-                    None,
+                    SnapshotLagConfig::default(),
                     None,
                     None,
                 )
@@ -344,8 +340,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
-                object_snapshot_min_checkpoint_lag,
-                object_snapshot_max_checkpoint_lag,
+                snapshot_config,
                 path.to_path_buf(),
                 epochs_to_keep,
             )
@@ -2107,8 +2102,7 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
-    object_snapshot_min_checkpoint_lag: Option<usize>,
-    object_snapshot_max_checkpoint_lag: Option<usize>,
+    snapshot_config: SnapshotLagConfig,
     test_file_path: PathBuf,
     epochs_to_keep: Option<u64>,
 ) -> (
@@ -2200,11 +2194,7 @@ async fn init_sim_executor(
         ),
         internal_data_port,
         Arc::new(read_replica),
-        Some(SnapshotLagConfig::new(
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
-            Some(1),
-        )),
+        Some(snapshot_config),
         epochs_to_keep,
         data_ingestion_path,
     )

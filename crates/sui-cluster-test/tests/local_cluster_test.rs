@@ -19,6 +19,9 @@ async fn test_sui_cluster() {
     use sui_cluster_test::config::Env;
     use sui_graphql_rpc::client::simple_client::SimpleClient;
     use tokio::time::sleep;
+
+    telemetry_subscribers::init_for_testing();
+
     let fullnode_rpc_port: u16 = 9020;
     let indexer_rpc_port: u16 = 9124;
     let pg_address = "postgres://postgres:postgrespw@localhost:5432/sui_indexer".to_string();
