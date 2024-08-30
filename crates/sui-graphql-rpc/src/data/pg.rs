@@ -200,7 +200,6 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        database::Connection,
         db::{get_pool_connection, new_connection_pool, reset_database, ConnectionPoolConfig},
         models::objects::StoredObject,
         schema::objects,
@@ -215,13 +214,7 @@ mod tests {
         pool_config.set_pool_size(5);
         let pool = new_connection_pool(database.database().url().as_str(), &pool_config).unwrap();
         let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(
-            Connection::dedicated(database.database().url())
-                .await
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        reset_database(&mut conn).await.unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())
