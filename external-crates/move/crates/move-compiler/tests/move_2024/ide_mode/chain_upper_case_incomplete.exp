@@ -1,0 +1,6 @@
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/ide_mode/chain_upper_case_incomplete.move:5:9
+  │
+5 │         B
+  │         ^ Expected a type, function, or constant in this position, not an address
+
