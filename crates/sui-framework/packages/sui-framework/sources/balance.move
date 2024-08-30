@@ -46,6 +46,7 @@ module sui::balance {
     public fun create_supply<T: drop>(_: T): Supply<T> {
         Supply { value: 0 }
     }
+    public use fun destroy_zero_supply as Supply.destroy_zero;
 
     /// Destroy an empty supply
     public fun destroy_zero_supply<T: drop>(self: Supply<T>) {
