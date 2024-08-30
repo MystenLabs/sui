@@ -837,7 +837,7 @@ mod checked {
                 &BTreeMap::new(),
                 &context
                     .protocol_config
-                    .verifier_config(/* for_signing */ false),
+                    .verifier_config(/* signing_limits */ None),
             )?;
         }
 
