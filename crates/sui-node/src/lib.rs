@@ -458,11 +458,8 @@ impl SuiNode {
             None,
         ));
 
-        let enable_write_stall = if let Some(enable) = config.enable_db_write_stall {
-            enable
-        } else {
-            is_validator
-        };
+        // By default, only enable write stall on validators for perpetual db.
+        let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
         let perpetual_tables_options = AuthorityPerpetualTablesOptions { enable_write_stall };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
