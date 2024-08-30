@@ -3,7 +3,20 @@
 
 #![allow(clippy::all)]
 
-mod pg;
+mod pg_v1;
+mod pg_v2;
+mod pg_v3;
+
+#[cfg(feature = "schema_v3")]
+use pg_v3 as pg;
+
+#[cfg(feature = "schema_v2")]
+#[cfg(not(feature = "schema_v3"))]
+use pg_v2 as pg;
+
+#[cfg(feature = "schema_v1")]
+#[cfg(not(feature = "schema_v2"))]
+use pg_v1 as pg;
 
 pub use pg::chain_identifier;
 pub use pg::checkpoints;

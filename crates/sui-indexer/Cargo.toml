@@ -57,7 +57,10 @@ diesel_migrations.workspace = true
 cached.workspace = true
 
 [features]
-default = []
+default = ["schema_v3"]
+schema_v1 = []
+schema_v2 = []
+schema_v3 = []
 pg_integration = []
 
 [dev-dependencies]

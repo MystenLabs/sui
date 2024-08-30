@@ -1,17 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::max;
 use std::time::Duration;
 
 use crate::errors::IndexerError;
+use crate::{run_query_async, spawn_read_only_blocking};
 use clap::Args;
+use diesel::migration::{Migration, MigrationSource};
+use diesel::pg::Pg;
 use diesel::query_dsl::RunQueryDsl;
 use diesel::r2d2::ConnectionManager;
 use diesel::r2d2::{Pool, PooledConnection};
 use diesel::PgConnection;
+use diesel::{sql_query, QueryableByName};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use tracing::info;
 
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
+
+const LAST_MIGRATION_IN_V1: &str = "2023-11-29-193859_advance_partition";
+const LAST_MIGRATION_IN_V2: &str = "2024-07-13-003534_chain_identifier";
 
 #[derive(Args, Debug, Clone)]
 pub struct ConnectionPoolConfig {
@@ -122,15 +134,82 @@ pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub mod setup_postgres {
-    use crate::db::PoolConnection;
-    use anyhow::anyhow;
-    use diesel::migration::MigrationSource;
-    use diesel::RunQueryDsl;
-    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-    use tracing::info;
+#[derive(QueryableByName)]
+pub struct StoredMigration {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub version: String,
+}
 
-    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
+pub async fn check_db_migration_consistency(pool: ConnectionPool) -> Result<(), IndexerError> {
+    info!("Starting compatibility check");
+    let query = "SELECT version FROM __diesel_schema_migrations ORDER BY version";
+    let mut db_migrations: Vec<_> = run_query_async!(&pool, move |conn| {
+        sql_query(query).load::<StoredMigration>(conn)
+    })?
+    .into_iter()
+    .map(|m| m.version)
+    .collect();
+    db_migrations.sort();
+    info!("Migration Records from the DB: {:?}", db_migrations);
+
+    let known_migrations = get_all_local_migrations()
+        .into_iter()
+        .map(|m| {
+            let full_name = m.name().to_string();
+            let processed = full_name.replace("-", "");
+            let first_non_digit = processed
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(processed.len());
+            processed[..first_non_digit].to_string()
+        })
+        .collect::<Vec<_>>();
+    info!(
+        "Migration Records from local schema: {:?}",
+        known_migrations
+    );
+    for i in 0..max(known_migrations.len(), db_migrations.len()) {
+        let local_migration_record = known_migrations.get(i).cloned().unwrap_or_default();
+        let db_migration_record = db_migrations.get(i).cloned().unwrap_or_default();
+        if known_migrations.get(i) != db_migrations.get(i) {
+            return Err(IndexerError::DbMigrationRecordMismatch {
+                local_migration_record,
+                db_migration_record,
+            });
+        }
+    }
+    info!("Compatibility check passed");
+    Ok(())
+}
+
+fn get_all_local_migrations() -> Vec<Box<dyn Migration<Pg>>> {
+    let mut known_migrations: Vec<_> = MIGRATIONS.migrations().unwrap();
+    // We expect the DB migration record to end at the last migration
+    // known to the build based on the release.
+    let last_migration_pos = if cfg!(feature = "schema_v3") {
+        known_migrations.len() - 1
+    } else if cfg!(feature = "schema_v2") {
+        known_migrations
+            .iter()
+            .position(|m| m.name().to_string() == LAST_MIGRATION_IN_V2)
+            .expect("Last migration not found in known migrations")
+    } else {
+        assert!(cfg!(feature = "schema_v1"));
+        // production schema.
+        known_migrations
+            .iter()
+            .position(|m| m.name().to_string() == LAST_MIGRATION_IN_V1)
+            .expect("Last migration not found in known migrations")
+    };
+    known_migrations.truncate(last_migration_pos + 1);
+    known_migrations
+}
+
+pub mod setup_postgres {
+    use crate::db::{get_all_local_migrations, PoolConnection};
+    use anyhow::anyhow;
+    use diesel::RunQueryDsl;
+    use diesel_migrations::MigrationHarness;
+    use tracing::info;
 
     pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
         info!("Resetting PG database ...");
@@ -185,9 +264,27 @@ pub mod setup_postgres {
         .execute(conn)?;
         info!("Created __diesel_schema_migrations table.");
 
-        conn.run_migrations(&MIGRATIONS.migrations().unwrap())
+        conn.run_migrations(&get_all_local_migrations())
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
         info!("Reset database complete.");
         Ok(())
+    }
+}
+
+#[cfg(feature = "pg_integration")]
+#[cfg(test)]
+mod tests {
+    use crate::db::{
+        check_db_migration_consistency, new_connection_pool, setup_postgres::reset_database,
+        ConnectionPoolConfig,
+    };
+
+    #[tokio::test]
+    async fn test_db_consistency_check() {
+        let db_url = "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
+        let config = ConnectionPoolConfig::default();
+        let pool = new_connection_pool(db_url, &config).unwrap();
+        reset_database(&mut pool.get().unwrap()).unwrap();
+        check_db_migration_consistency(pool).await.unwrap();
     }
 }

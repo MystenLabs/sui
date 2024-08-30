@@ -3,7 +3,9 @@
 
 use clap::Parser;
 use sui_indexer::config::Command;
-use sui_indexer::db::{get_pool_connection, new_connection_pool, reset_database};
+use sui_indexer::db::{
+    check_db_migration_consistency, get_pool_connection, new_connection_pool, reset_database,
+};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
@@ -30,6 +32,7 @@ async fn main() -> Result<(), IndexerError> {
 
     let connection_pool =
         new_connection_pool(opts.database_url.as_str(), &opts.connection_pool_config)?;
+    check_db_migration_consistency(connection_pool.clone()).await?;
     spawn_connection_pool_metric_collector(indexer_metrics.clone(), connection_pool.clone());
 
     match opts.command {
