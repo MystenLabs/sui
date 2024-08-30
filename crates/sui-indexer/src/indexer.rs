@@ -103,6 +103,12 @@ impl Indexer {
         )
         .await?;
 
+        let epochs_to_keep = epochs_to_keep.or_else(|| {
+            std::env::var("EPOCHS_TO_KEEP")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+        });
+
         if let Some(epochs_to_keep) = epochs_to_keep {
             info!(
                 "Starting indexer pruner with epochs to keep: {}",

@@ -704,7 +704,7 @@ async fn start(
         start_test_indexer(
             Some(pg_address.clone()),
             fullnode_url.clone(),
-            ReaderWriterConfig::writer_mode(None),
+            ReaderWriterConfig::writer_mode(None, None),
             data_ingestion_path.clone(),
         )
         .await;
