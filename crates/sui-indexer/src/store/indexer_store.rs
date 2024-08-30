@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 use crate::models::display::StoredDisplay;
+use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::types::{
     EventIndex, IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
@@ -52,6 +53,11 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     async fn persist_full_objects_history(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_object_versions(
+        &self,
+        object_versions: Vec<StoredObjectVersion>,
     ) -> Result<(), IndexerError>;
 
     // persist objects snapshot with object changes during backfill
