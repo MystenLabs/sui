@@ -18,7 +18,7 @@ use sui_data_ingestion_core::{
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
-use crate::config::{IngestionConfig, JsonRpcConfig, SnapshotLagConfig};
+use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagConfig};
 use crate::db::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
@@ -53,7 +53,7 @@ impl Indexer {
         store: PgIndexerStore,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
-        epochs_to_keep: Option<u64>,
+        pruning_options: PruningOptions,
         cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
@@ -86,13 +86,7 @@ impl Indexer {
         )
         .await?;
 
-        let epochs_to_keep = epochs_to_keep.or_else(|| {
-            std::env::var("EPOCHS_TO_KEEP")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-        });
-
-        if let Some(epochs_to_keep) = epochs_to_keep {
+        if let Some(epochs_to_keep) = pruning_options.epochs_to_keep {
             info!(
                 "Starting indexer pruner with epochs to keep: {}",
                 epochs_to_keep

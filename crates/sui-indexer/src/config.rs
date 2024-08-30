@@ -156,7 +156,7 @@ pub enum Command {
     },
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Default, Debug, Clone)]
 pub struct PruningOptions {
     #[arg(long, env = "EPOCHS_TO_KEEP")]
     pub epochs_to_keep: Option<u64>,

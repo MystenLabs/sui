@@ -11,6 +11,7 @@ use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
 use crate::config::IngestionConfig;
+use crate::config::PruningOptions;
 use crate::config::SnapshotLagConfig;
 use crate::db::{new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
@@ -24,7 +25,7 @@ pub enum ReaderWriterConfig {
     },
     Writer {
         snapshot_config: SnapshotLagConfig,
-        epochs_to_keep: Option<u64>,
+        pruning_options: PruningOptions,
     },
 }
 
@@ -43,7 +44,7 @@ impl ReaderWriterConfig {
     ) -> Self {
         Self::Writer {
             snapshot_config: snapshot_config.unwrap_or_default(),
-            epochs_to_keep,
+            pruning_options: PruningOptions { epochs_to_keep },
         }
     }
 }
@@ -148,7 +149,7 @@ pub async fn start_test_indexer_impl(
         }
         ReaderWriterConfig::Writer {
             snapshot_config,
-            epochs_to_keep,
+            pruning_options,
         } => {
             crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
 
@@ -162,7 +163,7 @@ pub async fn start_test_indexer_impl(
                     store_clone,
                     indexer_metrics,
                     snapshot_config,
-                    epochs_to_keep,
+                    pruning_options,
                     cancel,
                 )
                 .await
