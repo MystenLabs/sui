@@ -9,11 +9,25 @@ export interface ZkBagContractOptions {
 	bagStoreTableId: string;
 }
 
+export const TESTNET_CONTRACT_IDS: ZkBagContractOptions = {
+	packageId: '0x036fee67274d0d85c3532f58296abe0dee86b93864f1b2b9074be6adb388f138',
+	bagStoreId: '0x5c63e71734c82c48a3cb9124c54001d1a09736cfb1668b3b30cd92a96dd4d0ce',
+	bagStoreTableId: '0x4e1bc4085d64005e03eb4eab2510d527aeba9548cda431cb8f149ff37451f870',
+};
+
 export const MAINNET_CONTRACT_IDS: ZkBagContractOptions = {
 	packageId: '0x5bb7d0bb3240011336ca9015f553b2646302a4f05f821160344e9ec5a988f740',
 	bagStoreId: '0x65b215a3f2a951c94313a89c43f0adbd2fd9ea78a0badf81e27d1c9868a8b6fe',
 	bagStoreTableId: '0x616db54ca564660cd58e36a4548be68b289371ef2611485c62c374a60960084e',
 };
+
+export function getContractIds(network?: 'mainnet' | 'testnet') {
+	if (!network) {
+		return MAINNET_CONTRACT_IDS;
+	}
+
+	return network === 'mainnet' ? MAINNET_CONTRACT_IDS : TESTNET_CONTRACT_IDS;
+}
 
 export class ZkBag<IDs> {
 	#package: string;

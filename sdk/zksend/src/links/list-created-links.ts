@@ -9,7 +9,7 @@ import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils';
 
 import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
-import { MAINNET_CONTRACT_IDS } from './zk-bag.js';
+import { getContractIds } from './zk-bag.js';
 
 const ListCreatedLinksQuery = graphql(`
 	query listCreatedLinks($address: SuiAddress!, $function: String!, $cursor: String) {
@@ -37,7 +37,7 @@ export async function listCreatedLinks({
 	address,
 	cursor,
 	network,
-	contract = MAINNET_CONTRACT_IDS,
+	contract = getContractIds(network),
 	fetch: fetchFn,
 	...linkOptions
 }: {
