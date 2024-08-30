@@ -45,6 +45,7 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            None,
             data_ingestion_path,
         )
         .await;
@@ -128,6 +129,7 @@ mod tests {
             ConnectionConfig::default(),
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
             None,
             data_ingestion_path,
         )

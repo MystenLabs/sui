@@ -67,6 +67,10 @@ pub struct SuiInitArgs {
     pub object_snapshot_max_checkpoint_lag: Option<usize>,
     #[clap(long = "flavor")]
     pub flavor: Option<Flavor>,
+    /// The number of epochs to keep in the database. Epochs outside of this range will be pruned by
+    /// the indexer.
+    #[clap(long = "epochs-to-keep")]
+    pub epochs_to_keep: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -165,6 +169,8 @@ pub struct RunGraphqlCommand {
     pub show_service_version: bool,
     #[clap(long, num_args(1..))]
     pub cursors: Vec<String>,
+    #[clap(long)]
+    pub wait_for_checkpoint_pruned: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
