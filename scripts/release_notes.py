@@ -61,11 +61,9 @@ NOTE_ORDER = [
     "REST API",
 ]
 
-
 class Note(NamedTuple):
     checked: bool
     note: str
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -99,65 +97,24 @@ def parse_args():
     check_p = sub_parser.add_parser(
         "check",
         description=(
-            "Check if the release notes section of a givne commit is complete, "
+            "Check if the release notes section of a the PR is complete, "
             "i.e. that every impacted component has a non-empty note."
         ),
     )
 
     check_p.add_argument(
-        "commit",
+        "pr",
         nargs="?",
-        default="HEAD",
-        help="The commit to check, defaults to HEAD.",
+        help="The PR to check.",
     )
 
     return vars(parser.parse_args())
-
 
 def git(*args):
     """Run a git command and return the output as a string."""
     return subprocess.check_output(["git"] + list(args)).decode().strip()
 
-
-def extract_notes(commit):
-    """Get release notes from a body of the PR
-
-    Find the 'Release notes' section in PR body, and
-    extract the notes for each impacted area (area that has been
-    ticked).
-
-    Returns a tuple of the PR number and a dictionary of impacted
-    areas mapped to their release note. Each release note indicates
-    whether it has a note and whether it was checked (ticked).
-
-    """
-    
-    # Get pull request from the head sha
-    url = f"https://api.github.com/repos/MystenLabs/sui/commits/{commit}/pulls"
-    curl_command = [
-        "curl", "-s",
-        "-H", "Accept: application/vnd.github.groot-preview+json",
-        url
-    ]
-
-    # Execute the curl command
-    result = subprocess.run(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    json_data = json.loads(result.stdout)
-    pr = json_data[0].get("number")
-
-    # Get Release Notes, via body of the PR
-    url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
-    curl_command = [
-        "curl", "-s",
-        "-H", "Accept: application/vnd.github.groot-preview+json",
-        url
-    ]
-
-    # Execute the curl command
-    result = subprocess.run(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    json_data = json.loads(result.stdout)
-    notes = json_data.get("body")
-
+def parse_notes(pr, notes):
     # # Find the release notes section
     result = {}
     match = RE_HEADING.search(notes)
@@ -189,6 +146,50 @@ def extract_notes(commit):
 
     return pr, result
 
+def extract_notes_for_pr(pr):
+    """Get release notes from a body of the PR
+
+    Find the 'Release notes' section in PR body, and
+    extract the notes for each impacted area (area that has been
+    ticked).
+
+    Returns a tuple of the PR number and a dictionary of impacted
+    areas mapped to their release note. Each release note indicates
+    whether it has a note and whether it was checked (ticked).
+
+    """
+
+    url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
+    curl_command = [
+        "curl", "-s",
+        "-H", "Accept: application/vnd.github.groot-preview+json",
+        url
+    ]
+
+    # Execute the curl command
+    result = subprocess.run(curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    json_data = json.loads(result.stdout)
+    notes = json_data.get("body")
+    return parse_notes(pr, notes)
+
+def extract_notes_for_commit(commit):
+    """Get release notes from a commit message.
+
+    Find the 'Release notes' section in the commit message, and
+    extract the notes for each impacted area (area that has been
+    ticked).
+
+    Returns a tuple of the PR number and a dictionary of impacted
+    areas mapped to their release note. Each release note indicates
+    whether it has a note and whether it was checked (ticked).
+
+    """
+    message = git("show", "-s", "--format=%B", commit)
+
+    # Extract PR number
+    match = RE_PR.match(message)
+    pr = match.group(1) if match else None
+    return parse_notes(pr, message)
 
 def extract_protocol_version(commit):
     """Find the max protocol version at this commit.
@@ -217,7 +218,7 @@ def print_changelog(pr, log):
     print(log)
 
 
-def do_check(commit):
+def do_check(pr):
     """Check if the release notes section of a given commit is complete.
 
     This means that every impacted component has a non-empty note,
@@ -225,8 +226,8 @@ def do_check(commit):
     area is known.
 
     """
-
-    _, notes = extract_notes(commit)
+    
+    pr, notes = extract_notes_for_pr(pr)
     issues = []
     for impacted, note in notes.items():
         if impacted not in NOTE_ORDER:
@@ -243,7 +244,7 @@ def do_check(commit):
     if not issues:
         return
 
-    print(f"Found issues with release notes in {commit}:")
+    print(f"Found issues with release notes in {pr}:")
     for issue in issues:
         print(issue)
     sys.exit(1)
@@ -282,7 +283,7 @@ def do_generate(from_, to):
         return
 
     for commit in commits.split("\n"):
-        pr, notes = extract_notes(commit)
+        pr, notes = extract_notes_for_commit(commit)
         for impacted, note in notes.items():
             if note.checked:
                 results[impacted].append((pr, note.note))
@@ -310,9 +311,8 @@ def do_generate(from_, to):
             print_changelog(pr, note)
             print()
 
-
 args = parse_args()
 if args["command"] == "generate":
     do_generate(args["from"], args["to"])
 elif args["command"] == "check":
-    do_check(args["commit"])
+    do_check(args["pr"])
