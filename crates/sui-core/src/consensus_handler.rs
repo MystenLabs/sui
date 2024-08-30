@@ -205,6 +205,8 @@ fn update_index_and_hash(
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: impl ConsensusOutputAPI) {
+        let _scope = monitored_scope("HandleConsensusOutput");
+
         // This code no longer supports old protocol versions.
         assert!(self
             .epoch_store
