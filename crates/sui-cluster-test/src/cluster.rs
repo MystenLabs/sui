@@ -154,6 +154,7 @@ pub struct LocalNewCluster {
     indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
+    #[allow(unused)]
     cancellation_tokens: Vec<tokio_util::sync::DropGuard>,
 }
 
