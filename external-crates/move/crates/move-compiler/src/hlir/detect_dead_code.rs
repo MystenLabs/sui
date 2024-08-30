@@ -309,8 +309,10 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             };
             let conseq_flow = tail(context, conseq);
             let alt_flow = tail(context, alt);
+            if matches!(ty, sp!(_, N::Type_::Unit | N::Type_::Anything)) {
+                return None;
+            };
             match (conseq_flow, alt_flow) {
-                _ if matches!(ty, sp!(_, N::Type_::Unit)) => None,
                 (Some(cflow), Some(aflow)) => {
                     if cflow.value == aflow.value {
                         context.report_tail_error(sp(*eloc, cflow.value));
@@ -340,6 +342,13 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                     tail(context, &arm.rhs)
                 })
                 .collect::<Vec<_>>();
+            if matches!(ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
+                || arms.value.iter().all(|sp!(_, arm)| {
+                    matches!(arm.rhs.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
+                })
+            {
+                return None;
+            };
             if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
                 for arm_opt in arm_somes {
                     let sp!(aloc, arm_error) = arm_opt.unwrap();
