@@ -130,7 +130,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
-    async fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
         let mut conn = self.pool.get().await?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -141,6 +141,23 @@ impl IndexerProgressStore for PgBridgePersistent {
             .load(&mut conn)
             .await?;
         Ok(cp.into_iter().map(|d| d.into()).collect())
+    }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        let mut conn = self.pool.get().await?;
+        let cp: Option<i64> = dsl::progress_store
+            .select(columns::target_checkpoint)
+            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
+            .filter(columns::task_name.like(format!("{prefix} - %")))
+            .filter(columns::target_checkpoint.ne(i64::MAX))
+            .order_by(columns::target_checkpoint.desc())
+            .first::<i64>(&mut conn)
+            .await
+            .optional()?;
+        Ok(cp.map(|c| c as u64))
     }
 
     async fn register_task(
