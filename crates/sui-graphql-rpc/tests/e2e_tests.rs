@@ -14,6 +14,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::config::Limits;
     use sui_graphql_rpc::config::ServiceConfig;
     use sui_graphql_rpc::test_infra::cluster::start_cluster;
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
@@ -1080,25 +1081,31 @@ mod tests {
             ConnectionConfig::ci_integration_test_cfg(),
             None,
             ServiceConfig {
-                limits: Some(Limits {
+                limits: Limits {
                     max_query_payload_size: 5000,
                     max_tx_payload_size: 6000,
                     ..Default::default()
-                }),
+                },
                 ..ServiceConfig::test_defaults()
             },
         )
         .await;
-        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
 
         let recipient = addresses[1];
         let tx = cluster
+            .network
             .validator_fullnode_handle
             .test_transaction_builder()
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
         let signed_tx = cluster
+            .network
             .validator_fullnode_handle
             .wallet
             .sign_transaction(&tx);

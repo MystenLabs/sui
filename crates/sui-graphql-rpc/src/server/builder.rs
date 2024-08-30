@@ -1153,9 +1153,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Query part too large: 354 bytes. Requests must spend 400 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 10 bytes or fewer."
+            "Query part too large: 354 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 \
+             bytes or fewer."
         );
     }
 
@@ -1179,9 +1180,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 400 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
         );
     }
 
@@ -1206,9 +1208,10 @@ pub mod tests {
                 .into(),
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 400 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 bytes \
+             or fewer."
         );
     }
 
@@ -1233,7 +1236,7 @@ pub mod tests {
                 .into(),
             )
             .await,
-            "Overall request too large: 380 bytes. Requests must spend 10 bytes or fewer on \
+            "Overall request too large: 380 bytes. Requests are limited to 10 bytes or fewer on \
              transaction payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) \
              and the rest of the request (the query part) must be 10 bytes or fewer."
         );
@@ -1264,9 +1267,10 @@ pub mod tests {
                 })))
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 
@@ -1295,9 +1299,10 @@ pub mod tests {
                 })))
             )
             .await,
-            "Query part too large: 409 bytes. Requests must spend 500 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 10 bytes or fewer."
+            "Query part too large: 409 bytes. Requests are limited to 500 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
         );
     }
 
@@ -1326,9 +1331,10 @@ pub mod tests {
                 }))),
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 400 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
         );
     }
 
@@ -1357,9 +1363,10 @@ pub mod tests {
                 }))),
             )
             .await,
-            "Query part too large: 398 bytes. Requests must spend 400 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 10 bytes or fewer."
+            "Query part too large: 398 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
         );
     }
 
@@ -1410,9 +1417,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Transaction payload too large. Requests must spend 30 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 800 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
         );
     }
 
@@ -1466,9 +1474,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Transaction payload too large. Requests must spend 20 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 800 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 20 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
         );
     }
 
@@ -1518,9 +1527,10 @@ pub mod tests {
                 .into(),
             )
             .await,
-            "Transaction payload too large. Requests must spend 30 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer.",
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer.",
         )
     }
 
@@ -1551,9 +1561,10 @@ pub mod tests {
                 })))
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 
@@ -1784,9 +1795,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 
@@ -1812,9 +1824,10 @@ pub mod tests {
                 .into()
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 
@@ -1843,9 +1856,10 @@ pub mod tests {
                 .into(),
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 
@@ -1872,9 +1886,10 @@ pub mod tests {
                 .into(),
             )
             .await,
-            "Transaction payload too large. Requests must spend 10 bytes or fewer on transaction \
-             payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and the \
-             rest of the request (the query part) must be 500 bytes or fewer."
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
         );
     }
 }

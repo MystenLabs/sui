@@ -128,7 +128,7 @@ impl<'a> LimitsTraversal<'a> {
             self.check_tx_payload(op)?;
         }
 
-        // Next, with the tranaction payloads accounted for, ensure the remaining query is within
+        // Next, with the transaction payloads accounted for, ensure the remaining query is within
         // the size limit.
         let limits = self.reporter.limits;
         let tx_payload_size = (limits.max_tx_payload_size - self.tx_payload_budget) as u64;
@@ -607,10 +607,10 @@ impl<'a> Reporter<'a> {
         self.graphql_error(
             code::BAD_USER_INPUT,
             format!(
-                "{message}. Requests must spend {max_tx_payload} bytes or fewer on transaction \
-                payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) and \
-                the rest of the request (the query part) must be {max_query_payload} bytes or \
-                fewer.",
+                "{message}. Requests are limited to {max_tx_payload} bytes or fewer on \
+                 transaction payloads (all inputs to executeTransactionBlock or \
+                 dryRunTransactionBlock) and the rest of the request (the query part) must be \
+                 {max_query_payload} bytes or fewer.",
                 max_tx_payload = self.limits.max_tx_payload_size,
                 max_query_payload = self.limits.max_query_payload_size,
             ),

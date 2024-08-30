@@ -60,14 +60,14 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub(crate) versions: Versions,
-    pub(crate) limits: Limits,
-    pub(crate) disabled_features: BTreeSet<FunctionalGroup>,
-    pub(crate) experiments: Experiments,
-    pub(crate) name_service: NameServiceConfig,
-    pub(crate) background_tasks: BackgroundTasksConfig,
-    pub(crate) zklogin: ZkLoginConfig,
-    pub(crate) move_registry: MoveRegistryConfig,
+    pub versions: Versions,
+    pub limits: Limits,
+    pub disabled_features: BTreeSet<FunctionalGroup>,
+    pub experiments: Experiments,
+    pub name_service: NameServiceConfig,
+    pub background_tasks: BackgroundTasksConfig,
+    pub zklogin: ZkLoginConfig,
+    pub move_registry: MoveRegistryConfig,
 }
 
 #[GraphQLConfig]
@@ -129,7 +129,7 @@ pub struct BackgroundTasksConfig {
 
 #[GraphQLConfig]
 #[derive(Clone)]
-pub(crate) struct MoveRegistryConfig {
+pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
     pub(crate) resolution_type: ResolutionType,
     pub(crate) page_limit: u16,
