@@ -54,6 +54,7 @@ export class ZkSendLinkBuilder {
 	}[] = [];
 	balances = new Map<string, bigint>();
 	sender: string;
+	network: 'mainnet' | 'testnet';
 	#host: string;
 	#path: string;
 	keypair: Keypair;
@@ -78,6 +79,7 @@ export class ZkSendLinkBuilder {
 		this.keypair = keypair;
 		this.#client = client;
 		this.sender = normalizeSuiAddress(sender);
+		this.network = network;
 
 		if (contract) {
 			this.#contract = new ZkBag(contract.packageId, contract);
@@ -107,6 +109,10 @@ export class ZkSendLinkBuilder {
 		link.hash = `${this.#contract ? '$' : ''}${toB64(
 			decodeSuiPrivateKey(this.keypair.getSecretKey()).secretKey,
 		)}`;
+
+		if (this.network !== 'mainnet') {
+			link.searchParams.set('network', this.network);
+		}
 
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
