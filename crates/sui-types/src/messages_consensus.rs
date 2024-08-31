@@ -261,9 +261,10 @@ pub enum ConsensusTransactionKind {
     EndOfPublish(AuthorityName) = 2,
 
     CapabilityNotification(AuthorityCapabilitiesV1) = 3,
+    CapabilityNotificationV2(AuthorityCapabilitiesV2) = 8,
 
     NewJWKFetched(AuthorityName, JwkId, JWK) = 4,
-    RandomnessStateUpdate(u64, Vec<u8>) = 5, // deprecated
+
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
@@ -272,8 +273,6 @@ pub enum ConsensusTransactionKind {
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>) = 7,
-
-    CapabilityNotificationV2(AuthorityCapabilitiesV2) = 8,
 }
 
 impl ConsensusTransactionKind {
@@ -518,9 +517,6 @@ impl ConsensusTransaction {
                     id.clone(),
                     key.clone(),
                 )))
-            }
-            ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)
