@@ -364,7 +364,7 @@ impl ConsensusAdapter {
         let min_digest = transactions
             .iter()
             .filter_map(|tx| match &tx.kind {
-                ConsensusTransactionKind::UserTransaction(certificate) => {
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     Some(certificate.digest())
                 }
                 _ => None,
@@ -585,7 +585,7 @@ impl ConsensusAdapter {
                 fp_ensure!(
                     matches!(
                         transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
+                        ConsensusTransactionKind::CertifiedTransaction(_)
                     ),
                     SuiError::InvalidTxKindInSoftBundle
                 );
@@ -828,7 +828,7 @@ impl ConsensusAdapter {
         let is_user_tx = is_soft_bundle
             || matches!(
                 transactions[0].kind,
-                ConsensusTransactionKind::UserTransaction(_)
+                ConsensusTransactionKind::CertifiedTransaction(_)
             );
         let send_end_of_publish = if is_user_tx {
             // If we are in RejectUserCerts state and we just drained the list we need to
