@@ -14,6 +14,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::config::Limits;
     use sui_graphql_rpc::config::ServiceConfig;
     use sui_graphql_rpc::test_infra::cluster::start_cluster;
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
@@ -959,6 +960,189 @@ mod tests {
             .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
             .await;
         test_health_check_impl().await;
+        cluster.cleanup_resources().await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_total_exceeded() {
+        test_payload_total_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_read_exceeded() {
+        test_payload_read_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_mutation_exceeded() {
+        test_payload_mutation_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_dry_run_exceeded() {
+        test_payload_dry_run_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_using_vars_mutation_exceeded() {
+        test_payload_using_vars_mutation_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_using_vars_read_exceeded() {
+        test_payload_using_vars_read_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_using_vars_dry_run_read_exceeded() {
+        test_payload_using_vars_dry_run_read_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_using_vars_dry_run_exceeded() {
+        test_payload_using_vars_dry_run_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_multiple_execution_exceeded() {
+        test_payload_multiple_execution_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_multiple_dry_run_exceeded() {
+        test_payload_multiple_dry_run_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_execution_multiple_sigs_exceeded() {
+        test_payload_execution_multiple_sigs_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_sig_var_execution_exceeded() {
+        test_payload_sig_var_execution_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_reusing_vars_execution() {
+        test_payload_reusing_vars_execution_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_reusing_vars_dry_run() {
+        test_payload_reusing_vars_dry_run_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_named_fragment_execution_exceeded() {
+        test_payload_named_fragment_execution_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_inline_fragment_execution_exceeded() {
+        test_payload_inline_fragment_execution_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_named_fragment_dry_run_exceeded() {
+        test_payload_named_fragment_dry_run_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_inline_fragment_dry_run_exceeded() {
+        test_payload_inline_fragment_dry_run_exceeded_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_payload_using_vars_mutation_passes() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
+            ConnectionConfig::ci_integration_test_cfg(),
+            None,
+            ServiceConfig {
+                limits: Limits {
+                    max_query_payload_size: 5000,
+                    max_tx_payload_size: 6000,
+                    ..Default::default()
+                },
+                ..ServiceConfig::test_defaults()
+            },
+        )
+        .await;
+        let addresses = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .network
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let signed_tx = cluster
+            .network
+            .validator_fullnode_handle
+            .wallet
+            .sign_transaction(&tx);
+        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
+        let tx_bytes = tx_bytes.encoded();
+        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+
+        let mutation = r#"{
+            executeTransactionBlock(txBytes: $tx,  signatures: $sigs) {
+                effects {
+                    transactionBlock { digest }
+                    status
+                }
+                errors
+            }
+        }"#;
+
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "tx".to_string(),
+                ty: "String!".to_string(),
+                value: json!(tx_bytes),
+            },
+            GraphqlQueryVariable {
+                name: "sigs".to_string(),
+                ty: "[String!]!".to_string(),
+                value: json!(sigs),
+            },
+        ];
+
+        let res = cluster
+            .graphql_client
+            .execute_mutation_to_graphql(mutation.to_string(), variables)
+            .await
+            .unwrap();
+
+        assert!(res.errors().is_empty());
         cluster.cleanup_resources().await
     }
 }
