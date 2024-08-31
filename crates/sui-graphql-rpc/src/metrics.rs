@@ -65,8 +65,6 @@ pub(crate) struct RequestMetrics {
     pub output_nodes: Histogram,
     /// The query depth
     pub query_depth: Histogram,
-    /// The size (in bytes) of the payload that is higher than the maximum
-    pub query_payload_too_large_size: Histogram,
     /// The size (in bytes) of the payload
     pub query_payload_size: Histogram,
     /// The time it takes to validate the query
@@ -202,13 +200,6 @@ impl RequestMetrics {
                 "Depth of the query",
                 QUERY_DEPTH_BUCKETS.to_vec(),
                 registry
-            )
-            .unwrap(),
-            query_payload_too_large_size: register_histogram_with_registry!(
-                "query_payload_too_large_size",
-                "Query payload size (bytes), that was rejected due to being larger than maximum",
-                QUERY_PAYLOAD_SIZE_BUCKETS.to_vec(),
-                registry,
             )
             .unwrap(),
             query_payload_size: register_histogram_with_registry!(

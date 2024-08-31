@@ -13,7 +13,7 @@ use serde_json as json;
 #[derive(Enum, Copy, Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "kebab-case")]
 #[graphql(name = "Feature")]
-pub(crate) enum FunctionalGroup {
+pub enum FunctionalGroup {
     /// Statistics about how the network was running (TPS, top packages, APY, etc)
     Analytics,
 

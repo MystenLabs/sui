@@ -60,14 +60,14 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub(crate) versions: Versions,
-    pub(crate) limits: Limits,
-    pub(crate) disabled_features: BTreeSet<FunctionalGroup>,
-    pub(crate) experiments: Experiments,
-    pub(crate) name_service: NameServiceConfig,
-    pub(crate) background_tasks: BackgroundTasksConfig,
-    pub(crate) zklogin: ZkLoginConfig,
-    pub(crate) move_registry: MoveRegistryConfig,
+    pub versions: Versions,
+    pub limits: Limits,
+    pub disabled_features: BTreeSet<FunctionalGroup>,
+    pub experiments: Experiments,
+    pub name_service: NameServiceConfig,
+    pub background_tasks: BackgroundTasksConfig,
+    pub zklogin: ZkLoginConfig,
+    pub move_registry: MoveRegistryConfig,
 }
 
 #[GraphQLConfig]
@@ -83,7 +83,12 @@ pub struct Limits {
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u32,
-    /// Maximum size (in bytes) of a GraphQL request.
+    /// Maximum size in bytes allowed for the `txBytes` and `signatures` fields of a GraphQL
+    /// mutation request in the `executeTransactionBlock` node, and for the `txBytes` of a
+    /// `dryRunTransactionBlock` node.
+    pub max_tx_payload_size: u32,
+    /// Maximum size in bytes of the JSON payload of a GraphQL read request (excluding
+    /// `max_tx_payload_size`).
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
@@ -124,7 +129,7 @@ pub struct BackgroundTasksConfig {
 
 #[GraphQLConfig]
 #[derive(Clone)]
-pub(crate) struct MoveRegistryConfig {
+pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
     pub(crate) resolution_type: ResolutionType,
     pub(crate) page_limit: u16,
@@ -292,7 +297,19 @@ impl ServiceConfig {
         self.limits.request_timeout_ms
     }
 
-    /// Maximum length of a query payload string.
+    /// The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+    /// `executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+    ///
+    /// It is the value of the maximum transaction bytes (including the signatures) allowed by the
+    /// protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+    async fn max_transaction_payload_size(&self) -> u32 {
+        self.limits.max_tx_payload_size
+    }
+
+    /// The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+    /// the read part of the query.
+    /// In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+    /// included in this limit.
     async fn max_query_payload_size(&self) -> u32 {
         self.limits.max_query_payload_size
     }
@@ -551,6 +568,11 @@ impl Default for Limits {
             // for the `TransactionBlockFilter`.
             max_transaction_ids: 1000,
             max_scan_limit: 100_000_000,
+            // This value is set to be the size of the max transaction bytes allowed + base64
+            // overhead (roughly 1/3 of the original string). This is rounded up.
+            //
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
+            max_tx_payload_size: (128u32 * 1024u32 * 4u32).div_ceil(3),
         }
     }
 }
@@ -617,6 +639,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-output-nodes = 200000
+                max-mutation-payload-size = 174763
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -638,6 +661,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 174763,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -703,6 +727,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-output-nodes = 200000
+                max-tx-payload-size = 181017
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -727,6 +752,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 181017,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,

@@ -27,7 +27,7 @@ use crate::{
     extensions::{
         feature_gate::FeatureGate,
         logger::Logger,
-        query_limits_checker::{QueryLimitsChecker, ShowUsage},
+        query_limits_checker::{PayloadSize, QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
     server::version::{check_version_middleware, set_version_middleware},
@@ -47,6 +47,8 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post, MethodRouter, Route};
 use axum::Extension;
 use axum::Router;
+use axum_extra::headers::ContentLength;
+use axum_extra::TypedHeader;
 use chrono::Utc;
 use http::{HeaderValue, Method, Request};
 use mysten_metrics::spawn_monitored_task;
@@ -523,6 +525,7 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    TypedHeader(ContentLength(content_length)): TypedHeader<ContentLength>,
     schema: Extension<SuiGraphQLSchema>,
     Extension(watermark_lock): Extension<WatermarkLock>,
     Extension(chain_identifier_lock): Extension<ChainIdentifierLock>,
@@ -530,14 +533,16 @@ async fn graphql_handler(
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
+
+    req.data.insert(PayloadSize(content_length));
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
+
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-
     req.data.insert(Watermark::new(watermark_lock).await);
     req.data.insert(chain_identifier_lock.read().await);
 
@@ -681,8 +686,9 @@ pub mod tests {
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
-        Response,
+        Request, Response, Variables,
     };
+    use serde_json::json;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_sdk::{wallet_context::WalletContext, SuiClient};
@@ -881,6 +887,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
@@ -933,6 +940,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(None, Some(service_config))
+                .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
             schema.execute(query).await
@@ -1044,7 +1052,7 @@ pub mod tests {
     }
 
     pub async fn test_query_complexity_metrics_impl() {
-        let server_builder = prep_schema(None, None);
+        let server_builder = prep_schema(None, None).context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1092,5 +1100,796 @@ pub mod tests {
         let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
         let resp = reqwest::get(&url_with_param).await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
+    }
+
+    /// Execute a GraphQL request with `limits` in place, expecting an error to be returned.
+    /// Returns the list of errors returned.
+    async fn execute_for_error(limits: Limits, request: Request) -> String {
+        let service_config = ServiceConfig {
+            limits,
+            ..Default::default()
+        };
+
+        let schema = prep_schema(None, Some(service_config))
+            .context_data(PayloadSize(
+                // Payload size is usually set per request, and it is the size of the raw HTTP
+                // request, which includes the query, variables, and surrounding JSON. Simulate for
+                // testing purposes by serializing the request back into JSON and baking its length
+                // as context data into the schema.
+                serde_json::to_string(&request).unwrap().len() as u64,
+            ))
+            .extension(QueryLimitsChecker)
+            .build_schema();
+
+        let errs: Vec<_> = schema
+            .execute(request)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+
+        errs.join("\n")
+    }
+
+    pub async fn test_payload_read_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 400,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Query part too large: 354 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_mutation_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_dry_run_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 bytes \
+             or fewer."
+        );
+    }
+
+    pub async fn test_payload_total_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        dryRunTransactionBlock(txByte: "AAABBB") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Overall request too large: 380 bytes. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or dryRunTransactionBlock) \
+             and the rest of the request (the query part) must be 10 bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_using_vars_mutation_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sigs: [String!]!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC",
+                    "sigs": ["BBB"]
+                })))
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_using_vars_read_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 500,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sigs: [String!]!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAA",
+                    "sigs": ["BBB"]
+                })))
+            )
+            .await,
+            "Query part too large: 409 bytes. Requests are limited to 500 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
+        );
+    }
+
+    pub async fn test_payload_using_vars_dry_run_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 400,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                }))),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 400 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_using_vars_dry_run_read_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 400,
+                    max_query_payload_size: 10,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                }))),
+            )
+            .await,
+            "Query part too large: 398 bytes. Requests are limited to 400 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 10 bytes \
+             or fewer."
+        );
+    }
+
+    pub async fn test_payload_multiple_execution_exceeded_impl() {
+        // First check that the limit is large enough to hold one transaction's parameters (by
+        // checking that we hit the read limit).
+        let err = execute_for_error(
+            Limits {
+                max_tx_payload_size: 30,
+                max_query_payload_size: 320,
+                ..Default::default()
+            },
+            r#"
+                mutation {
+                    executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["DDD"]) {
+                        effects {
+                            status
+                        }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 30,
+                    max_query_payload_size: 800,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        e0: executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["DDD"]) {
+                            effects {
+                                status
+                            }
+                        }
+                        e1: executeTransactionBlock(txBytes: "EEEFFFGGG", signatures: ["HHH"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_multiple_dry_run_exceeded_impl() {
+        // First check that tx limit is large enough to hold one transaction's parameters (by
+        // checking that we hit the read limit).
+        let err = execute_for_error(
+            Limits {
+                max_tx_payload_size: 20,
+                max_query_payload_size: 330,
+                ..Default::default()
+            },
+            r#"
+                query {
+                    dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                       error
+                       transaction {
+                           digest
+                       }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 20,
+                    max_query_payload_size: 800,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        d0: dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                           error
+                           transaction {
+                               digest
+                           }
+                        }
+                        d1: dryRunTransactionBlock(txBytes: "DDDEEEFFF") {
+                           error
+                           transaction {
+                               digest
+                           }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 20 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 800 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_execution_multiple_sigs_exceeded_impl() {
+        // First check that the limit is large enough to hold a transaction with a single signature
+        // (by checking that we hite the read limit).
+        let err = execute_for_error(
+            Limits {
+                max_tx_payload_size: 30,
+                max_query_payload_size: 320,
+                ..Default::default()
+            },
+            r#"
+                mutation {
+                    executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                        effects {
+                            status
+                        }
+                    }
+                }
+            "#
+            .into(),
+        )
+        .await;
+
+        assert!(err.starts_with("Query part too large"), "{err}");
+
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 30,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(
+                            txBytes: "AAA",
+                            signatures: ["BBB", "CCC", "DDD", "EEE", "FFF"]
+                        ) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 30 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer.",
+        )
+    }
+
+    pub async fn test_payload_sig_var_execution_exceeded_impl() {
+        // Variables can show up in the sub-structure of a GraphQL value as well, and we need to
+        // count those as well.
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                Request::new(
+                    r#"
+                    mutation ($tx: String!, $sig: String!) {
+                        executeTransactionBlock(txBytes: $tx, signatures: [$sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAA",
+                    "sig": "BBB"
+                })))
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    /// Check if the error indicates that the request passed the overall size check and the
+    /// transaction payload check.
+    fn passed_tx_checks(err: &str) -> bool {
+        !err.starts_with("Overall request too large")
+            && !err.starts_with("Transaction payload too large")
+    }
+
+    pub async fn test_payload_reusing_vars_execution_impl() {
+        // Test that when variables are re-used as execution params, the size of the variable is
+        // only counted once.
+
+        // First, check that `eror_passed_tx_checks` is working, by submitting a request that will
+        // fail the initial payload check.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                Limits {
+                    max_tx_payload_size: 1,
+                    max_query_payload_size: 1,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        executeTransactionBlock(txBytes: "AAA", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await
+        ));
+
+        let limits = Limits {
+            max_tx_payload_size: 20,
+            max_query_payload_size: 1000,
+            ..Default::default()
+        };
+
+        // Then check that a request that uses the variable once passes the transaction limit
+        // check.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                limits.clone(),
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+
+        // Then check that a request that introduces an extra signature, but without re-using the
+        // variable fails the transaction limit.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                limits.clone(),
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig, "BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+
+        // And then when that use is replaced by re-using the variable, we should be under the
+        // transaction payload limit again.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                limits,
+                Request::new(
+                    r#"
+                    mutation ($sig: String!) {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: [$sig, $sig]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "sig": "BBB"
+                })))
+            )
+            .await
+        ));
+    }
+
+    pub async fn test_payload_reusing_vars_dry_run_impl() {
+        // Like `test_payload_reusing_vars_execution` but the variable is used in a dry-run.
+
+        let limits = Limits {
+            max_tx_payload_size: 20,
+            max_query_payload_size: 1000,
+            ..Default::default()
+        };
+
+        // A single dry-run is under the limit.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                limits.clone(),
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+
+        // Duplicating the dry-run causes us to hit the limit.
+        assert!(!passed_tx_checks(
+            &execute_for_error(
+                limits.clone(),
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        d0: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+
+                        d1: dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+
+        // And by re-using the variable, we are under the transaction limit again.
+        assert!(passed_tx_checks(
+            &execute_for_error(
+                limits,
+                Request::new(
+                    r#"
+                    query ($tx: String!) {
+                        d0: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+
+                        d1: dryRunTransactionBlock(txBytes: $tx) {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                    "#,
+                )
+                .variables(Variables::from_json(json!({
+                    "tx": "AAABBBCCC"
+                })))
+            )
+            .await
+        ));
+    }
+
+    pub async fn test_payload_named_fragment_execution_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        ...Tx
+                    }
+
+                    fragment Tx on Mutation {
+                        executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                            effects {
+                                status
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_inline_fragment_execution_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    mutation {
+                        ... on Mutation {
+                            executeTransactionBlock(txBytes: "AAABBBCCC", signatures: ["BBB"]) {
+                                effects {
+                                    status
+                                }
+                            }
+                        }
+                    }
+                "#
+                .into()
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_named_fragment_dry_run_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        ...DryRun
+                    }
+
+                    fragment DryRun on Query {
+                        dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                            error
+                            transaction {
+                                digest
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
+    }
+
+    pub async fn test_payload_inline_fragment_dry_run_exceeded_impl() {
+        assert_eq!(
+            execute_for_error(
+                Limits {
+                    max_tx_payload_size: 10,
+                    max_query_payload_size: 500,
+                    ..Default::default()
+                },
+                r#"
+                    query {
+                        ... on Query {
+                            dryRunTransactionBlock(txBytes: "AAABBBCCC") {
+                                error
+                                transaction {
+                                    digest
+                                }
+                            }
+                        }
+                    }
+                "#
+                .into(),
+            )
+            .await,
+            "Transaction payload too large. Requests are limited to 10 bytes or fewer on \
+             transaction payloads (all inputs to executeTransactionBlock or \
+             dryRunTransactionBlock) and the rest of the request (the query part) must be 500 \
+             bytes or fewer."
+        );
     }
 }
