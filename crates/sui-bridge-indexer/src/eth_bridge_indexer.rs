@@ -34,21 +34,27 @@ type RawEthData = (RawEthLog, Block<H256>, Transaction);
 
 pub struct EthSubscriptionDatasource {
     bridge_address: EthAddress,
+    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     eth_ws_url: String,
     indexer_metrics: BridgeIndexerMetrics,
+    genesis_block: u64,
 }
 
 impl EthSubscriptionDatasource {
-    pub fn new(
+    pub async fn new(
         eth_sui_bridge_contract_address: String,
+        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
         eth_ws_url: String,
         indexer_metrics: BridgeIndexerMetrics,
+        genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
         Ok(Self {
             bridge_address,
+            eth_client,
             eth_ws_url,
             indexer_metrics,
+            genesis_block,
         })
     }
 }
@@ -128,28 +134,50 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         });
         Ok(handle)
     }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        self.eth_client
+            .get_last_finalized_block_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get last finalized block id: {:?}", e))
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_block
+    }
 }
 
 pub struct EthSyncDatasource {
     bridge_address: EthAddress,
     eth_http_url: String,
+    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     indexer_metrics: BridgeIndexerMetrics,
-    bridge_metrics: Arc<BridgeMetrics>,
+    genesis_block: u64,
 }
 
 impl EthSyncDatasource {
-    pub fn new(
+    pub async fn new(
         eth_sui_bridge_contract_address: String,
         eth_http_url: String,
         indexer_metrics: BridgeIndexerMetrics,
         bridge_metrics: Arc<BridgeMetrics>,
+        genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
+        let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
+            EthClient::<MeteredEthHttpProvier>::new(
+                &eth_http_url,
+                HashSet::from_iter(vec![]), // dummy
+                bridge_metrics.clone(),
+            )
+            .await?,
+        );
         Ok(Self {
             bridge_address,
+            eth_client,
             eth_http_url,
             indexer_metrics,
-            bridge_metrics,
+            genesis_block,
         })
     }
 }
@@ -161,15 +189,6 @@ impl Datasource<RawEthData> for EthSyncDatasource {
         target_checkpoint: u64,
         data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
-        let client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
-            EthClient::<MeteredEthHttpProvier>::new(
-                &self.eth_http_url,
-                HashSet::from_iter(vec![self.bridge_address]),
-                self.bridge_metrics.clone(),
-            )
-            .await?,
-        );
-
         let provider = Arc::new(
             Provider::<Http>::try_from(&self.eth_http_url)?
                 .interval(std::time::Duration::from_millis(2000)),
@@ -177,8 +196,8 @@ impl Datasource<RawEthData> for EthSyncDatasource {
 
         let bridge_address = self.bridge_address;
         let indexer_metrics: BridgeIndexerMetrics = self.indexer_metrics.clone();
-        let client = Arc::clone(&client);
-        let provider = Arc::clone(&provider);
+        let client = self.eth_client.clone();
+        let provider = provider.clone();
 
         let handle = spawn_monitored_task!(async move {
             let mut cached_blocks: HashMap<u64, Block<H256>> = HashMap::new();
@@ -236,6 +255,17 @@ impl Datasource<RawEthData> for EthSyncDatasource {
         });
 
         Ok(handle)
+    }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        self.eth_client
+            .get_last_finalized_block_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get last finalized block id: {:?}", e))
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_block
     }
 }
 
