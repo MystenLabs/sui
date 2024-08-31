@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::indexer_test_utils::{InMemoryPersistent, NoopDataMapper, TestDatasource};
-use prometheus::Registry;
+use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
 use sui_indexer_builder::Task;
 
@@ -19,6 +19,7 @@ async fn indexer_simple_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 5,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -57,6 +58,7 @@ async fn indexer_partitioned_backfill_task_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     let mut indexer = IndexerBuilder::new(
@@ -102,6 +104,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test1() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -151,6 +154,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.data.lock().await.append(&mut (0..=30).collect());
@@ -202,6 +206,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test3() {
         data: data.clone(),
         live_task_starting_checkpoint: 28,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -256,6 +261,7 @@ async fn indexer_partitioned_task_with_data_already_in_db_test4() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -314,6 +320,7 @@ async fn indexer_with_existing_live_task1() {
         data: data.clone(),
         live_task_starting_checkpoint: 35,
         genesis_checkpoint: 10,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -357,6 +364,7 @@ async fn indexer_with_existing_live_task2() {
         data: data.clone(),
         live_task_starting_checkpoint: 25,
         genesis_checkpoint: 10,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -410,6 +418,7 @@ async fn resume_test() {
         data: data.clone(),
         live_task_starting_checkpoint: 31,
         genesis_checkpoint: 0,
+        metric: new_metric(&registry),
     };
     let persistent = InMemoryPersistent::new();
     persistent.progress_store.lock().await.insert(
@@ -445,4 +454,8 @@ async fn resume_test() {
     let mut recorded_data = persistent.data.lock().await.clone();
     recorded_data.sort();
     assert_eq!((10..=50u64).collect::<Vec<_>>(), recorded_data);
+}
+
+fn new_metric(registry: &Registry) -> IntGaugeVec {
+    register_int_gauge_vec_with_registry!("whatever", "whatever", &["whatever"], registry,).unwrap()
 }
