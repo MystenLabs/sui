@@ -478,13 +478,13 @@ fn datatype_completion(
         (
             format!("{field_container}{{..}}"),
             // more than two named fields, each on a separate line
-            format!("{field_container}{{\n\t{fields_list},\n}}"),
+            format!("{field_container} {{\n\t{fields_list},\n}}"),
         )
     } else {
         (
             format!("{field_container}{{..}}"),
             // fewer than three named fields, all on the same line
-            format!("{field_container}{{{fields_list}}}"),
+            format!("{field_container} {{{fields_list}}}"),
         )
     };
     let field_completion = CompletionItem {
