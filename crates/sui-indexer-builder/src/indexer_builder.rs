@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::sync::Arc;
 
 use anyhow::Error;
@@ -15,42 +15,42 @@ use tap::tap::TapFallible;
 type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
 
-pub struct IndexerBuilder<D, M> {
+pub struct IndexerBuilder<D, M, P> {
     name: String,
     datasource: D,
     data_mapper: M,
+    persistent: P,
     backfill_strategy: BackfillStrategy,
     disable_live_task: bool,
 }
 
-impl<D, M> IndexerBuilder<D, M> {
-    pub fn new(name: &str, datasource: D, data_mapper: M) -> IndexerBuilder<D, M> {
+impl<D, M, P> IndexerBuilder<D, M, P> {
+    pub fn new<R>(
+        name: &str,
+        datasource: D,
+        data_mapper: M,
+        persistent: P,
+    ) -> IndexerBuilder<D, M, P>
+    where
+        P: Persistent<R>,
+    {
         IndexerBuilder {
             name: name.into(),
             datasource,
             data_mapper,
             backfill_strategy: BackfillStrategy::Simple,
             disable_live_task: false,
+            persistent,
         }
     }
-    pub fn build<R, P>(
-        self,
-        start_from_checkpoint: u64,
-        genesis_checkpoint: u64,
-        persistent: P,
-    ) -> Indexer<P, D, M>
-    where
-        P: Persistent<R>,
-    {
+    pub fn build(self) -> Indexer<P, D, M> {
         Indexer {
             name: self.name,
-            storage: persistent,
+            storage: self.persistent,
             datasource: self.datasource.into(),
             backfill_strategy: self.backfill_strategy,
             disable_live_task: self.disable_live_task,
-            start_from_checkpoint,
             data_mapper: self.data_mapper,
-            genesis_checkpoint,
         }
     }
 
@@ -72,8 +72,6 @@ pub struct Indexer<P, D, M> {
     data_mapper: M,
     backfill_strategy: BackfillStrategy,
     disable_live_task: bool,
-    start_from_checkpoint: u64,
-    genesis_checkpoint: u64,
 }
 
 impl<P, D, M> Indexer<P, D, M> {
@@ -156,47 +154,52 @@ impl<P, D, M> Indexer<P, D, M> {
         Ok(())
     }
 
-    async fn update_tasks<R>(&mut self) -> Result<(), Error>
+    async fn update_tasks<T, R>(&mut self) -> Result<(), Error>
     where
         P: Persistent<R>,
+        D: Datasource<T>,
+        T: Send,
     {
         let ongoing_tasks = self.storage.get_ongoing_tasks(&self.name).await?;
         let largest_checkpoint = self
             .storage
             .get_largest_backfill_task_target_checkpoint(&self.name)
             .await?;
+        let live_task_from_checkpoint = self.datasource.get_live_task_starting_checkpoint().await?;
 
-        // 1, create and update live task if needed
+        // Create and update live task if needed
+        // for live task, we always start from `live_task_from_checkpoint`.
+        // What if there are older tasks with larger height? It's very
+        // unlikely, and even if it happens, we just reprocess the range.
+        // This simplifies the logic of determining task boundaries.
         if !self.disable_live_task {
-            let from_checkpoint = max(
-                self.start_from_checkpoint,
-                largest_checkpoint.map(|cp| cp + 1).unwrap_or_default(),
-            );
-
             match ongoing_tasks.live_task() {
                 None => {
                     self.storage
                         .register_task(
                             format!("{} - Live", self.name),
-                            from_checkpoint,
+                            live_task_from_checkpoint,
                             i64::MAX as u64,
                         )
                         .await
                         .tap_err(|e| {
                             tracing::error!(
                                 "Failed to register live task ({}-MAX): {:?}",
-                                from_checkpoint,
+                                live_task_from_checkpoint,
                                 e
                             );
                         })?;
                 }
                 Some(mut live_task) => {
-                    if self.start_from_checkpoint > live_task.checkpoint {
-                        live_task.checkpoint = self.start_from_checkpoint;
+                    // We still check this because in the case of slow
+                    // block generation (e.g. Ethereum), it's possible we will
+                    // stay on the same block for a bit.
+                    if live_task_from_checkpoint != live_task.checkpoint {
+                        live_task.checkpoint = live_task_from_checkpoint;
                         self.storage.update_task(live_task).await.tap_err(|e| {
                             tracing::error!(
                                 "Failed to update live task to ({}-MAX): {:?}",
-                                self.start_from_checkpoint,
+                                live_task_from_checkpoint,
                                 e
                             );
                         })?;
@@ -205,29 +208,29 @@ impl<P, D, M> Indexer<P, D, M> {
             }
         }
 
-        // 2, if there is a gap between `largest_checkpoint` and `start_from_checkpoint`,
-        // create backfill task [largest_checkpoint + 1, start_from_checkpoint - 1]
+        // 2, if there is a gap between `largest_checkpoint` and `live_task_from_checkpoint`,
+        // create backfill task [largest_checkpoint + 1, live_task_from_checkpoint - 1]
 
         // TODO: when there is a hole, we create one task for the hole, but ideally we should
         // honor the partition size and create as needed.
         let from_checkpoint = largest_checkpoint
             .map(|cp| cp + 1)
-            .unwrap_or(self.genesis_checkpoint);
-        if from_checkpoint < self.start_from_checkpoint {
-            self.create_backfill_tasks(from_checkpoint, self.start_from_checkpoint - 1)
+            .unwrap_or(self.datasource.get_genesis_height());
+        if from_checkpoint < live_task_from_checkpoint {
+            self.create_backfill_tasks(from_checkpoint, live_task_from_checkpoint - 1)
                 .await
                 .tap_ok(|_| {
                     tracing::info!(
                         "Created backfill tasks ({}-{})",
                         from_checkpoint,
-                        self.start_from_checkpoint - 1
+                        live_task_from_checkpoint - 1
                     );
                 })
                 .tap_err(|e| {
                     tracing::error!(
                         "Failed to create backfill tasks ({}-{}): {:?}",
-                        self.genesis_checkpoint,
-                        self.start_from_checkpoint - 1,
+                        from_checkpoint,
+                        live_task_from_checkpoint - 1,
                         e
                     );
                 })?;
@@ -252,7 +255,7 @@ impl<P, D, M> Indexer<P, D, M> {
             }
             BackfillStrategy::Partitioned { task_size } => {
                 // TODO: register all tasks in one DB write
-                while from_cp < self.start_from_checkpoint {
+                while from_cp < to_cp {
                     let target_cp = min(from_cp + task_size - 1, to_cp);
                     self.storage
                         .register_task(
@@ -270,9 +273,11 @@ impl<P, D, M> Indexer<P, D, M> {
     }
 
     #[cfg(any(feature = "test-utils", test))]
-    pub async fn test_only_update_tasks<R>(&mut self) -> Result<(), Error>
+    pub async fn test_only_update_tasks<R, T>(&mut self) -> Result<(), Error>
     where
         P: Persistent<R>,
+        D: Datasource<T>,
+        T: Send,
     {
         self.update_tasks().await
     }
@@ -375,6 +380,10 @@ pub trait Datasource<T: Send>: Sync + Send {
         target_checkpoint: u64,
         data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error>;
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error>;
+
+    fn get_genesis_height(&self) -> u64;
 }
 
 pub enum BackfillStrategy {

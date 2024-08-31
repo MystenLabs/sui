@@ -19,6 +19,8 @@ use sui_indexer_builder::Task;
 
 pub struct TestDatasource<T> {
     pub data: Vec<T>,
+    pub live_task_starting_checkpoint: u64,
+    pub genesis_checkpoint: u64,
 }
 
 #[async_trait]
@@ -44,6 +46,14 @@ where
             }
             Ok(())
         }))
+    }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        Ok(self.live_task_starting_checkpoint)
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_checkpoint
     }
 }
 
@@ -126,6 +136,7 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             .await
             .values()
             .filter(|task| task.task_name.starts_with(task_prefix))
+            .filter(|task| task.target_checkpoint.ne(&(i64::MAX as u64)))
             .max_by(|t1, t2| t1.target_checkpoint.cmp(&t2.target_checkpoint))
             .map(|t| t.target_checkpoint))
     }
