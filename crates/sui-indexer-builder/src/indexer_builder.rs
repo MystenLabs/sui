@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use async_trait::async_trait;
+use prometheus::IntGaugeVec;
 use tokio::task::JoinHandle;
 
 use crate::{Task, Tasks};
@@ -342,7 +343,7 @@ pub trait Datasource<T: Send>: Sync + Send {
             starting_checkpoint,
             target_checkpoint
         );
-        // todo: add metrics for number of tasks
+        let is_live_task = target_checkpoint == i64::MAX as u64;
         let (data_sender, mut data_channel) = metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
@@ -354,6 +355,27 @@ pub trait Datasource<T: Send>: Sync + Send {
             .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
             .await?;
 
+        // track remaining checkpoints per task, except for live task
+        let remaining_checkpoints_metric = if !is_live_task {
+            let m = self
+                .get_tasks_remaining_checkpoints_metric()
+                .with_label_values(&[&task_name]);
+            m.set((target_checkpoint - starting_checkpoint + 1) as i64);
+            Some(m)
+        } else {
+            None
+        };
+        // tracking current checkpoint for live task
+        let live_task_current_checkpoint_metrics = if is_live_task {
+            let m = self
+                .get_live_task_checkpoint_metric()
+                .with_label_values(&[&task_name]);
+            m.set((starting_checkpoint) as i64);
+            Some(m)
+        } else {
+            None
+        };
+
         while let Some((block_number, data)) = data_channel.recv().await {
             if block_number > target_checkpoint {
                 break;
@@ -363,14 +385,29 @@ pub trait Datasource<T: Send>: Sync + Send {
                     result.append(&mut data_mapper.map(d)?);
                     Ok::<Vec<_>, Error>(result)
                 })?;
+                // TODO: batch write data
                 // TODO: we might be able to write data and progress in a single transaction.
                 storage.write(processed_data).await?;
             }
+            // TODO: batch progress
             storage
                 .save_progress(task_name.clone(), block_number)
                 .await?;
+            if let Some(m) = &remaining_checkpoints_metric {
+                m.set((target_checkpoint - block_number + 1) as i64)
+            }
+            if let Some(m) = &live_task_current_checkpoint_metrics {
+                m.set((block_number) as i64)
+            }
+        }
+        if is_live_task {
+            // Live task should never exit, except in unit tests
+            tracing::error!(task_name, "Live task exiting");
         }
         join_handle.abort();
+        if let Some(m) = &remaining_checkpoints_metric {
+            m.set(0)
+        }
         join_handle.await?
     }
 
@@ -384,6 +421,10 @@ pub trait Datasource<T: Send>: Sync + Send {
     async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error>;
 
     fn get_genesis_height(&self) -> u64;
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
+
+    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec;
 }
 
 pub enum BackfillStrategy {
