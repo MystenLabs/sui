@@ -691,7 +691,10 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
         for module in pkg.package.root_modules() {
             let out = modules_out.join(format!("{}.mv", module.unit.name));
             let mut buf = vec![];
-            module.unit.module.serialize(&mut buf)?;
+            module
+                .unit
+                .module
+                .serialize_with_version(module.unit.module.version, &mut buf)?;
             fs::write(out, buf)?;
         }
     };
@@ -709,24 +712,21 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    // Skip deps and root
+    // Verify deps but skip root
     verifier
-        .verify_package(&a_pkg, /* verify_deps */ false, SourceMode::Skip)
+        .verify(&a_pkg, ValidationMode::deps())
         .await
         .unwrap();
 
-    // Verify deps but skip root
-    verifier.verify_package_deps(&a_pkg).await.unwrap();
-
     // Skip deps but verify root
     verifier
-        .verify_package_root(&a_pkg, a_ref.0.into())
+        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
         .await
         .unwrap();
 
     // Verify both deps and root
     verifier
-        .verify_package_root_and_deps(&a_pkg, a_ref.0.into())
+        .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
         .await
         .unwrap();
 
