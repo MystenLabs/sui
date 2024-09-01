@@ -355,13 +355,16 @@ pub trait Datasource<T: Send>: Sync + Send {
             .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
             .await?;
 
+        let processed_metrics_metrics = self
+            .get_tasks_processed_checkpoints_metric()
+            .with_label_values(&[&task_name]);
         // track remaining checkpoints per task, except for live task
         let remaining_checkpoints_metric = if !is_live_task {
-            let m = self
+            let remaining = self
                 .get_tasks_remaining_checkpoints_metric()
                 .with_label_values(&[&task_name]);
-            m.set((target_checkpoint - starting_checkpoint + 1) as i64);
-            Some(m)
+            remaining.set((target_checkpoint - starting_checkpoint + 1) as i64);
+            Some(remaining)
         } else {
             None
         };
@@ -377,6 +380,14 @@ pub trait Datasource<T: Send>: Sync + Send {
         };
 
         while let Some((block_number, data)) = data_channel.recv().await {
+            let data_len = data.len();
+            tracing::debug!(
+                task_name,
+                height = block_number,
+                "Ingestion task received {} data",
+                data_len,
+            );
+            let timer = tokio::time::Instant::now();
             if block_number > target_checkpoint {
                 break;
             }
@@ -393,6 +404,14 @@ pub trait Datasource<T: Send>: Sync + Send {
             storage
                 .save_progress(task_name.clone(), block_number)
                 .await?;
+            tracing::debug!(
+                task_name,
+                height = block_number,
+                "Ingestion task processed {} data in {}ms",
+                data_len,
+                timer.elapsed().as_millis(),
+            );
+            processed_metrics_metrics.inc();
             if let Some(m) = &remaining_checkpoints_metric {
                 m.set((target_checkpoint - block_number + 1) as i64)
             }
@@ -423,6 +442,8 @@ pub trait Datasource<T: Send>: Sync + Send {
     fn get_genesis_height(&self) -> u64;
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec;
 
     fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec;
 }

@@ -19,7 +19,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
-use tracing::info;
 
 use crate::metrics::BridgeIndexerMetrics;
 
@@ -108,6 +107,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
         &self.indexer_metrics.tasks_remaining_checkpoints
     }
 
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
     fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
         &self.indexer_metrics.live_task_current_checkpoint
     }
@@ -158,7 +161,7 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
     async fn process_checkpoint(&self, checkpoint: SuiCheckpointData) -> anyhow::Result<()> {
-        info!(
+        tracing::trace!(
             "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
             checkpoint.checkpoint_summary.sequence_number,
