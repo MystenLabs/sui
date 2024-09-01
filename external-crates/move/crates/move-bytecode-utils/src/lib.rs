@@ -11,8 +11,9 @@ use move_core_types::{
 };
 
 use anyhow::{anyhow, Result};
+use indexmap::IndexMap;
 use petgraph::graphmap::DiGraphMap;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// Set of Move modules indexed by module Id
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -46,24 +47,22 @@ impl<'a> Modules<'a> {
     /// Fails with an error if `self` contains circular dependencies.
     /// Tolerates missing dependencies.
     pub fn compute_topological_order(&self) -> Result<impl Iterator<Item = &CompiledModule>> {
-        let mut module_id_idx_map = HashMap::new();
-        let mut idx_module_map = HashMap::new();
-        for (i, m) in self.iter_modules().into_iter().enumerate() {
-            if module_id_idx_map.insert(m.self_id(), i).is_some() {
+        let mut module_map = IndexMap::new();
+        for m in self.iter_modules() {
+            if module_map.insert(m.self_id(), m).is_some() {
                 panic!("Duplicate module found")
-            };
-            idx_module_map.insert(i, m);
+            }
         }
 
         let mut graph: DiGraphMap<usize, usize> = DiGraphMap::new();
-        for i in 0..idx_module_map.len() {
+        for i in 0..module_map.len() {
             graph.add_node(i);
         }
 
-        for (i, m) in idx_module_map.iter() {
+        for (i, (_, m)) in module_map.iter().enumerate() {
             for dep in m.immediate_dependencies() {
-                if let Some(j) = module_id_idx_map.get(&dep) {
-                    graph.add_edge(*i, *j, 0);
+                if let Some(j) = module_map.get_index_of(&dep) {
+                    graph.add_edge(i, j, 0);
                 }
             }
         }
@@ -72,7 +71,7 @@ impl<'a> Modules<'a> {
             Err(_) => panic!("Circular dependency detected"),
             Ok(ordered_idxs) => Ok(ordered_idxs
                 .into_iter()
-                .map(move |idx| idx_module_map.remove(&idx).unwrap())
+                .map(move |idx| *module_map.get_index(idx).unwrap().1)
                 .rev()),
         }
     }
