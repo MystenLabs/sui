@@ -212,7 +212,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     let (test_plan, mapped_files, units) = test_plan.unwrap();
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
-    let test_plan = TestPlan::new(test_plan, mapped_files, units);
+    let test_plan = TestPlan::new(test_plan, mapped_files, units, bytecode_deps_modules);
 
     let trace_path = pkg_path.join(".trace");
     let coverage_map_path = pkg_path
@@ -235,13 +235,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(
-            test_plan,
-            Some(natives),
-            cost_table,
-            bytecode_deps_modules,
-            writer,
-        )?
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)?
         .1
     {
         cleanup_trace();

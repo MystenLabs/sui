@@ -117,10 +117,10 @@ impl TestRunner {
         // we don't have to make assumptions about their gas parameters.
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
-        bytecode_deps_modules: Vec<CompiledModule>,
     ) -> Result<Self> {
         let modules = tests.module_info.values().map(|info| &info.module);
-        let starting_storage_state = setup_test_storage(modules, bytecode_deps_modules.iter())?;
+        let starting_storage_state =
+            setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
