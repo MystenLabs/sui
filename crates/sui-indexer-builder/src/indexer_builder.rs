@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use async_trait::async_trait;
+use futures::StreamExt;
 use prometheus::IntGaugeVec;
 use tokio::task::JoinHandle;
 
@@ -15,6 +16,8 @@ use tap::tap::TapFallible;
 
 type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
+
+const INGESTION_BATCH_SIZE: usize = 100;
 
 pub struct IndexerBuilder<D, M, P> {
     name: String,
@@ -337,14 +340,19 @@ pub trait Datasource<T: Send>: Sync + Send {
         M: DataMapper<T, R>,
         P: Persistent<R>,
     {
+        let ingestion_batch_size = std::env::var("INGESTION_BATCH_SIZE")
+            .unwrap_or(INGESTION_BATCH_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         tracing::info!(
             task_name,
+            ingestion_batch_size,
             "Starting ingestion task ({}-{})",
             starting_checkpoint,
-            target_checkpoint
+            target_checkpoint,
         );
         let is_live_task = target_checkpoint == i64::MAX as u64;
-        let (data_sender, mut data_channel) = metered_channel::channel(
+        let (data_sender, data_rx) = metered_channel::channel(
             1000,
             &mysten_metrics::get_metrics()
                 .unwrap()
@@ -368,7 +376,7 @@ pub trait Datasource<T: Send>: Sync + Send {
         } else {
             None
         };
-        // tracking current checkpoint for live task
+        // track current checkpoint for live task
         let live_task_current_checkpoint_metrics = if is_live_task {
             let m = self
                 .get_live_task_checkpoint_metric()
@@ -379,18 +387,30 @@ pub trait Datasource<T: Send>: Sync + Send {
             None
         };
 
-        while let Some((block_number, data)) = data_channel.recv().await {
-            let data_len = data.len();
+        let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
+            .ready_chunks(ingestion_batch_size);
+
+        while let Some(batch) = stream.next().await {
+            // unwrap safe: at least 1 element in the batch
+            let first_height = batch.first().map(|(h, _)| *h).unwrap();
+            let last_height = batch.last().map(|(h, _)| *h).unwrap();
+            let batch_size = batch.len();
             tracing::debug!(
                 task_name,
-                height = block_number,
-                "Ingestion task received {} data",
-                data_len,
+                first_height,
+                last_height,
+                "Ingestion task received {} blocks.",
+                batch_size,
             );
             let timer = tokio::time::Instant::now();
-            if block_number > target_checkpoint {
-                break;
-            }
+
+            let data = batch
+                .into_iter()
+                .take_while(|(height, _)| *height <= target_checkpoint)
+                .flat_map(|(_, data)| data)
+                .collect::<Vec<_>>();
+            let new_len = data.len();
+            let last_height = min(last_height, target_checkpoint);
             if !data.is_empty() {
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
@@ -402,21 +422,26 @@ pub trait Datasource<T: Send>: Sync + Send {
             }
             // TODO: batch progress
             storage
-                .save_progress(task_name.clone(), block_number)
+                .save_progress(task_name.clone(), last_height)
                 .await?;
             tracing::debug!(
                 task_name,
-                height = block_number,
-                "Ingestion task processed {} data in {}ms",
-                data_len,
+                first_height,
+                last_height,
+                "Ingestion task processed {} blocks in {}ms",
+                new_len,
                 timer.elapsed().as_millis(),
             );
             processed_metrics_metrics.inc();
             if let Some(m) = &remaining_checkpoints_metric {
-                m.set((target_checkpoint - block_number + 1) as i64)
+                // Note this is +-1 accurate if one checkpoint is split into multiple batches
+                m.set((target_checkpoint - last_height) as i64)
             }
             if let Some(m) = &live_task_current_checkpoint_metrics {
-                m.set((block_number) as i64)
+                m.set((last_height) as i64)
+            }
+            if last_height > target_checkpoint {
+                break;
             }
         }
         if is_live_task {

@@ -108,6 +108,7 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
                         eth_ws_client.get_block(block_number),
                         Duration::from_secs(30000)
                     ) else {
+                        // FIXME: why
                         panic!("Unable to get block from provider");
                     };
 
