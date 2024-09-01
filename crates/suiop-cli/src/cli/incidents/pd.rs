@@ -13,6 +13,10 @@ use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::env;
+use tracing::debug;
+
+use crate::cli::incidents::slack::Channel;
+use crate::cli::lib::utils::day_of_week;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Priority {
@@ -30,18 +34,23 @@ pub struct Incident {
     resolved_at: Option<String>,
     html_url: String,
     priority: Option<Priority>,
-    slack_channel: Option<String>,
+    slack_channel: Option<Channel>,
 }
 
 impl Incident {
     fn print(&self, long_output: bool) -> Result<()> {
         let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
+        let priority = self.priority();
         if long_output {
             let date_format_out = "%m/%d/%Y %H:%M";
             println!(
-                "Incident #: {} ({})",
+                "Incident #: {} {}",
                 self.number.to_string().bright_purple(),
-                self.priority()
+                if priority.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("({})", priority)
+                }
             );
             println!("Title: {}", self.title.green());
             if let Some(created_at) = self.created_at.clone() {
@@ -64,7 +73,7 @@ impl Incident {
             }
             println!("URL: {}", self.html_url.bright_purple());
             if let Some(channel) = self.slack_channel.clone() {
-                println!("Predicted Slack channel: {}", channel.bright_purple());
+                println!("Predicted Slack channel: {}", channel.url().bright_purple());
             }
             println!("---");
         } else {
@@ -76,12 +85,16 @@ impl Incident {
                 None
             };
             println!(
-                "{}: ({}) {} {} ({})",
+                "{}:{}{} {} ({})",
                 self.number.to_string().bright_purple(),
                 resolved_at
                     .map(|v| (v.num_days().to_string() + "d").yellow())
                     .unwrap_or("".to_string().yellow()),
-                self.priority(),
+                if priority.is_empty() {
+                    "  ".to_string()
+                } else {
+                    format!(" {} ", priority)
+                },
                 self.title.green(),
                 self.html_url.bright_purple(),
             );
@@ -97,7 +110,7 @@ impl Incident {
             Some("P2") => "P2".truecolor(255, 165, 0),
             Some("P3") => "P3".yellow(),
             Some("P4") => "P4".white(),
-            _ => "  ".white(),
+            _ => "".white(),
         }
     }
 }
@@ -108,7 +121,7 @@ pub async fn fetch_incidents(
     start_time: DateTime<Local>,
     _end_time: DateTime<Local>,
 ) -> Result<Vec<Incident>> {
-    let mut slack = super::slack::Slack::new().await;
+    let slack = super::slack::Slack::new().await;
     let url = "https://api.pagerduty.com/incidents";
 
     let mut headers = HeaderMap::new();
@@ -180,14 +193,13 @@ pub async fn fetch_incidents(
         .map(serde_json::from_value)
         .filter_map(|i| i.ok())
         .map(|mut i: Incident| {
-            println!("Checking if incidents list contains {}", i.number);
-            let channel = slack
+            debug!("Checking if incidents list contains {}", i.number);
+            i.slack_channel = slack
                 .channels
                 .iter()
-                .find(|c| c.name.contains(&i.number.to_string()));
-            println!("Found channel: {:?}", channel);
-            i.slack_channel = channel
-                .map(|channel| format!("https://mysten-labs.slack.com/archives/{}", &channel.id));
+                .find(|c| c.name.contains(&i.number.to_string()))
+                .cloned();
+            debug!("Found channel: {:?}", i.slack_channel);
             i
         })
         .collect())
@@ -209,10 +221,8 @@ pub async fn print_recent_incidents(
 }
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
-    // TODO try to get the channel url that corresponds to each of the given channels
-
-    // finally allow incident selection
     let mut to_review = vec![];
+    let mut excluded = vec![];
     for incident in incidents {
         incident.print(false)?;
         let ans = Confirm::new("Keep this incident for review?")
@@ -221,6 +231,8 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
             .expect("Unexpected response");
         if ans {
             to_review.push(incident);
+        } else {
+            excluded.push(incident);
         }
     }
     println!(
@@ -231,5 +243,60 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
+
+    fn short_print(i: &Incident) -> String {
+        format!(
+            "• {} {} {}",
+            if let Some(channel) = i.slack_channel.clone() {
+                format!("{} ({})", i.number, channel.url())
+            } else {
+                i.number.to_string()
+            },
+            i.title,
+            i.slack_channel
+                .clone()
+                .map(|c| c.name)
+                .unwrap_or("".to_string())
+        )
+    }
+
+    let message = format!(
+        "
+Hello everyone and happy {}!
+
+We have selected the following incidents for review:
+{}
+    
+and the following incidents have been excluded from review:
+{}
+
+Comment in the thread to request an adjustment to the list.",
+        day_of_week(),
+        to_review
+            .iter()
+            .map(short_print)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        excluded
+            .iter()
+            .map(short_print)
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    println!(
+        "Here is the message to send in the channel: 
+    {}
+    ",
+        message
+    );
+    let ans = Confirm::new("Send this message to the channel?")
+        .with_default(false)
+        .prompt()
+        .expect("Unexpected response");
+    if ans {
+        let slack = super::slack::Slack::new().await;
+        slack.send_message("test-notifications", &message).await?;
+    }
+    // post to https://slack.com/api/chat.postMessage with message
     Ok(())
 }

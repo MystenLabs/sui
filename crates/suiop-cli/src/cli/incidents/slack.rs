@@ -8,6 +8,7 @@ use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
 lazy_static! {
@@ -39,6 +40,14 @@ struct ConversationsResponse {
     error: Option<String>,
     channels: Option<Vec<Channel>>,
     response_metadata: ResponseMetadata,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct SendMessageBody {
+    channel: String,
+    text: String,
+    ts: String,
+    mrkdwn: bool,
 }
 
 impl Slack {
@@ -78,7 +87,7 @@ impl Slack {
                     if elapsed.as_secs() < 24 * 60 * 60 {
                         if let Ok(file) = File::open(file_path) {
                             if let Ok(channels) = serde_json::from_reader::<_, Vec<Channel>>(file) {
-                                println!("Using cached channels");
+                                debug!("Using cached channels");
                                 self.channels = channels;
                                 return Ok(self.channels.iter().map(|c| c.name.clone()).collect());
                             }
@@ -119,5 +128,32 @@ impl Slack {
         self.serialize_channels().await?;
         let names = self.channels.iter().map(|c| c.name.clone()).collect();
         Ok(names)
+    }
+
+    pub async fn send_message(&self, channel: &str, message: &str) -> Result<()> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+        let message_body = SendMessageBody {
+            channel: channel.to_owned(),
+            text: message.to_owned(),
+            ts: timestamp.to_string(),
+            mrkdwn: true,
+        };
+        let url = "https://slack.com/api/chat.postMessage";
+        let response = self.client.post(url).json(&message_body).send().await?;
+        let response = response.json::<serde_json::Value>().await?;
+        if response["ok"].as_bool().expect("ok was not a bool") {
+            Ok(())
+        } else {
+            Err(anyhow!("Failed to send message: {}", response))
+        }
+    }
+}
+
+impl Channel {
+    pub fn url(self) -> String {
+        format!("https://mysten-labs.slack.com/archives/{}", self.id)
     }
 }
