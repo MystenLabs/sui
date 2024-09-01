@@ -13642,6 +13642,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "mysten-metrics",
  "prometheus",
  "sui-data-ingestion-core",
