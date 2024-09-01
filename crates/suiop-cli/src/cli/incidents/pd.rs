@@ -17,6 +17,7 @@ use tracing::debug;
 
 use crate::cli::incidents::slack::Channel;
 use crate::cli::lib::utils::day_of_week;
+use crate::DEBUG_MODE;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Priority {
@@ -270,7 +271,7 @@ We have selected the following incidents for review:
 and the following incidents have been excluded from review:
 {}
 
-Comment in the thread to request an adjustment to the list.",
+Please comment in the thread to request an adjustment to the list.",
         day_of_week(),
         to_review
             .iter()
@@ -295,7 +296,12 @@ Comment in the thread to request an adjustment to the list.",
         .expect("Unexpected response");
     if ans {
         let slack = super::slack::Slack::new().await;
-        slack.send_message("test-notifications", &message).await?;
+        let slack_channel = if *DEBUG_MODE {
+            "test-notifications"
+        } else {
+            "incident-postmortems"
+        };
+        slack.send_message(slack_channel, &message).await?;
     }
     // post to https://slack.com/api/chat.postMessage with message
     Ok(())
