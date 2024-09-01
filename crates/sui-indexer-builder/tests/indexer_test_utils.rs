@@ -63,6 +63,11 @@ where
         &self.metric
     }
 
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.metric
+    }
+
     fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
         // This is dummy
         &self.metric
