@@ -308,7 +308,7 @@ pub trait IndexerProgressStore: Send {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
+        checkpoint_numbers: &[u64],
         start_checkpoint_number: u64,
     ) -> anyhow::Result<()>;
 
@@ -366,7 +366,7 @@ pub trait Datasource<T: Send>: Sync + Send {
             .start_data_retrieval(start_checkpoint, target_checkpoint, data_sender)
             .await?;
 
-        let processed_metrics_metrics = self
+        let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
             .with_label_values(&[&task_name]);
         // track remaining checkpoints per task, except for live task
@@ -386,8 +386,8 @@ pub trait Datasource<T: Send>: Sync + Send {
         while let Some(batch) = stream.next().await {
             // unwrap safe: at least 1 element in the batch
             let mut max_height = 0;
+            let mut heights = vec![];
             let mut data = vec![];
-            let mut batch_size = 0;
             for (height, d) in batch {
                 if height > target_checkpoint {
                     tracing::warn!(
@@ -398,14 +398,14 @@ pub trait Datasource<T: Send>: Sync + Send {
                     continue;
                 }
                 max_height = std::cmp::max(max_height, height);
-                batch_size += 1;
+                heights.push(height);
                 data.extend(d);
             }
             tracing::debug!(
                 task_name,
                 max_height,
                 "Ingestion task received {} blocks.",
-                batch_size,
+                heights.len(),
             );
             let timer = tokio::time::Instant::now();
 
@@ -420,16 +420,16 @@ pub trait Datasource<T: Send>: Sync + Send {
             }
             // TODO: batch progress
             storage
-                .save_progress(task_name.clone(), max_height, start_checkpoint)
+                .save_progress(task_name.clone(), &heights, start_checkpoint)
                 .await?;
             tracing::debug!(
                 task_name,
                 max_height,
                 "Ingestion task processed {} blocks in {}ms",
-                batch_size,
+                heights.len(),
                 timer.elapsed().as_millis(),
             );
-            processed_metrics_metrics.inc_by(batch_size as u64);
+            processed_checkpoints_metrics.inc_by(heights.len() as u64);
             if let Some(m) = &remaining_checkpoints_metric {
                 // Note this is only approximate as the data may come in out of order
                 m.set(std::cmp::max(

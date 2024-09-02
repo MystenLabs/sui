@@ -114,9 +114,10 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
+        checkpoint_numbers: &[u64],
         _start_checkpoint_number: u64,
     ) -> anyhow::Result<()> {
+        let checkpoint_number = *checkpoint_numbers.last().unwrap();
         self.progress_store
             .lock()
             .await
