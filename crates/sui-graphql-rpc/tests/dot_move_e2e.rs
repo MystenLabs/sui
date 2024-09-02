@@ -13,6 +13,7 @@ mod tests {
         },
     };
     use sui_graphql_rpc_client::simple_client::SimpleClient;
+    use sui_indexer::tempdb::get_available_port;
     use sui_json_rpc_types::ObjectChange;
     use sui_move_build::BuildConfig;
     use sui_types::{
@@ -29,7 +30,6 @@ mod tests {
     const DEMO_PKG_V2: &str = "tests/dot_move/demo_v2/";
     const DEMO_PKG_V3: &str = "tests/dot_move/demo_v3/";
 
-    const DB_NAME: &str = "sui_graphql_rpc_e2e_tests";
     const DEMO_TYPE: &str = "::demo::V1Type";
     const DEMO_TYPE_V2: &str = "::demo::V2Type";
     const DEMO_TYPE_V3: &str = "::demo::V3Type";
@@ -39,8 +39,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dot_move_e2e() {
-        let network_cluster =
-            start_network_cluster(gql_default_config(DB_NAME, 8000, 9184), None).await;
+        let network_cluster = start_network_cluster().await;
 
         let external_network_chain_id = network_cluster
             .validator_fullnode_handle
@@ -86,8 +85,7 @@ mod tests {
 
         // The first cluster uses internal resolution (mimics our base network, does not rely on external chain).
         let internal_client = init_dot_move_gql(
-            8000,
-            9184,
+            network_cluster.graphql_connection_config.clone(),
             ServiceConfig::dot_move_test_defaults(
                 false,
                 None,
@@ -99,8 +97,11 @@ mod tests {
         .await;
 
         let external_client = init_dot_move_gql(
-            8001,
-            9185,
+            ConnectionConfig {
+                port: get_available_port(),
+                prom_port: get_available_port(),
+                ..network_cluster.graphql_connection_config.clone()
+            },
             ServiceConfig::dot_move_test_defaults(
                 true, // external resolution
                 Some(internal_client.url()),
@@ -226,15 +227,17 @@ mod tests {
     }
 
     async fn init_dot_move_gql(
-        gql_port: u16,
-        prom_port: u16,
+        connection_config: ConnectionConfig,
         config: ServiceConfig,
     ) -> SimpleClient {
-        let cfg = gql_default_config(DB_NAME, gql_port, prom_port);
+        let _gql_handle =
+            start_graphql_server_with_fn_rpc(connection_config.clone(), None, None, config).await;
 
-        let _gql_handle = start_graphql_server_with_fn_rpc(cfg.clone(), None, None, config).await;
-
-        let server_url = format!("http://{}:{}/", cfg.host(), cfg.port());
+        let server_url = format!(
+            "http://{}:{}/",
+            connection_config.host(),
+            connection_config.port()
+        );
 
         // Starts graphql client
         let client = SimpleClient::new(server_url);
@@ -505,9 +508,5 @@ mod tests {
 
     fn type_query(named_type: &str) -> String {
         format!(r#"typeByName(name: "{}") {{ layout }}"#, named_type)
-    }
-
-    fn gql_default_config(db_name: &str, port: u16, prom_port: u16) -> ConnectionConfig {
-        ConnectionConfig::ci_integration_test_cfg_with_db_name(db_name.to_string(), port, prom_port)
     }
 }
