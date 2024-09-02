@@ -383,7 +383,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
             .ready_chunks(ingestion_batch_size);
-
+        let mut last_saved_checkpoint = None;
         while let Some(batch) = stream.next().await {
             // unwrap safe: at least 1 element in the batch
             let mut max_height = 0;
@@ -420,7 +420,7 @@ pub trait Datasource<T: Send>: Sync + Send {
                 storage.write(processed_data).await?;
             }
             // TODO: batch progress
-            let saved_checkpoint = storage
+            last_saved_checkpoint = storage
                 .save_progress(
                     task_name.clone(),
                     &heights,
@@ -434,7 +434,7 @@ pub trait Datasource<T: Send>: Sync + Send {
                 "Ingestion task processed {} blocks in {}ms. Saved checkpoint: {:?}",
                 heights.len(),
                 timer.elapsed().as_millis(),
-                saved_checkpoint,
+                last_saved_checkpoint,
             );
             processed_checkpoints_metrics.inc_by(heights.len() as u64);
             // FIXME: metrics for saved checkpoint
@@ -445,7 +445,7 @@ pub trait Datasource<T: Send>: Sync + Send {
                     0,
                 ));
             }
-            if let Some(cp) = saved_checkpoint {
+            if let Some(cp) = last_saved_checkpoint {
                 if cp >= target_checkpoint {
                     // Task is done
                     break;
@@ -454,9 +454,16 @@ pub trait Datasource<T: Send>: Sync + Send {
         }
         if is_live_task {
             // Live task should never exit, except in unit tests
-            tracing::error!(task_name, "Live task exiting");
+            tracing::error!(task_name, "Live task exiting unexpectedly");
+        } else if last_saved_checkpoint.expect("last_saved_checkpoint is None") < target_checkpoint
+        {
+            tracing::error!(
+                task_name,
+                "Task did not reach target checkpoint, exiting. Last saved checkpoint: {:?}",
+                last_saved_checkpoint
+            );
         } else {
-            tracing::info!(task_name, "Task is done, exiting");
+            tracing::info!(task_name, "Backfill task is done, exiting");
         }
         join_handle.abort();
         if let Some(m) = &remaining_checkpoints_metric {
