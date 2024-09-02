@@ -28,6 +28,7 @@ use errors::IndexerError;
 pub mod apis;
 pub mod db;
 pub mod database;
+pub mod tempdb;
 pub mod errors;
 pub mod handlers;
 pub mod indexer;
