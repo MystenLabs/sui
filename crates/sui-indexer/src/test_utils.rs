@@ -184,22 +184,6 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
     )
 }
 
-pub async fn force_delete_database(db_url: String) {
-    // Replace the database name with the default `postgres`, which should be the last string after `/`
-    // This is necessary because you can't drop a database while being connected to it.
-    // Hence switch to the default `postgres` database to drop the active database.
-    let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
-    let mut pool_config = ConnectionPoolConfig::default();
-    pool_config.set_pool_size(1);
-
-    let blocking_pool = new_connection_pool(&default_db_url, &pool_config).unwrap();
-    blocking_pool
-        .get()
-        .unwrap()
-        .batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name))
-        .unwrap();
-}
-
 #[derive(Clone)]
 pub struct SuiTransactionBlockResponseBuilder<'a> {
     response: SuiTransactionBlockResponse,

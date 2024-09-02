@@ -18,7 +18,6 @@ mod tests {
     use sui_graphql_rpc::config::ServiceConfig;
     use sui_graphql_rpc::test_infra::cluster::start_cluster;
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-    use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::CallArg;
@@ -32,22 +31,19 @@ mod tests {
 
     async fn prep_executor_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
+        let data_ingestion_path = tempdir().unwrap();
         let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
+        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            connection_config.clone(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
             None,
-            data_ingestion_path,
+            data_ingestion_path.path().to_path_buf(),
         )
         .await;
 
@@ -55,7 +51,7 @@ mod tests {
             .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
             .await;
 
-        (connection_config, cluster)
+        (cluster.graphql_connection_config.clone(), cluster)
     }
 
     #[tokio::test]
@@ -109,8 +105,8 @@ mod tests {
     async fn test_simple_client_simulator_cluster() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
+        let data_ingestion_path = tempdir().unwrap();
+        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -127,12 +123,10 @@ mod tests {
             chain_id_actual
         );
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            ConnectionConfig::default(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
             None,
-            data_ingestion_path,
+            data_ingestion_path.path().to_path_buf(),
         )
         .await;
         cluster
