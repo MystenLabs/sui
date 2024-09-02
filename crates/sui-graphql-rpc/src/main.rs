@@ -18,8 +18,8 @@ bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
 static VERSION: Version = Version {
-    year: env!("CARGO_PKG_VERSION_MAJOR"),
-    month: env!("CARGO_PKG_VERSION_MINOR"),
+    major: env!("CARGO_PKG_VERSION_MAJOR"),
+    minor: env!("CARGO_PKG_VERSION_MINOR"),
     patch: env!("CARGO_PKG_VERSION_PATCH"),
     sha: GIT_REVISION,
     full: const_str::concat!(

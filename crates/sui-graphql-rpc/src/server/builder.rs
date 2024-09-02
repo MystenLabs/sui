@@ -30,7 +30,7 @@ use crate::{
         query_limits_checker::{PayloadSize, QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
-    server::version::{check_version_middleware, set_version_middleware},
+    server::version::set_version_middleware,
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::extensions::ApolloTracing;
@@ -350,10 +350,6 @@ impl ServerBuilder {
             .route_layer(middleware::from_fn_with_state(
                 state.version,
                 set_version_middleware,
-            ))
-            .route_layer(middleware::from_fn_with_state(
-                state.version,
-                check_version_middleware,
             ))
             .layer(axum::extract::Extension(schema))
             .layer(axum::extract::Extension(watermark_task.lock()))
