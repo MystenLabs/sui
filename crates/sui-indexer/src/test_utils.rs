@@ -94,8 +94,8 @@ pub async fn start_test_indexer_impl(
     // to prevent maxing out
     let pool_config = ConnectionPoolConfig {
         pool_size: 5,
-        connection_timeout: Duration::from_secs(5),
-        statement_timeout: Duration::from_secs(5),
+        connection_timeout: Duration::from_secs(10),
+        statement_timeout: Duration::from_secs(30),
     };
 
     println!("db_url: {db_url}");

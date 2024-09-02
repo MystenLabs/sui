@@ -4,17 +4,12 @@
 #[cfg(feature = "pg_integration")]
 mod tests {
     use anyhow::{anyhow, Context, Result};
-    use rand::rngs::StdRng;
-    use rand::SeedableRng;
-    use simulacrum::Simulacrum;
     use std::cmp::max;
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
     use sui_graphql_rpc::config::Limits;
-    use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-    use tempfile::tempdir;
+    use sui_graphql_rpc::test_infra::cluster::{prep_executor_cluster, ExecutorCluster};
 
     struct Example {
         contents: String,
@@ -141,21 +136,8 @@ mod tests {
 
     #[tokio::test]
     async fn good_examples_within_limits() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap();
-        let mut sim = Simulacrum::new_with_rng(rng);
+        let cluster = prep_executor_cluster().await;
         let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
-
-        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
-        sim.create_checkpoint();
-
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            Arc::new(sim),
-            None,
-            None,
-            data_ingestion_path.path().to_path_buf(),
-        )
-        .await;
 
         let mut errors = vec![];
         for (name, example) in good_examples().expect("Could not load examples") {
@@ -205,21 +187,8 @@ mod tests {
 
     #[tokio::test]
     async fn bad_examples_fail() {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap();
-        let mut sim = Simulacrum::new_with_rng(rng);
+        let cluster = prep_executor_cluster().await;
         let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
-        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
-
-        sim.create_checkpoint();
-
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            Arc::new(sim),
-            None,
-            None,
-            data_ingestion_path.path().to_path_buf(),
-        )
-        .await;
 
         for (name, example) in bad_examples() {
             let errors = test_query(

@@ -6,6 +6,9 @@ use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use simulacrum::Simulacrum;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +24,8 @@ use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::RestStateReader;
+use tempfile::tempdir;
+use tempfile::TempDir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::join;
@@ -45,6 +50,7 @@ pub struct ExecutorCluster {
     pub cancellation_token: CancellationToken,
     #[allow(unused)]
     database: TempDb,
+    tempdir: Option<TempDir>,
 }
 
 pub struct Cluster {
@@ -58,37 +64,35 @@ pub struct NetworkCluster {
     pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub cancellation_token: CancellationToken,
+    #[allow(unused)]
+    data_ingestion_path: TempDir,
+    #[allow(unused)]
+    database: TempDb,
+    pub graphql_connection_config: ConnectionConfig,
 }
 
 /// Starts a validator, fullnode, indexer, and graphql service for testing.
-pub async fn start_cluster(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: Option<u16>,
-    service_config: ServiceConfig,
-) -> Cluster {
-    let network_cluster = start_network_cluster(
-        graphql_connection_config.clone(),
-        internal_data_source_rpc_port,
-    )
-    .await;
+pub async fn start_cluster(service_config: ServiceConfig) -> Cluster {
+    let network_cluster = start_network_cluster().await;
+    let graphql_connection_config = network_cluster.graphql_connection_config.clone();
 
     let fn_rpc_url: String = network_cluster
         .validator_fullnode_handle
         .rpc_url()
         .to_string();
 
+    let server_url = format!(
+        "http://{}:{}/",
+        graphql_connection_config.host, graphql_connection_config.port
+    );
+
     let graphql_server_handle = start_graphql_server_with_fn_rpc(
-        graphql_connection_config.clone(),
+        graphql_connection_config,
         Some(fn_rpc_url),
         Some(network_cluster.cancellation_token.clone()),
         service_config,
     )
     .await;
-
-    let server_url = format!(
-        "http://{}:{}/",
-        graphql_connection_config.host, graphql_connection_config.port
-    );
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
@@ -104,26 +108,30 @@ pub async fn start_cluster(
 /// Starts a validator, fullnode, indexer (using data ingestion). Re-using GraphQL's ConnectionConfig for convenience.
 /// This does not start any GraphQL services, only the network cluster. You can start a GraphQL service
 /// calling `start_graphql_server`.
-pub async fn start_network_cluster(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: Option<u16>,
-) -> NetworkCluster {
-    let data_ingestion_path = tempfile::tempdir().unwrap().into_path();
+pub async fn start_network_cluster() -> NetworkCluster {
+    let database = TempDb::new().unwrap();
+    let graphql_connection_config = ConnectionConfig {
+        port: get_available_port(),
+        host: "127.0.0.1".to_owned(),
+        db_url: database.database().url().as_str().to_owned(),
+        db_pool_size: 5,
+        prom_url: "127.0.0.1".to_owned(),
+        prom_port: get_available_port(),
+    };
+    let data_ingestion_path = tempfile::tempdir().unwrap();
     let db_url = graphql_connection_config.db_url.clone();
     let cancellation_token = CancellationToken::new();
 
     // Starts validator+fullnode
-    let val_fn =
-        start_validator_with_fullnode(internal_data_source_rpc_port, data_ingestion_path.clone())
-            .await;
+    let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None, None),
-        /* reset_database */ true,
-        Some(data_ingestion_path),
+        /* reset_database */ false,
+        Some(data_ingestion_path.path().to_path_buf()),
         cancellation_token.clone(),
     )
     .await;
@@ -133,6 +141,9 @@ pub async fn start_network_cluster(
         indexer_store: pg_store,
         indexer_join_handle: pg_handle,
         cancellation_token,
+        data_ingestion_path,
+        database,
+        graphql_connection_config,
     }
 }
 
@@ -205,7 +216,42 @@ pub async fn serve_executor(
         graphql_connection_config,
         cancellation_token,
         database,
+        tempdir: None,
     }
+}
+
+pub async fn prep_executor_cluster() -> ExecutorCluster {
+    let rng = StdRng::from_seed([12; 32]);
+    let data_ingestion_path = tempdir().unwrap();
+    let mut sim = Simulacrum::new_with_rng(rng);
+    sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
+
+    sim.create_checkpoint();
+    sim.create_checkpoint();
+    sim.create_checkpoint();
+    sim.advance_epoch(true);
+    sim.create_checkpoint();
+    sim.advance_clock(
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap(),
+    );
+    sim.create_checkpoint();
+
+    let mut cluster = serve_executor(
+        Arc::new(sim),
+        None,
+        None,
+        data_ingestion_path.path().to_path_buf(),
+    )
+    .await;
+
+    cluster
+        .wait_for_checkpoint_catchup(6, Duration::from_secs(10))
+        .await;
+
+    cluster.tempdir = Some(data_ingestion_path);
+    cluster
 }
 
 pub async fn start_graphql_server(
@@ -246,11 +292,8 @@ pub async fn start_graphql_server_with_fn_rpc(
     })
 }
 
-async fn start_validator_with_fullnode(
-    internal_data_source_rpc_port: Option<u16>,
-    data_ingestion_dir: PathBuf,
-) -> TestCluster {
-    let mut test_cluster_builder = TestClusterBuilder::new()
+async fn start_validator_with_fullnode(data_ingestion_dir: PathBuf) -> TestCluster {
+    TestClusterBuilder::new()
         .with_num_validators(VALIDATOR_COUNT)
         .with_epoch_duration_ms(EPOCH_DURATION_MS)
         .with_data_ingestion_dir(data_ingestion_dir)
@@ -260,13 +303,9 @@ async fn start_validator_with_fullnode(
                 gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
             };
             ACCOUNT_NUM
-        ]);
-
-    if let Some(internal_data_source_rpc_port) = internal_data_source_rpc_port {
-        test_cluster_builder =
-            test_cluster_builder.with_fullnode_rpc_port(internal_data_source_rpc_port);
-    };
-    test_cluster_builder.build().await
+        ])
+        .build()
+        .await
 }
 
 /// Repeatedly ping the GraphQL server for 10s, until it responds
