@@ -16,6 +16,8 @@ mod ingestion_tests {
     use sui_indexer::models::{objects::StoredObject, transactions::StoredTransaction};
     use sui_indexer::schema::{objects, transactions};
     use sui_indexer::store::{indexer_store::IndexerStore, PgIndexerStore};
+    use sui_indexer::tempdb::get_available_port;
+    use sui_indexer::tempdb::TempDb;
     use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
@@ -23,8 +25,6 @@ mod ingestion_tests {
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
     use tokio::task::JoinHandle;
-    use sui_indexer::tempdb::TempDb;
-    use sui_indexer::tempdb::get_available_port;
 
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{

@@ -26,9 +26,8 @@ use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
 
 pub mod apis;
-pub mod db;
 pub mod database;
-pub mod tempdb;
+pub mod db;
 pub mod errors;
 pub mod handlers;
 pub mod indexer;
@@ -38,6 +37,7 @@ pub mod models;
 pub mod schema;
 pub mod store;
 pub mod system_package_task;
+pub mod tempdb;
 pub mod test_utils;
 pub mod types;
 
