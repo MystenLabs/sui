@@ -225,6 +225,7 @@ impl<P, D, M> Indexer<P, D, M> {
                 .await
                 .tap_ok(|_| {
                     tracing::info!(
+                        task_name = self.name.as_str(),
                         "Created backfill tasks ({}-{})",
                         from_checkpoint,
                         live_task_from_checkpoint - 1
@@ -232,6 +233,7 @@ impl<P, D, M> Indexer<P, D, M> {
                 })
                 .tap_err(|e| {
                     tracing::error!(
+                        task_name = self.name.as_str(),
                         "Failed to create backfill tasks ({}-{}): {:?}",
                         from_checkpoint,
                         live_task_from_checkpoint - 1,
@@ -392,25 +394,22 @@ pub trait Datasource<T: Send>: Sync + Send {
 
         while let Some(batch) = stream.next().await {
             // unwrap safe: at least 1 element in the batch
-            let first_height = batch.first().map(|(h, _)| *h).unwrap();
-            let last_height = batch.last().map(|(h, _)| *h).unwrap();
+            let max_height = batch.iter().max_by(|(a, _), (b, _)| a.cmp(b)).unwrap().0;
             let batch_size = batch.len();
             tracing::debug!(
                 task_name,
-                first_height,
-                last_height,
+                max_height,
                 "Ingestion task received {} blocks.",
                 batch_size,
             );
             let timer = tokio::time::Instant::now();
 
+            // Note: for simplicity here we assume all data's height <= target_checkpoint
             let data = batch
                 .into_iter()
-                .take_while(|(height, _)| *height <= target_checkpoint)
+                .filter(|(height, _)| *height <= target_checkpoint)
                 .flat_map(|(_, data)| data)
                 .collect::<Vec<_>>();
-            let new_len = data.len();
-            let last_height = min(last_height, target_checkpoint);
             if !data.is_empty() {
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
@@ -421,26 +420,23 @@ pub trait Datasource<T: Send>: Sync + Send {
                 storage.write(processed_data).await?;
             }
             // TODO: batch progress
-            storage
-                .save_progress(task_name.clone(), last_height)
-                .await?;
+            storage.save_progress(task_name.clone(), max_height).await?;
             tracing::debug!(
                 task_name,
-                first_height,
-                last_height,
+                max_height,
                 "Ingestion task processed {} blocks in {}ms",
-                new_len,
+                batch_size,
                 timer.elapsed().as_millis(),
             );
-            processed_metrics_metrics.inc();
+            processed_metrics_metrics.add(batch_size as i64);
             if let Some(m) = &remaining_checkpoints_metric {
-                // Note this is +-1 accurate if one checkpoint is split into multiple batches
-                m.set((target_checkpoint - last_height) as i64)
+                // Note this is only approximate as the data may come in out of order
+                m.set((target_checkpoint - max_height) as i64)
             }
             if let Some(m) = &live_task_current_checkpoint_metrics {
-                m.set((last_height) as i64)
+                m.set((max_height) as i64)
             }
-            if last_height > target_checkpoint {
+            if max_height > target_checkpoint {
                 break;
             }
         }
