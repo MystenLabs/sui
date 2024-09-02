@@ -38,7 +38,6 @@ mod tests {
         sim.create_checkpoint();
         sim.create_checkpoint();
 
-
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
             Arc::new(sim),
             None,
