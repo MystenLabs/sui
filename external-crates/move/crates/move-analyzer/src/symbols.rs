@@ -2290,7 +2290,7 @@ fn get_mod_outer_defs(
                     let fields_order_opt = fields_order_info
                         .variants
                         .get(&mod_ident_str)
-                        .and_then(|v| v.get(&name))
+                        .and_then(|v| v.get(name))
                         .and_then(|v| v.get(vname));
                     let (defs, types) = field_defs_and_types(
                         *name,

@@ -473,7 +473,7 @@ fn datatype_completion(
             }
         })
         .collect::<Vec<_>>()
-        .join(&separator);
+        .join(separator);
 
     let (label, insert_text) = if !named_fields {
         (
