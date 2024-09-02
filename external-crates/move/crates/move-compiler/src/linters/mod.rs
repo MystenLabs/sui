@@ -16,6 +16,7 @@ pub mod constant_naming;
 pub mod meaningless_math_operation;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod too_many_arguments;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -125,6 +126,12 @@ lints!(
         "abort_without_constant",
         "'abort' or 'assert' without named constant"
     ),
+    (
+        TooManyArguments,
+        LinterDiagnosticCategory::Complexity,
+        "too_many_arguments",
+        "too many arguments"
+    )
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -157,6 +164,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
                 unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
+                too_many_arguments::TooManyArguments.visitor(),
             ]
         }
     }
