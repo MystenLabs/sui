@@ -15,7 +15,8 @@ pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::test_utils::force_delete_database;
+use sui_indexer::tempdb::get_available_port;
+use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -33,8 +34,6 @@ const EPOCH_DURATION_MS: u64 = 15000;
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
-pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
-
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
     pub indexer_store: PgIndexerStore,
@@ -44,6 +43,8 @@ pub struct ExecutorCluster {
     pub snapshot_config: SnapshotLagConfig,
     pub graphql_connection_config: ConnectionConfig,
     pub cancellation_token: CancellationToken,
+    #[allow(unused)]
+    database: TempDb,
 }
 
 pub struct Cluster {
@@ -138,19 +139,26 @@ pub async fn start_network_cluster(
 /// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
 /// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
-    graphql_connection_config: ConnectionConfig,
-    internal_data_source_rpc_port: u16,
     executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     epochs_to_keep: Option<u64>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
+    let database = TempDb::new().unwrap();
+    let graphql_connection_config = ConnectionConfig {
+        port: get_available_port(),
+        host: "127.0.0.1".to_owned(),
+        db_url: database.database().url().as_str().to_owned(),
+        db_pool_size: 5,
+        prom_url: "127.0.0.1".to_owned(),
+        prom_port: get_available_port(),
+    };
     let db_url = graphql_connection_config.db_url.clone();
     // Creates a cancellation token and adds this to the ExecutorCluster, so that we can send a
     // cancellation token on cleanup
     let cancellation_token = CancellationToken::new();
 
-    let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
+    let executor_server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
         .parse()
         .unwrap();
 
@@ -164,7 +172,7 @@ pub async fn serve_executor(
         Some(db_url),
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
-        /* reset_database */ true,
+        /* reset_database */ false,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
@@ -196,6 +204,7 @@ pub async fn serve_executor(
         snapshot_config: snapshot_config.unwrap_or_default(),
         graphql_connection_config,
         cancellation_token,
+        database,
     }
 }
 
@@ -440,8 +449,6 @@ impl ExecutorCluster {
     pub async fn cleanup_resources(self) {
         self.cancellation_token.cancel();
         let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
-        let db_url = self.graphql_connection_config.db_url.clone();
-        force_delete_database(db_url).await;
     }
 
     pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {

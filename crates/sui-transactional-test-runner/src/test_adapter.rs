@@ -40,9 +40,6 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -52,7 +49,6 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
@@ -229,7 +225,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 Self::ExtraInitArgs,
             )>,
         >,
-        path: &Path,
+        _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -341,7 +337,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 custom_validator_account,
                 reference_gas_price,
                 snapshot_config,
-                path.to_path_buf(),
                 epochs_to_keep,
             )
             .await
@@ -2103,7 +2098,6 @@ async fn init_sim_executor(
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
     snapshot_config: SnapshotLagConfig,
-    test_file_path: PathBuf,
     epochs_to_keep: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
@@ -2173,26 +2167,7 @@ async fn init_sim_executor(
     let data_ingestion_path = tempdir().unwrap().into_path();
     sim.set_data_ingestion_path(data_ingestion_path.clone());
 
-    // Hash the file path to create custom unique DB name
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    test_file_path.hash(&mut hasher);
-    let hash = hasher.finish();
-    let db_name = format!("sui_graphql_test_{}", hash);
-
-    // Use the hash as a seed to generate a random port number
-    let base_port = hash as u16 % 8192;
-
-    let graphql_port = 20000 + base_port;
-    let graphql_prom_port = graphql_port + 1;
-    let internal_data_port = graphql_prom_port + 1;
-
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg_with_db_name(
-            db_name,
-            graphql_port,
-            graphql_prom_port,
-        ),
-        internal_data_port,
         Arc::new(read_replica),
         Some(snapshot_config),
         epochs_to_keep,

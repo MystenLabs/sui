@@ -426,6 +426,8 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: taiki-e/install-action@nextest
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: Setup db
         run: |
           PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
@@ -438,9 +440,10 @@ jobs:
         run: |
           cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --test dot_move_e2e --features pg_integration
           cargo nextest run --test-threads 1 --package sui-graphql-rpc --lib --features pg_integration -- test_query_cost
-          cargo nextest run --test-threads 4 --package sui-graphql-e2e-tests --features pg_integration
           cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
-          cargo nextest run --test-threads 1 --package sui-indexer --test ingestion_tests --features pg_integration
+
+          # The tests in these packages have been converted to use a temporary, ephemoral postgres database and so can be run in parallel
+          cargo nextest run --package sui-indexer --package sui-graphql-e2e-tests --features pg_integration
 
         env:
           POSTGRES_HOST: localhost
