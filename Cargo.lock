@@ -3677,18 +3677,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diesel-derive-enum"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81c5131a2895ef64741dad1d483f358c2a229a3a2d1b256778cdc5e146db64d4"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "diesel_derives"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13625,13 +13613,14 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "backoff",
+ "bb8",
  "bcs",
  "cached",
  "chrono",
  "clap",
  "criterion",
  "diesel",
- "diesel-derive-enum",
+ "diesel-async",
  "diesel_migrations",
  "fastcrypto",
  "futures",
