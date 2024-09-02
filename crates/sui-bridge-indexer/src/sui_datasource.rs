@@ -110,10 +110,6 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
-    }
 }
 
 struct PerTaskInMemProgressStore {

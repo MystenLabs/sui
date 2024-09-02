@@ -67,11 +67,6 @@ where
         // This is dummy
         &self.metric
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        // This is dummy
-        &self.metric
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -119,6 +114,7 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         &mut self,
         task_name: String,
         checkpoint_number: u64,
+        _start_checkpoint_number: u64,
     ) -> anyhow::Result<()> {
         self.progress_store
             .lock()

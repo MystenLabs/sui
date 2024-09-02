@@ -18,6 +18,7 @@ pub mod sui_transaction_queries;
 pub mod types;
 
 pub mod eth_bridge_indexer;
+pub mod storage;
 pub mod sui_bridge_indexer;
 pub mod sui_datasource;
 

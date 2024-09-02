@@ -309,6 +309,7 @@ pub trait IndexerProgressStore: Send {
         &mut self,
         task_name: String,
         checkpoint_number: u64,
+        start_checkpoint_number: u64,
     ) -> anyhow::Result<()>;
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
@@ -333,7 +334,7 @@ pub trait Datasource<T: Send>: Sync + Send {
     async fn start_ingestion_task<M, P, R>(
         &self,
         task_name: String,
-        starting_checkpoint: u64,
+        start_checkpoint: u64,
         target_checkpoint: u64,
         mut storage: P,
         data_mapper: M,
@@ -350,7 +351,7 @@ pub trait Datasource<T: Send>: Sync + Send {
             task_name,
             ingestion_batch_size,
             "Starting ingestion task ({}-{})",
-            starting_checkpoint,
+            start_checkpoint,
             target_checkpoint,
         );
         let is_live_task = target_checkpoint == i64::MAX as u64;
@@ -362,7 +363,7 @@ pub trait Datasource<T: Send>: Sync + Send {
                 .with_label_values(&[&task_name]),
         );
         let join_handle = self
-            .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
+            .start_data_retrieval(start_checkpoint, target_checkpoint, data_sender)
             .await?;
 
         let processed_metrics_metrics = self
@@ -373,21 +374,21 @@ pub trait Datasource<T: Send>: Sync + Send {
             let remaining = self
                 .get_tasks_remaining_checkpoints_metric()
                 .with_label_values(&[&task_name]);
-            remaining.set((target_checkpoint - starting_checkpoint + 1) as i64);
+            remaining.set((target_checkpoint - start_checkpoint + 1) as i64);
             Some(remaining)
         } else {
             None
         };
-        // track current checkpoint for live task
-        let live_task_current_checkpoint_metrics = if is_live_task {
-            let m = self
-                .get_live_task_checkpoint_metric()
-                .with_label_values(&[&task_name]);
-            m.set((starting_checkpoint) as i64);
-            Some(m)
-        } else {
-            None
-        };
+        // // track current checkpoint for live task
+        // let live_task_current_checkpoint_metrics = if is_live_task {
+        //     let m = self
+        //         .get_live_task_checkpoint_metric()
+        //         .with_label_values(&[&task_name]);
+        //     m.set((start_checkpoint) as i64);
+        //     Some(m)
+        // } else {
+        //     None
+        // };
 
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
             .ready_chunks(ingestion_batch_size);
@@ -420,7 +421,9 @@ pub trait Datasource<T: Send>: Sync + Send {
                 storage.write(processed_data).await?;
             }
             // TODO: batch progress
-            storage.save_progress(task_name.clone(), max_height).await?;
+            storage
+                .save_progress(task_name.clone(), max_height, start_checkpoint)
+                .await?;
             tracing::debug!(
                 task_name,
                 max_height,
@@ -433,16 +436,18 @@ pub trait Datasource<T: Send>: Sync + Send {
                 // Note this is only approximate as the data may come in out of order
                 m.set((target_checkpoint - max_height) as i64)
             }
-            if let Some(m) = &live_task_current_checkpoint_metrics {
-                m.set((max_height) as i64)
-            }
-            if max_height > target_checkpoint {
-                break;
-            }
+            // if let Some(m) = &live_task_current_checkpoint_metrics {
+            //     m.set((max_height) as i64)
+            // }
+            // if max_height > target_checkpoint {
+            //     break;
+            // }
         }
         if is_live_task {
             // Live task should never exit, except in unit tests
             tracing::error!(task_name, "Live task exiting");
+        } else {
+            tracing::info!(task_name, "Task is done, exiting");
         }
         join_handle.abort();
         if let Some(m) = &remaining_checkpoints_metric {
@@ -453,7 +458,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
+        start_checkpoint: u64,
         target_checkpoint: u64,
         data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error>;
@@ -465,8 +470,6 @@ pub trait Datasource<T: Send>: Sync + Send {
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec;
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec;
 }
 
 pub enum BackfillStrategy {
