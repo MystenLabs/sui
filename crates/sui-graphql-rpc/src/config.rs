@@ -45,13 +45,13 @@ pub struct ServerConfig {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
-    pub(crate) port: u16,
+    pub port: u16,
     /// Host to bind the server to
-    pub(crate) host: String,
-    pub(crate) db_url: String,
-    pub(crate) db_pool_size: u32,
-    pub(crate) prom_url: String,
-    pub(crate) prom_port: u16,
+    pub host: String,
+    pub db_url: String,
+    pub db_pool_size: u32,
+    pub prom_url: String,
+    pub prom_port: u16,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -353,27 +353,6 @@ impl ConnectionConfig {
             db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
-        }
-    }
-
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_graphql_rpc_e2e_tests"
-                .to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            ..Default::default()
         }
     }
 

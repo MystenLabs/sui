@@ -7,17 +7,15 @@ mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
-    use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::client::ClientError;
-    use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::config::Limits;
     use sui_graphql_rpc::config::ServiceConfig;
+    use sui_graphql_rpc::test_infra::cluster::prep_executor_cluster;
     use sui_graphql_rpc::test_infra::cluster::start_cluster;
-    use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
     use sui_types::digests::ChainIdentifier;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::CallArg;
@@ -29,43 +27,11 @@ mod tests {
     use tempfile::tempdir;
     use tokio::time::sleep;
 
-    async fn prep_executor_cluster() -> (ConnectionConfig, ExecutorCluster) {
-        let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap();
-        let mut sim = Simulacrum::new_with_rng(rng);
-        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            Arc::new(sim),
-            None,
-            None,
-            data_ingestion_path.path().to_path_buf(),
-        )
-        .await;
-
-        cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
-            .await;
-
-        (cluster.graphql_connection_config.clone(), cluster)
-    }
-
     #[tokio::test]
-    #[serial]
     async fn test_simple_client_validator_cluster() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         cluster
             .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
@@ -100,7 +66,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_simple_client_simulator_cluster() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -147,9 +112,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_graphql_client_response() {
-        let (_, cluster) = prep_executor_cluster().await;
+        let cluster = prep_executor_cluster().await;
 
         let query = r#"
             {
@@ -176,9 +140,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_graphql_client_variables() {
-        let (_, cluster) = prep_executor_cluster().await;
+        let cluster = prep_executor_cluster().await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -316,15 +279,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_transaction_execution() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
-        let cluster = start_cluster(connection_config, None, ServiceConfig::test_defaults()).await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         let addresses = cluster
             .network
@@ -424,7 +382,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_zklogin_sig_verify() {
         use shared_crypto::intent::Intent;
         use shared_crypto::intent::IntentMessage;
@@ -435,16 +392,9 @@ mod tests {
         use sui_types::utils::load_test_vectors;
         use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         let test_cluster = &cluster.network.validator_fullnode_handle;
         test_cluster.wait_for_epoch_all_nodes(1).await;
@@ -550,18 +500,10 @@ mod tests {
 
     // TODO: add more test cases for transaction execution/dry run in transactional test runner.
     #[tokio::test]
-    #[serial]
     async fn test_transaction_dry_run() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         let addresses = cluster
             .network
@@ -652,18 +594,10 @@ mod tests {
 
     // Test dry run where the transaction kind is provided instead of the full transaction.
     #[tokio::test]
-    #[serial]
     async fn test_transaction_dry_run_with_kind() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         let addresses = cluster
             .network
@@ -731,18 +665,10 @@ mod tests {
 
     // Test that we can handle dry run with failures at execution stage too.
     #[tokio::test]
-    #[serial]
     async fn test_dry_run_failed_execution() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         let addresses = cluster
             .network
@@ -829,18 +755,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_epoch_data() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
+        telemetry_subscribers::init_for_testing();
 
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
+        let cluster = start_cluster(ServiceConfig::test_defaults()).await;
 
         cluster
             .network
@@ -878,210 +796,17 @@ mod tests {
         cluster.cleanup_resources().await
     }
 
-    use sui_graphql_rpc::server::builder::tests::*;
-
     #[tokio::test]
-    #[serial]
-    async fn test_timeout() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
-        let cluster = start_cluster(
-            ConnectionConfig::default(),
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
-        cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
-            .await;
-        // timeout test includes mutation timeout, which requies a [SuiClient] to be able to run
-        // the test, and a transaction. [WalletContext] gives access to everything that's needed.
-        let wallet = &cluster.network.validator_fullnode_handle.wallet;
-        test_timeout_impl(wallet).await;
-        cluster.cleanup_resources().await
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_depth_limit() {
-        test_query_depth_limit_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_node_limit() {
-        test_query_node_limit_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_default_page_limit() {
-        let (connection_config, _) = prep_executor_cluster().await;
-        test_query_default_page_limit_impl(connection_config).await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_max_page_limit() {
-        test_query_max_page_limit_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_complexity_metrics() {
-        test_query_complexity_metrics_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_health_check() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
-            connection_config,
-            None,
-            ServiceConfig::test_defaults(),
-        )
-        .await;
-
-        // We wait until checkpoint 1 is indexed, to give enough time to the
-        // watermark task to pick up a valid checkpoint timestamp.
-        cluster
-            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
-            .await;
-        test_health_check_impl().await;
-        cluster.cleanup_resources().await
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_total_exceeded() {
-        test_payload_total_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_read_exceeded() {
-        test_payload_read_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_mutation_exceeded() {
-        test_payload_mutation_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_dry_run_exceeded() {
-        test_payload_dry_run_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_using_vars_mutation_exceeded() {
-        test_payload_using_vars_mutation_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_using_vars_read_exceeded() {
-        test_payload_using_vars_read_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_using_vars_dry_run_read_exceeded() {
-        test_payload_using_vars_dry_run_read_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_using_vars_dry_run_exceeded() {
-        test_payload_using_vars_dry_run_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_multiple_execution_exceeded() {
-        test_payload_multiple_execution_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_multiple_dry_run_exceeded() {
-        test_payload_multiple_dry_run_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_execution_multiple_sigs_exceeded() {
-        test_payload_execution_multiple_sigs_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_sig_var_execution_exceeded() {
-        test_payload_sig_var_execution_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_reusing_vars_execution() {
-        test_payload_reusing_vars_execution_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_reusing_vars_dry_run() {
-        test_payload_reusing_vars_dry_run_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_named_fragment_execution_exceeded() {
-        test_payload_named_fragment_execution_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_inline_fragment_execution_exceeded() {
-        test_payload_inline_fragment_execution_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_named_fragment_dry_run_exceeded() {
-        test_payload_named_fragment_dry_run_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_payload_inline_fragment_dry_run_exceeded() {
-        test_payload_inline_fragment_dry_run_exceeded_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn test_payload_using_vars_mutation_passes() {
-        let _guard = telemetry_subscribers::TelemetryConfig::new()
-            .with_env()
-            .init();
-        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(
-            ConnectionConfig::ci_integration_test_cfg(),
-            None,
-            ServiceConfig {
-                limits: Limits {
-                    max_query_payload_size: 5000,
-                    max_tx_payload_size: 6000,
-                    ..Default::default()
-                },
-                ..ServiceConfig::test_defaults()
+        telemetry_subscribers::init_for_testing();
+        let cluster = sui_graphql_rpc::test_infra::cluster::start_cluster(ServiceConfig {
+            limits: Limits {
+                max_query_payload_size: 5000,
+                max_tx_payload_size: 6000,
+                ..Default::default()
             },
-        )
+            ..ServiceConfig::test_defaults()
+        })
         .await;
         let addresses = cluster
             .network
