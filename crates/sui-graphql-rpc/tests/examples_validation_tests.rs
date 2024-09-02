@@ -13,9 +13,8 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_graphql_rpc::config::{ConnectionConfig, Limits};
+    use sui_graphql_rpc::config::Limits;
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-    use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use tempfile::tempdir;
 
     struct Example {
@@ -145,20 +144,18 @@ mod tests {
     #[serial]
     async fn good_examples_within_limits() {
         let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
+        let data_ingestion_path = tempdir().unwrap();
         let mut sim = Simulacrum::new_with_rng(rng);
         let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
 
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
+        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
         sim.create_checkpoint();
 
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            ConnectionConfig::default(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
             None,
-            data_ingestion_path,
+            data_ingestion_path.path().to_path_buf(),
         )
         .await;
 
@@ -212,20 +209,18 @@ mod tests {
     #[serial]
     async fn bad_examples_fail() {
         let rng = StdRng::from_seed([12; 32]);
-        let data_ingestion_path = tempdir().unwrap().into_path();
+        let data_ingestion_path = tempdir().unwrap();
         let mut sim = Simulacrum::new_with_rng(rng);
         let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
+        sim.set_data_ingestion_path(data_ingestion_path.path().to_path_buf());
 
         sim.create_checkpoint();
 
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
-            ConnectionConfig::default(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
             None,
-            data_ingestion_path,
+            data_ingestion_path.path().to_path_buf(),
         )
         .await;
 
