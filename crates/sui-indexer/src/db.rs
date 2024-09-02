@@ -36,7 +36,7 @@ impl ConnectionPoolConfig {
     const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
     const DEFAULT_STATEMENT_TIMEOUT: u64 = 3600;
 
-    fn connection_config(&self) -> ConnectionConfig {
+    pub(crate) fn connection_config(&self) -> ConnectionConfig {
         ConnectionConfig {
             statement_timeout: self.statement_timeout,
             read_only: false,
