@@ -107,14 +107,16 @@ impl IndexerProgressStore for PgBridgePersistent {
         task_name: String,
         checkpoint_numbers: &[u64],
         start_checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
+        target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
         if checkpoint_numbers.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
         if let Some(checkpoint_to_save) = self.save_progress_policy.cache_progress(
             task_name.clone(),
             checkpoint_numbers,
             start_checkpoint_number,
+            target_checkpoint_number,
         ) {
             let mut conn = self.pool.get().await?;
             diesel::insert_into(schema::progress_store::table)
@@ -138,8 +140,9 @@ impl IndexerProgressStore for PgBridgePersistent {
                 .tasks_current_checkpoints
                 .with_label_values(&[&task_name])
                 .set(checkpoint_to_save as i64);
+            return Ok(Some(checkpoint_to_save));
         }
-        Ok(())
+        Ok(None)
     }
 
     async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
@@ -253,12 +256,17 @@ impl ProgressSavingPolicy {
         task_name: String,
         heights: &[u64],
         start_height: u64,
+        target_height: u64,
     ) -> Option<u64> {
         match self {
             ProgressSavingPolicy::SaveAfterDuration(policy) => {
                 let height = *heights.iter().max().unwrap();
                 let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
                 let last_save_time = last_save_time_guard.entry(task_name).or_insert(None);
+                if height >= target_height {
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    return Some(height);
+                }
                 if let Some(v) = last_save_time {
                     if v.elapsed() >= policy.duration {
                         *last_save_time = Some(tokio::time::Instant::now());
@@ -300,11 +308,17 @@ impl ProgressSavingPolicy {
                         .insert(task_name.clone(), Some(next_to_fill));
                 }
 
-                // Regardless of whether we made progress, we should save if we have waited long enough
                 let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
                 let last_save_time = last_save_time_guard
                     .entry(task_name.clone())
                     .or_insert(None);
+
+                // If we have reached the target height, we always save
+                if next_to_fill > target_height {
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    return Some(next_to_fill - 1);
+                }
+                // Regardless of whether we made progress, we should save if we have waited long enough
                 if let Some(v) = last_save_time {
                     if v.elapsed() >= policy.duration && next_to_fill > start_height {
                         *last_save_time = Some(tokio::time::Instant::now());
@@ -332,21 +346,33 @@ mod tests {
         let duration = tokio::time::Duration::from_millis(100);
         let mut policy =
             ProgressSavingPolicy::SaveAfterDuration(SaveAfterDurationPolicy::new(duration));
-        assert_eq!(policy.cache_progress("task1".to_string(), &[1], 0), None);
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task1".to_string(), &[2], 0), Some(2));
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task1".to_string(), &[3], 0), Some(3));
-
-        assert_eq!(policy.cache_progress("task2".to_string(), &[4], 0), None);
+        assert_eq!(
+            policy.cache_progress("task1".to_string(), &[1], 0, 100),
+            None
+        );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[5, 6], 0),
+            policy.cache_progress("task1".to_string(), &[2], 0, 100),
+            Some(2)
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task1".to_string(), &[3], 0, 100),
+            Some(3)
+        );
+
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[4], 0, 100),
+            None
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[5, 6], 0, 100),
             Some(6)
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[8, 7], 0),
+            policy.cache_progress("task2".to_string(), &[8, 7], 0, 100),
             Some(8)
         );
     }
@@ -358,31 +384,61 @@ mod tests {
             OutOfOrderSaveAfterDurationPolicy::new(duration),
         );
 
-        assert_eq!(policy.cache_progress("task1".to_string(), &[0], 0), None);
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task1".to_string(), &[1], 0), Some(1));
-        assert_eq!(policy.cache_progress("task1".to_string(), &[3], 0), None);
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task1".to_string(), &[4], 0), Some(1));
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task1".to_string(), &[2], 0), Some(4));
-
-        assert_eq!(policy.cache_progress("task2".to_string(), &[0], 0), None);
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task2".to_string(), &[1], 0), Some(1));
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task2".to_string(), &[2], 0), Some(2));
-        assert_eq!(policy.cache_progress("task2".to_string(), &[3], 0), None);
-        tokio::time::sleep(duration).await;
-        assert_eq!(policy.cache_progress("task2".to_string(), &[4], 0), Some(4));
-
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[6, 7, 8], 0),
+            policy.cache_progress("task1".to_string(), &[0], 0, 100),
             None
         );
         tokio::time::sleep(duration).await;
         assert_eq!(
-            policy.cache_progress("task2".to_string(), &[5, 9], 0),
+            policy.cache_progress("task1".to_string(), &[1], 0, 100),
+            Some(1)
+        );
+        assert_eq!(
+            policy.cache_progress("task1".to_string(), &[3], 0, 100),
+            None
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task1".to_string(), &[4], 0, 100),
+            Some(1)
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task1".to_string(), &[2], 0, 100),
+            Some(4)
+        );
+
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[0], 0, 100),
+            None
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[1], 0, 100),
+            Some(1)
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[2], 0, 100),
+            Some(2)
+        );
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[3], 0, 100),
+            None
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[4], 0, 100),
+            Some(4)
+        );
+
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[6, 7, 8], 0, 100),
+            None
+        );
+        tokio::time::sleep(duration).await;
+        assert_eq!(
+            policy.cache_progress("task2".to_string(), &[5, 9], 0, 100),
             Some(9)
         );
     }

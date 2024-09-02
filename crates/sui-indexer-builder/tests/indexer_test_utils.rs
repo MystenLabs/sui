@@ -116,7 +116,8 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         task_name: String,
         checkpoint_numbers: &[u64],
         _start_checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
+        _target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
         let checkpoint_number = *checkpoint_numbers.last().unwrap();
         self.progress_store
             .lock()
@@ -124,7 +125,7 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             .get_mut(&task_name)
             .unwrap()
             .checkpoint = checkpoint_number;
-        Ok(())
+        Ok(Some(checkpoint_number))
     }
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {

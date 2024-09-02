@@ -310,7 +310,8 @@ pub trait IndexerProgressStore: Send {
         task_name: String,
         checkpoint_numbers: &[u64],
         start_checkpoint_number: u64,
-    ) -> anyhow::Result<()>;
+        target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>>;
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
 
@@ -419,23 +420,36 @@ pub trait Datasource<T: Send>: Sync + Send {
                 storage.write(processed_data).await?;
             }
             // TODO: batch progress
-            storage
-                .save_progress(task_name.clone(), &heights, start_checkpoint)
+            let saved_checkpoint = storage
+                .save_progress(
+                    task_name.clone(),
+                    &heights,
+                    start_checkpoint,
+                    target_checkpoint,
+                )
                 .await?;
             tracing::debug!(
                 task_name,
                 max_height,
-                "Ingestion task processed {} blocks in {}ms",
+                "Ingestion task processed {} blocks in {}ms. Saved checkpoint: {:?}",
                 heights.len(),
                 timer.elapsed().as_millis(),
+                saved_checkpoint,
             );
             processed_checkpoints_metrics.inc_by(heights.len() as u64);
+            // FIXME: metrics for saved checkpoint
             if let Some(m) = &remaining_checkpoints_metric {
                 // Note this is only approximate as the data may come in out of order
                 m.set(std::cmp::max(
                     target_checkpoint as i64 - max_height as i64,
                     0,
                 ));
+            }
+            if let Some(cp) = saved_checkpoint {
+                if cp >= target_checkpoint {
+                    // Task is done
+                    break;
+                }
             }
         }
         if is_live_task {

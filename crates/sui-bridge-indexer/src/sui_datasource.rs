@@ -72,6 +72,7 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
         let worker = IndexerWorker::new(data_sender);
         let worker_pool = WorkerPool::new(
             worker,
+            // FIXME
             TransactionDigest::random().to_string(),
             self.concurrency,
         );
@@ -130,13 +131,21 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
     async fn save(
         &mut self,
-        _task_name: String,
+        task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         if checkpoint_number >= self.exit_checkpoint {
-            if let Some(sender) = self.exit_sender.take() {
-                let _ = sender.send(());
-            }
+            tracing::info!(
+                task_name,
+                checkpoint_number,
+                exit_checkpoint = self.exit_checkpoint,
+                "Task completed, sending exit signal"
+            );
+            self.exit_sender
+                .take()
+                .expect("Exit sender should not be None")
+                .send(())
+                .unwrap();
         }
         self.current_checkpoint = checkpoint_number;
         Ok(())
