@@ -6,7 +6,6 @@ mod tests {
     use anyhow::{anyhow, Context, Result};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::cmp::max;
     use std::collections::BTreeMap;
@@ -141,7 +140,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn good_examples_within_limits() {
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap();
@@ -206,7 +204,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn bad_examples_fail() {
         let rng = StdRng::from_seed([12; 32]);
         let data_ingestion_path = tempdir().unwrap();
