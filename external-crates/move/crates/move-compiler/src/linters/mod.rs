@@ -14,6 +14,7 @@ use crate::{
 pub mod abort_constant;
 pub mod constant_naming;
 pub mod meaningless_math_operation;
+pub mod out_of_bounds_indexing;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 
@@ -125,6 +126,12 @@ lints!(
         "abort_without_constant",
         "'abort' or 'assert' without named constant"
     ),
+    (
+        OutOfBoundsIndexing,
+        LinterDiagnosticCategory::Correctness,
+        "out_of_bounds_indexing",
+        "indexing into a vector or array with a value that is out of bounds"
+    )
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -157,6 +164,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 meaningless_math_operation::MeaninglessMathOperation.visitor(),
                 unneeded_return::UnneededReturnVisitor.visitor(),
                 abort_constant::AssertAbortNamedConstants.visitor(),
+                out_of_bounds_indexing::OutOfBoundsArrayIndexing.visitor(),
             ]
         }
     }

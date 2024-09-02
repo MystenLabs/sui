@@ -1,15 +1,6 @@
-// Copyright (c) The Move Contributors
-// SPDX-License-Identifier: Apache-2.0
-
-//! Detects out-of-bounds array (or vector) indexing with a constant index in Move code.
-//! This lint aims to statically identify instances where an index access on an array or vector
-//! exceeds the bounds known at compile time, potentially indicating logical errors in the code.
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     expansion::ast::{ModuleIdent, Value_},
     naming::ast::Var_,
     parser::ast::FunctionName,
@@ -22,21 +13,13 @@ use crate::{
 use move_ir_types::location::{Loc, Spanned};
 use std::collections::BTreeMap;
 
-use super::{LinterDiagnosticCategory, LINT_WARNING_PREFIX, OUT_OF_BOUNDS_INDEXING_DIAG_CODE};
-
-const OUT_OF_BOUNDS_INDEXING_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Correctness as u8,
-    OUT_OF_BOUNDS_INDEXING_DIAG_CODE,
-    "Array index out of bounds: attempting to access index {} in array '{}' with size known at compile time.",
-);
+use super::StyleCodes;
 
 pub struct OutOfBoundsArrayIndexing;
 
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    array_list: BTreeMap<Var_, usize>,
+    array_sizes: BTreeMap<Var_, usize>,
 }
 
 impl TypingVisitorConstructor for OutOfBoundsArrayIndexing {
@@ -45,12 +28,20 @@ impl TypingVisitorConstructor for OutOfBoundsArrayIndexing {
     fn context<'a>(env: &'a mut CompilationEnv, _program: &T::Program) -> Self::Context<'a> {
         Context {
             env,
-            array_list: BTreeMap::new(),
+            array_sizes: BTreeMap::new(),
         }
     }
 }
 
 impl TypingVisitorContext for Context<'_> {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,
@@ -59,82 +50,66 @@ impl TypingVisitorContext for Context<'_> {
     ) -> bool {
         if let T::FunctionBody_::Defined((_, seq)) = &fdef.body.value {
             for seq_item in seq {
-                use T::SequenceItem_ as SI;
-                if let T::SequenceItem_::Bind(value_list, _, seq_exp) = &seq_item.value {
-                    if let UnannotatedExp_::Vector(_, size, _, _) = &seq_exp.exp.value {
-                        if let Some(sp!(_, LValue_::Var { var, .. })) = &value_list.value.get(0) {
-                            self.array_list.insert(var.value, *size);
-                        }
-                    }
-                }
-                match &seq_item.value {
-                    SI::Seq(e) => {
-                        visit_function_exp_custom(&mut self.env, &mut self.array_list, &e.exp)
-                    }
-                    SI::Declare(_) => (),
-                    SI::Bind(_, _, e) => {
-                        visit_function_exp_custom(&mut self.env, &mut self.array_list, &e.exp)
-                    }
-                };
+                self.process_sequence_item(seq_item);
             }
         }
-        self.array_list.clear();
+        self.array_sizes.clear();
         false
-    }
-
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
     }
 }
 
-fn visit_function_exp_custom(
-    env: &mut CompilationEnv,
-    array_list: &mut BTreeMap<Var_, usize>,
-    exp: &Spanned<UnannotatedExp_>,
-) {
-    if let UnannotatedExp_::ModuleCall(module_call) = &exp.value {
-        if is_array_push(module_call) {
-            if let UnannotatedExp_::ExpList(exp_list) = &module_call.arguments.exp.value {
-                if let Some(ExpListItem::Single(arr_arg_exp, _)) = &exp_list.get(0) {
-                    if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) =
-                        &arr_arg_exp.exp.value
-                    {
-                        if let Some(array_size) = array_list.get(array_arg) {
-                            array_list.insert(*array_arg, array_size + 1);
-                        }
-                    }
-                }
+impl Context<'_> {
+    fn process_sequence_item(&mut self, seq_item: &T::SequenceItem) {
+        use T::SequenceItem_ as SI;
+        match &seq_item.value {
+            SI::Bind(value_list, _, seq_exp) => {
+                self.update_array_size(value_list, seq_exp);
+                self.visit_expression(&seq_exp.exp);
+            }
+            SI::Seq(e) => self.visit_expression(&e.exp),
+            SI::Declare(_) => {}
+        }
+    }
+
+    fn update_array_size(&mut self, value_list: &T::LValueList, seq_exp: &T::Exp) {
+        if let UnannotatedExp_::Vector(_, size, _, _) = &seq_exp.exp.value {
+            if let Some(sp!(_, LValue_::Var { var, .. })) = value_list.value.get(0) {
+                self.array_sizes.insert(var.value.clone(), *size);
             }
         }
-        if is_array_pop(module_call) {
-            if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) =
-                &module_call.arguments.exp.value
+    }
+
+    fn visit_expression(&mut self, exp: &Spanned<UnannotatedExp_>) {
+        if let UnannotatedExp_::ModuleCall(module_call) = &exp.value {
+            self.process_module_call(module_call, exp.loc);
+        }
+    }
+
+    fn process_module_call(&mut self, module_call: &ModuleCall, loc: Loc) {
+        if is_vector_operation(module_call, "borrow")
+            || is_vector_operation(module_call, "borrow_mut")
+        {
+            self.check_vector_bounds(module_call, loc);
+        } else if is_vector_operation(module_call, "push_back") {
+            self.update_array_size_after_push(module_call);
+        } else if is_vector_operation(module_call, "pop_back") {
+            self.update_array_size_after_pop(module_call);
+        }
+    }
+
+    fn check_vector_bounds(&mut self, module_call: &ModuleCall, loc: Loc) {
+        if let UnannotatedExp_::ExpList(exp_list) = &module_call.arguments.exp.value {
+            if let (
+                Some(ExpListItem::Single(arr_arg_exp, _)),
+                Some(ExpListItem::Single(value_exp, _)),
+            ) = (exp_list.get(0), exp_list.get(1))
             {
-                if let Some(array_size) = array_list.get(array_arg) {
-                    array_list.insert(*array_arg, array_size - 1);
-                }
-            }
-        }
-        if is_vector_borrow(module_call) {
-            if let UnannotatedExp_::ExpList(exp_list) = &module_call.arguments.exp.value {
-                if let Some(ExpListItem::Single(arr_arg_exp, _)) = &exp_list.get(0) {
-                    if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) =
-                        &arr_arg_exp.exp.value
-                    {
-                        if let Some(array_size) = array_list.get(array_arg) {
-                            if let Some(ExpListItem::Single(value_exp, _)) = &exp_list.get(1) {
-                                if let UnannotatedExp_::Value(sp!(_, size)) = &value_exp.exp.value {
-                                    let index = extract_value(&size);
-                                    if index > (*array_size as u128 - 1) {
-                                        report_out_of_bounds_indexing(
-                                            env, array_arg, index, exp.loc,
-                                        );
-                                    }
-                                }
+                if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) = &arr_arg_exp.exp.value {
+                    if let Some(array_size) = self.array_sizes.get(array_arg) {
+                        if let UnannotatedExp_::Value(sp!(_, size)) = &value_exp.exp.value {
+                            let index = extract_value(size);
+                            if index > (*array_size as u128 - 1) {
+                                report_out_of_bounds_indexing(self.env, array_arg, index, loc);
                             }
                         }
                     }
@@ -142,21 +117,31 @@ fn visit_function_exp_custom(
             }
         }
     }
+
+    fn update_array_size_after_push(&mut self, module_call: &ModuleCall) {
+        if let UnannotatedExp_::ExpList(exp_list) = &module_call.arguments.exp.value {
+            if let Some(ExpListItem::Single(arr_arg_exp, _)) = exp_list.get(0) {
+                if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) = &arr_arg_exp.exp.value {
+                    if let Some(array_size) = self.array_sizes.get_mut(array_arg) {
+                        *array_size += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    fn update_array_size_after_pop(&mut self, module_call: &ModuleCall) {
+        if let UnannotatedExp_::BorrowLocal(_, sp!(_, array_arg)) = &module_call.arguments.exp.value
+        {
+            if let Some(array_size) = self.array_sizes.get_mut(array_arg) {
+                *array_size = array_size.saturating_sub(1);
+            }
+        }
+    }
 }
 
-fn is_vector_borrow(module_call: &ModuleCall) -> bool {
-    (module_call.name.0.value.as_str() == "borrow"
-        || module_call.name.0.value.as_str() == "borrow_mut")
-        && module_call.module.value.module.0.value.as_str() == "vector"
-}
-
-fn is_array_push(module_call: &ModuleCall) -> bool {
-    module_call.name.0.value.as_str() == "push_back"
-        && module_call.module.value.module.0.value.as_str() == "vector"
-}
-
-fn is_array_pop(module_call: &ModuleCall) -> bool {
-    module_call.name.0.value.as_str() == "pop_back"
+fn is_vector_operation(module_call: &ModuleCall, operation: &str) -> bool {
+    module_call.name.0.value.as_str() == operation
         && module_call.module.value.module.0.value.as_str() == "vector"
 }
 
@@ -170,11 +155,12 @@ fn extract_value(value: &Value_) -> u128 {
         _ => 0,
     }
 }
+
 fn report_out_of_bounds_indexing(env: &mut CompilationEnv, var: &Var_, index: u128, loc: Loc) {
     let msg = format!(
         "Array index out of bounds: attempting to access index {} in array '{}' with size known at compile time.",
         index, var.name.as_str()
     );
-    let diag = diag!(OUT_OF_BOUNDS_INDEXING_DIAG, (loc, msg));
+    let diag = diag!(StyleCodes::OutOfBoundsIndexing.diag_info(), (loc, msg));
     env.add_diag(diag);
 }
