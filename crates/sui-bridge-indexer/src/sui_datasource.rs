@@ -4,6 +4,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
+use prometheus::IntCounterVec;
 use prometheus::IntGaugeVec;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -107,7 +108,7 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
         &self.indexer_metrics.tasks_remaining_checkpoints
     }
 
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
 }

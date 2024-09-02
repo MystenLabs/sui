@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use ethers::prelude::Transaction;
 use ethers::providers::{Http, Middleware, Provider, StreamExt, Ws};
 use ethers::types::{Address as EthAddress, Block, Filter, H256};
-use prometheus::IntGaugeVec;
+use prometheus::{IntCounterVec, IntGaugeVec};
 use sui_bridge::error::BridgeError;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
@@ -152,7 +152,7 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
         &self.indexer_metrics.tasks_remaining_checkpoints
     }
 
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
 }
@@ -282,7 +282,7 @@ impl Datasource<RawEthData> for EthSyncDatasource {
         &self.indexer_metrics.tasks_remaining_checkpoints
     }
 
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec {
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
 }

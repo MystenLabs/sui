@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntGauge, IntGaugeVec, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
 #[derive(Clone, Debug)]
@@ -21,7 +22,7 @@ pub struct BridgeIndexerMetrics {
     pub(crate) latest_committed_eth_block: IntGauge,
     pub(crate) last_synced_eth_block: IntGauge,
     pub(crate) tasks_remaining_checkpoints: IntGaugeVec,
-    pub(crate) tasks_processed_checkpoints: IntGaugeVec,
+    pub(crate) tasks_processed_checkpoints: IntCounterVec,
     pub(crate) tasks_current_checkpoints: IntGaugeVec,
 }
 
@@ -107,7 +108,7 @@ impl BridgeIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            tasks_processed_checkpoints: register_int_gauge_vec_with_registry!(
+            tasks_processed_checkpoints: register_int_counter_vec_with_registry!(
                 "bridge_indexer_tasks_processed_checkpoints",
                 "Total processed checkpoints for each task",
                 &["task_name"],
