@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -2173,10 +2172,6 @@ impl IndexerStore for PgIndexerStore {
             this.get_network_total_transactions_by_end_of_epoch(epoch)
         })
         .await
-    }
-
-    fn as_any(&self) -> &dyn StdAny {
-        self
     }
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch
