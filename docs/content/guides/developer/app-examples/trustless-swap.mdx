@@ -1194,6 +1194,22 @@ Create a `src/components/` directory and add the following components:
   {@inject: examples/trading/frontend/src/components/SuiObjectDisplay.tsx}
 </details>
 
+Install the necessary dependencies:
+
+<Tabs groupId="packagemanager">
+  <TabItem label="PNPM" value="pnpm">
+    ```bash
+    pnpm add react-hot-toast
+    ```
+  </TabItem>
+  <TabItem label="Yarn" value="yarn">
+    ```bash
+    yarn add react-hot-toast
+    ```
+  </TabItem>
+</Tabs>
+
+
 ### Set up routing
 
 The imported template only has a single page. To add more pages, you need to set up routing.
@@ -1203,12 +1219,12 @@ First, install the necessary dependencies:
 <Tabs groupId="packagemanager">
   <TabItem label="PNPM" value="pnpm">
     ```bash
-    pnpm add react-router-dom react-hot-toast
+    pnpm add react-router-dom
     ```
   </TabItem>
   <TabItem label="Yarn" value="yarn">
     ```bash
-    yarn add react-router-dom react-hot-toast
+    yarn add react-router-dom
     ```
   </TabItem>
 </Tabs>
