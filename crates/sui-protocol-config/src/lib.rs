@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 55;
+const MAX_PROTOCOL_VERSION: u64 = 56;
 
 // Record history of protocol version allocations here:
 //
@@ -169,6 +169,7 @@ const MAX_PROTOCOL_VERSION: u64 = 55;
 //             Enable soft bundle on mainnet.
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
+// Version 56: Enable bridge on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2682,6 +2683,11 @@ impl ProtocolConfig {
                     cfg.consensus_max_num_transactions_in_block = Some(512);
 
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
+                }
+                56 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.bridge = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
