@@ -19,6 +19,7 @@ use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackage
 use crate::store::PgIndexerStore;
 use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::checkpoint_handler::CheckpointHandler;
@@ -165,7 +166,8 @@ impl ObjectsSnapshotProcessor {
         let mut start_cp = watermark;
         // To prevent the processor from committing more data than allowed by the min lag, keep an
         // in-memory buffer of changes that should not be committed to `objects_snapshot` yet.
-        let mut buffered_changes: Vec<CheckpointObjectChanges> = Vec::new();
+        let mut unprocessed = HashMap::new();
+        let mut batch = vec![];
 
         info!("Starting objects snapshot committer...");
         loop {
@@ -180,42 +182,50 @@ impl ObjectsSnapshotProcessor {
                         .await?
                         .unwrap_or_default();
 
-                    // Fetch new changes if buffer is empty
-                    if buffered_changes.is_empty() {
-                        if let Some(new_changes) = stream.next().await {
-                            buffered_changes.extend(new_changes);
-                            // Can't really guarantee order, so we sort checkpoints ascending here
-                            buffered_changes.sort_by_key(|change| change.checkpoint_sequence_number);
-                        }
-                    }
-
                     // We update the snapshot table when it falls behind the rest of the indexer by more than the min_lag.
-                    while latest_indexer_cp >= start_cp + config.lag as u64 && !buffered_changes.is_empty() {
+                    while latest_indexer_cp >= start_cp + config.lag as u64 {
+                        // The maximum checkpoint sequence number that can be committed to the
+                        // `objects_snapshot` table.
                         let max_allowed_cp = latest_indexer_cp - config.lag as u64;
 
-                        let split_index = buffered_changes.partition_point(|change| change.checkpoint_sequence_number <= max_allowed_cp);
-
-                        if split_index == 0 {
-                            break;
+                        // Fetch more from the stream if the buffer is empty and we still need to
+                        // catch up.
+                        if unprocessed.is_empty() {
+                            if let Some(new_changes) = stream.next().await {
+                                for checkpoint in new_changes {
+                                    unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
+                                }
+                            }
                         }
 
-                        let changes_to_commit: Vec<_> = buffered_changes.drain(..split_index).collect();
+                        // Collect the checkpoint object changes to write to `objects_snapshot`,
+                        // stopping when there are gaps in the sequence of unprocessed checkpoints.
+                        for cp in start_cp..=max_allowed_cp {
+                            if let Some(checkpoint) = unprocessed.remove(&cp) {
+                                batch.push(checkpoint);
+                            }
+                            else {
+                                break;
+                            }
+                        }
 
-                        let first_checkpoint_seq = changes_to_commit.first().as_ref().unwrap().checkpoint_sequence_number;
-                        let last_checkpoint_seq = changes_to_commit.last().as_ref().unwrap().checkpoint_sequence_number;
-                        info!("Objects snapshot processor is updating objects snapshot table from {} to {}", first_checkpoint_seq, last_checkpoint_seq);
+                        if !batch.is_empty() {
+                            let first_checkpoint_seq = batch.first().as_ref().unwrap().checkpoint_sequence_number;
+                            let last_checkpoint_seq = batch.last().as_ref().unwrap().checkpoint_sequence_number;
+                            info!("Objects snapshot processor is updating objects snapshot table from {} to {}", first_checkpoint_seq, last_checkpoint_seq);
 
 
-                        store.backfill_objects_snapshot(changes_to_commit.into_iter().map(|obj| obj.object_changes).collect())
-                            .await
-                            .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
-                        start_cp = last_checkpoint_seq + 1;
+                            store.backfill_objects_snapshot(batch.drain(..).map(|obj| obj.object_changes).collect())
+                                .await
+                                .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
+                            start_cp = last_checkpoint_seq + 1;
 
-                        // Tells the package buffer that this checkpoint has been processed and the corresponding package data can be deleted.
-                        commit_notifier.send(Some(last_checkpoint_seq)).expect("Commit watcher should not be closed");
-                        metrics
-                            .latest_object_snapshot_sequence_number
-                            .set(last_checkpoint_seq as i64);
+                            // Tells the package buffer that this checkpoint has been processed and the corresponding package data can be deleted.
+                            commit_notifier.send(Some(last_checkpoint_seq)).expect("Commit watcher should not be closed");
+                            metrics
+                                .latest_object_snapshot_sequence_number
+                                .set(last_checkpoint_seq as i64);
+                        }
 
                     }
                 }
