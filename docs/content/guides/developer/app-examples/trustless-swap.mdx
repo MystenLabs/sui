@@ -1753,9 +1753,9 @@ Run your app and ensure you can:
 
 ### Unlocking owned objects
 
-Unlocking owned objects is another crucial on-chain action in this application and is very likely to be used all over. Hence, it's beneficial to extract its logic into separated mutating functions to enhance reusability and encapsulation.
-
 To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. Call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
+
+Unlocking owned objects is another crucial and complex on-chain action in this application. Hence, it's beneficial to extract its logic into separated mutating functions to enhance discoverability and encapsulation.
 
 <details>
   <summary>
