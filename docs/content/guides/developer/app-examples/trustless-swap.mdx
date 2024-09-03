@@ -2016,20 +2016,16 @@ export function useCreateEscrowMutation() {
 ```
 </details>
 
-Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook:
-
 <details>
   <summary>
-    `Locked.tsx`
+    Update `src/components/locked/partials/Locked.tsx` to include the `useCreateEscrowMutation` hook
   </summary>
   {@inject: examples/trading/frontend/src/components/locked/partials/Locked.tsx}
 </details>
 
-Add `src/components/escrows/CreateEscrow.tsx`:
-
 <details>
   <summary>
-    `CreateEscrow.tsx`
+    Add `src/components/escrows/CreateEscrow.tsx`
   </summary>
   {@inject: examples/trading/frontend/src/components/escrows/CreateEscrow.tsx}
 </details>
@@ -2136,11 +2132,9 @@ export function useCancelEscrowMutation() {
 ```
 </details>
 
-Add `src/components/escrows/Escrow.tsx`:
-
 <details>
   <summary>
-    `Escrow.tsx`
+    Add `src/components/escrows/Escrow.tsx`
   </summary>
 ```tsx
 import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
@@ -2290,20 +2284,16 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
 ```
 </details>
 
-Add `src/components/escrows/EscrowList.tsx`:
-
 <details>
   <summary>
-    `EscrowList.tsx`
+    Add `src/components/escrows/EscrowList.tsx`
   </summary>
   {@inject: examples/trading/frontend/src/components/escrows/EscrowList.tsx}
 </details>
 
-Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
-
 <details>
   <summary>
-    `EscrowDashboard.tsx`
+    Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
   </summary>
 ```tsx
 import { useState } from "react";
@@ -2542,20 +2532,16 @@ export function useAcceptEscrowMutation() {
 ```
 </details>
 
-Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook:
-
 <details>
   <summary>
-    `Escrow.tsx`
+    Update `src/components/escrows/Escrow.tsx` to include the `useAcceptEscrowMutation` hook
   </summary>
   {@inject: examples/trading/frontend/src/components/escrows/Escrow.tsx}
 </details>
 
-Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component:
-
 <details>
   <summary>
-    `EscrowDashboard.tsx`
+    Update `src/routes/EscrowDashboard.tsx` to include the `EscrowList` component
   </summary>
   {@inject: examples/trading/frontend/src/routes/EscrowDashboard.tsx}
 </details>
