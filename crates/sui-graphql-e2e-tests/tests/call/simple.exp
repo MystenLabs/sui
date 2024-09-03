@@ -1,4 +1,4 @@
-processed 26 tasks
+processed 25 tasks
 
 init:
 validator_0: object(0,0)
@@ -114,11 +114,11 @@ task 15, lines 63-68:
 Headers: {
     "content-type": "application/json",
     "content-length": "157",
-    "x-sui-rpc-version": "2024.7.0-testing-no-sha",
+    "x-sui-rpc-version": "42.43.44-testing-no-sha",
     "vary": "origin, access-control-request-method, access-control-request-headers",
     "access-control-allow-origin": "*",
 }
-Service version: 2024.7.0-testing-no-sha
+Service version: 42.43.44-testing-no-sha
 Response: {
   "data": {
     "checkpoint": {
@@ -314,15 +314,3 @@ task 24, line 181:
 created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
-
-task 25, lines 183-188:
-//# run-graphql
-Response: {
-  "data": {
-    "serviceConfig": {
-      "availableVersions": [
-        "2024.7"
-      ]
-    }
-  }
-}
