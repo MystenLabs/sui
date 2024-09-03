@@ -47,3 +47,5 @@ export type {
 } from './json-rpc-resolver.js';
 
 export { Arguments } from './Arguments.js';
+
+export { nameResolutionPlugin, type NameResolutionPlugin } from './plugins/NameResolutionPlugin.js';
