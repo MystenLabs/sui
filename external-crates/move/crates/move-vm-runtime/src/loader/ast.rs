@@ -22,7 +22,10 @@ use move_core_types::{
 };
 
 use crate::{
-    loader::{arena::{self, ArenaPointer}, Loader, Resolver},
+    loader::{
+        arena::{self, ArenaPointer},
+        Loader, Resolver,
+    },
     native_functions::{NativeFunction, UnboxedNativeFunction},
 };
 

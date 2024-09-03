@@ -22,7 +22,6 @@ use move_core_types::{
 use std::{
     cell::RefCell,
     fmt::{self, Debug, Display},
-    iter,
     ops::Add,
     rc::Rc,
 };
