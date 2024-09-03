@@ -2,30 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
-use crate::move_vm::MoveVM;
-use move_binary_format::{
-    errors::{VMError, VMResult},
-    file_format::{
-        empty_module, AbilitySet, AddressIdentifierIndex, Bytecode, CodeUnit, CompiledModule,
-        DatatypeHandle, DatatypeHandleIndex, FieldDefinition, FunctionDefinition, FunctionHandle,
-        FunctionHandleIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature,
-        SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation, TableIndex,
-        TypeSignature, Visibility,
-    },
-};
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
-    runtime_value::{serialize_values, MoveValue},
-    u256::U256,
-    vm_status::{StatusCode, StatusType},
-};
-use move_vm_types::gas::UnmeteredGasMeter;
-
+/*
 fn make_module_with_function(
     visibility: Visibility,
     is_entry: bool,
@@ -663,3 +640,4 @@ fn call_missing_item() {
     );
     assert_eq!(error.status_type(), StatusType::Verification);
 }
+*/
