@@ -87,12 +87,12 @@ jobs:
           swap-size-gb: 256
       - name: Install Foundry
         run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup --version nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
-          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+          forge soldeer update
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E 'package(sui-bridge)'
@@ -109,12 +109,12 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install Foundry
         run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup --version nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
-          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+          forge soldeer update
       - name: Check Bridge EVM Unit Tests
         shell: bash
         working-directory: bridge/evm
