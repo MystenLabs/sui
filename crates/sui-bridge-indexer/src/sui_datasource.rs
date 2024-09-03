@@ -23,6 +23,8 @@ use tokio::task::JoinHandle;
 
 use crate::metrics::BridgeIndexerMetrics;
 
+const INGESTION_READER_BATCH_SIZE: usize = 300;
+
 pub struct SuiCheckpointDatasource {
     remote_store_url: String,
     sui_client: Arc<SuiClient>,
@@ -68,6 +70,14 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             exit_checkpoint: target_checkpoint,
             exit_sender: Some(exit_sender),
         };
+        let ingestion_reader_batch_size = std::env::var("INGESTION_READER_BATCH_SIZE")
+            .unwrap_or(INGESTION_READER_BATCH_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
+        tracing::info!(
+            "Starting Sui checkpoint data retrieval with batch size {}",
+            ingestion_reader_batch_size
+        );
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
         let worker = IndexerWorker::new(data_sender);
         let worker_pool = WorkerPool::new(
@@ -85,7 +95,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
                     checkpoint_path,
                     Some(remote_store_url),
                     vec![], // optional remote store access options
-                    ReaderOptions::default(),
+                    ReaderOptions {
+                        batch_size: ingestion_reader_batch_size,
+                        ..Default::default()
+                    },
                     exit_receiver,
                 )
                 .await?;
