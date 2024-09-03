@@ -183,10 +183,10 @@ impl ObjectsSnapshotProcessor {
                         .unwrap_or_default();
 
                     // We update the snapshot table when it falls behind the rest of the indexer by more than the min_lag.
-                    while latest_indexer_cp >= start_cp + config.lag as u64 {
+                    while latest_indexer_cp >= start_cp + config.snapshot_min_lag as u64 {
                         // The maximum checkpoint sequence number that can be committed to the
                         // `objects_snapshot` table.
-                        let max_allowed_cp = latest_indexer_cp - config.lag as u64;
+                        let max_allowed_cp = latest_indexer_cp - config.snapshot_min_lag as u64;
 
                         // Fetch more from the stream if the buffer is empty and we still need to
                         // catch up.

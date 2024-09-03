@@ -168,6 +168,8 @@ pub struct RunGraphqlCommand {
     pub show_service_version: bool,
     #[clap(long, num_args(1..))]
     pub cursors: Vec<String>,
+    #[clap(long)]
+    pub wait_for_checkpoint_pruned: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

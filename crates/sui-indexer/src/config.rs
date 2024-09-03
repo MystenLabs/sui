@@ -176,13 +176,6 @@ pub struct SnapshotLagConfig {
     pub snapshot_min_lag: usize,
 
     #[arg(
-        long = "object-snapshot-max-checkpoint-lag",
-        default_value_t = Self::DEFAULT_MAX_LAG,
-        env = "OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG",
-    )]
-    pub snapshot_max_lag: usize,
-
-    #[arg(
         long = "objects-snapshot-sleep-duration",
         default_value_t = Self::DEFAULT_SLEEP_DURATION_SEC,
     )]
@@ -190,7 +183,6 @@ pub struct SnapshotLagConfig {
 }
 
 impl SnapshotLagConfig {
-    const DEFAULT_MAX_LAG: usize = 900;
     const DEFAULT_MIN_LAG: usize = 300;
     const DEFAULT_SLEEP_DURATION_SEC: u64 = 5;
 }
@@ -198,8 +190,7 @@ impl SnapshotLagConfig {
 impl Default for SnapshotLagConfig {
     fn default() -> Self {
         SnapshotLagConfig {
-            snapshot_min_lag: Self::DEFAULT_MAX_LAG,
-            snapshot_max_lag: Self::DEFAULT_MIN_LAG,
+            snapshot_min_lag: Self::DEFAULT_MIN_LAG,
             sleep_duration: Self::DEFAULT_SLEEP_DURATION_SEC,
         }
     }
