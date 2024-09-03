@@ -1534,9 +1534,9 @@ You need a utility function to create a dummy object representing a real world a
 
 <details>
   <summary>
-    Create `src/helpers/create-demo-objects.ts`:
+    Create `src/mutations/demo.ts`:
   </summary>
-  {@inject: examples/trading/frontend/src/helpers/create-demo-objects.ts}
+  {@inject: examples/trading/frontend/src/mutations/demo.ts}
 </details>
 
 As previously mentioned, the example uses `@tanstack/react-query` to query, cache, and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update this data is by interacting with these remote servers. In this case, it could be from an API or directly from Sui blockchain RPC.
