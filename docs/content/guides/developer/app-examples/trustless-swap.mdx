@@ -1572,7 +1572,7 @@ It's beneficial to extract logic of locking owned objects into a separated mutat
 
 <details>
   <summary>
-    Create `src/hooks/useLockObjectMutation.ts`:
+    Create `src/mutations/locked.ts`:
   </summary>
 ```tsx
 import { CONSTANTS } from "@/constants";
@@ -1759,9 +1759,9 @@ To unlock the object, execute the `unlock` Move function identified by `{PACKAGE
 
 <details>
   <summary>
-    `unlock.ts`
+    `src/mutations/locked.ts`
   </summary>
-  {@inject: examples/trading/frontend/src/mutations/unlock.ts}
+  {@inject: examples/trading/frontend/src/mutations/locked.ts}
 </details>
 
 Update `src/components/locked/partials/Locked.tsx` to include the `useUnlockObjectMutation` hook:
