@@ -62,7 +62,6 @@ mod tests {
             chain_id_actual
         );
         assert_eq!(&format!("{}", res), &exp);
-        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -378,7 +377,6 @@ mod tests {
             .as_str()
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
-        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -495,7 +493,6 @@ mod tests {
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("verifyZkloginSignature").unwrap();
         assert_eq!(res.get("success").unwrap(), false);
-        cluster.cleanup_resources().await
     }
 
     // TODO: add more test cases for transaction execution/dry run in transactional test runner.
@@ -589,7 +586,6 @@ mod tests {
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
         assert!(res.get("results").unwrap().is_array());
-        cluster.cleanup_resources().await
     }
 
     // Test dry run where the transaction kind is provided instead of the full transaction.
@@ -660,7 +656,6 @@ mod tests {
         // in which case the sender is null.
         assert!(sender_read.is_null());
         assert!(res.get("results").unwrap().is_array());
-        cluster.cleanup_resources().await
     }
 
     // Test that we can handle dry run with failures at execution stage too.
@@ -750,8 +745,6 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("UnusedValueWithoutDrop"));
-
-        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -793,7 +786,6 @@ mod tests {
             .get("liveObjectSetDigest")
             .unwrap()
             .is_null());
-        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -860,7 +852,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(res.errors().is_empty());
-        cluster.cleanup_resources().await
+        assert!(res.errors().is_empty(), "{:#?}", res.errors());
     }
 }

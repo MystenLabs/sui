@@ -892,8 +892,6 @@ pub mod tests {
             delay.as_secs_f32()
         );
         assert_eq!(errs, vec![exp]);
-
-        cluster.cleanup_resources().await
     }
 
     #[tokio::test]
@@ -1144,7 +1142,6 @@ pub mod tests {
         let url_with_param = format!("{}?max_checkpoint_lag_ms=1", url);
         let resp = reqwest::get(&url_with_param).await.unwrap();
         assert_eq!(resp.status(), reqwest::StatusCode::GATEWAY_TIMEOUT);
-        cluster.cleanup_resources().await
     }
 
     /// Execute a GraphQL request with `limits` in place, expecting an error to be returned.
