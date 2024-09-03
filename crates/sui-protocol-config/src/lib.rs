@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 56;
+const MAX_PROTOCOL_VERSION: u64 = 57;
 
 // Record history of protocol version allocations here:
 //
@@ -170,6 +170,7 @@ const MAX_PROTOCOL_VERSION: u64 = 56;
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
 // Version 56: Reduce minimum number of random beacon shares.
+// Version 57: Optimize boolean binops
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2700,6 +2701,7 @@ impl ProtocolConfig {
                     // Reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(800);
                 }
+                57 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

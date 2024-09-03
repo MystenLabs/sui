@@ -18,7 +18,6 @@ use crate::{
     },
     shared::{
         matching::{new_match_var_name, MatchContext, MATCH_TEMP_PREFIX},
-        process_binops,
         program_info::TypingProgramInfo,
         string_utils::debug_print,
         unique_map::UniqueMap,
@@ -2607,150 +2606,263 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
     sp(loc, v_)
 }
 
+#[derive(Debug)]
+enum BinopEntry {
+    Op {
+        exp_loc: Loc,
+        lhs: Box<BinopEntry>,
+        op: BinOp,
+        op_type: Box<N::Type>,
+        rhs: Box<BinopEntry>,
+    },
+    ShortCircuitAnd {
+        loc: Loc,
+        tests: Vec<BinopEntry>,
+        last: Box<BinopEntry>,
+    },
+    ShortCircuitOr {
+        loc: Loc,
+        tests: Vec<BinopEntry>,
+        last: Box<BinopEntry>,
+    },
+    Exp {
+        exp: T::Exp,
+    },
+}
+
+#[allow(dead_code)]
+fn print_entry(entry: &BinopEntry, indent: usize) {
+    match entry {
+        BinopEntry::Op { lhs, op, rhs, .. } => {
+            println!("{:indent$} op {op}", " ");
+            print_entry(lhs, indent + 2);
+            print_entry(rhs, indent + 2);
+        }
+        BinopEntry::ShortCircuitAnd { tests, last, .. } => {
+            println!("{:indent$} '&&' op group", " ");
+            for entry in tests {
+                print_entry(entry, indent + 2);
+            }
+            print_entry(last, indent + 2);
+        }
+        BinopEntry::ShortCircuitOr { tests, last, .. } => {
+            println!("{:indent$} '||' op group", " ");
+            for entry in tests {
+                print_entry(entry, indent + 2);
+            }
+            print_entry(last, indent + 2);
+        }
+        BinopEntry::Exp { .. } => {
+            println!("{:indent$} value", " ");
+        }
+    }
+}
+
+#[growing_stack]
+fn group_boolean_binops(e: T::Exp) -> BinopEntry {
+    use BinopEntry as BE;
+    use T::UnannotatedExp_ as TE;
+    let exp_loc = e.exp.loc;
+    let _exp_type = e.ty.clone();
+    match e.exp.value {
+        TE::BinopExp(lhs, op, op_type, rhs) => {
+            let lhs = group_boolean_binops(*lhs);
+            let rhs = group_boolean_binops(*rhs);
+            match &op.value {
+                BinOp_::And => {
+                    let mut new_tests = match lhs {
+                        BE::ShortCircuitAnd {
+                            loc: _,
+                            mut tests,
+                            last,
+                        } => {
+                            tests.push(*last);
+                            tests
+                        }
+                        other => vec![other],
+                    };
+                    let last = match rhs {
+                        BE::ShortCircuitAnd {
+                            loc: _,
+                            tests,
+                            last,
+                        } => {
+                            new_tests.extend(tests);
+                            last
+                        }
+                        other => Box::new(other),
+                    };
+                    BE::ShortCircuitAnd {
+                        loc: exp_loc,
+                        tests: new_tests,
+                        last,
+                    }
+                }
+                BinOp_::Or => {
+                    let mut new_tests = match lhs {
+                        BE::ShortCircuitOr {
+                            loc: _,
+                            mut tests,
+                            last,
+                        } => {
+                            tests.push(*last);
+                            tests
+                        }
+                        other => vec![other],
+                    };
+                    let last = match rhs {
+                        BE::ShortCircuitOr {
+                            loc: _,
+                            tests,
+                            last,
+                        } => {
+                            new_tests.extend(tests);
+                            last
+                        }
+                        other => Box::new(other),
+                    };
+                    BE::ShortCircuitOr {
+                        loc: exp_loc,
+                        tests: new_tests,
+                        last,
+                    }
+                }
+                _ => {
+                    let lhs = Box::new(lhs);
+                    let rhs = Box::new(rhs);
+                    BE::Op {
+                        exp_loc,
+                        lhs,
+                        op,
+                        op_type,
+                        rhs,
+                    }
+                }
+            }
+        }
+        _ => BE::Exp { exp: e },
+    }
+}
+
 fn process_binops(
     context: &mut Context,
     input_block: &mut Block,
     result_type: H::Type,
     e: T::Exp,
 ) -> H::Exp {
-    use T::UnannotatedExp_ as E;
-    let (mut block, exp) = process_binops!(
-        (BinOp, H::Type, Loc),
-        (Block, H::Exp),
-        (e, result_type),
-        (exp, ty),
-        exp,
-        T::Exp {
-            exp: sp!(eloc, E::BinopExp(lhs, op, op_type, rhs)),
-            ..
-        } =>
-        {
-            let op = (op, ty, eloc);
-            let op_type = freeze_ty(type_(context, *op_type));
-            let rhs = (*rhs, op_type.clone());
-            let lhs = (*lhs, op_type);
-            (lhs, op, rhs)
-        },
-        {
-            let mut exp_block = make_block!();
-            let exp = value(context, &mut exp_block, Some(ty).as_ref(), exp);
-            (exp_block, exp)
-        },
-        value_stack,
-        (op, ty, eloc) =>
-        {
-            match op {
-                sp!(loc, op @ BinOp_::And) => {
-                    let test = value_stack.pop().expect("ICE binop hlir issue");
-                    let if_ = value_stack.pop().expect("ICE binop hlir issue");
-                    if simple_bool_binop_arg(&if_) {
-                        let (mut test_block, test_exp) = test;
-                        let (mut if_block, if_exp) = if_;
-                        test_block.append(&mut if_block);
-                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), if_exp)));
-                        (test_block, exp)
-                    } else {
-                        let else_ = (make_block!(), bool_exp(loc, false));
-                        make_boolean_binop(
-                            context,
-                            sp(loc, op),
-                            test,
-                            if_,
-                            else_,
-                        )
-                    }
+    let entry = group_boolean_binops(e.clone());
+    // print_entry(&entry, 0);
+
+    #[growing_stack]
+    fn build_binop(
+        context: &mut Context,
+        input_block: &mut Block,
+        result_type: H::Type,
+        e: BinopEntry,
+    ) -> H::Exp {
+        match e {
+            BinopEntry::Op {
+                exp_loc,
+                lhs,
+                op,
+                op_type,
+                rhs,
+            } => {
+                let op_type = freeze_ty(type_(context, *op_type));
+                let mut lhs_block = make_block!();
+                let mut lhs_exp = build_binop(context, &mut lhs_block, op_type.clone(), *lhs);
+                let mut rhs_block = make_block!();
+                let rhs_exp = build_binop(context, &mut rhs_block, op_type, *rhs);
+                if !rhs_block.is_empty() {
+                    lhs_exp = bind_exp(context, &mut lhs_block, lhs_exp);
                 }
-                sp!(loc, op @ BinOp_::Or) => {
-                    let test = value_stack.pop().expect("ICE binop hlir issue");
-                    let else_ = value_stack.pop().expect("ICE binop hlir issue");
-                    if simple_bool_binop_arg(&else_) {
-                        let (mut test_block, test_exp) = test;
-                        let (mut else_block, else_exp) = else_;
-                        test_block.append(&mut else_block);
-                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), else_exp)));
-                        (test_block, exp)
-                    } else {
-                        let if_ = (make_block!(), bool_exp(loc, true));
-                        make_boolean_binop(
-                            context,
-                            sp(loc, op),
-                            test,
-                            if_,
-                            else_,
-                        )
-                    }
-                }
-                op => {
-                    let (mut lhs_block, mut lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
-                    let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
-                    if !rhs_block.is_empty() {
-                        lhs_exp = bind_exp(context, &mut lhs_block, lhs_exp);
-                    }
-                    lhs_block.append(&mut rhs_block);
-                    // NB: here we could check if the LHS and RHS are "large" terms and let-bind
-                    // them if they are getting too big.
-                    let exp = H::exp(ty, sp(eloc, make_binop(lhs_exp, op, rhs_exp)));
-                    (lhs_block, exp)
-                }
+                input_block.extend(lhs_block);
+                input_block.extend(rhs_block);
+                H::exp(result_type, sp(exp_loc, make_binop(lhs_exp, op, rhs_exp)))
             }
+            BinopEntry::ShortCircuitAnd { loc, tests, last } => {
+                let bool_ty = tbool(loc);
+                let (binders, bound_exp) = make_binders(context, loc, bool_ty.clone());
+
+                let mut cur_block = make_block!();
+                let out_exp = build_binop(context, &mut cur_block, bool_ty.clone(), *last);
+                bind_value_in_block(
+                    context,
+                    binders.clone(),
+                    Some(bool_ty.clone()),
+                    &mut cur_block,
+                    out_exp,
+                );
+
+                for entry in tests.into_iter().rev() {
+                    let if_block = std::mem::take(&mut cur_block);
+                    let cond =
+                        Box::new(build_binop(context, &mut cur_block, bool_ty.clone(), entry));
+                    let mut else_block = make_block!();
+                    bind_value_in_block(
+                        context,
+                        binders.clone(),
+                        Some(bool_ty.clone()),
+                        &mut else_block,
+                        bool_exp(loc, false),
+                    );
+                    let if_stmt_ = H::Statement_::IfElse {
+                        cond,
+                        if_block,
+                        else_block,
+                    };
+                    let if_stmt = sp(loc, if_stmt_);
+                    cur_block.push_back(if_stmt);
+                }
+                input_block.extend(cur_block);
+                bound_exp
+            }
+            BinopEntry::ShortCircuitOr { loc, tests, last } => {
+                let bool_ty = tbool(loc);
+                let (binders, bound_exp) = make_binders(context, loc, bool_ty.clone());
+
+                let mut cur_block = make_block!();
+                let out_exp = build_binop(context, &mut cur_block, bool_ty.clone(), *last);
+                bind_value_in_block(
+                    context,
+                    binders.clone(),
+                    Some(bool_ty.clone()),
+                    &mut cur_block,
+                    out_exp,
+                );
+
+                for entry in tests.into_iter().rev() {
+                    let else_block = std::mem::take(&mut cur_block);
+                    let cond =
+                        Box::new(build_binop(context, &mut cur_block, bool_ty.clone(), entry));
+                    let mut if_block = make_block!();
+                    bind_value_in_block(
+                        context,
+                        binders.clone(),
+                        Some(bool_ty.clone()),
+                        &mut if_block,
+                        bool_exp(loc, true),
+                    );
+                    let if_stmt_ = H::Statement_::IfElse {
+                        cond,
+                        if_block,
+                        else_block,
+                    };
+                    let if_stmt = sp(loc, if_stmt_);
+                    cur_block.push_back(if_stmt);
+                }
+                input_block.extend(cur_block);
+                bound_exp
+            }
+            BinopEntry::Exp { exp } => value(context, input_block, Some(&result_type), exp),
         }
-    );
-    input_block.append(&mut block);
-    exp
+    }
+
+    build_binop(context, input_block, result_type, entry)
 }
 
 fn make_binop(lhs: H::Exp, op: BinOp, rhs: H::Exp) -> H::UnannotatedExp_ {
     H::UnannotatedExp_::BinopExp(Box::new(lhs), op, Box::new(rhs))
-}
-
-fn make_boolean_binop(
-    context: &mut Context,
-    op: BinOp,
-    (mut test_block, test_exp): (Block, H::Exp),
-    (mut if_block, if_exp): (Block, H::Exp),
-    (mut else_block, else_exp): (Block, H::Exp),
-) -> (Block, H::Exp) {
-    let loc = op.loc;
-
-    let bool_ty = tbool(loc);
-    let (binders, bound_exp) = make_binders(context, loc, bool_ty.clone());
-    let opty = Some(bool_ty);
-
-    let arms_unreachable = if_exp.is_unreachable() && else_exp.is_unreachable();
-    // one of these _must_ always bind by construction.
-    bind_value_in_block(
-        context,
-        binders.clone(),
-        opty.clone(),
-        &mut if_block,
-        if_exp,
-    );
-    bind_value_in_block(context, binders, opty, &mut else_block, else_exp);
-    assert!(!arms_unreachable, "ICE boolean binop processing failure");
-
-    let if_else = H::Statement_::IfElse {
-        cond: Box::new(test_exp),
-        if_block,
-        else_block,
-    };
-    test_block.push_back(sp(loc, if_else));
-    (test_block, bound_exp)
-}
-
-fn simple_bool_binop_arg((block, exp): &(Block, H::Exp)) -> bool {
-    use H::UnannotatedExp_ as HE;
-    if !block.is_empty() {
-        false
-    } else {
-        matches!(
-            exp.exp.value,
-            HE::Value(_)
-                | HE::Constant(_)
-                | HE::Move { .. }
-                | HE::Copy { .. }
-                | HE::UnresolvedError
-        )
-    }
 }
 
 //**************************************************************************************************
