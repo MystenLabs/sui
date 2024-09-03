@@ -3474,10 +3474,6 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
-	List the available versions for this GraphQL service.
-	"""
-	availableVersions: [String!]!
-	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -4734,3 +4730,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+

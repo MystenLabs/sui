@@ -60,7 +60,6 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub versions: Versions,
     pub limits: Limits,
     pub disabled_features: BTreeSet<FunctionalGroup>,
     pub experiments: Experiments,
@@ -68,11 +67,6 @@ pub struct ServiceConfig {
     pub background_tasks: BackgroundTasksConfig,
     pub zklogin: ZkLoginConfig,
     pub move_registry: MoveRegistryConfig,
-}
-
-#[GraphQLConfig]
-pub struct Versions {
-    versions: Vec<String>,
 }
 
 #[GraphQLConfig]
@@ -148,17 +142,18 @@ pub(crate) enum ResolutionType {
 /// The `full` version is `year.month.patch-sha`.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
-    /// The year of this release.
-    pub year: &'static str,
-    /// The month of this release.
-    pub month: &'static str,
-    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    /// The major version for the release
+    pub major: &'static str,
+    /// The minor version of the release
+    pub minor: &'static str,
+    /// The patch version of the release
     pub patch: &'static str,
-    /// The commit sha for this release.
+    /// The full commit SHA that the release was built from
     pub sha: &'static str,
-    /// The full version string.
-    /// Note that this extra field is used only for the uptime_metric function which requries a
-    /// &'static str.
+    /// The full version string: {MAJOR}.{MINOR}.{PATCH}-{SHA}
+    ///
+    /// The full version is pre-computed as a &'static str because that is what is required for
+    /// `uptime_metric`.
     pub full: &'static str,
 }
 
@@ -166,19 +161,12 @@ impl Version {
     /// Use for testing when you need the Version obj and a year.month &str
     pub fn for_testing() -> Self {
         Self {
-            year: env!("CARGO_PKG_VERSION_MAJOR"),
-            month: env!("CARGO_PKG_VERSION_MINOR"),
-            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            major: "42",
+            minor: "43",
+            patch: "44",
             sha: "testing-no-sha",
             // note that this full field is needed for metrics but not for testing
-            full: const_str::concat!(
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_MINOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_PATCH"),
-                "-testing-no-sha"
-            ),
+            full: "42.43.44-testing-no-sha",
         }
     }
 }
@@ -228,11 +216,6 @@ impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
-    }
-
-    /// List the available versions for this GraphQL service.
-    async fn available_versions(&self) -> Vec<String> {
-        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -500,18 +483,6 @@ impl MoveRegistryConfig {
             page_limit,
             package_address,
             registry_id,
-        }
-    }
-}
-
-impl Default for Versions {
-    fn default() -> Self {
-        Self {
-            versions: vec![format!(
-                "{}.{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR")
-            )],
         }
     }
 }

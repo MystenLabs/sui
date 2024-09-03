@@ -13520,7 +13520,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "2024.7.0"
+version = "1.33.0"
 dependencies = [
  "anyhow",
  "async-graphql",
