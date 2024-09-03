@@ -6,14 +6,6 @@ warning[Lint W04004]: unneeded return
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
-  ┌─ tests/linter/move_2024/unneeded_return_branch.move:5:35
-  │
-5 │     if (cond) { return 5 } else { abort ZERO }
-  │                                   ^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return_branch.move:9:17
   │
@@ -96,14 +88,6 @@ warning[Lint W04004]: unneeded return
    │                  ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09005]: dead or unreachable code
-   ┌─ tests/linter/move_2024/unneeded_return_branch.move:53:18
-   │
-53 │         E::V1 => abort ZERO,
-   │                  ^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
-   │
-   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return_branch.move:58:5

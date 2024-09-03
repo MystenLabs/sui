@@ -1,38 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use mysten_metrics::RegistryService;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use prometheus::{Registry, TextEncoder};
-use regex::Regex;
-use tracing::{info, warn};
-
-use mysten_metrics::RegistryService;
+use std::net::SocketAddr;
+use tracing::info;
 
 const METRICS_ROUTE: &str = "/metrics";
 
 pub fn start_prometheus_server(
     addr: SocketAddr,
-    fn_url: &str,
 ) -> Result<(RegistryService, Registry), anyhow::Error> {
-    let converted_fn_url = convert_url(fn_url);
-    if converted_fn_url.is_none() {
-        warn!(
-            "Failed to convert full node url {} to a shorter version",
-            fn_url
-        );
-    }
-    let fn_url_str = converted_fn_url.unwrap_or_else(|| "unknown_url".to_string());
-
-    let labels = HashMap::from([("indexer_fullnode".to_string(), fn_url_str)]);
-    info!("Starting prometheus server with labels: {:?}", labels);
-    let registry = Registry::new_custom(Some("indexer".to_string()), Some(labels))?;
+    info!(address =% addr, "Starting prometheus server");
+    let registry = Registry::new_custom(Some("indexer".to_string()), None)?;
     let registry_service = RegistryService::new(registry.clone());
 
     let app = Router::new()
@@ -55,14 +40,6 @@ async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (St
             format!("unable to encode metrics: {error}"),
         ),
     }
-}
-
-fn convert_url(url_str: &str) -> Option<String> {
-    // NOTE: unwrap here is safe because the regex is a constant.
-    let re = Regex::new(r"https?://([a-z0-9-]+\.[a-z0-9-]+\.[a-z]+)").unwrap();
-    let captures = re.captures(url_str)?;
-
-    captures.get(1).map(|m| m.as_str().to_string())
 }
 
 /// NOTE: for various data ingestion steps, which are expected to be within [0.001, 100] seconds,
@@ -785,4 +762,22 @@ impl IndexerMetrics {
             ).unwrap(),
         }
     }
+}
+
+pub fn spawn_connection_pool_metric_collector(
+    metrics: IndexerMetrics,
+    connection_pool: crate::db::ConnectionPool,
+) {
+    tokio::spawn(async move {
+        loop {
+            let cp_state = connection_pool.state();
+            tracing::debug!(
+                connection_pool_size =% cp_state.connections,
+                idle_connections =% cp_state.idle_connections,
+            );
+            metrics.db_conn_pool_size.set(cp_state.connections as i64);
+            metrics.idle_db_conn.set(cp_state.idle_connections as i64);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        }
+    });
 }

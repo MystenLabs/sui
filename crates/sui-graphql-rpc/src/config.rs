@@ -45,13 +45,13 @@ pub struct ServerConfig {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
-    pub(crate) port: u16,
+    pub port: u16,
     /// Host to bind the server to
-    pub(crate) host: String,
-    pub(crate) db_url: String,
-    pub(crate) db_pool_size: u32,
-    pub(crate) prom_url: String,
-    pub(crate) prom_port: u16,
+    pub host: String,
+    pub db_url: String,
+    pub db_pool_size: u32,
+    pub prom_url: String,
+    pub prom_port: u16,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -60,19 +60,13 @@ pub struct ConnectionConfig {
 #[GraphQLConfig]
 #[derive(Default)]
 pub struct ServiceConfig {
-    pub(crate) versions: Versions,
-    pub(crate) limits: Limits,
-    pub(crate) disabled_features: BTreeSet<FunctionalGroup>,
-    pub(crate) experiments: Experiments,
-    pub(crate) name_service: NameServiceConfig,
-    pub(crate) background_tasks: BackgroundTasksConfig,
-    pub(crate) zklogin: ZkLoginConfig,
-    pub(crate) move_registry: MoveRegistryConfig,
-}
-
-#[GraphQLConfig]
-pub struct Versions {
-    versions: Vec<String>,
+    pub limits: Limits,
+    pub disabled_features: BTreeSet<FunctionalGroup>,
+    pub experiments: Experiments,
+    pub name_service: NameServiceConfig,
+    pub background_tasks: BackgroundTasksConfig,
+    pub zklogin: ZkLoginConfig,
+    pub move_registry: MoveRegistryConfig,
 }
 
 #[GraphQLConfig]
@@ -83,7 +77,12 @@ pub struct Limits {
     pub max_query_nodes: u32,
     /// Maximum number of output nodes allowed in the response.
     pub max_output_nodes: u32,
-    /// Maximum size (in bytes) of a GraphQL request.
+    /// Maximum size in bytes allowed for the `txBytes` and `signatures` fields of a GraphQL
+    /// mutation request in the `executeTransactionBlock` node, and for the `txBytes` of a
+    /// `dryRunTransactionBlock` node.
+    pub max_tx_payload_size: u32,
+    /// Maximum size in bytes of the JSON payload of a GraphQL read request (excluding
+    /// `max_tx_payload_size`).
     pub max_query_payload_size: u32,
     /// Queries whose EXPLAIN cost are more than this will be logged. Given in the units used by the
     /// database (where 1.0 is roughly the cost of a sequential page access).
@@ -124,7 +123,7 @@ pub struct BackgroundTasksConfig {
 
 #[GraphQLConfig]
 #[derive(Clone)]
-pub(crate) struct MoveRegistryConfig {
+pub struct MoveRegistryConfig {
     pub(crate) external_api_url: Option<String>,
     pub(crate) resolution_type: ResolutionType,
     pub(crate) page_limit: u16,
@@ -143,17 +142,18 @@ pub(crate) enum ResolutionType {
 /// The `full` version is `year.month.patch-sha`.
 #[derive(Copy, Clone, Debug)]
 pub struct Version {
-    /// The year of this release.
-    pub year: &'static str,
-    /// The month of this release.
-    pub month: &'static str,
-    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    /// The major version for the release
+    pub major: &'static str,
+    /// The minor version of the release
+    pub minor: &'static str,
+    /// The patch version of the release
     pub patch: &'static str,
-    /// The commit sha for this release.
+    /// The full commit SHA that the release was built from
     pub sha: &'static str,
-    /// The full version string.
-    /// Note that this extra field is used only for the uptime_metric function which requries a
-    /// &'static str.
+    /// The full version string: {MAJOR}.{MINOR}.{PATCH}-{SHA}
+    ///
+    /// The full version is pre-computed as a &'static str because that is what is required for
+    /// `uptime_metric`.
     pub full: &'static str,
 }
 
@@ -161,19 +161,12 @@ impl Version {
     /// Use for testing when you need the Version obj and a year.month &str
     pub fn for_testing() -> Self {
         Self {
-            year: env!("CARGO_PKG_VERSION_MAJOR"),
-            month: env!("CARGO_PKG_VERSION_MINOR"),
-            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            major: "42",
+            minor: "43",
+            patch: "44",
             sha: "testing-no-sha",
             // note that this full field is needed for metrics but not for testing
-            full: const_str::concat!(
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_MINOR"),
-                ".",
-                env!("CARGO_PKG_VERSION_PATCH"),
-                "-testing-no-sha"
-            ),
+            full: "42.43.44-testing-no-sha",
         }
     }
 }
@@ -223,11 +216,6 @@ impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
-    }
-
-    /// List the available versions for this GraphQL service.
-    async fn available_versions(&self) -> Vec<String> {
-        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -292,7 +280,19 @@ impl ServiceConfig {
         self.limits.request_timeout_ms
     }
 
-    /// Maximum length of a query payload string.
+    /// The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+    /// `executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+    ///
+    /// It is the value of the maximum transaction bytes (including the signatures) allowed by the
+    /// protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+    async fn max_transaction_payload_size(&self) -> u32 {
+        self.limits.max_tx_payload_size
+    }
+
+    /// The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+    /// the read part of the query.
+    /// In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+    /// included in this limit.
     async fn max_query_payload_size(&self) -> u32 {
         self.limits.max_query_payload_size
     }
@@ -353,27 +353,6 @@ impl ConnectionConfig {
             db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
-        }
-    }
-
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_graphql_rpc_e2e_tests"
-                .to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            ..Default::default()
         }
     }
 
@@ -487,18 +466,6 @@ impl MoveRegistryConfig {
     }
 }
 
-impl Default for Versions {
-    fn default() -> Self {
-        Self {
-            versions: vec![format!(
-                "{}.{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR")
-            )],
-        }
-    }
-}
-
 impl Default for Ide {
     fn default() -> Self {
         Self {
@@ -551,6 +518,11 @@ impl Default for Limits {
             // for the `TransactionBlockFilter`.
             max_transaction_ids: 1000,
             max_scan_limit: 100_000_000,
+            // This value is set to be the size of the max transaction bytes allowed + base64
+            // overhead (roughly 1/3 of the original string). This is rounded up.
+            //
+            // <https://github.com/MystenLabs/sui/blob/4b934f87acae862cecbcbefb3da34cabb79805aa/crates/sui-protocol-config/src/lib.rs#L1578>
+            max_tx_payload_size: (128u32 * 1024u32 * 4u32).div_ceil(3),
         }
     }
 }
@@ -617,6 +589,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-output-nodes = 200000
+                max-mutation-payload-size = 174763
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -638,6 +611,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 174763,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -703,6 +677,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-output-nodes = 200000
+                max-tx-payload-size = 181017
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -727,6 +702,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_output_nodes: 200000,
+                max_tx_payload_size: 181017,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,

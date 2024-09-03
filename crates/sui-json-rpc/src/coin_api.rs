@@ -373,7 +373,7 @@ impl CoinReadInternal for CoinReadInternalImpl {
         one_coin_type_only: bool,
     ) -> RpcInterimResult<CoinPage> {
         let limit = cap_page_limit(limit);
-        self.metrics.get_coins_limit.report(limit as u64);
+        self.metrics.get_coins_limit.observe(limit as f64);
         let state = self.get_state();
         let mut data = spawn_monitored_task!(async move {
             state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)
@@ -383,7 +383,9 @@ impl CoinReadInternal for CoinReadInternalImpl {
         let has_next_page = data.len() > limit;
         data.truncate(limit);
 
-        self.metrics.get_coins_result_size.report(data.len() as u64);
+        self.metrics
+            .get_coins_result_size
+            .observe(data.len() as f64);
         self.metrics
             .get_coins_result_size_total
             .inc_by(data.len() as u64);
