@@ -1566,9 +1566,9 @@ Run your app and ensure you can:
 
 ### Locking owned objects
 
-It's beneficial to extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
-
 To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions, use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because our smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
+
+It's beneficial to extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
 
 <details>
   <summary>
