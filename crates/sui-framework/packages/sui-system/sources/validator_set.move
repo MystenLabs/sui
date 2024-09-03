@@ -317,7 +317,7 @@ module sui_system::validator_set {
         let staking_pool_id = pool_id(&staked_sui);
         let validator =
             if (self.staking_pool_mappings.contains(staking_pool_id)) { // This is an active validator.
-                let validator_address = self.staking_pool_mappings[pool_id(&staked_sui)];
+                let validator_address = self.staking_pool_mappings[staking_pool_id];
                 get_candidate_or_active_validator_mut(self, validator_address)
             } else { // This is an inactive pool.
                 assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
