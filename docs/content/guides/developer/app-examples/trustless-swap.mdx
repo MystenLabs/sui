@@ -1210,7 +1210,7 @@ Install the necessary dependencies:
 </Tabs>
 
 
-### Set up routing
+### Set up routing {#routing}
 
 The imported template only has a single page. To add more pages, you need to set up routing.
 
@@ -1545,7 +1545,7 @@ When you execute a transaction call to mutate data on the Sui blockchain, use th
 
 The main mutating logic includes executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transfering it to the connected wallet account, all within the same `Transaction`. This example reuses the `executeTransaction()` hook from the [Execute Transaction Hook](#execute-transaction-hook) step to execute the transaction.
 
-Another benefit of wrapping the main mutating logic inside `useMutation()` is that you can access and manipulate the cache storing server state. This example fetches the cache from remote servers by using query call in an appropriate callback. In this case, it is the `onSuccess` callback. When the transaction succeeds, invalidate the cache data at the cache key called `getOwnedObjects`, then `@tanstack/react-query` handles the re-fetching mechanism for the invalidated data automatically. Do this by using `invalidateQueries()` on the `@tanstack/react-query` configured client instance retrieved by `useQueryClient()` hook in the **Setup Providers** step.
+Another benefit of wrapping the main mutating logic inside `useMutation()` is that you can access and manipulate the cache storing server state. This example fetches the cache from remote servers by using query call in an appropriate callback. In this case, it is the `onSuccess` callback. When the transaction succeeds, invalidate the cache data at the cache key called `getOwnedObjects`, then `@tanstack/react-query` handles the re-fetching mechanism for the invalidated data automatically. Do this by using `invalidateQueries()` on the `@tanstack/react-query` configured client instance retrieved by `useQueryClient()` hook in the [Set up Routing](#routing) step.
 
 Now the logic to create a dummy bear object exists. You just need to attach it into the button in the header.
 
