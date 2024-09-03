@@ -170,6 +170,7 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
 // Version 56: Enable bridge on mainnet.
+//             Note: do not use version 56 for any new features.
 // Version 57: Reduce minimum number of random beacon shares.
 // Version 58: Optimize boolean binops
 
