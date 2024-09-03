@@ -313,6 +313,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     None,
                     SnapshotLagConfig::default(),
                     None,
+                    None,
                 )
             }
         };

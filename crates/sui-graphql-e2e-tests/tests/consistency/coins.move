@@ -7,7 +7,7 @@
 // coin2@A | coin2@A | coin2@B |
 // coin3@A | coin3@A | coin3@A |
 
-//# init --protocol-version 51 --addresses P0=0x0 --accounts A B --simulator --object-snapshot-min-checkpoint-lag 1
+//# init --protocol-version 51 --addresses P0=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 1
 
 //# publish --sender A
 module P0::fake {

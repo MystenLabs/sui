@@ -169,7 +169,7 @@ pub struct PruningOptions {
 #[derive(Args, Debug, Clone)]
 pub struct SnapshotLagConfig {
     #[arg(
-        long = "object-snapshot-min-checkpoint-lag",
+        long = "objects-snapshot-min-checkpoint-lag",
         default_value_t = Self::DEFAULT_MIN_LAG,
         env = "OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG",
     )]

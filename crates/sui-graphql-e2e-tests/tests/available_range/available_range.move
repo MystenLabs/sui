@@ -3,7 +3,7 @@
 
 // Test that available range is correctly updated per objects_snapshot catching up
 
-//# init --protocol-version 51 --simulator --object-snapshot-min-checkpoint-lag 2
+//# init --protocol-version 51 --simulator --objects-snapshot-min-checkpoint-lag 2
 
 //# run-graphql
 {

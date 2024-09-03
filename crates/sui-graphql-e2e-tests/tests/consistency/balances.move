@@ -14,7 +14,7 @@
 // snapshot@[0, 4), first two transaction blocks are out of available range.
 // snapshot@[0, 6), all transaction blocks are out of available range.
 
-//# init --protocol-version 51 --addresses P0=0x0 --accounts A B --simulator --object-snapshot-min-checkpoint-lag 7
+//# init --protocol-version 51 --addresses P0=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 7
 
 //# publish --sender A
 module P0::fake {

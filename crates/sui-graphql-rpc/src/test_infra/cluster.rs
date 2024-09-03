@@ -468,7 +468,7 @@ impl ExecutorCluster {
             .unwrap();
 
         tokio::time::timeout(base_timeout, async {
-            while latest_cp > latest_snapshot_cp + self.snapshot_config.lag as u64 {
+            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_min_lag as u64 {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
