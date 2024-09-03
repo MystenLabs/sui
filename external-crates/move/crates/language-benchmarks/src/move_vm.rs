@@ -4,11 +4,7 @@
 
 use criterion::{measurement::Measurement, Criterion};
 use move_binary_format::CompiledModule;
-use move_compiler::{
-    editions::Edition,
-    shared::PackagePaths,
-    Compiler, FullyCompiledProgram,
-};
+use move_compiler::{editions::Edition, shared::PackagePaths, Compiler, FullyCompiledProgram};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
