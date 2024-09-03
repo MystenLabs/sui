@@ -4,8 +4,6 @@
 pub mod cli;
 pub mod command;
 pub use command::run_cmd;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    pub static ref DEBUG_MODE: bool = std::env::var("DEBUG").is_ok();
-}
+pub static DEBUG_MODE: Lazy<bool> = Lazy::new(|| std::env::var("DEBUG").is_ok());

@@ -290,17 +290,20 @@ Please comment in the thread to request an adjustment to the list.",
     ",
         message
     );
-    let ans = Confirm::new("Send this message to the channel?")
-        .with_default(false)
-        .prompt()
-        .expect("Unexpected response");
+    let slack_channel = if *DEBUG_MODE {
+        "test-notifications"
+    } else {
+        "incident-postmortems"
+    };
+    let ans = Confirm::new(&format!(
+        "Send this message to the #{} channel?",
+        slack_channel
+    ))
+    .with_default(false)
+    .prompt()
+    .expect("Unexpected response");
     if ans {
         let slack = super::slack::Slack::new().await;
-        let slack_channel = if *DEBUG_MODE {
-            "test-notifications"
-        } else {
-            "incident-postmortems"
-        };
         slack.send_message(slack_channel, &message).await?;
     }
     // post to https://slack.com/api/chat.postMessage with message

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use reqwest::{header, Client};
 use serde::Deserialize;
 use serde::Serialize;
@@ -11,12 +11,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::debug;
 
 const CHANNELS_URL: &str = "https://slack.com/api/conversations.list";
-lazy_static! {
-    static ref CHANNELS_FILEPATH: PathBuf = dirs::home_dir()
+static CHANNELS_FILEPATH: Lazy<PathBuf> = Lazy::new(|| {
+    dirs::home_dir()
         .expect("HOME env var not set")
         .join(".suiop")
-        .join("channels");
-}
+        .join("channels")
+});
 
 pub struct Slack {
     client: Client,

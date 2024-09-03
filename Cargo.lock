@@ -15208,7 +15208,7 @@ dependencies = [
  "field_names",
  "include_dir",
  "inquire",
- "lazy_static",
+ "once_cell",
  "open",
  "prettytable-rs",
  "rand 0.8.5",
