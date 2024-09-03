@@ -281,6 +281,55 @@ module sui_system::staking_pool_tests {
         scenario.end();
     }
 
+    #[test]
+    fun test_redeem_fungible_staked_sui_regression_rounding() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let mut staking_pool = staking_pool::new(scenario.ctx());
+        staking_pool.activate_staking_pool(0);
+
+        // setup
+
+        let sui = balance::create_for_testing(1_000_000_000);
+        let staked_sui_1 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
+
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 0) == 1, 0);
+
+        let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(1);
+        assert!(latest_exchange_rate.sui_amount() == 1_000_000_000, 0);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_000_000_000, 0);
+
+        let sui = balance::create_for_testing(1_000_000_001);
+        let staked_sui_2 = staking_pool.request_add_stake(sui, scenario.ctx().epoch() + 1, scenario.ctx());
+
+        assert!(distribute_rewards_and_advance_epoch(&mut staking_pool, &mut scenario, 1_000_000_000) == 2, 0);
+
+        let latest_exchange_rate = staking_pool.pool_token_exchange_rate_at_epoch(2);
+        assert!(latest_exchange_rate.sui_amount() == 3_000_000_001, 0);
+        assert!(latest_exchange_rate.pool_token_amount() == 1_500_000_000, 0);
+
+        let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(staked_sui_2, scenario.ctx());
+        assert!(fungible_staked_sui.value() == 500_000_000, 0); // rounding!
+        assert!(fungible_staked_sui.pool_id() == object::id(&staking_pool), 0);
+
+        let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 500_000_000, 0);
+        assert!(fungible_staked_sui_data.principal_value() == 1_000_000_001, 0);
+
+        // this line used to error
+        let sui = staking_pool.redeem_fungible_staked_sui(fungible_staked_sui, scenario.ctx());
+        assert!(sui.value() == 1_000_000_000, 0);
+
+        let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
+        assert!(fungible_staked_sui_data.total_supply() == 0, 0);
+        assert!(fungible_staked_sui_data.principal_value() == 1, 0);
+
+        sui::test_utils::destroy(staking_pool);
+        sui::test_utils::destroy(staked_sui_1);
+        sui::test_utils::destroy(sui);
+
+        scenario.end();
+    }
+
     #[test_only]
     fun distribute_rewards_and_advance_epoch(
         staking_pool: &mut StakingPool, 

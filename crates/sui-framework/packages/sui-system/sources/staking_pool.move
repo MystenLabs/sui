@@ -232,6 +232,12 @@ module sui_system::staking_pool {
         // 1. if the entire FungibleStakedSuiData supply is redeemed, how much sui should we receive?
         let total_sui_amount = get_sui_amount(&latest_exchange_rate, fungible_staked_sui_data_total_supply);
 
+        // min with total_sui_amount to prevent underflow
+        let fungible_staked_sui_data_principal_amount = std::u64::min(
+            fungible_staked_sui_data_principal_amount,
+            total_sui_amount
+        );
+
         // 2. how much do we need to withdraw from the rewards pool?
         let total_rewards = total_sui_amount - fungible_staked_sui_data_principal_amount;
 
