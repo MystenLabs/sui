@@ -154,11 +154,10 @@ impl ProgressStore for PerTaskInMemProgressStore {
                 exit_checkpoint = self.exit_checkpoint,
                 "Task completed, sending exit signal"
             );
-            self.exit_sender
-                .take()
-                .expect("Exit sender should not be None")
-                .send(())
-                .unwrap();
+            // `exit_sender` may be `None` if we have already sent the exit signal.
+            if let Some(sender) = self.exit_sender.take() {
+                let _ = sender.send(()).unwrap();
+            }
         }
         self.current_checkpoint = checkpoint_number;
         Ok(())

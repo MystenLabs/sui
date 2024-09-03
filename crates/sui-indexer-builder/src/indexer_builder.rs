@@ -18,6 +18,7 @@ type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
 
 const INGESTION_BATCH_SIZE: usize = 100;
+const RETRIEVED_CHECKPOINT_CHANNEL_SIZE: usize = 10000;
 
 pub struct IndexerBuilder<D, M, P> {
     name: String,
@@ -348,16 +349,21 @@ pub trait Datasource<T: Send>: Sync + Send {
             .unwrap_or(INGESTION_BATCH_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+        let checkpoint_channel_size = std::env::var("RETRIEVED_CHECKPOINT_CHANNEL_SIZE")
+            .unwrap_or(RETRIEVED_CHECKPOINT_CHANNEL_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         tracing::info!(
             task_name,
             ingestion_batch_size,
+            checkpoint_channel_size,
             "Starting ingestion task ({}-{})",
             start_checkpoint,
             target_checkpoint,
         );
         let is_live_task = target_checkpoint == i64::MAX as u64;
         let (data_sender, data_rx) = metered_channel::channel(
-            1000,
+            checkpoint_channel_size,
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
@@ -411,13 +417,29 @@ pub trait Datasource<T: Send>: Sync + Send {
             let timer = tokio::time::Instant::now();
 
             if !data.is_empty() {
+                let timer = tokio::time::Instant::now();
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
                     Ok::<Vec<_>, Error>(result)
                 })?;
+                tracing::debug!(
+                    task_name,
+                    max_height,
+                    "Data mapper processed {} blocks in {}ms.",
+                    heights.len(),
+                    timer.elapsed().as_millis(),
+                );
+                let timer = tokio::time::Instant::now();
                 // TODO: batch write data
                 // TODO: we might be able to write data and progress in a single transaction.
                 storage.write(processed_data).await?;
+                tracing::debug!(
+                    task_name,
+                    max_height,
+                    "Processed data ({} blocks) was wrote to storage in {}ms.",
+                    heights.len(),
+                    timer.elapsed().as_millis(),
+                );
             }
             // TODO: batch progress
             last_saved_checkpoint = storage
