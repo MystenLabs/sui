@@ -1,15 +1,29 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Arena Definitions
-
 #![allow(unsafe_code)]
 
 use std::mem::MaybeUninit;
 
 use bumpalo::Bump;
 
+// -------------------------------------------------------------------------------------------------
+// ARENA DEFINITIONS
+// -------------------------------------------------------------------------------------------------
+
+// -----------------------------------------------
+// Types
+// -----------------------------------------------
+
 pub struct Arena(Bump);
+
+/// An Arena Pointer, which allows conversion to references and const. Equality is defined as
+/// pointer equality, and clone/copy are shallow.
+pub struct ArenaPointer<T>(*const T);
+
+// -----------------------------------------------
+// Impls
+// -----------------------------------------------
 
 impl Arena {
     pub fn new() -> Self {
@@ -26,12 +40,26 @@ impl Arena {
     }
 }
 
-// SAFETY: these are okay, if callers follow the documented safety requirements for `Arena`'s
-// unsafe methods.
-unsafe impl Send for Arena {}
-unsafe impl Sync for Arena {}
+impl<T> ArenaPointer<T> {
+    pub fn new(value: *const T) -> Self {
+        ArenaPointer(value)
+    }
 
-/// Returns a pointer to a slice, but nulled. This must be set before use.
+    #[allow(dead_code)]
+    pub fn to_const(self) -> *const T {
+        self.0
+    }
+
+    pub fn to_ref<'a>(self) -> &'a T {
+        to_ref(self.0)
+    }
+}
+
+// -----------------------------------------------
+// Pointer Operations
+// -----------------------------------------------
+
+///// Returns a pointer to a slice, but nulled. This must be set before use.
 pub fn null_ptr<T>() -> *const [T] {
     unsafe { MaybeUninit::<*const [T]>::zeroed().assume_init() }
 }
@@ -52,22 +80,18 @@ pub fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }
 }
 
-#[derive(Clone, Copy)]
-pub struct ArenaPointer<T>(*const T);
+// -----------------------------------------------
+// Trait Implementations
+// -----------------------------------------------
 
-impl<T> ArenaPointer<T> {
-    pub fn new(value: *const T) -> Self {
-        ArenaPointer(value)
-    }
+// SAFETY: these are okay, if callers follow the documented safety requirements for `Arena`'s
+// unsafe methods.
 
-    pub fn to_const(&self) -> *const T {
-        self.0
-    }
+unsafe impl Send for Arena {}
+unsafe impl Sync for Arena {}
 
-    pub fn to_ref<'a>(&self) -> &'a T {
-        to_ref(self.0)
-    }
-}
+unsafe impl<T> Send for ArenaPointer<T> {}
+unsafe impl<T> Sync for ArenaPointer<T> {}
 
 impl<T: ::std::fmt::Debug> ::std::fmt::Debug for ArenaPointer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -75,5 +99,19 @@ impl<T: ::std::fmt::Debug> ::std::fmt::Debug for ArenaPointer<T> {
     }
 }
 
-unsafe impl<T> Send for ArenaPointer<T> {}
-unsafe impl<T> Sync for ArenaPointer<T> {}
+// Pointer equality
+impl<T> PartialEq for ArenaPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
+impl<T> Eq for ArenaPointer<T> {}
+
+impl<T> Clone for ArenaPointer<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for ArenaPointer<T> {}

@@ -28,7 +28,7 @@ struct Context<'a> {
     link_context: AccountAddress,
     cache: &'a ModuleCache,
     module: &'a CompiledModule,
-    function_map: HashMap<Identifier, *const Function>,
+    function_map: HashMap<Identifier, ArenaPointer<Function>>,
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
 }
 
@@ -77,7 +77,7 @@ pub fn module(
     let mut struct_instantiations = vec![];
     let mut enums = vec![];
     let mut enum_instantiations = vec![];
-    let mut function_refs: Vec<*const Function> = vec![];
+    let mut function_refs: Vec<ArenaPointer<Function>> = vec![];
     let mut function_instantiations = vec![];
     let mut field_handles = vec![];
     let mut field_instantiations: Vec<FieldInstantiation> = vec![];
@@ -172,7 +172,12 @@ pub fn module(
 
     let function_map = arena::mut_to_ref_slice(loaded_functions)
         .iter()
-        .map(|function| (function.name.clone(), function as *const Function))
+        .map(|function| {
+            (
+                function.name.clone(),
+                ArenaPointer::new(function as *const Function),
+            )
+        })
         .collect::<HashMap<_, _>>();
 
     if DEBUG_FLAGS.function_list_sizes {
@@ -200,7 +205,7 @@ pub fn module(
                     if DEBUG_FLAGS.function_resolution {
                         println!("pushing {}", function.to_ref().name.as_ident_str());
                     }
-                    function_refs.push(function.to_const());
+                    function_refs.push(*function);
                     break;
                 }
             }
@@ -257,7 +262,7 @@ pub fn module(
             cache,
         )?;
         function_instantiations.push(FunctionInstantiation {
-            handle: arena::ArenaPointer::new(handle),
+            handle,
             instantiation_idx,
         });
     }
@@ -287,10 +292,7 @@ pub fn module(
         function_instantiations,
         field_handles,
         field_instantiations,
-        function_map: function_map
-            .into_iter()
-            .map(|(key, value)| (key, arena::ArenaPointer::new(value)))
-            .collect::<HashMap<_, _>>(),
+        function_map,
         single_signature_token_map,
         instantiation_signatures,
         variant_handles: module.variant_handles().to_vec(),
@@ -498,7 +500,7 @@ fn bytecode(context: &mut Context, bytecode: &FF::Bytecode) -> PartialVMResult<B
 fn call(
     context: &mut Context,
     function_handle_index: FunctionHandleIndex,
-) -> PartialVMResult<*const Function> {
+) -> PartialVMResult<ArenaPointer<Function>> {
     let func_handle = context.module.function_handle_at(function_handle_index);
     let func_name = context.module.identifier_at(func_handle.name);
     let module_handle = context.module.module_handle_at(func_handle.module);

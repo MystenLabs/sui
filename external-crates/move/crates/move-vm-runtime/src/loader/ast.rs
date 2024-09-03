@@ -214,7 +214,7 @@ pub(crate) enum DatatypeTagType {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
@@ -336,7 +336,7 @@ pub enum Bytecode {
     ///
     /// ```..., arg(1), arg(2), ...,  arg(n) -> ..., return_value(1), return_value(2), ...,
     /// return_value(k)```
-    Call(*const Function),
+    Call(ArenaPointer<Function>),
     CallGeneric(FunctionInstantiationIndex),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
@@ -936,7 +936,7 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CopyLoc(a) => write!(f, "CopyLoc({})", a),
             Bytecode::MoveLoc(a) => write!(f, "MoveLoc({})", a),
             Bytecode::StLoc(a) => write!(f, "StLoc({})", a),
-            Bytecode::Call(a) => write!(f, "Call({})", arena::to_ref(*a).name),
+            Bytecode::Call(a) => write!(f, "Call({})", a.to_ref().name),
             Bytecode::CallGeneric(ndx) => write!(f, "CallGeneric({})", ndx),
             Bytecode::Pack(a) => write!(f, "Pack({})", a),
             Bytecode::PackGeneric(a) => write!(f, "PackGeneric({})", a),

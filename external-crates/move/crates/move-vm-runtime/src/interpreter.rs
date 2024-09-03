@@ -4,7 +4,7 @@
 
 use crate::{
     loader::{
-        arena,
+        arena::{self, ArenaPointer},
         ast::{Bytecode, Function},
         Loader, Resolver,
     },
@@ -108,7 +108,7 @@ impl Interpreter {
     /// Entrypoint into the interpreter. All external calls need to be routed through this
     /// function.
     pub(crate) fn entrypoint(
-        fun_ref: *const Function,
+        funtction: ArenaPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
         data_store: &mut impl DataStore,
@@ -121,7 +121,7 @@ impl Interpreter {
             call_stack: CallStack::new(),
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
-        let fun_ref = arena::to_ref(fun_ref);
+        let fun_ref = funtction.to_ref();
         profile_open_frame!(gas_meter, fun_ref.pretty_string());
 
         if fun_ref.is_native() {
@@ -203,7 +203,7 @@ impl Interpreter {
                     }
                 }
                 ExitCode::Call(function) => {
-                    let func = arena::to_ref(function);
+                    let func = function.to_ref();
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
@@ -765,7 +765,7 @@ struct Frame {
 #[derive(Debug)]
 enum ExitCode {
     Return,
-    Call(*const Function),
+    Call(ArenaPointer<Function>),
     CallGeneric(FunctionInstantiationIndex),
 }
 

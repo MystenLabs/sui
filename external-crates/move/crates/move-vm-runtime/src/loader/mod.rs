@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unsafe_code)]
 pub mod arena;
 pub mod ast;
 pub mod translate;
@@ -584,13 +585,13 @@ impl ModuleCache {
         func_name: &IdentStr,
         runtime_id: &ModuleId,
         link_context: AccountAddress,
-    ) -> PartialVMResult<*const Function> {
+    ) -> PartialVMResult<ArenaPointer<Function>> {
         match self
             .loaded_modules
             .get(&(link_context, runtime_id.clone()))
             .and_then(|module| module.function_map.get(func_name))
         {
-            Some(func_idx) => Ok(func_idx.to_ref()),
+            Some(func_idx) => Ok(*func_idx),
             None => Err(
                 PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(format!(
                     "Cannot find {:?}::{:?} in cache for context {:?}",
@@ -849,7 +850,7 @@ impl Loader {
     ) -> VMResult<(
         Arc<CompiledModule>,
         Arc<LoadedModule>,
-        *const Function,
+        ArenaPointer<Function>,
         LoadedFunctionInstantiation,
     )> {
         let link_context = data_store.link_context();
@@ -860,7 +861,7 @@ impl Loader {
             .resolve_function_by_name(function_name, runtime_id, link_context)
             .map_err(|err| err.finish(Location::Undefined))?;
 
-        let fun_ref = arena::to_ref(function);
+        let fun_ref = function.to_ref();
 
         let parameters = compiled
             .signature_at(fun_ref.parameters)
