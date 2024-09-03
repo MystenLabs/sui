@@ -653,7 +653,6 @@ fn function_body(
                     &mut cfg,
                 );
             }
-
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
