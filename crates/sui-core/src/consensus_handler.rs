@@ -332,21 +332,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .observe(serialized_transaction.len() as f64);
                     if matches!(
                         &transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
+                        ConsensusTransactionKind::CertifiedTransaction(_)
                     ) {
                         self.last_consensus_stats
                             .stats
                             .inc_num_user_transactions(authority_index as usize);
                     }
-                    if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
-                        &transaction.kind
-                    {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
-                    } else {
-                        let transaction = SequencedConsensusTransactionKind::External(transaction);
-                        transactions.push((serialized_transaction, transaction, authority_index));
-                    }
+                    let transaction = SequencedConsensusTransactionKind::External(transaction);
+                    transactions.push((serialized_transaction, transaction, authority_index));
                 }
             }
         }
@@ -550,7 +543,7 @@ impl<C> ConsensusHandler<C> {
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
-        ConsensusTransactionKind::UserTransaction(certificate) => {
+        ConsensusTransactionKind::CertifiedTransaction(certificate) => {
             if certificate.contains_shared_object() {
                 "shared_certificate"
             } else {
@@ -562,7 +555,6 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
         ConsensusTransactionKind::CapabilityNotificationV2(_) => "capability_notification_v2",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
-        ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
     }
@@ -667,7 +659,7 @@ impl SequencedConsensusTransactionKind {
     pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
         match self {
             SequencedConsensusTransactionKind::External(ext) => {
-                if let ConsensusTransactionKind::UserTransaction(txn) = &ext.kind {
+                if let ConsensusTransactionKind::CertifiedTransaction(txn) = &ext.kind {
                     Some(*txn.digest())
                 } else {
                     None
@@ -718,7 +710,7 @@ impl SequencedConsensusTransaction {
             return false;
         }
         let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-            kind: ConsensusTransactionKind::UserTransaction(certificate),
+            kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
             ..
         }) = &self.transaction
         else {
@@ -730,7 +722,7 @@ impl SequencedConsensusTransaction {
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) if certificate.contains_shared_object() => Some(certificate.data()),
             SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
@@ -1086,7 +1078,7 @@ mod tests {
                 ConsensusTransactionKind::CapabilityNotification(cap) => {
                     format!("cap({})", cap.generation)
                 }
-                ConsensusTransactionKind::UserTransaction(txn) => {
+                ConsensusTransactionKind::CertifiedTransaction(txn) => {
                     format!("user({})", txn.transaction_data().gas_price())
                 }
                 _ => unreachable!(),
@@ -1125,7 +1117,7 @@ mod tests {
             ),
             vec![],
         );
-        txn(ConsensusTransactionKind::UserTransaction(Box::new(
+        txn(ConsensusTransactionKind::CertifiedTransaction(Box::new(
             CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
         )))
     }

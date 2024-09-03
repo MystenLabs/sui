@@ -253,26 +253,26 @@ impl AuthorityCapabilitiesV2 {
     }
 }
 
+#[repr(u8)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
-    UserTransaction(Box<CertifiedTransaction>),
-    CheckpointSignature(Box<CheckpointSignatureMessage>),
-    EndOfPublish(AuthorityName),
+    CertifiedTransaction(Box<CertifiedTransaction>) = 0,
+    CheckpointSignature(Box<CheckpointSignatureMessage>) = 1,
+    EndOfPublish(AuthorityName) = 2,
 
-    CapabilityNotification(AuthorityCapabilitiesV1),
+    CapabilityNotification(AuthorityCapabilitiesV1) = 3,
+    CapabilityNotificationV2(AuthorityCapabilitiesV2) = 8,
 
-    NewJWKFetched(AuthorityName, JwkId, JWK),
-    RandomnessStateUpdate(u64, Vec<u8>), // deprecated
+    NewJWKFetched(AuthorityName, JwkId, JWK) = 4,
+
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
-    RandomnessDkgMessage(AuthorityName, Vec<u8>),
+    RandomnessDkgMessage(AuthorityName, Vec<u8>) = 6,
     // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
-    RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
-
-    CapabilityNotificationV2(AuthorityCapabilitiesV2),
+    RandomnessDkgConfirmation(AuthorityName, Vec<u8>) = 7,
 }
 
 impl ConsensusTransactionKind {
@@ -385,7 +385,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -442,7 +442,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -493,7 +493,7 @@ impl ConsensusTransaction {
 
     pub fn key(&self) -> ConsensusTransactionKey {
         match &self.kind {
-            ConsensusTransactionKind::UserTransaction(cert) => {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
                 ConsensusTransactionKey::Certificate(*cert.digest())
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
@@ -518,9 +518,6 @@ impl ConsensusTransaction {
                     key.clone(),
                 )))
             }
-            ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
-            }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)
             }
@@ -531,7 +528,7 @@ impl ConsensusTransaction {
     }
 
     pub fn is_user_certificate(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {
