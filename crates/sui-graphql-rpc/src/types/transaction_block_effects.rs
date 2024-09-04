@@ -530,6 +530,10 @@ impl TransactionBlockEffects {
                 | ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation {
                     module,
                     ..
+                })))
+                | ExecutionFailureStatus::MovePrimitiveRuntimeErrorV2(_, MoveLocationOpt(Some(MoveLocation {
+                    module,
+                    ..
                 }))),
             command: Some(command_idx),
         } = &mut status

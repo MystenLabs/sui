@@ -70,6 +70,7 @@ const ExecutionFailureStatus = bcs.enum('ExecutionFailureStatus', {
 	PublishErrorNonZeroAddress: null,
 	SuiMoveVerificationError: null,
 	MovePrimitiveRuntimeError: bcs.option(MoveLocation),
+	MovePrimitiveRuntimeErrorV2: bcs.tuple([bcs.u64(), MoveLocation]),
 	MoveAbort: bcs.tuple([MoveLocation, bcs.u64()]),
 	VMVerificationOrDeserializationError: null,
 	VMInvariantViolation: null,

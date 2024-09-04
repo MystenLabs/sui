@@ -80,7 +80,7 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
                     }
                     _ => None,
                 };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
+                ExecutionFailureStatus::MovePrimitiveRuntimeErrorV2(error.major_status(), MoveLocationOpt(location))
             }
             StatusType::Validation
             | StatusType::Verification

@@ -7,6 +7,7 @@ use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
+use move_core_types::vm_status::StatusCode;
 use sui_macros::EnumVariantOrder;
 use thiserror::Error;
 
@@ -102,6 +103,13 @@ pub enum ExecutionFailureStatus {
         Arithmetic error, stack overflow, max value depth, etc."
     )]
     MovePrimitiveRuntimeError(MoveLocationOpt),
+
+    #[error(
+        "Move Primitive Runtime Error. Location: {1}. \
+        VM Status Code: {0:?}"
+    )]
+    MovePrimitiveRuntimeErrorV2(StatusCode, MoveLocationOpt),
+
     #[error("Move Runtime Abort. Location: {0}, Abort Code: {1}")]
     MoveAbort(MoveLocation, u64),
     #[error(
