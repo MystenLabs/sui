@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use sui_indexer::config::Command;
-use sui_indexer::database::Connection;
+use sui_indexer::database::{Connection, ConnectionPool};
 use sui_indexer::db::{new_connection_pool, reset_database};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
@@ -50,7 +50,12 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
-            Indexer::start_reader(&json_rpc_config, &registry, connection_pool).await?;
+            let pool = ConnectionPool::new(
+                opts.database_url.clone(),
+                opts.connection_pool_config.clone(),
+            )
+            .await?;
+            Indexer::start_reader(&json_rpc_config, &registry, connection_pool, pool).await?;
         }
         Command::ResetDatabase { force } => {
             if !force {

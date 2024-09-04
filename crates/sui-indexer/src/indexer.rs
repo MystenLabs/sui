@@ -19,7 +19,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
 use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagConfig};
-use crate::db::ConnectionPool;
+use crate::database::ConnectionPool;
+use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
 use crate::handlers::objects_snapshot_processor::start_objects_snapshot_processor;
@@ -159,13 +160,14 @@ impl Indexer {
     pub async fn start_reader(
         config: &JsonRpcConfig,
         registry: &Registry,
-        connection_pool: ConnectionPool,
+        blocking_pool: BlockingConnectionPool,
+        pool: ConnectionPool,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let indexer_reader = IndexerReader::new(connection_pool);
+        let indexer_reader = IndexerReader::new(blocking_pool, pool);
         let handle = build_json_rpc_server(registry, indexer_reader, config)
             .await
             .expect("Json rpc server should not run into errors upon start.");

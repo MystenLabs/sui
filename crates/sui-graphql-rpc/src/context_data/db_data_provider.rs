@@ -24,7 +24,7 @@ impl PgManager {
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader_with_config(
+    pub(crate) async fn reader_with_config(
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
@@ -33,6 +33,7 @@ impl PgManager {
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
         IndexerReader::new_with_config(db_url, config)
+            .await
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 }

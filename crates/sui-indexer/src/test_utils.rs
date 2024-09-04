@@ -13,6 +13,7 @@ use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
 use crate::config::SnapshotLagConfig;
 use crate::database::Connection;
+use crate::database::ConnectionPool;
 use crate::db::{new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
@@ -109,9 +110,12 @@ pub async fn start_test_indexer_impl(
                 rpc_address: reader_mode_rpc_url.parse().unwrap(),
                 rpc_client_url: rpc_url.parse().unwrap(),
             };
-            tokio::spawn(
-                async move { Indexer::start_reader(&config, &registry, blocking_pool).await },
-            )
+            let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                Indexer::start_reader(&config, &registry, blocking_pool, pool).await
+            })
         }
         ReaderWriterConfig::Writer {
             snapshot_config,
