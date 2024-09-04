@@ -48,4 +48,4 @@ export type {
 
 export { Arguments } from './Arguments.js';
 
-export { nameResolutionPlugin, type NameResolutionPlugin } from './plugins/NameResolutionPlugin.js';
+export { namedPackagesPlugin, type NamedPackagesPlugin } from './plugins/NamedPackagesPlugin.js';

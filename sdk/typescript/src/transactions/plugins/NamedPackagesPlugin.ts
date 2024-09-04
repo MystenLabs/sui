@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiGraphQLClient } from '../../graphql/client.js';
-import type { NameResolutionRequest } from '../../utils/move_registry.js';
+import type { NamedPackagesPluginCache, NameResolutionRequest } from '../../utils/move_registry.js';
 import {
 	findTransactionBlockNames,
 	listToRequests,
@@ -11,7 +11,7 @@ import {
 import type { BuildTransactionOptions } from '../json-rpc-resolver.js';
 import type { TransactionDataBuilder } from '../TransactionData.js';
 
-export type NameResolutionPlugin = {
+export type NamedPackagesPlugin = {
 	/**
 	 * The SuiGraphQLClient to use for resolving names.
 	 * The endpoint should be the GraphQL endpoint of the network you are targeting.
@@ -25,14 +25,15 @@ export type NameResolutionPlugin = {
 	 */
 	pageSize?: number;
 	/**
-	 * Local overrides to the resolution plugin. Useful for CI testing.
+	 * Local cache of the resolution plugin. Pass this to pre-populate
+	 * the cache with known packages / types (mainly useful for local or CI testing).
 	 *
 	 * Expected format is:
 	 * 1. For packages: `app@org` -> `0x1234`
 	 * 2. For types: `app@org::type::Type` -> `0x1234::type::Type`
 	 *
 	 */
-	overrides?: Record<string, string>;
+	cache?: NamedPackagesPluginCache;
 };
 
 /**
@@ -42,47 +43,51 @@ export type NameResolutionPlugin = {
  *
  * To install this plugin globally in your app, use:
  * ```
- * Transaction.registerGlobalSerializationPlugin(nameResolutionPlugin({ suiGraphQLClient }));
+ * Transaction.registerGlobalSerializationPlugin(namedPackagesPlugin({ suiGraphQLClient }));
  * ```
  *
- * You can also define `overrides` to resolve names locally (without making a GraphQL request).
+ * You can also define `cache` to pre-populate name resolutions locally (removes the GraphQL request).
+ *
  * Example:
- * const overrides = {
+ * const cache = {
  *  'std@framework': '0x1',
  * 	'std@framework::string::String': '0x1::string::String',
  * }
  *	```
- * 	Transaction.registerGlobalSerializationPlugin(nameResolutionPlugin({ suiGraphQLClient, overrides }));
+ * 	Transaction.registerGlobalSerializationPlugin(namedPackagesPlugin({ suiGraphQLClient, cache }));
  * 	```
  */
-export const nameResolutionPlugin =
-	({ suiGraphQLClient, pageSize = 10, overrides = {} }: NameResolutionPlugin) =>
+export const namedPackagesPlugin =
+	({ suiGraphQLClient, pageSize = 10, cache = { packages: {}, types: {} } }: NamedPackagesPlugin) =>
 	async (
 		transactionData: TransactionDataBuilder,
 		_buildOptions: BuildTransactionOptions,
 		next: () => Promise<void>,
 	) => {
 		const names = findTransactionBlockNames(transactionData);
-		// Remove the "overrides" from the list of names to resolve.
-		names.names = names.names.filter((x) => !overrides[x]);
-		names.types = names.types.filter((x) => !overrides[x]);
+		const batches = listToRequests(
+			{
+				packages: names.packages.filter((x) => !cache.packages[x]),
+				types: names.types.filter((x) => !cache.types[x]),
+			},
+			pageSize,
+		);
 
-		const batches = listToRequests(names, pageSize);
-
-		console.log(batches);
 		// now we need to bulk resolve all the names + types, and replace them in the transaction data.
-		const results = (
-			await Promise.all(batches.map((batch) => queryGQL(suiGraphQLClient, batch)))
-		).reduce((acc, val) => ({ ...acc, ...val }), {});
+		(await Promise.all(batches.map((batch) => query(suiGraphQLClient, batch)))).forEach((res) => {
+			Object.assign(cache.types, res.types);
+			Object.assign(cache.packages, res.packages);
+		});
 
-		replaceNames(transactionData, { ...results, ...overrides });
+		replaceNames(transactionData, cache);
 
 		await next();
 	};
 
-async function queryGQL(client: SuiGraphQLClient, requests: NameResolutionRequest[]) {
+async function query(client: SuiGraphQLClient, requests: NameResolutionRequest[]) {
+	const results: NamedPackagesPluginCache = { packages: {}, types: {} };
 	// avoid making a request if there are no names to resolve.
-	if (requests.length === 0) return {};
+	if (requests.length === 0) return results;
 
 	// Create multiple queries for each name / type we need to resolve
 	// TODO: Replace with bulk APIs when available.
@@ -104,15 +109,14 @@ async function queryGQL(client: SuiGraphQLClient, requests: NameResolutionReques
 
 	if (result.errors) throw new Error(JSON.stringify({ query: gqlQuery, errors: result.errors }));
 
-	const results: Record<string, string> = {};
-
 	// Parse the results and create a map of `<name|type> -> <address|repr>`
 	for (const req of requests) {
 		const key = gqlQueryKey(req.id);
 		if (!result.data || !result.data[key]) throw new Error(`No result found for: ${req.name}`);
 		const data = result.data[key] as { address?: string; repr?: string };
 
-		results[req.name] = req.type === 'package' ? data.address! : data.repr!;
+		if (req.type === 'package') results.packages[req.name] = data.address!;
+		if (req.type === 'moveType') results.types[req.name] = data.repr!;
 	}
 
 	return results;

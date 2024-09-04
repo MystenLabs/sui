@@ -13,14 +13,19 @@ export type NameResolutionRequest = {
 	name: string;
 };
 
+export type NamedPackagesPluginCache = {
+	packages: Record<string, string>;
+	types: Record<string, string>;
+};
+
 /**
  * Looks up all `.move` names in a transaction block.
  * Returns a list of all the names found.
  */
 export const findTransactionBlockNames = (
 	builder: TransactionDataBuilder,
-): { names: string[]; types: string[] } => {
-	const names: Set<string> = new Set();
+): { packages: string[]; types: string[] } => {
+	const packages: Set<string> = new Set();
 	const types: Set<string> = new Set();
 
 	for (const command of builder.commands) {
@@ -32,7 +37,7 @@ export const findTransactionBlockNames = (
 		const pkg = tx.package.split('::')[0];
 		if (pkg.includes(NAME_SEPARATOR)) {
 			if (!isValidNamedPackage(pkg)) throw new Error(`Invalid package name: ${pkg}`);
-			names.add(pkg);
+			packages.add(pkg);
 		}
 
 		for (const type of tx.typeArguments ?? []) {
@@ -44,7 +49,7 @@ export const findTransactionBlockNames = (
 	}
 
 	return {
-		names: [...names],
+		packages: [...packages],
 		types: [...types],
 	};
 };
@@ -53,7 +58,7 @@ export const findTransactionBlockNames = (
  * Replace all names & types in a transaction block
  * with their resolved names/types.
  */
-export const replaceNames = (builder: TransactionDataBuilder, results: Record<string, string>) => {
+export const replaceNames = (builder: TransactionDataBuilder, cache: NamedPackagesPluginCache) => {
 	for (const command of builder.commands) {
 		const tx = command.MoveCall;
 		if (!tx) continue;
@@ -61,10 +66,10 @@ export const replaceNames = (builder: TransactionDataBuilder, results: Record<st
 		const nameParts = tx.package.split('::');
 		const name = nameParts[0];
 
-		if (name.includes(NAME_SEPARATOR) && !results[name])
+		if (name.includes(NAME_SEPARATOR) && !cache.packages[name])
 			throw new Error(`No address found for package: ${name}`);
 
-		nameParts[0] = results[name];
+		nameParts[0] = cache.packages[name];
 		tx.package = nameParts.join('::');
 
 		const types = tx.typeArguments;
@@ -73,8 +78,8 @@ export const replaceNames = (builder: TransactionDataBuilder, results: Record<st
 		for (let i = 0; i < types.length; i++) {
 			if (!types[i].includes(NAME_SEPARATOR)) continue;
 
-			if (!results[types[i]]) throw new Error(`No resolution found for type: ${types[i]}`);
-			types[i] = results[types[i]];
+			if (!cache.types[types[i]]) throw new Error(`No resolution found for type: ${types[i]}`);
+			types[i] = cache.types[types[i]];
 		}
 
 		tx.typeArguments = types;
@@ -82,11 +87,11 @@ export const replaceNames = (builder: TransactionDataBuilder, results: Record<st
 };
 
 export const listToRequests = (
-	names: { names: string[]; types: string[] },
+	names: { packages: string[]; types: string[] },
 	batchSize: number,
 ): NameResolutionRequest[][] => {
 	const results: NameResolutionRequest[] = [];
-	const uniqueNames = deduplicate(names.names);
+	const uniqueNames = deduplicate(names.packages);
 	const uniqueTypes = deduplicate(names.types);
 
 	for (const [idx, name] of uniqueNames.entries()) {

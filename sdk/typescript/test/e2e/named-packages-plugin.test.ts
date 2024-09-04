@@ -4,20 +4,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { SuiGraphQLClient } from '../../src/graphql/client';
-import { nameResolutionPlugin, Transaction } from '../../src/transactions';
+import { namedPackagesPlugin, Transaction } from '../../src/transactions';
 import { normalizeSuiAddress } from '../../src/utils';
 
 Transaction.registerGlobalSerializationPlugin(
-	nameResolutionPlugin({
+	namedPackagesPlugin({
 		suiGraphQLClient: new SuiGraphQLClient({
 			url: 'http://127.0.0.1:9125',
 		}),
-		overrides: {
-			'std@framework': '0x1',
-			'std@framework/v1': '0x1',
-			'std@framework::string::String': '0x1::string::String',
-			'std@framework::vector::empty<std@framework::string::String>':
-				'0x1::vector::empty<0x1::string::String>',
+		cache: {
+			packages: {
+				'std@framework': '0x1',
+				'std@framework/v1': '0x1',
+			},
+			types: {
+				'std@framework::string::String': '0x1::string::String',
+				'std@framework::vector::empty<std@framework::string::String>':
+					'0x1::vector::empty<0x1::string::String>',
+			},
 		},
 	}),
 );
