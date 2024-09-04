@@ -64,10 +64,9 @@ module sui::tx_context {
         id
     }
 
-    #[allow(unused_function)]
     /// Return the number of id's created by the current transaction.
     /// Hidden for now, but may expose later
-    fun ids_created(self: &TxContext): u64 {
+    public fun ids_created(self: &TxContext): u64 {
         self.ids_created
     }
 
