@@ -984,6 +984,8 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE)
                     .unwrap_or(METRICS_ERROR),
             );
+        // 7 is the default number of levels in RocksDB. If we ever change the number of levels using `set_num_levels`,
+        // we need to update here as well. Note that there isn't an API to query the DB to get the number of levels (yet).
         let total_num_files: i64 = (0..=6)
             .map(|level| {
                 Self::get_int_property(rocksdb, &cf, &num_files_at_level(level))
