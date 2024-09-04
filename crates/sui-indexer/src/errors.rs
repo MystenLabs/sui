@@ -152,3 +152,9 @@ impl From<tokio::task::JoinError> for IndexerError {
         IndexerError::UncategorizedError(anyhow::Error::from(value))
     }
 }
+
+impl From<diesel_async::pooled_connection::bb8::RunError> for IndexerError {
+    fn from(value: diesel_async::pooled_connection::bb8::RunError) -> Self {
+        Self::PgPoolConnectionError(value.to_string())
+    }
+}
