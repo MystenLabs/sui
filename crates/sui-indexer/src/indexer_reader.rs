@@ -430,43 +430,45 @@ impl IndexerReader {
         sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
     }
 
-    fn get_checkpoints_from_db(
+    async fn get_checkpoints_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredCheckpoint>, IndexerError> {
-        use diesel::RunQueryDsl;
-        run_query!(&self.blocking_pool, |conn| {
-            let mut boxed_query = checkpoints::table.into_boxed();
-            if let Some(cursor) = cursor {
-                if descending_order {
-                    boxed_query =
-                        boxed_query.filter(checkpoints::sequence_number.lt(cursor as i64));
-                } else {
-                    boxed_query =
-                        boxed_query.filter(checkpoints::sequence_number.gt(cursor as i64));
-                }
-            }
-            if descending_order {
-                boxed_query = boxed_query.order_by(checkpoints::sequence_number.desc());
-            } else {
-                boxed_query = boxed_query.order_by(checkpoints::sequence_number.asc());
-            }
+        use diesel_async::RunQueryDsl;
 
-            boxed_query
-                .limit(limit as i64)
-                .load::<StoredCheckpoint>(conn)
-        })
+        let mut connection = self.pool.get().await?;
+
+        let mut query = checkpoints::table.into_boxed();
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(checkpoints::sequence_number.lt(cursor as i64));
+            } else {
+                query = query.filter(checkpoints::sequence_number.gt(cursor as i64));
+            }
+        }
+        if descending_order {
+            query = query.order_by(checkpoints::sequence_number.desc());
+        } else {
+            query = query.order_by(checkpoints::sequence_number.asc());
+        }
+
+        query
+            .limit(limit as i64)
+            .load::<StoredCheckpoint>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub fn get_checkpoints(
+    pub async fn get_checkpoints(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
-        self.get_checkpoints_from_db(cursor, limit, descending_order)?
+        self.get_checkpoints_from_db(cursor, limit, descending_order)
+            .await?
             .into_iter()
             .map(sui_json_rpc_types::Checkpoint::try_from)
             .collect()

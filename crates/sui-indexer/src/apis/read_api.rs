@@ -224,7 +224,7 @@ impl ReadApiServer for ReadApi {
 
         let mut checkpoints = self
             .inner
-            .spawn_blocking(move |this| this.get_checkpoints(cursor, limit + 1, descending_order))
+            .get_checkpoints(cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = checkpoints.len() > limit;
