@@ -1,5 +1,11 @@
 # @mysten/deepbook-v3
 
+## 0.5.0
+
+### Minor Changes
+
+- c53baf2: Redeploy packages
+
 ## 0.4.3
 
 ### Patch Changes
