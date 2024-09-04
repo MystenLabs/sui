@@ -44,9 +44,7 @@ impl ReadApi {
     }
 
     async fn get_latest_checkpoint(&self) -> Result<Checkpoint, IndexerError> {
-        self.inner
-            .spawn_blocking(|this| this.get_latest_checkpoint())
-            .await
+        self.inner.get_latest_checkpoint().await
     }
 
     async fn get_chain_identifier(&self) -> RpcResult<ChainIdentifier> {
