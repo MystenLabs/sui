@@ -253,6 +253,8 @@ impl CheckpointExecutor {
         let scheduling_timeout_config = get_scheduling_timeout();
 
         loop {
+            let schedule_scope = mysten_metrics::monitored_scope("ScheduleCheckpointExecution");
+
             // If we have executed the last checkpoint of the current epoch, stop.
             // Note: when we arrive here with highest_executed == the final checkpoint of the epoch,
             // we are in an edge case where highest_executed does not actually correspond to the watermark.
@@ -293,12 +295,15 @@ impl CheckpointExecutor {
             let panic_timeout = scheduling_timeout_config.panic_timeout;
             let warning_timeout = scheduling_timeout_config.warning_timeout;
 
+            drop(schedule_scope);
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, checkpoint_acc, tx_digests))) = pending.next() => {
+                    let _process_scope = mysten_metrics::monitored_scope("ProcessExecutedCheckpoint");
+
                     self.process_executed_checkpoint(&epoch_store, &checkpoint, checkpoint_acc, &tx_digests).await;
                     highest_executed = Some(checkpoint.clone());
 
