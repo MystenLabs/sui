@@ -139,10 +139,9 @@ jobs:
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --bin sui --release --features indexer && mv target/release/sui target/release/sui-pg
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo clean
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
 
-      - name: Cargo build sui in debug mode for ${{ matrix.os }} platform
+      - name: Cargo build sui in debug mode (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
