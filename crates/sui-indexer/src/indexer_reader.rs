@@ -294,39 +294,47 @@ impl IndexerReader {
         Ok(Some(epoch_info))
     }
 
-    fn get_epochs_from_db(
+    async fn get_epochs_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredEpochInfo>, IndexerError> {
-        use diesel::RunQueryDsl;
-        run_query!(&self.blocking_pool, |conn| {
-            let mut boxed_query = epochs::table.into_boxed();
-            if let Some(cursor) = cursor {
-                if descending_order {
-                    boxed_query = boxed_query.filter(epochs::epoch.lt(cursor as i64));
-                } else {
-                    boxed_query = boxed_query.filter(epochs::epoch.gt(cursor as i64));
-                }
-            }
-            if descending_order {
-                boxed_query = boxed_query.order_by(epochs::epoch.desc());
-            } else {
-                boxed_query = boxed_query.order_by(epochs::epoch.asc());
-            }
+        use diesel_async::RunQueryDsl;
 
-            boxed_query.limit(limit as i64).load(conn)
-        })
+        let mut connection = self.pool.get().await?;
+
+        let mut query = epochs::table.into_boxed();
+
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(epochs::epoch.lt(cursor as i64));
+            } else {
+                query = query.filter(epochs::epoch.gt(cursor as i64));
+            }
+        }
+
+        if descending_order {
+            query = query.order_by(epochs::epoch.desc());
+        } else {
+            query = query.order_by(epochs::epoch.asc());
+        }
+
+        query
+            .limit(limit as i64)
+            .load(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub fn get_epochs(
+    pub async fn get_epochs(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<EpochInfo>, IndexerError> {
-        self.get_epochs_from_db(cursor, limit, descending_order)?
+        self.get_epochs_from_db(cursor, limit, descending_order)
+            .await?
             .into_iter()
             .map(EpochInfo::try_from)
             .collect::<Result<Vec<_>, _>>()
