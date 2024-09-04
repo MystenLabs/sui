@@ -39,19 +39,18 @@ pub(crate) fn update_low_scoring_authorities(
 
     let mut final_low_scoring_map = HashMap::new();
     let mut total_stake = 0;
-    for ((authority_index, consensus_authority), (_, score)) in consensus_committee
-        .authorities()
-        .zip(scores_per_authority_order_asc.into_iter())
-    {
-        let authority_name = sui_committee
-            .authority_by_index(authority_index.value() as u32)
+    for (index, score) in scores_per_authority_order_asc {
+        let authority_name = sui_committee.authority_by_index(index).unwrap();
+        let authority_index = consensus_committee
+            .to_authority_index(index as usize)
             .unwrap();
+        let consensus_authority = consensus_committee.authority(authority_index);
         let hostname = &consensus_authority.hostname;
         let stake = consensus_authority.stake;
         total_stake += stake;
 
         let included = if total_stake
-            <= (consensus_bad_nodes_stake_threshold * consensus_committee.total_stake()) / 100
+            <= consensus_bad_nodes_stake_threshold * consensus_committee.total_stake() / 100
         {
             final_low_scoring_map.insert(*authority_name, score);
             true
@@ -86,10 +85,6 @@ mod tests {
     use arc_swap::ArcSwap;
     use consensus_config::{local_committee_and_keys, Committee as ConsensusCommittee};
     use prometheus::Registry;
-    use rand::{
-        rngs::{OsRng, StdRng},
-        Rng as _, SeedableRng,
-    };
     use sui_types::{committee::Committee, crypto::AuthorityPublicKeyBytes};
 
     use crate::{authority::AuthorityMetrics, scoring_decision::update_low_scoring_authorities};
@@ -111,13 +106,13 @@ mod tests {
             (6, 340_u64),
             (7, 310_u64),
             (5, 300_u64),
-            (2, 50_u64),
             (3, 50_u64),
+            (2, 50_u64),
             (4, 0_u64), // down node
         ];
 
         // WHEN
-        let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 maximum stake that will considered low scoring
+        let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 low scoring validator
 
         update_low_scoring_authorities(
             low_scoring.clone(),
@@ -130,24 +125,25 @@ mod tests {
 
         // THEN
         assert_eq!(low_scoring.load().len(), 2);
-        println!("low scoring {:?}", low_scoring.load());
         assert_eq!(
             *low_scoring
                 .load()
+                // authority 2 is 2nd to the last in authorities_by_score_desc
                 .get(sui_committee.authority_by_index(2).unwrap())
-                .unwrap(), // Since a3 & a4 have equal scores, we resolve the decision with a3.id < a4.id
+                .unwrap(),
             50
         );
         assert_eq!(
             *low_scoring
                 .load()
+                // authority 4 is the last in authorities_by_score_desc
                 .get(sui_committee.authority_by_index(4).unwrap())
                 .unwrap(),
             0
         );
 
         // WHEN setting the threshold to lower
-        let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 maximum
+        let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 low scoring validator
         update_low_scoring_authorities(
             low_scoring.clone(),
             &sui_committee,
@@ -172,19 +168,13 @@ mod tests {
     fn generate_committees(committee_size: usize) -> (Committee, ConsensusCommittee) {
         let (consensus_committee, _) = local_committee_and_keys(0, vec![1; committee_size]);
 
-        let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
         let public_keys = consensus_committee
             .authorities()
             .map(|(_i, authority)| authority.authority_key.inner())
             .collect::<Vec<_>>();
         let sui_authorities = public_keys
             .iter()
-            .map(|key| {
-                (
-                    AuthorityPublicKeyBytes::from(*key),
-                    rng.gen_range(1u64..100u64),
-                )
-            })
+            .map(|key| (AuthorityPublicKeyBytes::from(*key), 1))
             .collect::<Vec<_>>();
         let sui_committee = Committee::new_for_testing_with_normalized_voting_power(
             0,

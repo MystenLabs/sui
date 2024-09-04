@@ -5,7 +5,7 @@ use crate::balance::Balance;
 use crate::base_types::SuiAddress;
 use crate::collection_types::{Bag, Table};
 use crate::committee::{CommitteeWithNetworkMetadata, NetworkMetadata};
-use crate::crypto::AuthorityPublicKeyBytes;
+use crate::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::{
