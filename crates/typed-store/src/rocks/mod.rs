@@ -337,6 +337,15 @@ impl RocksDB {
         delegate_call!(self.drop_cf(name))
     }
 
+    pub fn delete_file_in_range<K: AsRef<[u8]>>(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        from: K,
+        to: K,
+    ) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.delete_file_in_range_cf(cf, from, to))
+    }
+
     pub fn delete_cf<K: AsRef<[u8]>>(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -1986,6 +1995,23 @@ where
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
+        Ok(())
+    }
+
+    /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
+    /// by immediately deleting any sst files whose key range overlaps with the range.
+    /// Files whose range only partially overlaps with the range are not deleted.
+    /// This can be useful for quickly removing a large amount of data without having
+    /// to delete individual keys. Only files at level 1 or higher are considered (
+    /// Level 0 files are skipped). It doesn't guarantee that all keys in the range are
+    /// deleted, as there might be keys in files that weren't entirely within the range.
+    #[instrument(level = "trace", skip_all, err)]
+    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError> {
+        let from_buf = be_fix_int_ser(from.borrow())?;
+        let to_buf = be_fix_int_ser(to.borrow())?;
+        self.rocksdb
+            .delete_file_in_range(&self.cf(), from_buf, to_buf)
+            .map_err(typed_store_err_from_rocks_err)?;
         Ok(())
     }
 
