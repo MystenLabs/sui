@@ -7,8 +7,8 @@ use anyhow::Result;
 use backoff::backoff::Backoff;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
-use notify::RecursiveMode;
-use notify::Watcher;
+#[cfg(not(target_os = "macos"))]
+use notify::{RecommendedWatcher, RecursiveMode};
 use object_store::path::Path;
 use object_store::ObjectStore;
 use std::collections::BTreeMap;
@@ -342,9 +342,12 @@ impl CheckpointReader {
         (reader, checkpoint_recv, processed_sender, exit_sender)
     }
 
-    pub async fn run(mut self) -> Result<()> {
-        let (inotify_sender, mut inotify_recv) = mpsc::channel(1);
-        std::fs::create_dir_all(self.path.clone()).expect("failed to create a directory");
+    #[cfg(not(target_os = "macos"))]
+    fn init_watcher(
+        inotify_sender: mpsc::Sender<()>,
+        path: &std::path::Path,
+    ) -> RecommendedWatcher {
+        use notify::Watcher;
         let mut watcher = notify::recommended_watcher(move |res| {
             if let Err(err) = res {
                 eprintln!("watch error: {:?}", err);
@@ -354,10 +357,19 @@ impl CheckpointReader {
                 .expect("Failed to send inotify update");
         })
         .expect("Failed to init inotify");
-
         watcher
-            .watch(&self.path, RecursiveMode::NonRecursive)
+            .watch(path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
+        watcher
+    }
+
+    pub async fn run(mut self) -> Result<()> {
+        let (_inotify_sender, mut inotify_recv) = mpsc::channel::<()>(1);
+        std::fs::create_dir_all(self.path.clone()).expect("failed to create a directory");
+
+        #[cfg(not(target_os = "macos"))]
+        let _watcher = Self::init_watcher(_inotify_sender, &self.path);
+
         self.gc_processed_files(self.last_pruned_watermark)
             .expect("Failed to clean the directory");
 
