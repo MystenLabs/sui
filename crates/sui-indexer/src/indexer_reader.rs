@@ -59,7 +59,7 @@ use crate::{
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, objects_snapshot, transactions},
+    schema::{checkpoints, display, epochs, events, objects, transactions},
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
@@ -1577,30 +1577,6 @@ impl IndexerReader {
                     treasury_cap_obj_id
                 )))?;
         Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
-    }
-
-    pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
-        use diesel::RunQueryDsl;
-        let latest_checkpoint_sequence = run_query!(&self.blocking_pool, |conn| {
-            checkpoints::table
-                .select(checkpoints::sequence_number)
-                .order(checkpoints::sequence_number.desc())
-                .first::<i64>(conn)
-                .optional()
-        })?
-        .unwrap_or_default();
-        let latest_object_snapshot_checkpoint_sequence = run_query!(&self.blocking_pool, |conn| {
-            objects_snapshot::table
-                .select(objects_snapshot::checkpoint_sequence_number)
-                .order(objects_snapshot::checkpoint_sequence_number.desc())
-                .first::<i64>(conn)
-                .optional()
-        })?
-        .unwrap_or_default();
-        Ok((
-            latest_object_snapshot_checkpoint_sequence,
-            latest_checkpoint_sequence,
-        ))
     }
 
     pub fn package_resolver(&self) -> PackageResolver {
