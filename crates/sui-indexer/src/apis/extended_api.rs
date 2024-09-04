@@ -52,10 +52,7 @@ impl ExtendedApiServer for ExtendedApi {
     }
 
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
-        let stored_epoch = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_epoch_info_from_db())
-            .await?;
+        let stored_epoch = self.inner.get_latest_epoch_info_from_db().await?;
         EpochInfo::try_from(stored_epoch).map_err(Into::into)
     }
 

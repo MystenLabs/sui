@@ -242,44 +242,48 @@ impl IndexerReader {
         Ok(pkg)
     }
 
-    pub fn get_epoch_info_from_db(
+    async fn get_epoch_info_from_db(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<Option<StoredEpochInfo>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_epoch = run_query!(&self.blocking_pool, |conn| {
-            if let Some(epoch) = epoch {
-                epochs::dsl::epochs
-                    .filter(epochs::epoch.eq(epoch as i64))
-                    .first::<StoredEpochInfo>(conn)
-                    .optional()
-            } else {
-                epochs::dsl::epochs
-                    .order_by(epochs::epoch.desc())
-                    .first::<StoredEpochInfo>(conn)
-                    .optional()
-            }
-        })?;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_epoch = epochs::table
+            .into_boxed()
+            .pipe(|query| {
+                if let Some(epoch) = epoch {
+                    query.filter(epochs::epoch.eq(epoch as i64))
+                } else {
+                    query.order_by(epochs::epoch.desc())
+                }
+            })
+            .first::<StoredEpochInfo>(&mut connection)
+            .await
+            .optional()?;
 
         Ok(stored_epoch)
     }
 
-    pub fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_epoch = run_query!(&self.blocking_pool, |conn| {
-            epochs::dsl::epochs
-                .order_by(epochs::epoch.desc())
-                .first::<StoredEpochInfo>(conn)
-        })?;
+    pub async fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_epoch = epochs::table
+            .order_by(epochs::epoch.desc())
+            .first::<StoredEpochInfo>(&mut connection)
+            .await?;
 
         Ok(stored_epoch)
     }
 
-    pub fn get_epoch_info(
+    pub async fn get_epoch_info(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<Option<EpochInfo>, IndexerError> {
-        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = self.get_epoch_info_from_db(epoch).await?;
 
         let stored_epoch = match stored_epoch {
             Some(stored_epoch) => stored_epoch,
@@ -341,11 +345,11 @@ impl IndexerReader {
     /// System state of the an epoch is written at the end of the epoch, so system state
     /// of the current epoch is empty until the epoch ends. You can call
     /// `get_latest_sui_system_state` for current epoch instead.
-    pub fn get_epoch_sui_system_state(
+    pub async fn get_epoch_sui_system_state(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<SuiSystemStateSummary, IndexerError> {
-        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = self.get_epoch_info_from_db(epoch).await?;
         let stored_epoch = match stored_epoch {
             Some(stored_epoch) => stored_epoch,
             None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
