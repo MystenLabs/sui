@@ -21,6 +21,7 @@ use bincode::Options;
 use collectable::TryExtend;
 use itertools::Itertools;
 use prometheus::{Histogram, HistogramTimer};
+use rocksdb::properties::num_files_at_level;
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
     DBPinnableSlice, LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
@@ -911,7 +912,7 @@ impl<K, V> DBMap<K, V> {
     fn get_int_property(
         rocksdb: &RocksDB,
         cf: &impl AsColumnFamilyRef,
-        property_name: &'static std::ffi::CStr,
+        property_name: &std::ffi::CStr,
     ) -> Result<i64, TypedStoreError> {
         match rocksdb.property_int_value_cf(cf, property_name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
@@ -992,6 +993,19 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE)
                     .unwrap_or(METRICS_ERROR),
             );
+        // 7 is the default number of levels in RocksDB. If we ever change the number of levels using `set_num_levels`,
+        // we need to update here as well. Note that there isn't an API to query the DB to get the number of levels (yet).
+        let total_num_files: i64 = (0..=6)
+            .map(|level| {
+                Self::get_int_property(rocksdb, &cf, &num_files_at_level(level))
+                    .unwrap_or(METRICS_ERROR)
+            })
+            .sum();
+        db_metrics
+            .cf_metrics
+            .rocksdb_total_num_files
+            .with_label_values(&[cf_name])
+            .set(total_num_files);
         db_metrics
             .cf_metrics
             .rocksdb_current_size_active_mem_tables
