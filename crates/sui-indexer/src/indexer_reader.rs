@@ -80,7 +80,7 @@ pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePac
 // Impl for common initialization and utilities
 impl IndexerReader {
     pub fn new(blocking_pool: BlockingConnectionPool, pool: ConnectionPool) -> Self {
-        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(blocking_pool.clone());
+        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         let package_obj_type_cache = Arc::new(Mutex::new(SizedCache::with_size(10000)));
@@ -113,7 +113,7 @@ impl IndexerReader {
 
         let pool = ConnectionPool::new(db_url.parse()?, config).await?;
 
-        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(blocking_pool.clone());
+        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         let package_obj_type_cache = Arc::new(Mutex::new(SizedCache::with_size(10000)));

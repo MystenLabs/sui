@@ -128,8 +128,7 @@ impl ObjectsSnapshotProcessor {
         // We include a commit receiver which will be paged when a checkpoint has been processed and
         // the corresponding package data can be deleted from the buffer.
         let package_buffer = IndexingPackageBuffer::start(commit_receiver);
-        let pg_blocking_cp = CheckpointHandler::pg_blocking_cp(store.clone()).unwrap();
-        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
+        let package_db_resolver = IndexerStorePackageResolver::new(store.pool());
         let in_mem_package_resolver = InterimPackageResolver::new(
             package_db_resolver,
             package_buffer.clone(),
