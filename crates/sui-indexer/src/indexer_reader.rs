@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use cached::{Cached, SizedCache};
 use diesel::PgConnection;
 use diesel::{
     dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
@@ -20,10 +18,7 @@ use fastcrypto::encoding::Hex;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::StructTag;
 use sui_json_rpc_types::DisplayFieldsResponse;
-use sui_json_rpc_types::{
-    Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
-};
+use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
     SuiTransactionBlockResponse, TransactionFilter,
@@ -38,7 +33,6 @@ use sui_types::{
     committee::EpochId,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
-    is_system_package,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
@@ -73,7 +67,6 @@ pub struct IndexerReader {
     blocking_pool: BlockingConnectionPool,
     pool: ConnectionPool,
     package_resolver: PackageResolver,
-    package_obj_type_cache: Arc<Mutex<SizedCache<String, Option<ObjectID>>>>,
 }
 
 pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>;
@@ -84,12 +77,10 @@ impl IndexerReader {
         let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
-        let package_obj_type_cache = Arc::new(Mutex::new(SizedCache::with_size(10000)));
         Self {
             blocking_pool,
             pool,
             package_resolver,
-            package_obj_type_cache,
         }
     }
 
@@ -117,12 +108,10 @@ impl IndexerReader {
         let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
-        let package_obj_type_cache = Arc::new(Mutex::new(SizedCache::with_size(10000)));
         Ok(Self {
             blocking_pool,
             pool,
             package_resolver,
-            package_obj_type_cache,
         })
     }
 
@@ -474,34 +463,6 @@ impl IndexerReader {
             .collect()
     }
 
-    fn get_transaction_effects_with_digest(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_txn: StoredTransaction = run_query!(&self.blocking_pool, |conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                .first::<StoredTransaction>(conn)
-        })?;
-
-        stored_txn.try_into_sui_transaction_effects()
-    }
-
-    fn get_transaction_effects_with_sequence_number(
-        &self,
-        sequence_number: i64,
-    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_txn: StoredTransaction = run_query!(&self.blocking_pool, |conn| {
-            transactions::table
-                .filter(transactions::tx_sequence_number.eq(sequence_number))
-                .first::<StoredTransaction>(conn)
-        })?;
-
-        stored_txn.try_into_sui_transaction_effects()
-    }
-
     fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
@@ -664,34 +625,6 @@ impl IndexerReader {
                 .load::<StoredObject>(conn)
                 .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
-    }
-
-    fn filter_object_id_with_type(
-        &self,
-        object_ids: Vec<ObjectID>,
-        object_type: String,
-    ) -> Result<Vec<ObjectID>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
-        let filtered_ids = run_query!(&self.blocking_pool, |conn| {
-            objects::dsl::objects
-                .filter(objects::object_id.eq_any(object_ids))
-                .filter(objects::object_type.eq(object_type))
-                .select(objects::object_id)
-                .load::<Vec<u8>>(conn)
-        })?;
-
-        filtered_ids
-            .into_iter()
-            .map(|id| {
-                ObjectID::from_bytes(id.clone()).map_err(|_e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "Can't convert {:?} to ObjectID",
-                        id,
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
     }
 
     pub async fn multi_get_objects_in_blocking_task(
@@ -1528,68 +1461,49 @@ impl IndexerReader {
         })
     }
 
-    pub async fn get_coin_metadata_in_blocking_task(
-        &self,
-        coin_struct: StructTag,
-    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_coin_metadata(coin_struct))
-            .await
-    }
+    pub async fn get_singleton_object(&self, type_: &StructTag) -> Result<Option<Object>> {
+        use diesel_async::RunQueryDsl;
 
-    fn get_coin_metadata(
-        &self,
-        coin_struct: StructTag,
-    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
-        let package_id = coin_struct.address.into();
-        let coin_metadata_type =
-            CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let coin_metadata_obj_id = *self
-            .package_obj_type_cache
-            .lock()
-            .unwrap()
-            .cache_get_or_set_with(format!("{}{}", package_id, coin_metadata_type), || {
-                get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type.clone())
-                    .unwrap()
-            });
-        if let Some(id) = coin_metadata_obj_id {
-            let metadata_object = self.get_object(&id, None)?;
-            Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
-        } else {
-            Ok(None)
+        let mut connection = self.pool.get().await?;
+
+        let object = match objects::table
+            .filter(objects::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)))
+            .first::<StoredObject>(&mut connection)
+            .await
+            .optional()?
+        {
+            Some(object) => object,
+            None => return Ok(None),
         }
+        .try_into()?;
+
+        Ok(Some(object))
     }
 
-    pub async fn get_total_supply_in_blocking_task(
+    pub async fn get_coin_metadata(
         &self,
         coin_struct: StructTag,
-    ) -> Result<Supply, IndexerError> {
-        self.spawn_blocking(move |this| this.get_total_supply(coin_struct))
-            .await
+    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
+        let coin_metadata_type = CoinMetadata::type_(coin_struct);
+
+        self.get_singleton_object(&coin_metadata_type)
+            .await?
+            .and_then(|o| SuiCoinMetadata::try_from(o).ok())
+            .pipe(Ok)
     }
 
-    fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
-        let package_id = coin_struct.address.into();
-        let treasury_cap_type =
-            TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let treasury_cap_obj_id = self
-            .package_obj_type_cache
-            .lock()
-            .unwrap()
-            .cache_get_or_set_with(format!("{}{}", package_id, treasury_cap_type), || {
-                get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())
-                    .unwrap()
-            })
+    pub async fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
+        let treasury_cap_type = TreasuryCap::type_(coin_struct);
+
+        self.get_singleton_object(&treasury_cap_type)
+            .await?
+            .and_then(|o| TreasuryCap::try_from(o).ok())
             .ok_or(IndexerError::GenericError(format!(
-                "Cannot find treasury cap for type {}",
+                "Cannot find treasury cap object with type {}",
                 treasury_cap_type
-            )))?;
-        let treasury_cap_obj_object =
-            self.get_object(&treasury_cap_obj_id, None)?
-                .ok_or(IndexerError::GenericError(format!(
-                    "Cannot find treasury cap object with id {}",
-                    treasury_cap_obj_id
-                )))?;
-        Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
+            )))?
+            .total_supply
+            .pipe(Ok)
     }
 
     pub fn package_resolver(&self) -> PackageResolver {
@@ -1613,45 +1527,5 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, Some(version))
             .map_err(sui_types::storage::error::Error::custom)
-    }
-}
-
-fn get_single_obj_id_from_package_publish(
-    reader: &IndexerReader,
-    package_id: ObjectID,
-    obj_type: String,
-) -> Result<Option<ObjectID>, IndexerError> {
-    let publish_txn_effects_opt = if is_system_package(package_id) {
-        Some(reader.get_transaction_effects_with_sequence_number(0))
-    } else {
-        reader.get_object(&package_id, None)?.map(|o| {
-            let publish_txn_digest = o.previous_transaction;
-            reader.get_transaction_effects_with_digest(publish_txn_digest)
-        })
-    };
-    if let Some(publish_txn_effects) = publish_txn_effects_opt {
-        let created_objs = publish_txn_effects?
-            .created()
-            .iter()
-            .map(|o| o.object_id())
-            .collect::<Vec<_>>();
-        let obj_ids_with_type =
-            reader.filter_object_id_with_type(created_objs, obj_type.clone())?;
-        if obj_ids_with_type.len() == 1 {
-            Ok(Some(obj_ids_with_type[0]))
-        } else if obj_ids_with_type.is_empty() {
-            // The package exists but no such object is created in that transaction. Or maybe it is wrapped and we don't know yet.
-            Ok(None)
-        } else {
-            // We expect there to be only one object of this type created by the package but more than one is found.
-            tracing::error!(
-                "There are more than one objects found for type {}",
-                obj_type
-            );
-            Ok(None)
-        }
-    } else {
-        // The coin package does not exist.
-        Ok(None)
     }
 }
