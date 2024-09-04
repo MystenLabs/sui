@@ -32,13 +32,11 @@ impl ExtendedApiServer for ExtendedApi {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self
             .inner
-            .spawn_blocking(move |this| {
-                this.get_epochs(
-                    cursor.map(|x| *x),
-                    limit + 1,
-                    descending_order.unwrap_or(false),
-                )
-            })
+            .get_epochs(
+                cursor.map(|x| *x),
+                limit + 1,
+                descending_order.unwrap_or(false),
+            )
             .await?;
 
         let has_next_page = epochs.len() > limit;
