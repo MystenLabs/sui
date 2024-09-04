@@ -66,7 +66,7 @@ impl Loader<PackageKey> for Db {
             .await
             .map_err(|e| PackageResolverError::Store {
                 store: STORE,
-                source: Arc::new(e),
+                error: e.to_string(),
             })?;
 
         let mut id_to_package = HashMap::new();
