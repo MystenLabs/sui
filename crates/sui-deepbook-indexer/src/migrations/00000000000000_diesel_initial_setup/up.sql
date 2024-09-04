@@ -8,12 +8,14 @@ CREATE TABLE IF NOT EXISTS order_updates
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
     status                      TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     order_id                    NUMERIC      NOT NULL,
     client_order_id             BIGINT       NOT NULL,
     price                       BIGINT       NOT NULL,
     is_bid                      BOOLEAN      NOT NULL,
+    original_quantity           BIGINT       NOT NULL,
     quantity                    BIGINT       NOT NULL,
     onchain_timestamp           BIGINT       NOT NULL,
     balance_manager_id          TEXT         NOT NULL,
@@ -26,12 +28,15 @@ CREATE TABLE IF NOT EXISTS order_fills
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
     pool_id                     TEXT         NOT NULL,
     maker_order_id              NUMERIC      NOT NULL,
     taker_order_id              NUMERIC      NOT NULL,
     maker_client_order_id       BIGINT       NOT NULL,
     taker_client_order_id       BIGINT       NOT NULL,
     price                       BIGINT       NOT NULL,
+    taker_fee                   BIGINT       NOT NULL,
+    maker_fee                   BIGINT       NOT NULL,
     taker_is_bid                BOOLEAN      NOT NULL,
     base_quantity               BIGINT       NOT NULL,
     quote_quantity              BIGINT       NOT NULL,
@@ -46,6 +51,7 @@ CREATE TABLE IF NOT EXISTS flashloans
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
     borrow                      BOOLEAN      NOT NULL,
     pool_id                     TEXT         NOT NULL,
     borrow_quantity             BIGINT       NOT NULL,
@@ -58,9 +64,93 @@ CREATE TABLE IF NOT EXISTS pool_prices
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
     target_pool                 TEXT         NOT NULL,
     reference_pool              TEXT         NOT NULL,
     conversion_rate             BIGINT       NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS balances
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    balance_manager_id          TEXT         NOT NULL,
+    asset                       TEXT         NOT NULL,
+    amount                      BIGINT       NOT NULL,
+    deposit                     BOOLEAN      NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trade_params_update
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    pool_id                     TEXT         NOT NULL,
+    taker_fee                   BIGINT       NOT NULL,
+    maker_fee                   BIGINT       NOT NULL,
+    stake_required              BIGINT       NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS stakes
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    pool_id                     TEXT         NOT NULL,
+    balance_manager_id          TEXT         NOT NULL,
+    epoch                       BIGINT       NOT NULL,
+    amount                      BIGINT       NOT NULL,
+    stake                       BOOLEAN      NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS proposals
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    pool_id                     TEXT         NOT NULL,
+    balance_manager_id          TEXT         NOT NULL,
+    epoch                       BIGINT       NOT NULL,
+    taker_fee                   BIGINT       NOT NULL,
+    maker_fee                   BIGINT       NOT NULL,
+    stake_required              BIGINT       NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS votes
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    pool_id                     TEXT         NOT NULL,
+    balance_manager_id          TEXT         NOT NULL,
+    epoch                       BIGINT       NOT NULL,
+    from_proposal_id            TEXT,
+    to_proposal_id              TEXT         NOT NULL,
+    stake                       BIGINT       NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rebates
+(
+    digest                      TEXT         PRIMARY KEY,
+    sender                      TEXT         NOT NULL,
+    checkpoint                  BIGINT       NOT NULL,
+    timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    package                     TEXT         NOT NULL,
+    pool_id                     TEXT         NOT NULL,
+    balance_manager_id          TEXT         NOT NULL,
+    epoch                       BIGINT       NOT NULL,
+    claim_amount                BIGINT       NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS progress_store
@@ -77,5 +167,6 @@ CREATE TABLE IF NOT EXISTS sui_error_transactions
     sender_address              TEXT         NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     failure_status              TEXT         NOT NULL,
+    package                     TEXT         NOT NULL,
     cmd_idx                     BIGINT
 );

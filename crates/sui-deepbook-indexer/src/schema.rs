@@ -3,11 +3,26 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    balances (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        balance_manager_id -> Text,
+        asset -> Text,
+        amount -> Int8,
+        deposit -> Bool,
+    }
+}
+
+diesel::table! {
     flashloans (digest) {
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        package -> Text,
         borrow -> Bool,
         pool_id -> Text,
         borrow_quantity -> Int8,
@@ -21,12 +36,15 @@ diesel::table! {
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        package -> Text,
         pool_id -> Text,
         maker_order_id -> Numeric,
         taker_order_id -> Numeric,
         maker_client_order_id -> Int8,
         taker_client_order_id -> Int8,
         price -> Int8,
+        taker_fee -> Int8,
+        maker_fee -> Int8,
         taker_is_bid -> Bool,
         base_quantity -> Int8,
         quote_quantity -> Int8,
@@ -42,12 +60,14 @@ diesel::table! {
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        package -> Text,
         status -> Text,
         pool_id -> Text,
         order_id -> Numeric,
         client_order_id -> Int8,
         price -> Int8,
         is_bid -> Bool,
+        original_quantity -> Int8,
         quantity -> Int8,
         onchain_timestamp -> Int8,
         balance_manager_id -> Text,
@@ -61,6 +81,7 @@ diesel::table! {
         sender -> Text,
         checkpoint -> Int8,
         timestamp -> Timestamp,
+        package -> Text,
         target_pool -> Text,
         reference_pool -> Text,
         conversion_rate -> Int8,
@@ -77,20 +98,102 @@ diesel::table! {
 }
 
 diesel::table! {
+    proposals (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        pool_id -> Text,
+        balance_manager_id -> Text,
+        epoch -> Int8,
+        taker_fee -> Int8,
+        maker_fee -> Int8,
+        stake_required -> Int8,
+    }
+}
+
+diesel::table! {
+    rebates (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        pool_id -> Text,
+        balance_manager_id -> Text,
+        epoch -> Int8,
+        claim_amount -> Int8,
+    }
+}
+
+diesel::table! {
+    stakes (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        pool_id -> Text,
+        balance_manager_id -> Text,
+        epoch -> Int8,
+        amount -> Int8,
+        stake -> Bool,
+    }
+}
+
+diesel::table! {
     sui_error_transactions (txn_digest) {
         txn_digest -> Text,
         sender_address -> Text,
         timestamp_ms -> Int8,
         failure_status -> Text,
+        package -> Text,
         cmd_idx -> Nullable<Int8>,
     }
 }
 
+diesel::table! {
+    trade_params_update (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        pool_id -> Text,
+        taker_fee -> Int8,
+        maker_fee -> Int8,
+        stake_required -> Int8,
+    }
+}
+
+diesel::table! {
+    votes (digest) {
+        digest -> Text,
+        sender -> Text,
+        checkpoint -> Int8,
+        timestamp -> Timestamp,
+        package -> Text,
+        pool_id -> Text,
+        balance_manager_id -> Text,
+        epoch -> Int8,
+        from_proposal_id -> Nullable<Text>,
+        to_proposal_id -> Text,
+        stake -> Int8,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
+    balances,
     flashloans,
     order_fills,
     order_updates,
     pool_prices,
     progress_store,
+    proposals,
+    rebates,
+    stakes,
     sui_error_transactions,
+    trade_params_update,
+    votes,
 );

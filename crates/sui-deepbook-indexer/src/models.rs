@@ -8,7 +8,8 @@ use diesel::{Identifiable, Insertable, Queryable, Selectable};
 use sui_indexer_builder::Task;
 
 use crate::schema::{
-    flashloans, order_fills, order_updates, pool_prices, progress_store, sui_error_transactions,
+    balances, flashloans, order_fills, order_updates, pool_prices, progress_store, proposals,
+    rebates, stakes, sui_error_transactions, trade_params_update, votes,
 };
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -17,12 +18,14 @@ pub struct OrderUpdate {
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
+    pub package: String,
     pub status: String,
     pub pool_id: String,
     pub order_id: BigDecimal,
     pub client_order_id: i64,
     pub price: i64,
     pub is_bid: bool,
+    pub original_quantity: i64,
     pub quantity: i64,
     pub onchain_timestamp: i64,
     pub trader: String,
@@ -35,12 +38,15 @@ pub struct OrderFill {
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
+    pub package: String,
     pub pool_id: String,
     pub maker_order_id: BigDecimal,
     pub taker_order_id: BigDecimal,
     pub maker_client_order_id: i64,
     pub taker_client_order_id: i64,
     pub price: i64,
+    pub taker_fee: i64,
+    pub maker_fee: i64,
     pub taker_is_bid: bool,
     pub base_quantity: i64,
     pub quote_quantity: i64,
@@ -55,6 +61,7 @@ pub struct Flashloan {
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
+    pub package: String,
     pub pool_id: String,
     pub borrow_quantity: i64,
     pub borrow: bool,
@@ -67,9 +74,92 @@ pub struct PoolPrice {
     pub digest: String,
     pub sender: String,
     pub checkpoint: i64,
+    pub package: String,
     pub target_pool: String,
     pub reference_pool: String,
     pub conversion_rate: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = balances, primary_key(digest))]
+pub struct Balances {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub balance_manager_id: String,
+    pub asset: String,
+    pub amount: i64,
+    pub deposit: bool,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = proposals, primary_key(digest))]
+pub struct Proposals {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub balance_manager_id: String,
+    pub epoch: i64,
+    pub taker_fee: i64,
+    pub maker_fee: i64,
+    pub stake_required: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = rebates, primary_key(digest))]
+pub struct Rebates {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub pool_id: String,
+    pub balance_manager_id: String,
+    pub epoch: i64,
+    pub claim_amount: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = stakes, primary_key(digest))]
+pub struct Stakes {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub pool_id: String,
+    pub balance_manager_id: String,
+    pub epoch: i64,
+    pub amount: i64,
+    pub stake: bool,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = trade_params_update, primary_key(digest))]
+pub struct TradeParamsUpdate {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub pool_id: String,
+    pub taker_fee: i64,
+    pub maker_fee: i64,
+    pub stake_required: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = votes, primary_key(digest))]
+pub struct Votes {
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: i64,
+    pub package: String,
+    pub pool_id: String,
+    pub balance_manager_id: String,
+    pub epoch: i64,
+    pub from_proposal_id: Option<String>,
+    pub to_proposal_id: String,
+    pub stake: i64,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
@@ -79,6 +169,7 @@ pub struct SuiErrorTransactions {
     pub sender_address: String,
     pub timestamp_ms: i64,
     pub failure_status: String,
+    pub package: String,
     pub cmd_idx: Option<i64>,
 }
 

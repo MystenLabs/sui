@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{flashloans, order_fills, order_updates, pool_prices, sui_error_transactions};
+use crate::schema::{
+    balances, flashloans, order_fills, order_updates, pool_prices, proposals, rebates, stakes,
+    sui_error_transactions, trade_params_update, votes,
+};
 use crate::ProcessedTxnData;
 use diesel::{
     pg::PgConnection,
@@ -24,9 +27,46 @@ pub fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::E
     if txns.is_empty() {
         return Ok(());
     }
-    let (order_updates, order_fills, pool_prices, flahloans, errors) = txns.iter().fold(
-        (vec![], vec![], vec![], vec![], vec![]),
-        |(mut order_updates, mut order_fills, mut pool_prices, mut flashloans, mut errors), d| {
+    let (
+        order_updates,
+        order_fills,
+        pool_prices,
+        flahloans,
+        balances,
+        proposals,
+        rebates,
+        stakes,
+        trade_params_update,
+        votes,
+        errors,
+    ) = txns.iter().fold(
+        (
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        ),
+        |(
+            mut order_updates,
+            mut order_fills,
+            mut pool_prices,
+            mut flashloans,
+            mut balances,
+            mut proposals,
+            mut rebates,
+            mut stakes,
+            mut trade_params_update,
+            mut votes,
+            mut errors,
+        ),
+         d| {
             match d {
                 ProcessedTxnData::OrderUpdate(t) => {
                     order_updates.push(t.to_db());
@@ -40,9 +80,39 @@ pub fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::E
                 ProcessedTxnData::Flashloan(t) => {
                     flashloans.push(t.to_db());
                 }
+                ProcessedTxnData::Balances(t) => {
+                    balances.push(t.to_db());
+                }
+                ProcessedTxnData::Proposals(t) => {
+                    proposals.push(t.to_db());
+                }
+                ProcessedTxnData::Rebates(t) => {
+                    rebates.push(t.to_db());
+                }
+                ProcessedTxnData::Stakes(t) => {
+                    stakes.push(t.to_db());
+                }
+                ProcessedTxnData::TradeParamsUpdate(t) => {
+                    trade_params_update.push(t.to_db());
+                }
+                ProcessedTxnData::Votes(t) => {
+                    votes.push(t.to_db());
+                }
                 ProcessedTxnData::Error(e) => errors.push(e.to_db()),
             }
-            (order_updates, order_fills, pool_prices, flashloans, errors)
+            (
+                order_updates,
+                order_fills,
+                pool_prices,
+                flashloans,
+                balances,
+                proposals,
+                rebates,
+                stakes,
+                trade_params_update,
+                votes,
+                errors,
+            )
         },
     );
 
@@ -62,6 +132,30 @@ pub fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::E
             .execute(conn)?;
         diesel::insert_into(pool_prices::table)
             .values(&pool_prices)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(balances::table)
+            .values(&balances)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(proposals::table)
+            .values(&proposals)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(rebates::table)
+            .values(&rebates)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(stakes::table)
+            .values(&stakes)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(trade_params_update::table)
+            .values(&trade_params_update)
+            .on_conflict_do_nothing()
+            .execute(conn)?;
+        diesel::insert_into(votes::table)
+            .values(&votes)
             .on_conflict_do_nothing()
             .execute(conn)?;
         diesel::insert_into(sui_error_transactions::table)

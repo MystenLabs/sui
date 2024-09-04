@@ -7,6 +7,7 @@ use diesel::dsl::now;
 use diesel::{Connection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use diesel::{ExpressionMethods, TextExpressionMethods};
 use sui_types::base_types::ObjectID;
+use sui_types::transaction::{Command, TransactionDataAPI};
 use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
@@ -18,16 +19,18 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 
 use crate::events::{
-    MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderFilledEvent,
-    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent,
+    MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderFilledEvent,
+    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent, MoveProposalEvent, MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
 };
 use crate::metrics::DeepBookIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
-use crate::schema::{flashloans, order_fills, order_updates, pool_prices, sui_error_transactions};
+use crate::schema::{
+    balances, flashloans, order_fills, order_updates, pool_prices, proposals, rebates, stakes,
+    sui_error_transactions, trade_params_update, votes,
+};
 use crate::{
-    models, schema, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice,
-    ProcessedTxnData, SuiTxnError,
+    models, schema, Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice, ProcessedTxnData, Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes
 };
 
 /// Persistent layer impl
@@ -72,6 +75,42 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
                     }
                     ProcessedTxnData::PoolPrice(t) => {
                         diesel::insert_into(pool_prices::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::Balances(t) => {
+                        diesel::insert_into(balances::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::Proposals(t) => {
+                        diesel::insert_into(proposals::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::Rebates(t) => {
+                        diesel::insert_into(rebates::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::Stakes(t) => {
+                        diesel::insert_into(stakes::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::TradeParamsUpdate(t) => {
+                        diesel::insert_into(trade_params_update::table)
+                            .values(&t.to_db())
+                            .on_conflict_do_nothing()
+                            .execute(conn)?;
+                    }
+                    ProcessedTxnData::Votes(t) => {
+                        diesel::insert_into(votes::table)
                             .values(&t.to_db())
                             .on_conflict_do_nothing()
                             .execute(conn)?;
@@ -222,11 +261,19 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
             }
             None => {
                 if let ExecutionStatus::Failure { error, command } = data.effects.status() {
+                    let txn_kind = data.transaction.transaction_data().clone().into_kind();
+                    let first_command = txn_kind.iter_commands().next().clone();
+                    let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                        move_call.package.to_string()
+                    } else {
+                        "".to_string()
+                    };
                     Ok(vec![ProcessedTxnData::Error(SuiTxnError {
                         tx_digest: *data.transaction.digest(),
                         sender: data.transaction.sender_address(),
                         timestamp_ms,
                         failure_status: error.to_string(),
+                        package,
                         cmd_idx: command.map(|idx| idx as u64),
                     })])
                 } else {
@@ -250,10 +297,18 @@ fn process_sui_event(
                 info!("Observed Deepbook Order Placed {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderPlacedEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     status: OrderUpdateStatus::Placed,
                     pool_id: move_event.pool_id.to_string(),
                     order_id: move_event.order_id,
@@ -261,6 +316,7 @@ fn process_sui_event(
                     price: move_event.price,
                     is_bid: move_event.is_bid,
                     onchain_timestamp: move_event.expire_timestamp,
+                    original_quantity: move_event.placed_quantity,
                     quantity: move_event.placed_quantity,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
@@ -270,10 +326,18 @@ fn process_sui_event(
                 info!("Observed Deepbook Order Modified {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderModifiedEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     status: OrderUpdateStatus::Modified,
                     pool_id: move_event.pool_id.to_string(),
                     order_id: move_event.order_id,
@@ -281,6 +345,7 @@ fn process_sui_event(
                     price: move_event.price,
                     is_bid: move_event.is_bid,
                     onchain_timestamp: move_event.timestamp,
+                    original_quantity: 0,
                     quantity: move_event.new_quantity,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
@@ -290,10 +355,18 @@ fn process_sui_event(
                 info!("Observed Deepbook Order Canceled {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderCanceledEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::OrderUpdate(OrderUpdate {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     status: OrderUpdateStatus::Canceled,
                     pool_id: move_event.pool_id.to_string(),
                     order_id: move_event.order_id,
@@ -301,6 +374,7 @@ fn process_sui_event(
                     price: move_event.price,
                     is_bid: move_event.is_bid,
                     onchain_timestamp: move_event.timestamp,
+                    original_quantity: move_event.original_quantity,
                     quantity: move_event.base_asset_quantity_canceled,
                     trader: move_event.trader.to_string(),
                     balance_manager_id: move_event.balance_manager_id.to_string(),
@@ -310,10 +384,18 @@ fn process_sui_event(
                 info!("Observed Deepbook Order Filled {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderFilledEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::OrderFill(OrderFill {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     pool_id: move_event.pool_id.to_string(),
                     maker_order_id: move_event.maker_order_id,
                     taker_order_id: move_event.taker_order_id,
@@ -321,6 +403,8 @@ fn process_sui_event(
                     taker_client_order_id: move_event.taker_client_order_id,
                     price: move_event.price,
                     taker_is_bid: move_event.taker_is_bid,
+                    taker_fee: move_event.taker_fee,
+                    maker_fee: move_event.maker_fee,
                     base_quantity: move_event.base_quantity,
                     quote_quantity: move_event.quote_quantity,
                     maker_balance_manager_id: move_event.maker_balance_manager_id.to_string(),
@@ -332,10 +416,18 @@ fn process_sui_event(
                 info!("Observed Deepbook Flash Loan Borrowed {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveFlashLoanBorrowedEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::Flashloan(Flashloan {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     pool_id: move_event.pool_id.to_string(),
                     borrow_quantity: move_event.borrow_quantity,
                     borrow: true,
@@ -346,16 +438,169 @@ fn process_sui_event(
                 info!("Observed Deepbook Price Addition {:?}", ev);
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MovePriceAddedEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
                 Some(ProcessedTxnData::PoolPrice(PoolPrice {
                     digest: tx.transaction.digest().to_string(),
                     sender: tx.transaction.sender_address().to_string(),
                     checkpoint,
+                    package,
                     target_pool: move_event.target_pool.to_string(),
                     conversion_rate: move_event.conversion_rate,
                     reference_pool: move_event.reference_pool.to_string(),
                 }))
             }
-
+            "BalanceEvent" => {
+                info!("Observed Deepbook Balance Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveBalanceEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::Balances(Balances {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                    asset: move_event.asset.to_string(),
+                    amount: move_event.amount,
+                    deposit: move_event.deposit,
+                }))
+            }
+            "ProposalEvent" => {
+                info!("Observed Deepbook Proposal Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveProposalEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::Proposals(Proposals {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                    epoch: move_event.epoch,
+                    taker_fee: move_event.taker_fee,
+                    maker_fee: move_event.maker_fee,
+                    stake_required: move_event.stake_required,
+                }))
+            }
+            "RebateEvent" => {
+                info!("Observed Deepbook Rebate Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveRebateEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::Rebates(Rebates {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    pool_id: move_event.pool_id.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                    epoch: move_event.epoch,
+                    claim_amount: move_event.claim_amount,
+                }))
+            }
+            "StakeEvent" => {
+                info!("Observed Deepbook Stake Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveStakeEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::Stakes(Stakes {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    pool_id: move_event.pool_id.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                    epoch: move_event.epoch,
+                    amount: move_event.amount,
+                    stake: move_event.stake,
+                }))
+            }
+            "TradeParamsUpdateEvent" => {
+                info!("Observed Deepbook Trade Params Update Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveTradeParamsUpdateEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                let shared_objects = &tx.input_objects;
+                let mut pool_id = "0x0".to_string();
+                for obj in shared_objects.iter() {
+                    if let Some(obj_type) = obj.data.type_() {
+                        if obj_type.module().to_string().eq("pool") && obj_type.address() == *package_id {
+                            pool_id = obj_type.address().to_string();
+                            break;
+                        }
+                    }
+                }
+                Some(ProcessedTxnData::TradeParamsUpdate(TradeParamsUpdate {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    pool_id,
+                    taker_fee: move_event.taker_fee,
+                    maker_fee: move_event.maker_fee,
+                    stake_required: move_event.stake_required,
+                }))
+            }
+            "VoteEvent" => {
+                info!("Observed Deepbook Vote Event {:?}", ev);
+                // metrics.total_sui_token_deposited.inc();
+                let move_event: MoveVoteEvent = bcs::from_bytes(&ev.contents)?;
+                let txn_kind = tx.transaction.transaction_data().clone().into_kind();
+                let first_command = txn_kind.iter_commands().next().clone();
+                let package = if let Some(Command::MoveCall(move_call)) = first_command {
+                    move_call.package.to_string()
+                } else {
+                    "".to_string()
+                };
+                Some(ProcessedTxnData::Votes(Votes {
+                    digest: tx.transaction.digest().to_string(),
+                    sender: tx.transaction.sender_address().to_string(),
+                    checkpoint,
+                    package,
+                    pool_id: move_event.pool_id.to_string(),
+                    balance_manager_id: move_event.balance_manager_id.to_string(),
+                    epoch: move_event.epoch,
+                    from_proposal_id: move_event.from_proposal_id.map(|id| id.to_string()),
+                    to_proposal_id: move_event.to_proposal_id.to_string(),
+                    stake: move_event.stake,
+                }))
+            }
             _ => {
                 // todo: metrics.total_sui_bridge_txn_other.inc();
                 None
