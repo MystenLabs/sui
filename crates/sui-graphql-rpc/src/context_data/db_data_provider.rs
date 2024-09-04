@@ -57,7 +57,7 @@ impl PgManager {
             } else {
                 Ok(self
                     .inner
-                    .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
+                    .get_epoch_sui_system_state(Some(epoch_id))
                     .await?)
             }
         } else {

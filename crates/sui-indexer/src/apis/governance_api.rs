@@ -33,11 +33,7 @@ impl GovernanceReadApi {
     }
 
     pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
-        match self
-            .inner
-            .spawn_blocking(move |this| this.get_epoch_info(epoch))
-            .await
-        {
+        match self.inner.get_epoch_info(epoch).await {
             Ok(Some(epoch_info)) => Ok(epoch_info),
             Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
                 "Missing epoch {epoch:?}"
