@@ -34,11 +34,7 @@ impl ReadApi {
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        match self
-            .inner
-            .spawn_blocking(move |this| this.get_checkpoint(id))
-            .await
-        {
+        match self.inner.get_checkpoint(id).await {
             Ok(Some(epoch_info)) => Ok(epoch_info),
             Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
                 "Checkpoint {id:?} not found"
