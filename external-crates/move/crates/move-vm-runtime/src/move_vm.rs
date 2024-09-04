@@ -14,7 +14,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    metadata::Metadata, resolver::MoveResolver,
+    resolver::MoveResolver,
 };
 use move_vm_config::runtime::VMConfig;
 

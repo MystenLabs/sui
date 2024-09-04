@@ -262,7 +262,7 @@ pub fn module(
             cache,
         )?;
         function_instantiations.push(FunctionInstantiation {
-            handle,
+            handle: CallType::Known(handle),
             instantiation_idx,
         });
     }

@@ -7,13 +7,12 @@
 // `loaded_packages` table (keyed by the _runtime_ package ID!) with the VTables for each package
 // in the transitive closure of the root package.
 
-use super::{
+use crate::loader::{
     arena::ArenaPointer,
-    ast::Function,
+    ast::{Function, LoadedPackage, RuntimePackageId, VTableKey},
     linkage_checker,
-    package_cache::{LoadedPackage, RuntimePackageId, VTableKey},
-    package_loader::PackageLoader,
     type_cache::TypeCache,
+    vm_cache::VMCache,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
 use move_core_types::vm_status::StatusCode;
@@ -31,21 +30,21 @@ use std::{collections::HashMap, sync::Arc};
 ///
 /// TODO(tzakian): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
-pub struct PackageTables<'a> {
+pub struct RuntimeVTables<'a> {
     loaded_packages: HashMap<RuntimePackageId, Arc<LoadedPackage>>,
     cached_types: &'a RwLock<TypeCache>,
 }
 
 /// The VM API that it will use to resolve packages and functions during execution of the
 /// transaction.
-impl<'a> PackageTables<'a> {
+impl<'a> RuntimeVTables<'a> {
     /// Given a root package id, a type cache, and a data store, this function creates a new map of
     /// loaded packages that consist of the root package and all of its dependencies as specified
     /// by the root package.
     ///
     /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
     /// package w.r.t, to the current linkage context in `data_store`.
-    pub fn new(data_store: &impl DataStore, package_runtime: &'a PackageLoader) -> VMResult<Self> {
+    pub fn new(data_store: &impl DataStore, package_runtime: &'a VMCache) -> VMResult<Self> {
         let mut loaded_packages = HashMap::new();
 
         // Make sure the root package and all of its dependencies (under the current linkage

@@ -27,6 +27,7 @@ move-vm-config.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-vm-profiler.workspace = true
+petgraph.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

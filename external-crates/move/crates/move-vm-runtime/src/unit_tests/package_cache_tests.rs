@@ -1,17 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::loader::type_cache::TypeCache;
+use crate::loader::ast::{PackageStorageId, RuntimePackageId};
 use crate::unit_tests::relinking_store::RelinkingStore;
 use crate::{
-    data_cache::TransactionDataCache,
-    loader::{
-        package_cache::PackageCache,
-        package_loader::{LoadingPackage, PackageLoader},
-    },
-    native_functions::NativeFunctions,
+    data_cache::TransactionDataCache, loader::vm_cache::VMCache, native_functions::NativeFunctions,
 };
 use anyhow::Result;
+use move_binary_format::errors::VMResult;
 use move_binary_format::file_format::CompiledModule;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
@@ -20,10 +16,12 @@ use move_compiler::{
     shared::PackageConfig,
     Compiler as MoveCompiler,
 };
-use move_core_types::{account_address::AccountAddress, resolver::ModuleResolver};
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::ModuleId;
 use move_vm_config::runtime::VMConfig;
 use move_vm_test_utils::InMemoryStorage;
-use parking_lot::RwLock;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 pub fn expect_modules(
@@ -34,11 +32,11 @@ pub fn expect_modules(
         .map(|annot_module| annot_module.named_module.module)
 }
 
-pub fn compile_modules_in_file(path: &Path) -> Result<Vec<CompiledModule>> {
+pub fn compile_modules_in_file(path: &Path, deps: Vec<String>) -> Result<Vec<CompiledModule>> {
     let (_, units) = MoveCompiler::from_files(
         None,
         vec![path.to_str().unwrap().to_string()],
-        vec![],
+        deps,
         std::collections::BTreeMap::<String, _>::new(),
     )
     .set_default_config(PackageConfig {
@@ -54,13 +52,15 @@ pub fn compile_modules_in_file(path: &Path) -> Result<Vec<CompiledModule>> {
 
 struct Adapter {
     storage: TransactionDataCache<RelinkingStore>,
-    cache: PackageCache,
+    cache: VMCache,
 }
 
 impl Adapter {
     fn new() -> Self {
         let storage = RelinkingStore::new(InMemoryStorage::new());
-        let cache = PackageCache::new();
+        let native_functions = NativeFunctions::new(vec![]).unwrap();
+        let vm_config = VMConfig::default();
+        let cache = VMCache::new(native_functions, vm_config);
         let storage = TransactionDataCache::new(storage);
         Self { storage, cache }
     }
@@ -75,7 +75,7 @@ impl Adapter {
         path.push("unit_tests");
         path.push("packages");
         path.push(package_name);
-        let modules = compile_modules_in_file(&path).unwrap();
+        let modules = compile_modules_in_file(&path, vec![]).unwrap();
         assert!(!modules.is_empty(), "Tried to publish an empty package");
         for module in modules {
             let module_id = module.self_id();
@@ -95,48 +95,88 @@ impl Adapter {
 
         self.storage.get_remote_resolver_mut().context = root_address;
     }
+
+    fn compile_packages(
+        &mut self,
+        package_name: &str,
+        dependencies: &[&str],
+    ) -> BTreeMap<RuntimePackageId, Vec<CompiledModule>> {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("src");
+        path.push("unit_tests");
+        path.push("packages");
+        path.push(package_name);
+        let deps = dependencies
+            .iter()
+            .map(|dep| {
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push("src");
+                path.push("unit_tests");
+                path.push("packages");
+                path.push(dep);
+                path.to_string_lossy().to_string()
+            })
+            .collect();
+        let modules = compile_modules_in_file(&path, deps).unwrap();
+        assert!(!modules.is_empty(), "Tried to publish an empty package");
+        let mut packages = BTreeMap::new();
+        for module in modules {
+            let module_id = module.self_id();
+            packages
+                .entry(*module_id.address())
+                .or_insert_with(Vec::new)
+                .push(module);
+        }
+
+        packages
+    }
+
+    fn publish_package(
+        &mut self,
+        runtime_package_id: RuntimePackageId,
+        storage_id: PackageStorageId,
+        modules: Vec<CompiledModule>,
+        type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
+        dependencies: BTreeSet<PackageStorageId>,
+    ) -> VMResult<()> {
+        let remote_resolver = self.storage.get_remote_resolver_mut();
+        let linkage = modules
+            .iter()
+            .map(|module| {
+                (
+                    module.self_id(),
+                    ModuleId::new(storage_id, module.self_id().name().to_owned()),
+                )
+            })
+            .collect();
+        remote_resolver.relink(storage_id, linkage, type_origin);
+        remote_resolver.set_dependent_packages(dependencies);
+        let modules = modules
+            .into_iter()
+            .map(|module| {
+                let mut module_bytes = vec![];
+                module
+                    .serialize_with_version(module.version, &mut module_bytes)
+                    .unwrap();
+                module_bytes
+            })
+            .collect();
+        self.cache
+            .publish_package(modules, &self.storage, runtime_package_id)
+    }
 }
 
 #[test]
 fn cache_package_internal_package_calls_only_no_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    // Get the package and make sure that we have what we expect
-    let package = adapter
-        .storage
-        .get_remote_resolver()
-        .get_package(&package_address);
-    assert!(package.is_ok());
-    assert!(package
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|blobs| blobs.len() == 3));
-
-    let modules = package
-        .unwrap()
-        .unwrap()
-        .into_iter()
-        .map(|blob| {
-            CompiledModule::deserialize_with_defaults(&blob).expect("Failed to deserialize module")
-        })
-        .collect();
-
-    let type_cache = RwLock::new(TypeCache::new());
-
-    let result = adapter.cache.cache_package(
-        package_address,
-        LoadingPackage::new(package_address, modules),
-        &native_functions,
-        &adapter.storage,
-        &type_cache,
-    );
+    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
-    let l_pkg = result.unwrap();
+    let result = result.unwrap();
+    let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.storage_id, package_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 3);
@@ -145,121 +185,39 @@ fn cache_package_internal_package_calls_only_no_types() {
 #[test]
 fn cache_package_internal_package_calls_only_with_types() {
     let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package2.move", package_address);
 
-    // Get the package and make sure that we have what we expect
-    let package = adapter
-        .storage
-        .get_remote_resolver()
-        .get_package(&package_address);
-    assert!(package.is_ok());
-    assert!(package
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|blobs| blobs.len() == 3));
-
-    let modules = package
-        .unwrap()
-        .unwrap()
-        .into_iter()
-        .map(|blob| {
-            CompiledModule::deserialize_with_defaults(&blob).expect("Failed to deserialize module")
-        })
-        .collect();
-
-    let type_cache = RwLock::new(TypeCache::new());
-
-    let result = adapter.cache.cache_package(
-        package_address,
-        LoadingPackage::new(package_address, modules),
-        &native_functions,
-        &adapter.storage,
-        &type_cache,
-    );
+    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
-    let l_pkg = result.unwrap();
+    let result = result.unwrap();
+    let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 3);
     assert_eq!(l_pkg.storage_id, package_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 3);
-    println!("{:#?}", type_cache.read().cached_types.id_map);
+    println!("{:#?}", adapter.cache.type_cache.read().cached_types.id_map);
 }
 
 #[test]
 fn cache_package_external_package_calls_no_types() {
     let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
     let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
-    let native_functions = NativeFunctions::new(vec![]).unwrap();
     let mut adapter = Adapter::new();
-    adapter.compile_and_insert_packages_into_storage("package3.move", package1_address);
+    adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
+    let result = adapter.cache.load_and_cache_link_context(&adapter.storage);
 
-    // Get the package and make sure that we have what we expect
-    let package1 = adapter
-        .storage
-        .get_remote_resolver()
-        .get_package(&package1_address);
-    assert!(package1.is_ok());
-    assert!(package1
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|blobs| blobs.len() == 2));
-
-    let package2 = adapter
-        .storage
-        .get_remote_resolver()
-        .get_package(&package2_address);
-    assert!(package2.is_ok());
-    assert!(package2
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|blobs| blobs.len() == 1));
-
-    let modules1 = package1
-        .unwrap()
-        .unwrap()
-        .into_iter()
-        .map(|blob| {
-            CompiledModule::deserialize_with_defaults(&blob).expect("Failed to deserialize module")
-        })
-        .collect();
-
-    let modules2 = package2
-        .unwrap()
-        .unwrap()
-        .into_iter()
-        .map(|blob| {
-            CompiledModule::deserialize_with_defaults(&blob).expect("Failed to deserialize module")
-        })
-        .collect();
-
-    let type_cache = RwLock::new(TypeCache::new());
-    let result1 = adapter.cache.cache_package(
-        package1_address,
-        LoadingPackage::new(package1_address, modules1),
-        &native_functions,
-        &adapter.storage,
-        &type_cache,
-    );
-
-    // Verify that we've loaded the package correctly
-    let l_pkg = result1.unwrap();
+    // Verify that we've loaded the packages correctly
+    let results = result.unwrap();
+    let l_pkg = results.get(&package1_address).unwrap();
     assert_eq!(l_pkg.loaded_modules.binaries.len(), 2);
     assert_eq!(l_pkg.storage_id, package1_address);
     assert_eq!(l_pkg.vtable.binaries.len(), 2);
 
-    let result2 = adapter.cache.cache_package(
-        package2_address,
-        LoadingPackage::new(package2_address, modules2),
-        &native_functions,
-        &adapter.storage,
-        &type_cache,
-    );
-    println!("{:#?}", result2.is_ok());
+    let l_pkg = results.get(&package2_address).unwrap();
+    assert_eq!(l_pkg.loaded_modules.binaries.len(), 1);
+    assert_eq!(l_pkg.storage_id, package2_address);
+    assert_eq!(l_pkg.vtable.binaries.len(), 1);
 }
 
 #[test]
@@ -269,7 +227,7 @@ fn load_package_internal_package_calls_only_no_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
     let result = loader.load_and_cache_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
@@ -288,7 +246,7 @@ fn load_package_internal_package_calls_only_with_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package1.move", package_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
     let result = loader.load_and_cache_link_context(&adapter.storage);
 
     // Verify that we've loaded the package correctly
@@ -308,7 +266,7 @@ fn load_package_external_package_calls_no_types() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package3.move", package2_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
 
     let result = loader.load_and_cache_link_context(&adapter.storage);
 
@@ -332,12 +290,54 @@ fn cache_package_external_package_type_references() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package2_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
 
     let result1 = loader.load_and_cache_link_context(&adapter.storage);
 
     assert!(result1.is_ok());
     assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 7);
+}
+
+#[test]
+fn cache_package_external_generic_call_type_references() {
+    let package1_address = AccountAddress::from_hex_literal("0x1").unwrap();
+    let package2_address = AccountAddress::from_hex_literal("0x2").unwrap();
+    let mut adapter = Adapter::new();
+
+    let mut packages = adapter.compile_packages("package6.move", &[]);
+
+    let a_pkg = packages.remove(&package1_address).unwrap();
+    let b_pkg = packages.remove(&package2_address).unwrap();
+
+    // publish a
+    adapter
+        .publish_package(
+            package1_address,
+            package1_address,
+            a_pkg,
+            BTreeMap::new(),
+            BTreeSet::new(),
+        )
+        .unwrap();
+
+    // publish b
+    adapter
+        .publish_package(
+            package2_address,
+            package2_address,
+            b_pkg,
+            [(
+                (
+                    ModuleId::new(package1_address, Identifier::new("a").unwrap()),
+                    Identifier::new("AA").unwrap(),
+                ),
+                ModuleId::new(package1_address, Identifier::new("a").unwrap()),
+            )]
+            .into_iter()
+            .collect(),
+            [package1_address].into_iter().collect(),
+        )
+        .unwrap();
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn cache_package_external_package_type_references_cache_reload() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package4.move", package1_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
 
     let result1 = loader.load_and_cache_link_context(&adapter.storage);
     assert!(result1.is_ok());
@@ -367,7 +367,7 @@ fn cache_package_external_package_type_references_with_shared_dep() {
     let mut adapter = Adapter::new();
     adapter.compile_and_insert_packages_into_storage("package5.move", package3_address);
 
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
     let result = loader.load_and_cache_link_context(&adapter.storage);
 
     assert!(result.is_ok());
@@ -384,7 +384,7 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     adapter.compile_and_insert_packages_into_storage("package5.move", package1_address);
 
     // Load from the bottom up
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
     let result1 = loader.load_and_cache_link_context(&adapter.storage);
     assert!(result1.is_ok());
     assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 4);
@@ -401,7 +401,7 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
 
     // Now load it the other way -- from the top down
     let native_functions = NativeFunctions::new(vec![]).unwrap();
-    let loader = PackageLoader::new(native_functions, VMConfig::default());
+    let loader = VMCache::new(native_functions, VMConfig::default());
 
     adapter.storage.get_remote_resolver_mut().context = package3_address;
     let result3 = loader.load_and_cache_link_context(&adapter.storage);
@@ -417,4 +417,199 @@ fn cache_package_external_package_type_references_cache_reload_with_shared_dep()
     let result2 = loader.load_and_cache_link_context(&adapter.storage);
     assert!(result2.is_ok());
     assert_eq!(loader.type_cache.read().cached_types.id_map.len(), 10);
+}
+
+#[test]
+fn publish_missing_dependency() {
+    let mut adapter = Adapter::new();
+    let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            BTreeMap::new(),
+            BTreeSet::new(),
+        )
+        .unwrap_err();
+}
+
+#[test]
+fn publish_unpublished_dependency() {
+    let mut adapter = Adapter::new();
+    let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
+    let c_runtime_addr = AccountAddress::from_hex_literal("0x2").unwrap();
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            BTreeMap::new(),
+            [c_runtime_addr].into_iter().collect(),
+        )
+        .unwrap_err();
+}
+
+// Test that we properly publish and relink (and reuse) packages.
+#[test]
+fn relink() {
+    let mut adapter = Adapter::new();
+
+    let st_c_v1_addr = AccountAddress::from_hex_literal("0x42").unwrap();
+    let st_b_v1_addr = AccountAddress::from_hex_literal("0x43").unwrap();
+
+    let c_runtime_addr = AccountAddress::from_hex_literal("0x2").unwrap();
+    let b_runtime_addr = AccountAddress::from_hex_literal("0x3").unwrap();
+    let _a_runtime_addr = AccountAddress::from_hex_literal("0x4").unwrap();
+
+    // publish c v0
+    let packages = adapter.compile_packages("rt_c_v0.move", &[]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            BTreeMap::new(),
+            BTreeSet::new(),
+        )
+        .unwrap();
+
+    assert_eq!(adapter.cache.package_cache.read().len(), 1);
+
+    // publish c v1
+    let packages = adapter.compile_packages("rt_c_v1.move", &[]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            st_c_v1_addr,
+            modules,
+            [(
+                (
+                    ModuleId::new(runtime_package_id, Identifier::new("c").unwrap()),
+                    Identifier::new("S").unwrap(),
+                ),
+                ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+            )]
+            .into_iter()
+            .collect(),
+            BTreeSet::new(),
+        )
+        .unwrap();
+
+    assert_eq!(adapter.cache.package_cache.read().len(), 2);
+
+    // publish b_v0 <- c_v0
+    let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v0.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            BTreeMap::new(),
+            [c_runtime_addr].into_iter().collect(),
+        )
+        .unwrap();
+
+    assert_eq!(adapter.cache.package_cache.read().len(), 3);
+
+    // publish b_v0 <- c_v1
+    let packages = adapter.compile_packages("rt_b_v0.move", &["rt_c_v1.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            st_b_v1_addr,
+            modules,
+            [
+                (
+                    (
+                        ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                        Identifier::new("S").unwrap(),
+                    ),
+                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                ),
+                (
+                    (
+                        ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
+                        Identifier::new("R").unwrap(),
+                    ),
+                    ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            [st_c_v1_addr].into_iter().collect(),
+        )
+        .unwrap();
+
+    assert_eq!(adapter.cache.package_cache.read().len(), 4);
+
+    // publish a_v0 <- c_v1 && b_v0
+    let packages = adapter.compile_packages("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            [
+                (
+                    (
+                        ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                        Identifier::new("S").unwrap(),
+                    ),
+                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                ),
+                (
+                    (
+                        ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
+                        Identifier::new("R").unwrap(),
+                    ),
+                    ModuleId::new(st_c_v1_addr, Identifier::new("c").unwrap()),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            [st_c_v1_addr, b_runtime_addr].into_iter().collect(),
+        )
+        .unwrap();
+
+    assert_eq!(adapter.cache.package_cache.read().len(), 5);
+
+    // publish a_v0 <- c_v0 && b_v0 -- ERROR since a_v0 requires c_v1+
+    let packages = adapter.compile_packages("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
+    assert!(packages.len() == 1);
+    let (runtime_package_id, modules) = packages.into_iter().next().unwrap();
+    adapter
+        .publish_package(
+            runtime_package_id,
+            runtime_package_id,
+            modules,
+            [(
+                (
+                    ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+                    Identifier::new("S").unwrap(),
+                ),
+                ModuleId::new(c_runtime_addr, Identifier::new("c").unwrap()),
+            )]
+            .into_iter()
+            .collect(),
+            [c_runtime_addr, b_runtime_addr].into_iter().collect(),
+        )
+        .unwrap_err();
+
+    // cache stays the same since the publish failed
+    assert_eq!(adapter.cache.package_cache.read().len(), 5);
 }

@@ -6,8 +6,9 @@
 // and publishing packages to the VM.
 
 use super::{
-    linkage_checker,
-    package_cache::{LoadedPackage, PackageCache, PackageStorageId, RuntimePackageId},
+    ast::{LoadedPackage, PackageStorageId, RuntimePackageId},
+    chain_ast::DeserializedPackage,
+    linkage_checker, translate2,
     type_cache::TypeCache,
 };
 use crate::{logging::expect_no_verification_errors, native_functions::NativeFunctions};
@@ -16,53 +17,32 @@ use move_binary_format::{
     file_format::{StructFieldInformation, TableIndex},
     CompiledModule, IndexKind,
 };
-use move_core_types::{language_storage::ModuleId, vm_status::StatusCode};
+use move_core_types::vm_status::StatusCode;
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::data_store::DataStore;
 use parking_lot::RwLock;
+use petgraph::{algo::toposort, graphmap::DiGraphMap};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 use tracing::error;
 
 /// The loader for the VM. This is the data structure is used to resolve packages and cache them
 /// and their types. This is then used to create the VTables for the VM.
-pub(crate) struct PackageLoader {
+pub(crate) struct VMCache {
     pub(crate) natives: Arc<NativeFunctions>,
     pub(crate) vm_config: VMConfig,
     pub(crate) type_cache: RwLock<TypeCache>,
-    pub(crate) package_cache: RwLock<PackageCache>,
+    pub(crate) package_cache: RwLock<HashMap<PackageStorageId, Arc<LoadedPackage>>>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct LoadingPackage {
-    pub(crate) runtime_id: RuntimePackageId,
-    pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
-}
-
-impl LoadingPackage {
-    pub fn new(runtime_id: RuntimePackageId, modules: Vec<CompiledModule>) -> Self {
-        Self {
-            runtime_id,
-            modules: modules.into_iter().map(|m| (m.self_id(), m)).collect(),
-        }
-    }
-    pub fn into_modules(self) -> Vec<CompiledModule> {
-        self.modules.into_values().collect()
-    }
-
-    pub fn as_modules(&self) -> impl IntoIterator<Item = &CompiledModule> {
-        self.modules.values()
-    }
-}
-
-impl PackageLoader {
+impl VMCache {
     pub fn new(natives: NativeFunctions, vm_config: VMConfig) -> Self {
         Self {
             natives: Arc::new(natives),
             vm_config,
-            package_cache: RwLock::new(PackageCache::new()),
+            package_cache: RwLock::new(HashMap::new()),
             type_cache: RwLock::new(TypeCache::new()),
         }
     }
@@ -126,7 +106,7 @@ impl PackageLoader {
         )?;
 
         // Cache the package and its types.
-        self.package_cache.write().cache_package(
+        self.cache_package(
             storage_id,
             loading_package,
             &self.natives,
@@ -144,37 +124,28 @@ impl PackageLoader {
         packages_to_read: BTreeSet<PackageStorageId>,
     ) -> VMResult<BTreeMap<PackageStorageId, Arc<LoadedPackage>>> {
         let allow_loading_failure = true;
-        let root_package = data_store.link_context();
 
-        let mut dependency_order = vec![];
         let mut seen_packages = BTreeSet::new();
 
         let mut cached_packages = BTreeMap::new();
         let mut pkgs_to_cache = BTreeMap::new();
-        let mut work_queue = vec![root_package];
+        let mut work_queue: Vec<_> = packages_to_read.clone().into_iter().collect();
 
-        // Load all packages, compute dependency order (including possibly already cached
-        // packages). NB: packages can be loaded out of order here if so desired.
+        // Load all packages, compute dependency order (excluding already cached
+        // packages). NB: packages can be loaded out of order here (e.g., in parallel) if so
+        // desired.
         while let Some(dep) = work_queue.pop() {
             if seen_packages.contains(&dep) {
                 continue;
             }
 
+            seen_packages.insert(dep);
+
             // Check if package is already cached. If so add it to the cached packages.
-            // Also compute the packages dependency order. This is because we need to count on the fact that
-            // all dependencies are loaded and their types cached before we cache a package.
-            let package_deps = if let Some(pkg) = self.package_cache.read().loaded_package_at(dep) {
-                let package_deps = Self::compute_immediate_package_dependencies(
-                    &dep,
-                    pkg.compiled_modules
-                        .binaries
-                        .iter()
-                        .map(|x| x.as_ref())
-                        .collect::<Vec<_>>(),
-                    data_store,
-                )?;
+            // Note that this package will not contribute to the dependency order of packages to
+            // loade since it and its types are already cached.
+            if let Some(pkg) = self.cached_package_at(dep) {
                 cached_packages.insert(dep, pkg);
-                package_deps
             } else {
                 let pkg =
                     self.read_package_modules_from_store(&dep, data_store, allow_loading_failure)?;
@@ -183,28 +154,20 @@ impl PackageLoader {
                     pkg.modules.values().collect::<Vec<_>>(),
                     data_store,
                 )?;
-                pkgs_to_cache.insert(dep, pkg);
-                package_deps
+                pkgs_to_cache.insert(dep, (pkg, package_deps));
             };
-
-            dependency_order.push(dep);
-            seen_packages.insert(dep);
-            package_deps
-                .into_iter()
-                .for_each(|dep| work_queue.push(dep))
         }
 
-        // Cache each package in reverse dependency order (which was computed as we loaded them).
+        let pkgs_in_dependency_order = Self::compute_dependency_order(pkgs_to_cache)
+            .map_err(|e| e.finish(Location::Undefined))?;
+
+        // Cache each package in reverse dependency order.
         // NB: the packages must be cached in reverse dependency order otherwise types may not be cached
         // correctly.
-        for (package_id, loaded_package) in dependency_order
-            .into_iter()
-            .rev()
-            .filter_map(|dep| pkgs_to_cache.remove(&dep).map(|x| (dep, x)))
-        {
-            let pkg = self.package_cache.write().cache_package(
+        for (package_id, deserialized_package) in pkgs_in_dependency_order.into_iter().rev() {
+            let pkg = self.cache_package(
                 package_id,
-                loaded_package,
+                deserialized_package,
                 &self.natives,
                 data_store,
                 &self.type_cache,
@@ -221,12 +184,46 @@ impl PackageLoader {
         Ok(cached_packages)
     }
 
+    fn cache_package(
+        &self,
+        package_key: PackageStorageId,
+        loading_package: DeserializedPackage,
+        natives: &NativeFunctions,
+        data_store: &impl DataStore,
+        type_cache: &RwLock<TypeCache>,
+    ) -> VMResult<Arc<LoadedPackage>> {
+        if let Some(loaded_package) = self.cached_package_at(package_key) {
+            return Ok(loaded_package);
+        }
+
+        let loaded_package = translate2::package(
+            package_key,
+            loading_package.runtime_id,
+            loading_package.into_modules(),
+            natives,
+            type_cache,
+            data_store,
+        )
+        .map_err(|e| e.finish(Location::Undefined))?;
+
+        self.package_cache
+            .write()
+            .insert(package_key, Arc::new(loaded_package));
+
+        self.package_cache
+            .read()
+            .get(&package_key)
+            .cloned()
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Package not found in cache after loading".to_string())
+                    .finish(Location::Undefined)
+            })
+    }
+
     // All native functions must be known to the loader at load time.
     fn check_natives(&self, module: &CompiledModule) -> VMResult<()> {
-        fn check_natives_impl(
-            loader: &PackageLoader,
-            module: &CompiledModule,
-        ) -> PartialVMResult<()> {
+        fn check_natives_impl(loader: &VMCache, module: &CompiledModule) -> PartialVMResult<()> {
             for (idx, native_function) in module
                 .function_defs()
                 .iter()
@@ -274,9 +271,9 @@ impl PackageLoader {
         package_id: &PackageStorageId,
         data_store: &impl DataStore,
         allow_loading_failure: bool,
-    ) -> VMResult<LoadingPackage> {
+    ) -> VMResult<DeserializedPackage> {
         // Load the package bytes
-        let bytes = match data_store.load_package(dbg!(package_id)) {
+        let bytes = match data_store.load_package(package_id) {
             Ok(bytes) => bytes,
             Err(err) if allow_loading_failure => return Err(err),
             Err(err) => {
@@ -289,7 +286,7 @@ impl PackageLoader {
 
     // Deserialize and verify the package.
     // NB: Does not perform cyclic dependency verification or linkage checking.
-    fn deserialize_and_verify_package(&self, bytes: Vec<Vec<u8>>) -> VMResult<LoadingPackage> {
+    fn deserialize_and_verify_package(&self, bytes: Vec<Vec<u8>>) -> VMResult<DeserializedPackage> {
         // Deserialize each module in the package
         let mut modules = vec![];
         for module_bytes in bytes.iter() {
@@ -332,7 +329,7 @@ impl PackageLoader {
             .self_id()
             .address();
 
-        Ok(LoadingPackage::new(runtime_id, modules))
+        Ok(DeserializedPackage::new(runtime_id, modules))
     }
 
     // Compute the immediate dependencies of a package in terms of their storage IDs.
@@ -345,6 +342,7 @@ impl PackageLoader {
             .into_iter()
             .flat_map(|m| m.immediate_dependencies())
             .map(|m| Ok(*data_store.relocate(&m)?.address()))
+            .filter(|m| m.as_ref().is_ok_and(|m| m != package_id))
             .collect::<PartialVMResult<BTreeSet<_>>>()
             .map_err(|e| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
@@ -354,5 +352,47 @@ impl PackageLoader {
                     ))
                     .finish(Location::Undefined)
             })
+    }
+
+    fn compute_dependency_order(
+        mut pkgs_to_cache: BTreeMap<
+            PackageStorageId,
+            (DeserializedPackage, BTreeSet<PackageStorageId>),
+        >,
+    ) -> PartialVMResult<Vec<(PackageStorageId, DeserializedPackage)>> {
+        // Compute edges for the dependency graph
+        let package_edges = pkgs_to_cache.iter().flat_map(|(package_id, (_, deps))| {
+            deps.iter()
+                .filter(|pkg| pkgs_to_cache.contains_key(pkg))
+                .map(|dep_pkg| (*package_id, *dep_pkg))
+        });
+
+        let mut digraph = DiGraphMap::<PackageStorageId, ()>::from_edges(package_edges);
+
+        // Make sure every package is in the graph (even if it has no dependencies)
+        for pkg in pkgs_to_cache.keys() {
+            digraph.add_node(*pkg);
+        }
+
+        Ok(toposort(&digraph, None)
+            .map_err(|_| {
+                PartialVMError::new(StatusCode::CYCLIC_PACKAGE_DEPENDENCY)
+                    .with_message("Cyclic package dependency detected".to_string())
+            })?
+            .into_iter()
+            .map(|pkg| {
+                (
+                    pkg,
+                    pkgs_to_cache
+                        .remove(&pkg)
+                        .expect("dependency order computation error")
+                        .0,
+                )
+            })
+            .collect())
+    }
+
+    fn cached_package_at(&self, package_key: PackageStorageId) -> Option<Arc<LoadedPackage>> {
+        self.package_cache.read().get(&package_key).map(Arc::clone)
     }
 }

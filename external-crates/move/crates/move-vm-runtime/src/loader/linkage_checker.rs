@@ -7,12 +7,14 @@
 //
 // The checks are done in the context of a set of packages that are already loaded in the cache,
 // with the exception of possibly the root package in the case of package publication.
+//
+// NB: this process is fallible due to relinking! If a package is loaded with a different set of
+// dependencies fail the linkage checks in this module.
 
 use super::{
-    package_cache::{LoadedPackage, PackageStorageId, RuntimePackageId},
-    package_loader::LoadingPackage,
+    ast::{LoadedPackage, PackageStorageId, RuntimePackageId},
+    chain_ast::DeserializedPackage,
 };
-use crate::logging::expect_no_verification_errors;
 use move_binary_format::{
     errors::{Location, PartialVMError, VMResult},
     CompiledModule,
@@ -59,7 +61,7 @@ pub fn verify_linkage_and_cyclic_checks(
 /// the cache (i.e., that at least in the current linking context the package is valid w.r.t. its
 /// dependencies).
 pub fn verify_linkage_and_cyclic_checks_for_publication(
-    package_to_publish: &LoadingPackage,
+    package_to_publish: &DeserializedPackage,
     cached_packages: &BTreeMap<PackageStorageId, Arc<LoadedPackage>>,
 ) -> VMResult<()> {
     let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
@@ -117,7 +119,6 @@ fn verify_package_no_cyclic_relationships(
         (module, module_map)
     };
 
-    // TODO(tzakian): This could be made more efficient.
     cyclic_dependencies::verify_module(module, |runtime_module_id| {
         let module = if let Some(bundled) = bundle_verified.get(runtime_module_id) {
             Some(**bundled)
@@ -135,8 +136,7 @@ fn verify_package_no_cyclic_relationships(
         module
             .map(|m| m.immediate_dependencies())
             .ok_or_else(|| PartialVMError::new(StatusCode::MISSING_DEPENDENCY))
-    })
-    .map_err(expect_no_verification_errors)?;
+    })?;
 
     Ok(())
 }
@@ -178,7 +178,7 @@ fn verify_package_valid_linkage(
                 }
             })
             .collect::<VMResult<Vec<&CompiledModule>>>()?;
-        dependencies::verify_module(&m, module_deps).map_err(expect_no_verification_errors)?;
+        dependencies::verify_module(&m, module_deps)?;
     }
     Ok(())
 }

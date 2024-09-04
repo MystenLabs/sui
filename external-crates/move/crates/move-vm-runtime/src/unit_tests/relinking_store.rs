@@ -4,7 +4,6 @@
 use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::ChangeSet,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
@@ -12,11 +11,14 @@ use move_core_types::{
 use move_vm_test_utils::InMemoryStorage;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::loader::ast::PackageStorageId;
+
 #[derive(Clone)]
 pub struct RelinkingStore {
     pub store: InMemoryStorage,
     pub context: AccountAddress,
     pub linkage: BTreeMap<ModuleId, ModuleId>,
+    pub dependent_packages: Option<BTreeSet<PackageStorageId>>,
     type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
 }
 
@@ -26,27 +28,24 @@ impl RelinkingStore {
             store,
             context: AccountAddress::ZERO,
             linkage: BTreeMap::new(),
+            dependent_packages: None,
             type_origin: BTreeMap::new(),
         }
     }
 
     pub fn relink(
-        self,
+        &mut self,
         context: AccountAddress,
         linkage: BTreeMap<ModuleId, ModuleId>,
         type_origin: BTreeMap<(ModuleId, Identifier), ModuleId>,
-    ) -> Self {
-        let Self { store, .. } = self;
-        Self {
-            store,
-            context,
-            linkage,
-            type_origin,
-        }
+    ) {
+        self.context = context;
+        self.linkage = linkage;
+        self.type_origin = type_origin;
     }
 
-    fn apply(&mut self, changeset: ChangeSet) -> anyhow::Result<()> {
-        self.store.apply(changeset)
+    pub fn set_dependent_packages(&mut self, dependent_packages: BTreeSet<PackageStorageId>) {
+        self.dependent_packages = Some(dependent_packages);
     }
 }
 
@@ -77,6 +76,9 @@ impl LinkageResolver for RelinkingStore {
     }
 
     fn all_package_dependencies(&self) -> Result<BTreeSet<AccountAddress>, Self::Error> {
+        if let Some(dependent_packages) = &self.dependent_packages {
+            return Ok(dependent_packages.clone());
+        }
         let modules = self.store.get_package(&self.context)?.unwrap();
         let mut all_deps = BTreeSet::new();
         for module in &modules {

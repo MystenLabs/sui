@@ -12,7 +12,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_types::data_store::DataStore;
-use std::collections::btree_map::BTreeMap;
+use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 pub struct AccountDataCache {
     module_map: BTreeMap<Identifier, Vec<u8>>,
@@ -157,5 +157,19 @@ impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
             .insert(module_id.name().to_owned(), blob);
 
         Ok(())
+    }
+
+    fn all_package_dependencies(&self) -> VMResult<BTreeSet<AccountAddress>> {
+        match self.remote.all_package_dependencies() {
+            Ok(addrs) => Ok(addrs),
+            Err(err) => {
+                let msg = format!("Unexpected storage error: {:?}", err);
+                Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(msg)
+                        .finish(Location::Undefined),
+                )
+            }
+        }
     }
 }

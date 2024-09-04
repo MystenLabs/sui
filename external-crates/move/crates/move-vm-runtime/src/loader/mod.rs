@@ -2,10 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: remove once the loader is fully incorporated in the VM and we don't get dead code
+// warnings.
+#![allow(dead_code)]
+
 use crate::{
     loader::{
         arena::{Arena, ArenaPointer},
-        ast::{DatatypeInfo, DatatypeTagType, Function, LoadedModule},
+        ast::{CallType, DatatypeInfo, DatatypeTagType, Function, LoadedModule},
     },
     logging::expect_no_verification_errors,
     native_functions::NativeFunctions,
@@ -47,6 +51,16 @@ use std::{
     sync::Arc,
 };
 use tracing::error;
+
+pub mod arena;
+pub mod ast;
+pub mod chain_ast;
+pub mod linkage_checker;
+pub mod runtime_vtable;
+pub mod translate;
+pub mod translate2;
+pub mod type_cache;
+pub mod vm_cache;
 
 // A simple cache that offers both a HashMap and a Vector lookup.
 // Values are forced into a `Arc` so they can be used from multiple thread.
@@ -1495,7 +1509,11 @@ impl<'a> ModuleDefinitionResolver<'a> {
         &self,
         idx: FunctionInstantiationIndex,
     ) -> ArenaPointer<Function> {
-        self.binary.loaded.function_instantiation_at(idx.0).handle
+        let func_inst = self.binary.loaded.function_instantiation_at(idx.0);
+        let CallType::Known(f_ptr) = func_inst.handle else {
+            unimplemented!("TODO: Need to replace this to handle virtual generic calls as part of plumbing in the new tables for the interpreter");
+        };
+        f_ptr
     }
 
     pub(crate) fn instantiate_generic_function(
