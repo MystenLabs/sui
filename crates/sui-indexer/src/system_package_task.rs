@@ -4,7 +4,6 @@
 use std::time::Duration;
 
 use crate::store::diesel_macro::*;
-use diesel::r2d2::R2D2Connection;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio_util::sync::CancellationToken;
@@ -13,18 +12,18 @@ use crate::{indexer_reader::IndexerReader, schema::epochs};
 
 /// Background task responsible for evicting system packages from the package resolver's cache after
 /// detecting an epoch boundary.
-pub(crate) struct SystemPackageTask<T: R2D2Connection + 'static> {
+pub(crate) struct SystemPackageTask {
     /// Holds the DB connection and also the package resolver to evict packages from.
-    reader: IndexerReader<T>,
+    reader: IndexerReader,
     /// Signal to cancel the task.
     cancel: CancellationToken,
     /// Interval to sleep for between checks.
     interval: Duration,
 }
 
-impl<T: R2D2Connection> SystemPackageTask<T> {
+impl SystemPackageTask {
     pub(crate) fn new(
-        reader: IndexerReader<T>,
+        reader: IndexerReader,
         cancel: CancellationToken,
         interval: Duration,
     ) -> Self {

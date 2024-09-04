@@ -2,7 +2,7 @@ name: Attach Sui binaries to a release
 
 on:
   release:
-    types: [ published ]
+    types: [ published, prereleased ]
   workflow_dispatch:
     inputs:
       sui_tag:

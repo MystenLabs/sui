@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionEmptyError;
 use jsonrpsee::types::SubscriptionResult;
@@ -29,13 +28,13 @@ use sui_types::TypeTag;
 use crate::indexer_reader::IndexerReader;
 use crate::IndexerError;
 
-pub(crate) struct IndexerApi<T: R2D2Connection + 'static> {
-    inner: IndexerReader<T>,
+pub(crate) struct IndexerApi {
+    inner: IndexerReader,
     name_service_config: NameServiceConfig,
 }
 
-impl<T: R2D2Connection + 'static> IndexerApi<T> {
-    pub fn new(inner: IndexerReader<T>, name_service_config: NameServiceConfig) -> Self {
+impl IndexerApi {
+    pub fn new(inner: IndexerReader, name_service_config: NameServiceConfig) -> Self {
         Self {
             inner,
             name_service_config,
@@ -133,7 +132,7 @@ impl<T: R2D2Connection + 'static> IndexerApi<T> {
 }
 
 #[async_trait]
-impl<T: R2D2Connection + 'static> IndexerApiServer for IndexerApi<T> {
+impl IndexerApiServer for IndexerApi {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
@@ -428,7 +427,7 @@ impl<T: R2D2Connection + 'static> IndexerApiServer for IndexerApi<T> {
     }
 }
 
-impl<T: R2D2Connection> SuiRpcModule for IndexerApi<T> {
+impl SuiRpcModule for IndexerApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

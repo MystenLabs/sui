@@ -16,8 +16,8 @@ chrono.workspace = true
 serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
-diesel = { workspace = true, optional = true }
-diesel-derive-enum = { workspace = true, optional = true }
+diesel = { workspace = true, features = ["postgres", "chrono", "r2d2", "serde_json"] }
+diesel-derive-enum = { workspace = true, features = ["postgres"] }
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
@@ -59,10 +59,8 @@ secrecy = "0.8.0"
 downcast = "0.11.0"
 
 [features]
+default = []
 pg_integration = []
-default = ["postgres-feature"]
-postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]
-mysql-feature = ["diesel/mysql", "diesel/mysql_backend", "diesel-derive-enum/mysql"]
 
 [dev-dependencies]
 sui-keys.workspace = true

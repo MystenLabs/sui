@@ -461,6 +461,34 @@ export class DeepBookClient {
 	}
 
 	/**
+	 * @description Get the trade parameters for a given pool, including tick size, lot size, and min size.
+	 * @param {string} poolKey Key of the pool
+	 * @returns {Promise<{ tickSize: number, lotSize: number, minSize: number }>}
+	 */
+	async poolBookParams(poolKey: string) {
+		const tx = new Transaction();
+		const pool = this.#config.getPool(poolKey);
+		const baseScalar = this.#config.getCoin(pool.baseCoin).scalar;
+		const quoteScalar = this.#config.getCoin(pool.quoteCoin).scalar;
+
+		tx.add(this.deepBook.poolBookParams(poolKey));
+		const res = await this.client.devInspectTransactionBlock({
+			sender: normalizeSuiAddress(this.#address),
+			transactionBlock: tx,
+		});
+
+		const tickSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![0][0])));
+		const lotSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![1][0])));
+		const minSize = Number(bcs.U64.parse(new Uint8Array(res.results![0].returnValues![2][0])));
+
+		return {
+			tickSize: Number((tickSize * baseScalar) / quoteScalar / FLOAT_SCALAR),
+			lotSize: Number(lotSize / baseScalar),
+			minSize: Number(minSize / baseScalar),
+		};
+	}
+
+	/**
 	 * @description Get the account information for a given pool and balance manager
 	 * @param {string} poolKey Key of the pool
 	 * @param {string} managerKey The key of the BalanceManager

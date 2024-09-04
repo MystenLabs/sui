@@ -31,7 +31,7 @@ mod ingestion_tests {
 
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = get_pool_connection::<diesel::PgConnection>($pool)?;
+            let mut pg_pool_conn = get_pool_connection($pool)?;
             pg_pool_conn
                 .build_transaction()
                 .read_only()
@@ -49,7 +49,7 @@ mod ingestion_tests {
         data_ingestion_path: PathBuf,
     ) -> (
         JoinHandle<()>,
-        PgIndexerStore<diesel::PgConnection>,
+        PgIndexerStore,
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let server_url: SocketAddr = format!("127.0.0.1:{}", DEFAULT_SERVER_PORT)
@@ -74,7 +74,7 @@ mod ingestion_tests {
 
     /// Wait for the indexer to catch up to the given checkpoint sequence number.
     async fn wait_for_checkpoint(
-        pg_store: &PgIndexerStore<diesel::PgConnection>,
+        pg_store: &PgIndexerStore,
         checkpoint_sequence_number: u64,
     ) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {
@@ -94,10 +94,7 @@ mod ingestion_tests {
     }
 
     /// Wait for the indexer to catch up to the given epoch id.
-    async fn wait_for_epoch(
-        pg_store: &PgIndexerStore<diesel::PgConnection>,
-        epoch: u64,
-    ) -> Result<(), IndexerError> {
+    async fn wait_for_epoch(pg_store: &PgIndexerStore, epoch: u64) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {
             while {
                 let cp_opt = pg_store.get_latest_epoch_id().unwrap();

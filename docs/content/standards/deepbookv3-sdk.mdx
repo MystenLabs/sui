@@ -122,7 +122,7 @@ class DeepBookMarketMaker {
             throw new Error('No balance manager address found');
         }
         return {
-            BALANCE_MANAGER_KEY: {
+            [BALANCE_MANAGER_KEY]: {
                 address: balanceManagerAddress,
                 tradeCap: balanceManagerTradeCap
             }
@@ -190,11 +190,11 @@ class DeepBookMarketMaker {
 
         // @ts-ignore
         const balanceManagerAddress = res.objectChanges?.find((change) => {
-            change.type === 'created' && change.objectType.includes('BalanceManager');
+            return change.type === 'created' && change.objectType.includes('BalanceManager');
         })?.['objectId'];
 
         const balanceManagers: { [key: string]: BalanceManager } = {
-            BALANCE_MANAGER_KEY: {
+            [BALANCE_MANAGER_KEY]: {
                 address: balanceManagerAddress,
                 tradeCap: undefined,
             }
