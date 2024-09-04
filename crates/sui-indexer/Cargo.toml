@@ -63,10 +63,6 @@ move-binary-format.workspace = true
 diesel_migrations.workspace = true
 cached.workspace = true
 
-[features]
-default = []
-pg_integration = []
-
 [dev-dependencies]
 sui-keys.workspace = true
 sui-move-build.workspace = true
