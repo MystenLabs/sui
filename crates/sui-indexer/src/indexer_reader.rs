@@ -1311,26 +1311,20 @@ impl IndexerReader {
         .collect::<IndexerResult<HashMap<_, _>>>()
     }
 
-    pub async fn get_display_object_by_type(
+    async fn get_display_object_by_type(
         &self,
         object_type: &move_core_types::language_storage::StructTag,
     ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
-        self.spawn_blocking(move |this| this.get_display_update_event(object_type))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_display_update_event(
-        &self,
-        object_type: String,
-    ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_display = run_query!(&self.blocking_pool, |conn| {
-            display::table
-                .filter(display::object_type.eq(object_type))
-                .first::<StoredDisplay>(conn)
-                .optional()
-        })?;
+        let mut connection = self.pool.get().await?;
+
+        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
+        let stored_display = display::table
+            .filter(display::object_type.eq(object_type))
+            .first::<StoredDisplay>(&mut connection)
+            .await
+            .optional()?;
 
         let stored_display = match stored_display {
             Some(display) => display,
