@@ -3,19 +3,19 @@
 
 use clap::Parser;
 use sui_indexer::config::Command;
-use sui_indexer::db::{get_pool_connection, new_connection_pool, reset_database};
+use sui_indexer::database::Connection;
+use sui_indexer::db::{new_connection_pool, reset_database};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
 
 #[tokio::main]
-async fn main() -> Result<(), IndexerError> {
+async fn main() -> anyhow::Result<()> {
     let opts = sui_indexer::config::IndexerConfig::parse();
 
     // NOTE: this is to print out tracing like info, warn & error.
@@ -54,13 +54,13 @@ async fn main() -> Result<(), IndexerError> {
         }
         Command::ResetDatabase { force } => {
             if !force {
-                return Err(IndexerError::PostgresResetError(
-                    "Resetting the DB requires use of the `--force` flag".to_owned(),
+                return Err(anyhow::anyhow!(
+                    "Resetting the DB requires use of the `--force` flag",
                 ));
             }
 
-            let mut connection = get_pool_connection(&connection_pool)?;
-            reset_database(&mut connection)?;
+            let connection = Connection::dedicated(&opts.database_url).await?;
+            reset_database(connection).await?;
         }
     }
 

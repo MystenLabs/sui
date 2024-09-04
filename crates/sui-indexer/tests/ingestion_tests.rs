@@ -59,7 +59,7 @@ mod ingestion_tests {
         });
         // Starts indexer
         let (pg_store, pg_handle, _) = start_test_indexer(
-            Some(database.database().url().as_str().to_owned()),
+            database.database().url().as_str().to_owned(),
             format!("http://{}", server_url),
             ReaderWriterConfig::writer_mode(None, None),
             data_ingestion_path,
