@@ -25,7 +25,7 @@ A call to the previous entry function takes the following form, passing `0x6` as
 sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```
 
-Expect the `Clock` timestamp to change at the rate the network generates checkpoints, which is **every 1 second** with Narwhal/Bullshark consensus and **every 0.1 to 0.2 seconds** with Mysticeti consensus.
+Expect the `Clock` timestamp to change at the rate the network generates checkpoints, which is about **every 1/4 second** with Mysticeti consensus. Find the current network checkpoint rate on this [public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
 
 Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects: Successive transactions seeing a greater or equal timestamp to their predecessors.
 
