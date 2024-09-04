@@ -12,8 +12,6 @@ use crate::store::pg_partition_manager::PgPartitionManager;
 use crate::store::PgIndexerStore;
 use crate::{metrics::IndexerMetrics, store::IndexerStore, types::IndexerResult};
 
-use super::checkpoint_handler::CheckpointHandler;
-
 pub struct Pruner {
     pub store: PgIndexerStore,
     pub partition_manager: PgPartitionManager,
@@ -27,7 +25,7 @@ impl Pruner {
         epochs_to_keep: u64,
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
-        let blocking_cp = CheckpointHandler::pg_blocking_cp(store.clone()).unwrap();
+        let blocking_cp = store.blocking_cp();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())?;
         Ok(Self {
             store,
