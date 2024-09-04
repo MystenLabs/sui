@@ -17,6 +17,7 @@ use url::Url;
 use crate::db::ConnectionConfig;
 use crate::db::ConnectionPoolConfig;
 
+#[derive(Clone, Debug)]
 pub struct ConnectionPool {
     database_url: Arc<Url>,
     pool: Pool<AsyncPgConnection>,
