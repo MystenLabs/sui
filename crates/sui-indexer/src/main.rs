@@ -45,11 +45,17 @@ async fn main() -> anyhow::Result<()> {
             ingestion_config,
             snapshot_config,
             pruning_options,
+            restore_config,
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(&mut get_pool_connection(&connection_pool)?).await?;
 
-            let store = PgIndexerStore::new(connection_pool, pool, indexer_metrics.clone());
+            let store = PgIndexerStore::new(
+                connection_pool,
+                pool,
+                restore_config,
+                indexer_metrics.clone(),
+            );
 
             Indexer::start_writer_with_config(
                 &ingestion_config,
