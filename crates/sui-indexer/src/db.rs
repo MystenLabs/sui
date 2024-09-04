@@ -117,22 +117,18 @@ pub fn get_pool_connection(pool: &ConnectionPool) -> Result<PoolConnection, Inde
     })
 }
 
-pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
-    setup_postgres::reset_database(conn)?;
-    Ok(())
-}
+pub use setup_postgres::reset_database;
 
 pub mod setup_postgres {
-    use crate::db::PoolConnection;
+    use crate::database::Connection;
     use anyhow::anyhow;
-    use diesel::migration::MigrationSource;
-    use diesel::RunQueryDsl;
-    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+    use diesel_async::RunQueryDsl;
+    use diesel_migrations::{embed_migrations, EmbeddedMigrations};
     use tracing::info;
 
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
-    pub fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
+    pub async fn reset_database(mut conn: Connection<'static>) -> Result<(), anyhow::Error> {
         info!("Resetting PG database ...");
 
         let drop_all_tables = "
@@ -144,7 +140,9 @@ pub mod setup_postgres {
                 EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_tables).execute(conn)?;
+        diesel::sql_query(drop_all_tables)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all tables.");
 
         let drop_all_procedures = "
@@ -158,7 +156,9 @@ pub mod setup_postgres {
                 EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_procedures).execute(conn)?;
+        diesel::sql_query(drop_all_procedures)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all procedures.");
 
         let drop_all_functions = "
@@ -172,7 +172,9 @@ pub mod setup_postgres {
                 EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_functions).execute(conn)?;
+        diesel::sql_query(drop_all_functions)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all functions.");
 
         diesel::sql_query(
@@ -182,10 +184,12 @@ pub mod setup_postgres {
             run_on TIMESTAMP NOT NULL DEFAULT NOW()
         )",
         )
-        .execute(conn)?;
+        .execute(&mut conn)
+        .await?;
         info!("Created __diesel_schema_migrations table.");
 
-        conn.run_migrations(&MIGRATIONS.migrations().unwrap())
+        conn.run_migrations(MIGRATIONS)
+            .await
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
         info!("Reset database complete.");
         Ok(())
