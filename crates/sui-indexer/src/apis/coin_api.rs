@@ -122,7 +122,7 @@ impl CoinReadApiServer for CoinReadApi {
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let coin_struct = parse_to_struct_tag(&coin_type)?;
         self.inner
-            .get_coin_metadata_in_blocking_task(coin_struct)
+            .get_coin_metadata(coin_struct)
             .await
             .map_err(Into::into)
     }
@@ -135,7 +135,7 @@ impl CoinReadApiServer for CoinReadApi {
             })
         } else {
             self.inner
-                .get_total_supply_in_blocking_task(coin_struct)
+                .get_total_supply(coin_struct)
                 .await
                 .map_err(Into::into)
         }
