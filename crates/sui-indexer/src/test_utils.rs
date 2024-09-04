@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -13,6 +12,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
 use crate::config::SnapshotLagConfig;
+use crate::database::Connection;
 use crate::db::{new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
@@ -50,7 +50,7 @@ impl ReaderWriterConfig {
 }
 
 pub async fn start_test_indexer(
-    db_url: Option<String>,
+    db_url: String,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: PathBuf,
@@ -64,7 +64,6 @@ pub async fn start_test_indexer(
         db_url,
         rpc_url,
         reader_writer_config,
-        /* reset_database */ false,
         Some(data_ingestion_path),
         token.clone(),
     )
@@ -72,24 +71,14 @@ pub async fn start_test_indexer(
     (store, handle, token)
 }
 
-/// Starts an indexer reader or writer for testing depending on the `reader_writer_config`. If
-/// `reset_database` is true, the database instance named in `db_url` will be dropped and
-/// reinstantiated.
+/// Starts an indexer reader or writer for testing depending on the `reader_writer_config`.
 pub async fn start_test_indexer_impl(
-    db_url: Option<String>,
+    db_url: String,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
-    reset_database: bool,
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    let db_url = db_url.unwrap_or_else(|| {
-        let pg_host = "localhost";
-        let pg_port = "32770";
-        let pw = "postgrespw";
-        format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
-    });
-
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     let pool_config = ConnectionPoolConfig {
@@ -108,30 +97,7 @@ pub async fn start_test_indexer_impl(
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let mut parsed_url = db_url.clone();
-
-    if reset_database {
-        let db_name = parsed_url.split('/').last().unwrap();
-        // Switch to default to create a new database
-        let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
-
-        // Open in default mode
-        let blocking_pool = new_connection_pool(&default_db_url, &pool_config).unwrap();
-        let mut default_conn = blocking_pool.get().unwrap();
-
-        // Delete the old db if it exists
-        default_conn
-            .batch_execute(&format!("DROP DATABASE IF EXISTS {}", db_name))
-            .unwrap();
-
-        // Create the new db
-        default_conn
-            .batch_execute(&format!("CREATE DATABASE {}", db_name))
-            .unwrap();
-        parsed_url = replace_db_name(&parsed_url, db_name).0;
-    }
-
-    let blocking_pool = new_connection_pool(&parsed_url, &pool_config).unwrap();
+    let blocking_pool = new_connection_pool(&db_url, &pool_config).unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -151,7 +117,10 @@ pub async fn start_test_indexer_impl(
             snapshot_config,
             pruning_options,
         } => {
-            crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
+            let connection = Connection::dedicated(&db_url.parse().unwrap())
+                .await
+                .unwrap();
+            crate::db::reset_database(connection).await.unwrap();
 
             let store_clone = store.clone();
             let mut ingestion_config = IngestionConfig::default();
@@ -172,16 +141,6 @@ pub async fn start_test_indexer_impl(
     };
 
     (store, handle)
-}
-
-fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
-    let pos = db_url.rfind('/').expect("Unable to find / in db_url");
-    let old_db_name = &db_url[pos + 1..];
-
-    (
-        format!("{}/{}", &db_url[..pos], new_db_name),
-        old_db_name.to_string(),
-    )
 }
 
 #[derive(Clone)]

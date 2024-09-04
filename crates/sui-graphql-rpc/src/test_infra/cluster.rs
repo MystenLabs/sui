@@ -127,10 +127,9 @@ pub async fn start_network_cluster() -> NetworkCluster {
 
     // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer_impl(
-        Some(db_url),
+        db_url,
         val_fn.rpc_url().to_string(),
         ReaderWriterConfig::writer_mode(None, None),
-        /* reset_database */ false,
         Some(data_ingestion_path.path().to_path_buf()),
         cancellation_token.clone(),
     )
@@ -180,10 +179,9 @@ pub async fn serve_executor(
     });
 
     let (pg_store, pg_handle) = start_test_indexer_impl(
-        Some(db_url),
+        db_url,
         format!("http://{}", executor_server_url),
         ReaderWriterConfig::writer_mode(snapshot_config.clone(), epochs_to_keep),
-        /* reset_database */ false,
         Some(data_ingestion_path),
         cancellation_token.clone(),
     )
