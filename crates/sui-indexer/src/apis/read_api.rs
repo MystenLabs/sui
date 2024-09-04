@@ -270,10 +270,7 @@ impl ReadApiServer for ReadApi {
         let version = if let Some(version) = version {
             (*version).into()
         } else {
-            let latest_epoch = self
-                .inner
-                .spawn_blocking(|this| this.get_latest_epoch_info_from_db())
-                .await?;
+            let latest_epoch = self.inner.get_latest_epoch_info_from_db().await?;
             (latest_epoch.protocol_version as u64).into()
         };
 
