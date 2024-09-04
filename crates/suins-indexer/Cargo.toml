@@ -7,7 +7,8 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
-diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
+diesel = { workspace = true, features = ["serde_json"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres"] }
 sui-data-ingestion-core.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true

@@ -13,7 +13,6 @@ bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 colored.workspace = true
 comfy-table.workspace = true
-diesel.workspace = true
 eyre.workspace = true
 futures.workspace = true
 hex.workspace = true
@@ -37,11 +36,8 @@ tokio = { workspace = true, features = ["full"] }
 typed-store.workspace = true
 fastcrypto.workspace = true
 
-narwhal-storage.workspace = true
-narwhal-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
-sui-indexer.workspace = true
 sui-network.workspace = true
 sui-snapshot.workspace = true
 sui-protocol-config.workspace = true
@@ -50,4 +46,5 @@ sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
+sui-package-dump.workspace = true
 bin-version.workspace = true

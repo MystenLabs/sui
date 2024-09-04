@@ -28,7 +28,7 @@ import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 
-import { DeepBookClient } from "@mysten/deepbook";
+import { DeepBookClient } from "@mysten/deepbook-v3";
 
 class DeepBookMarketMaker {
     dbClient: DeepBookClient; // For building transactions
@@ -122,7 +122,7 @@ class DeepBookMarketMaker {
             throw new Error('No balance manager address found');
         }
         return {
-            BALANCE_MANAGER_KEY: {
+            [BALANCE_MANAGER_KEY]: {
                 address: balanceManagerAddress,
                 tradeCap: balanceManagerTradeCap
             }
@@ -190,11 +190,11 @@ class DeepBookMarketMaker {
 
         // @ts-ignore
         const balanceManagerAddress = res.objectChanges?.find((change) => {
-            change.type === 'created' && change.objectType.includes('BalanceManager');
+            return change.type === 'created' && change.objectType.includes('BalanceManager');
         })?.['objectId'];
 
         const balanceManagers: { [key: string]: BalanceManager } = {
-            BALANCE_MANAGER_KEY: {
+            [BALANCE_MANAGER_KEY]: {
                 address: balanceManagerAddress,
                 tradeCap: undefined,
             }

@@ -6,7 +6,11 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
+async-trait.workspace = true
 anemo.workspace = true
 anyhow.workspace = true
 bincode.workspace = true

@@ -225,7 +225,7 @@ pub trait CFGIRVisitorContext {
         }
         match &mut cmd.value {
             C::Assign(_, _, e)
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::Return { exp: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
@@ -316,6 +316,18 @@ pub trait CFGIRVisitorContext {
                 }
             }
         }
+    }
+}
+
+impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: CFGIRVisitorConstructor> CFGIRVisitor for V {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+        self.visit(env, program)
     }
 }
 
@@ -534,7 +546,7 @@ pub trait SimpleAbsInt: Sized {
             | C::VariantSwitch { subject: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::Return { exp: e, .. }
-            | C::Abort(e) => {
+            | C::Abort(_, e) => {
                 self.exp(context, state, e);
             }
             C::Jump { .. } => (),

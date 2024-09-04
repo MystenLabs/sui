@@ -88,9 +88,8 @@ mod tests;
 /// # Arguments
 ///
 /// * `db` - a reference to a rocks DB object
-/// * `cf;<ty,ty>` - a comma separated list of column families to open. For each
-/// column family a concatenation of column family name (cf) and Key-Value <ty, ty>
-/// should be provided.
+/// * `cf;<ty,ty>` - a comma separated list of column families to open. For each column family a
+///     concatenation of column family name (cf) and Key-Value <ty, ty> should be provided.
 ///
 /// # Examples
 ///
@@ -705,7 +704,7 @@ impl MetricConf {
         }
     }
 }
-const CF_METRICS_REPORT_PERIOD_MILLIS: u64 = 1000;
+const CF_METRICS_REPORT_PERIOD_SECS: u64 = 30;
 const METRICS_ERROR: i64 = -1;
 
 /// An interface to a rocksDB database, keyed by a columnfamily
@@ -741,7 +740,7 @@ impl<K, V> DBMap<K, V> {
         if !is_deprecated {
             tokio::task::spawn(async move {
                 let mut interval =
-                    tokio::time::interval(Duration::from_millis(CF_METRICS_REPORT_PERIOD_MILLIS));
+                    tokio::time::interval(Duration::from_secs(CF_METRICS_REPORT_PERIOD_SECS));
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
@@ -986,6 +985,14 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
+            .rocksdb_current_size_active_mem_tables
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, properties::CUR_SIZE_ACTIVE_MEM_TABLE)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
             .rocksdb_size_all_mem_tables
             .with_label_values(&[cf_name])
             .set(
@@ -1050,7 +1057,7 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
-            .rocskdb_estimate_table_readers_mem
+            .rocksdb_estimate_table_readers_mem
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::ESTIMATE_TABLE_READERS_MEM)
@@ -1066,6 +1073,14 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
+            .rocksdb_num_immutable_mem_tables
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, properties::NUM_IMMUTABLE_MEM_TABLE)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
             .rocksdb_mem_table_flush_pending
             .with_label_values(&[cf_name])
             .set(
@@ -1074,7 +1089,7 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
-            .rocskdb_compaction_pending
+            .rocksdb_compaction_pending
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::COMPACTION_PENDING)
@@ -1082,7 +1097,15 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
-            .rocskdb_num_running_compactions
+            .rocksdb_estimate_pending_compaction_bytes
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, properties::ESTIMATE_PENDING_COMPACTION_BYTES)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
+            .rocksdb_num_running_compactions
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::NUM_RUNNING_COMPACTIONS)
@@ -1106,10 +1129,18 @@ impl<K, V> DBMap<K, V> {
             );
         db_metrics
             .cf_metrics
-            .rocskdb_background_errors
+            .rocksdb_background_errors
             .with_label_values(&[cf_name])
             .set(
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
+            .rocksdb_base_level
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, properties::BASE_LEVEL)
                     .unwrap_or(METRICS_ERROR),
             );
     }
@@ -1451,15 +1482,21 @@ impl DBBatch {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
-
+        let mut total = 0usize;
         new_vals
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
+                total += k_buf.len() + v_buf.len();
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
+        self.db_metrics
+            .op_metrics
+            .rocksdb_batch_put_bytes
+            .with_label_values(&[&db.cf])
+            .observe(total as f64);
         Ok(self)
     }
 
@@ -2729,7 +2766,7 @@ fn populate_missing_cfs(
 /// Given a vec<u8>, find the value which is one more than the vector
 /// if the vector was a big endian number.
 /// If the vector is already minimum, don't change it.
-fn big_endian_saturating_add_one(v: &mut Vec<u8>) {
+fn big_endian_saturating_add_one(v: &mut [u8]) {
     if is_max(v) {
         return;
     }
@@ -2763,7 +2800,6 @@ fn test_helpers() {
 
     uint::construct_uint! {
         // 32 byte number
-        #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
         struct Num32(4);
     }
 

@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
@@ -19,6 +22,7 @@ prometheus.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 futures.workspace = true
+parking_lot.workspace = true
 tower.workspace = true
 reqwest.workspace = true
 tap.workspace = true
@@ -43,9 +47,9 @@ sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
 mysten-metrics.workspace = true
+mysten-service.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true
-narwhal-worker.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

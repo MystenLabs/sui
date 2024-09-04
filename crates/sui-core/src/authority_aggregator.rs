@@ -8,7 +8,6 @@ use crate::authority_client::{
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
 use std::convert::AsRef;
@@ -40,8 +39,9 @@ use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrumen
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -179,16 +179,16 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
-            remaining_tasks_when_reaching_cert_quorum: mysten_metrics::histogram::Histogram::new_in_registry(
+            remaining_tasks_when_reaching_cert_quorum: register_histogram_with_registry!(
                 "auth_agg_remaining_tasks_when_reaching_cert_quorum",
                 "Number of remaining tasks when reaching certificate quorum",
                 registry,
-            ),
-            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: mysten_metrics::histogram::Histogram::new_in_registry(
+            ).unwrap(),
+            remaining_tasks_when_cert_broadcasting_post_quorum_timeout: register_histogram_with_registry!(
                 "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
                 "Number of remaining tasks when post quorum certificate broadcasting times out",
                 registry,
-            )
+            ).unwrap()
         }
     }
 
@@ -277,6 +277,7 @@ pub enum AggregatorProcessCertificateError {
 }
 
 pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> GroupedErrors {
+    #[allow(clippy::mutable_key_type)]
     let mut grouped_errors = HashMap::new();
     for (error, names, stake) in errors {
         let entry = grouped_errors.entry(error).or_insert((0, vec![]));
@@ -1501,11 +1502,11 @@ where
         // create a set of validators that we should sample to request input/output objects from
         let validators_to_sample =
             if request.include_input_objects || request.include_output_objects {
-                // Always at least ask 1 validator
-                let number_to_sample = std::cmp::max(1, self.committee.num_members() / 2);
+                // Number of validators to request input/output objects from
+                const NUMBER_TO_SAMPLE: usize = 5;
 
                 self.committee
-                    .choose_multiple_weighted_iter(number_to_sample)
+                    .choose_multiple_weighted_iter(NUMBER_TO_SAMPLE)
                     .cloned()
                     .collect()
             } else {
@@ -1667,7 +1668,7 @@ where
         let metrics = self.metrics.clone();
         metrics
             .remaining_tasks_when_reaching_cert_quorum
-            .report(remaining_tasks.len() as u64);
+            .observe(remaining_tasks.len() as f64);
         if !remaining_tasks.is_empty() {
             // Use best efforts to send the cert to remaining validators.
             spawn_monitored_task!(async move {
@@ -1677,7 +1678,7 @@ where
                         _ = &mut timeout => {
                             debug!(?tx_digest, "Timed out in post quorum cert broadcasting: {:?}. Remaining tasks: {:?}", timeout_after_quorum, remaining_tasks.len());
                             metrics.cert_broadcasting_post_quorum_timeout.inc();
-                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.report(remaining_tasks.len() as u64);
+                            metrics.remaining_tasks_when_cert_broadcasting_post_quorum_timeout.observe(remaining_tasks.len() as f64);
                             break;
                         }
                         res = remaining_tasks.next() => {

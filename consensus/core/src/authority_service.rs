@@ -17,7 +17,7 @@ use crate::{
     block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
-    commit_syncer::CommitVoteMonitor,
+    commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
@@ -133,7 +133,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .rejected_future_blocks
-                .with_label_values(&[&peer_hostname])
+                .with_label_values(&[peer_hostname])
                 .inc();
             debug!(
                 "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
@@ -157,7 +157,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname, &"handle_send_block"])
+                .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
             debug!(
                 "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
@@ -171,7 +171,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         // Observe the block for the commit votes. When local commit is lagging too much,
         // commit sync loop will trigger fetching.
-        self.commit_vote_monitor.observe(&verified_block);
+        self.commit_vote_monitor.observe_block(&verified_block);
 
         // Reject blocks when local commit index is lagging too far from quorum commit index.
         //
@@ -192,7 +192,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .rejected_blocks
-                .with_label_values(&[&"commit_lagging"])
+                .with_label_values(&["commit_lagging"])
                 .inc();
             debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
@@ -213,7 +213,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .metrics
             .node_metrics
             .verified_blocks
-            .with_label_values(&[&peer_hostname])
+            .with_label_values(&[peer_hostname])
             .inc();
 
         let missing_ancestors = self
@@ -567,7 +567,7 @@ mod tests {
         authority_service::AuthorityService,
         block::BlockAPI,
         block::{BlockRef, SignedBlock, TestBlock, VerifiedBlock},
-        commit_syncer::CommitVoteMonitor,
+        commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
@@ -689,24 +689,25 @@ mod tests {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
-            commit_vote_monitor,
+            commit_vote_monitor.clone(),
             block_verifier.clone(),
             dag_state.clone(),
+            false,
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            Arc::new(CommitVoteMonitor::new(context.clone())),
+            commit_vote_monitor,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
@@ -747,24 +748,25 @@ mod tests {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
-            commit_vote_monitor,
+            commit_vote_monitor.clone(),
             block_verifier.clone(),
             dag_state.clone(),
+            true,
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
-            Arc::new(CommitVoteMonitor::new(context.clone())),
+            commit_vote_monitor,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,

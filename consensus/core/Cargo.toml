@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true

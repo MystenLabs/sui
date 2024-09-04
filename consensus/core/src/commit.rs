@@ -13,7 +13,6 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
-use mysten_metrics::monitored_mpsc::UnboundedSender;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -262,7 +261,7 @@ pub struct CommitRef {
 }
 
 impl CommitRef {
-    pub(crate) fn new(index: CommitIndex, digest: CommitDigest) -> Self {
+    pub fn new(index: CommitIndex, digest: CommitDigest) -> Self {
         Self { index, digest }
     }
 }
@@ -306,8 +305,8 @@ pub struct CommittedSubDag {
 }
 
 impl CommittedSubDag {
-    /// Create new (empty) sub-dag.
-    pub(crate) fn new(
+    /// Creates a new committed sub dag.
+    pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
@@ -396,32 +395,6 @@ pub fn load_committed_subdag_from_store(
         commit.reference(),
         reputation_scores_desc,
     )
-}
-
-pub struct CommitConsumer {
-    // A channel to send the committed sub dags through
-    pub sender: UnboundedSender<CommittedSubDag>,
-    // Leader round of the last commit that the consumer has processed.
-    pub last_processed_commit_round: Round,
-    // Index of the last commit that the consumer has processed. This is useful for
-    // crash/recovery so mysticeti can replay the commits from the next index.
-    // First commit in the replayed sequence will have index last_processed_commit_index + 1.
-    // Set 0 to replay from the start (as generated commit sequence starts at index = 1).
-    pub last_processed_commit_index: CommitIndex,
-}
-
-impl CommitConsumer {
-    pub fn new(
-        sender: UnboundedSender<CommittedSubDag>,
-        last_processed_commit_round: Round,
-        last_processed_commit_index: CommitIndex,
-    ) -> Self {
-        Self {
-            sender,
-            last_processed_commit_round,
-            last_processed_commit_index,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

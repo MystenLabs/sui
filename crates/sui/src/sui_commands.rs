@@ -34,7 +34,8 @@ use sui_config::{
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
 #[cfg(feature = "indexer")]
 use sui_graphql_rpc::{
-    config::ConnectionConfig, test_infra::cluster::start_graphql_server_with_fn_rpc,
+    config::{ConnectionConfig, ServiceConfig},
+    test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 #[cfg(feature = "indexer")]
 use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
@@ -493,7 +494,7 @@ impl SuiCommand {
                     PersistedConfig::read(&bridge_committee_config_path).map_err(|err| {
                         err.context(format!(
                             "Cannot open Bridge Committee config file at {:?}",
-                            network_config_path
+                            bridge_committee_config_path
                         ))
                     })?;
 
@@ -700,17 +701,17 @@ async fn start(
             .map_err(|_| anyhow!("Invalid indexer host and port"))?;
         tracing::info!("Starting the indexer service at {indexer_address}");
         // Start in writer mode
-        start_test_indexer::<diesel::PgConnection>(
+        start_test_indexer(
             Some(pg_address.clone()),
             fullnode_url.clone(),
-            ReaderWriterConfig::writer_mode(None),
+            ReaderWriterConfig::writer_mode(None, None),
             data_ingestion_path.clone(),
         )
         .await;
         info!("Indexer in writer mode started");
 
         // Start in reader mode
-        start_test_indexer::<diesel::PgConnection>(
+        start_test_indexer(
             Some(pg_address.clone()),
             fullnode_url.clone(),
             ReaderWriterConfig::reader_mode(indexer_address.to_string()),
@@ -737,6 +738,7 @@ async fn start(
             graphql_connection_config,
             Some(fullnode_url.clone()),
             None, // it will be initialized by default
+            ServiceConfig::test_defaults(),
         )
         .await;
         info!("GraphQL started");

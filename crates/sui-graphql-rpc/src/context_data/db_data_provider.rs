@@ -5,7 +5,6 @@ use crate::{
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
-use diesel::PgConnection;
 use std::{collections::BTreeMap, time::Duration};
 use sui_indexer::db::ConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
@@ -16,11 +15,11 @@ use sui_types::{
 };
 
 pub(crate) struct PgManager {
-    pub inner: IndexerReader<PgConnection>,
+    pub inner: IndexerReader,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader<PgConnection>) -> Self {
+    pub(crate) fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 
@@ -29,11 +28,11 @@ impl PgManager {
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
-    ) -> Result<IndexerReader<PgConnection>, Error> {
+    ) -> Result<IndexerReader, Error> {
         let mut config = ConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
-        IndexerReader::<PgConnection>::new_with_config(db_url, config)
+        IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 }

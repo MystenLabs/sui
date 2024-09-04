@@ -45,8 +45,9 @@ export async function verifyPersonalMessageSignature(
 export async function verifyTransactionSignature(
 	transaction: Uint8Array,
 	signature: string,
+	options: { client?: SuiGraphQLClient } = {},
 ): Promise<PublicKey> {
-	const parsedSignature = parseSignature(signature);
+	const parsedSignature = parseSignature(signature, options);
 
 	if (
 		!(await parsedSignature.publicKey.verifyTransaction(
@@ -102,10 +103,13 @@ export function publicKeyFromRawBytes(
 	}
 }
 
-export function publicKeyFromSuiBytes(publicKey: string | Uint8Array) {
+export function publicKeyFromSuiBytes(
+	publicKey: string | Uint8Array,
+	options: { client?: SuiGraphQLClient } = {},
+) {
 	const bytes = typeof publicKey === 'string' ? fromB64(publicKey) : publicKey;
 
 	const signatureScheme = SIGNATURE_FLAG_TO_SCHEME[bytes[0] as SignatureFlag];
 
-	return publicKeyFromRawBytes(signatureScheme, bytes.slice(1));
+	return publicKeyFromRawBytes(signatureScheme, bytes.slice(1), options);
 }

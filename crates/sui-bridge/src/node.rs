@@ -24,7 +24,10 @@ use std::{
     time::Duration,
 };
 use sui_types::{
-    bridge::{BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_MODULE_NAME},
+    bridge::{
+        BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
+        BRIDGE_TREASURY_MODULE_NAME,
+    },
     event::EventID,
     Identifier,
 };
@@ -166,6 +169,8 @@ fn get_sui_modules_to_watch(
     let sui_bridge_modules = vec![
         BRIDGE_MODULE_NAME.to_owned(),
         BRIDGE_COMMITTEE_MODULE_NAME.to_owned(),
+        BRIDGE_TREASURY_MODULE_NAME.to_owned(),
+        BRIDGE_LIMITER_MODULE_NAME.to_owned(),
     ];
     if let Some(cursor) = sui_bridge_module_last_processed_event_id_override {
         info!("Overriding cursor for sui bridge modules to {:?}", cursor);
@@ -235,6 +240,7 @@ mod tests {
     use prometheus::Registry;
 
     use super::*;
+    use crate::config::default_ed25519_key_pair;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
@@ -315,13 +321,17 @@ mod tests {
         let store = BridgeOrchestratorTables::new(temp_dir.path());
         let bridge_module = BRIDGE_MODULE_NAME.to_owned();
         let committee_module = BRIDGE_COMMITTEE_MODULE_NAME.to_owned();
+        let treasury_module = BRIDGE_TREASURY_MODULE_NAME.to_owned();
+        let limiter_module = BRIDGE_LIMITER_MODULE_NAME.to_owned();
         // No override, no stored watermark, use None
         let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
         assert_eq!(
             sui_modules_to_watch,
             vec![
                 (bridge_module.clone(), None),
-                (committee_module.clone(), None)
+                (committee_module.clone(), None),
+                (treasury_module.clone(), None),
+                (limiter_module.clone(), None)
             ]
             .into_iter()
             .collect::<HashMap<_, _>>()
@@ -337,7 +347,9 @@ mod tests {
             sui_modules_to_watch,
             vec![
                 (bridge_module.clone(), Some(override_cursor)),
-                (committee_module.clone(), Some(override_cursor))
+                (committee_module.clone(), Some(override_cursor)),
+                (treasury_module.clone(), Some(override_cursor)),
+                (limiter_module.clone(), Some(override_cursor))
             ]
             .into_iter()
             .collect::<HashMap<_, _>>()
@@ -357,7 +369,9 @@ mod tests {
             sui_modules_to_watch,
             vec![
                 (bridge_module.clone(), Some(stored_cursor)),
-                (committee_module.clone(), None)
+                (committee_module.clone(), None),
+                (treasury_module.clone(), None),
+                (limiter_module.clone(), None)
             ]
             .into_iter()
             .collect::<HashMap<_, _>>()
@@ -376,7 +390,9 @@ mod tests {
             sui_modules_to_watch,
             vec![
                 (bridge_module.clone(), Some(override_cursor)),
-                (committee_module.clone(), Some(override_cursor))
+                (committee_module.clone(), Some(override_cursor)),
+                (treasury_module.clone(), Some(override_cursor)),
+                (limiter_module.clone(), Some(override_cursor))
             ]
             .into_iter()
             .collect::<HashMap<_, _>>()
@@ -417,6 +433,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: false,
             db_path: None,
+            metrics_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -480,6 +497,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: true,
             db_path: Some(db_path),
+            metrics_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -554,6 +572,7 @@ mod tests {
             approved_governance_actions: vec![],
             run_client: true,
             db_path: Some(db_path),
+            metrics_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(

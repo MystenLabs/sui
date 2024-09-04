@@ -37,7 +37,7 @@ pub fn verify(
 
 fn verify_fallthrough(
     current_function: FunctionDefinitionIndex,
-    code: &Vec<Bytecode>,
+    code: &[Bytecode],
 ) -> PartialVMResult<()> {
     // Check to make sure that the bytecode vector ends with a branching instruction.
     match code.last() {

@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority};
 use fastcrypto::ed25519;
 use mysten_metrics::{monitored_mpsc::unbounded_channel, RegistryID, RegistryService};
-use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_protocol_config::ConsensusNetwork;
@@ -41,6 +40,7 @@ pub struct MysticetiManager {
     metrics: Arc<ConsensusManagerMetrics>,
     registry_service: RegistryService,
     authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
+    boot_counter: Mutex<u64>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -69,6 +69,7 @@ impl MysticetiManager {
             authority: ArcSwapOption::empty(),
             client,
             consensus_handler: Mutex::new(None),
+            boot_counter: Mutex::new(0),
         }
     }
 
@@ -124,9 +125,15 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_config = config
             .consensus_config()
             .expect("consensus_config should exist");
-        let parameters = Parameters {
+
+        let mut parameters = Parameters {
             db_path: self.get_store_path(epoch),
             ..consensus_config.parameters.clone().unwrap_or_default()
+        };
+
+        // Disable the automated last known block sync for mainnet for now
+        if epoch_store.get_chain_identifier().chain() == sui_protocol_config::Chain::Mainnet {
+            parameters.sync_last_known_own_block_timeout = Duration::ZERO;
         };
 
         let own_protocol_key = self.protocol_keypair.public();
@@ -142,13 +149,13 @@ impl ConsensusManagerTrait for MysticetiManager {
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
         let consumer = CommitConsumer::new(
             commit_sender,
-            // TODO(mysticeti): remove dependency on narwhal executor
-            consensus_handler.last_executed_sub_dag_round() as Round,
-            consensus_handler.last_executed_sub_dag_index() as CommitIndex,
+            consensus_handler.last_processed_subdag_index() as CommitIndex,
         );
+        let monitor = consumer.monitor();
 
         // TODO(mysticeti): Investigate if we need to return potential errors from
         // AuthorityNode and add retries here?
+        let boot_counter = *self.boot_counter.lock().await;
         let authority = ConsensusAuthority::start(
             network_type,
             own_index,
@@ -160,9 +167,14 @@ impl ConsensusManagerTrait for MysticetiManager {
             Arc::new(tx_validator.clone()),
             consumer,
             registry.clone(),
+            boot_counter,
         )
         .await;
         let client = authority.transaction_client();
+
+        // Now increment the boot counter
+        let mut boot_counter = self.boot_counter.lock().await;
+        *boot_counter += 1;
 
         let registry_id = self.registry_service.add(registry.clone());
 
@@ -173,7 +185,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
+        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver, monitor);
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
     }

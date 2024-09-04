@@ -3,6 +3,8 @@
 
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use dashmap::DashMap;
+use parking_lot::Mutex;
+use simple_server_timing_header::Timer;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -31,10 +33,27 @@ pub use guards::*;
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 
+pub const SUBSECOND_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1.,
+];
+
+pub const COARSE_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1., 2., 3., 5., 10., 20., 30., 60.,
+];
+
 pub const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6,
     0.7, 0.8, 0.9, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5.,
     6., 7., 8., 9., 10., 15., 20., 25., 30., 60., 90.,
+];
+
+pub const COUNT_BUCKETS: &[f64] = &[
+    2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000.,
+];
+
+pub const BYTES_BUCKETS: &[f64] = &[
+    1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152., 4194304., 8388608.,
+    16777216., 33554432., 67108864.,
 ];
 
 #[derive(Debug)]
@@ -132,6 +151,60 @@ pub fn get_metrics() -> Option<&'static Metrics> {
     METRICS.get()
 }
 
+tokio::task_local! {
+    static SERVER_TIMING: Arc<Mutex<Timer>>;
+}
+
+/// Create a new task-local ServerTiming context and run the provided future within it.
+/// Should be used at the top-most level of a request handler. Can be added to an axum router
+/// as a layer by using mysten_service::server_timing_middleware.
+pub async fn with_new_server_timing<T>(fut: impl Future<Output = T> + Send + 'static) -> T {
+    let timer = Arc::new(Mutex::new(Timer::new()));
+
+    let mut ret = None;
+    SERVER_TIMING
+        .scope(timer, async {
+            ret = Some(fut.await);
+        })
+        .await;
+
+    ret.unwrap()
+}
+
+/// Create a new task-local ServerTiming context and run the provided future within it.
+/// Only intended for use by macros within this module.
+pub async fn with_server_timing<T>(
+    timer: Arc<Mutex<Timer>>,
+    fut: impl Future<Output = T> + Send + 'static,
+) -> T {
+    let mut ret = None;
+    SERVER_TIMING
+        .scope(timer, async {
+            ret = Some(fut.await);
+        })
+        .await;
+
+    ret.unwrap()
+}
+
+/// Get the currently active ServerTiming context. Only intended for use by macros within this module.
+pub fn get_server_timing() -> Option<Arc<Mutex<Timer>>> {
+    SERVER_TIMING.try_with(|timer| timer.clone()).ok()
+}
+
+/// Add a new entry to the ServerTiming header.
+/// If the caller is not currently in a ServerTiming context (created with `with_new_server_timing`),
+/// an error is logged.
+pub fn add_server_timing(name: &str) {
+    let res = SERVER_TIMING.try_with(|timer| {
+        timer.lock().add(name);
+    });
+
+    if res.is_err() {
+        tracing::error!("Server timing context not found");
+    }
+}
+
 #[macro_export]
 macro_rules! monitored_future {
     ($fut: expr) => {{
@@ -182,24 +255,41 @@ macro_rules! monitored_future {
 }
 
 #[macro_export]
+macro_rules! forward_server_timing_and_spawn {
+    ($fut: expr) => {
+        if let Some(timing) = $crate::get_server_timing() {
+            tokio::task::spawn(async move { $crate::with_server_timing(timing, $fut).await })
+        } else {
+            tokio::task::spawn($fut)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! spawn_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn($crate::monitored_future!(tasks, $fut, "", INFO, false))
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
+            tasks, $fut, "", INFO, false
+        ))
     };
 }
 
 #[macro_export]
 macro_rules! spawn_logged_monitored_task {
     ($fut: expr) => {
-        tokio::task::spawn($crate::monitored_future!(tasks, $fut, "", INFO, true))
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
+            tasks, $fut, "", INFO, true
+        ))
     };
 
     ($fut: expr, $name: expr) => {
-        tokio::task::spawn($crate::monitored_future!(tasks, $fut, $name, INFO, true))
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
+            tasks, $fut, $name, INFO, true
+        ))
     };
 
     ($fut: expr, $name: expr, $logging_level: ident) => {
-        tokio::task::spawn($crate::monitored_future!(
+        $crate::forward_server_timing_and_spawn!($crate::monitored_future!(
             tasks,
             $fut,
             $name,

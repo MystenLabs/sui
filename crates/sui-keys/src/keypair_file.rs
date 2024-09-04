@@ -59,6 +59,7 @@ pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
 /// - Base64 encoded `privkey` for Raw key
 /// - Bech32 encoded private key prefixed with `suiprivkey`
 /// - Hex encoded `privkey` for Raw key
+///
 /// If `require_secp256k1` is true, it will return an error if the key is not Secp256k1.
 pub fn read_key(path: &PathBuf, require_secp256k1: bool) -> Result<SuiKeyPair, anyhow::Error> {
     if !path.exists() {

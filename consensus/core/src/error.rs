@@ -24,6 +24,15 @@ pub(crate) enum ConsensusError {
     #[error("Error serializing: {0}")]
     SerializationFailure(bcs::Error),
 
+    #[error("Block contains a transaction that is too large: {size} > {limit}")]
+    TransactionTooLarge { size: usize, limit: usize },
+
+    #[error("Block contains too many transactions: {count} > {limit}")]
+    TooManyTransactions { count: usize, limit: usize },
+
+    #[error("Block contains too many transaction bytes: {size} > {limit}")]
+    TooManyTransactionBytes { size: usize, limit: usize },
+
     #[error("Unexpected block authority {0} from peer {1}")]
     UnexpectedAuthority(AuthorityIndex, AuthorityIndex),
 

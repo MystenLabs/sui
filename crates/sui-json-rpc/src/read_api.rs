@@ -17,6 +17,7 @@ use move_core_types::language_storage::StructTag;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
@@ -209,7 +210,7 @@ impl ReadApi {
         }
         self.metrics
             .get_tx_blocks_limit
-            .report(digests.len() as u64);
+            .observe(digests.len() as f64);
 
         let opts = opts.unwrap_or_default();
 
@@ -465,7 +466,7 @@ impl ReadApi {
 
         self.metrics
             .get_tx_blocks_result_size
-            .report(converted_tx_block_resps.len() as u64);
+            .observe(converted_tx_block_resps.len() as f64);
         self.metrics
             .get_tx_blocks_result_size_total
             .inc_by(converted_tx_block_resps.len() as u64);
@@ -542,7 +543,7 @@ impl ReadApiServer for ReadApi {
             if object_ids.len() <= *QUERY_MAX_RESULT_LIMIT {
                 self.metrics
                     .get_objects_limit
-                    .report(object_ids.len() as u64);
+                    .observe(object_ids.len() as f64);
                 let mut futures = vec![];
                 for object_id in object_ids {
                     futures.push(self.get_object(object_id, options.clone()));
@@ -566,7 +567,7 @@ impl ReadApiServer for ReadApi {
 
                 self.metrics
                     .get_objects_result_size
-                    .report(objects.len() as u64);
+                    .observe(objects.len() as f64);
                 self.metrics
                     .get_objects_result_size_total
                     .inc_by(objects.len() as u64);
@@ -721,10 +722,12 @@ impl ReadApiServer for ReadApi {
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
-                transaction_kv_store.get_tx(digest).await.map_err(|err| {
+                let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
                     Error::from(err)
-                })
+                });
+                add_server_timing("tx_kv_lookup");
+                ret
             })
             .await
             .map_err(Error::from)??;
@@ -961,7 +964,7 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let kv_store = self.transaction_kv_store.clone();
 
-            self.metrics.get_checkpoints_limit.report(limit as u64);
+            self.metrics.get_checkpoints_limit.observe(limit as f64);
 
             let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
                 state,
@@ -985,7 +988,7 @@ impl ReadApiServer for ReadApi {
 
             self.metrics
                 .get_checkpoints_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_checkpoints_result_size_total
                 .inc_by(data.len() as u64);

@@ -887,7 +887,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             exp(context, code, *eref);
             code.push(sp(loc, B::WriteRef));
         }
-        C::Abort(ecode) => {
+        C::Abort(_, ecode) => {
             exp(context, code, ecode);
             code.push(sp(loc, B::Abort));
         }

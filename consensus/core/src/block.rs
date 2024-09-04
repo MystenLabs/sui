@@ -443,8 +443,8 @@ impl VerifiedBlock {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_for_test(block: Block) -> Self {
+    /// This method is public for testing in other crates.
+    pub fn new_for_test(block: Block) -> Self {
         // Use empty signature in test.
         let signed_block = SignedBlock {
             inner: block,
@@ -462,7 +462,7 @@ impl VerifiedBlock {
     }
 
     /// Returns reference to the block.
-    pub(crate) fn reference(&self) -> BlockRef {
+    pub fn reference(&self) -> BlockRef {
         BlockRef {
             round: self.round(),
             author: self.author(),
@@ -544,15 +544,14 @@ pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
 }
 
 /// Creates fake blocks for testing.
-#[cfg(test)]
+/// This struct is public for testing in other crates.
 #[derive(Clone)]
-pub(crate) struct TestBlock {
+pub struct TestBlock {
     block: BlockV1,
 }
 
-#[cfg(test)]
 impl TestBlock {
-    pub(crate) fn new(round: Round, author: u32) -> Self {
+    pub fn new(round: Round, author: u32) -> Self {
         Self {
             block: BlockV1 {
                 round,
@@ -562,42 +561,42 @@ impl TestBlock {
         }
     }
 
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+    pub fn set_epoch(mut self, epoch: Epoch) -> Self {
         self.block.epoch = epoch;
         self
     }
 
-    pub(crate) fn set_round(mut self, round: Round) -> Self {
+    pub fn set_round(mut self, round: Round) -> Self {
         self.block.round = round;
         self
     }
 
-    pub(crate) fn set_author(mut self, author: AuthorityIndex) -> Self {
+    pub fn set_author(mut self, author: AuthorityIndex) -> Self {
         self.block.author = author;
         self
     }
 
-    pub(crate) fn set_timestamp_ms(mut self, timestamp_ms: BlockTimestampMs) -> Self {
+    pub fn set_timestamp_ms(mut self, timestamp_ms: BlockTimestampMs) -> Self {
         self.block.timestamp_ms = timestamp_ms;
         self
     }
 
-    pub(crate) fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+    pub fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
         self.block.ancestors = ancestors;
         self
     }
 
-    pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
+    pub fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
         self
     }
 
-    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+    pub fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
         self.block.commit_votes = commit_votes;
         self
     }
 
-    pub(crate) fn build(self) -> Block {
+    pub fn build(self) -> Block {
         Block::V1(self.block)
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Context};
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -24,13 +25,21 @@ pub enum LockCommand {
     Upgrade,
 }
 
-#[derive(Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum PublishedAtError {
+    #[error("The 'published-at' field in Move.toml or Move.lock is invalid: {0:?}")]
     Invalid(String),
+
+    #[error("The 'published-at' field is not present in Move.toml or Move.lock")]
     NotPresent,
+
+    #[error(
+        "Conflicting 'published-at' addresses between Move.toml -- {id_manifest} -- and \
+         Move.lock -- {id_lock}"
+    )]
     Conflict {
-        id_lock: String,
-        id_manifest: String,
+        id_lock: ObjectID,
+        id_manifest: ObjectID,
     },
 }
 
@@ -140,45 +149,42 @@ pub fn resolve_published_id(
 ) -> Result<ObjectID, PublishedAtError> {
     // Look up a valid `published-at` in the `Move.toml` first, which we'll
     // return if the Move.lock does not manage addresses.
-    let published_id_in_manifest = match published_at_property(package) {
-        Ok(v) => Some(v),
-        Err(PublishedAtError::NotPresent) => None,
-        Err(e) => return Err(e), // An existing but invalid `published-at` in `Move.toml` should fail early.
-    };
+    let published_id_in_manifest = manifest_published_at(package);
+
+    match published_id_in_manifest {
+        Ok(_) | Err(PublishedAtError::NotPresent) => { /* nop */ }
+        Err(e) => {
+            return Err(e);
+        }
+    }
 
     let lock = package.package_path.join(SourcePackageLayout::Lock.path());
     let Ok(mut lock_file) = File::open(lock.clone()) else {
-        return match published_id_in_manifest {
-            Some(v) => {
-                ObjectID::from_str(v.as_str()).map_err(|_| PublishedAtError::Invalid(v.to_owned()))
-            }
-            None => Err(PublishedAtError::NotPresent),
-        };
+        return published_id_in_manifest;
     };
-    let managed_packages = ManagedPackage::read(&mut lock_file).ok();
-    // Find the environment and ManagedPackage data for this chain_id.
-    let id_in_lock_for_chain_id = managed_packages.and_then(|m| {
-        let chain_id = chain_id.as_ref()?;
-        m.into_iter()
-            .find_map(|(_, v)| (v.chain_id == *chain_id).then_some(v.latest_published_id))
-    });
 
-    let package_id = match (id_in_lock_for_chain_id, published_id_in_manifest) {
-        (Some(id_lock), Some(id_manifest)) if id_lock != id_manifest => {
-            return Err(PublishedAtError::Conflict {
+    // Find the environment and ManagedPackage data for this chain_id.
+    let id_in_lock_for_chain_id =
+        lock_published_at(ManagedPackage::read(&mut lock_file).ok(), chain_id.as_ref());
+
+    match (id_in_lock_for_chain_id, published_id_in_manifest) {
+        (Ok(id_lock), Ok(id_manifest)) if id_lock != id_manifest => {
+            Err(PublishedAtError::Conflict {
                 id_lock,
                 id_manifest,
             })
         }
-        (Some(id_lock), _) => id_lock,
-        (None, Some(id_manifest)) => id_manifest, /* No info in Move.lock: Fall back to manifest */
-        _ => return Err(PublishedAtError::NotPresent), /* Neither in Move.toml nor Move.lock */
-    };
-    ObjectID::from_str(package_id.as_str())
-        .map_err(|_| PublishedAtError::Invalid(package_id.to_owned()))
+
+        (Ok(id), _) | (_, Ok(id)) => Ok(id),
+
+        // We return early (above) if we failed to read the ID from the manifest for some reason
+        // other than it not being present, so at this point, we can defer to whatever error came
+        // from the lock file (Ok case is handled above).
+        (from_lock, Err(_)) => from_lock,
+    }
 }
 
-fn published_at_property(package: &Package) -> Result<String, PublishedAtError> {
+fn manifest_published_at(package: &Package) -> Result<ObjectID, PublishedAtError> {
     let Some(value) = package
         .source_package
         .package
@@ -187,5 +193,36 @@ fn published_at_property(package: &Package) -> Result<String, PublishedAtError> 
     else {
         return Err(PublishedAtError::NotPresent);
     };
-    Ok(value.to_string())
+
+    let id =
+        ObjectID::from_str(value.as_str()).map_err(|_| PublishedAtError::Invalid(value.clone()))?;
+
+    if id == ObjectID::ZERO {
+        Err(PublishedAtError::NotPresent)
+    } else {
+        Ok(id)
+    }
+}
+
+fn lock_published_at(
+    lock: Option<HashMap<String, ManagedPackage>>,
+    chain_id: Option<&String>,
+) -> Result<ObjectID, PublishedAtError> {
+    let (Some(lock), Some(chain_id)) = (lock, chain_id) else {
+        return Err(PublishedAtError::NotPresent);
+    };
+
+    let managed_package = lock
+        .into_values()
+        .find(|v| v.chain_id == *chain_id)
+        .ok_or(PublishedAtError::NotPresent)?;
+
+    let id = ObjectID::from_str(managed_package.latest_published_id.as_str())
+        .map_err(|_| PublishedAtError::Invalid(managed_package.latest_published_id.clone()))?;
+
+    if id == ObjectID::ZERO {
+        Err(PublishedAtError::NotPresent)
+    } else {
+        Ok(id)
+    }
 }

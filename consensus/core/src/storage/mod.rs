@@ -17,6 +17,7 @@ use crate::{
 };
 
 /// A common interface for consensus storage.
+#[allow(unused)]
 pub(crate) trait Store: Send + Sync {
     /// Writes blocks, consensus commits and other data to store atomically.
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()>;

@@ -18,16 +18,14 @@ use sui_bridge::retry_with_max_elapsed_time;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use mysten_metrics::metered_channel::Receiver;
-use mysten_metrics::{metered_channel, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 
+use crate::metrics::BridgeIndexerMetrics;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::{EthEvent, RawEthLog};
+use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
 
-use crate::indexer_builder::{DataMapper, Datasource};
-use crate::metrics::BridgeIndexerMetrics;
-use crate::sui_bridge_indexer::PgBridgePersistent;
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,
 };
@@ -36,50 +34,42 @@ type RawEthData = (RawEthLog, Block<H256>, Transaction);
 
 pub struct EthSubscriptionDatasource {
     bridge_address: EthAddress,
+    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     eth_ws_url: String,
     indexer_metrics: BridgeIndexerMetrics,
+    genesis_block: u64,
 }
 
 impl EthSubscriptionDatasource {
-    pub fn new(
+    pub async fn new(
         eth_sui_bridge_contract_address: String,
+        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
         eth_ws_url: String,
         indexer_metrics: BridgeIndexerMetrics,
+        genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
         Ok(Self {
             bridge_address,
+            eth_client,
             eth_ws_url,
             indexer_metrics,
+            genesis_block,
         })
     }
 }
 #[async_trait]
-impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSubscriptionDatasource {
+impl Datasource<RawEthData> for EthSubscriptionDatasource {
     async fn start_data_retrieval(
         &self,
-        task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<
-        (
-            JoinHandle<Result<(), Error>>,
-            Receiver<(u64, Vec<RawEthData>)>,
-        ),
-        Error,
-    > {
+        data_sender: DataSender<RawEthData>,
+    ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let filter = Filter::new()
             .address(self.bridge_address)
             .from_block(starting_checkpoint)
             .to_block(target_checkpoint);
-
-        let (data_sender, data_receiver) = metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&[&task_name]),
-        );
 
         let eth_ws_url = self.eth_ws_url.clone();
         let indexer_metrics: BridgeIndexerMetrics = self.indexer_metrics.clone();
@@ -142,73 +132,72 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSubscri
 
             Ok::<_, Error>(())
         });
-        Ok((handle, data_receiver))
+        Ok(handle)
+    }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        self.eth_client
+            .get_last_finalized_block_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get last finalized block id: {:?}", e))
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_block
     }
 }
 
 pub struct EthSyncDatasource {
     bridge_address: EthAddress,
     eth_http_url: String,
+    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     indexer_metrics: BridgeIndexerMetrics,
-    bridge_metrics: Arc<BridgeMetrics>,
+    genesis_block: u64,
 }
 
 impl EthSyncDatasource {
-    pub fn new(
+    pub async fn new(
         eth_sui_bridge_contract_address: String,
         eth_http_url: String,
         indexer_metrics: BridgeIndexerMetrics,
         bridge_metrics: Arc<BridgeMetrics>,
+        genesis_block: u64,
     ) -> Result<Self, anyhow::Error> {
         let bridge_address = EthAddress::from_str(&eth_sui_bridge_contract_address)?;
+        let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
+            EthClient::<MeteredEthHttpProvier>::new(
+                &eth_http_url,
+                HashSet::from_iter(vec![]), // dummy
+                bridge_metrics.clone(),
+            )
+            .await?,
+        );
         Ok(Self {
             bridge_address,
+            eth_client,
             eth_http_url,
             indexer_metrics,
-            bridge_metrics,
+            genesis_block,
         })
     }
 }
 #[async_trait]
-impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDatasource {
+impl Datasource<RawEthData> for EthSyncDatasource {
     async fn start_data_retrieval(
         &self,
-        task_name: String,
         starting_checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<
-        (
-            JoinHandle<Result<(), Error>>,
-            Receiver<(u64, Vec<RawEthData>)>,
-        ),
-        Error,
-    > {
-        let client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
-            EthClient::<MeteredEthHttpProvier>::new(
-                &self.eth_http_url,
-                HashSet::from_iter(vec![self.bridge_address]),
-                self.bridge_metrics.clone(),
-            )
-            .await?,
-        );
-
+        data_sender: DataSender<RawEthData>,
+    ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let provider = Arc::new(
             Provider::<Http>::try_from(&self.eth_http_url)?
                 .interval(std::time::Duration::from_millis(2000)),
         );
 
-        let (data_sender, data_receiver) = metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&[&task_name]),
-        );
-
         let bridge_address = self.bridge_address;
         let indexer_metrics: BridgeIndexerMetrics = self.indexer_metrics.clone();
-        let client = Arc::clone(&client);
-        let provider = Arc::clone(&provider);
+        let client = self.eth_client.clone();
+        let provider = provider.clone();
 
         let handle = spawn_monitored_task!(async move {
             let mut cached_blocks: HashMap<u64, Block<H256>> = HashMap::new();
@@ -265,7 +254,18 @@ impl Datasource<RawEthData, PgBridgePersistent, ProcessedTxnData> for EthSyncDat
             Ok::<_, Error>(())
         });
 
-        Ok((handle, data_receiver))
+        Ok(handle)
+    }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        self.eth_client
+            .get_last_finalized_block_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get last finalized block id: {:?}", e))
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_block
     }
 }
 

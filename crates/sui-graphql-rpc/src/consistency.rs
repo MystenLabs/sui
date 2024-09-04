@@ -7,7 +7,7 @@ use sui_indexer::models::objects::StoredHistoryObject;
 
 use crate::raw_query::RawQuery;
 use crate::types::available_range::AvailableRange;
-use crate::types::cursor::{JsonCursor, Page};
+use crate::types::cursor::{JsonCursor, Page, ScanLimited};
 use crate::types::object::Cursor;
 use crate::{filter, query};
 
@@ -58,6 +58,10 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
         self.c
     }
 }
+
+impl ScanLimited for JsonCursor<ConsistentIndexCursor> {}
+
+impl ScanLimited for JsonCursor<ConsistentNamedCursor> {}
 
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch
 /// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint `range`.

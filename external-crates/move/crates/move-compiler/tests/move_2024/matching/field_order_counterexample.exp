@@ -1,0 +1,8 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/field_order_counterexample.move:8:12
+  │
+8 │     match (e) {
+  │            ^ Pattern 'E::V { zero: _0, one: _ }' not covered
+  │
+  = When '_0' is not 0
+

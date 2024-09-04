@@ -3,7 +3,6 @@
 
 use crate::indexer_reader::IndexerReader;
 use async_trait::async_trait;
-use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::coin_api::{parse_to_struct_tag, parse_to_type_tag};
@@ -15,18 +14,18 @@ use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 
-pub(crate) struct CoinReadApi<T: R2D2Connection + 'static> {
-    inner: IndexerReader<T>,
+pub(crate) struct CoinReadApi {
+    inner: IndexerReader,
 }
 
-impl<T: R2D2Connection> CoinReadApi<T> {
-    pub fn new(inner: IndexerReader<T>) -> Self {
+impl CoinReadApi {
+    pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait]
-impl<T: R2D2Connection + 'static> CoinReadApiServer for CoinReadApi<T> {
+impl CoinReadApiServer for CoinReadApi {
     async fn get_coins(
         &self,
         owner: SuiAddress,
@@ -143,7 +142,7 @@ impl<T: R2D2Connection + 'static> CoinReadApiServer for CoinReadApi<T> {
     }
 }
 
-impl<T: R2D2Connection> SuiRpcModule for CoinReadApi<T> {
+impl SuiRpcModule for CoinReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

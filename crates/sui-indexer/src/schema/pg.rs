@@ -32,14 +32,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    pruner_cp_watermark (checkpoint_sequence_number) {
-        checkpoint_sequence_number -> Int8,
-        min_tx_sequence_number -> Int8,
-        max_tx_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     display (object_type) {
         object_type -> Text,
         id -> Bytea,
@@ -145,14 +137,10 @@ diesel::table! {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
         senders -> Array<Nullable<Bytea>>,
         package -> Bytea,
         module -> Text,
         event_type -> Text,
-        event_type_package -> Bytea,
-        event_type_module -> Text,
-        event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
     }
@@ -163,16 +151,20 @@ diesel::table! {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
         senders -> Array<Nullable<Bytea>>,
         package -> Bytea,
         module -> Text,
         event_type -> Text,
-        event_type_package -> Bytea,
-        event_type_module -> Text,
-        event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+    }
+}
+
+diesel::table! {
+    feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
     }
 }
 
@@ -276,12 +268,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     packages (package_id, original_id, package_version) {
         package_id -> Bytea,
         original_id -> Bytea,
         package_version -> Int8,
         move_package -> Bytea,
         checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    pruner_cp_watermark (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        min_tx_sequence_number -> Int8,
+        max_tx_sequence_number -> Int8,
     }
 }
 
@@ -395,7 +403,6 @@ macro_rules! for_all_tables {
         $action!(
             chain_identifier,
             checkpoints,
-            pruner_cp_watermark,
             display,
             epochs,
             event_emit_module,
@@ -406,11 +413,13 @@ macro_rules! for_all_tables {
             event_struct_name,
             event_struct_package,
             events,
-            objects,
+            feature_flags,
             objects_history,
             objects_snapshot,
             objects_version,
             packages,
+            protocol_configs,
+            pruner_cp_watermark,
             transactions,
             tx_calls_fun,
             tx_calls_mod,

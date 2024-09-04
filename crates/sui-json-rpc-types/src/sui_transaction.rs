@@ -180,6 +180,10 @@ impl SuiTransactionBlockResponseOptions {
         }
     }
 
+    #[deprecated(
+        since = "1.33.0",
+        note = "Balance and object changes no longer require local execution"
+    )]
     pub fn require_local_execution(&self) -> bool {
         self.show_balance_changes || self.show_object_changes
     }
@@ -1799,7 +1803,7 @@ impl SuiProgrammableTransactionBlock {
     }
 
     fn resolve_input_type(
-        inputs: &Vec<CallArg>,
+        inputs: &[CallArg],
         commands: &[Command],
         module_cache: &impl GetModule,
     ) -> Vec<Option<MoveTypeLayout>> {

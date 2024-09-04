@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::connection::ScanConnection;
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -32,7 +33,7 @@ pub(crate) struct Epoch {
     pub checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
+/// `DataLoader` key for fetching an `Epoch` by its ID, optionally constrained by a consistency
 /// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct EpochKey {
@@ -229,6 +230,23 @@ impl Epoch {
     }
 
     /// The epoch's corresponding transaction blocks.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range consists of all transactions in this epoch.
     async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -237,13 +255,15 @@ impl Epoch {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         #[allow(clippy::unnecessary_lazy_evaluations)] // rust-lang/rust-clippy#9422
         let Some(filter) = filter
             .unwrap_or_default()
             .intersect(TransactionBlockFilter {
+                // If `first_checkpoint_id` is 0, we include the 0th checkpoint by leaving it None
                 after_checkpoint: (self.stored.first_checkpoint_id > 0)
                     .then(|| UInt53::from(self.stored.first_checkpoint_id as u64 - 1)),
                 before_checkpoint: self
@@ -253,17 +273,12 @@ impl Epoch {
                 ..Default::default()
             })
         else {
-            return Ok(Connection::new(false, false));
+            return Ok(ScanConnection::new(false, false));
         };
 
-        TransactionBlock::paginate(
-            ctx.data_unchecked(),
-            page,
-            filter,
-            self.checkpoint_viewed_at,
-        )
-        .await
-        .extend()
+        TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)
+            .await
+            .extend()
     }
 }
 

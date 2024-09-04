@@ -6,11 +6,9 @@
 //! within a module against this convention.
 use crate::{
     diag,
-    diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        WarningFilters,
-    },
+    diagnostics::WarningFilters,
     expansion::ast::ModuleIdent,
+    linters::StyleCodes,
     parser::ast::ConstantName,
     shared::CompilationEnv,
     typing::{
@@ -18,17 +16,6 @@ use crate::{
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
-
-use super::{LinterDiagnosticCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
-
-/// Diagnostic information for constant naming violations.
-const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Style as u8,
-    CONSTANT_NAMING_DIAG_CODE,
-    "constant should follow naming convention",
-);
 
 pub struct ConstantNamingVisitor;
 pub struct Context<'a> {
@@ -53,7 +40,7 @@ impl TypingVisitorContext for Context<'_> {
         if !is_valid_name(name) {
             let uid_msg =
                 format!("'{name}' should be ALL_CAPS. Or for error constants, use PascalCase",);
-            let diagnostic = diag!(CONSTANT_NAMING_DIAG, (cdef.loc, uid_msg));
+            let diagnostic = diag!(StyleCodes::ConstantNaming.diag_info(), (cdef.loc, uid_msg));
             self.env.add_diag(diagnostic);
         }
         false

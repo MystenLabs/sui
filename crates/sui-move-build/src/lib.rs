@@ -252,7 +252,7 @@ pub fn build_from_resolution_graph(
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
         let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
-            .verifier_config(/* for_signing */ false);
+            .verifier_config(/* signing_limits */ None);
 
         for m in compiled_modules.iter_modules() {
             move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
@@ -347,19 +347,9 @@ impl CompiledPackage {
     }
 
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
-    /// original package IDs.
-    pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
-        let mut ids: BTreeSet<_> = self
-            .package
-            .deps_compiled_units
-            .iter()
-            .map(|(_, m)| ObjectID::from(*m.unit.module.address()))
-            .collect();
-
-        // `0x0` is not a real dependency ID -- it means that the package has unpublished
-        // dependencies.
-        ids.remove(&ObjectID::ZERO);
-        ids.into_iter().collect()
+    /// storage package IDs (where to load those packages on-chain).
+    pub fn get_dependency_storage_package_ids(&self) -> Vec<ObjectID> {
+        self.dependency_ids.published.values().cloned().collect()
     }
 
     pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
@@ -388,14 +378,6 @@ impl CompiledPackage {
         self.get_package_bytes(with_unpublished_deps)
             .iter()
             .map(|b| Base64::from_bytes(b))
-            .collect()
-    }
-
-    pub fn get_package_dependencies_hex(&self) -> Vec<String> {
-        self.dependency_ids
-            .published
-            .values()
-            .map(|object_id| object_id.to_hex_uncompressed())
             .collect()
     }
 
@@ -645,7 +627,7 @@ pub struct PackageDependencies {
     pub invalid: BTreeMap<Symbol, String>,
     /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
     /// the package, and the tuple refers to the address in the (Move.lock, Move.toml) respectively.
-    pub conflicting: BTreeMap<Symbol, (String, String)>,
+    pub conflicting: BTreeMap<Symbol, (ObjectID, ObjectID)>,
 }
 
 /// Partition packages in `resolution_graph` into one of four groups:

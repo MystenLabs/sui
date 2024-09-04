@@ -1,4 +1,4 @@
-warning[Lint W99007]: The struct's first field is 'id' of type 'sui::object::UID' but is missing the 'key' ability.
+warning[Lint W99007]: struct with id but missing key ability
   ┌─ tests/sui_mode/linter/trigger_lint_missing_key.move:5:5
   │  
 5 │ ╭     struct MissingKeyAbility {
@@ -7,14 +7,4 @@ warning[Lint W99007]: The struct's first field is 'id' of type 'sui::object::UID
   │ ╰─────^ Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.
   │  
   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[Lint W99007]: The struct's first field is 'id' of type 'sui::object::UID' but is missing the 'key' ability.
-   ┌─ tests/sui_mode/linter/trigger_lint_missing_key.move:27:5
-   │  
-27 │ ╭     struct Wrapper {
-28 │ │         id: UID,
-29 │ │     }
-   │ ╰─────^ Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.
-   │  
-   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

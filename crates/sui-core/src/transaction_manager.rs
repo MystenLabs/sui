@@ -43,7 +43,7 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
-/// It receives certificates from Narwhal, validator RPC handlers, and checkpoint executor.
+/// It receives certificates from consensus, validator RPC handlers, and checkpoint executor.
 /// Execution driver subscribes to the stream of ready certificates from TransactionManager, and
 /// executes them in parallel.
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
@@ -62,6 +62,7 @@ pub struct TransactionManager {
 #[derive(Clone, Debug)]
 pub struct PendingCertificateStats {
     // The time this certificate enters transaction manager.
+    #[allow(unused)]
     pub enqueue_time: Instant,
     // The time this certificate becomes ready for execution.
     pub ready_time: Option<Instant>,
@@ -966,9 +967,7 @@ impl TransactionQueue {
     /// After removing the digest, first() will return the new oldest entry
     /// in the queue (which may be unchanged).
     fn remove(&mut self, digest: &TransactionDigest) -> Option<Instant> {
-        let Some(when) = self.digests.remove(digest) else {
-            return None;
-        };
+        let when = self.digests.remove(digest)?;
 
         // This loop removes all previously inserted entries that no longer
         // correspond to live entries in self.digests. When the loop terminates,

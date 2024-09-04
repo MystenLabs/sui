@@ -172,6 +172,8 @@ module std::option_tests {
 
     // === Macros ===
 
+    public struct NoDrop {}
+
     #[test]
     fun do_destroy() {
         let mut counter = 0;
@@ -179,6 +181,12 @@ module std::option_tests {
         option::some(10).do!(|x| counter = counter + x);
 
         assert!(counter == 15);
+
+        let some = option::some(NoDrop {});
+        let none = option::none<NoDrop>();
+
+        some.do!(|el| { let NoDrop {} = el; });
+        none.do!(|el| { let NoDrop {} = el; });
     }
 
     #[test]
@@ -200,6 +208,49 @@ module std::option_tests {
     }
 
     #[test]
+    fun map_no_drop() {
+        let none = option::none<NoDrop>().map!(|el| {
+            let NoDrop {} = el;
+            100u64
+        });
+        let some = option::some(NoDrop {}).map!(|el| {
+            let NoDrop {} = el;
+            100u64
+        });
+
+        assert!(none == option::none());
+        assert!(some == option::some(100));
+    }
+
+    #[test]
+    fun or_no_drop() {
+        let none = option::none<NoDrop>().or!(option::some(NoDrop {}));
+        let some = option::some(NoDrop {}).or!(option::some(NoDrop {}));
+
+        assert!(none.is_some());
+        assert!(some.is_some());
+
+        let NoDrop {} = none.destroy_some();
+        let NoDrop {} = some.destroy_some();
+    }
+
+    #[test]
+    fun and_no_drop() {
+        let none = option::none<NoDrop>().and!(|e| {
+            let NoDrop {} = e;
+            option::some(100)
+        });
+
+        let some = option::some(NoDrop {}).and!(|e| {
+            let NoDrop {} = e;
+            option::some(100)
+        });
+
+        assert!(some == option::some(100));
+        assert!(none == option::none());
+    }
+
+    #[test]
     fun filter() {
         assert!(option::some(5).filter!(|x| *x == 5) == option::some(5));
         assert!(option::some(5).filter!(|x| *x == 6) == option::none());
@@ -216,5 +267,14 @@ module std::option_tests {
     fun destroy_or() {
         assert!(option::none().destroy_or!(10) == 10);
         assert!(option::some(5).destroy_or!(10) == 5);
+    }
+
+    #[test]
+    fun destroy_or_no_drop() {
+        let none = option::none<NoDrop>().destroy_or!(NoDrop {});
+        let some = option::some(NoDrop {}).destroy_or!(NoDrop {});
+
+        let NoDrop {} = some;
+        let NoDrop {} = none;
     }
 }

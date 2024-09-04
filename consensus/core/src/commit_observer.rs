@@ -23,14 +23,16 @@ use crate::{
 /// Role of CommitObserver
 /// - Called by core when try_commit() returns newly committed leaders.
 /// - The newly committed leaders are sent to commit observer and then commit observer
-/// gets subdags for each leader via the commit interpreter (linearizer)
+///     gets subdags for each leader via the commit interpreter (linearizer)
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
+///
 /// No back pressure mechanism is needed as backpressure is handled as input into
 /// consenus.
+///
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
-/// is sent to the consumer.
+///     is sent to the consumer.
 /// - When CommitObserver is initialized a last processed commit index can be used
-/// to ensure any missing commits are re-sent.
+///     to ensure any missing commits are re-sent.
 pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
@@ -210,11 +212,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{BlockRef, Round},
-        commit::DEFAULT_WAVE_LENGTH,
-        context::Context,
-        dag_state::DagState,
-        storage::mem_store::MemStore,
+        block::BlockRef, context::Context, dag_state::DagState, storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
     };
 
@@ -228,7 +226,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel("consensus_output");
 
@@ -239,11 +236,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            CommitConsumer::new(sender, last_processed_commit_index),
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -332,7 +325,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel("consensus_output");
 
@@ -343,11 +335,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            CommitConsumer::new(sender.clone(), last_processed_commit_index),
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -370,8 +358,6 @@ mod tests {
         // Commit first batch of leaders (2) and "receive" the subdags as the
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
         let mut commits = observer
             .handle_commit(
                 leaders
@@ -443,11 +429,7 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            CommitConsumer::new(sender, expected_last_processed_index as CommitIndex),
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,
@@ -480,7 +462,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel("consensus_output");
 
@@ -491,11 +472,7 @@ mod tests {
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender.clone(),
-                last_processed_commit_round,
-                last_processed_commit_index,
-            ),
+            CommitConsumer::new(sender.clone(), last_processed_commit_index),
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule.clone(),
@@ -518,8 +495,6 @@ mod tests {
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
         let expected_last_processed_index: usize = 10;
-        let expected_last_processed_round =
-            expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
         let commits = observer.handle_commit(leaders.clone()).unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -548,11 +523,7 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            CommitConsumer::new(
-                sender,
-                expected_last_processed_round as Round,
-                expected_last_processed_index as CommitIndex,
-            ),
+            CommitConsumer::new(sender, expected_last_processed_index as CommitIndex),
             dag_state.clone(),
             mem_store.clone(),
             leader_schedule,

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use anyhow::Result;
 use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use reqwest::Url;
@@ -57,10 +55,12 @@ pub struct Client {
 
 impl Client {
     pub fn new(url: &str) -> Result<Self> {
-        let mut url = Url::parse(url)?;
+        let mut url = Url::parse(url).map_err(Error::from_error)?;
 
         if url.cannot_be_a_base() {
-            return Err(anyhow!("provided url '{url}' cannot be used as a base"));
+            return Err(Error::new_message(format!(
+                "provided url '{url}' cannot be used as a base"
+            )));
         }
 
         url.set_path("/v2/");
@@ -81,12 +81,12 @@ impl Client {
         &self.inner
     }
 
-    pub(super) fn url(&self) -> &Url {
+    pub fn url(&self) -> &Url {
         &self.url
     }
 
     pub async fn node_info(&self) -> Result<Response<NodeInfo>> {
-        let url = self.url.join("")?;
+        let url = self.url().join("")?;
 
         let response = self
             .inner
@@ -99,7 +99,7 @@ impl Client {
     }
 
     pub async fn health_check(&self, threshold_seconds: Option<u32>) -> Result<Response<()>> {
-        let url = self.url.join("health")?;
+        let url = self.url().join("health")?;
         let query = Threshold { threshold_seconds };
 
         let response = self.inner.get(url).query(&query).send().await?;
@@ -108,7 +108,7 @@ impl Client {
     }
 
     pub async fn get_coin_info(&self, coin_type: &StructTag) -> Result<Response<CoinInfo>> {
-        let url = self.url.join(&format!("coins/{coin_type}"))?;
+        let url = self.url().join(&format!("coins/{coin_type}"))?;
 
         let response = self
             .inner
@@ -125,7 +125,7 @@ impl Client {
         account: Address,
         parameters: &ListAccountOwnedObjectsQueryParameters,
     ) -> Result<Response<Vec<AccountOwnedObjectInfo>>> {
-        let url = self.url.join(&format!("account/{account}/objects"))?;
+        let url = self.url().join(&format!("account/{account}/objects"))?;
 
         let response = self
             .inner
@@ -139,7 +139,7 @@ impl Client {
     }
 
     pub async fn get_object(&self, object_id: ObjectId) -> Result<Response<Object>> {
-        let url = self.url.join(&format!("objects/{object_id}"))?;
+        let url = self.url().join(&format!("objects/{object_id}"))?;
 
         let response = self
             .inner
@@ -157,7 +157,7 @@ impl Client {
         version: Version,
     ) -> Result<Response<Object>> {
         let url = self
-            .url
+            .url()
             .join(&format!("objects/{object_id}/version/{version}"))?;
 
         let response = self
@@ -175,7 +175,7 @@ impl Client {
         object_id: ObjectId,
         parameters: &ListDynamicFieldsQueryParameters,
     ) -> Result<Response<Vec<DynamicFieldInfo>>> {
-        let url = self.url.join(&format!("objects/{object_id}"))?;
+        let url = self.url().join(&format!("objects/{object_id}"))?;
 
         let response = self
             .inner
@@ -189,7 +189,7 @@ impl Client {
     }
 
     pub async fn get_gas_info(&self) -> Result<Response<GasInfo>> {
-        let url = self.url.join("system/gas")?;
+        let url = self.url().join("system/gas")?;
 
         let response = self
             .inner
@@ -209,7 +209,7 @@ impl Client {
     }
 
     pub async fn get_current_protocol_config(&self) -> Result<Response<ProtocolConfigResponse>> {
-        let url = self.url.join("system/protocol")?;
+        let url = self.url().join("system/protocol")?;
 
         let response = self
             .inner
@@ -225,7 +225,7 @@ impl Client {
         &self,
         version: u64,
     ) -> Result<Response<ProtocolConfigResponse>> {
-        let url = self.url.join(&format!("system/protocol/{version}"))?;
+        let url = self.url().join(&format!("system/protocol/{version}"))?;
 
         let response = self
             .inner
@@ -238,7 +238,7 @@ impl Client {
     }
 
     pub async fn get_system_state_summary(&self) -> Result<Response<SystemStateSummary>> {
-        let url = self.url.join("system")?;
+        let url = self.url().join("system")?;
 
         let response = self
             .inner
@@ -251,7 +251,7 @@ impl Client {
     }
 
     pub async fn get_current_committee(&self) -> Result<Response<ValidatorCommittee>> {
-        let url = self.url.join("system/committee")?;
+        let url = self.url().join("system/committee")?;
 
         let response = self
             .inner
@@ -264,7 +264,7 @@ impl Client {
     }
 
     pub async fn get_committee(&self, epoch: EpochId) -> Result<Response<ValidatorCommittee>> {
-        let url = self.url.join(&format!("system/committee/{epoch}"))?;
+        let url = self.url().join(&format!("system/committee/{epoch}"))?;
 
         let response = self
             .inner
@@ -281,7 +281,7 @@ impl Client {
         checkpoint_sequence_number: CheckpointSequenceNumber,
     ) -> Result<Response<SignedCheckpointSummary>> {
         let url = self
-            .url
+            .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}"))?;
 
         let response = self
@@ -305,7 +305,7 @@ impl Client {
 
         let checkpoint = page
             .pop()
-            .ok_or_else(|| anyhow!("server returned empty checkpoint list"))?;
+            .ok_or_else(|| Error::new_message("server returned empty checkpoint list"))?;
 
         Ok(Response::new(checkpoint, parts))
     }
@@ -314,7 +314,7 @@ impl Client {
         &self,
         parameters: &ListCheckpointsQueryParameters,
     ) -> Result<Response<Vec<SignedCheckpointSummary>>> {
-        let url = self.url.join("checkpoints")?;
+        let url = self.url().join("checkpoints")?;
 
         let response = self
             .inner
@@ -332,7 +332,7 @@ impl Client {
         checkpoint_sequence_number: CheckpointSequenceNumber,
     ) -> Result<Response<CheckpointData>> {
         let url = self
-            .url
+            .url()
             .join(&format!("checkpoints/{checkpoint_sequence_number}/full"))?;
 
         let response = self
@@ -349,7 +349,7 @@ impl Client {
         &self,
         transaction: &TransactionDigest,
     ) -> Result<Response<TransactionResponse>> {
-        let url = self.url.join(&format!("transactions/{transaction}"))?;
+        let url = self.url().join(&format!("transactions/{transaction}"))?;
 
         let response = self
             .inner
@@ -365,7 +365,7 @@ impl Client {
         &self,
         parameters: &ListTransactionsQueryParameters,
     ) -> Result<Response<Vec<TransactionResponse>>> {
-        let url = self.url.join("transactions")?;
+        let url = self.url().join("transactions")?;
 
         let response = self
             .inner
@@ -383,7 +383,7 @@ impl Client {
         parameters: &ExecuteTransactionQueryParameters,
         transaction: &SignedTransaction,
     ) -> Result<Response<TransactionExecutionResponse>> {
-        let url = self.url.join("transactions")?;
+        let url = self.url().join("transactions")?;
 
         let body = bcs::to_bytes(transaction)?;
 
@@ -400,22 +400,27 @@ impl Client {
         self.bcs(response).await
     }
 
-    fn check_response(
+    async fn check_response(
         &self,
         response: reqwest::Response,
     ) -> Result<(reqwest::Response, ResponseParts)> {
-        if !response.status().is_success() {
-            let status = response.status();
-            return Err(anyhow::anyhow!("request failed with status {status}"));
-        }
-
         let parts = ResponseParts::from_reqwest_response(&response);
+
+        if !response.status().is_success() {
+            let error = match response.text().await {
+                Ok(body) => Error::new_message(body),
+                Err(e) => Error::from_error(e),
+            }
+            .pipe(|e| e.with_parts(parts));
+
+            return Err(error);
+        }
 
         Ok((response, parts))
     }
 
     async fn empty(&self, response: reqwest::Response) -> Result<Response<()>> {
-        let (_response, parts) = self.check_response(response)?;
+        let (_response, parts) = self.check_response(response).await?;
         Ok(Response::new((), parts))
     }
 
@@ -423,7 +428,7 @@ impl Client {
         &self,
         response: reqwest::Response,
     ) -> Result<Response<T>> {
-        let (response, parts) = self.check_response(response)?;
+        let (response, parts) = self.check_response(response).await?;
 
         let json = response.json().await?;
         Ok(Response::new(json, parts))
@@ -433,11 +438,13 @@ impl Client {
         &self,
         response: reqwest::Response,
     ) -> Result<Response<T>> {
-        let (response, parts) = self.check_response(response)?;
+        let (response, parts) = self.check_response(response).await?;
 
         let bytes = response.bytes().await?;
-        let bcs = bcs::from_bytes(&bytes)?;
-        Ok(Response::new(bcs, parts))
+        match bcs::from_bytes(&bytes) {
+            Ok(bcs) => Ok(Response::new(bcs, parts)),
+            Err(e) => Err(Error::from_error(e).with_parts(parts)),
+        }
     }
 }
 
@@ -551,5 +558,111 @@ impl<T> Response<T> {
     {
         let (inner, state) = self.into_parts();
         Response::new(f(inner), state)
+    }
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+#[derive(Debug)]
+pub struct Error {
+    inner: Box<InnerError>,
+}
+
+#[derive(Debug)]
+struct InnerError {
+    parts: Option<ResponseParts>,
+    message: Option<String>,
+    source: Option<BoxError>,
+}
+
+impl Error {
+    fn empty() -> Self {
+        Self {
+            inner: Box::new(InnerError {
+                parts: None,
+                message: None,
+                source: None,
+            }),
+        }
+    }
+
+    fn from_error<E: Into<BoxError>>(error: E) -> Self {
+        Self::empty().with_error(error.into())
+    }
+
+    fn new_message<M: Into<String>>(message: M) -> Self {
+        Self::empty().with_message(message.into())
+    }
+
+    fn with_parts(mut self, parts: ResponseParts) -> Self {
+        self.inner.parts.replace(parts);
+        self
+    }
+
+    fn with_message(mut self, message: String) -> Self {
+        self.inner.message.replace(message);
+        self
+    }
+
+    fn with_error(mut self, error: BoxError) -> Self {
+        self.inner.source.replace(error);
+        self
+    }
+
+    pub fn status(&self) -> Option<StatusCode> {
+        self.parts().map(|parts| parts.status)
+    }
+
+    pub fn parts(&self) -> Option<&ResponseParts> {
+        self.inner.parts.as_ref()
+    }
+
+    pub fn message(&self) -> Option<&str> {
+        self.inner.message.as_deref()
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Rest Client Error:")?;
+        if let Some(status) = self.status() {
+            write!(f, " {status}")?;
+        }
+
+        if let Some(message) = self.message() {
+            write!(f, " '{message}'")?;
+        }
+
+        if let Some(source) = &self.inner.source {
+            write!(f, " '{source}'")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source.as_deref().map(|e| e as _)
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(error: reqwest::Error) -> Self {
+        Self::from_error(error)
+    }
+}
+
+impl From<bcs::Error> for Error {
+    fn from(error: bcs::Error) -> Self {
+        Self::from_error(error)
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(error: url::ParseError) -> Self {
+        Self::from_error(error)
     }
 }

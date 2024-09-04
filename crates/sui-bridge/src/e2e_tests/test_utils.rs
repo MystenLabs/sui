@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::EthBridgeCommittee;
+use crate::abi::EthBridgeConfig;
+use crate::config::default_ed25519_key_pair;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
@@ -24,6 +26,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
+use std::sync::Arc;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -67,6 +70,7 @@ const BTC_NAME: &str = "BTC";
 const ETH_NAME: &str = "ETH";
 const USDC_NAME: &str = "USDC";
 const USDT_NAME: &str = "USDT";
+const KA_NAME: &str = "KA";
 
 pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356";
 
@@ -176,6 +180,14 @@ impl BridgeTestClusterBuilder {
         let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
+        info!(
+            "Bridge committee: {:?}",
+            bridge_client
+                .get_bridge_committee()
+                .await
+                .unwrap()
+                .to_string()
+        );
         BridgeTestCluster {
             num_validators: self.num_validators,
             test_cluster,
@@ -203,7 +215,6 @@ impl BridgeTestClusterBuilder {
         test_cluster
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
-        info!("Bridge committee is finalized");
         test_cluster
     }
 
@@ -238,6 +249,11 @@ impl BridgeTestCluster {
         Ok((eth_signer, eth_address))
     }
 
+    pub async fn get_eth_signer(&self) -> EthSigner {
+        let (eth_signer, _) = self.get_eth_signer_and_private_key().await.unwrap();
+        eth_signer
+    }
+
     pub fn bridge_client(&self) -> &SuiBridgeClient {
         &self.bridge_client
     }
@@ -256,6 +272,10 @@ impl BridgeTestCluster {
 
     pub fn eth_chain_id(&self) -> BridgeChainId {
         self.eth_chain_id
+    }
+
+    pub(crate) fn eth_env(&self) -> &EthBridgeEnvironment {
+        &self.eth_environment
     }
 
     pub fn contracts(&self) -> &DeployedSolContracts {
@@ -437,6 +457,7 @@ pub struct DeployedSolContracts {
     pub eth: EthAddress,
     pub usdc: EthAddress,
     pub usdt: EthAddress,
+    pub ka: EthAddress,
 }
 
 impl DeployedSolContracts {
@@ -505,7 +526,7 @@ pub(crate) async fn deploy_sol_contract(
     };
 
     let serialized_config = serde_json::to_string_pretty(&deploy_config).unwrap();
-    tracing::debug!(
+    tracing::info!(
         "Serialized config written to {:?}: {:?}",
         deploy_config_path,
         serialized_config
@@ -590,15 +611,16 @@ pub(crate) async fn deploy_sol_contract(
     }
 
     let contracts = DeployedSolContracts {
-        sui_bridge: *deployed_contracts.get(SUI_BRIDGE_NAME).unwrap(),
-        bridge_committee: *deployed_contracts.get(BRIDGE_COMMITTEE_NAME).unwrap(),
-        bridge_config: *deployed_contracts.get(BRIDGE_CONFIG_NAME).unwrap(),
-        bridge_limiter: *deployed_contracts.get(BRIDGE_LIMITER_NAME).unwrap(),
-        bridge_vault: *deployed_contracts.get(BRIDGE_VAULT_NAME).unwrap(),
-        btc: *deployed_contracts.get(BTC_NAME).unwrap(),
-        eth: *deployed_contracts.get(ETH_NAME).unwrap(),
-        usdc: *deployed_contracts.get(USDC_NAME).unwrap(),
-        usdt: *deployed_contracts.get(USDT_NAME).unwrap(),
+        sui_bridge: deployed_contracts.remove(SUI_BRIDGE_NAME).unwrap(),
+        bridge_committee: deployed_contracts.remove(BRIDGE_COMMITTEE_NAME).unwrap(),
+        bridge_config: deployed_contracts.remove(BRIDGE_CONFIG_NAME).unwrap(),
+        bridge_limiter: deployed_contracts.remove(BRIDGE_LIMITER_NAME).unwrap(),
+        bridge_vault: deployed_contracts.remove(BRIDGE_VAULT_NAME).unwrap(),
+        btc: deployed_contracts.remove(BTC_NAME).unwrap(),
+        eth: deployed_contracts.remove(ETH_NAME).unwrap(),
+        usdc: deployed_contracts.remove(USDC_NAME).unwrap(),
+        usdt: deployed_contracts.remove(USDT_NAME).unwrap(),
+        ka: deployed_contracts.remove(KA_NAME).unwrap(),
     };
     let eth_bridge_committee =
         EthBridgeCommittee::new(contracts.bridge_committee, eth_signer.clone().into());
@@ -628,7 +650,7 @@ pub(crate) async fn deploy_sol_contract(
 }
 
 #[derive(Debug)]
-pub(crate) struct EthBridgeEnvironment {
+pub struct EthBridgeEnvironment {
     pub rpc_url: String,
     process: Child,
     contracts: Option<DeployedSolContracts>,
@@ -643,7 +665,7 @@ impl EthBridgeEnvironment {
             .arg("--block-time")
             .arg("1") // 1 second block time
             .arg("--slots-in-an-epoch")
-            .arg("3") // 3 slots in an epoch
+            .arg("1") // 1 slots in an epoch
             .spawn()
             .expect("Failed to start anvil");
 
@@ -664,6 +686,25 @@ impl EthBridgeEnvironment {
 
     pub(crate) fn contracts(&self) -> &DeployedSolContracts {
         self.contracts.as_ref().unwrap()
+    }
+
+    pub(crate) fn get_bridge_config(
+        &self,
+    ) -> EthBridgeConfig<ethers::prelude::Provider<ethers::providers::Http>> {
+        let provider = Arc::new(
+            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&self.rpc_url)
+                .unwrap()
+                .interval(std::time::Duration::from_millis(2000)),
+        );
+        EthBridgeConfig::new(self.contracts().bridge_config, provider.clone())
+    }
+
+    pub(crate) async fn get_supported_token(&self, token_id: u8) -> (EthAddress, u8, u64) {
+        let config = self.get_bridge_config();
+        let token_address = config.token_address_of(token_id).call().await.unwrap();
+        let token_sui_decimal = config.token_sui_decimal_of(token_id).call().await.unwrap();
+        let token_price = config.token_price_of(token_id).call().await.unwrap();
+        (token_address, token_sui_decimal, token_price)
     }
 }
 
@@ -719,7 +760,7 @@ pub(crate) async fn start_bridge_cluster(
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path: authority_key_path,
             approved_governance_actions,
-            run_client: true,
+            run_client: i == 0,
             db_path: Some(db_path),
             eth: EthConfig {
                 eth_rpc_url: eth_environment.rpc_url.clone(),
@@ -735,12 +776,12 @@ pub(crate) async fn start_bridge_cluster(
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
+            metrics_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
-        let config_clone = config.clone();
         handles.push(
             run_bridge_node(
-                config_clone,
+                config,
                 BridgeNodePublicMetadata::empty_for_testing(),
                 Registry::new(),
             )
@@ -764,6 +805,17 @@ pub(crate) async fn get_signatures(
     sigs.into_iter()
         .map(|sig: Vec<u8>| Bytes::from(sig))
         .collect()
+}
+
+pub(crate) async fn send_eth_tx_and_get_tx_receipt<B, M, D>(
+    call: FunctionCall<B, M, D>,
+) -> TransactionReceipt
+where
+    M: Middleware,
+    B: std::borrow::Borrow<M>,
+    D: ethers::abi::Detokenize,
+{
+    call.send().await.unwrap().await.unwrap().unwrap()
 }
 
 /// A simple struct to create a temporary directory that

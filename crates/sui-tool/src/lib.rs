@@ -71,7 +71,6 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
-pub mod pkg_dump;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
@@ -128,9 +127,6 @@ pub struct ObjectData {
 trait OptionDebug<T> {
     fn opt_debug(&self, def_str: &str) -> String;
 }
-trait OptionDisplay<T> {
-    fn opt_display(&self, def_str: &str) -> String;
-}
 
 impl<T> OptionDebug<T> for Option<T>
 where
@@ -140,40 +136,6 @@ where
         match self {
             None => def_str.to_string(),
             Some(t) => format!("{:?}", t),
-        }
-    }
-}
-
-impl<T> OptionDisplay<T> for Option<T>
-where
-    T: std::fmt::Display,
-{
-    fn opt_display(&self, def_str: &str) -> String {
-        match self {
-            None => def_str.to_string(),
-            Some(t) => format!("{}", t),
-        }
-    }
-}
-
-struct OwnerOutput(Owner);
-
-// grep/awk-friendly output for Owner
-impl std::fmt::Display for OwnerOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Owner::AddressOwner(address) => {
-                write!(f, "address({})", address)
-            }
-            Owner::ObjectOwner(address) => {
-                write!(f, "object({})", address)
-            }
-            Owner::Immutable => {
-                write!(f, "immutable")
-            }
-            Owner::Shared { .. } => {
-                write!(f, "shared")
-            }
         }
     }
 }
@@ -527,58 +489,11 @@ async fn get_object_impl(
 }
 
 pub(crate) fn make_anemo_config() -> anemo_cli::Config {
-    use narwhal_types::*;
     use sui_network::discovery::*;
     use sui_network::state_sync::*;
 
     // TODO: implement `ServiceInfo` generation in anemo-build and use here.
     anemo_cli::Config::new()
-        // Narwhal primary-to-primary
-        .add_service(
-            "PrimaryToPrimary",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "SendCertificate",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        send_certificate,
-                        SendCertificateRequest
-                    ),
-                )
-                .add_method(
-                    "RequestVote",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        request_vote,
-                        RequestVoteRequest
-                    ),
-                )
-                .add_method(
-                    "FetchCertificates",
-                    anemo_cli::ron_method!(
-                        PrimaryToPrimaryClient,
-                        fetch_certificates,
-                        FetchCertificatesRequest
-                    ),
-                ),
-        )
-        // Narwhal worker-to-worker
-        .add_service(
-            "WorkerToWorker",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "ReportBatch",
-                    anemo_cli::ron_method!(WorkerToWorkerClient, report_batch, WorkerBatchMessage),
-                )
-                .add_method(
-                    "RequestBatches",
-                    anemo_cli::ron_method!(
-                        WorkerToWorkerClient,
-                        request_batches,
-                        RequestBatchesRequest
-                    ),
-                ),
-        )
         // Sui discovery
         .add_service(
             "Discovery",

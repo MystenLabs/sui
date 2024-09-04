@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use diesel::r2d2::R2D2Connection;
 use futures::StreamExt;
 use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::{Receiver, Sender};
@@ -15,7 +14,9 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::SnapshotLagConfig;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
+use crate::store::PgIndexerStore;
 use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
 use std::sync::{Arc, Mutex};
@@ -24,13 +25,10 @@ use super::checkpoint_handler::CheckpointHandler;
 use super::tx_processor::IndexingPackageBuffer;
 use super::TransactionObjectChangesToCommit;
 
-const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
-const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
-
-pub struct ObjectsSnapshotProcessor<S, T: R2D2Connection + 'static> {
-    pub store: S,
+pub struct ObjectsSnapshotProcessor {
+    pub store: PgIndexerStore,
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver<T>>>>,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver>>>,
     pub indexed_obj_sender: Sender<CheckpointObjectChanges>,
     metrics: IndexerMetrics,
 }
@@ -40,64 +38,17 @@ pub struct CheckpointObjectChanges {
     pub object_changes: TransactionObjectChangesToCommit,
 }
 
-#[derive(Clone)]
-pub struct SnapshotLagConfig {
-    pub snapshot_min_lag: usize,
-    pub snapshot_max_lag: usize,
-    pub sleep_duration: u64,
-}
-
-impl SnapshotLagConfig {
-    pub fn new(
-        min_lag: Option<usize>,
-        max_lag: Option<usize>,
-        sleep_duration: Option<u64>,
-    ) -> Self {
-        let default_config = Self::default();
-        Self {
-            snapshot_min_lag: min_lag.unwrap_or(default_config.snapshot_min_lag),
-            snapshot_max_lag: max_lag.unwrap_or(default_config.snapshot_max_lag),
-            sleep_duration: sleep_duration.unwrap_or(default_config.sleep_duration),
-        }
-    }
-}
-
-impl Default for SnapshotLagConfig {
-    fn default() -> Self {
-        let snapshot_min_lag = std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG);
-
-        let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG);
-
-        SnapshotLagConfig {
-            snapshot_min_lag,
-            snapshot_max_lag,
-            sleep_duration: 5,
-        }
-    }
-}
-
 #[async_trait]
-impl<S, T> Worker for ObjectsSnapshotProcessor<S, T>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+impl Worker for ObjectsSnapshotProcessor {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
         let checkpoint_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         // Index the object changes and send them to the committer.
-        let object_changes: TransactionObjectChangesToCommit =
-            CheckpointHandler::<S, T>::index_objects(
-                checkpoint,
-                &self.metrics,
-                self.package_resolver.clone(),
-            )
-            .await?;
+        let object_changes: TransactionObjectChangesToCommit = CheckpointHandler::index_objects(
+            checkpoint,
+            &self.metrics,
+            self.package_resolver.clone(),
+        )
+        .await?;
         self.indexed_obj_sender
             .send(CheckpointObjectChanges {
                 checkpoint_sequence_number,
@@ -108,7 +59,7 @@ where
     }
 
     fn preprocess_hook(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        let package_objects = CheckpointHandler::<S, T>::get_package_objects(&[checkpoint]);
+        let package_objects = CheckpointHandler::get_package_objects(&[checkpoint]);
         self.package_buffer
             .lock()
             .unwrap()
@@ -118,16 +69,12 @@ where
 }
 
 // Start both the ingestion pipeline and committer for objects snapshot table.
-pub async fn start_objects_snapshot_processor<S, T>(
-    store: S,
+pub async fn start_objects_snapshot_processor(
+    store: PgIndexerStore,
     metrics: IndexerMetrics,
     snapshot_config: SnapshotLagConfig,
     cancel: CancellationToken,
-) -> IndexerResult<(ObjectsSnapshotProcessor<S, T>, u64)>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+) -> IndexerResult<(ObjectsSnapshotProcessor, u64)> {
     info!("Starting object snapshot processor...");
 
     let watermark = store
@@ -150,7 +97,7 @@ where
     );
 
     // Start an ingestion pipeline with the objects snapshot processor as a worker.
-    let worker = ObjectsSnapshotProcessor::<S, T>::new(
+    let worker = ObjectsSnapshotProcessor::new(
         store.clone(),
         indexed_obj_sender,
         commit_receiver,
@@ -158,7 +105,7 @@ where
     );
 
     // Now start the task that will commit the indexed object changes to the store.
-    spawn_monitored_task!(ObjectsSnapshotProcessor::<S, T>::commit_objects_snapshot(
+    spawn_monitored_task!(ObjectsSnapshotProcessor::commit_objects_snapshot(
         store,
         watermark,
         indexed_obj_receiver,
@@ -170,17 +117,13 @@ where
     Ok((worker, watermark))
 }
 
-impl<S, T> ObjectsSnapshotProcessor<S, T>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-    T: R2D2Connection + 'static,
-{
+impl ObjectsSnapshotProcessor {
     pub fn new(
-        store: S,
+        store: PgIndexerStore,
         indexed_obj_sender: Sender<CheckpointObjectChanges>,
         commit_receiver: watch::Receiver<Option<CheckpointSequenceNumber>>,
         metrics: IndexerMetrics,
-    ) -> ObjectsSnapshotProcessor<S, T> {
+    ) -> ObjectsSnapshotProcessor {
         // Start the package buffer used for buffering packages before they are written to the db.
         // We include a commit receiver which will be paged when a checkpoint has been processed and
         // the corresponding package data can be deleted from the buffer.
@@ -207,7 +150,7 @@ where
     // Receives object changes from the ingestion pipeline and commits them to the store,
     // keeping the appropriate amount of checkpoint lag behind the rest of the indexer.
     pub async fn commit_objects_snapshot(
-        store: S,
+        store: PgIndexerStore,
         watermark: CheckpointSequenceNumber,
         indexed_obj_receiver: Receiver<CheckpointObjectChanges>,
         commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,

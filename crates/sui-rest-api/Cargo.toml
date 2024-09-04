@@ -12,6 +12,7 @@ axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
@@ -30,7 +31,6 @@ fastcrypto.workspace = true
 sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
-
 
 [dev-dependencies]
 diffy = "0.3"

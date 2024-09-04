@@ -8,7 +8,7 @@ use std::{
 };
 
 use clap::*;
-use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 54;
+const MAX_PROTOCOL_VERSION: u64 = 58;
 
 // Record history of protocol version allocations here:
 //
@@ -167,6 +167,12 @@ const MAX_PROTOCOL_VERSION: u64 = 54;
 //             Update stdlib natives costs
 // Version 54: Enable random beacon on mainnet.
 //             Enable soft bundle on mainnet.
+// Version 55: Enable enums on mainnet.
+//             Rethrow serialization type layout errors instead of converting them.
+// Version 56: Enable bridge on mainnet.
+//             Note: do not use version 56 for any new features.
+// Version 57: Reduce minimum number of random beacon shares.
+// Version 58: Optimize boolean binops
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -505,6 +511,10 @@ struct FeatureFlags {
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
     authority_capabilities_v2: bool,
+
+    // Rethrow type layout errors during serialization instead of trying to convert them.
+    #[serde(skip_serializing_if = "is_false")]
+    rethrow_serialization_type_layout_errors: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -694,7 +704,7 @@ pub struct ProtocolConfig {
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
     max_publish_or_upgrade_per_ptb: Option<u64>,
 
-    /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
+    /// Maximum gas budget in MIST that a transaction can use.
     max_tx_gas: Option<u64>,
 
     /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
@@ -1183,8 +1193,10 @@ pub struct ProtocolConfig {
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
-    /// The maximum size of transactions included in a consensus proposed block
+    /// The maximum size of transactions included in a consensus block.
     consensus_max_transactions_in_block_bytes: Option<u64>,
+    /// The maximum number of transactions included in a consensus block.
+    consensus_max_num_transactions_in_block: Option<u64>,
 
     /// The max accumulated txn execution cost per object in a Narwhal commit. Transactions
     /// in a checkpoint will be deferred once their touch shared objects hit this limit.
@@ -1527,6 +1539,27 @@ impl ProtocolConfig {
 
     pub fn authority_capabilities_v2(&self) -> bool {
         self.feature_flags.authority_capabilities_v2
+    }
+
+    pub fn max_transaction_size_bytes(&self) -> u64 {
+        // Provide a default value if protocol config version is too low.
+        self.consensus_max_transaction_size_bytes
+            .unwrap_or(256 * 1024)
+    }
+
+    pub fn max_transactions_in_block_bytes(&self) -> u64 {
+        // Provide a default value if protocol config version is too low.
+        self.consensus_max_transactions_in_block_bytes
+            .unwrap_or(512 * 1024)
+    }
+
+    pub fn max_num_transactions_in_block(&self) -> u64 {
+        // 500 is the value used before this field is introduced.
+        self.consensus_max_num_transactions_in_block.unwrap_or(500)
+    }
+
+    pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
+        self.feature_flags.rethrow_serialization_type_layout_errors
     }
 }
 
@@ -2014,6 +2047,8 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            consensus_max_num_transactions_in_block: None,
 
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
@@ -2652,6 +2687,28 @@ impl ProtocolConfig {
                     cfg.feature_flags.soft_bundle = true;
                     cfg.max_soft_bundle_size = Some(5);
                 }
+                55 => {
+                    // Turn on enums mainnet
+                    cfg.move_binary_format_version = Some(7);
+
+                    // Assume 1KB per transaction and 500 transactions per block.
+                    cfg.consensus_max_transactions_in_block_bytes = Some(512 * 1024);
+                    // Assume 20_000 TPS * 5% max stake per validator / (minimum) 4 blocks per round = 250 transactions per block maximum
+                    // Using a higher limit that is 512, to account for bursty traffic and system transactions.
+                    cfg.consensus_max_num_transactions_in_block = Some(512);
+
+                    cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
+                }
+                56 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
+                57 => {
+                    // Reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(800);
+                }
+                58 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2670,11 +2727,15 @@ impl ProtocolConfig {
 
     // Extract the bytecode verifier config from this protocol config. `for_signing` indicates
     // whether this config is used for verification during signing or execution.
-    pub fn verifier_config(&self, for_signing: bool) -> VerifierConfig {
-        let (max_back_edges_per_function, max_back_edges_per_module) = if for_signing {
+    pub fn verifier_config(&self, signing_limits: Option<(usize, usize)>) -> VerifierConfig {
+        let (max_back_edges_per_function, max_back_edges_per_module) = if let Some((
+            max_back_edges_per_function,
+            max_back_edges_per_module,
+        )) = signing_limits
+        {
             (
-                Some(self.max_back_edges_per_function() as usize),
-                Some(self.max_back_edges_per_module() as usize),
+                Some(max_back_edges_per_function),
+                Some(max_back_edges_per_module),
             )
         } else {
             (None, None)
@@ -2702,19 +2763,6 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
-        }
-    }
-
-    pub fn meter_config(&self) -> MeterConfig {
-        MeterConfig {
-            max_per_fun_meter_units: Some(self.max_verifier_meter_ticks_per_function() as u128),
-            max_per_mod_meter_units: Some(self.max_meter_ticks_per_module() as u128),
-            max_per_pkg_meter_units: Some(
-                // Until the per-package limit was introduced, the per-module limit played double
-                // duty.
-                self.max_meter_ticks_per_package_as_option()
-                    .unwrap_or_else(|| self.max_meter_ticks_per_module()) as u128,
-            ),
         }
     }
 

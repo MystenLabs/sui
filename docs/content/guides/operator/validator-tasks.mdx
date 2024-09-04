@@ -57,10 +57,8 @@ Sui node uses the following ports by default:
 
 | protocol/port | reachability     | purpose                           |
 | ------------- | ---------------- | --------------------------------- |
-| TCP/8080      | inbound          | protocol/transaction interface    |
-| UDP/8081      | inbound/outbound | narwhal primary interface         |
-| UDP/8082      | inbound/outbound | narwhal worker interface          |
-| TCP/8083      | localhost        | sui -> narwhal interface          |
+| TCP/8080      | inbound          | validator/transaction interface   |
+| TCP/8081      | inbound/outbound | consensus interface               |
 | UDP/8084      | inbound/outbound | peer to peer state sync interface |
 | TCP/8443      | outbound         | metrics pushing                   |
 | TCP/9184      | localhost        | metrics scraping                  |
@@ -136,10 +134,10 @@ The following keys are used by Sui node:
 
 | key          | scheme   | purpose                         |
 | ------------ | -------- | ------------------------------- |
-| protocol.key | bls12381 | transactions, narwhal consensus |
+| protocol.key | bls12381 | transactions                    |
 | account.key  | ed25519  | controls assets for staking     |
-| network.key  | ed25519  | narwhal primary, sui state sync |
-| worker.key   | ed25519  | validate narwhal workers        |
+| network.key  | ed25519  | state sync                      |
+| worker.key   | ed25519  | consensus (to be migrated)      |
 
 These are configured in the [Sui node configuration file](#configuration).
 

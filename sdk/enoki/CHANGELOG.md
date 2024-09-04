@@ -1,5 +1,39 @@
 # @mysten/enoki
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+  - @mysten/sui@1.8.0
+  - @mysten/zklogin@0.7.18
+
+## 0.4.0
+
+### Minor Changes
+
+- f589885: Add sdk methods for managing enoki subnames
+
+## 0.3.17
+
+### Patch Changes
+
+- Updated dependencies [143cd9d]
+- Updated dependencies [4357ac6]
+- Updated dependencies [4019dd7]
+- Updated dependencies [4019dd7]
+- Updated dependencies [00a974d]
+  - @mysten/sui@1.7.0
+  - @mysten/zklogin@0.7.17
+
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies [a3e32fe]
+  - @mysten/sui@1.6.0
+  - @mysten/zklogin@0.7.16
+
 ## 0.3.15
 
 ### Patch Changes

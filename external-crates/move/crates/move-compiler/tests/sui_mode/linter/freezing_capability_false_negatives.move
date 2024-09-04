@@ -17,6 +17,10 @@ module a::test_false_negatives {
        id: UID
     }
 
+    struct Capv0 has key {
+        id: UID
+    }
+
     public fun freeze_admin_rights(w: AdminRights) {
         transfer::public_freeze_object(w);
     }
@@ -28,6 +32,10 @@ module a::test_false_negatives {
     public fun freeze_access_control(w: AccessControl) {
         transfer::public_freeze_object(w);
     }
+
+    public fun freeze_cap_v(w: Capv0) {
+        transfer::public_freeze_object(w);
+    }
 }
 
 module sui::object {
@@ -37,7 +45,8 @@ module sui::object {
 }
 
 module sui::transfer {
+    const ZERO: u64 = 0;
     public fun public_freeze_object<T: key>(_: T) {
-        abort 0
+        abort ZERO
     }
 }

@@ -10,6 +10,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
 
+#[allow(unused)]
 pub(crate) trait ScoringStrategy: Send + Sync {
     fn calculate_scores_for_leader(&self, subdag: &UnscoredSubdag, leader_slot: Slot) -> Vec<u64>;
 

@@ -15,22 +15,38 @@ use move_binary_format::{
     file_format_common::VERSION_6,
     IndexKind,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{HashMap, HashSet};
 
-pub struct SignatureChecker<'a> {
-    module: &'a CompiledModule,
+use crate::ability_cache::AbilityCache;
+
+pub struct SignatureChecker<'env, 'a, 'b, M: Meter + ?Sized> {
+    module: &'env CompiledModule,
+    module_ability_cache: &'a mut AbilityCache<'env>,
+    meter: &'b mut M,
     abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
-impl<'a> SignatureChecker<'a> {
-    pub fn verify_module(module: &'a CompiledModule) -> VMResult<()> {
-        Self::verify_module_impl(module).map_err(|e| e.finish(Location::Module(module.self_id())))
+impl<'env, 'a, 'b, M: Meter + ?Sized> SignatureChecker<'env, 'a, 'b, M> {
+    pub fn verify_module(
+        module: &'env CompiledModule,
+        module_ability_cache: &'a mut AbilityCache<'env>,
+        meter: &'b mut M,
+    ) -> VMResult<()> {
+        Self::verify_module_impl(module, module_ability_cache, meter)
+            .map_err(|e| e.finish(Location::Module(module.self_id())))
     }
 
-    fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
+    fn verify_module_impl(
+        module: &'env CompiledModule,
+        module_ability_cache: &'a mut AbilityCache<'env>,
+        meter: &'b mut M,
+    ) -> PartialVMResult<()> {
         let mut sig_check = Self {
             module,
+            module_ability_cache,
+            meter,
             abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
@@ -66,7 +82,7 @@ impl<'a> SignatureChecker<'a> {
         Ok(())
     }
 
-    fn verify_struct_fields(&self, struct_defs: &[StructDefinition]) -> PartialVMResult<()> {
+    fn verify_struct_fields(&mut self, struct_defs: &[StructDefinition]) -> PartialVMResult<()> {
         for (struct_def_idx, struct_def) in struct_defs.iter().enumerate() {
             let fields = match &struct_def.field_information {
                 StructFieldInformation::Native => continue,
@@ -95,7 +111,7 @@ impl<'a> SignatureChecker<'a> {
         Ok(())
     }
 
-    fn verify_enum_fields(&self, enum_defs: &[EnumDefinition]) -> PartialVMResult<()> {
+    fn verify_enum_fields(&mut self, enum_defs: &[EnumDefinition]) -> PartialVMResult<()> {
         for (enum_def_idx, enum_def) in enum_defs.iter().enumerate() {
             let enum_handle = self.module.datatype_handle_at(enum_def.enum_handle);
             let type_param_constraints: Vec<_> = enum_handle.type_param_constraints().collect();
@@ -419,7 +435,7 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn check_type_instantiation(
-        &self,
+        &mut self,
         s: &SignatureToken,
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
@@ -435,7 +451,7 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn check_type_instantiation_(
-        &self,
+        &mut self,
         s: &SignatureToken,
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
@@ -472,7 +488,7 @@ impl<'a> SignatureChecker<'a> {
 
     // Checks if the given types are well defined and satisfy the constraints in the given context.
     fn check_generic_instance(
-        &self,
+        &mut self,
         type_arguments: &[SignatureToken],
         constraints: impl ExactSizeIterator<Item = AbilitySet>,
         global_abilities: &[AbilitySet],
@@ -489,8 +505,11 @@ impl<'a> SignatureChecker<'a> {
             );
         }
 
+        let meter: &mut M = self.meter;
+        let module_ability_cache: &mut AbilityCache = self.module_ability_cache;
         for (constraint, ty) in constraints.into_iter().zip(type_arguments) {
-            let given = self.module.abilities(ty, global_abilities)?;
+            let given =
+                module_ability_cache.abilities(Scope::Module, meter, global_abilities, ty)?;
             if !constraint.is_subset(given) {
                 return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
                     .with_message(format!(

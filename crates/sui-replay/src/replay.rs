@@ -635,6 +635,12 @@ impl LocalExec {
                 error!("Object {id} {version} {digest} was deleted on RPC server.");
                 Ok(None)
             }
+            // This is a child object which was not found in the store (e.g., due to exists
+            // check before creating the dynamic field).
+            Err(ReplayEngineError::ObjectVersionNotFound { id, version }) => {
+                info!("Object {id} {version} not found on RPC server -- this may have been pruned or never existed.");
+                Ok(None)
+            }
             Err(err) => Err(ReplayEngineError::SuiRpcError {
                 err: err.to_string(),
             }),

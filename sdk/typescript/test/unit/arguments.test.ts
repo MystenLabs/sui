@@ -26,6 +26,10 @@ describe('Arguments helpers', () => {
 				digest: toB58(new Uint8Array(32).fill(0x1)),
 			}),
 			Arguments.pure.address('0x2'),
+			Arguments.object.system(),
+			Arguments.object.clock(),
+			Arguments.object.random(),
+			Arguments.object.denyList(),
 		];
 
 		const tx = new Transaction();
@@ -66,6 +70,26 @@ describe('Arguments helpers', () => {
 			            "$kind": "Input",
 			            "Input": 4,
 			            "type": "pure",
+			          },
+			          {
+			            "$kind": "Input",
+			            "Input": 5,
+			            "type": "object",
+			          },
+			          {
+			            "$kind": "Input",
+			            "Input": 6,
+			            "type": "object",
+			          },
+			          {
+			            "$kind": "Input",
+			            "Input": 7,
+			            "type": "object",
+			          },
+			          {
+			            "$kind": "Input",
+			            "Input": 8,
+			            "type": "object",
 			          },
 			        ],
 			        "function": "bar",
@@ -126,6 +150,30 @@ describe('Arguments helpers', () => {
 			      "$kind": "Pure",
 			      "Pure": {
 			        "bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI=",
+			      },
+			    },
+			    {
+			      "$kind": "UnresolvedObject",
+			      "UnresolvedObject": {
+			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000005",
+			      },
+			    },
+			    {
+			      "$kind": "UnresolvedObject",
+			      "UnresolvedObject": {
+			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000006",
+			      },
+			    },
+			    {
+			      "$kind": "UnresolvedObject",
+			      "UnresolvedObject": {
+			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000008",
+			      },
+			    },
+			    {
+			      "$kind": "UnresolvedObject",
+			      "UnresolvedObject": {
+			        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000403",
 			      },
 			    },
 			  ],

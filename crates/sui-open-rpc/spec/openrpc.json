@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.32.0"
+    "version": "1.33.0"
   },
   "methods": [
     {
@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "54",
+              "maxSupportedProtocolVersion": "58",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1341,6 +1341,7 @@
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1417,6 +1418,7 @@
                 "config_read_setting_impl_cost_base": null,
                 "config_read_setting_impl_cost_per_byte": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
                 "consensus_max_transactions_in_block_bytes": null,
                 "crypto_invalid_arguments_cost": {

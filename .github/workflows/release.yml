@@ -2,7 +2,7 @@ name: Attach Sui binaries to a release
 
 on:
   release:
-    types: [ published ]
+    types: [ published, prereleased ]
   workflow_dispatch:
     inputs:
       sui_tag:
@@ -162,8 +162,7 @@ jobs:
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
       - name: Publish Windows sui binary to Chocolatey
-        if: ${{ matrix.os == 'windows-ghcloud' && contains( env.sui_tag, 'testnet') }}
-        continue-on-error: true
+        if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
         shell: bash
         run: |
           choco install checksum
@@ -172,9 +171,9 @@ jobs:
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
-          1. Go to https://github.com/MystenLabs/sui/releases/download/${{ env.sui_tag }}/sui-${{ env.sui_tag }}-windows-x86_64.tgz
-          2. Extract sui-windows-x86_64.exe
-          3. checksum.exe -t sha256 sui-windows-x86_64.exe: ${sui_sha}
+          1. Download https://github.com/MystenLabs/sui/releases/download/${{ env.sui_tag }}/sui-${{ env.sui_tag }}-windows-x86_64.tgz
+          2. Extract sui.exe
+          3. Verify binary: checksum.exe -t sha256 sui.exe: ${sui_sha}
 
           File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
           EOF

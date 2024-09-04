@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
-
 use super::QueryExecutor;
 use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
@@ -12,6 +10,8 @@ use diesel::{
     query_dsl::LoadQuery,
     QueryResult, RunQueryDsl,
 };
+use std::fmt;
+use std::time::Instant;
 use sui_indexer::indexer_reader::IndexerReader;
 
 use sui_indexer::{run_query_async, run_query_repeatable_async, spawn_read_only_blocking};
@@ -19,7 +19,7 @@ use tracing::error;
 
 #[derive(Clone)]
 pub(crate) struct PgExecutor {
-    pub inner: IndexerReader<diesel::PgConnection>,
+    pub inner: IndexerReader,
     pub limits: Limits,
     pub metrics: Metrics,
 }
@@ -29,12 +29,10 @@ pub(crate) struct PgConnection<'c> {
     conn: &'c mut diesel::PgConnection,
 }
 
+pub(crate) struct ByteaLiteral<'a>(pub &'a [u8]);
+
 impl PgExecutor {
-    pub(crate) fn new(
-        inner: IndexerReader<diesel::PgConnection>,
-        limits: Limits,
-        metrics: Metrics,
-    ) -> Self {
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
         Self {
             inner,
             limits,
@@ -118,6 +116,16 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     }
 }
 
+impl fmt::Display for ByteaLiteral<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'\\x{}'::bytea", hex::encode(self.0))
+    }
+}
+
+pub(crate) fn bytea_literal(slice: &[u8]) -> ByteaLiteral<'_> {
+    ByteaLiteral(slice)
+}
+
 /// Support for calculating estimated query cost using EXPLAIN and then logging it.
 mod query_cost {
     use super::*;
@@ -189,26 +197,24 @@ mod query_cost {
 #[cfg(all(test, feature = "pg_integration"))]
 mod tests {
     use super::*;
-    use crate::config::ConnectionConfig;
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        db::{get_pool_connection, new_connection_pool, reset_database},
+        db::{get_pool_connection, new_connection_pool, reset_database, ConnectionPoolConfig},
         models::objects::StoredObject,
         schema::objects,
+        tempdb::TempDb,
         types::IndexedObject,
     };
 
     #[test]
     fn test_query_cost() {
-        let connection_config = ConnectionConfig::default();
-        let pool = new_connection_pool::<diesel::PgConnection>(
-            &connection_config.db_url,
-            Some(connection_config.db_pool_size),
-        )
-        .unwrap();
+        let database = TempDb::new().unwrap();
+        let mut pool_config = ConnectionPoolConfig::default();
+        pool_config.set_pool_size(5);
+        let pool = new_connection_pool(database.database().url().as_str(), &pool_config).unwrap();
         let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(&mut conn, /* drop_all */ true).unwrap();
+        reset_database(&mut conn).unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())

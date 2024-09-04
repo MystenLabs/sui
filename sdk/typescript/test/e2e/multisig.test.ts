@@ -105,6 +105,7 @@ describe('MultiSig with zklogin signature', () => {
 			signature,
 			options: { showEffects: true },
 		});
+		await client.waitForTransaction({ digest: result.digest });
 
 		// check the execution result and digest.
 		const localDigest = await tx.getDigest({ client });

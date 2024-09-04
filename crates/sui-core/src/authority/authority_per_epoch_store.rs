@@ -11,7 +11,6 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
-use narwhal_executor::ExecutionIndices;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
@@ -19,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_config::node::{ConsensusProtocol, ExpensiveSafetyCheckConfig};
+use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_macros::fail_point_arg;
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
@@ -66,7 +65,6 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
-use crate::consensus_manager::ConsensusManager;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     DkgStatus, RandomnessManager, RandomnessReporter, VersionedProcessedMessage,
@@ -125,8 +123,8 @@ pub(crate) type EncG = bls12381::G2Element;
 // CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
 // anyway. If we need to support distributed object storage, having this distinction will be
 // useful, as we will most likely have to re-implement a retry / write-ahead-log at that point.
-pub struct CertLockGuard(MutexGuard);
-pub struct CertTxGuard(CertLockGuard);
+pub struct CertLockGuard(#[allow(unused)] MutexGuard);
+pub struct CertTxGuard(#[allow(unused)] CertLockGuard);
 
 impl CertTxGuard {
     pub fn release(self) {}
@@ -234,6 +232,37 @@ impl ConsensusStatsAPI for ConsensusStatsV1 {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, Copy)]
+pub struct ExecutionIndices {
+    /// The round number of the last committed leader.
+    pub last_committed_round: u64,
+    /// The index of the last sub-DAG that was executed (either fully or partially).
+    pub sub_dag_index: u64,
+    /// The index of the last transaction was executed (used for crash-recovery).
+    pub transaction_index: u64,
+}
+
+impl Ord for ExecutionIndices {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (
+            self.last_committed_round,
+            self.sub_dag_index,
+            self.transaction_index,
+        )
+            .cmp(&(
+                other.last_committed_round,
+                other.sub_dag_index,
+                other.transaction_index,
+            ))
+    }
+}
+
+impl PartialOrd for ExecutionIndices {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithStats {
     pub index: ExecutionIndices,
@@ -250,6 +279,10 @@ pub struct ExecutionComponents {
     pub(crate) module_cache: Arc<ExecutionModuleCache>,
     metrics: Arc<ResolverMetrics>,
 }
+
+#[cfg(test)]
+#[path = "../unit_tests/authority_per_epoch_store_tests.rs"]
+pub mod authority_per_epoch_store_tests;
 
 pub struct AuthorityPerEpochStore {
     /// The name of this authority.
@@ -272,6 +305,10 @@ pub struct AuthorityPerEpochStore {
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
+
+    // Subscribers will get notified when a transaction is executed via checkpoint execution.
+    executed_transactions_to_checkpoint_notify_read:
+        NotifyRead<TransactionDigest, CheckpointSequenceNumber>,
 
     /// Batch verifier for certificates - also caches certificates and tx sigs that are known to have
     /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
@@ -370,15 +407,15 @@ pub struct AuthorityEpochTables {
     /// The tables below manage shared object locks / versions. There are three ways they can be
     /// updated:
     /// 1. (validators only): Upon receiving a certified transaction from consensus, the authority
-    /// assigns the next version to each shared object of the transaction. The next versions of
-    /// the shared objects are updated as well.
+    ///     assigns the next version to each shared object of the transaction. The next versions of
+    ///     the shared objects are updated as well.
     /// 2. (validators only): Upon receiving a new consensus commit, the authority assigns the
-    /// next version of the randomness state object to an expected future transaction to be
-    /// generated after the next random value is available. The next version of the randomness
-    /// state object is updated as well.
+    ///     next version of the randomness state object to an expected future transaction to be
+    ///     generated after the next random value is available. The next version of the randomness
+    ///     state object is updated as well.
     /// 3. (fullnodes + validators): Upon receiving a certified effect from state sync, or
-    /// transaction orchestrator fast execution path, the node assigns the shared object
-    /// versions from the transaction effect. Next object versions are not updated.
+    ///     transaction orchestrator fast execution path, the node assigns the shared object
+    ///     versions from the transaction effect. Next object versions are not updated.
     ///
     /// REQUIRED: all authorities must assign the same shared object versions for each transaction.
     assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
@@ -738,7 +775,9 @@ impl AuthorityPerEpochStore {
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
             .filter_map(|transaction| {
-                if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
+                    &transaction.kind
+                {
                     Some(*certificate.digest())
                 } else {
                     None
@@ -831,6 +870,7 @@ impl AuthorityPerEpochStore {
             user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
+            executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
@@ -1466,6 +1506,13 @@ impl AuthorityPerEpochStore {
         )?;
         batch.write()?;
         trace!("Transactions {digests:?} finalized at checkpoint {sequence}");
+
+        // Notify all readers that the transactions have been finalized as part of a checkpoint execution.
+        for digest in digests {
+            self.executed_transactions_to_checkpoint_notify_read
+                .notify(digest, &sequence);
+        }
+
         Ok(())
     }
 
@@ -1477,6 +1524,16 @@ impl AuthorityPerEpochStore {
             .tables()?
             .executed_transactions_to_checkpoint
             .contains_key(digest)?)
+    }
+
+    pub fn transactions_executed_in_checkpoint(
+        &self,
+        digests: impl Iterator<Item = TransactionDigest>,
+    ) -> SuiResult<Vec<bool>> {
+        Ok(self
+            .tables()?
+            .executed_transactions_to_checkpoint
+            .multi_contains_keys(digests)?)
     }
 
     pub fn get_transaction_checkpoint(
@@ -1732,14 +1789,8 @@ impl AuthorityPerEpochStore {
     }
 
     fn get_max_accumulated_txn_cost_per_object_in_commit(&self) -> Option<u64> {
-        match ConsensusManager::get_consensus_protocol_in_epoch(self) {
-            ConsensusProtocol::Narwhal => self
-                .protocol_config()
-                .max_accumulated_txn_cost_per_object_in_narwhal_commit_as_option(),
-            ConsensusProtocol::Mysticeti => self
-                .protocol_config()
-                .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option(),
-        }
+        self.protocol_config()
+            .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
     }
 
     fn should_defer(
@@ -1830,7 +1881,7 @@ impl AuthorityPerEpochStore {
 
         // TODO: lock once for all insert() calls.
         for transaction in transactions {
-            if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+            if let ConsensusTransactionKind::CertifiedTransaction(cert) = &transaction.kind {
                 let state = lock.expect("Must pass reconfiguration lock when storing certificate");
                 // Caller is responsible for performing graceful check
                 assert!(
@@ -1955,6 +2006,25 @@ impl AuthorityPerEpochStore {
             .into_iter()
             .zip(self.check_consensus_messages_processed(keys.into_iter())?)
             .filter(|(_, processed)| !processed)
+            .map(|(registration, _)| registration);
+
+        join_all(unprocessed_keys_registrations).await;
+        Ok(())
+    }
+
+    /// Get notified when transactions get executed as part of a checkpoint execution.
+    pub async fn transactions_executed_in_checkpoint_notify(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> Result<(), SuiError> {
+        let registrations = self
+            .executed_transactions_to_checkpoint_notify_read
+            .register_all(&digests);
+
+        let unprocessed_keys_registrations = registrations
+            .into_iter()
+            .zip(self.transactions_executed_in_checkpoint(digests.into_iter())?)
+            .filter(|(_, processed)| !*processed)
             .map(|(registration, _)| registration);
 
         join_all(unprocessed_keys_registrations).await;
@@ -2393,7 +2463,7 @@ impl AuthorityPerEpochStore {
         // Signatures are verified as part of the consensus payload verification in SuiTxValidator
         match &transaction.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(_certificate),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -2464,10 +2534,6 @@ impl AuthorityPerEpochStore {
                     return None;
                 }
             }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
-                ..
-            }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, _bytes),
                 ..
@@ -3341,7 +3407,7 @@ impl AuthorityPerEpochStore {
 
         match &transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) => {
                 if certificate.epoch() != self.epoch() {
@@ -3538,13 +3604,6 @@ impl AuthorityPerEpochStore {
                     );
                 }
                 Ok(ConsensusCertificateResult::ConsensusMessage)
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessStateUpdate(_, _),
-                ..
-            }) => {
-                // These are always generated as System transactions (handled below).
-                panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),

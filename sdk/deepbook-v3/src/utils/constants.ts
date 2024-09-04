@@ -12,8 +12,8 @@ export interface DeepbookPackageIds {
 }
 
 export const testnetPackageIds = {
-	DEEPBOOK_PACKAGE_ID: '0x279443bdf339c7beb585fa44bbd9fa40e4ff255b4df6a2eca32ccc469ffc9046',
-	REGISTRY_ID: '0xe9c839fd0c6469b750b96ebe0fe656eec25466dea2a57f7d6df12c63c71af9ac',
+	DEEPBOOK_PACKAGE_ID: '0xc89b2bd6172c077aec6e8d7ba201e99c32f9770cdae7be6dac9d95132fff8e8e',
+	REGISTRY_ID: '0x9162317a81a9eb66ecd42705529b2a39c7805f98f42312275c2e7a599d518437',
 	DEEP_TREASURY_ID: '0x69fffdae0075f8f71f4fa793549c11079266910e8905169845af1f5d00e09dcb',
 } satisfies DeepbookPackageIds;
 
@@ -76,22 +76,22 @@ export const mainnetCoins: CoinMap = {
 
 export const testnetPools: PoolMap = {
 	DEEP_SUI: {
-		address: `0x69c220e16a38e6f18073b2ae5d200d45f27449db86d3435a592474686037416e`,
+		address: `0x2decc59a6f05c5800e5c8a1135f9d133d1746f562bf56673e6e81ef4f7ccd3b7`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'SUI',
 	},
 	SUI_DBUSDC: {
-		address: `0x7abf219eda0771e27a4cc1c87946515c3dfc6ef994b4b06aef81830ff3bfad7f`,
+		address: `0xace543e8239f0c19783e57bacb02c581fd38d52899bdce117e49c91b494c8b10`,
 		baseCoin: 'SUI',
 		quoteCoin: 'DBUSDC',
 	},
 	DEEP_DBUSDC: {
-		address: `0x4d48440f70032595f31d1fd39c4891e81e9b3f5d48ae2dde3198f26eebfed55e`,
+		address: `0x1faaa544a84c16215ef005edb046ddf8e1cfec0792aec3032e86e554b33bd33a`,
 		baseCoin: 'DEEP',
 		quoteCoin: 'DBUSDC',
 	},
 	DBUSDT_DBUSDC: {
-		address: `0x2d532573987c46e43b6d4c09d6b702caee045d330b7450300d331e57a11a0308`,
+		address: `0x83aca040eaeaf061e3d482a44d1a87a5b8b6206ad52edae9d0479b830a38106f`,
 		baseCoin: 'DBUSDT',
 		quoteCoin: 'DBUSDC',
 	},

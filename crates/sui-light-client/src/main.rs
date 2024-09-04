@@ -96,8 +96,8 @@ struct Config {
 }
 
 impl Config {
-    pub fn rest_url(&self) -> String {
-        format!("{}/rest", self.full_node_url)
+    pub fn rest_url(&self) -> &str {
+        &self.full_node_url
     }
 }
 
@@ -186,7 +186,7 @@ async fn download_checkpoint_summary(
 ) -> anyhow::Result<CertifiedCheckpointSummary> {
     // Download the checkpoint from the server
     let client = Client::new(config.rest_url());
-    client.get_checkpoint_summary(seq).await
+    client.get_checkpoint_summary(seq).await.map_err(Into::into)
 }
 
 /// Run binary search to for each end of epoch checkpoint that is missing

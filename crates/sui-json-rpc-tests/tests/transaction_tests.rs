@@ -259,24 +259,23 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert!(second_page.data.len() > 5);
     assert!(!second_page.has_next_page);
 
-    let mut all_txs_rev = first_page.data.clone();
-    all_txs_rev.extend(second_page.data);
-    all_txs_rev.reverse();
+    let mut all_txs = first_page.data.clone();
+    all_txs.extend(second_page.data);
 
-    // test get 10 latest transactions paged
+    // test get 10 transactions paged
     let latest = client
         .read_api()
         .query_transaction_blocks(
             SuiTransactionBlockResponseQuery::default(),
             None,
             Some(10),
-            true,
+            false,
         )
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
-    assert_eq!(Some(all_txs_rev[9].digest), latest.next_cursor);
-    assert_eq!(all_txs_rev[0..10], latest.data);
+    assert_eq!(Some(all_txs[9].digest), latest.next_cursor);
+    assert_eq!(all_txs[0..10], latest.data);
     assert!(latest.has_next_page);
 
     // test get from address txs in ascending order

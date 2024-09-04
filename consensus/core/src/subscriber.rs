@@ -152,7 +152,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .metrics
                         .node_metrics
                         .subscriber_connection_attempts
-                        .with_label_values(&[&peer_hostname, "success"])
+                        .with_label_values(&[peer_hostname, "success"])
                         .inc();
                     blocks
                 }
@@ -162,7 +162,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                         .metrics
                         .node_metrics
                         .subscriber_connection_attempts
-                        .with_label_values(&[&peer_hostname, "failure"])
+                        .with_label_values(&[peer_hostname, "failure"])
                         .inc();
                     continue 'subscription;
                 }
@@ -184,7 +184,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .metrics
                             .node_metrics
                             .subscribed_blocks
-                            .with_label_values(&[&peer_hostname])
+                            .with_label_values(&[peer_hostname])
                             .inc();
                         let result = authority_service
                             .handle_send_block(peer, block.clone())

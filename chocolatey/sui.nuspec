@@ -5,7 +5,7 @@ enclosed in quotation marks, you should use an editor that supports UTF-8, not t
 	<metadata>
 		<id>sui</id>
 		<version>$version$</version>
-		<owners>sui</owners>
+		<owners>Sui Foundation</owners>
 		<title>Main Sui Binary</title>
 		<authors>sui</authors>
 		<projectUrl>https://sui.io/</projectUrl>
@@ -15,12 +15,12 @@ enclosed in quotation marks, you should use an editor that supports UTF-8, not t
 		<bugTrackerUrl>https://github.com/MystenLabs/sui/issues</bugTrackerUrl>
 		<tags>sui</tags>
 		<packageSourceUrl>https://community.chocolatey.org/packages/sui.portable</packageSourceUrl>
-		<summary>Run a local sui binary</summary>
+		<summary>Sui delivers the benefits of Web3 with the ease of Web2</summary>
 		<description>Sui is the first internet-scale programmable blockchain platform</description>
-		<releaseNotes>https://github.com/MystenLabs/sui/releases/tag/mainnet-v$version$</releaseNotes>
+		<releaseNotes>See https://github.com/MystenLabs/sui/releases/tag/testnet-v$version$</releaseNotes>
 	</metadata>
 	<files>
-		<file src="./tmp/release/sui.exe" target="bin/sui.exe" />
+		<file src="../tmp/release/sui.exe" target="bin/sui.exe" />
 		<file src="../LICENSE" target="bin/LICENSE.txt" />
 		<file src="./VERIFICATION.txt" target="bin/VERIFICATION.txt" />
 	</files>

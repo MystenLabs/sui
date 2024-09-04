@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -11,15 +10,14 @@ use std::time::Instant;
 use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::{max, min};
-use diesel::r2d2::R2D2Connection;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
-use downcast::Any;
 use itertools::Itertools;
 use tap::TapFallible;
 use tracing::info;
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 
 use crate::db::ConnectionPool;
@@ -32,6 +30,7 @@ use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::checkpoints::StoredCpTx;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
+use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
@@ -43,9 +42,10 @@ use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
-    event_struct_package, events, objects, objects_history, objects_snapshot, objects_version,
-    packages, pruner_cp_watermark, transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg,
-    tx_changed_objects, tx_digests, tx_input_objects, tx_kinds, tx_recipients, tx_senders,
+    event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
+    objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
+    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
+    tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -58,8 +58,8 @@ use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
 
-#[cfg(feature = "postgres-feature")]
 use diesel::upsert::excluded;
+use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 
 #[macro_export]
 macro_rules! chunk {
@@ -131,18 +131,17 @@ SET object_version = EXCLUDED.object_version,
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
     pub parallel_objects_chunk_size: usize,
-    pub epochs_to_keep: Option<u64>,
 }
 
-pub struct PgIndexerStore<T: R2D2Connection + 'static> {
-    blocking_cp: ConnectionPool<T>,
+pub struct PgIndexerStore {
+    blocking_cp: ConnectionPool,
     metrics: IndexerMetrics,
-    partition_manager: PgPartitionManager<T>,
+    partition_manager: PgPartitionManager,
     config: PgIndexerStoreConfig,
 }
 
-impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
-    fn clone(&self) -> PgIndexerStore<T> {
+impl Clone for PgIndexerStore {
+    fn clone(&self) -> PgIndexerStore {
         Self {
             blocking_cp: self.blocking_cp.clone(),
             metrics: self.metrics.clone(),
@@ -152,8 +151,8 @@ impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
     }
 }
 
-impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
-    pub fn new(blocking_cp: ConnectionPool<T>, metrics: IndexerMetrics) -> Self {
+impl PgIndexerStore {
+    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -162,15 +161,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
-        let epochs_to_keep = std::env::var("EPOCHS_TO_KEEP")
-            .map(|s| s.parse::<u64>().ok())
-            .unwrap_or_else(|_e| None);
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
-            epochs_to_keep,
         };
 
         Self {
@@ -181,7 +176,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         }
     }
 
-    pub fn blocking_cp(&self) -> ConnectionPool<T> {
+    pub fn blocking_cp(&self) -> ConnectionPool {
         self.blocking_cp.clone()
     }
 
@@ -193,6 +188,38 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 .map(|v| v.map(|v| v as u64))
         })
         .context("Failed reading latest epoch id from PostgresDB")
+    }
+
+    /// Get the range of the protocol versions that need to be indexed.
+    pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
+        // We start indexing from the next protocol version after the latest one stored in the db.
+        let start = read_only_blocking!(&self.blocking_cp, |conn| {
+            protocol_configs::dsl::protocol_configs
+                .select(max(protocol_configs::protocol_version))
+                .first::<Option<i64>>(conn)
+        })
+        .context("Failed reading latest protocol version from PostgresDB")?
+        .map_or(1, |v| v + 1);
+
+        // We end indexing at the protocol version of the latest epoch stored in the db.
+        let end = read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select(max(epochs::protocol_version))
+                .first::<Option<i64>>(conn)
+        })
+        .context("Failed reading latest epoch protocol version from PostgresDB")?
+        .unwrap_or(1);
+        Ok((start, end))
+    }
+
+    pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            chain_identifier::dsl::chain_identifier
+                .select(chain_identifier::checkpoint_digest)
+                .first::<Vec<u8>>(conn)
+                .optional()
+        })
+        .context("Failed reading chain id from PostgresDB")
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
@@ -627,6 +654,8 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         // If the first checkpoint has sequence number 0, we need to persist the digest as
         // chain identifier.
         if first_checkpoint.sequence_number == 0 {
+            let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
+            self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())?;
             transactional_blocking_with_retry!(
                 &self.blocking_cp,
                 |conn| {
@@ -1559,9 +1588,9 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::table
                 .filter(checkpoints::epoch.eq(epoch as i64))
-                .select(max(checkpoints::network_total_transactions))
-                .first::<Option<i64>>(conn)
-                .map(|o| o.unwrap_or(0))
+                .select(checkpoints::network_total_transactions)
+                .order_by(checkpoints::sequence_number.desc())
+                .first::<i64>(conn)
         })
         .context("Failed to get network total transactions in epoch")
         .map(|v| v as u64)
@@ -1613,7 +1642,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
 }
 
 #[async_trait]
-impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
+impl IndexerStore for PgIndexerStore {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
             .await
@@ -1626,6 +1655,11 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
 
     async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_available_checkpoint_range())
+            .await
+    }
+
+    async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        self.execute_in_blocking_worker(|this| this.get_chain_identifier())
             .await
     }
 
@@ -2140,8 +2174,71 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
         .await
     }
 
-    fn as_any(&self) -> &dyn StdAny {
-        self
+    /// Persist protocol configs and feature flags until the protocol version for the latest epoch
+    /// we have stored in the db, inclusive.
+    fn persist_protocol_configs_and_feature_flags(
+        &self,
+        chain_id: Vec<u8>,
+    ) -> Result<(), IndexerError> {
+        let chain_id = ChainIdentifier::from(
+            CheckpointDigest::try_from(chain_id).expect("Unable to convert chain id"),
+        );
+
+        let mut all_configs = vec![];
+        let mut all_flags = vec![];
+
+        let (start_version, end_version) = self.get_protocol_version_index_range()?;
+        info!(
+            "Persisting protocol configs with start_version: {}, end_version: {}",
+            start_version, end_version
+        );
+
+        // Gather all protocol configs and feature flags for all versions between start and end.
+        for version in start_version..=end_version {
+            let protocol_configs = ProtocolConfig::get_for_version_if_supported(
+                (version as u64).into(),
+                chain_id.chain(),
+            )
+            .ok_or(IndexerError::GenericError(format!(
+                "Unable to fetch protocol version {} and chain {:?}",
+                version,
+                chain_id.chain()
+            )))?;
+            let configs_vec = protocol_configs
+                .attr_map()
+                .into_iter()
+                .map(|(k, v)| StoredProtocolConfig {
+                    protocol_version: version,
+                    config_name: k,
+                    config_value: v.map(|v| v.to_string()),
+                })
+                .collect::<Vec<_>>();
+            all_configs.extend(configs_vec);
+
+            let feature_flags = protocol_configs
+                .feature_map()
+                .into_iter()
+                .map(|(k, v)| StoredFeatureFlag {
+                    protocol_version: version,
+                    flag_name: k,
+                    flag_value: v,
+                })
+                .collect::<Vec<_>>();
+            all_flags.extend(feature_flags);
+        }
+
+        // Now insert all of them into the db.
+        // TODO: right now the size of these updates is manageable but later we may consider batching.
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                insert_or_ignore_into!(protocol_configs::table, all_configs.clone(), conn);
+                insert_or_ignore_into!(feature_flags::table, all_flags.clone(), conn);
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )?;
+        Ok(())
     }
 }
 
@@ -2163,15 +2260,15 @@ fn make_final_list_of_objects_to_commit(
         .flat_map(|changes| changes.changed_objects);
     let mut latest_objects = HashMap::new();
     for object in mutated_objects {
-        if deleted_objects.contains_key(&object.object_id) {
+        if deleted_objects.contains_key(&object.object.id()) {
             continue;
         }
-        match latest_objects.entry(object.object_id) {
+        match latest_objects.entry(object.object.id()) {
             Entry::Vacant(e) => {
                 e.insert(object);
             }
             Entry::Occupied(mut e) => {
-                if object.object_version > e.get().object_version {
+                if object.object.version() > e.get().object.version() {
                     e.insert(object);
                 }
             }

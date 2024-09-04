@@ -368,6 +368,9 @@
           },
           "404": {
             "description": ""
+          },
+          "410": {
+            "description": ""
           }
         }
       }
@@ -2651,6 +2654,85 @@
                 "type": "string",
                 "enum": [
                   "input_object_deleted"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Certificate is cancelled due to congestion on shared objects",
+            "type": "object",
+            "required": [
+              "congested_objects",
+              "error"
+            ],
+            "properties": {
+              "congested_objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectId"
+                }
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "execution_cancelled_due_to_shared_object_congestion"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Address is denied for this coin type",
+            "type": "object",
+            "required": [
+              "address",
+              "coin_type",
+              "error"
+            ],
+            "properties": {
+              "address": {
+                "$ref": "#/components/schemas/Address"
+              },
+              "coin_type": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "address_denied_for_coin"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Coin type is globally paused for use",
+            "type": "object",
+            "required": [
+              "coin_type",
+              "error"
+            ],
+            "properties": {
+              "coin_type": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "coin_type_global_pause"
+                ]
+              }
+            }
+          },
+          {
+            "description": "Certificate is cancelled because randomness could not be generated this epoch",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "execution_cancelled_due_to_randomness_unavailable"
                 ]
               }
             }
@@ -5189,6 +5271,37 @@
                 "type": "string",
                 "enum": [
                   "zklogin"
+                ]
+              },
+              "signature": {
+                "$ref": "#/components/schemas/SimpleSignature"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "authenticator_data",
+              "client_data_json",
+              "scheme",
+              "signature"
+            ],
+            "properties": {
+              "authenticator_data": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              },
+              "client_data_json": {
+                "type": "string"
+              },
+              "scheme": {
+                "type": "string",
+                "enum": [
+                  "passkey"
                 ]
               },
               "signature": {

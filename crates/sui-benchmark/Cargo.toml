@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -45,7 +48,6 @@ fastcrypto-zkp.workspace = true
 
 move-core-types.workspace = true
 mysten-metrics.workspace = true
-narwhal-node.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
 
@@ -55,6 +57,3 @@ sui-framework-snapshot.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
 typed-store.workspace = true
-
-[features]
-benchmark = ["narwhal-node/benchmark"]

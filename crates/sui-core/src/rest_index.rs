@@ -15,13 +15,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
-use sui_rest_api::CheckpointData;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::object::Object;
@@ -114,9 +114,9 @@ struct IndexStoreTables {
     ///
     /// A few uses for this singleton:
     /// - determining if the DB has been initialized (as some tables will still be empty post
-    /// initializatio)
+    ///     initialization)
     /// - version of the DB. Everytime a new table or schema is changed the version number needs to
-    /// be incremented.
+    ///     be incremented.
     meta: DBMap<(), MetadataInfo>,
 
     /// An index of extra metadata for Transactions.
@@ -406,7 +406,7 @@ impl IndexStoreTables {
 
             for tx in &checkpoint.transactions {
                 // determine changes from removed objects
-                for removed_object in tx.removed_objects() {
+                for removed_object in tx.removed_objects_pre_version() {
                     match removed_object.owner() {
                         Owner::AddressOwner(address) => {
                             let owner_key = OwnerIndexKey::new(*address, removed_object.id());

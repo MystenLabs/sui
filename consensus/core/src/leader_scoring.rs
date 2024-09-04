@@ -41,7 +41,7 @@ pub(crate) struct ReputationScoreCalculator<'a> {
 impl<'a> ReputationScoreCalculator<'a> {
     pub(crate) fn new(
         context: Arc<Context>,
-        unscored_subdags: &Vec<CommittedSubDag>,
+        unscored_subdags: &[CommittedSubDag],
         scoring_strategy: &'a dyn ScoringStrategy,
     ) -> Self {
         let num_authorities = context.committee.size();

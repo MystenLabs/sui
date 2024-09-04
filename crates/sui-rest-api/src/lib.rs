@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::Router;
+use axum::{response::Redirect, routing::get, Router};
 use mysten_network::callback::CallbackLayer;
 use openapi::ApiEndpoint;
 use reader::StateReader;
 use std::sync::Arc;
 use sui_types::storage::RestStateReader;
+use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
 pub mod accept;
@@ -32,7 +33,7 @@ pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
+pub use transactions::ExecuteTransactionQueryParameters;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
@@ -45,6 +46,7 @@ pub enum Direction {
     Descending,
 }
 
+#[derive(Debug)]
 pub struct Page<T, C> {
     pub entries: response::ResponseContent<Vec<T>>,
     pub cursor: Option<C>,
@@ -145,8 +147,14 @@ impl RestService {
 
         api.register_endpoints(ENDPOINTS.to_owned());
 
-        api.to_router()
-            .with_state(self.clone())
+        Router::new()
+            .nest("/v2/", api.to_router().with_state(self.clone()))
+            .route("/v2", get(|| async { Redirect::permanent("/v2/") }))
+            // Previously the service used to be hosted at `/rest`. In an effort to migrate folks
+            // to the new versioned route, we'll issue redirects from `/rest` -> `/v2`.
+            .route("/rest/*path", axum::routing::method_routing::any(redirect))
+            .route("/rest", get(|| async { Redirect::permanent("/v2/") }))
+            .route("/rest/", get(|| async { Redirect::permanent("/v2/") }))
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
@@ -162,15 +170,9 @@ impl RestService {
             })
     }
 
-    pub async fn start_service(self, socket_address: std::net::SocketAddr, base: Option<String>) {
-        let mut app = self.into_router();
-
-        if let Some(base) = base {
-            app = Router::new().nest(&base, app);
-        }
-
+    pub async fn start_service(self, socket_address: std::net::SocketAddr) {
         let listener = tokio::net::TcpListener::bind(socket_address).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, self.into_router()).await.unwrap();
     }
 }
 
@@ -194,6 +196,10 @@ fn info() -> openapiv3::v3_1::Info {
         version: "0.0.0".to_owned(),
         ..Default::default()
     }
+}
+
+async fn redirect(axum::extract::Path(path): axum::extract::Path<String>) -> Redirect {
+    Redirect::permanent(&format!("/v2/{path}"))
 }
 
 mod _schemars {

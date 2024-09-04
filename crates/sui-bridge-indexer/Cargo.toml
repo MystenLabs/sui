@@ -9,7 +9,8 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 tap.workspace = true
-diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
+diesel = { workspace = true, features = ["serde_json"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres"] }
 ethers = { version = "2.0", features = ["rustls", "ws"] }
 rayon = "1.10.0"
 tokio = { workspace = true, features = ["full"] }
@@ -31,6 +32,7 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 backoff.workspace = true
 sui-config.workspace = true
+sui-indexer-builder.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod sdk;
+use sdk::Result;
+
+pub use reqwest;
 
 use crate::transactions::ExecuteTransactionQueryParameters;
-use anyhow::Result;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::effects::{TransactionEffects, TransactionEvents};

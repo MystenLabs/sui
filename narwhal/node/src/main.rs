@@ -303,7 +303,7 @@ async fn main() -> Result<(), eyre::Report> {
 
 /// Generate all the genesis files required for benchmarks.
 fn benchmark_genesis(
-    ips: &Vec<String>,
+    ips: &[String],
     working_directory: &PathBuf,
     num_workers: usize,
     base_port: usize,

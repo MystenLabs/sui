@@ -6,6 +6,9 @@ publish = false
 edition = "2021"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 
 [dev-dependencies]

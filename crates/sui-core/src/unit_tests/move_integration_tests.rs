@@ -2806,7 +2806,7 @@ pub fn build_package(
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let digest = compiled_package.get_package_digest(with_unpublished_deps);
     let modules = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
     (digest.to_vec(), modules, dependencies)
 }
 
@@ -2826,7 +2826,7 @@ pub async fn build_and_try_publish_test_package(
 
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
