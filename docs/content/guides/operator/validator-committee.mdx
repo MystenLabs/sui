@@ -32,7 +32,7 @@ When a validator receives a transaction from a client, it first performs transac
 
 The process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions/certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness (it can refuse to form a certificate), but not for safety (it cannot change the effects of the transaction, and does not need the user's secret key).
 
-### Certificates / certified transactions
+### Certificates / certified transactions {#certificates}
 
 After the client forms a certificate, it submits it to the validators, which perform certificate validity checks. These checks ensure the signers are validators in the current epoch, and the signatures are cryptographically valid. If the checks pass, the validators execute the transaction inside the certificate. Execution of a transaction either succeeds and commits all of its effects or aborts and has no effect other than debiting the transaction's gas input. Some reasons a transaction might abort include an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget. Whether it succeeds or aborts, the validator durably stores the certificate indexed by the hash of its inner transaction.
 
@@ -40,8 +40,8 @@ If a client collects a quorum of signatures on the effects of the transaction, t
 
 ## The role of consensus
 
-Sui uses a high-throughput DAG-based consensus engine implementing the Mysticeti algorithm to sequences certified transactions. Consensus produces a sequence of commits. In each commits, there is a sequence of certified transactions.
+Sui uses a high-throughput DAG-based consensus engine implementing the Mysticeti algorithm to sequence certified transactions. Consensus produces a series of commits. In each commit, there is a sequence of certified transactions.
 
-The order of transactions sequenced by consensus determines the relative order they can operate on each shared object. Note that executions of transactions touching different shared objects are parallelized on multiple cores.
+The order of transactions in consensus output determines the relative order they can operate on each shared object. Note that executions of transactions touching different shared objects are parallelized on multiple cores.
 
 If total execution cost of transactions in a consensus commit is over a threshold, transactions can be cancelled post consensus to avoid overloading the system.
