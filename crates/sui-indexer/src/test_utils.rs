@@ -99,7 +99,10 @@ pub async fn start_test_indexer_impl(
     let indexer_metrics = IndexerMetrics::new(&registry);
 
     let blocking_pool = new_connection_pool(&db_url, &pool_config).unwrap();
-    let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
+    let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
+        .await
+        .unwrap();
+    let store = PgIndexerStore::new(blocking_pool.clone(), pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
@@ -110,9 +113,6 @@ pub async fn start_test_indexer_impl(
                 rpc_address: reader_mode_rpc_url.parse().unwrap(),
                 rpc_client_url: rpc_url.parse().unwrap(),
             };
-            let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
-                .await
-                .unwrap();
             tokio::spawn(async move {
                 Indexer::start_reader(&config, &registry, blocking_pool, pool).await
             })
