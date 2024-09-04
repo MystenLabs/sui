@@ -773,6 +773,7 @@ async fn test_authority_txn_signing_pushback() {
         None,
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
+        authority_state.get_checkpoint_store().clone(),
     ));
     let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),
@@ -902,6 +903,7 @@ async fn test_authority_txn_execution_pushback() {
         None,
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
+        authority_state.get_checkpoint_store().clone(),
     ));
     let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),

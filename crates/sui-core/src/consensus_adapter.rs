@@ -40,6 +40,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{self};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -253,6 +254,8 @@ pub struct ConsensusAdapter {
     submit_semaphore: Semaphore,
     latency_observer: LatencyObserver,
     protocol_config: ProtocolConfig,
+    #[allow(unused)]
+    checkpoint_store: Arc<CheckpointStore>,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -285,6 +288,7 @@ impl ConsensusAdapter {
         submit_delay_step_override: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
         protocol_config: ProtocolConfig,
+        checkpoint_store: Arc<CheckpointStore>,
     ) -> Self {
         let num_inflight_transactions = Default::default();
         let low_scoring_authorities =
@@ -303,6 +307,7 @@ impl ConsensusAdapter {
             latency_observer: LatencyObserver::new(),
             consensus_throughput_profiler: ArcSwapOption::empty(),
             protocol_config,
+            checkpoint_store,
         }
     }
 
@@ -1140,6 +1145,7 @@ pub fn position_submit_certificate(
 #[cfg(test)]
 mod adapter_tests {
     use super::position_submit_certificate;
+    use crate::checkpoints::CheckpointStore;
     use crate::consensus_adapter::{
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
     };
@@ -1154,6 +1160,7 @@ mod adapter_tests {
         committee::Committee,
         crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
     };
+    use tempfile::tempdir;
 
     fn test_committee(rng: &mut StdRng, size: usize) -> Committee {
         let authorities = (0..size)
@@ -1177,6 +1184,7 @@ mod adapter_tests {
         // grab a random committee and a random stake distribution
         let mut rng = StdRng::from_seed([0; 32]);
         let committee = test_committee(&mut rng, 10);
+        let tempdir = tempdir().unwrap();
 
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
@@ -1189,6 +1197,7 @@ mod adapter_tests {
             Some(Duration::from_secs(2)),
             ConsensusAdapterMetrics::new_test(),
             sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
+            CheckpointStore::new(tempdir.path()),
         );
 
         // transaction to submit
@@ -1219,6 +1228,7 @@ mod adapter_tests {
             None,
             ConsensusAdapterMetrics::new_test(),
             sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
+            CheckpointStore::new(tempdir.path()),
         );
 
         let (delay_step, position, positions_moved, _) =

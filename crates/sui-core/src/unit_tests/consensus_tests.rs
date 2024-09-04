@@ -200,6 +200,7 @@ pub fn make_consensus_adapter_for_test(
         None,
         metrics,
         epoch_store.protocol_config().clone(),
+        state.get_checkpoint_store().clone(),
     ))
 }
 

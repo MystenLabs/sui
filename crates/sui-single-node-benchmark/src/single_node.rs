@@ -65,6 +65,7 @@ impl SingleValidator {
             None,
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
+            validator.get_checkpoint_store().clone(),
         ));
         // TODO: for validator benchmarking purposes, we should allow for traffic control
         // to be configurable and introduce traffic control benchmarks to test

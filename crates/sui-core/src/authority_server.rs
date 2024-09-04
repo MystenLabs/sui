@@ -131,6 +131,7 @@ impl AuthorityServer {
             None,
             ConsensusAdapterMetrics::new_test(),
             state.epoch_store_for_testing().protocol_config().clone(),
+            state.get_checkpoint_store().clone(),
         ));
         Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
