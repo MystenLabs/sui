@@ -397,15 +397,16 @@ impl IndexerReader {
         Ok(stored_checkpoint)
     }
 
-    pub fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
-        use diesel::RunQueryDsl;
-        let stored_checkpoint = run_query!(&self.blocking_pool, |conn| {
-            checkpoints::dsl::checkpoints
-                .order_by(checkpoints::sequence_number.desc())
-                .first::<StoredCheckpoint>(conn)
-        })?;
+    async fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
+        use diesel_async::RunQueryDsl;
 
-        Ok(stored_checkpoint)
+        let mut connection = self.pool.get().await?;
+
+        checkpoints::table
+            .order_by(checkpoints::sequence_number.desc())
+            .first::<StoredCheckpoint>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_checkpoint(
@@ -421,8 +422,10 @@ impl IndexerReader {
         Ok(Some(checkpoint))
     }
 
-    pub fn get_latest_checkpoint(&self) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
-        let stored_checkpoint = self.get_latest_checkpoint_from_db()?;
+    pub async fn get_latest_checkpoint(
+        &self,
+    ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
+        let stored_checkpoint = self.get_latest_checkpoint_from_db().await?;
 
         sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
     }

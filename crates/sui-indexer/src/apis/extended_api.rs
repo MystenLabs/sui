@@ -67,10 +67,7 @@ impl ExtendedApiServer for ExtendedApi {
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
-        let latest_checkpoint = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_checkpoint())
-            .await?;
+        let latest_checkpoint = self.inner.get_latest_checkpoint().await?;
         Ok(latest_checkpoint.network_total_transactions.into())
     }
 }
