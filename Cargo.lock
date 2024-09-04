@@ -13118,8 +13118,6 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "narwhal-config",
- "narwhal-crypto",
  "narwhal-types",
  "nonempty",
  "num-bigint 0.4.4",

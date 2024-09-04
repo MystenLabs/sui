@@ -26,7 +26,7 @@ pub trait EpochStartSystemStateTrait {
     fn get_validator_addresses(&self) -> Vec<SuiAddress>;
     fn get_sui_committee(&self) -> Committee;
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata;
-    fn get_mysticeti_committee(&self) -> ConsensusCommittee;
+    fn get_consensus_committee(&self) -> ConsensusCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
     fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
@@ -177,7 +177,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         Committee::new(self.epoch, voting_rights)
     }
 
-    fn get_mysticeti_committee(&self) -> ConsensusCommittee {
+    fn get_consensus_committee(&self) -> ConsensusCommittee {
         let mut authorities = vec![];
         for validator in self.active_validators.iter() {
             authorities.push(Authority {
@@ -336,34 +336,34 @@ mod test {
 
         // WHEN
         let sui_committee = state.get_sui_committee();
-        let mysticeti_committee = state.get_mysticeti_committee();
+        let consensus_committee = state.get_consensus_committee();
 
         // THEN
         // assert the validators details
         assert_eq!(sui_committee.num_members(), 10);
-        assert_eq!(sui_committee.num_members(), mysticeti_committee.size());
+        assert_eq!(sui_committee.num_members(), consensus_committee.size());
         assert_eq!(
             sui_committee.validity_threshold(),
-            mysticeti_committee.validity_threshold()
+            consensus_committee.validity_threshold()
         );
         assert_eq!(
             sui_committee.quorum_threshold(),
-            mysticeti_committee.quorum_threshold()
+            consensus_committee.quorum_threshold()
         );
-        assert_eq!(state.epoch, mysticeti_committee.epoch());
+        assert_eq!(state.epoch, consensus_committee.epoch());
 
-        for (authority_index, mysticeti_authority) in mysticeti_committee.authorities() {
+        for (authority_index, consensus_authority) in consensus_committee.authorities() {
             let sui_authority_name = sui_committee
                 .authority_by_index(authority_index.value() as u32)
                 .unwrap();
 
             assert_eq!(
-                mysticeti_authority.authority_key.to_bytes(),
+                consensus_authority.authority_key.to_bytes(),
                 sui_authority_name.0,
                 "Mysten & SUI committee member of same index correspond to different public key"
             );
             assert_eq!(
-                mysticeti_authority.stake,
+                consensus_authority.stake,
                 sui_committee.weight(sui_authority_name),
                 "Mysten & SUI committee member stake differs"
             );
