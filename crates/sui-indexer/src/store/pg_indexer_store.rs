@@ -20,7 +20,8 @@ use tracing::info;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 
-use crate::db::ConnectionPool;
+use crate::database::ConnectionPool;
+use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
@@ -133,26 +134,21 @@ pub struct PgIndexerStoreConfig {
     pub parallel_objects_chunk_size: usize,
 }
 
+#[derive(Clone)]
 pub struct PgIndexerStore {
-    blocking_cp: ConnectionPool,
+    blocking_cp: BlockingConnectionPool,
+    pool: ConnectionPool,
     metrics: IndexerMetrics,
     partition_manager: PgPartitionManager,
     config: PgIndexerStoreConfig,
 }
 
-impl Clone for PgIndexerStore {
-    fn clone(&self) -> PgIndexerStore {
-        Self {
-            blocking_cp: self.blocking_cp.clone(),
-            metrics: self.metrics.clone(),
-            partition_manager: self.partition_manager.clone(),
-            config: self.config.clone(),
-        }
-    }
-}
-
 impl PgIndexerStore {
-    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(
+        blocking_cp: BlockingConnectionPool,
+        pool: ConnectionPool,
+        metrics: IndexerMetrics,
+    ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -170,14 +166,19 @@ impl PgIndexerStore {
 
         Self {
             blocking_cp,
+            pool,
             metrics,
             partition_manager,
             config,
         }
     }
 
-    pub fn blocking_cp(&self) -> ConnectionPool {
+    pub fn blocking_cp(&self) -> BlockingConnectionPool {
         self.blocking_cp.clone()
+    }
+
+    pub fn pool(&self) -> ConnectionPool {
+        self.pool.clone()
     }
 
     pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {

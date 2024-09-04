@@ -30,6 +30,11 @@ async fn main() -> anyhow::Result<()> {
 
     let connection_pool =
         new_connection_pool(opts.database_url.as_str(), &opts.connection_pool_config)?;
+    let pool = ConnectionPool::new(
+        opts.database_url.clone(),
+        opts.connection_pool_config.clone(),
+    )
+    .await?;
     spawn_connection_pool_metric_collector(indexer_metrics.clone(), connection_pool.clone());
 
     match opts.command {
@@ -38,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
             snapshot_config,
             pruning_options,
         } => {
-            let store = PgIndexerStore::new(connection_pool, indexer_metrics.clone());
+            let store = PgIndexerStore::new(connection_pool, pool, indexer_metrics.clone());
             Indexer::start_writer_with_config(
                 &ingestion_config,
                 store,
@@ -50,11 +55,6 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
-            let pool = ConnectionPool::new(
-                opts.database_url.clone(),
-                opts.connection_pool_config.clone(),
-            )
-            .await?;
             Indexer::start_reader(&json_rpc_config, &registry, connection_pool, pool).await?;
         }
         Command::ResetDatabase { force } => {
