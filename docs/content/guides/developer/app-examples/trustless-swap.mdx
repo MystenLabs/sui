@@ -1957,7 +1957,7 @@ Add `src/components/locked/ApiLockedList.tsx`:
   {@inject: examples/trading/frontend/src/components/locked/ApiLockedList.tsx}
 </details>
 
-This hook Fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, so we can better trust the latest state of the object in regards to ownership.
+This hook Fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, to ensure the latest state of the object is displayed.
 
 This component uses tanstack's `useInfiniteQuery` instead of `useSuiClientInfiniteQuery` since the data is being fetched from the example's API rather than Sui. 
 
