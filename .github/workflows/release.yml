@@ -1,4 +1,5 @@
 name: Attach Sui binaries to a release
+run-name: Attach Sui binaries to a ${{ inputs.sui_tag }} release
 
 on:
   release:
@@ -123,7 +124,7 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (Mac arm64)
+      - name: Install postgres (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         shell: bash
         env:
@@ -134,12 +135,37 @@ jobs:
         run: |
           brew install postgresql
 
+      - name: Removed unused apps (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
+          df -hI /dev/disk3s1s1
+          sudo rm -rf /Applications/Xcode_14.3.1.app
+          sudo rm -rf /Applications/Xcode_15.0.1.app
+          sudo rm -rf /Applications/Xcode_15.1.app
+          sudo rm -rf /Applications/Xcode_15.2.app
+          sudo rm -rf /Applications/Xcode_15.3.app
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
+          df -hI /dev/disk3s1s1
+
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --bin sui --release --features indexer && mv target/release/sui target/release/sui-pg
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+
+      - name: Cargo build sui in debug mode (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-ghcloud' && env.s3_archive_exist == '' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --profile=dev --bin sui
+          mkdir -p ${{ env.TMP_BUILD_DIR }}
+          mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_archive_exist == '' }}
@@ -157,7 +183,6 @@ jobs:
           export binary=$(echo "sui-pg" | tr -d $'\r')
           mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
 
-          mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
