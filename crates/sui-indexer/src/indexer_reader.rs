@@ -509,13 +509,16 @@ impl IndexerReader {
         Ok(tx_blocks)
     }
 
-    fn multi_get_transactions_with_sequence_numbers(
+    async fn multi_get_transactions_with_sequence_numbers(
         &self,
         tx_sequence_numbers: Vec<i64>,
         // Some(true) for desc, Some(false) for asc, None for undefined order
         is_descending: Option<bool>,
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
-        use diesel::RunQueryDsl;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let mut query = transactions::table
             .filter(transactions::tx_sequence_number.eq_any(tx_sequence_numbers))
             .into_boxed();
@@ -528,8 +531,11 @@ impl IndexerReader {
             }
             None => (),
         }
-        run_query!(&self.blocking_pool, |conn| query
-            .load::<StoredTransaction>(conn))
+
+        query
+            .load::<StoredTransaction>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_owned_objects_in_blocking_task(
@@ -892,7 +898,7 @@ impl IndexerReader {
         .into_iter()
         .map(|tsn| tsn.tx_sequence_number)
         .collect::<Vec<i64>>();
-        self.multi_get_transaction_block_response_by_sequence_numbers_in_blocking_task(
+        self.multi_get_transaction_block_response_by_sequence_numbers(
             tx_sequence_numbers,
             options,
             Some(is_descending),
@@ -910,7 +916,7 @@ impl IndexerReader {
             .await
     }
 
-    async fn multi_get_transaction_block_response_by_sequence_numbers_in_blocking_task(
+    async fn multi_get_transaction_block_response_by_sequence_numbers(
         &self,
         tx_sequence_numbers: Vec<i64>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -918,12 +924,7 @@ impl IndexerReader {
         is_descending: Option<bool>,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
         let stored_txes: Vec<StoredTransaction> = self
-            .spawn_blocking(move |this| {
-                this.multi_get_transactions_with_sequence_numbers(
-                    tx_sequence_numbers,
-                    is_descending,
-                )
-            })
+            .multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)
             .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
