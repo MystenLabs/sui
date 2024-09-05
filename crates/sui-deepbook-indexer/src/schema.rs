@@ -1,9 +1,8 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    balances (digest) {
+    balances (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -17,7 +16,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    flashloans (digest) {
+    flashloans (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -31,7 +31,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_fills (digest) {
+    order_fills (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -55,7 +56,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    order_updates (digest) {
+    order_updates (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -76,7 +78,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    pool_prices (digest) {
+    pool_prices (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -98,7 +101,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    proposals (digest) {
+    proposals (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -114,7 +118,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    rebates (digest) {
+    rebates (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -128,7 +133,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    stakes (digest) {
+    stakes (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -143,7 +149,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    sui_error_transactions (txn_digest) {
+    sui_error_transactions (id) {
+        id -> Int4,
         txn_digest -> Text,
         sender_address -> Text,
         timestamp_ms -> Int8,
@@ -154,7 +161,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    trade_params_update (digest) {
+    trade_params_update (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,
@@ -168,7 +176,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    votes (digest) {
+    votes (id) {
+        id -> Int4,
         digest -> Text,
         sender -> Text,
         checkpoint -> Int8,

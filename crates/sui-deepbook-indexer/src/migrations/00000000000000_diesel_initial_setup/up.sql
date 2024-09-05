@@ -4,7 +4,8 @@
 
 CREATE TABLE IF NOT EXISTS order_updates
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS order_updates
 
 CREATE TABLE IF NOT EXISTS order_fills
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -47,7 +49,8 @@ CREATE TABLE IF NOT EXISTS order_fills
 
 CREATE TABLE IF NOT EXISTS flashloans
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -60,7 +63,8 @@ CREATE TABLE IF NOT EXISTS flashloans
 
 CREATE TABLE IF NOT EXISTS pool_prices
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -72,7 +76,8 @@ CREATE TABLE IF NOT EXISTS pool_prices
 
 CREATE TABLE IF NOT EXISTS balances
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -85,7 +90,8 @@ CREATE TABLE IF NOT EXISTS balances
 
 CREATE TABLE IF NOT EXISTS trade_params_update
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -98,7 +104,8 @@ CREATE TABLE IF NOT EXISTS trade_params_update
 
 CREATE TABLE IF NOT EXISTS stakes
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -112,7 +119,8 @@ CREATE TABLE IF NOT EXISTS stakes
 
 CREATE TABLE IF NOT EXISTS proposals
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -127,7 +135,8 @@ CREATE TABLE IF NOT EXISTS proposals
 
 CREATE TABLE IF NOT EXISTS votes
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -142,7 +151,8 @@ CREATE TABLE IF NOT EXISTS votes
 
 CREATE TABLE IF NOT EXISTS rebates
 (
-    digest                      TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    digest                      TEXT         NOT NULL,
     sender                      TEXT         NOT NULL,
     checkpoint                  BIGINT       NOT NULL,
     timestamp                   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -163,7 +173,8 @@ CREATE TABLE IF NOT EXISTS progress_store
 
 CREATE TABLE IF NOT EXISTS sui_error_transactions
 (
-    txn_digest                  TEXT         PRIMARY KEY,
+    id                          SERIAL       PRIMARY KEY,
+    txn_digest                  TEXT         NOT NULL,
     sender_address              TEXT         NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     failure_status              TEXT         NOT NULL,
