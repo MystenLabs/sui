@@ -129,6 +129,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     NameServiceError(#[from] NameServiceError),
+
+    #[error("Inconsistent migration records: {0}")]
+    DbMigrationError(String),
 }
 
 pub trait Context<T> {

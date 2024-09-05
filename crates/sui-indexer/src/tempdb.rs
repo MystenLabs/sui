@@ -280,7 +280,10 @@ fn initdb(dir: &Path) -> Result<()> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(anyhow!("unable to initialize database"))
+        Err(anyhow!(
+            "unable to initialize database: {:?}",
+            String::from_utf8(output.stderr)
+        ))
     }
 }
 

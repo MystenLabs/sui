@@ -397,43 +397,38 @@ diesel::table! {
     }
 }
 
-#[macro_export]
-macro_rules! for_all_tables {
-    ($action:path) => {
-        $action!(
-            chain_identifier,
-            checkpoints,
-            display,
-            epochs,
-            event_emit_module,
-            event_emit_package,
-            event_senders,
-            event_struct_instantiation,
-            event_struct_module,
-            event_struct_name,
-            event_struct_package,
-            events,
-            feature_flags,
-            objects_history,
-            objects_snapshot,
-            objects_version,
-            packages,
-            protocol_configs,
-            pruner_cp_watermark,
-            transactions,
-            tx_calls_fun,
-            tx_calls_mod,
-            tx_calls_pkg,
-            tx_changed_objects,
-            tx_digests,
-            tx_input_objects,
-            tx_kinds,
-            tx_recipients,
-            tx_senders
-        );
-    };
-}
-
-pub use for_all_tables;
-
-for_all_tables!(diesel::allow_tables_to_appear_in_same_query);
+diesel::allow_tables_to_appear_in_same_query!(
+    chain_identifier,
+    checkpoints,
+    display,
+    epochs,
+    event_emit_module,
+    event_emit_package,
+    event_senders,
+    event_struct_instantiation,
+    event_struct_module,
+    event_struct_name,
+    event_struct_package,
+    events,
+    events_partition_0,
+    feature_flags,
+    objects,
+    objects_history,
+    objects_history_partition_0,
+    objects_snapshot,
+    objects_version,
+    packages,
+    protocol_configs,
+    pruner_cp_watermark,
+    transactions,
+    transactions_partition_0,
+    tx_calls_fun,
+    tx_calls_mod,
+    tx_calls_pkg,
+    tx_changed_objects,
+    tx_digests,
+    tx_input_objects,
+    tx_kinds,
+    tx_recipients,
+    tx_senders,
+);
