@@ -160,17 +160,6 @@ impl PgIndexerStore {
         self.pool.clone()
     }
 
-    pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            epochs::dsl::epochs
-                .select(max(epochs::epoch))
-                .first::<Option<i64>>(conn)
-                .map(|v| v.map(|v| v as u64))
-        })
-        .context("Failed reading latest epoch id from PostgresDB")
-    }
-
     /// Get the range of the protocol versions that need to be indexed.
     pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
         use diesel::RunQueryDsl;
