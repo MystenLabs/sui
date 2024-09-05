@@ -190,7 +190,7 @@ pub async fn exchange_rates(
     // Get inactive validator rate tables
     for df in state
         .inner
-        .get_dynamic_fields_in_blocking_task(
+        .get_dynamic_fields(
             system_state_summary.inactive_pools_id,
             None,
             system_state_summary.inactive_pools_size as usize,
@@ -228,11 +228,7 @@ pub async fn exchange_rates(
         let mut rates = vec![];
         for df in state
             .inner
-            .get_dynamic_fields_raw_in_blocking_task(
-                exchange_rates_id,
-                None,
-                exchange_rates_size as usize,
-            )
+            .get_dynamic_fields_raw(exchange_rates_id, None, exchange_rates_size as usize)
             .await?
         {
             let dynamic_field = df
