@@ -13,7 +13,7 @@ use csv::Writer;
 use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
-use diesel::{QueryDsl, RunQueryDsl};
+use diesel::QueryDsl;
 use itertools::Itertools;
 use object_store::path::Path;
 use tap::TapFallible;
@@ -161,6 +161,7 @@ impl PgIndexerStore {
     }
 
     pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             epochs::dsl::epochs
                 .select(max(epochs::epoch))
@@ -172,6 +173,7 @@ impl PgIndexerStore {
 
     /// Get the range of the protocol versions that need to be indexed.
     pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
+        use diesel::RunQueryDsl;
         // We start indexing from the next protocol version after the latest one stored in the db.
         let start = read_only_blocking!(&self.blocking_cp, |conn| {
             protocol_configs::dsl::protocol_configs
@@ -193,6 +195,7 @@ impl PgIndexerStore {
     }
 
     pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             chain_identifier::dsl::chain_identifier
                 .select(chain_identifier::checkpoint_digest)
@@ -203,6 +206,7 @@ impl PgIndexerStore {
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
@@ -213,6 +217,7 @@ impl PgIndexerStore {
     }
 
     fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select((
@@ -231,6 +236,7 @@ impl PgIndexerStore {
     }
 
     fn get_prunable_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             epochs::dsl::epochs
                 .select((min(epochs::epoch), max(epochs::epoch)))
@@ -246,6 +252,7 @@ impl PgIndexerStore {
     }
 
     fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             pruner_cp_watermark::dsl::pruner_cp_watermark
                 .select(min(pruner_cp_watermark::checkpoint_sequence_number))
@@ -259,6 +266,7 @@ impl PgIndexerStore {
         &self,
         epoch: u64,
     ) -> Result<(u64, Option<u64>), IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             epochs::dsl::epochs
                 .select((epochs::first_checkpoint_id, epochs::last_checkpoint_id))
@@ -273,6 +281,7 @@ impl PgIndexerStore {
         &self,
         checkpoint: u64,
     ) -> Result<(u64, u64), IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             pruner_cp_watermark::dsl::pruner_cp_watermark
                 .select((
@@ -289,6 +298,7 @@ impl PgIndexerStore {
     fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             objects_snapshot::dsl::objects_snapshot
                 .select(max(objects_snapshot::checkpoint_sequence_number))
@@ -397,6 +407,7 @@ impl PgIndexerStore {
         &self,
         deleted_objects_chunk: Vec<StoredDeletedObject>,
     ) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
@@ -1246,6 +1257,7 @@ impl PgIndexerStore {
     }
 
     fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_epoch
@@ -1345,6 +1357,7 @@ impl PgIndexerStore {
     }
 
     fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         let last_epoch_id = epoch_to_commit.last_epoch.as_ref().map(|e| e.epoch);
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
@@ -1392,6 +1405,7 @@ impl PgIndexerStore {
     }
 
     fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -1409,6 +1423,7 @@ impl PgIndexerStore {
     }
 
     fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -1423,6 +1438,7 @@ impl PgIndexerStore {
     }
 
     fn prune_event_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
@@ -1483,6 +1499,7 @@ impl PgIndexerStore {
     }
 
     fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
@@ -1550,6 +1567,7 @@ impl PgIndexerStore {
     }
 
     fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -1570,6 +1588,7 @@ impl PgIndexerStore {
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError> {
+        use diesel::RunQueryDsl;
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::table
                 .filter(checkpoints::epoch.eq(epoch as i64))
@@ -2187,6 +2206,8 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
+        use diesel::RunQueryDsl;
+
         let mut buffer = Cursor::new(Vec::new());
         {
             let mut writer = Writer::from_writer(&mut buffer);
