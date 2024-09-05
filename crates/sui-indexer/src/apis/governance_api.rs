@@ -69,7 +69,7 @@ impl GovernanceReadApi {
         let mut stakes = vec![];
         for stored_object in self
             .inner
-            .get_owned_objects_in_blocking_task(
+            .get_owned_objects(
                 owner,
                 Some(SuiObjectDataFilter::StructType(
                     MoveObjectType::staked_sui().into(),

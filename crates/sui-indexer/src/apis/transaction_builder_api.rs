@@ -31,7 +31,7 @@ impl DataReader for TransactionBuilderApi {
     ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
         let stored_objects = self
             .inner
-            .get_owned_objects_in_blocking_task(
+            .get_owned_objects(
                 address,
                 Some(SuiObjectDataFilter::StructType(object_type)),
                 None,
