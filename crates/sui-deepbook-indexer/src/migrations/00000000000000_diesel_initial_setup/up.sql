@@ -1,7 +1,5 @@
 -- Your SQL goes here
 
-
-
 CREATE TABLE IF NOT EXISTS order_updates
 (
     id                          SERIAL       PRIMARY KEY,

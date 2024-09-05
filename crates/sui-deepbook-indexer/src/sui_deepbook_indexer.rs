@@ -20,7 +20,8 @@ use sui_types::full_checkpoint_content::CheckpointTransaction;
 
 use crate::events::{
     MoveBalanceEvent, MoveFlashLoanBorrowedEvent, MoveOrderCanceledEvent, MoveOrderFilledEvent,
-    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent, MoveProposalEvent, MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
+    MoveOrderModifiedEvent, MoveOrderPlacedEvent, MovePriceAddedEvent, MoveProposalEvent,
+    MoveRebateEvent, MoveStakeEvent, MoveTradeParamsUpdateEvent, MoveVoteEvent,
 };
 use crate::metrics::DeepBookIndexerMetrics;
 use crate::postgres_manager::PgPool;
@@ -30,7 +31,8 @@ use crate::schema::{
     sui_error_transactions, trade_params_update, votes,
 };
 use crate::{
-    models, schema, Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice, ProcessedTxnData, Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes
+    models, schema, Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice,
+    ProcessedTxnData, Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes,
 };
 
 /// Persistent layer impl
@@ -262,7 +264,7 @@ impl DataMapper<CheckpointTxnData, ProcessedTxnData> for SuiDeepBookDataMapper {
             None => {
                 if let ExecutionStatus::Failure { error, command } = data.effects.status() {
                     let txn_kind = data.transaction.transaction_data().clone().into_kind();
-                    let first_command = txn_kind.iter_commands().next().clone();
+                    let first_command = txn_kind.iter_commands().next();
                     let package = if let Some(Command::MoveCall(move_call)) = first_command {
                         move_call.package.to_string()
                     } else {
@@ -298,7 +300,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderPlacedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -327,7 +329,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderModifiedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -356,7 +358,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderCanceledEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -385,7 +387,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveOrderFilledEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -417,7 +419,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveFlashLoanBorrowedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -439,7 +441,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MovePriceAddedEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -460,7 +462,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveBalanceEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -482,7 +484,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveProposalEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -505,7 +507,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveRebateEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -527,7 +529,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveStakeEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -550,7 +552,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveTradeParamsUpdateEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
@@ -560,7 +562,9 @@ fn process_sui_event(
                 let mut pool_id = "0x0".to_string();
                 for obj in shared_objects.iter() {
                     if let Some(obj_type) = obj.data.type_() {
-                        if obj_type.module().to_string().eq("pool") && obj_type.address() == *package_id {
+                        if obj_type.module().to_string().eq("pool")
+                            && obj_type.address() == *package_id
+                        {
                             pool_id = obj_type.address().to_string();
                             break;
                         }
@@ -582,7 +586,7 @@ fn process_sui_event(
                 // metrics.total_sui_token_deposited.inc();
                 let move_event: MoveVoteEvent = bcs::from_bytes(&ev.contents)?;
                 let txn_kind = tx.transaction.transaction_data().clone().into_kind();
-                let first_command = txn_kind.iter_commands().next().clone();
+                let first_command = txn_kind.iter_commands().next();
                 let package = if let Some(Command::MoveCall(move_call)) = first_command {
                     move_call.package.to_string()
                 } else {
