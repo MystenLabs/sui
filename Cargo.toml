@@ -328,6 +328,7 @@ diesel = { version = "2.2.3", features = [
 ] }
 diesel-derive-enum = { version = "2.0.1" }
 diesel_migrations = { version = "2.0.0" }
+diesel-async = "0.5"
 dirs = "4.0.0"
 duration-str = "0.5.0"
 ed25519 = { version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"] }
