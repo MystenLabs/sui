@@ -20,6 +20,8 @@ abstract contract CommitteeUpgradeable is
     /* ========== STATE VARIABLES ========== */
 
     bool private _upgradeAuthorized;
+    // upgradeablity storage gap
+    uint256[50] private __gap;
 
     /* ========== INITIALIZER ========== */
 
