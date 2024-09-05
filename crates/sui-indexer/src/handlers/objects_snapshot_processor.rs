@@ -190,13 +190,9 @@ impl ObjectsSnapshotProcessor {
                         // `objects_snapshot` table.
                         let max_allowed_cp = latest_indexer_cp - config.snapshot_min_lag as u64;
 
-                        // Fetch `batch_size` more data from the stream if the buffer is empty and
-                        // we still need to catch up.
-                        if unprocessed.is_empty() {
-                            if let Some(new_changes) = stream.next().await {
-                                for checkpoint in new_changes {
-                                    unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
-                                }
+                        if let Some(new_changes) = stream.next().await {
+                            for checkpoint in new_changes {
+                                unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
                             }
                         }
 
