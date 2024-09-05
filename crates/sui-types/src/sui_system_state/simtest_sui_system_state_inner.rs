@@ -5,7 +5,7 @@ use crate::balance::Balance;
 use crate::base_types::SuiAddress;
 use crate::collection_types::{Bag, Table};
 use crate::committee::{CommitteeWithNetworkMetadata, NetworkMetadata};
-use crate::crypto::AuthorityPublicKeyBytes;
+use crate::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::{
@@ -84,9 +84,9 @@ pub struct SimTestValidatorMetadataV1 {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct VerifiedSimTestValidatorMetadataV1 {
     pub sui_address: SuiAddress,
-    pub protocol_pubkey: narwhal_crypto::PublicKey,
-    pub network_pubkey: narwhal_crypto::NetworkPublicKey,
-    pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub protocol_pubkey: AuthorityPublicKey,
+    pub network_pubkey: NetworkPublicKey,
+    pub worker_pubkey: NetworkPublicKey,
     pub net_address: Multiaddr,
     pub p2p_address: Multiaddr,
     pub primary_address: Multiaddr,
@@ -96,13 +96,11 @@ pub struct VerifiedSimTestValidatorMetadataV1 {
 impl SimTestValidatorMetadataV1 {
     pub fn verify(&self) -> VerifiedSimTestValidatorMetadataV1 {
         let protocol_pubkey =
-            narwhal_crypto::PublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref()).unwrap();
+            AuthorityPublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref()).unwrap();
         let network_pubkey =
-            narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
-                .unwrap();
+            NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref()).unwrap();
         let worker_pubkey =
-            narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
-                .unwrap();
+            NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref()).unwrap();
         let net_address = Multiaddr::try_from(self.net_address.clone()).unwrap();
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone()).unwrap();
         let primary_address = Multiaddr::try_from(self.primary_address.clone()).unwrap();

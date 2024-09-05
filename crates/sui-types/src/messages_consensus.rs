@@ -83,7 +83,7 @@ pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusTransaction {
-    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
+    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and consensus.
     /// Use an byte array instead of u64 to ensure stable serialization.
     pub tracking_id: [u8; 8],
     pub kind: ConsensusTransactionKind,
@@ -136,11 +136,11 @@ impl Debug for ConsensusTransactionKey {
     }
 }
 
-/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct AuthorityCapabilitiesV1 {
-    /// Originating authority - must match narwhal transaction source.
+    /// Originating authority - must match consensus transaction source.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
     /// AuthorityCapabilities messages from the same authority is the most recent.
@@ -192,11 +192,11 @@ impl AuthorityCapabilitiesV1 {
     }
 }
 
-/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct AuthorityCapabilitiesV2 {
-    /// Originating authority - must match narwhal transaction source.
+    /// Originating authority - must match transaction source authority from consensus.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
     /// AuthorityCapabilities messages from the same authority is the most recent.
@@ -253,26 +253,26 @@ impl AuthorityCapabilitiesV2 {
     }
 }
 
-#[repr(u8)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
-    CertifiedTransaction(Box<CertifiedTransaction>) = 0,
-    CheckpointSignature(Box<CheckpointSignatureMessage>) = 1,
-    EndOfPublish(AuthorityName) = 2,
+    CertifiedTransaction(Box<CertifiedTransaction>),
+    CheckpointSignature(Box<CheckpointSignatureMessage>),
+    EndOfPublish(AuthorityName),
 
-    CapabilityNotification(AuthorityCapabilitiesV1) = 3,
-    CapabilityNotificationV2(AuthorityCapabilitiesV2) = 8,
+    CapabilityNotification(AuthorityCapabilitiesV1),
 
-    NewJWKFetched(AuthorityName, JwkId, JWK) = 4,
-
+    NewJWKFetched(AuthorityName, JwkId, JWK),
+    RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
-    RandomnessDkgMessage(AuthorityName, Vec<u8>) = 6,
+    RandomnessDkgMessage(AuthorityName, Vec<u8>),
     // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
-    RandomnessDkgConfirmation(AuthorityName, Vec<u8>) = 7,
+    RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+
+    CapabilityNotificationV2(AuthorityCapabilitiesV2),
 }
 
 impl ConsensusTransactionKind {
@@ -517,6 +517,9 @@ impl ConsensusTransaction {
                     id.clone(),
                     key.clone(),
                 )))
+            }
+            ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
+                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)

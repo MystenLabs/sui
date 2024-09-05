@@ -426,20 +426,6 @@ impl Cluster {
     pub async fn wait_for_checkpoint_pruned(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_graphql_checkpoint_pruned(&self.graphql_client, checkpoint, base_timeout).await
     }
-
-    /// Sends a cancellation signal to the graphql and indexer services and waits for them to
-    /// shutdown.
-    pub async fn cleanup_resources(self) {
-        self.network.cleanup_resources().await;
-        let _ = self.graphql_server_join_handle.await;
-    }
-}
-
-impl NetworkCluster {
-    pub async fn cleanup_resources(self) {
-        self.cancellation_token.cancel();
-        let _ = self.indexer_join_handle.await;
-    }
 }
 
 impl ExecutorCluster {

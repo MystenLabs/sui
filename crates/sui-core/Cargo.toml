@@ -71,8 +71,6 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 
 mysten-metrics.workspace = true
-narwhal-config.workspace = true
-narwhal-crypto.workspace = true
 narwhal-types.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
