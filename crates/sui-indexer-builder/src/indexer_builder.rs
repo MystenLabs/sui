@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Error;
 use async_trait::async_trait;
 use futures::StreamExt;
-use prometheus::IntGaugeVec;
+use prometheus::{IntCounterVec, IntGaugeVec};
 use tokio::task::JoinHandle;
 
 use crate::{Task, Tasks};
@@ -365,7 +365,7 @@ pub trait Datasource<T: Send>: Sync + Send {
             .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
             .await?;
 
-        let processed_metrics_metrics = self
+        let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
             .with_label_values(&[&task_name]);
         // track remaining checkpoints per task, except for live task
@@ -394,8 +394,22 @@ pub trait Datasource<T: Send>: Sync + Send {
 
         while let Some(batch) = stream.next().await {
             // unwrap safe: at least 1 element in the batch
-            let max_height = batch.iter().max_by(|(a, _), (b, _)| a.cmp(b)).unwrap().0;
-            let batch_size = batch.len();
+            let mut max_height = 0;
+            let mut data = vec![];
+            let mut batch_size = 0;
+            for (height, d) in batch {
+                if height > target_checkpoint {
+                    tracing::warn!(
+                        task_name,
+                        height,
+                        "Received data with height > target_checkpoint, skipping."
+                    );
+                    continue;
+                }
+                max_height = std::cmp::max(max_height, height);
+                batch_size += 1;
+                data.extend(d);
+            }
             tracing::debug!(
                 task_name,
                 max_height,
@@ -404,12 +418,6 @@ pub trait Datasource<T: Send>: Sync + Send {
             );
             let timer = tokio::time::Instant::now();
 
-            // Note: for simplicity here we assume all data's height <= target_checkpoint
-            let data = batch
-                .into_iter()
-                .filter(|(height, _)| *height <= target_checkpoint)
-                .flat_map(|(_, data)| data)
-                .collect::<Vec<_>>();
             if !data.is_empty() {
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
@@ -428,10 +436,13 @@ pub trait Datasource<T: Send>: Sync + Send {
                 batch_size,
                 timer.elapsed().as_millis(),
             );
-            processed_metrics_metrics.add(batch_size as i64);
+            processed_checkpoints_metrics.inc_by(batch_size as u64);
             if let Some(m) = &remaining_checkpoints_metric {
                 // Note this is only approximate as the data may come in out of order
-                m.set((target_checkpoint - max_height) as i64)
+                m.set(std::cmp::max(
+                    target_checkpoint as i64 - max_height as i64,
+                    0,
+                ));
             }
             if let Some(m) = &live_task_current_checkpoint_metrics {
                 m.set((max_height) as i64)
@@ -464,7 +475,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
 
-    fn get_tasks_processed_checkpoints_metric(&self) -> &IntGaugeVec;
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec;
 
     fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec;
 }
