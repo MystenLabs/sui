@@ -3,21 +3,126 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use chrono::{DateTime, Duration, Local, NaiveDateTime};
-use colored::Colorize;
+use chrono::{DateTime, Local, NaiveDateTime};
+use colored::{ColoredString, Colorize};
+use inquire::Confirm;
 use reqwest;
 use reqwest::header::HeaderMap;
 use reqwest::header::ACCEPT;
 use reqwest::header::AUTHORIZATION;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::env;
+use tracing::debug;
+
+use crate::cli::incidents::slack::Channel;
+use crate::cli::lib::utils::day_of_week;
+use crate::DEBUG_MODE;
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Priority {
+    name: String,
+    id: String,
+    color: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Incident {
+    #[serde(rename = "incident_number")]
+    number: u64,
+    title: String,
+    created_at: Option<String>,
+    resolved_at: Option<String>,
+    html_url: String,
+    priority: Option<Priority>,
+    slack_channel: Option<Channel>,
+}
+
+impl Incident {
+    fn print(&self, long_output: bool) -> Result<()> {
+        let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
+        let priority = self.priority();
+        if long_output {
+            let date_format_out = "%m/%d/%Y %H:%M";
+            println!(
+                "Incident #: {} {}",
+                self.number.to_string().bright_purple(),
+                if priority.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("({})", priority)
+                }
+            );
+            println!("Title: {}", self.title.green());
+            if let Some(created_at) = self.created_at.clone() {
+                println!(
+                    "Created at: {}",
+                    NaiveDateTime::parse_from_str(&created_at, date_format_in)?
+                        .format(date_format_out)
+                        .to_string()
+                        .yellow()
+                );
+            }
+            if let Some(resolved_at) = self.resolved_at.clone() {
+                println!(
+                    "Resolved at: {}",
+                    NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?
+                        .format(date_format_out)
+                        .to_string()
+                        .yellow()
+                );
+            }
+            println!("URL: {}", self.html_url.bright_purple());
+            if let Some(channel) = self.slack_channel.clone() {
+                println!("Predicted Slack channel: {}", channel.url().bright_purple());
+            }
+            println!("---");
+        } else {
+            let resolved_at = if let Some(resolved_at) = self.resolved_at.clone() {
+                let now = Utc::now().naive_utc();
+
+                Some(now - NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?)
+            } else {
+                None
+            };
+            println!(
+                "{}:{}{} {} ({})",
+                self.number.to_string().bright_purple(),
+                resolved_at
+                    .map(|v| (v.num_days().to_string() + "d").yellow())
+                    .unwrap_or("".to_string().yellow()),
+                if priority.is_empty() {
+                    "  ".to_string()
+                } else {
+                    format!(" {} ", priority)
+                },
+                self.title.green(),
+                self.html_url.bright_purple(),
+            );
+        }
+        Ok(())
+    }
+
+    fn priority(&self) -> ColoredString {
+        // println!("{}", self.priority.as_ref().unwrap_or(&"none".to_string()));
+        match self.priority.clone().map(|p| p.name).as_deref() {
+            Some("P0") => "P0".red(),
+            Some("P1") => "P1".magenta(),
+            Some("P2") => "P2".truecolor(255, 165, 0),
+            Some("P3") => "P3".yellow(),
+            Some("P4") => "P4".white(),
+            _ => "".white(),
+        }
+    }
+}
 
 /// Fetch incidents from the API using the given parameters until {limit} incidents have been received.
-async fn fetch_incidents(
+pub async fn fetch_incidents(
     limit: usize,
     start_time: DateTime<Local>,
     _end_time: DateTime<Local>,
-) -> Result<Vec<JsonValue>> {
+) -> Result<Vec<Incident>> {
+    let slack = super::slack::Slack::new().await;
     let url = "https://api.pagerduty.com/incidents";
 
     let mut headers = HeaderMap::new();
@@ -84,100 +189,123 @@ async fn fetch_incidents(
             break;
         }
     }
-    Ok(all_incidents)
+    Ok(all_incidents
+        .into_iter()
+        .map(serde_json::from_value)
+        .filter_map(|i| i.ok())
+        .map(|mut i: Incident| {
+            debug!("Checking if incidents list contains {}", i.number);
+            i.slack_channel = slack
+                .channels
+                .iter()
+                .find(|c| c.name.contains(&i.number.to_string()))
+                .cloned();
+            debug!("Found channel: {:?}", i.slack_channel);
+            i
+        })
+        .collect())
 }
 
 pub async fn print_recent_incidents(
-    long: bool,
-    limit: usize,
-    days: usize,
+    incidents: Vec<Incident>,
+    long_output: bool,
     with_priority: bool,
 ) -> Result<()> {
-    let current_time = Local::now();
-    let start_time = current_time - Duration::days(days as i64);
-    let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
-    let date_format_out = "%m/%d/%Y %H:%M";
+    for incident in &incidents {
+        if with_priority && incident.priority() == "  ".white() {
+            // skip incidents without priority
+            continue;
+        }
+        incident.print(long_output)?;
+    }
+    Ok(())
+}
 
-    let incidents = fetch_incidents(limit, start_time, current_time).await?;
+pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
+    let mut to_review = vec![];
+    let mut excluded = vec![];
     for incident in incidents {
-        if long {
-            println!(
-                "Incident #: {}",
-                incident["incident_number"]
-                    .as_u64()
-                    .expect("incident_number as_u64")
-                    .to_string()
-                    .bright_purple()
-            );
-            println!(
-                "Title: {}",
-                incident["title"].as_str().expect("title as_str").green()
-            );
-            if let JsonValue::String(created_at) = incident["created_at"].clone() {
-                println!(
-                    "Created at: {}",
-                    NaiveDateTime::parse_from_str(&created_at, date_format_in)?
-                        .format(date_format_out)
-                        .to_string()
-                        .yellow()
-                );
-            }
-            if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
-                println!(
-                    "Resolved at: {}",
-                    NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?
-                        .format(date_format_out)
-                        .to_string()
-                        .yellow()
-                );
-            }
-            println!(
-                "URL: {}",
-                incident["html_url"]
-                    .as_str()
-                    .expect("html_url as string")
-                    .bright_purple()
-            );
-            println!("---");
+        incident.print(false)?;
+        let ans = Confirm::new("Keep this incident for review?")
+            .with_default(false)
+            .prompt()
+            .expect("Unexpected response");
+        if ans {
+            to_review.push(incident);
         } else {
-            let resolved_at =
-                if let JsonValue::String(resolved_at) = incident["resolved_at"].clone() {
-                    let now = Utc::now().naive_utc();
-
-                    Some(now - NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?)
-                } else {
-                    None
-                };
-            let priority = match incident["priority"]["name"].as_str() {
-                Some("P0") => "P0".red(),
-                Some("P1") => "P1".magenta(),
-                Some("P2") => "P2".truecolor(255, 165, 0),
-                Some("P3") => "P3".yellow(),
-                Some("P4") => "P4".white(),
-                _ => "  ".white(),
-            };
-            if with_priority && priority == "  ".white() {
-                // skip incidents without priority
-                continue;
-            }
-            println!(
-                "{}: ({}) {} {} ({})",
-                incident["incident_number"]
-                    .as_u64()
-                    .expect("incident_number as_u64")
-                    .to_string()
-                    .bright_purple(),
-                resolved_at
-                    .map(|v| (v.num_days().to_string() + "d").yellow())
-                    .unwrap_or("".to_string().yellow()),
-                priority,
-                incident["title"].as_str().expect("title").green(),
-                incident["html_url"]
-                    .as_str()
-                    .expect("html_url")
-                    .bright_purple()
-            )
+            excluded.push(incident);
         }
     }
+    println!(
+        "Incidents marked for review: {}",
+        to_review
+            .iter()
+            .map(|i| i.number.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    fn short_print(i: &Incident) -> String {
+        format!(
+            "• {} {} {}",
+            if let Some(channel) = i.slack_channel.clone() {
+                format!("{} ({})", i.number, channel.url())
+            } else {
+                i.number.to_string()
+            },
+            i.title,
+            i.slack_channel
+                .clone()
+                .map(|c| c.name)
+                .unwrap_or("".to_string())
+        )
+    }
+
+    let message = format!(
+        "
+Hello everyone and happy {}!
+
+We have selected the following incidents for review:
+{}
+    
+and the following incidents have been excluded from review:
+{}
+
+Please comment in the thread to request an adjustment to the list.",
+        day_of_week(),
+        to_review
+            .iter()
+            .map(short_print)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        excluded
+            .iter()
+            .map(short_print)
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    println!(
+        "Here is the message to send in the channel: 
+    {}
+    ",
+        message
+    );
+    let slack_channel = if *DEBUG_MODE {
+        "test-notifications"
+    } else {
+        "incident-postmortems"
+    };
+    let ans = Confirm::new(&format!(
+        "Send this message to the #{} channel?",
+        slack_channel
+    ))
+    .with_default(false)
+    .prompt()
+    .expect("Unexpected response");
+    if ans {
+        let slack = super::slack::Slack::new().await;
+        slack.send_message(slack_channel, &message).await?;
+    }
+    // post to https://slack.com/api/chat.postMessage with message
     Ok(())
 }
