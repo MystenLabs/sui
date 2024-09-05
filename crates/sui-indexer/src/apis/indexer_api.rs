@@ -196,7 +196,7 @@ impl IndexerApiServer for IndexerApi {
         let descending_order = descending_order.unwrap_or(false);
         let mut results = self
             .inner
-            .query_events_in_blocking_task(query, cursor, limit + 1, descending_order)
+            .query_events(query, cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = results.len() > limit;
