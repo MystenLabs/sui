@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::compatibility_check::check_all_tables;
 use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{ChainIdentifierLock, Watermark, WatermarkLock, WatermarkTask};
@@ -58,6 +57,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::LIMITS_HEADER;
+use sui_indexer::db::{check_db_migration_consistency, get_pool_connection};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -88,10 +88,8 @@ impl Server {
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        // Compatibility check
-        info!("Starting compatibility check");
-        check_all_tables(&self.db_reader).await?;
-        info!("Compatibility check passed");
+        let mut connection = get_pool_connection(&self.db_reader.inner.get_pool())?;
+        check_db_migration_consistency(&mut connection)?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -545,7 +543,7 @@ async fn graphql_handler(
 
     let result = schema.execute(req).await;
 
-    // If there are errors, insert them as an extention so that the Metrics callback handler can
+    // If there are errors, insert them as an extension so that the Metrics callback handler can
     // pull it out later.
     let mut extensions = axum::http::Extensions::new();
     if result.is_err() {
@@ -776,7 +774,7 @@ pub mod tests {
         cluster
             .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
             .await;
-        // timeout test includes mutation timeout, which requies a [SuiClient] to be able to run
+        // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.
         let wallet = &cluster.network.validator_fullnode_handle.wallet;
         let db_url = cluster.network.graphql_connection_config.db_url.clone();
@@ -1685,7 +1683,7 @@ pub mod tests {
         // Test that when variables are re-used as execution params, the size of the variable is
         // only counted once.
 
-        // First, check that `eror_passed_tx_checks` is working, by submitting a request that will
+        // First, check that `error_passed_tx_checks` is working, by submitting a request that will
         // fail the initial payload check.
         assert!(!passed_tx_checks(
             &execute_for_error(
