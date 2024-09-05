@@ -49,7 +49,7 @@ impl CoinReadApiServer for CoinReadApi {
         };
         let mut results = self
             .inner
-            .get_owned_coins_in_blocking_task(owner, Some(coin_type), cursor, limit + 1)
+            .get_owned_coins(owner, Some(coin_type), cursor, limit + 1)
             .await?;
 
         let has_next_page = results.len() > limit;
@@ -80,7 +80,7 @@ impl CoinReadApiServer for CoinReadApi {
         };
         let mut results = self
             .inner
-            .get_owned_coins_in_blocking_task(owner, None, cursor, limit + 1)
+            .get_owned_coins(owner, None, cursor, limit + 1)
             .await?;
 
         let has_next_page = results.len() > limit;

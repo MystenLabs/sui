@@ -1336,18 +1336,7 @@ impl IndexerReader {
         Ok(Some(display_update))
     }
 
-    pub async fn get_owned_coins_in_blocking_task(
-        &self,
-        owner: SuiAddress,
-        coin_type: Option<String>,
-        cursor: ObjectID,
-        limit: usize,
-    ) -> Result<Vec<SuiCoin>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_coins(owner, coin_type, cursor, limit))
-            .await
-    }
-
-    fn get_owned_coins(
+    pub async fn get_owned_coins(
         &self,
         owner: SuiAddress,
         // If coin_type is None, look for all coins.
@@ -1355,7 +1344,9 @@ impl IndexerReader {
         cursor: ObjectID,
         limit: usize,
     ) -> Result<Vec<SuiCoin>, IndexerError> {
-        use diesel::RunQueryDsl;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
         let mut query = objects::dsl::objects
             .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
             .filter(objects::dsl::owner_id.eq(owner.to_vec()))
@@ -1366,14 +1357,12 @@ impl IndexerReader {
         } else {
             query = query.filter(objects::dsl::coin_type.is_not_null());
         }
-        query = query
+
+        query
             .order((objects::dsl::coin_type.asc(), objects::dsl::object_id.asc()))
-            .limit(limit as i64);
-
-        let stored_objects =
-            run_query!(&self.blocking_pool, |conn| query.load::<StoredObject>(conn))?;
-
-        stored_objects
+            .limit(limit as i64)
+            .load::<StoredObject>(&mut connection)
+            .await?
             .into_iter()
             .map(|o| o.try_into())
             .collect::<IndexerResult<Vec<_>>>()
