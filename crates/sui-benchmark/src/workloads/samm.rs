@@ -523,7 +523,7 @@ impl Workload<dyn Payload> for SammWorkload {
             "pay",
             "divide_and_keep",
             vec![xbtc_type_tag.clone()],
-            vec![large_xbtc_arg.clone().into(), (1500 as u64).into()],
+            vec![large_xbtc_arg.clone().into(), (2000 as u64).into()],
             &updated_gas_ref,
             gas_budget,
             reference_gas_price,
