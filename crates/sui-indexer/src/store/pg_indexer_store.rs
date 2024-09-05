@@ -252,15 +252,18 @@ impl PgIndexerStore {
             .context("Failed reading min and max epoch numbers from PostgresDB")
     }
 
-    fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            pruner_cp_watermark::dsl::pruner_cp_watermark
-                .select(min(pruner_cp_watermark::checkpoint_sequence_number))
-                .first::<Option<i64>>(conn)
-                .map(|v| v.unwrap_or_default() as u64)
-        })
-        .context("Failed reading min prunable checkpoint sequence number from PostgresDB")
+    async fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        pruner_cp_watermark::table
+            .select(min(pruner_cp_watermark::checkpoint_sequence_number))
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|v| v.unwrap_or_default() as u64)
+            .context("Failed reading min prunable checkpoint sequence number from PostgresDB")
     }
 
     fn get_checkpoint_range_for_epoch(
@@ -2134,7 +2137,7 @@ impl IndexerStore for PgIndexerStore {
         // partially pruned already. min_prunable_cp is the min cp to be pruned.
         // By std::cmp::max, we will resume the pruning process from the next checkpoint, instead of
         // the first cp of the current epoch.
-        let min_prunable_cp = self.get_min_prunable_checkpoint()?;
+        let min_prunable_cp = self.get_min_prunable_checkpoint().await?;
         min_cp = std::cmp::max(min_cp, min_prunable_cp);
         for cp in min_cp..=max_cp {
             // NOTE: the order of pruning tables is crucial:
