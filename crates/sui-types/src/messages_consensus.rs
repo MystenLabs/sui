@@ -253,27 +253,26 @@ impl AuthorityCapabilitiesV2 {
     }
 }
 
-#[repr(u8)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
-    CertifiedTransaction(Box<CertifiedTransaction>) = 0,
-    CheckpointSignature(Box<CheckpointSignatureMessage>) = 1,
-    EndOfPublish(AuthorityName) = 2,
+    CertifiedTransaction(Box<CertifiedTransaction>),
+    CheckpointSignature(Box<CheckpointSignatureMessage>),
+    EndOfPublish(AuthorityName),
 
-    CapabilityNotification(AuthorityCapabilitiesV1) = 3,
+    CapabilityNotification(AuthorityCapabilitiesV1),
 
-    NewJWKFetched(AuthorityName, JwkId, JWK) = 4,
-    RandomnessStateUpdate(u64, Vec<u8>) = 5, // deprecated
+    NewJWKFetched(AuthorityName, JwkId, JWK),
+    RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
-    RandomnessDkgMessage(AuthorityName, Vec<u8>) = 6,
+    RandomnessDkgMessage(AuthorityName, Vec<u8>),
     // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
-    RandomnessDkgConfirmation(AuthorityName, Vec<u8>) = 7,
+    RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 
-    CapabilityNotificationV2(AuthorityCapabilitiesV2) = 8,
+    CapabilityNotificationV2(AuthorityCapabilitiesV2),
 }
 
 impl ConsensusTransactionKind {
