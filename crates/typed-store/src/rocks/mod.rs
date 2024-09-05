@@ -1008,6 +1008,14 @@ impl<K, V> DBMap<K, V> {
             .set(total_num_files);
         db_metrics
             .cf_metrics
+            .rocksdb_num_level0_files
+            .with_label_values(&[cf_name])
+            .set(
+                Self::get_int_property(rocksdb, &cf, &num_files_at_level(0))
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .cf_metrics
             .rocksdb_current_size_active_mem_tables
             .with_label_values(&[cf_name])
             .set(
