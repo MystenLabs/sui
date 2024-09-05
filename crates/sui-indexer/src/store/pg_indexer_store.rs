@@ -194,15 +194,18 @@ impl PgIndexerStore {
         .context("Failed reading chain id from PostgresDB")
     }
 
-    fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            checkpoints::dsl::checkpoints
-                .select(max(checkpoints::sequence_number))
-                .first::<Option<i64>>(conn)
-                .map(|v| v.map(|v| v as u64))
-        })
-        .context("Failed reading latest checkpoint sequence number from PostgresDB")
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        checkpoints::table
+            .select(max(checkpoints::sequence_number))
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|v| v.map(|v| v as u64))
+            .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
     fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
@@ -1637,8 +1640,7 @@ impl PgIndexerStore {
 #[async_trait]
 impl IndexerStore for PgIndexerStore {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
-        self.execute_in_blocking_worker(|this| this.get_latest_checkpoint_sequence_number())
-            .await
+        self.get_latest_checkpoint_sequence_number().await
     }
 
     async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
