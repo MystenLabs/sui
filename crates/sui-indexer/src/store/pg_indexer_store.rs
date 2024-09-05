@@ -230,20 +230,23 @@ impl PgIndexerStore {
         .context("Failed reading min and max checkpoint sequence numbers from PostgresDB")
     }
 
-    fn get_prunable_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            epochs::dsl::epochs
-                .select((min(epochs::epoch), max(epochs::epoch)))
-                .first::<(Option<i64>, Option<i64>)>(conn)
-                .map(|(min, max)| {
-                    (
-                        min.unwrap_or_default() as u64,
-                        max.unwrap_or_default() as u64,
-                    )
-                })
-        })
-        .context("Failed reading min and max epoch numbers from PostgresDB")
+    async fn get_prunable_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select((min(epochs::epoch), max(epochs::epoch)))
+            .first::<(Option<i64>, Option<i64>)>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|(min, max)| {
+                (
+                    min.unwrap_or_default() as u64,
+                    max.unwrap_or_default() as u64,
+                )
+            })
+            .context("Failed reading min and max epoch numbers from PostgresDB")
     }
 
     fn get_min_prunable_checkpoint(&self) -> Result<u64, IndexerError> {
@@ -1647,8 +1650,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn get_available_epoch_range(&self) -> Result<(u64, u64), IndexerError> {
-        self.execute_in_blocking_worker(|this| this.get_prunable_epoch_range())
-            .await
+        self.get_prunable_epoch_range().await
     }
 
     async fn get_available_checkpoint_range(&self) -> Result<(u64, u64), IndexerError> {
