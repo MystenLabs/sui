@@ -182,14 +182,17 @@ impl ObjectsSnapshotProcessor {
                         .await?
                         .unwrap_or_default();
 
-                    // We update the snapshot table when it falls behind the rest of the indexer by more than the min_lag.
+                    // We update the snapshot table when it falls behind the rest of the indexer by
+                    // more than the min_lag. When `latest_indexer_cp = start_cp +
+                    // config.snapshot_min_lag`, we have not actually indexed `start_cp` yet, hence
+                    // why the condition is `>=`.
                     while latest_indexer_cp >= start_cp + config.snapshot_min_lag as u64 {
                         // The maximum checkpoint sequence number that can be committed to the
                         // `objects_snapshot` table.
                         let max_allowed_cp = latest_indexer_cp - config.snapshot_min_lag as u64;
 
-                        // Fetch more from the stream if the buffer is empty and we still need to
-                        // catch up.
+                        // Fetch `batch_size` more data from the stream if the buffer is empty and
+                        // we still need to catch up.
                         if unprocessed.is_empty() {
                             if let Some(new_changes) = stream.next().await {
                                 for checkpoint in new_changes {
@@ -200,6 +203,8 @@ impl ObjectsSnapshotProcessor {
 
                         // Collect the checkpoint object changes to write to `objects_snapshot`,
                         // stopping when there are gaps in the sequence of unprocessed checkpoints.
+                        // This is an inclusive range, so if `start_cp` is equal to
+                        // `max_allowed_cp`, we'll still index the one checkpoint.
                         for cp in start_cp..=max_allowed_cp {
                             if let Some(checkpoint) = unprocessed.remove(&cp) {
                                 batch.push(checkpoint);
@@ -220,13 +225,13 @@ impl ObjectsSnapshotProcessor {
                                 .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
                             start_cp = last_checkpoint_seq + 1;
 
-                            // Tells the package buffer that this checkpoint has been processed and the corresponding package data can be deleted.
+                            // Tells the package buffer that this checkpoint has been processed and
+                            // the corresponding package data can be deleted.
                             commit_notifier.send(Some(last_checkpoint_seq)).expect("Commit watcher should not be closed");
                             metrics
                                 .latest_object_snapshot_sequence_number
                                 .set(last_checkpoint_seq as i64);
                         }
-
                     }
                 }
             }
