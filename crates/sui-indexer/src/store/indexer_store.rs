@@ -48,6 +48,12 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
+    async fn persist_full_objects_history(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError>;
+
+    // persist objects snapshot with object changes during backfill
     async fn persist_objects_snapshot(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
