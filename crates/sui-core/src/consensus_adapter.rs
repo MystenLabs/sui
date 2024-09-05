@@ -886,6 +886,15 @@ impl ConsensusAdapter {
                 vec![]
             };
 
+            let checkpoint_sequence_number = if let SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+            ) = transaction_key
+            {
+                Some(checkpoint_sequence_number)
+            } else {
+                None
+            };
+
             // We wait for each transaction individually to be processed by consensus or executed in a checkpoint. We could equally just
             // get notified in aggregate when all transactions are processed, but with this approach can get notified in a more fine-grained way
             // as transactions can be marked as processed in different ways. This is mostly a concern for the soft-bundle transactions.
@@ -898,6 +907,16 @@ impl ConsensusAdapter {
                     processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         processed.expect("Storage error when waiting for transaction executed in checkpoint");
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
+                    }
+                    processed = async {
+                        if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                            epoch_store.synced_checkpoint_notify(checkpoint_sequence_number).await
+                        } else {
+                            Ok(())
+                        }
+                    }, if checkpoint_sequence_number.is_some() => {
+                        processed.expect("Error when waiting for checkpoint sequence number");
+                        self.metrics.sequencing_certificate_processed.with_label_values(&["synced_checkpoint"]).inc();
                     }
                 }
             });
