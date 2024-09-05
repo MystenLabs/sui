@@ -266,19 +266,22 @@ impl PgIndexerStore {
             .context("Failed reading min prunable checkpoint sequence number from PostgresDB")
     }
 
-    fn get_checkpoint_range_for_epoch(
+    async fn get_checkpoint_range_for_epoch(
         &self,
         epoch: u64,
     ) -> Result<(u64, Option<u64>), IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            epochs::dsl::epochs
-                .select((epochs::first_checkpoint_id, epochs::last_checkpoint_id))
-                .filter(epochs::epoch.eq(epoch as i64))
-                .first::<(i64, Option<i64>)>(conn)
-                .map(|(min, max)| (min as u64, max.map(|v| v as u64)))
-        })
-        .context("Failed reading checkpoint range from PostgresDB")
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        epochs::table
+            .select((epochs::first_checkpoint_id, epochs::last_checkpoint_id))
+            .filter(epochs::epoch.eq(epoch as i64))
+            .first::<(i64, Option<i64>)>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|(min, max)| (min as u64, max.map(|v| v as u64)))
+            .context("Failed reading checkpoint range from PostgresDB")
     }
 
     fn get_transaction_range_for_checkpoint(
@@ -2125,7 +2128,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError> {
-        let (mut min_cp, max_cp) = match self.get_checkpoint_range_for_epoch(epoch)? {
+        let (mut min_cp, max_cp) = match self.get_checkpoint_range_for_epoch(epoch).await? {
             (min_cp, Some(max_cp)) => Ok((min_cp, max_cp)),
             _ => Err(IndexerError::PostgresReadError(format!(
                 "Failed to get checkpoint range for epoch {}",
