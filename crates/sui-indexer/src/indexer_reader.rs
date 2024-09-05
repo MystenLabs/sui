@@ -140,50 +140,40 @@ impl IndexerReader {
 
 // Impl for reading data from the DB
 impl IndexerReader {
-    fn get_object_from_db(
+    async fn get_object_from_db(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<StoredObject>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let object_id = object_id.to_vec();
+        use diesel_async::RunQueryDsl;
 
-        let stored_object = run_query!(&self.blocking_pool, |conn| {
-            if let Some(version) = version {
-                objects::dsl::objects
-                    .filter(objects::dsl::object_id.eq(object_id))
-                    .filter(objects::dsl::object_version.eq(version.value() as i64))
-                    .first::<StoredObject>(conn)
-                    .optional()
-            } else {
-                objects::dsl::objects
-                    .filter(objects::dsl::object_id.eq(object_id))
-                    .first::<StoredObject>(conn)
-                    .optional()
-            }
-        })?;
-        Ok(stored_object)
+        let mut connection = self.pool.get().await?;
+
+        let mut query = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+        if let Some(version) = version {
+            query = query.filter(objects::object_version.eq(version.value() as i64))
+        }
+
+        query
+            .first::<StoredObject>(&mut connection)
+            .await
+            .optional()
+            .map_err(Into::into)
     }
 
-    fn get_object(
+    pub async fn get_object(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<Object>, IndexerError> {
-        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+        let Some(stored_package) = self.get_object_from_db(object_id, version).await? else {
             return Ok(None);
         };
 
         let object = stored_package.try_into()?;
         Ok(Some(object))
-    }
-
-    pub async fn get_object_in_blocking_task(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<Object>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_object(&object_id, None))
-            .await
     }
 
     pub async fn get_object_read(&self, object_id: ObjectID) -> Result<ObjectRead, IndexerError> {
