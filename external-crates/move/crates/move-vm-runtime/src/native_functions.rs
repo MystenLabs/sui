@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    interpreter::Interpreter, loader::Resolver, native_extensions::NativeContextExtensions,
+    interpreter::state::MachineState, loader::ModuleDefinitionResolver,
+    native_extensions::NativeContextExtensions,
 };
-use move_binary_format::errors::{ExecutionState, PartialVMError, PartialVMResult};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
@@ -92,25 +93,30 @@ impl NativeFunctions {
     }
 }
 
-pub struct NativeContext<'a, 'b> {
-    interpreter: &'a mut Interpreter,
-    resolver: &'a Resolver<'a>,
+pub struct NativeContext<'a, 'b, 'c> {
+    // If this native was the base invocation, we do not create a machine state. This is only used
+    // for printing stack traces, and in that case we will print that there is no call stack.
+    state: Option<&'a MachineState>,
+    resolver: &'a ModuleDefinitionResolver<'a>,
     extensions: &'a mut NativeContextExtensions<'b>,
+    runtime_limits_config: &'c VMRuntimeLimitsConfig,
     gas_left: RefCell<InternalGas>,
     gas_budget: InternalGas,
 }
 
-impl<'a, 'b> NativeContext<'a, 'b> {
+impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub(crate) fn new(
-        interpreter: &'a mut Interpreter,
-        resolver: &'a Resolver<'a>,
+        state: Option<&'a MachineState>,
+        resolver: &'a ModuleDefinitionResolver<'a>,
         extensions: &'a mut NativeContextExtensions<'b>,
+        runtime_limits_config: &'c VMRuntimeLimitsConfig,
         gas_budget: InternalGas,
     ) -> Self {
         Self {
-            interpreter,
+            state,
             resolver,
             extensions,
+            runtime_limits_config,
             gas_left: RefCell::new(gas_budget),
             gas_budget,
         }
@@ -118,16 +124,20 @@ impl<'a, 'b> NativeContext<'a, 'b> {
 
     /// Limits imposed at runtime
     pub fn runtime_limits_config(&self) -> &VMRuntimeLimitsConfig {
-        self.interpreter.runtime_limits_config()
+        self.runtime_limits_config
     }
 }
 
-impl<'a, 'b> NativeContext<'a, 'b> {
-    pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
-        self.interpreter
-            .debug_print_stack_trace(buf, self.resolver.loader())
-    }
+macro_rules! debug_writeln {
+    ($($toks: tt)*) => {
+        writeln!($($toks)*).map_err(|_|
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("failed to write to buffer".to_string())
+        )
+    };
+}
 
+impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.resolver.loader().type_to_type_tag(ty)
     }
@@ -163,12 +173,6 @@ impl<'a, 'b> NativeContext<'a, 'b> {
         self.extensions
     }
 
-    /// Get count stack frames, including the one of the called native function. This
-    /// allows a native function to reflect about its caller.
-    pub fn stack_frames(&self, count: usize) -> ExecutionState {
-        self.interpreter.get_stack_frames(count)
-    }
-
     pub fn charge_gas(&self, amount: InternalGas) -> bool {
         let mut gas_left = self.gas_left.borrow_mut();
 
@@ -187,6 +191,16 @@ impl<'a, 'b> NativeContext<'a, 'b> {
 
     pub fn gas_used(&self) -> InternalGas {
         self.gas_budget.saturating_sub(*self.gas_left.borrow())
+    }
+
+    pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
+        // If this native was a base invocation, it won't have a stack to speak of.
+        if let Some(state) = self.state {
+            state.debug_print_stack_trace(buf, self.resolver.loader())
+        } else {
+            debug_writeln!(buf, "No Call Stack Available")?;
+            debug_writeln!(buf, "Base Native Invocations Do Not Create Call Stacks")
+        }
     }
 }
 

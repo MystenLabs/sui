@@ -1465,12 +1465,12 @@ struct BinaryType {
 // A Resolver is a simple and small structure allocated on the stack and used by the
 // interpreter. It's the only API known to the interpreter and it's tailored to the interpreter
 // needs.
-pub(crate) struct Resolver<'a> {
+pub(crate) struct ModuleDefinitionResolver<'a> {
     loader: &'a Loader,
     binary: BinaryType,
 }
 
-impl<'a> Resolver<'a> {
+impl<'a> ModuleDefinitionResolver<'a> {
     fn for_module(
         loader: &'a Loader,
         compiled: Arc<CompiledModule>,
@@ -1495,9 +1495,8 @@ impl<'a> Resolver<'a> {
     pub(crate) fn function_from_instantiation(
         &self,
         idx: FunctionInstantiationIndex,
-    ) -> *const Function {
-        let func_inst = self.binary.loaded.function_instantiation_at(idx.0);
-        func_inst.handle.to_ref()
+    ) -> ArenaPointer<Function> {
+        self.binary.loaded.function_instantiation_at(idx.0).handle
     }
 
     pub(crate) fn instantiate_generic_function(

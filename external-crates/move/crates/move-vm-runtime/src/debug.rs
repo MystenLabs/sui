@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    interpreter::Interpreter,
+    interpreter::state::MachineState,
     loader::{
         ast::{Bytecode, Function},
         Loader,
@@ -134,7 +134,7 @@ impl DebugContext {
         function_desc: &Function,
         locals: &Locals,
         pc: u16,
-        interp: &Interpreter,
+        interp: &MachineState,
         resolver: &Loader,
     ) {
         let function_string = function_desc.pretty_short_string();
@@ -168,7 +168,7 @@ impl DebugContext {
         pc: u16,
         instr: &Bytecode,
         resolver: &Loader,
-        interp: &Interpreter,
+        interp: &MachineState,
     ) {
         let instr_string = format!("{:?}", instr);
         let function_string = function_desc.pretty_short_string();
