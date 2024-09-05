@@ -1,4 +1,4 @@
-processed 34 tasks
+processed 42 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -166,10 +166,6 @@ Response: {
   }
 }
 
-task 19, line 147:
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 3
-Objects snapshot updated to [0 to 3)
-
 task 20, line 149:
 //# create-checkpoint
 Checkpoint created: 8
@@ -282,18 +278,26 @@ Response: {
   }
 }
 
-task 24, line 220:
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 4
-Objects snapshot updated to [0 to 4)
-
 task 25, line 222:
 //# create-checkpoint
 Checkpoint created: 9
 
-task 26, lines 224-245:
+task 27, line 226:
+//# create-checkpoint
+Checkpoint created: 10
+
+task 28, lines 228-257:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 3
+      },
+      "last": {
+        "sequenceNumber": 10
+      }
+    },
     "transactionBlocks": {
       "nodes": [
         {
@@ -307,7 +311,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 9,
+          "line": 17,
           "column": 9
         }
       ],
@@ -325,7 +329,7 @@ Response: {
   ]
 }
 
-task 27, lines 247-268:
+task 29, lines 259-280:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
@@ -361,7 +365,7 @@ Response: {
   }
 }
 
-task 28, lines 270-291:
+task 30, lines 282-303:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
@@ -397,18 +401,34 @@ Response: {
   }
 }
 
-task 29, line 294:
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 6
-Objects snapshot updated to [0 to 6)
-
-task 30, line 296:
+task 32, line 307:
 //# create-checkpoint
-Checkpoint created: 10
+Checkpoint created: 11
 
-task 31, lines 298-319:
+task 34, line 311:
+//# create-checkpoint
+Checkpoint created: 12
+
+task 36, line 315:
+//# create-checkpoint
+Checkpoint created: 13
+
+task 38, line 319:
+//# create-checkpoint
+Checkpoint created: 14
+
+task 39, lines 321-350:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
     "transactionBlocks": {
       "nodes": [
         {
@@ -422,7 +442,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 9,
+          "line": 17,
           "column": 9
         }
       ],
@@ -440,10 +460,18 @@ Response: {
   ]
 }
 
-task 32, lines 321-342:
+task 40, lines 352-381:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
     "transactionBlocks": {
       "nodes": [
         {
@@ -457,7 +485,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 9,
+          "line": 17,
           "column": 9
         }
       ],
@@ -475,10 +503,18 @@ Response: {
   ]
 }
 
-task 33, lines 344-365:
+task 41, lines 383-412:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 7
+      },
+      "last": {
+        "sequenceNumber": 14
+      }
+    },
     "transactionBlocks": {
       "nodes": [
         {
@@ -492,7 +528,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 9,
+          "line": 17,
           "column": 9
         }
       ],
