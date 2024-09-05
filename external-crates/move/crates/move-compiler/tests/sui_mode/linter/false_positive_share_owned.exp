@@ -16,15 +16,15 @@ warning[Lint W99000]: possible owned object share
    = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99000]: possible owned object share
-   ┌─ tests/sui_mode/linter/false_positive_share_owned.move:38:9
+   ┌─ tests/sui_mode/linter/false_positive_share_owned.move:42:9
    │
-27 │     fun make_obj(_: X, ctx: &mut sui::tx_context::TxContext): Obj {
-   │                                                               --- A potentially owned object coming from here
+30 │     fun make_obj(o: Obj2, ctx: &mut sui::tx_context::TxContext): Obj {
+   │                                                                  --- A potentially owned object coming from here
    ·
-33 │         transfer::transfer(o, sui::tx_context::sender(ctx));
+37 │         transfer::transfer(o, sui::tx_context::sender(ctx));
    │         --------------------------------------------------- Transferred as an owned object here
    ·
-38 │         transfer::share_object(o);
+42 │         transfer::share_object(o);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                      │
    │         │                      Creating a fresh object and sharing it within the same function will ensure this does not abort.

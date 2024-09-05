@@ -46,6 +46,33 @@ module a::can_determine_to_be_new {
 }
 
 
+// object is created locally, but the analysis cannot determine that currently
+module b::can_determine_to_be_new_with_struct {
+    use sui::transfer;
+    use sui::object::UID;
+
+    struct Obj has key {
+        id: UID
+    }
+
+    struct X<phantom T> has drop {}
+
+    fun make_obj<T>(_: X<T>, ctx: &mut sui::tx_context::TxContext): Obj {
+        Obj { id: sui::object::new(ctx) }
+    }
+
+    public fun transfer(ctx: &mut sui::tx_context::TxContext) {
+        let o = make_obj(X<Obj> {}, ctx);
+        transfer::transfer(o, sui::tx_context::sender(ctx));
+    }
+
+    public fun share(ctx: &mut sui::tx_context::TxContext) {
+        let o = make_obj(X<Obj> {}, ctx);
+        transfer::share_object(o);
+    }
+}
+
+
 
 module sui::tx_context {
     struct TxContext has drop {}

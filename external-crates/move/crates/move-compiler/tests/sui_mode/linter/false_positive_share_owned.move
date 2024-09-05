@@ -22,19 +22,23 @@ module a::cannot_determine_to_be_new {
         id: UID
     }
 
-    struct X has drop {}
+    struct Obj2 has key {
+        id: UID
+    }
 
-    fun make_obj(_: X, ctx: &mut sui::tx_context::TxContext): Obj {
+    // we do not do interprodedural analysis here
+    fun make_obj(o: Obj2, ctx: &mut sui::tx_context::TxContext): Obj {
+        transfer::transfer(o, @0);
         Obj { id: sui::object::new(ctx) }
     }
 
-    public fun transfer(ctx: &mut sui::tx_context::TxContext) {
-        let o = make_obj(X {}, ctx);
+    public fun transfer(o2: Obj2, ctx: &mut sui::tx_context::TxContext) {
+        let o = make_obj(o2, ctx);
         transfer::transfer(o, sui::tx_context::sender(ctx));
     }
 
-    public fun share(ctx: &mut sui::tx_context::TxContext) {
-        let o = make_obj(X {}, ctx); // cannot determine this is local because of `X`
+    public fun share(o2: Obj2, ctx: &mut sui::tx_context::TxContext) {
+        let o = make_obj(o2, ctx); // cannot determine this is local because of `X`
         transfer::share_object(o);
     }
 }

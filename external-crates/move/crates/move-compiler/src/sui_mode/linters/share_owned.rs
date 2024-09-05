@@ -165,10 +165,13 @@ fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
             calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
         }
 
-        E::ModuleCall(m) => m
-            .arguments
-            .iter()
-            .any(|arg| calls_special_function_exp(special, arg)),
+        E::ModuleCall(call) => {
+            special.iter().any(|(a, m, f)| call.is(*a, *m, *f))
+                || call
+                    .arguments
+                    .iter()
+                    .any(|arg| calls_special_function_exp(special, arg))
+        }
         E::Vector(_, _, _, es) | E::Multiple(es) => {
             es.iter().any(|e| calls_special_function_exp(special, e))
         }
