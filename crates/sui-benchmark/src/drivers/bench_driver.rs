@@ -724,11 +724,6 @@ async fn run_bench_worker(
                     .latency_squared_s
                     .with_label_values(&[&payload.to_string()])
                     .inc_by(square_latency_ms);
-
-                metrics_cloned
-                    .num_success
-                    .with_label_values(&[&payload.to_string()])
-                    .inc();
                 metrics_cloned
                     .num_in_flight
                     .with_label_values(&[&payload.to_string()])
@@ -736,10 +731,22 @@ async fn run_bench_worker(
 
                 let num_commands =
                     transaction.data().transaction_data().kind().num_commands() as u16;
-                metrics_cloned
-                    .num_success_cmds
-                    .with_label_values(&[&payload.to_string()])
-                    .inc_by(num_commands as u64);
+
+                if effects.is_ok() {
+                    metrics_cloned
+                        .num_success
+                        .with_label_values(&[&payload.to_string()])
+                        .inc();
+                    metrics_cloned
+                        .num_success_cmds
+                        .with_label_values(&[&payload.to_string()])
+                        .inc_by(num_commands as u64);
+                } else {
+                    metrics_cloned
+                        .num_error
+                        .with_label_values(&[&payload.to_string()])
+                        .inc();
+                }
 
                 if let Some(sig_info) = effects.quorum_sig() {
                     sig_info.authorities(&committee).for_each(|name| {
