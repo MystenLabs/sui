@@ -939,18 +939,19 @@ impl IndexerReader {
             .await
     }
 
-    pub async fn get_transaction_events_in_blocking_task(
+    pub async fn get_transaction_events(
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let pool = self.get_pool();
-        let (timestamp_ms, serialized_events) = run_query_async!(&pool, move |conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                .select((transactions::timestamp_ms, transactions::events))
-                .first::<(i64, StoredTransactionEvents)>(conn)
-        })?;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let (timestamp_ms, serialized_events) = transactions::table
+            .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+            .select((transactions::timestamp_ms, transactions::events))
+            .first::<(i64, StoredTransactionEvents)>(&mut connection)
+            .await?;
 
         let events = stored_events_to_events(serialized_events)?;
         let tx_events = TransactionEvents { data: events };

@@ -255,7 +255,7 @@ impl ReadApiServer for ReadApi {
 
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         self.inner
-            .get_transaction_events_in_blocking_task(transaction_digest)
+            .get_transaction_events(transaction_digest)
             .await
             .map_err(Into::into)
     }
