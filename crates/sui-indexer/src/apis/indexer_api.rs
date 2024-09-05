@@ -383,10 +383,8 @@ impl IndexerApiServer for IndexerApi {
             has_next_page: false,
         };
 
-        let Some(field_reverse_record_object) = self
-            .inner
-            .get_object_in_blocking_task(reverse_record_id)
-            .await?
+        let Some(field_reverse_record_object) =
+            self.inner.get_object(&reverse_record_id, None).await?
         else {
             return Ok(result);
         };
