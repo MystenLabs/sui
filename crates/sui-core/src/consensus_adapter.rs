@@ -882,6 +882,8 @@ impl ConsensusAdapter {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
                     processed = async {
+                        // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
+                        // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
                         if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
                             epoch_store.synced_checkpoint_notify(checkpoint_sequence_number).await
                         } else {
