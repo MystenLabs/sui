@@ -538,95 +538,82 @@ impl IndexerReader {
             .map_err(Into::into)
     }
 
-    pub async fn get_owned_objects_in_blocking_task(
+    pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
         filter: Option<SuiObjectDataFilter>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, filter, cursor, limit))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_owned_objects_impl(
-        &self,
-        address: SuiAddress,
-        filter: Option<SuiObjectDataFilter>,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        use diesel::RunQueryDsl;
-        run_query!(&self.blocking_pool, |conn| {
-            let mut query = objects::dsl::objects
-                .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
-                .filter(objects::dsl::owner_id.eq(address.to_vec()))
-                .order(objects::dsl::object_id.asc())
-                .limit(limit as i64)
-                .into_boxed();
-            if let Some(filter) = filter {
-                match filter {
-                    SuiObjectDataFilter::StructType(struct_tag) => {
-                        let object_type =
-                            struct_tag.to_canonical_string(/* with_prefix */ true);
-                        query =
-                            query.filter(objects::object_type.like(format!("{}%", object_type)));
-                    }
-                    SuiObjectDataFilter::MatchAny(filters) => {
-                        let mut condition = "(".to_string();
-                        for (i, filter) in filters.iter().enumerate() {
-                            if let SuiObjectDataFilter::StructType(struct_tag) = filter {
-                                let object_type =
-                                    struct_tag.to_canonical_string(/* with_prefix */ true);
-                                if i == 0 {
-                                    condition +=
-                                        format!("objects.object_type LIKE '{}%'", object_type)
-                                            .as_str();
-                                } else {
-                                    condition +=
-                                        format!(" OR objects.object_type LIKE '{}%'", object_type)
-                                            .as_str();
-                                }
+        let mut connection = self.pool.get().await?;
+
+        let mut query = objects::table
+            .filter(objects::owner_type.eq(OwnerType::Address as i16))
+            .filter(objects::owner_id.eq(address.to_vec()))
+            .order(objects::object_id.asc())
+            .limit(limit as i64)
+            .into_boxed();
+        if let Some(filter) = filter {
+            match filter {
+                SuiObjectDataFilter::StructType(struct_tag) => {
+                    let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
+                    query = query.filter(objects::object_type.like(format!("{}%", object_type)));
+                }
+                SuiObjectDataFilter::MatchAny(filters) => {
+                    let mut condition = "(".to_string();
+                    for (i, filter) in filters.iter().enumerate() {
+                        if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                            let object_type =
+                                struct_tag.to_canonical_string(/* with_prefix */ true);
+                            if i == 0 {
+                                condition +=
+                                    format!("objects.object_type LIKE '{}%'", object_type).as_str();
                             } else {
-                                return Err(IndexerError::InvalidArgumentError(
+                                condition +=
+                                    format!(" OR objects.object_type LIKE '{}%'", object_type)
+                                        .as_str();
+                            }
+                        } else {
+                            return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
                                 ));
-                            }
                         }
-                        condition += ")";
-                        query = query.filter(sql::<Bool>(&condition));
                     }
-                    SuiObjectDataFilter::MatchNone(filters) => {
-                        for filter in filters {
-                            if let SuiObjectDataFilter::StructType(struct_tag) = filter {
-                                let object_type =
-                                    struct_tag.to_canonical_string(/* with_prefix */ true);
-                                query = query.filter(
-                                    objects::object_type.not_like(format!("{}%", object_type)),
-                                );
-                            } else {
-                                return Err(IndexerError::InvalidArgumentError(
+                    condition += ")";
+                    query = query.filter(sql::<Bool>(&condition));
+                }
+                SuiObjectDataFilter::MatchNone(filters) => {
+                    for filter in filters {
+                        if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                            let object_type =
+                                struct_tag.to_canonical_string(/* with_prefix */ true);
+                            query = query
+                                .filter(objects::object_type.not_like(format!("{}%", object_type)));
+                        } else {
+                            return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
                                 ));
-                            }
                         }
-                    }
-                    _ => {
-                        return Err(IndexerError::InvalidArgumentError(
-                            "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
-                        ));
                     }
                 }
+                _ => {
+                    return Err(IndexerError::InvalidArgumentError(
+                            "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                        ));
+                }
             }
+        }
 
-            if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
-            }
+        if let Some(object_cursor) = cursor {
+            query = query.filter(objects::object_id.gt(object_cursor.to_vec()));
+        }
 
-            query
-                .load::<StoredObject>(conn)
-                .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-        })
+        query
+            .load::<StoredObject>(&mut connection)
+            .await
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
     pub async fn multi_get_objects(

@@ -52,7 +52,7 @@ impl IndexerApi {
         let options = options.unwrap_or_default();
         let objects = self
             .inner
-            .get_owned_objects_in_blocking_task(address, filter, cursor, limit + 1)
+            .get_owned_objects(address, filter, cursor, limit + 1)
             .await?;
 
         let mut object_futures = vec![];
