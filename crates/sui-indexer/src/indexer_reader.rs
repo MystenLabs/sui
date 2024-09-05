@@ -1191,9 +1191,7 @@ impl IndexerReader {
             })
             .collect::<Vec<_>>();
 
-        let object_refs = self
-            .spawn_blocking(move |this| this.get_object_refs(dfo_ids))
-            .await?;
+        let object_refs = self.get_object_refs(dfo_ids).await?;
         let mut df_futures = vec![];
         for object in objects {
             let package_resolver_clone = self.package_resolver.clone();
@@ -1274,41 +1272,43 @@ impl IndexerReader {
         Ok(name_bcs_value)
     }
 
-    fn get_object_refs(
+    async fn get_object_refs(
         &self,
         object_ids: Vec<Vec<u8>>,
     ) -> IndexerResult<HashMap<ObjectID, ObjectRef>> {
-        use diesel::RunQueryDsl;
-        run_query!(&self.blocking_pool, |conn| {
-            let query = objects::dsl::objects
-                .select((
-                    objects::dsl::object_id,
-                    objects::dsl::object_version,
-                    objects::dsl::object_digest,
-                ))
-                .filter(objects::dsl::object_id.eq_any(object_ids))
-                .into_boxed();
-            query.load::<ObjectRefColumn>(conn)
-        })?
-        .into_iter()
-        .map(|object_ref: ObjectRefColumn| {
-            let object_id = ObjectID::from_bytes(object_ref.object_id.clone()).map_err(|_e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Can't convert {:?} to ObjectID",
-                    object_ref.object_id
-                ))
-            })?;
-            let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
-            let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
-                .map_err(|e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "object {:?} has incompatible object digest. Error: {e}",
-                        object_ref.object_digest
-                    ))
-                })?;
-            Ok((object_id, (object_id, seq, object_digest)))
-        })
-        .collect::<IndexerResult<HashMap<_, _>>>()
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        objects::table
+            .filter(objects::object_id.eq_any(object_ids))
+            .select((
+                objects::object_id,
+                objects::object_version,
+                objects::object_digest,
+            ))
+            .load::<ObjectRefColumn>(&mut connection)
+            .await?
+            .into_iter()
+            .map(|object_ref: ObjectRefColumn| {
+                let object_id =
+                    ObjectID::from_bytes(object_ref.object_id.clone()).map_err(|_e| {
+                        IndexerError::PersistentStorageDataCorruptionError(format!(
+                            "Can't convert {:?} to ObjectID",
+                            object_ref.object_id
+                        ))
+                    })?;
+                let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
+                let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
+                    .map_err(|e| {
+                        IndexerError::PersistentStorageDataCorruptionError(format!(
+                            "object {:?} has incompatible object digest. Error: {e}",
+                            object_ref.object_digest
+                        ))
+                    })?;
+                Ok((object_id, (object_id, seq, object_digest)))
+            })
+            .collect::<IndexerResult<HashMap<_, _>>>()
     }
 
     async fn get_display_object_by_type(
