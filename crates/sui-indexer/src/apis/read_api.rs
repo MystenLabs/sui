@@ -61,10 +61,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         let options = options.unwrap_or_default();
-        let object_read = self
-            .inner
-            .get_object_read_in_blocking_task(object_id)
-            .await?;
+        let object_read = self.inner.get_object_read(object_id).await?;
 
         match object_read {
             ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(

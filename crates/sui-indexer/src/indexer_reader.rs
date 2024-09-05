@@ -186,13 +186,16 @@ impl IndexerReader {
             .await
     }
 
-    pub async fn get_object_read_in_blocking_task(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<ObjectRead, IndexerError> {
-        let stored_object = self
-            .spawn_blocking(move |this| this.get_object_raw(object_id))
-            .await?;
+    pub async fn get_object_read(&self, object_id: ObjectID) -> Result<ObjectRead, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_object = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .first::<StoredObject>(&mut connection)
+            .await
+            .optional()?;
 
         if let Some(object) = stored_object {
             object
@@ -201,18 +204,6 @@ impl IndexerReader {
         } else {
             Ok(ObjectRead::NotExists(object_id))
         }
-    }
-
-    fn get_object_raw(&self, object_id: ObjectID) -> Result<Option<StoredObject>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let id = object_id.to_vec();
-        let stored_object = run_query!(&self.blocking_pool, |conn| {
-            objects::dsl::objects
-                .filter(objects::dsl::object_id.eq(id))
-                .first::<StoredObject>(conn)
-                .optional()
-        })?;
-        Ok(stored_object)
     }
 
     pub async fn get_package(&self, package_id: ObjectID) -> Result<Package, IndexerError> {
