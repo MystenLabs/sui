@@ -4,6 +4,7 @@
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use dashmap::DashMap;
 use parking_lot::Mutex;
+use prometheus::core::{AtomicI64, GenericGauge};
 use simple_server_timing_header::Timer;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -357,7 +358,8 @@ impl<F: Future> MonitoredFutureExt for F {
     fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self> {
         MonitoredScopeFuture {
             f: Box::pin(self),
-            name,
+            active_duration_metric: get_metrics()
+                .map(|m| m.future_active_duration_ns.with_label_values(&[name])),
             _scope: monitored_scope(name),
         }
     }
@@ -365,7 +367,7 @@ impl<F: Future> MonitoredFutureExt for F {
 
 pub struct MonitoredScopeFuture<F: Sized> {
     f: Pin<Box<F>>,
-    name: &'static str,
+    active_duration_metric: Option<GenericGauge<AtomicI64>>,
     _scope: Option<MonitoredScopeGuard>,
 }
 
@@ -375,10 +377,8 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let active_timer = Instant::now();
         let ret = self.f.as_mut().poll(cx);
-        if let Some(m) = get_metrics() {
-            m.future_active_duration_ns
-                .with_label_values(&[self.name])
-                .add(active_timer.elapsed().as_nanos() as i64);
+        if let Some(m) = &self.active_duration_metric {
+            m.add(active_timer.elapsed().as_nanos() as i64);
         }
         ret
     }
