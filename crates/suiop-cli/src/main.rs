@@ -3,10 +3,14 @@
 
 use anyhow::Result;
 use clap::Parser;
-use suioplib::cli::{
-    ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, CIArgs, DockerArgs,
-    IAMArgs, IncidentsArgs, PulumiArgs, ServiceArgs,
+use suioplib::{
+    cli::{
+        ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, CIArgs, DockerArgs,
+        IAMArgs, IncidentsArgs, PulumiArgs, ServiceArgs,
+    },
+    DEBUG_MODE,
 };
+use tracing::info;
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
     FmtSubscriber,
@@ -47,6 +51,10 @@ async fn main() -> Result<()> {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    if *DEBUG_MODE {
+        info!("Debug mode enabled");
+    }
 
     let args = SuiOpArgs::parse();
     match args.resource {
