@@ -1368,23 +1368,16 @@ impl IndexerReader {
             .collect::<IndexerResult<Vec<_>>>()
     }
 
-    pub async fn get_coin_balances_in_blocking_task(
+    pub async fn get_coin_balances(
         &self,
         owner: SuiAddress,
         // If coin_type is None, look for all coins.
         coin_type: Option<String>,
     ) -> Result<Vec<Balance>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_coin_balances(owner, coin_type))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_coin_balances(
-        &self,
-        owner: SuiAddress,
-        // If coin_type is None, look for all coins.
-        coin_type: Option<String>,
-    ) -> Result<Vec<Balance>, IndexerError> {
-        use diesel::RunQueryDsl;
+        let mut connection = self.pool.get().await?;
+
         let coin_type_filter = if let Some(coin_type) = coin_type {
             format!("= '{}'", coin_type)
         } else {
@@ -1409,9 +1402,10 @@ impl IndexerReader {
         );
 
         tracing::debug!("get coin balances query: {query}");
-        let coin_balances = run_query!(&self.blocking_pool, |conn| diesel::sql_query(query)
-            .load::<CoinBalance>(conn))?;
-        coin_balances
+
+        diesel::sql_query(query)
+            .load::<CoinBalance>(&mut connection)
+            .await?
             .into_iter()
             .map(|cb| cb.try_into())
             .collect::<IndexerResult<Vec<_>>>()
