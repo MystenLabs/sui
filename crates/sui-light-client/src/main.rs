@@ -124,7 +124,7 @@ struct Config {
     graphql_url: String,
 }
 
-async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyhow::Result<u64> {
+pub async fn query_last_checkpoint_of_epoch(graphql_url: &str, epoch_id: u64) -> anyhow::Result<u64> {
     // GraphQL query to get the last checkpoint of an epoch
     let query = json!({
         "query": "query ($epochID: Int) { epoch(id: $epochID) { checkpoints(last: 1) { nodes { sequenceNumber } } } }",
@@ -134,7 +134,7 @@ async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyho
     // Submit the query by POSTing to the GraphQL endpoint
     let client = reqwest::Client::new();
     let resp = client
-        .post(&config.graphql_url)
+        .post(graphql_url)
         .header("Content-Type", "application/json")
         .body(query.to_string())
         .send()
@@ -280,7 +280,7 @@ async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<()> {
     while last_epoch + 1 < latest.epoch() {
         let target_epoch = last_epoch + 1;
         let target_last_checkpoint_number =
-            query_last_checkpoint_of_epoch(config, target_epoch).await?;
+            query_last_checkpoint_of_epoch(&config.graphql_url, target_epoch).await?;
 
         // Add to the list
         checkpoints_list
