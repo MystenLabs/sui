@@ -463,28 +463,24 @@ impl IndexerReader {
             .collect()
     }
 
-    fn multi_get_transactions(
+    async fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
-        use diesel::RunQueryDsl;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let digests = digests
             .iter()
             .map(|digest| digest.inner().to_vec())
             .collect::<Vec<_>>();
-        run_query!(&self.blocking_pool, |conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq_any(digests))
-                .load::<StoredTransaction>(conn)
-        })
-    }
 
-    async fn multi_get_transactions_in_blocking_task(
-        &self,
-        digests: Vec<TransactionDigest>,
-    ) -> Result<Vec<StoredTransaction>, IndexerError> {
-        self.spawn_blocking(move |this| this.multi_get_transactions(&digests))
+        transactions::table
+            .filter(transactions::transaction_digest.eq_any(digests))
+            .load::<StoredTransaction>(&mut connection)
             .await
+            .map_err(Into::into)
     }
 
     async fn stored_transaction_to_transaction_block(
@@ -909,9 +905,7 @@ impl IndexerReader {
         digests: &[TransactionDigest],
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        let stored_txes = self
-            .multi_get_transactions_in_blocking_task(digests.to_vec())
-            .await?;
+        let stored_txes = self.multi_get_transactions(digests).await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
     }
