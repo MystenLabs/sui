@@ -173,14 +173,6 @@ pub struct RunGraphqlCommand {
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct ForceObjectSnapshotCatchup {
-    #[clap(long = "start-cp")]
-    pub start_cp: u64,
-    #[clap(long = "end-cp")]
-    pub end_cp: u64,
-}
-
-#[derive(Debug, clap::Parser)]
 pub struct CreateCheckpointCommand {
     pub count: Option<u64>,
 }
@@ -217,7 +209,6 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     SetRandomState(SetRandomStateCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
-    ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup),
     Bench(RunCommand<ExtraValueArgs>, ExtraRunArgs),
 }
 
@@ -263,11 +254,6 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("run-graphql", matches)) => {
                 SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
             }
-            Some(("force-object-snapshot-catchup", matches)) => {
-                SuiSubcommand::ForceObjectSnapshotCatchup(
-                    ForceObjectSnapshotCatchup::from_arg_matches(matches)?,
-                )
-            }
             Some(("bench", matches)) => SuiSubcommand::Bench(
                 RunCommand::from_arg_matches(matches)?,
                 ExtraRunArgs::from_arg_matches(matches)?,
@@ -305,7 +291,6 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(SetRandomStateCommand::command().name("set-random-state"))
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
-            .subcommand(ForceObjectSnapshotCatchup::command().name("force-object-snapshot-catchup"))
             .subcommand(
                 RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
             )

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 4
 
 
 // cp | object_id | owner
@@ -220,12 +220,25 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 4
+//# advance-clock --duration-ns 1
+
+//# create-checkpoint
+
+//# advance-clock --duration-ns 1
 
 //# create-checkpoint
 
 //# run-graphql --cursors @{obj_6_0,2}
+# This query will error due to requesting data outside of available range
 {
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
   before_obj_6_0_at_checkpoint_2: objects(filter: {type: "@{Test}"}, before: "@{cursor_0}") {
     nodes {
       version

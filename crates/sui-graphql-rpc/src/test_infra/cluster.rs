@@ -452,7 +452,7 @@ impl ExecutorCluster {
             .unwrap();
 
         tokio::time::timeout(base_timeout, async {
-            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
+            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_min_lag as u64 {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
@@ -472,36 +472,5 @@ impl ExecutorCluster {
     pub async fn cleanup_resources(self) {
         self.cancellation_token.cancel();
         let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
-    }
-
-    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
-        self.indexer_store
-            .update_objects_snapshot(start_cp, end_cp)
-            .await
-            .unwrap();
-
-        let mut latest_snapshot_cp = self
-            .indexer_store
-            .get_latest_object_snapshot_checkpoint_sequence_number()
-            .await
-            .unwrap()
-            .unwrap_or_default();
-
-        tokio::time::timeout(Duration::from_secs(60), async {
-            while latest_snapshot_cp < end_cp - 1 {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                latest_snapshot_cp = self
-                    .indexer_store
-                    .get_latest_object_snapshot_checkpoint_sequence_number()
-                    .await
-                    .unwrap()
-                    .unwrap_or_default();
-            }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
-        latest_snapshot_cp, end_cp));
-
-        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
