@@ -53,7 +53,7 @@ impl GovernanceReadApi {
         ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, IndexerError> {
         let mut stakes = vec![];
-        for stored_object in self.inner.multi_get_objects_in_blocking_task(ids).await? {
+        for stored_object in self.inner.multi_get_objects(ids).await? {
             let object = sui_types::object::Object::try_from(stored_object)?;
             let stake_object = StakedSui::try_from(&object)?;
             stakes.push(stake_object);
