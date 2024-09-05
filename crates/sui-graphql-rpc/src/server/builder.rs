@@ -88,7 +88,7 @@ impl Server {
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        let mut connection = get_pool_connection(&self.db_reader.inner.get_pool())?;
+        let mut connection = get_pool_connection(&self.db_reader.inner.get_blocking_pool())?;
         check_db_migration_consistency(&mut connection)?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
