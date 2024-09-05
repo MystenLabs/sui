@@ -647,7 +647,9 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
-        if !cfg!(debug_assertions) && manifest.package.edition == Some(Edition::DEVELOPMENT) {
+        if (!cfg!(debug_assertions) || cfg!(test))
+            && manifest.package.edition == Some(Edition::DEVELOPMENT)
+        {
             return Err(Edition::DEVELOPMENT.unknown_edition_error());
         }
         Ok(manifest.package.name)
