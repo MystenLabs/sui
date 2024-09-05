@@ -8,6 +8,19 @@ module prover::prover {
         !p || q
     }
 
+    public macro fun fun_spec<$T>($fun_call: $T, $requires_spec: ||, $ensures_spec: |&$T|, $aborts_if_spec: |&$T|): $T {
+        $requires_spec();
+        let result = $fun_call;
+        $ensures_spec(&result);
+        $aborts_if_spec(&result);
+        result
+    }
+
+    public macro fun ensures_($cond: bool) {
+        let cond = $cond;
+        ensures(cond);
+    }
+
     const MAX_U8: u8 = 255u8;
     const MAX_U16: u16 = 65535u16;
     const MAX_U32: u32 = 4294967295u32;
