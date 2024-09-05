@@ -28,6 +28,11 @@ module std::u32_tests {
     ];
 
     #[test]
+    fun test_bitwise_not() {
+        integer_tests::test_bitwise_not!(MAX, CASES);
+    }
+
+    #[test]
     fun test_max() {
         integer_tests::test_max!(MAX, CASES);
     }
@@ -70,6 +75,16 @@ module std::u32_tests {
             vector[0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59];
         integer_tests::test_sqrt!(MAX, CASES, reflexive_cases)
     }
+
+    #[test]
+    fun test_try_as_u8() {
+        integer_tests::test_try_as_u8!<u32>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u16() {
+        integer_tests::test_try_as_u16!<u32>(MAX);
+        }
 
     #[test]
     fun test_to_string() {

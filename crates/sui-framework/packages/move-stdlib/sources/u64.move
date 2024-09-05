@@ -5,6 +5,12 @@
 module std::u64 {
     use std::string::String;
 
+    /// Returns the bitwise not of the value.
+    /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
+    public fun bitwise_not(x: u64): u64 {
+        x ^ max_value!()
+    }
+
     /// Return the larger of `x` and `y`
     public fun max(x: u64, y: u64): u64 {
         std::macros::num_max!(x, y)
@@ -59,8 +65,28 @@ module std::u64 {
         std::macros::num_sqrt!<u64, u128>(x, 64)
     }
 
+    /// Try to convert a `u64` to a `u8`. Returns `None` if the value is too large.
+    public fun try_as_u8(x: u64): Option<u8> {
+        std::macros::try_as_u8!(x)
+    }
+
+    /// Try to convert a `u64` to a `u16`. Returns `None` if the value is too large.
+    public fun try_as_u16(x: u64): Option<u16> {
+        std::macros::try_as_u16!(x)
+    }
+
+    /// Try to convert a `u64` to a `u32`. Returns `None` if the value is too large.
+    public fun try_as_u32(x: u64): Option<u32> {
+        std::macros::try_as_u32!(x)
+    }
+
     public fun to_string(x: u64): String {
         std::macros::num_to_string!(x)
+    }
+
+    /// Maximum value for a `u64`
+    public macro fun max_value(): u64 {
+        0xFFFF_FFFF_FFFF_FFFF
     }
 
     /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)

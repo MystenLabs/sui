@@ -17,6 +17,28 @@ module std::integer_tests {
         }
     }
 
+    public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
+        let max = $max;
+        let cases = $cases;
+        assert_eq!(max.bitwise_not(), 0);
+        cases!(max, cases, |case_pred, case, case_succ| {
+            assert_eq!(case_pred.bitwise_not().bitwise_not(), case_pred);
+            assert_eq!(case_pred.bitwise_not() | case_pred, max);
+            assert_eq!(case_pred.bitwise_not() ^ case_pred, max);
+            assert_eq!(case_pred.bitwise_not() & case_pred, 0);
+
+            assert_eq!(case.bitwise_not().bitwise_not(), case);
+            assert_eq!(case.bitwise_not() | case, max);
+            assert_eq!(case.bitwise_not() ^ case, max);
+            assert_eq!(case.bitwise_not() & case, 0);
+
+            assert_eq!(case_succ.bitwise_not().bitwise_not(), case_succ);
+            assert_eq!(case_succ.bitwise_not() | case_succ, max);
+            assert_eq!(case_succ.bitwise_not() ^ case_succ, max);
+            assert_eq!(case_succ.bitwise_not() & case_succ, 0);
+        })
+    }
+
     public(package) macro fun test_max($max: _, $cases: vector<_>) {
         let max = $max;
         let cases = $cases;
@@ -158,6 +180,57 @@ module std::integer_tests {
                 i = i + 1;
             }
         }
+    }
+
+    public(package) macro fun test_try_as_u8<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u8(), option::some(0));
+        assert_eq!((1: $T).try_as_u8(), option::some(1));
+        assert_eq!((0xFF: $T).try_as_u8(), option::some(0xFF));
+        assert_eq!((0xFF + 1: $T).try_as_u8(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u8(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u16<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u16(), option::some(0));
+        assert_eq!((1: $T).try_as_u16(), option::some(1));
+        assert_eq!((0xFFFF: $T).try_as_u16(), option::some(0xFFFF));
+        assert_eq!((0xFFFF + 1: $T).try_as_u16(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u16(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u32<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u32(), option::some(0));
+        assert_eq!((1: $T).try_as_u32(), option::some(1));
+        assert_eq!((0xFFFF_FFFF: $T).try_as_u32(), option::some(0xFFFF_FFFF));
+        assert_eq!((0xFFFF_FFFF + 1: $T).try_as_u32(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u32(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u64<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u64(), option::some(0));
+        assert_eq!((1: $T).try_as_u64(), option::some(1));
+        assert_eq!((0xFFFF_FFFF_FFFF_FFFF: $T).try_as_u64(), option::some(0xFFFF_FFFF_FFFF_FFFF));
+        assert_eq!((0xFFFF_FFFF_FFFF_FFFF + 1: $T).try_as_u64(), option::none());
+        let max = $max;
+        assert_eq!(max.try_as_u64(), option::none());
+    }
+
+    public(package) macro fun test_try_as_u128<$T>($max: $T) {
+        assert_eq!((0: $T).try_as_u128(), option::some(0));
+        assert_eq!((1: $T).try_as_u128(), option::some(1));
+        assert_eq!(
+            (0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF: $T).try_as_u128(),
+            option::some(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF)
+        );
+        assert_eq!(
+            (0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF + 1: $T).try_as_u128(),
+            option::none()
+        );
+        let max = $max;
+        assert_eq!(max.try_as_u128(), option::none());
     }
 
     public(package) macro fun sum_range<$T>($n: $T): $T {
