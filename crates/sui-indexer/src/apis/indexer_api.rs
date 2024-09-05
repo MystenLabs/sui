@@ -323,7 +323,7 @@ impl IndexerApiServer for IndexerApi {
         // We do this as we do not know if the subdomain is a node or leaf record.
         let domains: Vec<_> = self
             .inner
-            .multi_get_objects_in_blocking_task(requests)
+            .multi_get_objects(requests)
             .await?
             .into_iter()
             .map(|o| sui_types::object::Object::try_from(o).ok())
