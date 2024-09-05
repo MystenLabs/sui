@@ -195,7 +195,7 @@ impl UnitTestingConfig {
         let bytecode_deps_modules = bytecode_deps_files
             .iter()
             .map(|path| {
-                let bytes = std::fs::read(path.to_string()).unwrap();
+                let bytes = std::fs::read(path).unwrap();
                 CompiledModule::deserialize_with_defaults(&bytes).unwrap()
             })
             .collect::<Vec<_>>();
