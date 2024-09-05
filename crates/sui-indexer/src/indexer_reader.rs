@@ -1157,16 +1157,14 @@ impl IndexerReader {
         Ok(sui_events)
     }
 
-    pub async fn get_dynamic_fields_in_blocking_task(
+    pub async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
         let objects = self
-            .spawn_blocking(move |this| {
-                this.get_dynamic_fields_raw(parent_object_id, cursor, limit)
-            })
+            .get_dynamic_fields_raw(parent_object_id, cursor, limit)
             .await?;
 
         if any(objects.iter(), |o| o.df_object_id.is_none()) {
@@ -1218,39 +1216,31 @@ impl IndexerReader {
         Ok(dynamic_fields)
     }
 
-    pub async fn get_dynamic_fields_raw_in_blocking_task(
+    pub async fn get_dynamic_fields_raw(
         &self,
         parent_object_id: ObjectID,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.get_dynamic_fields_raw(parent_object_id, cursor, limit)
-        })
-        .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_dynamic_fields_raw(
-        &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        use diesel::RunQueryDsl;
-        let objects: Vec<StoredObject> = run_query!(&self.blocking_pool, |conn| {
-            let mut query = objects::dsl::objects
-                .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
-                .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
-                .order(objects::dsl::object_id.asc())
-                .limit(limit as i64)
-                .into_boxed();
-            if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
-            }
-            query.load::<StoredObject>(conn)
-        })?;
+        let mut connection = self.pool.get().await?;
 
-        Ok(objects)
+        let mut query = objects::table
+            .filter(objects::owner_type.eq(OwnerType::Object as i16))
+            .filter(objects::owner_id.eq(parent_object_id.to_vec()))
+            .order(objects::object_id.asc())
+            .limit(limit as i64)
+            .into_boxed();
+
+        if let Some(object_cursor) = cursor {
+            query = query.filter(objects::object_id.gt(object_cursor.to_vec()));
+        }
+
+        query
+            .load::<StoredObject>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn bcs_name_from_dynamic_field_name(

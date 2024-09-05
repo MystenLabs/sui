@@ -221,7 +221,7 @@ impl IndexerApiServer for IndexerApi {
         }
         let mut results = self
             .inner
-            .get_dynamic_fields_in_blocking_task(parent_object_id, cursor, limit + 1)
+            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
             .await?;
 
         let has_next_page = results.len() > limit;
