@@ -135,6 +135,18 @@ jobs:
         run: |
           brew install postgresql
 
+      - name: Removed unused apps (Mac arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+        shell: bash
+        run: |
+          df -hI /dev/disk3s1s1
+          sudo rm -rf /Applications/Xcode_14.3.1.app
+          sudo rm -rf /Applications/Xcode_15.0.1.app
+          sudo rm -rf /Applications/Xcode_15.1.app
+          sudo rm -rf /Applications/Xcode_15.2.app
+          sudo rm -rf /Applications/Xcode_15.3.app
+          df -hI /dev/disk3s1s1
+
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
