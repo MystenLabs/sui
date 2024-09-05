@@ -179,8 +179,6 @@ module Test::M1 {
   }
 }
 
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 3
-
 //# create-checkpoint
 
 //# run-graphql
@@ -262,9 +260,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
-# First transaction should have no results since its data is no longer in objects_snapshot. Second
-# transaction is still valid - since objects_snapshot table is at [0, 3), it will have data from
-# checkpoint 2.
+# Regardless of the transaction block, the nested fields should yield the same data.
 {
   all_transactions: transactionBlocks(first: 4, filter: {signAddress: "@{A}"}) {
     nodes {

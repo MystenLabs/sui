@@ -3,11 +3,13 @@
 
 mod jira;
 mod pd;
+mod slack;
 
 use anyhow::Result;
+use chrono::{Duration, Local};
 use clap::Parser;
 use jira::generate_follow_up_tasks;
-use pd::print_recent_incidents;
+use pd::{fetch_incidents, print_recent_incidents, review_recent_incidents};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone)]
@@ -33,6 +35,8 @@ pub enum IncidentsAction {
         /// limit to incidents with any priority set
         #[arg(long, short = 'p', default_value = "false")]
         with_priority: bool,
+        #[arg(short, long, default_value = "false")]
+        interactive: bool,
     },
     /// generate Jira tasks for incident follow ups
     #[command(name = "generate follow up tasks", aliases=["g", "gen", "generate"])]
@@ -50,7 +54,18 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
             limit,
             days,
             with_priority,
-        } => print_recent_incidents(*long, *limit, *days, *with_priority).await?,
+            interactive,
+        } => {
+            let current_time = Local::now();
+            let start_time = current_time - Duration::days(*days as i64);
+
+            let incidents = fetch_incidents(*limit, start_time, current_time).await?;
+            if *interactive {
+                review_recent_incidents(incidents).await?
+            } else {
+                print_recent_incidents(incidents, *long, *with_priority).await?
+            }
+        }
         IncidentsAction::GenerateFollowUpTasks { input_filename } => {
             generate_follow_up_tasks(input_filename).await?
         }

@@ -231,7 +231,7 @@ impl Cluster for LocalNewCluster {
 
             // Start indexer writer
             let (_, _, writer_token) = start_test_indexer(
-                Some(pg_address.clone()),
+                pg_address.clone(),
                 fullnode_url.clone(),
                 ReaderWriterConfig::writer_mode(None, None),
                 data_ingestion_path.path().to_path_buf(),
@@ -241,7 +241,7 @@ impl Cluster for LocalNewCluster {
 
             // Start indexer jsonrpc service
             let (_, _, reader_token) = start_test_indexer(
-                Some(pg_address.clone()),
+                pg_address.clone(),
                 fullnode_url.clone(),
                 ReaderWriterConfig::reader_mode(indexer_jsonrpc_address.clone()),
                 data_ingestion_path.path().to_path_buf(),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
+use chrono::{Datelike, Utc, Weekday};
 use regex::Regex;
 
 /// Validates the format of a project name.
@@ -15,4 +16,18 @@ pub fn validate_project_name(project_name: &str) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+pub fn day_of_week() -> String {
+    let current_day = Utc::now().weekday();
+    match current_day {
+        Weekday::Mon => "Monday",
+        Weekday::Tue => "Tuesday",
+        Weekday::Wed => "Wednesday",
+        Weekday::Thu => "Thursday",
+        Weekday::Fri => "Friday",
+        Weekday::Sat => "Saturday",
+        Weekday::Sun => "Sunday",
+    }
+    .to_string()
 }

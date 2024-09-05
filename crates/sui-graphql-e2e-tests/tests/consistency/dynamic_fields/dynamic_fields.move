@@ -7,7 +7,7 @@
 // chkpt3: add df4, 5, 6 parent @ version 5, child @ version 4
 // chkpt4: remove df1, df2, df3 parent @ version 6, child @ version 4
 
-//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator --objects-snapshot-min-checkpoint-lag 4
 
 //# publish
 module Test::M1 {
@@ -438,7 +438,11 @@ fragment DynamicFieldSelect on DynamicField {
 
 //# create-checkpoint
 
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 5
+//# advance-clock --duration-ns 1
+
+//# create-checkpoint
+
+//# advance-clock --duration-ns 1
 
 //# create-checkpoint
 
@@ -472,6 +476,14 @@ fragment DynamicFieldsSelect on DynamicFieldConnection {
 }
 
 {
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
   parent_version_4_outside_consistent_range: object(address: "@{obj_2_1}", version: 4) {
     dynamicFields {
       ...DynamicFieldsSelect

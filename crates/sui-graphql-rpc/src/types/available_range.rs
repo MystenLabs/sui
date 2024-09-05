@@ -69,7 +69,8 @@ impl AvailableRange {
                 .order(snapshots::checkpoint_sequence_number.desc())
                 .limit(1);
 
-            lhs.union(rhs)
+            // We need to use `union_all` in case `lhs` and `rhs` have the same value.
+            lhs.union_all(rhs)
         })?;
 
         let (first, mut last) = match checkpoint_range.as_slice() {

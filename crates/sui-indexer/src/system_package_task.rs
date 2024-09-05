@@ -1,14 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::indexer_reader::IndexerReader;
 use std::time::Duration;
-
-use crate::store::diesel_macro::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio_util::sync::CancellationToken;
-
-use crate::{indexer_reader::IndexerReader, schema::epochs};
 
 /// Background task responsible for evicting system packages from the package resolver's cache after
 /// detecting an epoch boundary.
@@ -45,14 +41,8 @@ impl SystemPackageTask {
                     return;
                 }
                 _ = tokio::time::sleep(self.interval) => {
-                    let pool = self.reader.get_pool();
-                    let next_epoch = match run_query_async!(&pool, move |conn| {
-                            epochs::dsl::epochs
-                                .select(epochs::dsl::epoch)
-                                .order_by(epochs::epoch.desc())
-                                .first::<i64>(conn)
-                        }) {
-                        Ok(epoch) => epoch,
+                    let next_epoch = match self.reader.get_latest_epoch_info_from_db().await {
+                        Ok(epoch) => epoch.epoch,
                         Err(e) => {
                             tracing::error!("Failed to fetch latest epoch: {:?}", e);
                             continue;

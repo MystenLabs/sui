@@ -702,7 +702,7 @@ async fn start(
         tracing::info!("Starting the indexer service at {indexer_address}");
         // Start in writer mode
         start_test_indexer(
-            Some(pg_address.clone()),
+            pg_address.clone(),
             fullnode_url.clone(),
             ReaderWriterConfig::writer_mode(None, None),
             data_ingestion_path.clone(),
@@ -712,7 +712,7 @@ async fn start(
 
         // Start in reader mode
         start_test_indexer(
-            Some(pg_address.clone()),
+            pg_address.clone(),
             fullnode_url.clone(),
             ReaderWriterConfig::reader_mode(indexer_address.to_string()),
             data_ingestion_path,

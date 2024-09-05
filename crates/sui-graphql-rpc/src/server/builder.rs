@@ -420,6 +420,7 @@ impl ServerBuilder {
             // time).
             config.service.limits.request_timeout_ms.into(),
         )
+        .await
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
@@ -698,7 +699,7 @@ pub mod tests {
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
     /// further extended with `context_data` and `extension` for testing.
-    fn prep_schema(db_url: String, service_config: Option<ServiceConfig>) -> ServerBuilder {
+    async fn prep_schema(db_url: String, service_config: Option<ServiceConfig>) -> ServerBuilder {
         let connection_config = ConnectionConfig {
             port: get_available_port(),
             host: "127.0.0.1".to_owned(),
@@ -714,6 +715,7 @@ pub mod tests {
             connection_config.db_pool_size,
             service_config.limits.request_timeout_ms.into(),
         )
+        .await
         .expect("Failed to create pg connection pool");
 
         let version = Version::for_testing();
@@ -816,6 +818,7 @@ pub mod tests {
             cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(db_url, Some(cfg))
+                .await
                 .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
@@ -909,6 +912,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(db_url, Some(service_config))
+                .await
                 .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
@@ -967,6 +971,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(db_url, Some(service_config))
+                .await
                 .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
@@ -1023,7 +1028,9 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(db_url, Some(service_config)).build_schema();
+        let schema = prep_schema(db_url, Some(service_config))
+            .await
+            .build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -1065,7 +1072,7 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = prep_executor_cluster().await;
         let db_url = cluster.graphql_connection_config.db_url.clone();
-        let schema = prep_schema(db_url, None).build_schema();
+        let schema = prep_schema(db_url, None).await.build_schema();
 
         schema
             .execute("{ objects(first: 1) { nodes { version } } }")
@@ -1093,7 +1100,9 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = prep_executor_cluster().await;
         let db_url = cluster.graphql_connection_config.db_url.clone();
-        let server_builder = prep_schema(db_url, None).context_data(PayloadSize(100));
+        let server_builder = prep_schema(db_url, None)
+            .await
+            .context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1153,6 +1162,7 @@ pub mod tests {
         };
 
         let schema = prep_schema(db_url.to_owned(), Some(service_config))
+            .await
             .context_data(PayloadSize(
                 // Payload size is usually set per request, and it is the size of the raw HTTP
                 // request, which includes the query, variables, and surrounding JSON. Simulate for

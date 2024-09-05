@@ -3,19 +3,19 @@
 
 use clap::Parser;
 use sui_indexer::config::Command;
-use sui_indexer::db::{get_pool_connection, new_connection_pool, reset_database};
+use sui_indexer::database::{Connection, ConnectionPool};
+use sui_indexer::db::{new_connection_pool, reset_database};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
 
 #[tokio::main]
-async fn main() -> Result<(), IndexerError> {
+async fn main() -> anyhow::Result<()> {
     let opts = sui_indexer::config::IndexerConfig::parse();
 
     // NOTE: this is to print out tracing like info, warn & error.
@@ -30,6 +30,11 @@ async fn main() -> Result<(), IndexerError> {
 
     let connection_pool =
         new_connection_pool(opts.database_url.as_str(), &opts.connection_pool_config)?;
+    let pool = ConnectionPool::new(
+        opts.database_url.clone(),
+        opts.connection_pool_config.clone(),
+    )
+    .await?;
     spawn_connection_pool_metric_collector(indexer_metrics.clone(), connection_pool.clone());
 
     match opts.command {
@@ -38,7 +43,7 @@ async fn main() -> Result<(), IndexerError> {
             snapshot_config,
             pruning_options,
         } => {
-            let store = PgIndexerStore::new(connection_pool, indexer_metrics.clone());
+            let store = PgIndexerStore::new(connection_pool, pool, indexer_metrics.clone());
             Indexer::start_writer_with_config(
                 &ingestion_config,
                 store,
@@ -50,17 +55,17 @@ async fn main() -> Result<(), IndexerError> {
             .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
-            Indexer::start_reader(&json_rpc_config, &registry, connection_pool).await?;
+            Indexer::start_reader(&json_rpc_config, &registry, connection_pool, pool).await?;
         }
         Command::ResetDatabase { force } => {
             if !force {
-                return Err(IndexerError::PostgresResetError(
-                    "Resetting the DB requires use of the `--force` flag".to_owned(),
+                return Err(anyhow::anyhow!(
+                    "Resetting the DB requires use of the `--force` flag",
                 ));
             }
 
-            let mut connection = get_pool_connection(&connection_pool)?;
-            reset_database(&mut connection)?;
+            let connection = Connection::dedicated(&opts.database_url).await?;
+            reset_database(connection).await?;
         }
     }
 
