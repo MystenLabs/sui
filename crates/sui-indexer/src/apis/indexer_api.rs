@@ -249,7 +249,7 @@ impl IndexerApiServer for IndexerApi {
         .expect("deriving dynamic field id can't fail");
 
         let options = sui_json_rpc_types::SuiObjectDataOptions::full_content();
-        match self.inner.get_object_read_in_blocking_task(id).await? {
+        match self.inner.get_object_read(id).await? {
             sui_types::object::ObjectRead::NotExists(_)
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {
@@ -269,11 +269,7 @@ impl IndexerApiServer for IndexerApi {
             &name_bcs_value,
         )
         .expect("deriving dynamic field id can't fail");
-        match self
-            .inner
-            .get_object_read_in_blocking_task(dynamic_object_field_id)
-            .await?
-        {
+        match self.inner.get_object_read(dynamic_object_field_id).await? {
             sui_types::object::ObjectRead::NotExists(_)
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {

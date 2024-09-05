@@ -55,10 +55,7 @@ impl DataReader for TransactionBuilderApi {
         object_id: ObjectID,
         options: SuiObjectDataOptions,
     ) -> Result<SuiObjectResponse, anyhow::Error> {
-        let result = self
-            .inner
-            .get_object_read_in_blocking_task(object_id)
-            .await?;
+        let result = self.inner.get_object_read(object_id).await?;
         Ok((result, options).try_into()?)
     }
 
