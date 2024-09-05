@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=e609f7697ed6169bf0760882a0b6c032a57e4f3b#e609f7697ed6169bf0760882a0b6c032a57e4f3b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -200,7 +200,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=e609f7697ed6169bf0760882a0b6c032a57e4f3b#e609f7697ed6169bf0760882a0b6c032a57e4f3b"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.78",
@@ -211,7 +211,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=e609f7697ed6169bf0760882a0b6c032a57e4f3b#e609f7697ed6169bf0760882a0b6c032a57e4f3b"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -227,7 +227,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=dbb5a074c2d25660525ab5d36d65ff0cb8051949#dbb5a074c2d25660525ab5d36d65ff0cb8051949"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=e609f7697ed6169bf0760882a0b6c032a57e4f3b#e609f7697ed6169bf0760882a0b6c032a57e4f3b"
 dependencies = [
  "anemo",
  "bytes",
@@ -3674,18 +3674,6 @@ dependencies = [
  "scoped-futures",
  "tokio",
  "tokio-postgres",
-]
-
-[[package]]
-name = "diesel-derive-enum"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81c5131a2895ef64741dad1d483f358c2a229a3a2d1b256778cdc5e146db64d4"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
 ]
 
 [[package]]
@@ -7972,7 +7960,9 @@ dependencies = [
  "eyre",
  "futures",
  "http 1.1.0",
+ "hyper-util",
  "multiaddr",
+ "once_cell",
  "pin-project-lite",
  "serde",
  "snap",
@@ -11554,15 +11544,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "secrecy"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
-dependencies = [
- "zeroize",
-]
-
-[[package]]
 name = "security-framework"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11844,31 +11825,6 @@ checksum = "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177"
 dependencies = [
  "base16ct 0.2.0",
  "serde",
-]
-
-[[package]]
-name = "serial_test"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
-dependencies = [
- "dashmap",
- "futures",
- "lazy_static",
- "log",
- "parking_lot 0.12.1",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d129178576168c589c9ec973feedf7d3126c01ac2bf08795109aa35b69fb8f"
-dependencies = [
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
 ]
 
 [[package]]
@@ -13046,6 +13002,7 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "uuid 1.2.2",
 ]
@@ -13063,6 +13020,7 @@ dependencies = [
  "dirs 4.0.0",
  "fastcrypto",
  "insta",
+ "move-vm-config",
  "narwhal-config",
  "object_store",
  "once_cell",
@@ -13123,8 +13081,6 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "narwhal-config",
- "narwhal-crypto",
  "narwhal-types",
  "nonempty",
  "num-bigint 0.4.4",
@@ -13432,6 +13388,7 @@ dependencies = [
  "once_cell",
  "regex",
  "serde",
+ "sui-config",
  "sui-move-build",
  "sui-types",
  "tempfile",
@@ -13465,6 +13422,7 @@ dependencies = [
  "move-unit-test",
  "prometheus",
  "sui-adapter-latest",
+ "sui-config",
  "sui-framework",
  "sui-move",
  "sui-move-build",
@@ -13517,12 +13475,13 @@ dependencies = [
  "msim",
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
+ "telemetry-subscribers",
  "tokio",
 ]
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "2024.7.0"
+version = "1.33.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -13566,7 +13525,6 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "serde_yaml 0.8.26",
- "serial_test",
  "shared-crypto",
  "similar",
  "simulacrum",
@@ -13577,6 +13535,7 @@ dependencies = [
  "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-move-build",
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
@@ -13626,15 +13585,15 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "backoff",
+ "bb8",
  "bcs",
  "cached",
  "chrono",
  "clap",
  "criterion",
  "diesel",
- "diesel-derive-enum",
+ "diesel-async",
  "diesel_migrations",
- "downcast",
  "fastcrypto",
  "futures",
  "itertools 0.10.5",
@@ -13647,7 +13606,6 @@ dependencies = [
  "prometheus",
  "rayon",
  "regex",
- "secrecy",
  "serde",
  "serde_json",
  "serde_with 3.9.0",
@@ -13687,7 +13645,10 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "sui-data-ingestion-core",
+ "sui-indexer-builder",
+ "sui-sdk 1.33.0",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tracing",
@@ -14783,6 +14744,7 @@ dependencies = [
  "integer-encoding",
  "itertools 0.10.5",
  "lru 0.10.0",
+ "moka",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -15105,8 +15067,6 @@ dependencies = [
  "move-vm-types",
  "mysten-metrics",
  "mysten-network",
- "narwhal-config",
- "narwhal-crypto",
  "nonempty",
  "num-bigint 0.4.4",
  "num-traits",

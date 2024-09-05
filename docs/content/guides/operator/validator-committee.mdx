@@ -32,21 +32,16 @@ When a validator receives a transaction from a client, it first performs transac
 
 The process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions/certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness (it can refuse to form a certificate), but not for safety (it cannot change the effects of the transaction, and does not need the user's secret key).
 
-### Certificates
+### Certificates / certified transactions {#certificates}
 
 After the client forms a certificate, it submits it to the validators, which perform certificate validity checks. These checks ensure the signers are validators in the current epoch, and the signatures are cryptographically valid. If the checks pass, the validators execute the transaction inside the certificate. Execution of a transaction either succeeds and commits all of its effects or aborts and has no effect other than debiting the transaction's gas input. Some reasons a transaction might abort include an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget. Whether it succeeds or aborts, the validator durably stores the certificate indexed by the hash of its inner transaction.
 
 If a client collects a quorum of signatures on the effects of the transaction, then the client has a promise of finality. This means that transaction effects persist on the shared database and are actually committed and visible to everyone by the end of the epoch. This does not mean that the latency is a full epoch, because you can use the effects certificate to convince anyone of the transactions finality, as well as to access the effects and issue new transactions. As with transactions, you can parallelize the process of sharing a certificate with validators and (if desired) outsource to a third-party service provider.
 
-## The role of Narwhal and Bullshark
+## The role of consensus
 
-Sui takes advantage of Narwhal and Bullshark as its mempool and consensus engines. Narwhal/Bullshark (N/B) is also implemented in Sui so that when Byzantine agreement is required it uses a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
+Sui uses a high-throughput DAG-based consensus engine implementing the Mysticeti algorithm to sequence certified transactions. Consensus produces a series of commits. In each commit, there is a sequence of certified transactions.
 
-Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Bullshark defines an algorithm for executing the DAG that these blocks form. N/B combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Bullshark here), and does not substitute for it:
+The order of transactions in consensus output determines the relative order they can operate on each shared object. Note that executions of transactions touching different shared objects are parallelized on multiple cores.
 
-- N/B operates in OX, rather than XO mode (O = order, X = execute); the execution occurs after the Narwhal/Bullshark ordering.
-- The output of N/B is therefore a sequence of transactions, with interdependencies stored in the transaction data itself.
-
-Consensus sequences certificates of transactions. These represent transactions that have already been presented to 2/3 of validators that checked that all their owned objects are available to be operated on and signed the transaction. Upon a certificate being sequenced, Sui sets the lock of the shared objects at the next available version to map to the execution of that certificate. So for example if you have a shared object X at version 2, and you sequence certificate T, Sui stores T -> [(X, 2)]. That is all you do when Sui reaches consensus, and as a result Sui can ingest a lot of sequenced transactions.
-
-Now, after this is done Sui can execute all certificates that have their locks set, on one or multiple cores. Obviously, transactions for earlier versions of objects need to be processed first (causally), and that reduces the degree of concurrency. The read and write set of the transaction can be statically determined from its versioned object inputs--execution can only read/write an object that was an input to the transaction, or that was created by the transaction.
+If total execution cost of transactions in a consensus commit is over a threshold, transactions can be cancelled post consensus to avoid overloading the system.

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any as StdAny;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -21,7 +20,8 @@ use tracing::info;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 
-use crate::db::ConnectionPool;
+use crate::database::ConnectionPool;
+use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
@@ -132,30 +132,23 @@ SET object_version = EXCLUDED.object_version,
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
     pub parallel_objects_chunk_size: usize,
-    #[allow(unused)]
-    pub epochs_to_keep: Option<u64>,
 }
 
+#[derive(Clone)]
 pub struct PgIndexerStore {
-    blocking_cp: ConnectionPool,
+    blocking_cp: BlockingConnectionPool,
+    pool: ConnectionPool,
     metrics: IndexerMetrics,
     partition_manager: PgPartitionManager,
     config: PgIndexerStoreConfig,
 }
 
-impl Clone for PgIndexerStore {
-    fn clone(&self) -> PgIndexerStore {
-        Self {
-            blocking_cp: self.blocking_cp.clone(),
-            metrics: self.metrics.clone(),
-            partition_manager: self.partition_manager.clone(),
-            config: self.config.clone(),
-        }
-    }
-}
-
 impl PgIndexerStore {
-    pub fn new(blocking_cp: ConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(
+        blocking_cp: BlockingConnectionPool,
+        pool: ConnectionPool,
+        metrics: IndexerMetrics,
+    ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
@@ -164,27 +157,28 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
-        let epochs_to_keep = std::env::var("EPOCHS_TO_KEEP")
-            .map(|s| s.parse::<u64>().ok())
-            .unwrap_or_else(|_e| None);
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
-            epochs_to_keep,
         };
 
         Self {
             blocking_cp,
+            pool,
             metrics,
             partition_manager,
             config,
         }
     }
 
-    pub fn blocking_cp(&self) -> ConnectionPool {
+    pub fn blocking_cp(&self) -> BlockingConnectionPool {
         self.blocking_cp.clone()
+    }
+
+    pub fn pool(&self) -> ConnectionPool {
+        self.pool.clone()
     }
 
     pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {
@@ -2179,10 +2173,6 @@ impl IndexerStore for PgIndexerStore {
             this.get_network_total_transactions_by_end_of_epoch(epoch)
         })
         .await
-    }
-
-    fn as_any(&self) -> &dyn StdAny {
-        self
     }
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch

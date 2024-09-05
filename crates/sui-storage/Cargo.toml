@@ -41,6 +41,7 @@ hyper-rustls.workspace = true
 base64-url.workspace = true
 telemetry-subscribers.workspace = true
 indicatif.workspace = true
+moka.workspace = true
 
 sui-types.workspace = true
 mysten-metrics.workspace = true

@@ -74,7 +74,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounterVec,
     pub sequencing_certificate_failures: IntCounterVec,
     pub sequencing_certificate_inflight: IntGaugeVec,
-    pub sequencing_acknowledge_latency: mysten_metrics::histogram::HistogramVec,
+    pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
     pub sequencing_certificate_positions_moved: Histogram,
@@ -117,12 +117,13 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
-            sequencing_acknowledge_latency: mysten_metrics::histogram::HistogramVec::new_in_registry(
+            sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
                 &["retry", "tx_type"],
+                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            ).unwrap(),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
@@ -364,7 +365,7 @@ impl ConsensusAdapter {
         let min_digest = transactions
             .iter()
             .filter_map(|tx| match &tx.kind {
-                ConsensusTransactionKind::UserTransaction(certificate) => {
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     Some(certificate.digest())
                 }
                 _ => None,
@@ -585,7 +586,7 @@ impl ConsensusAdapter {
                 fp_ensure!(
                     matches!(
                         transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
+                        ConsensusTransactionKind::CertifiedTransaction(_)
                     ),
                     SuiError::InvalidTxKindInSoftBundle
                 );
@@ -808,7 +809,7 @@ impl ConsensusAdapter {
                 self.metrics
                     .sequencing_acknowledge_latency
                     .with_label_values(&[&bucket, tx_type])
-                    .report(ack_start.elapsed().as_millis() as u64);
+                    .observe(ack_start.elapsed().as_secs_f64());
             };
             match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((processed, _submit_inner)) => processed,
@@ -828,7 +829,7 @@ impl ConsensusAdapter {
         let is_user_tx = is_soft_bundle
             || matches!(
                 transactions[0].kind,
-                ConsensusTransactionKind::UserTransaction(_)
+                ConsensusTransactionKind::CertifiedTransaction(_)
             );
         let send_end_of_publish = if is_user_tx {
             // If we are in RejectUserCerts state and we just drained the list we need to

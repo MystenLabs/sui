@@ -3,6 +3,8 @@
 
 /// This module holds shared implementation of macros used in `std`
 module std::macros {
+    use std::string::String;
+
     public macro fun num_max($x: _, $y: _): _ {
         let x = $x;
         let y = $y;
@@ -66,6 +68,20 @@ module std::macros {
         };
 
         res as $T
+    }
+
+    public macro fun num_to_string($x: _): String {
+        let mut x = $x;
+        if (x == 0) {
+            return b"0".to_string()
+        };
+        let mut buffer = vector[];
+        while (x != 0) {
+            buffer.push_back(((48 + x % 10) as u8));
+            x = x / 10;
+        };
+        buffer.reverse();
+        buffer.to_string()
     }
 
     public macro fun range_do($start: _, $stop: _, $f: |_|) {

@@ -31,7 +31,7 @@ impl DataReader for TransactionBuilderApi {
     ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
         let stored_objects = self
             .inner
-            .get_owned_objects_in_blocking_task(
+            .get_owned_objects(
                 address,
                 Some(SuiObjectDataFilter::StructType(object_type)),
                 None,
@@ -55,10 +55,7 @@ impl DataReader for TransactionBuilderApi {
         object_id: ObjectID,
         options: SuiObjectDataOptions,
     ) -> Result<SuiObjectResponse, anyhow::Error> {
-        let result = self
-            .inner
-            .get_object_read_in_blocking_task(object_id)
-            .await?;
+        let result = self.inner.get_object_read(object_id).await?;
         Ok((result, options).try_into()?)
     }
 

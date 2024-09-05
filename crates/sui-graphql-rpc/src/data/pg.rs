@@ -197,26 +197,31 @@ mod query_cost {
 #[cfg(all(test, feature = "pg_integration"))]
 mod tests {
     use super::*;
-    use crate::config::ConnectionConfig;
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        db::{get_pool_connection, new_connection_pool, reset_database},
+        database::Connection,
+        db::{get_pool_connection, new_connection_pool, reset_database, ConnectionPoolConfig},
         models::objects::StoredObject,
         schema::objects,
+        tempdb::TempDb,
         types::IndexedObject,
     };
 
-    #[test]
-    fn test_query_cost() {
-        let connection_config = ConnectionConfig::default();
-        let pool = new_connection_pool(
-            &connection_config.db_url,
-            Some(connection_config.db_pool_size),
-        )
-        .unwrap();
+    #[tokio::test]
+    async fn test_query_cost() {
+        let database = TempDb::new().unwrap();
+        let mut pool_config = ConnectionPoolConfig::default();
+        pool_config.set_pool_size(5);
+        let pool = new_connection_pool(database.database().url().as_str(), &pool_config).unwrap();
         let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(&mut conn).unwrap();
+        reset_database(
+            Connection::dedicated(database.database().url())
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())

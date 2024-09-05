@@ -4213,27 +4213,6 @@ sha2_256
 sha3_256
 	public fun
 	0x1::hash
-bitwise_not
-	public fun
-	0x1::u8
-max
-	public fun
-	0x1::u8
-min
-	public fun
-	0x1::u8
-diff
-	public fun
-	0x1::u8
-divide_and_round_up
-	public fun
-	0x1::u8
-pow
-	public fun
-	0x1::u8
-sqrt
-	public fun
-	0x1::u8
 empty
 	public fun
 	0x1::vector
@@ -4552,6 +4531,9 @@ try_as_u32
 try_as_u64
 	public fun
 	0x1::u128
+to_string
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -4574,6 +4556,9 @@ sqrt
 	public fun
 	0x1::u16
 try_as_u8
+	public fun
+	0x1::u16
+to_string
 	public fun
 	0x1::u16
 bitwise_not
@@ -4609,6 +4594,9 @@ try_as_u64
 try_as_u128
 	public fun
 	0x1::u256
+to_string
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -4634,6 +4622,9 @@ try_as_u8
 	public fun
 	0x1::u32
 try_as_u16
+	public fun
+	0x1::u32
+to_string
 	public fun
 	0x1::u32
 bitwise_not
@@ -4666,3 +4657,30 @@ try_as_u16
 try_as_u32
 	public fun
 	0x1::u64
+to_string
+	public fun
+	0x1::u64
+bitwise_not
+	public fun
+	0x1::u8
+max
+	public fun
+	0x1::u8
+min
+	public fun
+	0x1::u8
+diff
+	public fun
+	0x1::u8
+divide_and_round_up
+	public fun
+	0x1::u8
+pow
+	public fun
+	0x1::u8
+sqrt
+	public fun
+	0x1::u8
+to_string
+	public fun
+	0x1::u8

@@ -179,10 +179,3 @@ module Test::M1 {
 //# run Test::M1::create --args 0 @A --gas-price 1000
 
 //# run Test::M1::create --args 0 @A --gas-price 235
-
-//# run-graphql
-{
-  serviceConfig {
-    availableVersions
-  }
-}

@@ -18,6 +18,7 @@ use sui_config::node::{
 };
 use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
+use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
@@ -240,6 +241,8 @@ impl ValidatorConfigBuilder {
             state_accumulator_v2: self.state_accumulator_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
+            verifier_signing_config: VerifierSigningConfig::default(),
+            enable_db_write_stall: None,
         }
     }
 
@@ -523,6 +526,8 @@ impl FullnodeConfigBuilder {
             enable_soft_bundle: true,
             // This is a validator specific feature.
             enable_validator_tx_finalizer: false,
+            verifier_signing_config: VerifierSigningConfig::default(),
+            enable_db_write_stall: None,
         }
     }
 }

@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
@@ -457,10 +458,12 @@ impl SuiNode {
             None,
         ));
 
-        let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
+        // By default, only enable write stall on validators for perpetual db.
+        let enable_write_stall = config.enable_db_write_stall.unwrap_or(is_validator);
+        let perpetual_tables_options = AuthorityPerpetualTablesOptions { enable_write_stall };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
-            Some(perpetual_options.options),
+            Some(perpetual_tables_options),
         ));
         let is_genesis = perpetual_tables
             .database_is_empty()
@@ -1934,7 +1937,11 @@ fn build_kv_store(
     };
 
     let base_url = base_url.join(network_str)?.to_string();
-    let http_store = HttpKVStore::new_kv(&base_url, metrics.clone())?;
+    let http_store = HttpKVStore::new_kv(
+        &base_url,
+        config.transaction_kv_store_read_config.cache_size,
+        metrics.clone(),
+    )?;
     info!("using local key-value store with fallback to http key-value store");
     Ok(Arc::new(FallbackTransactionKVStore::new_kv(
         db_store,

@@ -94,7 +94,7 @@ fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
             exp(state, el)
         }
         C::Return { exp: e, .. }
-        | C::Abort(e)
+        | C::Abort(_, e)
         | C::IgnoreAndPop { exp: e, .. }
         | C::JumpIf { cond: e, .. }
         | C::VariantSwitch { subject: e, .. } => exp(state, e),
@@ -265,7 +265,7 @@ mod last_usage {
                 exp(context, er)
             }
             C::Return { exp: e, .. }
-            | C::Abort(e)
+            | C::Abort(_, e)
             | C::IgnoreAndPop { exp: e, .. }
             | C::JumpIf { cond: e, .. }
             | C::VariantSwitch { subject: e, .. } => exp(context, e),

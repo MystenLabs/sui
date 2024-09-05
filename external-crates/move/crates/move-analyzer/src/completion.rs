@@ -5,10 +5,10 @@
 use crate::{
     context::Context,
     symbols::{
-        self, mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
-        type_list_to_ide_string, type_to_ide_string, ChainCompletionKind, ChainInfo, CursorContext,
-        CursorDefinition, DefInfo, FunType, PrecompiledPkgDeps, SymbolicatorRunner, Symbols,
-        VariantInfo,
+        self, expansion_mod_ident_to_map_key, mod_ident_to_ide_string, ret_type_to_ide_str,
+        type_args_to_ide_string, type_list_to_ide_string, type_to_ide_string, ChainCompletionKind,
+        ChainInfo, CursorContext, CursorDefinition, DefInfo, FunType, MemberDef, MemberDefInfo,
+        ModuleDefs, PrecompiledPkgDeps, SymbolicatorRunner, Symbols, VariantInfo,
     },
     utils,
 };
@@ -43,6 +43,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    vec,
 };
 use vfs::VfsPath;
 
@@ -194,50 +195,71 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
     }
 }
 
+/// Checks if the cursor is at the opening brace of a struct definition and returns
+/// auto-completion of this struct into an object if the struct has the `key` ability.
+fn object_completion(symbols: &Symbols, cursor: &CursorContext) -> (Option<CompletionItem>, bool) {
+    let mut only_custom_items = false;
+    // look for a struct definition on the line that contains `{`, check its abilities,
+    // and do auto-completion if `key` ability is present
+    let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name else {
+        return (None, only_custom_items);
+    };
+    only_custom_items = true;
+    let Some(mod_ident) = cursor.module else {
+        return (None, only_custom_items);
+    };
+    let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+        return (None, only_custom_items);
+    };
+    let Some(struct_def) = mod_defs.structs.get(&sname.value()) else {
+        return (None, only_custom_items);
+    };
+
+    let Some(DefInfo::Struct(_, _, _, _, abilities, ..)) =
+        symbols.def_info.get(&struct_def.name_loc)
+    else {
+        return (None, only_custom_items);
+    };
+
+    if !abilities.has_ability_(Ability_::Key) {
+        return (None, only_custom_items);
+    }
+    let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
+    let init_completion = CompletionItem {
+        label: "id: UID".to_string(),
+        kind: Some(CompletionItemKind::SNIPPET),
+        documentation: Some(Documentation::String("Object snippet".to_string())),
+        insert_text: Some(obj_snippet),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        ..Default::default()
+    };
+    (Some(init_completion), only_custom_items)
+}
+
 /// Handle context-specific auto-completion requests with lbrace (`{`) trigger character.
 fn context_specific_lbrace(
     symbols: &Symbols,
     cursor: &CursorContext,
 ) -> (Vec<CompletionItem>, bool) {
-    let mut completions = vec![];
-    let mut only_custom_items = false;
-    // look for a struct definition on the line that contains `{`, check its abilities,
-    // and do auto-completion if `key` ability is present
-    let Some(CursorDefinition::Struct(sname)) = &cursor.defn_name else {
-        return (completions, only_custom_items);
-    };
-    only_custom_items = true;
-    let Some(mident) = cursor.module else {
-        return (completions, only_custom_items);
-    };
-    let Some(typed_ast) = symbols.typed_ast.as_ref() else {
-        return (completions, only_custom_items);
-    };
-    let Some(struct_def) = typed_ast.info.struct_definition_opt(&mident, sname) else {
-        return (completions, only_custom_items);
-    };
-    if struct_def.abilities.has_ability_(Ability_::Key) {
-        let obj_snippet = "\n\tid: UID,\n\t$1\n".to_string();
-        let init_completion = CompletionItem {
-            label: "id: UID".to_string(),
-            kind: Some(CompletionItemKind::SNIPPET),
-            documentation: Some(Documentation::String("Object snippet".to_string())),
-            insert_text: Some(obj_snippet),
-            insert_text_format: Some(InsertTextFormat::SNIPPET),
-            ..Default::default()
-        };
-        completions.push(init_completion);
+    let completions = vec![];
+    let (completion_item_opt, only_custom_items) = object_completion(symbols, cursor);
+    if let Some(completion_item) = completion_item_opt {
+        return (vec![completion_item], only_custom_items);
     }
     (completions, only_custom_items)
 }
 
-fn fun_def_info(symbols: &Symbols, mod_ident: ModuleIdent_, name: Symbol) -> Option<&DefInfo> {
-    let Some(mod_defs) = symbols
+/// Get definitions for a given module.
+fn mod_defs<'a>(symbols: &'a Symbols, mod_ident: &ModuleIdent_) -> Option<&'a ModuleDefs> {
+    symbols
         .file_mods
         .values()
         .flatten()
-        .find(|mdef| mdef.ident == mod_ident)
-    else {
+        .find(|mdef| mdef.ident == *mod_ident)
+}
+
+fn fun_def_info(symbols: &Symbols, mod_ident: ModuleIdent_, name: Symbol) -> Option<&DefInfo> {
+    let Some(mod_defs) = mod_defs(symbols, &mod_ident) else {
         return None;
     };
 
@@ -247,7 +269,7 @@ fn fun_def_info(symbols: &Symbols, mod_ident: ModuleIdent_, name: Symbol) -> Opt
     symbols.def_info(&fdef.name_loc)
 }
 
-fn lamda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
+fn lambda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
     if let Type_::Fun(vec, _) = ty {
         let arg_snippets = vec
             .iter()
@@ -289,7 +311,7 @@ fn call_completion_item(
         .zip(arg_types)
         .skip(omitted_arg_count)
         .map(|(name, ty)| {
-            lamda_snippet(ty, &mut snippet_idx).unwrap_or_else(|| {
+            lambda_snippet(ty, &mut snippet_idx).unwrap_or_else(|| {
                 let mut arg_name = name.to_string();
                 if arg_name.starts_with('$') {
                     arg_name = arg_name[1..].to_string();
@@ -412,6 +434,77 @@ fn dot_completions(
     completions
 }
 
+/// Handles auto-completion for structs and enums variants, including fields contained
+/// by the struct or variant.
+fn datatype_completion(
+    cursor: &CursorContext,
+    defining_mod_ident: &ModuleIdent_,
+    field_container: Symbol,
+    kind: CompletionItemKind,
+    field_names: &[Name],
+    named_fields: bool,
+) -> Vec<CompletionItem> {
+    // always add a completion for the datatype itself (for type completion)
+    let mut completions = vec![completion_item(&field_container, kind)];
+
+    let defining_mod_ident_str = expansion_mod_ident_to_map_key(defining_mod_ident);
+    let current_mod_ident_str =
+        expansion_mod_ident_to_map_key(&cursor.module.as_ref().unwrap().value);
+
+    // only add fields if there are some and we are in the same module as the datatype
+    if field_names.is_empty() || defining_mod_ident_str != current_mod_ident_str {
+        return completions;
+    }
+
+    // fields on separate lines if there is more than two and if they are named
+    let separator = if field_names.len() > 2 && named_fields {
+        ",\n\t"
+    } else {
+        ", "
+    };
+    let fields_list = field_names
+        .iter()
+        .enumerate()
+        .map(|(idx, name)| {
+            if named_fields {
+                format!("${{{}:{}}}", idx + 1, name)
+            } else {
+                format!("${{{}}}", idx + 1)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(separator);
+
+    let (label, insert_text) = if !named_fields {
+        (
+            format!("{field_container}(..)"),
+            // positional fields always on the same line
+            format!("{field_container}({fields_list})"),
+        )
+    } else if field_names.len() > 2 {
+        (
+            format!("{field_container}{{..}}"),
+            // more than two named fields, each on a separate line
+            format!("{field_container} {{\n\t{fields_list},\n}}"),
+        )
+    } else {
+        (
+            format!("{field_container}{{..}}"),
+            // fewer than three named fields, all on the same line
+            format!("{field_container} {{ {fields_list} }}"),
+        )
+    };
+    let field_completion = CompletionItem {
+        label,
+        kind: Some(kind),
+        insert_text: Some(insert_text),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        ..Default::default()
+    };
+    completions.push(field_completion);
+    completions
+}
+
 /// Returns all possible completions for a module member (e.g., a datatype) component of a name
 /// access chain, where the prefix of this component (e.g, in `some_pkg::some_mod::`) represents a
 /// module specified in `prefix_mod_ident`. The `inside_use` parameter determines if completion is
@@ -427,12 +520,7 @@ fn module_member_completions(
 
     let mut completions = vec![];
 
-    let Some(mod_defs) = symbols
-        .file_mods
-        .values()
-        .flatten()
-        .find(|mdef| mdef.ident == prefix_mod_ident.value)
-    else {
+    let Some(mod_defs) = mod_defs(symbols, &prefix_mod_ident.value) else {
         return completions;
     };
 
@@ -500,12 +588,9 @@ fn module_member_completions(
     }
 
     if matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All) {
-        completions.extend(
-            mod_defs
-                .structs
-                .keys()
-                .map(|sname| completion_item(sname, CompletionItemKind::STRUCT)),
-        );
+        completions.extend(mod_defs.structs.iter().flat_map(|(sname, member_def)| {
+            struct_completion(cursor, &mod_defs.ident, *sname, member_def)
+        }));
         completions.extend(
             mod_defs
                 .enums
@@ -526,37 +611,60 @@ fn module_member_completions(
     completions
 }
 
+/// Computes completions for a struct.
+fn struct_completion(
+    cursor: &CursorContext,
+    defining_mod_ident: &ModuleIdent_,
+    name: Symbol,
+    member_def: &MemberDef,
+) -> Vec<CompletionItem> {
+    let MemberDef {
+        info: MemberDefInfo::Struct {
+            field_defs,
+            positional,
+        },
+        ..
+    } = member_def
+    else {
+        return vec![completion_item(&name, CompletionItemKind::STRUCT)];
+    };
+    datatype_completion(
+        cursor,
+        defining_mod_ident,
+        name,
+        CompletionItemKind::STRUCT,
+        &field_defs.iter().map(|d| sp(d.loc, d.name)).collect_vec(),
+        !positional,
+    )
+}
+
 /// Returns completion item if a given name/alias identifies a valid member of a given module
 /// available in the completion scope as if it was a single-length name chain.
 fn single_name_member_completion(
     symbols: &Symbols,
+    cursor: &CursorContext,
     mod_ident: &ModuleIdent_,
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-) -> Option<CompletionItem> {
+) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
-    let Some(mod_defs) = symbols
-        .file_mods
-        .values()
-        .flatten()
-        .find(|mdef| mdef.ident == *mod_ident)
-    else {
-        return None;
+    let Some(mod_defs) = mod_defs(symbols, mod_ident) else {
+        return vec![];
     };
 
     // is it a function?
     if let Some(fdef) = mod_defs.functions.get(member_name) {
         if !(matches!(chain_kind, CT::Function) || matches!(chain_kind, CT::All)) {
-            return None;
+            return vec![];
         }
         let Some(DefInfo::Function(.., fun_type, _, type_args, arg_names, arg_types, ret_type, _)) =
             symbols.def_info(&fdef.name_loc)
         else {
-            return None;
+            return vec![];
         };
-        return Some(call_completion_item(
+        return vec![call_completion_item(
             mod_ident,
             matches!(fun_type, FunType::Macro),
             None,
@@ -566,64 +674,61 @@ fn single_name_member_completion(
             arg_types,
             ret_type,
             /* inside_use */ false,
-        ));
+        )];
     };
 
     // is it a struct?
-    if mod_defs.structs.get(member_name).is_some() {
+    if let Some(member_def) = mod_defs.structs.get(member_name) {
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
-            return None;
+            return vec![];
         }
-        return Some(completion_item(
-            member_alias.as_str(),
-            CompletionItemKind::STRUCT,
-        ));
+        return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
     }
 
     // is it an enum?
     if mod_defs.enums.get(member_name).is_some() {
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
-            return None;
+            return vec![];
         }
-        return Some(completion_item(
+        return vec![completion_item(
             member_alias.as_str(),
             CompletionItemKind::ENUM,
-        ));
+        )];
     }
 
     // is it a const?
     if mod_defs.constants.get(member_name).is_some() {
         if !matches!(chain_kind, CT::All) {
-            return None;
+            return vec![];
         }
-        return Some(completion_item(
+        return vec![completion_item(
             member_alias.as_str(),
             CompletionItemKind::CONSTANT,
-        ));
+        )];
     }
 
-    None
+    vec![]
 }
 
 /// Returns completion items for all members of a given module as if they were single-length name
 /// chains.
 fn all_single_name_member_completions(
     symbols: &Symbols,
+    cursor: &CursorContext,
     members_info: &BTreeSet<(Symbol, ModuleIdent, Name)>,
     chain_kind: ChainCompletionKind,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
     for (member_alias, sp!(_, mod_ident), member_name) in members_info {
-        let Some(member_completion) = single_name_member_completion(
+        let member_completions = single_name_member_completion(
             symbols,
+            cursor,
             mod_ident,
             member_alias,
             &member_name.value,
             chain_kind,
-        ) else {
-            continue;
-        };
-        completions.push(member_completion);
+        );
+        completions.extend(member_completions);
     }
     completions
 }
@@ -671,68 +776,40 @@ fn pkg_mod_identifiers(
         .collect::<BTreeSet<_>>()
 }
 
-/// Computes completion for a single enum variant.
-fn variant_completion(symbols: &Symbols, vinfo: &VariantInfo) -> Option<CompletionItem> {
-    let Some(DefInfo::Variant(_, _, vname, is_positional, field_names, ..)) =
+/// Computes completions for a single enum variant.
+fn variant_completion(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    defining_mod_ident: &ModuleIdent_,
+    vinfo: &VariantInfo,
+) -> Vec<CompletionItem> {
+    let Some(DefInfo::Variant(_, _, _, positional, field_names, ..)) =
         symbols.def_info.get(&vinfo.name.loc)
     else {
-        return None;
+        return vec![completion_item(
+            vinfo.name.value.as_str(),
+            CompletionItemKind::ENUM_MEMBER,
+        )];
     };
 
-    let label = if field_names.is_empty() {
-        vname.to_string()
-    } else if *is_positional {
-        format!("{vname}()")
-    } else {
-        format!("{vname}{{}}")
-    };
-    let field_snippet = field_names
-        .iter()
-        .enumerate()
-        .map(|(snippet_idx, fname)| {
-            if *is_positional {
-                format!("${{{}}}", snippet_idx + 1)
-            } else {
-                format!("${{{}:{}}}", snippet_idx + 1, fname)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let (insert_text, insert_text_format) = if field_names.is_empty() {
-        (format!("{vname}"), InsertTextFormat::PLAIN_TEXT)
-    } else if *is_positional {
-        (
-            format!("{vname}({field_snippet})"),
-            InsertTextFormat::SNIPPET,
-        )
-    } else {
-        (
-            format!("{vname}{{{field_snippet}}}"),
-            InsertTextFormat::SNIPPET,
-        )
-    };
-
-    Some(CompletionItem {
-        label,
-        kind: Some(CompletionItemKind::ENUM_MEMBER),
-        insert_text: Some(insert_text),
-        insert_text_format: Some(insert_text_format),
-        ..Default::default()
-    })
+    datatype_completion(
+        cursor,
+        defining_mod_ident,
+        vinfo.name.value,
+        CompletionItemKind::ENUM_MEMBER,
+        field_names,
+        !positional,
+    )
 }
 
 /// Computes completions for variants of a given enum.
 fn all_variant_completions(
     symbols: &Symbols,
+    cursor: &CursorContext,
     mod_ident: &ModuleIdent,
     datatype_name: Symbol,
 ) -> Vec<CompletionItem> {
-    let Some(mod_defs) = symbols
-        .file_mods
-        .values()
-        .flatten()
-        .find(|mdef| mdef.ident == mod_ident.value)
-    else {
+    let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
         return vec![];
     };
 
@@ -746,7 +823,7 @@ fn all_variant_completions(
 
     variants
         .iter()
-        .filter_map(|vinfo| variant_completion(symbols, vinfo))
+        .flat_map(|vinfo| variant_completion(symbols, cursor, &mod_defs.ident, vinfo))
         .collect_vec()
 }
 
@@ -777,7 +854,12 @@ fn name_chain_entry_completions(
             ));
         }
         ChainComponentKind::Member(mod_ident, member_name) => {
-            completions.extend(all_variant_completions(symbols, &mod_ident, member_name));
+            completions.extend(all_variant_completions(
+                symbols,
+                cursor,
+                &mod_ident,
+                member_name,
+            ));
         }
     }
 }
@@ -1061,6 +1143,7 @@ fn name_chain_completions(
             );
             completions.extend(all_single_name_member_completions(
                 symbols,
+                cursor,
                 &info.members,
                 chain_kind,
             ));

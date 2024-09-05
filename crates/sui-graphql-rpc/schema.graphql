@@ -1349,6 +1349,10 @@ enum Feature {
 	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
+	"""
+	Named packages service (utilizing dotmove package registry).
+	"""
+	MOVE_REGISTRY
 }
 
 
@@ -3347,6 +3351,14 @@ type Query {
 	"""
 	resolveSuinsAddress(domain: String!): Address
 	"""
+	Fetch a package by its name (using dot move service)
+	"""
+	packageByName(name: String!): MovePackage
+	"""
+	Fetch a type that includes dot move service names in it.
+	"""
+	typeByName(name: String!): MoveType!
+	"""
 	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
@@ -3458,10 +3470,6 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
-	List the available versions for this GraphQL service.
-	"""
-	availableVersions: [String!]!
-	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3511,7 +3519,18 @@ type ServiceConfig {
 	"""
 	requestTimeoutMs: Int!
 	"""
-	Maximum length of a query payload string.
+	The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+	`executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+	
+	It is the value of the maximum transaction bytes (including the signatures) allowed by the
+	protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+	"""
+	maxTransactionPayloadSize: Int!
+	"""
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+	the read part of the query.
+	In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+	included in this limit.
 	"""
 	maxQueryPayloadSize: Int!
 	"""

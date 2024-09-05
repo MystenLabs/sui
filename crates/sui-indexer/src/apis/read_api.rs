@@ -34,11 +34,7 @@ impl ReadApi {
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        match self
-            .inner
-            .spawn_blocking(move |this| this.get_checkpoint(id))
-            .await
-        {
+        match self.inner.get_checkpoint(id).await {
             Ok(Some(epoch_info)) => Ok(epoch_info),
             Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
                 "Checkpoint {id:?} not found"
@@ -48,9 +44,7 @@ impl ReadApi {
     }
 
     async fn get_latest_checkpoint(&self) -> Result<Checkpoint, IndexerError> {
-        self.inner
-            .spawn_blocking(|this| this.get_latest_checkpoint())
-            .await
+        self.inner.get_latest_checkpoint().await
     }
 
     async fn get_chain_identifier(&self) -> RpcResult<ChainIdentifier> {
@@ -67,10 +61,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         let options = options.unwrap_or_default();
-        let object_read = self
-            .inner
-            .get_object_read_in_blocking_task(object_id)
-            .await?;
+        let object_read = self.inner.get_object_read(object_id).await?;
 
         match object_read {
             ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
@@ -230,7 +221,7 @@ impl ReadApiServer for ReadApi {
 
         let mut checkpoints = self
             .inner
-            .spawn_blocking(move |this| this.get_checkpoints(cursor, limit + 1, descending_order))
+            .get_checkpoints(cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = checkpoints.len() > limit;
@@ -261,7 +252,7 @@ impl ReadApiServer for ReadApi {
 
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         self.inner
-            .get_transaction_events_in_blocking_task(transaction_digest)
+            .get_transaction_events(transaction_digest)
             .await
             .map_err(Into::into)
     }
@@ -274,10 +265,7 @@ impl ReadApiServer for ReadApi {
         let version = if let Some(version) = version {
             (*version).into()
         } else {
-            let latest_epoch = self
-                .inner
-                .spawn_blocking(|this| this.get_latest_epoch_info_from_db())
-                .await?;
+            let latest_epoch = self.inner.get_latest_epoch_info_from_db().await?;
             (latest_epoch.protocol_version as u64).into()
         };
 

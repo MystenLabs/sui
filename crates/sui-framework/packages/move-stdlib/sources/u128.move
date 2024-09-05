@@ -3,6 +3,8 @@
 
 #[defines_primitive(u128)]
 module std::u128 {
+    use std::string::String;
+
     /// Returns the bitwise not of the value.
     /// Each bit that is 1 becomes 0. Each bit that is 0 becomes 1.
     public fun bitwise_not(x: u128): u128 {
@@ -81,6 +83,10 @@ module std::u128 {
     /// Try to convert a `u128` to a `u64`. Returns `None` if the value is too large.
     public fun try_as_u64(x: u128): Option<u64> {
         std::macros::try_as_u64!(x)
+    }
+
+    public fun to_string(x: u128): String {
+        std::macros::num_to_string!(x)
     }
 
     /// Maximum value for a `u128`

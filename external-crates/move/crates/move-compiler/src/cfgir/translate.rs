@@ -324,7 +324,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
             C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
+            C::Abort(_, exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
             C::Mutate(lhs, rhs) => {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
@@ -653,7 +653,6 @@ fn function_body(
                     &mut cfg,
                 );
             }
-
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))

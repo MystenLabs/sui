@@ -3,39 +3,29 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::database::ConnectionPool;
+use crate::handlers::tx_processor::IndexingPackageBuffer;
+use crate::metrics::IndexerMetrics;
+use crate::schema::objects;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use diesel::ExpressionMethods;
-use diesel::OptionalExtension;
-use diesel::{QueryDsl, RunQueryDsl};
-
+use diesel::QueryDsl;
+use diesel_async::RunQueryDsl;
 use move_core_types::account_address::AccountAddress;
 use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 
-use crate::db::ConnectionPool;
-use crate::errors::IndexerError;
-use crate::handlers::tx_processor::IndexingPackageBuffer;
-use crate::metrics::IndexerMetrics;
-use crate::schema::objects;
-use crate::store::diesel_macro::*;
-
 /// A package resolver that reads packages from the database.
+#[derive(Clone)]
 pub struct IndexerStorePackageResolver {
-    cp: ConnectionPool,
-}
-
-impl Clone for IndexerStorePackageResolver {
-    fn clone(&self) -> IndexerStorePackageResolver {
-        Self {
-            cp: self.cp.clone(),
-        }
-    }
+    pool: ConnectionPool,
 }
 
 impl IndexerStorePackageResolver {
-    pub fn new(cp: ConnectionPool) -> Self {
-        Self { cp }
+    pub fn new(pool: ConnectionPool) -> Self {
+        Self { pool }
     }
 }
 
@@ -43,42 +33,30 @@ impl IndexerStorePackageResolver {
 impl PackageStore for IndexerStorePackageResolver {
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
         let pkg = self
-            .get_package_from_db_in_blocking_task(id)
+            .get_package_from_db(id)
             .await
             .map_err(|e| PackageResolverError::Store {
                 store: "PostgresDB",
-                source: Arc::new(e),
+                error: e.to_string(),
             })?;
         Ok(Arc::new(pkg))
     }
 }
 
 impl IndexerStorePackageResolver {
-    fn get_package_from_db(&self, id: AccountAddress) -> Result<Package, IndexerError> {
-        let Some(bcs) = read_only_blocking!(&self.cp, |conn| {
-            let query = objects::dsl::objects
-                .select(objects::dsl::serialized_object)
-                .filter(objects::dsl::object_id.eq(id.to_vec()));
-            query.get_result::<Vec<u8>>(conn).optional()
-        })?
-        else {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Package not found in DB: {:?}",
-                id
-            )));
-        };
-        let object = bcs::from_bytes::<Object>(&bcs)?;
-        Package::read_from_object(&object).map_err(|e| {
-            IndexerError::PostgresReadError(format!("Failed parsing object to package: {:?}", e))
-        })
-    }
+    async fn get_package_from_db(&self, id: AccountAddress) -> Result<Package, anyhow::Error> {
+        let mut connection = self.pool.get().await?;
 
-    async fn get_package_from_db_in_blocking_task(
-        &self,
-        id: AccountAddress,
-    ) -> Result<Package, IndexerError> {
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || this.get_package_from_db(id)).await?
+        let bcs = objects::dsl::objects
+            .select(objects::dsl::serialized_object)
+            .filter(objects::dsl::object_id.eq(id.to_vec()))
+            .get_result::<Vec<u8>>(&mut connection)
+            .await
+            .map_err(|e| anyhow!("Package not found in DB: {e}"))?;
+
+        let object = bcs::from_bytes::<Object>(&bcs)?;
+        Package::read_from_object(&object)
+            .map_err(|e| anyhow!("Failed parsing object to package: {e}"))
     }
 }
 
@@ -114,7 +92,7 @@ impl PackageStore for InterimPackageResolver {
             self.metrics.indexing_package_resolver_in_mem_hit.inc();
             let pkg = Package::read_from_object(&obj).map_err(|e| PackageResolverError::Store {
                 store: "InMemoryPackageBuffer",
-                source: Arc::new(e),
+                error: e.to_string(),
             })?;
             Ok(Arc::new(pkg))
         } else {

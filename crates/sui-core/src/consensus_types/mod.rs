@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod committee_api;
 pub(crate) mod consensus_output_api;
 
 /// An unique integer ID for a validator used by consensus.

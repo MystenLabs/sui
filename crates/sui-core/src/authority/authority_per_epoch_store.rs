@@ -775,7 +775,9 @@ impl AuthorityPerEpochStore {
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
             .filter_map(|transaction| {
-                if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
+                    &transaction.kind
+                {
                     Some(*certificate.digest())
                 } else {
                     None
@@ -1879,7 +1881,7 @@ impl AuthorityPerEpochStore {
 
         // TODO: lock once for all insert() calls.
         for transaction in transactions {
-            if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+            if let ConsensusTransactionKind::CertifiedTransaction(cert) = &transaction.kind {
                 let state = lock.expect("Must pass reconfiguration lock when storing certificate");
                 // Caller is responsible for performing graceful check
                 assert!(
@@ -2461,7 +2463,7 @@ impl AuthorityPerEpochStore {
         // Signatures are verified as part of the consensus payload verification in SuiTxValidator
         match &transaction.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(_certificate),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -3409,7 +3411,7 @@ impl AuthorityPerEpochStore {
 
         match &transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
             }) => {
                 if certificate.epoch() != self.epoch() {

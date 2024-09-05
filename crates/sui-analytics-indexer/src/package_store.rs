@@ -32,7 +32,7 @@ impl From<Error> for PackageResolverError {
         match source {
             Error::TypedStore(store_error) => Self::Store {
                 store: STORE,
-                source: Arc::new(store_error),
+                error: store_error.to_string(),
             },
         }
     }

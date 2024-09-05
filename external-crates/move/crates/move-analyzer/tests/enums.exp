@@ -229,8 +229,8 @@ Def: 'AnotherStruct', line: 6, def char: 18
 TypeDef: 'AnotherStruct', line: 6, char: 18
 On Hover:
 public struct Enums::struct_match::AnotherStruct has drop {
-	another_field: Enums::struct_match::SomeStruct,
-	field: u64
+	field: u64,
+	another_field: Enums::struct_match::SomeStruct
 }
 
 -- test 2 -------------------

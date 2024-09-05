@@ -1,0 +1,10 @@
+[package]
+name = "dotmove"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+dotmove = "0x0"
+
