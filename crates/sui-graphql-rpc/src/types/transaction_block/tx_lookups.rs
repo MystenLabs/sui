@@ -63,9 +63,9 @@ use crate::{
         type_filter::{FqNameFilter, ModuleFilter},
     },
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{CombineDsl, ExpressionMethods, QueryDsl};
 use std::fmt::Write;
-use sui_indexer::schema::checkpoints;
+use sui_indexer::schema::pruner_cp_watermark;
 
 /// Bounds on transaction sequence number, imposed by filters, cursors, and the scan limit. The
 /// outermost bounds are determined by the checkpoint filters. These get translated into bounds in
@@ -103,7 +103,8 @@ use sui_indexer::schema::checkpoints;
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TxBounds {
     /// The inclusive lower bound tx_sequence_number derived from checkpoint bounds. If checkpoint
-    /// bounds are not provided, this will default to `0`.
+    /// bounds are not provided, this will default to the smallest transaction sequence number of
+    /// the earliest checkpoint that has not been pruned.
     tx_lo: u64,
 
     /// The exclusive upper bound tx_sequence_number derived from checkpoint bounds. If checkpoint
@@ -140,9 +141,9 @@ impl TxBounds {
         scan_limit: Option<u64>,
         page: &Page<Cursor>,
     ) -> Result<Option<Self>, diesel::result::Error> {
-        // Lowerbound in terms of checkpoint sequence number. We want to get the total transaction
-        // count of the checkpoint before this one, or 0 if there is no previous checkpoint.
-        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap_or(0);
+        // Inclusive lowerbound in terms of checkpoint sequence number. If a lower bound is not set,
+        // we will default to the smallest checkpoint available from the database.
+        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]);
 
         let cp_before_inclusive = match cp_before {
             // There are no results strictly before checkpoint 0.
@@ -151,56 +152,99 @@ impl TxBounds {
             None => None,
         };
 
-        // Upperbound in terms of checkpoint sequence number. We want to get the total transaction
-        // count at the end of this checkpoint. If no upperbound is given, use
-        // `checkpoint_viewed_at`.
+        // Inclusive upper bound in terms of checkpoint sequence number. If no upperbound is given,
+        // use `checkpoint_viewed_at`.
         //
         // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)
         let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
 
-        use checkpoints::dsl;
-        let (tx_lo, tx_hi) = if let Some(cp_prev) = cp_lo.checked_sub(1) {
-            let res: Vec<i64> = conn
+        use pruner_cp_watermark::dsl;
+        // Inclusive lower and upper bounds of the transaction sequence number range. `tx_hi` will
+        // need to be adjusted to form the expected right-open interval.
+        let (tx_lo, mut tx_hi) = {
+            let res: Vec<(i64, i64, i64)> = conn
                 .results(move || {
-                    dsl::checkpoints
-                        .select(dsl::network_total_transactions)
-                        .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
-                        .order_by(dsl::network_total_transactions.asc())
+                    let mut min_cp_range = dsl::pruner_cp_watermark
+                        .select((
+                            dsl::checkpoint_sequence_number,
+                            dsl::min_tx_sequence_number,
+                            dsl::max_tx_sequence_number,
+                        ))
+                        .into_boxed();
+
+                    if let Some(cp_lo) = cp_lo {
+                        min_cp_range = min_cp_range
+                            .filter(dsl::checkpoint_sequence_number.eq(cp_lo as i64))
+                            .limit(1);
+                    } else {
+                        min_cp_range = min_cp_range
+                            .order_by(dsl::checkpoint_sequence_number.asc())
+                            .limit(1);
+                    };
+
+                    let max_cp_range = dsl::pruner_cp_watermark
+                        .select((
+                            dsl::checkpoint_sequence_number,
+                            dsl::min_tx_sequence_number,
+                            dsl::max_tx_sequence_number,
+                        ))
+                        .filter(dsl::checkpoint_sequence_number.eq(cp_hi as i64))
+                        .limit(1);
+
+                    min_cp_range.union_all(max_cp_range)
                 })
                 .await?;
 
-            // If there are not two distinct results, it means that the transaction bounds are
-            // empty (lo and hi are the same), or it means that the one or other of the checkpoints
-            // doesn't exist, so we can return early.
-            let &[lo, hi] = res.as_slice() else {
-                return Ok(None);
+            // Unless `cp_hi` is given by the client, we expect there to be a record returned for
+            // `cp_hi` corresponding to the latest `checkpoint_viewed_at`.
+            let Some(hi_record) = res
+                .iter()
+                .find(|&(checkpoint, _, _)| *checkpoint == cp_hi as i64)
+            else {
+                if cp_hi == checkpoint_viewed_at {
+                    return Err(diesel::result::Error::NotFound);
+                } else {
+                    return Ok(None);
+                }
             };
 
-            (lo as u64, hi as u64)
-        } else {
-            let res: Option<i64> = conn
-                .first(move || {
-                    dsl::checkpoints
-                        .select(dsl::network_total_transactions)
-                        .filter(dsl::sequence_number.eq(cp_hi as i64))
-                })
-                .await
-                .optional()?;
+            let lo_record = if let Some(cp_lo) = cp_lo {
+                let Some(lo_record) = res
+                    .iter()
+                    .find(|&(checkpoint, _, _)| *checkpoint == cp_lo as i64)
+                else {
+                    return Ok(None);
+                };
+                lo_record
+            } else {
+                // If `cp_lo` is not given by the client, we expect there to be a record returned
+                // for the smallest checkpoint from `pruner_cp_watermark`.
+                let Some(min_record) = res.iter().min_by_key(|(checkpoint, _, _)| *checkpoint)
+                else {
+                    return Err(diesel::result::Error::NotFound);
+                };
 
-            // If there is no result, it means that the checkpoint doesn't exist, so we can return
-            // early.
-            let Some(hi) = res else {
-                return Ok(None);
+                min_record
             };
 
-            (0, hi as u64)
+            (lo_record.1 as u64, hi_record.2 as u64)
         };
 
-        // If the cursors point outside checkpoint bounds, we can return early.
+        // This is done to make tx_hi an exclusive upper bound.
+        tx_hi = match tx_hi.checked_add(1) {
+            Some(new_x) => new_x,
+            None => return Ok(None),
+        };
+
+        // If the cursors point outside checkpoint bounds, we can return early. Increment `after` by
+        // one because it is an exclusive bound. If `after` + 1 == `tx_hi`, then there cannot be any
+        // txs between the cursor and the upper bound.
         if matches!(page.after(), Some(a) if tx_hi <= a.tx_sequence_number.saturating_add(1)) {
             return Ok(None);
         }
 
+        // There are no transactions between `tx_lo`
+        // If `before` cursor is equal to `tx_lo`, there cannot be any txs between
         if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
             return Ok(None);
         }
