@@ -321,11 +321,39 @@ impl IndexerReader {
             .map_err(Into::into)
     }
 
-    pub fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
-        let system_state: SuiSystemStateSummary =
-            sui_types::sui_system_state::get_sui_system_state(self)?
-                .into_sui_system_state_summary();
+    pub async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
+        let object_store = ConnectionAsObjectStore::from_pool(&self.pool)
+            .await
+            .map_err(|e| IndexerError::PgPoolConnectionError(e.to_string()))?;
+
+        let system_state = tokio::task::spawn_blocking(move || {
+            sui_types::sui_system_state::get_sui_system_state(&object_store)
+        })
+        .await
+        .unwrap()?
+        .into_sui_system_state_summary();
+
         Ok(system_state)
+    }
+
+    pub async fn get_validator_from_table(
+        &self,
+        table_id: ObjectID,
+        pool_id: sui_types::id::ID,
+    ) -> Result<
+        sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary,
+        IndexerError,
+    > {
+        let object_store = ConnectionAsObjectStore::from_pool(&self.pool)
+            .await
+            .map_err(|e| IndexerError::PgPoolConnectionError(e.to_string()))?;
+
+        let validator = tokio::task::spawn_blocking(move || {
+            sui_types::sui_system_state::get_validator_from_table(&object_store, table_id, &pool_id)
+        })
+        .await
+        .unwrap()?;
+        Ok(validator)
     }
 
     /// Retrieve the system state data for the given epoch. If no epoch is given,
@@ -1436,7 +1464,67 @@ impl IndexerReader {
     }
 }
 
-impl sui_types::storage::ObjectStore for IndexerReader {
+// NOTE: Do not make this public and easily accessible as we need to be careful that it is only
+// used in non-async contexts via the use of tokio::task::spawn_blocking in order to avoid blocking
+// the async runtime.
+//
+// Maybe we should look into introducing an async object store trait...
+struct ConnectionAsObjectStore {
+    inner: std::sync::Mutex<
+        diesel_async::async_connection_wrapper::AsyncConnectionWrapper<
+            crate::database::Connection<'static>,
+        >,
+    >,
+}
+
+impl ConnectionAsObjectStore {
+    async fn from_pool(
+        pool: &ConnectionPool,
+    ) -> Result<Self, diesel_async::pooled_connection::PoolError> {
+        let connection = std::sync::Mutex::new(pool.dedicated_connection().await?.into());
+
+        Ok(Self { inner: connection })
+    }
+
+    fn get_object_from_db(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<StoredObject>, IndexerError> {
+        use diesel::RunQueryDsl;
+
+        let mut guard = self.inner.lock().unwrap();
+        let connection: &mut diesel_async::async_connection_wrapper::AsyncConnectionWrapper<_> =
+            &mut guard;
+
+        let mut query = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+        if let Some(version) = version {
+            query = query.filter(objects::object_version.eq(version.value() as i64))
+        }
+
+        query
+            .first::<StoredObject>(connection)
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<Object>, IndexerError> {
+        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+            return Ok(None);
+        };
+
+        let object = stored_package.try_into()?;
+        Ok(Some(object))
+    }
+}
+
+impl sui_types::storage::ObjectStore for ConnectionAsObjectStore {
     fn get_object(
         &self,
         object_id: &ObjectID,

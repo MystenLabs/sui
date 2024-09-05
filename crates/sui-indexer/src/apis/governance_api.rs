@@ -43,9 +43,7 @@ impl GovernanceReadApi {
     }
 
     async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
-        self.inner
-            .spawn_blocking(|this| this.get_latest_sui_system_state())
-            .await
+        self.inner.get_latest_sui_system_state().await
     }
 
     async fn get_stakes_by_ids(
@@ -205,13 +203,7 @@ pub async fn exchange_rates(
         let inactive_pools_id = system_state_summary.inactive_pools_id;
         let validator = state
             .inner
-            .spawn_blocking(move |this| {
-                sui_types::sui_system_state::get_validator_from_table(
-                    &this,
-                    inactive_pools_id,
-                    &pool_id,
-                )
-            })
+            .get_validator_from_table(inactive_pools_id, pool_id)
             .await?;
         tables.push((
             validator.sui_address,
