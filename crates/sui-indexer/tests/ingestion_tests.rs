@@ -5,7 +5,6 @@
 mod ingestion_tests {
     use diesel::ExpressionMethods;
     use diesel::{QueryDsl, RunQueryDsl};
-    use move_core_types::language_storage::StructTag;
     use simulacrum::Simulacrum;
     use std::net::SocketAddr;
     use std::path::PathBuf;
@@ -14,18 +13,16 @@ mod ingestion_tests {
     use sui_indexer::db::get_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::models::{
-        events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
-    };
-    use sui_indexer::schema::{events, objects, transactions};
+    use sui_indexer::models::{objects::StoredObject, transactions::StoredTransaction};
+    use sui_indexer::schema::{objects, transactions};
     use sui_indexer::store::{indexer_store::IndexerStore, PgIndexerStore};
+    use sui_indexer::tempdb::get_available_port;
+    use sui_indexer::tempdb::TempDb;
     use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::gas_coin::GasCoin;
-    use sui_types::{
-        Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
-    };
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
     use tokio::task::JoinHandle;
 
@@ -40,9 +37,6 @@ mod ingestion_tests {
         }};
     }
 
-    const DEFAULT_SERVER_PORT: u16 = 3000;
-    const DEFAULT_DB_URL: &str = "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
-
     /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
     async fn set_up(
         sim: Arc<Simulacrum>,
@@ -51,8 +45,10 @@ mod ingestion_tests {
         JoinHandle<()>,
         PgIndexerStore,
         JoinHandle<Result<(), IndexerError>>,
+        TempDb,
     ) {
-        let server_url: SocketAddr = format!("127.0.0.1:{}", DEFAULT_SERVER_PORT)
+        let database = TempDb::new().unwrap();
+        let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
             .parse()
             .unwrap();
 
@@ -62,14 +58,14 @@ mod ingestion_tests {
                 .await;
         });
         // Starts indexer
-        let (pg_store, pg_handle) = start_test_indexer(
-            Some(DEFAULT_DB_URL.to_owned()),
+        let (pg_store, pg_handle, _) = start_test_indexer(
+            Some(database.database().url().as_str().to_owned()),
             format!("http://{}", server_url),
-            ReaderWriterConfig::writer_mode(None),
+            ReaderWriterConfig::writer_mode(None, None),
             data_ingestion_path,
         )
         .await;
-        (server_handle, pg_store, pg_handle)
+        (server_handle, pg_store, pg_handle, database)
     }
 
     /// Wait for the indexer to catch up to the given checkpoint sequence number.
@@ -85,7 +81,7 @@ mod ingestion_tests {
                     .unwrap();
                 cp_opt.is_none() || (cp_opt.unwrap() < checkpoint_sequence_number)
             } {
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         })
         .await
@@ -93,25 +89,11 @@ mod ingestion_tests {
         Ok(())
     }
 
-    /// Wait for the indexer to catch up to the given epoch id.
-    async fn wait_for_epoch(pg_store: &PgIndexerStore, epoch: u64) -> Result<(), IndexerError> {
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while {
-                let cp_opt = pg_store.get_latest_epoch_id().unwrap();
-                cp_opt.is_none() || (cp_opt.unwrap() < epoch)
-            } {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-        .await
-        .expect("Timeout waiting for indexer to catchup to epoch");
-        Ok(())
-    }
-
     #[tokio::test]
     pub async fn test_transaction_table() -> Result<(), IndexerError> {
+        let tempdir = tempdir().unwrap();
         let mut sim = Simulacrum::new();
-        let data_ingestion_path = tempdir().unwrap().into_path();
+        let data_ingestion_path = tempdir.path().to_path_buf();
         sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         // Execute a simple transaction.
@@ -123,7 +105,7 @@ mod ingestion_tests {
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
 
-        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
+        let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path).await;
 
         // Wait for the indexer to catch up to the checkpoint.
         wait_for_checkpoint(&pg_store, 1).await?;
@@ -154,49 +136,10 @@ mod ingestion_tests {
     }
 
     #[tokio::test]
-    pub async fn test_event_type() -> Result<(), IndexerError> {
-        let mut sim = Simulacrum::new();
-        let data_ingestion_path = tempdir().unwrap().into_path();
-        sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-        // Advance the epoch to generate some events.
-        sim.advance_epoch(false);
-
-        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
-
-        // Wait for the epoch to change so we can get some events.
-        wait_for_epoch(&pg_store, 1).await?;
-
-        // Read the event from the database directly.
-        let db_event: StoredEvent = read_only_blocking!(&pg_store.blocking_cp(), |conn| {
-            events::table
-                .filter(events::event_type_name.eq("SystemEpochInfoEvent"))
-                .first::<StoredEvent>(conn)
-        })
-        .context("Failed reading SystemEpochInfoEvent from PostgresDB")?;
-
-        let event_type_tag = StructTag {
-            address: SUI_SYSTEM_ADDRESS,
-            module: Identifier::new("sui_system_state_inner").unwrap(),
-            name: Identifier::new("SystemEpochInfoEvent").unwrap(),
-            type_params: vec![],
-        };
-
-        // Check that the different components of the event type were stored correctly.
-        assert_eq!(
-            db_event.event_type,
-            event_type_tag.to_canonical_string(true)
-        );
-        assert_eq!(db_event.event_type_package, SUI_SYSTEM_PACKAGE_ID.to_vec());
-        assert_eq!(db_event.event_type_module, "sui_system_state_inner");
-        assert_eq!(db_event.event_type_name, "SystemEpochInfoEvent");
-        Ok(())
-    }
-
-    #[tokio::test]
     pub async fn test_object_type() -> Result<(), IndexerError> {
+        let tempdir = tempdir().unwrap();
         let mut sim = Simulacrum::new();
-        let data_ingestion_path = tempdir().unwrap().into_path();
+        let data_ingestion_path = tempdir.path().to_path_buf();
         sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         // Execute a simple transaction.
@@ -208,7 +151,7 @@ mod ingestion_tests {
         // Create a checkpoint which should include the transaction we executed.
         let _ = sim.create_checkpoint();
 
-        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
+        let (_, pg_store, _, _database) = set_up(Arc::new(sim), data_ingestion_path).await;
 
         // Wait for the indexer to catch up to the checkpoint.
         wait_for_checkpoint(&pg_store, 1).await?;

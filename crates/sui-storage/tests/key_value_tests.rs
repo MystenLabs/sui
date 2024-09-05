@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ExecutionDigests, ObjectID, VersionNumber};
+use sui_types::base_types::{
+    random_object_ref, ExecutionDigests, ObjectID, SequenceNumber, VersionNumber,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -25,6 +27,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::transaction::Transaction;
 
+use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::*;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::object::Object;
@@ -436,7 +439,6 @@ mod simtests {
     use std::time::{Duration, Instant};
     use sui_macros::sim_test;
     use sui_simulator::configs::constant_latency_ms;
-    use sui_storage::http_key_value_store::*;
     use tracing::info;
 
     async fn svc(
@@ -528,8 +530,9 @@ mod simtests {
 
         let server_data = Arc::new(Mutex::new(data));
         test_server(server_data).await;
+        let metrics = KeyValueStoreMetrics::new_for_tests();
 
-        let store = HttpKVStore::new("http://10.10.10.10:8080").unwrap();
+        let store = HttpKVStore::new("http://10.10.10.10:8080", 1000, metrics.clone()).unwrap();
 
         // send one request to warm up the client (and open a connection)
         store.multi_get(&[*tx.digest()], &[], &[]).await.unwrap();
@@ -553,7 +556,87 @@ mod simtests {
             (vec![Some(tx), None], vec![Some(fx)], vec![Some(events)])
         );
 
+        // the tx was fetched twice, so there should be one cache hit
+        assert_eq!(
+            metrics
+                .key_value_store_num_fetches_success
+                .get_metric_with_label_values(&["http_cache", "url"])
+                .unwrap()
+                .get(),
+            1
+        );
+
         let result = store.multi_get(&[random_digest], &[], &[]).await.unwrap();
         assert_eq!(result, (vec![None], vec![], vec![]));
     }
+}
+
+#[test]
+fn test_key_to_path_and_back() {
+    let tx = TransactionDigest::random();
+    let key = Key::Tx(tx);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::Fx(TransactionDigest::random());
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let events = TransactionEventsDigest::random();
+    let key = Key::Events(events);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::CheckpointSummary(42);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::CheckpointContents(42);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let ckpt_contents = CheckpointContentsDigest::random();
+    let key = Key::CheckpointContentsByDigest(ckpt_contents);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let ckpt_summary = CheckpointDigest::random();
+    let key = Key::CheckpointSummaryByDigest(ckpt_summary);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::TxToCheckpoint(tx);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::ObjectKey(ObjectID::random(), SequenceNumber::from_u64(42));
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
 }

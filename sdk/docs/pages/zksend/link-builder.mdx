@@ -12,7 +12,7 @@ import { Callout } from 'nextra/components';
 
 ## Limitations
 
-- zkSend only supports Mainnet at this time.
+- zkSend only supports Mainnet and Testnet at this time.
 - Objects within links must be publicly transferrable.
 
 ## Create a link
@@ -27,6 +27,8 @@ constructor takes an object with the following options:
   - **`name`** - The name of your dApp. This will be shown to the user when claiming the link.
 - **`client`** (optional) - The `@mysten/sui` client used to fetch data to construct the link. If
   not provided, a default client will be used.
+- **`network`** (optional) - The Sui network that the link will be created for. Defaults to
+  `mainnet`.
 
 ```ts
 import { ZkSendLinkBuilder } from '@mysten/zksend';

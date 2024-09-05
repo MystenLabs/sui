@@ -83,7 +83,7 @@ pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusTransaction {
-    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
+    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and consensus.
     /// Use an byte array instead of u64 to ensure stable serialization.
     pub tracking_id: [u8; 8],
     pub kind: ConsensusTransactionKind,
@@ -136,11 +136,11 @@ impl Debug for ConsensusTransactionKey {
     }
 }
 
-/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct AuthorityCapabilitiesV1 {
-    /// Originating authority - must match narwhal transaction source.
+    /// Originating authority - must match consensus transaction source.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
     /// AuthorityCapabilities messages from the same authority is the most recent.
@@ -192,11 +192,11 @@ impl AuthorityCapabilitiesV1 {
     }
 }
 
-/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct AuthorityCapabilitiesV2 {
-    /// Originating authority - must match narwhal transaction source.
+    /// Originating authority - must match transaction source authority from consensus.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
     /// AuthorityCapabilities messages from the same authority is the most recent.
@@ -255,7 +255,7 @@ impl AuthorityCapabilitiesV2 {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
-    UserTransaction(Box<CertifiedTransaction>),
+    CertifiedTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
 
@@ -385,7 +385,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -442,7 +442,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -493,7 +493,7 @@ impl ConsensusTransaction {
 
     pub fn key(&self) -> ConsensusTransactionKey {
         match &self.kind {
-            ConsensusTransactionKind::UserTransaction(cert) => {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
                 ConsensusTransactionKey::Certificate(*cert.digest())
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
@@ -531,7 +531,7 @@ impl ConsensusTransaction {
     }
 
     pub fn is_user_certificate(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

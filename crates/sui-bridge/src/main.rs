@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use fastcrypto::traits::KeyPair;
 use mysten_metrics::start_prometheus_server;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -43,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();
-    let metadata = BridgeNodePublicMetadata::new(VERSION.into());
+
+    let metadata =
+        BridgeNodePublicMetadata::new(VERSION.into(), config.metrics_key_pair.public().clone());
+
     Ok(run_bridge_node(config, metadata, prometheus_registry)
         .await?
         .await?)

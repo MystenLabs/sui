@@ -63,4 +63,23 @@ module Completion::colon_colon {
     public fun attr_chain() {
         abort(SOME_CONST);
     }
+
+    public enum EnumWithMultiFieldVariant has drop {
+        MultiFieldVariant { name1: u64, name2: u64, name3: u64},
+    }
+
+    public struct MultiFieldStruct has drop {
+        field1: u64,
+        field2: u64,
+        field3: u64,
+    }
+
+    public fun multi_field_variant() {
+        EnumWithMultiFieldVariant::
+    }
+
+    public fun multi_field_struct() {
+        MultiField
+    }
+
 }

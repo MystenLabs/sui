@@ -110,6 +110,7 @@ export class SerialTransactionExecutor {
 			return {
 				digest: results.digest,
 				effects: toB64(effectsBytes),
+				data: results,
 			};
 		});
 	}

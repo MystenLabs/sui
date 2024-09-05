@@ -18,6 +18,7 @@ use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
 use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
+use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -81,6 +82,7 @@ pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     // Other
     deny_config: TransactionDenyConfig,
     data_ingestion_path: Option<PathBuf>,
+    verifier_signing_config: VerifierSigningConfig,
 }
 
 impl Simulacrum {
@@ -156,6 +158,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             checkpoint_builder,
             epoch_state,
             deny_config: TransactionDenyConfig::default(),
+            verifier_signing_config: VerifierSigningConfig::default(),
             data_ingestion_path: None,
         }
     }
@@ -178,9 +181,13 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let transaction = transaction
             .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
 
-        let (inner_temporary_store, _, effects, execution_error_opt) = self
-            .epoch_state
-            .execute_transaction(&self.store, &self.deny_config, &transaction)?;
+        let (inner_temporary_store, _, effects, execution_error_opt) =
+            self.epoch_state.execute_transaction(
+                &self.store,
+                &self.deny_config,
+                &self.verifier_signing_config,
+                &transaction,
+            )?;
 
         let InnerTemporaryStore {
             written, events, ..

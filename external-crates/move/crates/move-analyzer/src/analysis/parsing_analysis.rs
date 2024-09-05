@@ -3,8 +3,10 @@
 
 use crate::{
     symbols::{
-        add_member_use_def, ignored_function, CallInfo, CursorContext, CursorDefinition,
-        CursorPosition, DefMap, ModuleDefs, References, UseDef, UseDefMap,
+        add_member_use_def, ignored_function, parsed_address,
+        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key, CallInfo,
+        CursorContext, CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef,
+        UseDefMap,
     },
     utils::loc_start_to_lsp_position_opt,
 };
@@ -14,7 +16,6 @@ use lsp_types::Position;
 use std::collections::BTreeMap;
 
 use move_compiler::{
-    expansion::ast as E,
     parser::ast as P,
     shared::{files::MappedFiles, Identifier, Name, NamedAddressMap, NamedAddressMaps},
 };
@@ -801,48 +802,4 @@ fn parsing_mod_ident_to_map_key(
         mod_ident.module
     )
     .to_string()
-}
-
-/// Produces module ident string of the form pkg::module to be used as a map key.
-/// It's important that these are consistent between parsing AST and typed AST.
-fn parsing_mod_def_to_map_key(
-    pkg_addresses: &NamedAddressMap,
-    mod_def: &P::ModuleDefinition,
-) -> Option<String> {
-    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
-    // standard practice) and while Move allows other ways of defining modules (i.e., with address
-    // preceding a sequence of modules), this method is now deprecated.
-    //
-    // TODO: make this function simply return String when the other way of defining modules is
-    // removed
-    mod_def
-        .address
-        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
-}
-
-/// Produces module ident string of the form pkg::module to be used as a map key.
-/// It's important that these are consistent between parsing AST and typed AST.
-fn parsing_leading_and_mod_names_to_map_key(
-    pkg_addresses: &NamedAddressMap,
-    ln: P::LeadingNameAccess,
-    name: P::ModuleName,
-) -> String {
-    format!("{}::{}", parsed_address(ln, pkg_addresses), name).to_string()
-}
-
-/// Converts parsing AST's `LeadingNameAccess` to expansion AST's `Address` (similarly to
-/// expansion::translate::top_level_address but disregarding the name portion of `Address` as we
-/// only care about actual address here if it's available). We need this to be able to reliably
-/// compare parsing AST's module identifier with expansion/typing AST's module identifier, even in
-/// presence of module renaming (i.e., we cannot rely on module names if addresses are available).
-fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap) -> E::Address {
-    let sp!(loc, ln_) = ln;
-    match ln_ {
-        P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
-        P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
-        P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
-            Some(addr) => E::Address::anonymous(loc, addr),
-            None => E::Address::NamedUnassigned(name),
-        },
-    }
 }

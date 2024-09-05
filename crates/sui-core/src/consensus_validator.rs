@@ -57,7 +57,7 @@ impl SuiTxValidator {
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx {
-                ConsensusTransactionKind::UserTransaction(certificate) => {
+                ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     cert_batch.push(*certificate);
 
                     // if !certificate.contains_shared_object() {

@@ -253,6 +253,8 @@ impl CheckpointExecutor {
         let scheduling_timeout_config = get_scheduling_timeout();
 
         loop {
+            let schedule_scope = mysten_metrics::monitored_scope("ScheduleCheckpointExecution");
+
             // If we have executed the last checkpoint of the current epoch, stop.
             // Note: when we arrive here with highest_executed == the final checkpoint of the epoch,
             // we are in an edge case where highest_executed does not actually correspond to the watermark.
@@ -293,12 +295,15 @@ impl CheckpointExecutor {
             let panic_timeout = scheduling_timeout_config.panic_timeout;
             let warning_timeout = scheduling_timeout_config.warning_timeout;
 
+            drop(schedule_scope);
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, checkpoint_acc, tx_digests))) = pending.next() => {
+                    let _process_scope = mysten_metrics::monitored_scope("ProcessExecutedCheckpoint");
+
                     self.process_executed_checkpoint(&epoch_store, &checkpoint, checkpoint_acc, &tx_digests).await;
                     highest_executed = Some(checkpoint.clone());
 
@@ -327,7 +332,7 @@ impl CheckpointExecutor {
                             sequence_number = ?checkpoint.sequence_number,
                             "Received checkpoint summary from state sync"
                         );
-                        checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
+                        checkpoint.report_checkpoint_age(&self.metrics.checkpoint_contents_age, &self.metrics.checkpoint_contents_age_ms);
                     },
                     Err(RecvError::Lagged(num_skipped)) => {
                         debug!(
@@ -411,7 +416,10 @@ impl CheckpointExecutor {
         self.metrics
             .last_executed_checkpoint_timestamp_ms
             .set(checkpoint.timestamp_ms as i64);
-        checkpoint.report_checkpoint_age_ms(&self.metrics.last_executed_checkpoint_age_ms);
+        checkpoint.report_checkpoint_age(
+            &self.metrics.last_executed_checkpoint_age,
+            &self.metrics.last_executed_checkpoint_age_ms,
+        );
     }
 
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
@@ -741,7 +749,9 @@ async fn execute_checkpoint(
 
     let tx_count = execution_digests.len();
     debug!("Number of transactions in the checkpoint: {:?}", tx_count);
-    metrics.checkpoint_transaction_count.report(tx_count as u64);
+    metrics
+        .checkpoint_transaction_count
+        .observe(tx_count as f64);
 
     let checkpoint_acc = execute_transactions(
         execution_digests,
@@ -1244,8 +1254,8 @@ async fn execute_transactions(
 
     let prepare_elapsed = prepare_start.elapsed();
     metrics
-        .checkpoint_prepare_latency_us
-        .report(prepare_elapsed.as_micros() as u64);
+        .checkpoint_prepare_latency
+        .observe(prepare_elapsed.as_secs_f64());
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
         info!(
             "Checkpoint preparation for execution took {:?}",
@@ -1274,8 +1284,8 @@ async fn execute_transactions(
 
     let exec_elapsed = exec_start.elapsed();
     metrics
-        .checkpoint_exec_latency_us
-        .report(exec_elapsed.as_micros() as u64);
+        .checkpoint_exec_latency
+        .observe(exec_elapsed.as_secs_f64());
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
         info!("Checkpoint execution took {:?}", exec_elapsed);
     }

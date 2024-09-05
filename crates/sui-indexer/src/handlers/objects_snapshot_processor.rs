@@ -14,6 +14,7 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::SnapshotLagConfig;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::PgIndexerStore;
 use crate::types::IndexerResult;
@@ -23,9 +24,6 @@ use std::sync::{Arc, Mutex};
 use super::checkpoint_handler::CheckpointHandler;
 use super::tx_processor::IndexingPackageBuffer;
 use super::TransactionObjectChangesToCommit;
-
-const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
-const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
 
 pub struct ObjectsSnapshotProcessor {
     pub store: PgIndexerStore,
@@ -38,48 +36,6 @@ pub struct ObjectsSnapshotProcessor {
 pub struct CheckpointObjectChanges {
     pub checkpoint_sequence_number: u64,
     pub object_changes: TransactionObjectChangesToCommit,
-}
-
-#[derive(Clone)]
-pub struct SnapshotLagConfig {
-    pub snapshot_min_lag: usize,
-    pub snapshot_max_lag: usize,
-    pub sleep_duration: u64,
-}
-
-impl SnapshotLagConfig {
-    pub fn new(
-        min_lag: Option<usize>,
-        max_lag: Option<usize>,
-        sleep_duration: Option<u64>,
-    ) -> Self {
-        let default_config = Self::default();
-        Self {
-            snapshot_min_lag: min_lag.unwrap_or(default_config.snapshot_min_lag),
-            snapshot_max_lag: max_lag.unwrap_or(default_config.snapshot_max_lag),
-            sleep_duration: sleep_duration.unwrap_or(default_config.sleep_duration),
-        }
-    }
-}
-
-impl Default for SnapshotLagConfig {
-    fn default() -> Self {
-        let snapshot_min_lag = std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG);
-
-        let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG);
-
-        SnapshotLagConfig {
-            snapshot_min_lag,
-            snapshot_max_lag,
-            sleep_duration: 5,
-        }
-    }
 }
 
 #[async_trait]

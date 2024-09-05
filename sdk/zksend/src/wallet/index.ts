@@ -24,6 +24,7 @@ import type { Emitter } from 'mitt';
 import mitt from 'mitt';
 
 import { DEFAULT_STASHED_ORIGIN, StashedPopup } from './channel/index.js';
+import type { StashedSupportedNetwork } from './types.js';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
@@ -38,6 +39,7 @@ export class StashedWallet implements Wallet {
 	#accounts: ReadonlyWalletAccount[];
 	#origin: string;
 	#name: string;
+	#network: StashedSupportedNetwork;
 
 	get name() {
 		return STASHED_WALLET_NAME;
@@ -95,17 +97,20 @@ export class StashedWallet implements Wallet {
 
 	constructor({
 		name,
+		network,
 		address,
 		origin = DEFAULT_STASHED_ORIGIN,
 	}: {
+		name: string;
+		network: StashedSupportedNetwork;
 		origin?: string;
 		address?: string | null;
-		name: string;
 	}) {
 		this.#accounts = [];
 		this.#events = mitt();
 		this.#origin = origin;
 		this.#name = name;
+		this.#network = network;
 
 		if (address) {
 			this.#setAccount(address);
@@ -120,6 +125,7 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
+			network: this.#network,
 		});
 
 		const response = await popup.send({
@@ -138,6 +144,7 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
+			network: this.#network,
 		});
 
 		const tx = Transaction.from(await transaction.toJSON());
@@ -161,6 +168,7 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
+			network: this.#network,
 		});
 		const bytes = toB64(message);
 
@@ -212,7 +220,11 @@ export class StashedWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
+			network: this.#network,
+		});
 
 		const response = await popup.send({
 			type: 'connect',
@@ -237,9 +249,11 @@ export function registerStashedWallet(
 	name: string,
 	{
 		origin,
+		network = 'mainnet',
 	}: {
 		origin?: string;
-	},
+		network?: StashedSupportedNetwork;
+	} = {},
 ) {
 	const wallets = getWallets();
 
@@ -253,6 +267,7 @@ export function registerStashedWallet(
 
 	const wallet = new StashedWallet({
 		name,
+		network,
 		origin,
 		address: addressFromRedirect,
 	});

@@ -14,10 +14,11 @@ backoff.workspace = true
 bcs.workspace = true
 chrono.workspace = true
 serde_with.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["env"] }
 tap.workspace = true
 diesel = { workspace = true, features = ["postgres", "chrono", "r2d2", "serde_json"] }
-diesel-derive-enum = { workspace = true, features = ["postgres"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+bb8 = "0.8.5"
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
@@ -55,8 +56,6 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
-secrecy = "0.8.0"
-downcast = "0.11.0"
 
 [features]
 default = []

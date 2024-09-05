@@ -1,0 +1,96 @@
+{
+  "name": "move-trace-debug",
+  "displayName": "move-trace-debug",
+  "description": "An extension to visualize Move VM traces DAP-style",
+  "version": "0.0.1",
+  "preview": true,
+  "repository": {
+    "url": "https://github.com/MystenLabs/sui.git",
+    "type": "git"
+  },
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onDebugDynamicConfigurations:move-debug",
+    "onDebugResolve:move-debug"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "debuggers": [
+      {
+        "type": "move-debug",
+        "label": "Move Debug",
+        "program": "./out/server.js",
+        "runtime": "node",
+        "runtimeArgs": [
+          "--nolazy"
+        ],
+        "languages": [
+          "move"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "source",
+              "trace"
+            ],
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Absolute path to the Move source file whose traces are to be viewed.",
+                "default": "${file}"
+              },
+              "traceInfo": {
+                "type": "string",
+                "description": "Trace selected for viewing."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": true
+              },
+              "logLevel": {
+                "type": "string",
+                "description": "Logging lavel for the Debug Adapter Protocol.",
+                "enum": [
+                  "none",
+                  "log",
+                  "verbose"
+                ],
+                "default": "log"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/",
+    "vscode:prepackage": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test",
+    "prestart": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/"
+  },
+  "dependencies": {
+    "@vscode/debugadapter": "^1.56.0",
+    "@vscode/debugadapter-testsupport": "^1.56.0",
+    "@vscode/debugprotocol": "1.66.0",
+    "toml": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.92.0",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.11.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  }
+}

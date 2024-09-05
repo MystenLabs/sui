@@ -13,7 +13,7 @@ use serde_json as json;
 #[derive(Enum, Copy, Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "kebab-case")]
 #[graphql(name = "Feature")]
-pub(crate) enum FunctionalGroup {
+pub enum FunctionalGroup {
     /// Statistics about how the network was running (TPS, top packages, APY, etc)
     Analytics,
 
@@ -32,6 +32,9 @@ pub(crate) enum FunctionalGroup {
     /// Aspects that affect the running of the system that are managed by the
     /// validators either directly, or through system transactions.
     SystemState,
+
+    /// Named packages service (utilizing dotmove package registry).
+    MoveRegistry,
 }
 
 impl FunctionalGroup {
@@ -51,6 +54,7 @@ impl FunctionalGroup {
             G::NameService,
             G::Subscriptions,
             G::SystemState,
+            G::MoveRegistry,
         ];
         ALL
     }
@@ -96,6 +100,8 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Query", "networkMetrics"), G::Analytics),
             (("Query", "protocolConfig"), G::SystemState),
             (("Query", "resolveSuinsAddress"), G::NameService),
+            (("Query", "packageByName"), G::MoveRegistry),
+            (("Query", "typeByName"), G::MoveRegistry),
             (("Subscription", "events"), G::Subscriptions),
             (("Subscription", "transactions"), G::Subscriptions),
             (("SystemStateSummary", "safeMode"), G::SystemState),

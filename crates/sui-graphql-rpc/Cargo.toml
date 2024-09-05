@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "2024.7.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -40,7 +40,6 @@ prometheus.workspace = true
 rand.workspace = true # todo: cleanup test only deps
 regex.workspace = true
 reqwest.workspace = true
-serial_test.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
@@ -90,6 +89,7 @@ serde_json.workspace = true
 sui-framework.workspace = true
 tower.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-move-build.workspace = true
 
 [features]
 default = []

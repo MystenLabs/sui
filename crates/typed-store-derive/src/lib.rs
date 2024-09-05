@@ -312,6 +312,14 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 remove_deprecated_tables: bool,
             ) -> Self {
                 let path = &path;
+                let default_cf_opt = if let Some(opt) = global_db_options_override.as_ref() {
+                    typed_store::rocks::DBOptions {
+                        options: opt.clone(),
+                        rw_options: typed_store::rocks::default_db_options().rw_options,
+                    }
+                } else {
+                    typed_store::rocks::default_db_options()
+                };
                 let (db, rwopt_cfs) = {
                     let opt_cfs = match tables_db_options_override {
                         None => [
@@ -321,7 +329,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         ],
                         Some(o) => [
                             #(
-                                (stringify!(#cf_names).to_owned(), o.to_map().get(stringify!(#cf_names)).unwrap().clone()),
+                                (stringify!(#cf_names).to_owned(), o.to_map().get(stringify!(#cf_names)).unwrap_or(&default_cf_opt).clone()),
                             )*
                         ]
                     };

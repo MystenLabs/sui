@@ -8,7 +8,7 @@ use std::{
 };
 
 use clap::*;
-use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{ProtocolConfigAccessors, ProtocolConfigFeatureFlagsGetters};
@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 56;
+const MAX_PROTOCOL_VERSION: u64 = 58;
 
 // Record history of protocol version allocations here:
 //
@@ -169,6 +169,10 @@ const MAX_PROTOCOL_VERSION: u64 = 56;
 //             Enable soft bundle on mainnet.
 // Version 55: Enable enums on mainnet.
 //             Rethrow serialization type layout errors instead of converting them.
+// Version 56: Enable bridge on mainnet.
+//             Note: do not use version 56 for any new features.
+// Version 57: Reduce minimum number of random beacon shares.
+// Version 58: Optimize boolean binops
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2695,7 +2699,16 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.rethrow_serialization_type_layout_errors = true;
                 }
-                56 => {}
+                56 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
+                57 => {
+                    // Reduce minimum number of random beacon shares.
+                    cfg.random_beacon_reduction_lower_bound = Some(800);
+                }
+                58 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2714,11 +2727,15 @@ impl ProtocolConfig {
 
     // Extract the bytecode verifier config from this protocol config. `for_signing` indicates
     // whether this config is used for verification during signing or execution.
-    pub fn verifier_config(&self, for_signing: bool) -> VerifierConfig {
-        let (max_back_edges_per_function, max_back_edges_per_module) = if for_signing {
+    pub fn verifier_config(&self, signing_limits: Option<(usize, usize)>) -> VerifierConfig {
+        let (max_back_edges_per_function, max_back_edges_per_module) = if let Some((
+            max_back_edges_per_function,
+            max_back_edges_per_module,
+        )) = signing_limits
+        {
             (
-                Some(self.max_back_edges_per_function() as usize),
-                Some(self.max_back_edges_per_module() as usize),
+                Some(max_back_edges_per_function),
+                Some(max_back_edges_per_module),
             )
         } else {
             (None, None)
@@ -2746,16 +2763,6 @@ impl ProtocolConfig {
                 .reject_mutable_random_on_entry_functions(),
             bytecode_version: self.move_binary_format_version(),
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
-        }
-    }
-
-    /// MeterConfig for metering packages during signing. It is NOT stable between binaries and
-    /// cannot used during execution.
-    pub fn meter_config_for_signing(&self) -> MeterConfig {
-        MeterConfig {
-            max_per_fun_meter_units: Some(2_200_000),
-            max_per_mod_meter_units: Some(2_200_000),
-            max_per_pkg_meter_units: Some(2_200_000),
         }
     }
 

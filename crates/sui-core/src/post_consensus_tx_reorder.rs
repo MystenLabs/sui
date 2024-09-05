@@ -32,7 +32,7 @@ impl PostConsensusTxReorder {
                 match &txn.0.transaction {
                     SequencedConsensusTransactionKind::External(ConsensusTransaction {
                         tracking_id: _,
-                        kind: ConsensusTransactionKind::UserTransaction(cert),
+                        kind: ConsensusTransactionKind::CertifiedTransaction(cert),
                     }) => cert.gas_price(),
                     // Non-user transactions are considered to have gas price of MAX u64 and are
                     // put to the beginning.

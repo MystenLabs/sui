@@ -97,13 +97,10 @@ use move_compiler::{
     shared::{
         files::{FileId, MappedFiles},
         unique_map::UniqueMap,
-        Identifier, Name, NamedAddressMap,
+        Identifier, Name, NamedAddressMap, NamedAddressMaps,
     },
     typing::{
-        ast::{
-            self as T, Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_,
-            UnannotatedExp_,
-        },
+        ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
         visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
@@ -354,6 +351,27 @@ impl CallInfo {
     }
 }
 
+/// Map from struct name to field order information
+pub type StructFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, usize>>;
+/// Map from enum name to variant name to field order information
+pub type VariantFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, BTreeMap<Symbol, usize>>>;
+
+/// Information about field order in structs and enums
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+pub struct FieldOrderInfo {
+    structs: BTreeMap<String, StructFieldOrderInfo>,
+    variants: BTreeMap<String, VariantFieldOrderInfo>,
+}
+
+impl FieldOrderInfo {
+    pub fn new() -> Self {
+        Self {
+            structs: BTreeMap::new(),
+            variants: BTreeMap::new(),
+        }
+    }
+}
+
 /// Module-level definitions and other module-related info
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ModuleDefs {
@@ -537,8 +555,6 @@ pub struct Symbols {
     pub compiler_info: CompilerInfo,
     /// Cursor information gathered up during analysis
     pub cursor_context: Option<CursorContext>,
-    /// Typed Program
-    pub typed_ast: Option<T::Program>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -1754,10 +1770,15 @@ pub fn get_symbols(
         file_id_to_lines.insert(*file_id, lines);
     }
 
+    let mut fields_order_info = FieldOrderInfo::new();
+
+    pre_process_parsed_program(&parsed_program, &mut fields_order_info);
+
     let mut cursor_context = compute_cursor_context(&mapped_files, cursor_info);
 
     pre_process_typed_modules(
         &typed_program.modules,
+        &fields_order_info,
         &mapped_files,
         &file_id_to_lines,
         &mut mod_outer_defs,
@@ -1771,6 +1792,7 @@ pub fn get_symbols(
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &libs.typing.modules,
+            &fields_order_info,
             &mapped_files,
             &file_id_to_lines,
             &mut mod_outer_defs,
@@ -1862,7 +1884,6 @@ pub fn get_symbols(
         files: mapped_files,
         compiler_info,
         cursor_context,
-        typed_ast,
     };
 
     eprintln!("get_symbols load complete");
@@ -1881,8 +1902,71 @@ fn compute_cursor_context(
     Some(CursorContext::new(loc))
 }
 
+/// Pre-process parsed program to get initial info before AST traversals
+fn pre_process_parsed_program(prog: &P::Program, fields_order_info: &mut FieldOrderInfo) {
+    prog.source_definitions.iter().for_each(|pkg_def| {
+        pre_process_parsed_pkg(pkg_def, &prog.named_address_maps, fields_order_info);
+    });
+    prog.lib_definitions.iter().for_each(|pkg_def| {
+        pre_process_parsed_pkg(pkg_def, &prog.named_address_maps, fields_order_info);
+    });
+}
+
+/// Pre-process parsed package to get initial info before AST traversals
+fn pre_process_parsed_pkg(
+    pkg_def: &P::PackageDefinition,
+    named_address_maps: &NamedAddressMaps,
+    fields_order_info: &mut FieldOrderInfo,
+) {
+    if let P::Definition::Module(mod_def) = &pkg_def.def {
+        for member in &mod_def.members {
+            let pkg_addresses = named_address_maps.get(pkg_def.named_address_map);
+            let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses, mod_def) else {
+                continue;
+            };
+            if let P::ModuleMember::Struct(sdef) = member {
+                if let P::StructFields::Named(fields) = &sdef.fields {
+                    let indexed_fields = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (f, _))| (f.value(), i))
+                        .collect::<BTreeMap<_, _>>();
+                    fields_order_info
+                        .structs
+                        .entry(mod_ident_str.clone())
+                        .or_default()
+                        .entry(sdef.name.value())
+                        .or_default()
+                        .extend(indexed_fields);
+                }
+            }
+            if let P::ModuleMember::Enum(edef) = member {
+                for vdef in &edef.variants {
+                    if let P::VariantFields::Named(fields) = &vdef.fields {
+                        let indexed_fields = fields
+                            .iter()
+                            .enumerate()
+                            .map(|(i, (f, _))| (f.value(), i))
+                            .collect::<BTreeMap<_, _>>();
+                        fields_order_info
+                            .variants
+                            .entry(mod_ident_str.clone())
+                            .or_default()
+                            .entry(edef.name.value())
+                            .or_default()
+                            .entry(vdef.name.value())
+                            .or_default()
+                            .extend(indexed_fields);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn pre_process_typed_modules(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
+    fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
@@ -1904,7 +1988,9 @@ fn pre_process_typed_modules(
         let (defs, symbols) = get_mod_outer_defs(
             &pos,
             &sp(pos, *module_ident),
+            mod_ident_str.clone(),
             module_def,
+            fields_order_info,
             files,
             file_id_to_lines,
             references,
@@ -1993,6 +2079,50 @@ pub fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     }
 }
 
+/// Converts parsing AST's `LeadingNameAccess` to expansion AST's `Address` (similarly to
+/// expansion::translate::top_level_address but disregarding the name portion of `Address` as we
+/// only care about actual address here if it's available). We need this to be able to reliably
+/// compare parsing AST's module identifier with expansion/typing AST's module identifier, even in
+/// presence of module renaming (i.e., we cannot rely on module names if addresses are available).
+pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap) -> E::Address {
+    let sp!(loc, ln_) = ln;
+    match ln_ {
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
+        P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
+        P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
+            Some(addr) => E::Address::anonymous(loc, addr),
+            None => E::Address::NamedUnassigned(name),
+        },
+    }
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+pub fn parsing_leading_and_mod_names_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    ln: P::LeadingNameAccess,
+    name: P::ModuleName,
+) -> String {
+    format!("{}::{}", parsed_address(ln, pkg_addresses), name).to_string()
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+pub fn parsing_mod_def_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    mod_def: &P::ModuleDefinition,
+) -> Option<String> {
+    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
+    // standard practice) and while Move allows other ways of defining modules (i.e., with address
+    // preceding a sequence of modules), this method is now deprecated.
+    //
+    // TODO: make this function simply return String when the other way of defining modules is
+    // removed
+    mod_def
+        .address
+        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
+}
+
 /// Get empty symbols
 pub fn empty_symbols() -> Symbols {
     Symbols {
@@ -2003,7 +2133,6 @@ pub fn empty_symbols() -> Symbols {
         files: MappedFiles::empty(),
         compiler_info: CompilerInfo::new(),
         cursor_context: None,
-        typed_ast: None,
     }
 }
 
@@ -2011,6 +2140,7 @@ fn field_defs_and_types(
     datatype_name: Symbol,
     datatype_loc: Loc,
     fields: &E::Fields<Type>,
+    fields_order_opt: Option<&BTreeMap<Symbol, usize>>,
     mod_ident: &ModuleIdent,
     files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
@@ -2018,7 +2148,15 @@ fn field_defs_and_types(
 ) -> (Vec<FieldDef>, Vec<Type>) {
     let mut field_defs = vec![];
     let mut field_types = vec![];
-    for (floc, fname, (_, t)) in fields {
+    let mut ordered_fields = fields
+        .iter()
+        .map(|(floc, fname, (_, ftype))| (floc, fname, ftype))
+        .collect::<Vec<_>>();
+    // sort fields by order if available for correct auto-completion
+    if let Some(fields_order) = fields_order_opt {
+        ordered_fields.sort_by_key(|(_, fname, _)| fields_order.get(fname).copied());
+    }
+    for (floc, fname, ftype) in ordered_fields {
         field_defs.push(FieldDef {
             name: *fname,
             loc: floc,
@@ -2030,11 +2168,11 @@ fn field_defs_and_types(
                 mod_ident.value,
                 datatype_name,
                 *fname,
-                t.clone(),
+                ftype.clone(),
                 doc_string,
             ),
         );
-        field_types.push(t.clone());
+        field_types.push(ftype.clone());
     }
     (field_defs, field_types)
 }
@@ -2067,7 +2205,9 @@ pub fn ignored_function(name: Symbol) -> bool {
 fn get_mod_outer_defs(
     loc: &Loc,
     mod_ident: &ModuleIdent,
+    mod_ident_str: String,
     mod_def: &ModuleDefinition,
+    fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
     references: &mut References,
@@ -2087,10 +2227,15 @@ fn get_mod_outer_defs(
         let mut field_types = vec![];
         if let StructFields::Defined(pos_fields, fields) = &def.fields {
             positional = *pos_fields;
+            let fields_order_opt = fields_order_info
+                .structs
+                .get(&mod_ident_str)
+                .and_then(|s| s.get(name));
             (field_defs, field_types) = field_defs_and_types(
                 *name,
                 name_loc,
                 fields,
+                fields_order_opt,
                 mod_ident,
                 files,
                 file_id_to_lines,
@@ -2142,10 +2287,16 @@ fn get_mod_outer_defs(
         for (vname_loc, vname, vdef) in &def.variants {
             let (field_defs, field_types, positional) = match &vdef.fields {
                 VariantFields::Defined(pos_fields, fields) => {
+                    let fields_order_opt = fields_order_info
+                        .variants
+                        .get(&mod_ident_str)
+                        .and_then(|v| v.get(name))
+                        .and_then(|v| v.get(vname));
                     let (defs, types) = field_defs_and_types(
                         *name,
                         name_loc,
                         fields,
+                        fields_order_opt,
                         mod_ident,
                         files,
                         file_id_to_lines,

@@ -716,13 +716,15 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_emergency_op() {
         telemetry_subscribers::init_for_testing();
+        let num_valdiator = 2;
         let mut bridge_keys = vec![];
-        for _ in 0..=3 {
+        for _ in 0..num_valdiator {
             let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
             bridge_keys.push(kp);
         }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .with_num_validators(num_valdiator)
             .build_with_bridge(bridge_keys, true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)

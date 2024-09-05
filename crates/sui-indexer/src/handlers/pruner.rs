@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
@@ -53,10 +54,20 @@ impl Pruner {
                 (min_epoch, max_epoch) = self.store.get_available_epoch_range().await?;
             }
 
-            let table_partitions = self.partition_manager.get_table_partitions()?;
-            let table_names = table_partitions.keys().cloned().collect::<Vec<_>>();
-            for (table_name, (min_partition, max_partition)) in table_partitions {
-                if max_epoch != max_partition {
+            // Not all partitioned tables are epoch-partitioned, so we need to filter them out.
+            let table_partitions: HashMap<_, _> = self
+                .partition_manager
+                .get_table_partitions()?
+                .into_iter()
+                .filter(|(table_name, _)| {
+                    self.partition_manager
+                        .get_strategy(table_name)
+                        .is_epoch_partitioned()
+                })
+                .collect();
+
+            for (table_name, (min_partition, max_partition)) in &table_partitions {
+                if max_epoch != *max_partition {
                     error!(
                         "Epochs are out of sync for table {}: max_epoch={}, max_partition={}",
                         table_name, max_epoch, max_partition
@@ -64,7 +75,7 @@ impl Pruner {
                 }
                 // drop partitions if pruning is enabled afterwards, where all epochs before min_epoch
                 // would have been pruned already if the pruner was running.
-                for epoch in min_partition..min_epoch {
+                for epoch in *min_partition..min_epoch {
                     self.partition_manager
                         .drop_table_partition(table_name.clone(), epoch)?;
                     info!(
@@ -80,7 +91,7 @@ impl Pruner {
                     return Ok(());
                 }
                 info!("Pruning epoch {}", epoch);
-                for table_name in table_names.clone() {
+                for table_name in table_partitions.keys() {
                     self.partition_manager
                         .drop_table_partition(table_name.clone(), epoch)?;
                     info!("Dropped table partition {} epoch {}", table_name, epoch);
