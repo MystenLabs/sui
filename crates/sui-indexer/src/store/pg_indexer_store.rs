@@ -296,17 +296,22 @@ impl PgIndexerStore {
         .context("Failed reading transaction range from PostgresDB")
     }
 
-    fn get_latest_object_snapshot_checkpoint_sequence_number(
+    async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            objects_snapshot::dsl::objects_snapshot
-                .select(max(objects_snapshot::checkpoint_sequence_number))
-                .first::<Option<i64>>(conn)
-                .map(|v| v.map(|v| v as u64))
-        })
-        .context("Failed reading latest object snapshot checkpoint sequence number from PostgresDB")
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        objects_snapshot::table
+            .select(max(objects_snapshot::checkpoint_sequence_number))
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|v| v.map(|v| v as u64))
+            .context(
+                "Failed reading latest object snapshot checkpoint sequence number from PostgresDB",
+            )
     }
 
     fn persist_display_updates(
@@ -1667,10 +1672,8 @@ impl IndexerStore for PgIndexerStore {
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
         &self,
     ) -> Result<Option<u64>, IndexerError> {
-        self.execute_in_blocking_worker(|this| {
-            this.get_latest_object_snapshot_checkpoint_sequence_number()
-        })
-        .await
+        self.get_latest_object_snapshot_checkpoint_sequence_number()
+            .await
     }
 
     async fn persist_objects(
