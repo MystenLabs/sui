@@ -629,25 +629,20 @@ impl IndexerReader {
         })
     }
 
-    pub async fn multi_get_objects_in_blocking_task(
+    pub async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| this.multi_get_objects_impl(object_ids))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn multi_get_objects_impl(
-        &self,
-        object_ids: Vec<ObjectID>,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        use diesel::RunQueryDsl;
+        let mut connection = self.pool.get().await?;
         let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
-        run_query!(&self.blocking_pool, |conn| {
-            objects::dsl::objects
-                .filter(objects::object_id.eq_any(object_ids))
-                .load::<StoredObject>(conn)
-        })
+
+        objects::table
+            .filter(objects::object_id.eq_any(object_ids))
+            .load::<StoredObject>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
     async fn query_transaction_blocks_by_checkpoint(
