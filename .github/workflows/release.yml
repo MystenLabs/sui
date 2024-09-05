@@ -1,4 +1,5 @@
 name: Attach Sui binaries to a release
+run-name: Attach Sui binaries to a ${{ inputs.sui_tag }} release
 
 on:
   release:
@@ -145,8 +146,7 @@ jobs:
           mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
 
           # clean and build release binaries
-          cargo clean
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo clean && cargo build --release
 
       - name: Cargo build sui in debug mode (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-ghcloud' && env.s3_archive_exist == '' }}
