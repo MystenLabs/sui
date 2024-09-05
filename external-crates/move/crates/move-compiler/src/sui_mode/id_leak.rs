@@ -7,6 +7,7 @@ use move_symbol_pool::Symbol;
 use crate::{
     cfgir::{
         absint::JoinResult,
+        cfg::ImmForwardCFG,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
@@ -94,6 +95,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
     fn new<'a>(
         env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        _cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let module = &context.module;

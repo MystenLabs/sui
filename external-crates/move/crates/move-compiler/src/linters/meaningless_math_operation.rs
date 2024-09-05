@@ -38,7 +38,7 @@ impl CFGIRVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut H::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &H::Exp) -> bool {
         let H::UnannotatedExp_::BinopExp(lhs, op, rhs) = &exp.exp.value else {
             return false;
         };

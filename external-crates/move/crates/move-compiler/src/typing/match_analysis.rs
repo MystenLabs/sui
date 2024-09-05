@@ -17,7 +17,7 @@ use crate::{
     typing::{
         ast as T,
         core::{error_format, Context, Subst},
-        visitor::TypingVisitorContext,
+        visitor::TypingMutVisitorContext,
     },
 };
 use move_ir_types::location::*;
@@ -42,7 +42,7 @@ struct MatchCompiler<'ctx, 'env> {
     context: &'ctx mut Context<'env>,
 }
 
-impl TypingVisitorContext for MatchCompiler<'_, '_> {
+impl TypingMutVisitorContext for MatchCompiler<'_, '_> {
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         let eloc = exp.exp.loc;

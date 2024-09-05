@@ -378,6 +378,22 @@ pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
     MatchPattern { ty, pat }
 }
 
+impl ModuleCall {
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        function: impl AsRef<str>,
+    ) -> bool {
+        let Self {
+            module: sp!(_, mident),
+            name: f,
+            ..
+        } = self;
+        mident.is(address, module) && f == function.as_ref()
+    }
+}
+
 //**************************************************************************************************
 // Display
 //**************************************************************************************************
