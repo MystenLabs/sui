@@ -650,7 +650,7 @@ impl IndexerReader {
         })
     }
 
-    async fn query_transaction_blocks_by_checkpoint_impl(
+    async fn query_transaction_blocks_by_checkpoint(
         &self,
         checkpoint_seq: u64,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -658,33 +658,36 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        use diesel::RunQueryDsl;
-        let mut query = transactions::dsl::transactions
-            .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = transactions::table
+            .filter(transactions::checkpoint_sequence_number.eq(checkpoint_seq as i64))
             .into_boxed();
 
         // Translate transaction digest cursor to tx sequence number
         if let Some(cursor_tx_seq) = cursor_tx_seq {
             if is_descending {
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(cursor_tx_seq));
+                query = query.filter(transactions::tx_sequence_number.lt(cursor_tx_seq));
             } else {
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(cursor_tx_seq));
+                query = query.filter(transactions::tx_sequence_number.gt(cursor_tx_seq));
             }
         }
         if is_descending {
-            query = query.order(transactions::dsl::tx_sequence_number.desc());
+            query = query.order(transactions::tx_sequence_number.desc());
         } else {
-            query = query.order(transactions::dsl::tx_sequence_number.asc());
+            query = query.order(transactions::tx_sequence_number.asc());
         }
-        let pool = self.get_pool();
-        let stored_txes = run_query_async!(&pool, move |conn| query
+        let stored_txes = query
             .limit(limit as i64)
-            .load::<StoredTransaction>(conn))?;
+            .load::<StoredTransaction>(&mut connection)
+            .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
     }
 
-    pub async fn query_transaction_blocks_in_blocking_task(
+    pub async fn query_transaction_blocks(
         &self,
         filter: Option<TransactionFilter>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -692,27 +695,16 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        self.query_transaction_blocks_impl(filter, options, cursor, limit, is_descending)
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    async fn query_transaction_blocks_impl(
-        &self,
-        filter: Option<TransactionFilter>,
-        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
-        cursor: Option<TransactionDigest>,
-        limit: usize,
-        is_descending: bool,
-    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        use diesel::RunQueryDsl;
+        let mut connection = self.pool.get().await?;
+
         let cursor_tx_seq = if let Some(cursor) = cursor {
-            let pool = self.get_pool();
-            let tx_seq = run_query_async!(&pool, move |conn| {
-                transactions::dsl::transactions
-                    .select(transactions::tx_sequence_number)
-                    .filter(transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()))
-                    .first::<i64>(conn)
-            })?;
+            let tx_seq = transactions::table
+                .select(transactions::tx_sequence_number)
+                .filter(transactions::transaction_digest.eq(cursor.into_inner().to_vec()))
+                .first::<i64>(&mut connection)
+                .await?;
             Some(tx_seq)
         } else {
             None
@@ -731,7 +723,7 @@ impl IndexerReader {
             // Processed above
             Some(TransactionFilter::Checkpoint(seq)) => {
                 return self
-                    .query_transaction_blocks_by_checkpoint_impl(
+                    .query_transaction_blocks_by_checkpoint(
                         seq,
                         options,
                         cursor_tx_seq,
@@ -891,13 +883,12 @@ impl IndexerReader {
         );
 
         tracing::debug!("query transaction blocks: {}", query);
-        let pool = self.get_pool();
-        let tx_sequence_numbers = run_query_async!(&pool, move |conn| {
-            diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn)
-        })?
-        .into_iter()
-        .map(|tsn| tsn.tx_sequence_number)
-        .collect::<Vec<i64>>();
+        let tx_sequence_numbers = diesel::sql_query(query.clone())
+            .load::<TxSequenceNumber>(&mut connection)
+            .await?
+            .into_iter()
+            .map(|tsn| tsn.tx_sequence_number)
+            .collect::<Vec<i64>>();
         self.multi_get_transaction_block_response_by_sequence_numbers(
             tx_sequence_numbers,
             options,

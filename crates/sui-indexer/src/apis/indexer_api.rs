@@ -161,7 +161,7 @@ impl IndexerApiServer for IndexerApi {
         }
         let mut results = self
             .inner
-            .query_transaction_blocks_in_blocking_task(
+            .query_transaction_blocks(
                 query.filter,
                 query.options.unwrap_or_default(),
                 cursor,
