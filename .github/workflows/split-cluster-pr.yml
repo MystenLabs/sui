@@ -1,0 +1,29 @@
+name: Split Cluster Check
+on: 
+  pull_request:
+jobs:
+  validate-mainnet:
+    runs-on: ubuntu-ghcloud
+    steps:
+      - name: checkout code repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          fetch-depth: 0
+      - name: Run split cluster check script
+        id: mn-split-cluster-check
+        run: | 
+            SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet \
+            scripts/compatibility/split-cluster-check.sh origin/mainnet ${{ github.sha }}
+
+  validate-testnet:
+    runs-on: ubuntu-ghcloud
+    steps:
+      - name: checkout code repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          fetch-depth: 0
+      - name: Run split cluster check script
+        id: tn-split-cluster-check
+        run: | 
+            SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=testnet \
+            scripts/compatibility/split-cluster-check.sh origin/testnet ${{ github.sha }}
