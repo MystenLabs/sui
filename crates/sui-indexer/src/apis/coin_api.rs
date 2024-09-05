@@ -104,7 +104,7 @@ impl CoinReadApiServer for CoinReadApi {
 
         let mut results = self
             .inner
-            .get_coin_balances_in_blocking_task(owner, Some(coin_type.clone()))
+            .get_coin_balances(owner, Some(coin_type.clone()))
             .await?;
         if results.is_empty() {
             return Ok(Balance::zero(coin_type));
@@ -114,7 +114,7 @@ impl CoinReadApiServer for CoinReadApi {
 
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         self.inner
-            .get_coin_balances_in_blocking_task(owner, None)
+            .get_coin_balances(owner, None)
             .await
             .map_err(Into::into)
     }
