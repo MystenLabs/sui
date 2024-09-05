@@ -8,6 +8,32 @@ This crate builds a WASM binary for the `move-language/move-binary-format` allow
 serialization and deserialization in various environments. The main target for this package is
 "web".
 
+## Build locally
+
+To build the binary, you need to have Rust installed and then the `wasm-pack`. The installation script [can be found here](https://rustwasm.github.io/wasm-pack/).
+
+Building for test (nodejs) environment - required for tests.
+```
+pnpm build:dev
+```
+
+Building for web environment.
+```
+pnpm build:release
+```
+
+## Running tests
+
+Local tests can only be run on the `dev` build. To run tests, follow these steps:
+
+```
+pnpm build:dev
+pnpm test
+```
+
+## Build Artifacts
+Once the build is complete, you can find the build artifacts in the `pkg` subdirectory, including the wasm file
+
 ## Applications
 
 This package is a perfect fit for the following applications:
