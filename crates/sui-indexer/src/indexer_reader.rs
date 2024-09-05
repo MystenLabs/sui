@@ -1005,36 +1005,34 @@ impl IndexerReader {
         ))
     }
 
-    pub async fn query_events_in_blocking_task(
+    pub async fn query_events(
         &self,
         filter: EventFilter,
         cursor: Option<EventID>,
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
-        use diesel::RunQueryDsl;
-        let pool = self.get_pool();
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let (tx_seq, event_seq) = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
             } = cursor;
-            let tx_seq = run_query_async!(&pool, move |conn| {
-                transactions::dsl::transactions
-                    .select(transactions::tx_sequence_number)
-                    .filter(
-                        transactions::dsl::transaction_digest.eq(tx_digest.into_inner().to_vec()),
-                    )
-                    .first::<i64>(conn)
-            })?;
+            let tx_seq = transactions::table
+                .select(transactions::tx_sequence_number)
+                .filter(transactions::transaction_digest.eq(tx_digest.into_inner().to_vec()))
+                .first::<i64>(&mut connection)
+                .await?;
             (tx_seq, event_seq)
         } else if descending_order {
-            let max_tx_seq: i64 = run_query_async!(&pool, move |conn| {
-                events::dsl::events
-                    .select(events::tx_sequence_number)
-                    .order(events::dsl::tx_sequence_number.desc())
-                    .first::<i64>(conn)
-            })?;
+            let max_tx_seq = events::table
+                .select(events::tx_sequence_number)
+                .order(events::tx_sequence_number.desc())
+                .first::<i64>(&mut connection)
+                .await?;
             (max_tx_seq + 1, 0)
         } else {
             (-1, 0)
@@ -1131,9 +1129,9 @@ impl IndexerReader {
             )
         };
         tracing::debug!("query events: {}", query);
-        let pool = self.get_pool();
-        let stored_events = run_query_async!(&pool, move |conn| diesel::sql_query(query)
-            .load::<StoredEvent>(conn))?;
+        let stored_events = diesel::sql_query(query)
+            .load::<StoredEvent>(&mut connection)
+            .await?;
 
         let mut sui_event_futures = vec![];
         for stored_event in stored_events {
