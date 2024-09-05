@@ -11,6 +11,7 @@ pub struct IndexerConfig {
     #[serde(default = "default_db_url")]
     pub db_url: String,
     pub checkpoints_path: String,
+    pub sui_rpc_url: String,
     pub deepbook_package_id: String,
     pub deepbook_genesis_checkpoint: u64,
     pub concurrency: u64,

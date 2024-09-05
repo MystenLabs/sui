@@ -169,7 +169,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         Ok(())
     }
 
-    async fn tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -179,6 +179,22 @@ impl IndexerProgressStore for PgDeepbookPersistent {
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)?;
         Ok(cp.into_iter().map(|d| d.into()).collect())
+    }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        let mut conn = self.pool.get()?;
+        let cp: Option<i64> = dsl::progress_store
+            .select(columns::target_checkpoint)
+            // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
+            .filter(columns::task_name.like(format!("{prefix} - %")))
+            .filter(columns::target_checkpoint.ne(i64::MAX))
+            .order_by(columns::target_checkpoint.desc())
+            .first::<i64>(&mut conn)
+            .optional()?;
+        Ok(cp.map(|c| c as u64))
     }
 
     async fn register_task(
