@@ -4498,6 +4498,9 @@ get_module
 into_string
 	public fun
 	0x1::type_name
+bitwise_not
+	public fun
+	0x1::u128
 max
 	public fun
 	0x1::u128
@@ -4516,9 +4519,24 @@ pow
 sqrt
 	public fun
 	0x1::u128
+try_as_u8
+	public fun
+	0x1::u128
+try_as_u16
+	public fun
+	0x1::u128
+try_as_u32
+	public fun
+	0x1::u128
+try_as_u64
+	public fun
+	0x1::u128
 to_string
 	public fun
 	0x1::u128
+bitwise_not
+	public fun
+	0x1::u16
 max
 	public fun
 	0x1::u16
@@ -4537,9 +4555,15 @@ pow
 sqrt
 	public fun
 	0x1::u16
+try_as_u8
+	public fun
+	0x1::u16
 to_string
 	public fun
 	0x1::u16
+bitwise_not
+	public fun
+	0x1::u256
 max
 	public fun
 	0x1::u256
@@ -4555,9 +4579,27 @@ divide_and_round_up
 pow
 	public fun
 	0x1::u256
+try_as_u8
+	public fun
+	0x1::u256
+try_as_u16
+	public fun
+	0x1::u256
+try_as_u32
+	public fun
+	0x1::u256
+try_as_u64
+	public fun
+	0x1::u256
+try_as_u128
+	public fun
+	0x1::u256
 to_string
 	public fun
 	0x1::u256
+bitwise_not
+	public fun
+	0x1::u32
 max
 	public fun
 	0x1::u32
@@ -4576,9 +4618,18 @@ pow
 sqrt
 	public fun
 	0x1::u32
+try_as_u8
+	public fun
+	0x1::u32
+try_as_u16
+	public fun
+	0x1::u32
 to_string
 	public fun
 	0x1::u32
+bitwise_not
+	public fun
+	0x1::u64
 max
 	public fun
 	0x1::u64
@@ -4597,9 +4648,21 @@ pow
 sqrt
 	public fun
 	0x1::u64
+try_as_u8
+	public fun
+	0x1::u64
+try_as_u16
+	public fun
+	0x1::u64
+try_as_u32
+	public fun
+	0x1::u64
 to_string
 	public fun
 	0x1::u64
+bitwise_not
+	public fun
+	0x1::u8
 max
 	public fun
 	0x1::u8
