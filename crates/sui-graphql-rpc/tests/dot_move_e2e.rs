@@ -160,7 +160,6 @@ mod tests {
         test_results(internal_resolution, &v1, &v2, &v3, "internal resolution");
         test_results(external_resolution, &v1, &v2, &v3, "external resolution");
 
-        network_cluster.cleanup_resources().await;
         eprintln!("Tests have finished successfully now!");
     }
 
