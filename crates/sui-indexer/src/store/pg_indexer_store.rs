@@ -183,15 +183,18 @@ impl PgIndexerStore {
         Ok((start, end))
     }
 
-    pub fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            chain_identifier::dsl::chain_identifier
-                .select(chain_identifier::checkpoint_digest)
-                .first::<Vec<u8>>(conn)
-                .optional()
-        })
-        .context("Failed reading chain id from PostgresDB")
+    async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        chain_identifier::table
+            .select(chain_identifier::checkpoint_digest)
+            .first::<Vec<u8>>(&mut connection)
+            .await
+            .optional()
+            .map_err(Into::into)
+            .context("Failed reading chain id from PostgresDB")
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
@@ -1654,8 +1657,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn get_chain_identifier(&self) -> Result<Option<Vec<u8>>, IndexerError> {
-        self.execute_in_blocking_worker(|this| this.get_chain_identifier())
-            .await
+        self.get_chain_identifier().await
     }
 
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
