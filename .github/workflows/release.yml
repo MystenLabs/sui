@@ -124,7 +124,7 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (Mac arm64)
+      - name: Install postgres (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         shell: bash
         env:
@@ -135,16 +135,20 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Removed unused apps (Mac arm64)
+      - name: Removed unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         shell: bash
         run: |
+          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
           df -hI /dev/disk3s1s1
           sudo rm -rf /Applications/Xcode_14.3.1.app
           sudo rm -rf /Applications/Xcode_15.0.1.app
           sudo rm -rf /Applications/Xcode_15.1.app
           sudo rm -rf /Applications/Xcode_15.2.app
           sudo rm -rf /Applications/Xcode_15.3.app
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -hI /dev/disk3s1s1
 
       - name: Cargo build for ${{ matrix.os }} platform
