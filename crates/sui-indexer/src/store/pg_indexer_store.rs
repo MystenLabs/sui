@@ -284,22 +284,25 @@ impl PgIndexerStore {
             .context("Failed reading checkpoint range from PostgresDB")
     }
 
-    fn get_transaction_range_for_checkpoint(
+    async fn get_transaction_range_for_checkpoint(
         &self,
         checkpoint: u64,
     ) -> Result<(u64, u64), IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            pruner_cp_watermark::dsl::pruner_cp_watermark
-                .select((
-                    pruner_cp_watermark::min_tx_sequence_number,
-                    pruner_cp_watermark::max_tx_sequence_number,
-                ))
-                .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint as i64))
-                .first::<(i64, i64)>(conn)
-                .map(|(min, max)| (min as u64, max as u64))
-        })
-        .context("Failed reading transaction range from PostgresDB")
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        pruner_cp_watermark::table
+            .select((
+                pruner_cp_watermark::min_tx_sequence_number,
+                pruner_cp_watermark::max_tx_sequence_number,
+            ))
+            .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint as i64))
+            .first::<(i64, i64)>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .map(|(min, max)| (min as u64, max as u64))
+            .context("Failed reading transaction range from PostgresDB")
     }
 
     async fn get_latest_object_snapshot_checkpoint_sequence_number(
@@ -2160,7 +2163,7 @@ impl IndexerStore for PgIndexerStore {
                     tracing::error!("Failed to prune checkpoint {}: {}", cp, e);
                 });
 
-            let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp)?;
+            let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.execute_in_blocking_worker(move |this| {
                 this.prune_tx_indices_table(min_tx, max_tx)
             })
