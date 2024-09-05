@@ -56,8 +56,6 @@ move-vm-profiler.workspace = true
 num-traits = "0.2.18"
 num-bigint = { version = "0.4", default-features = false, features = ["rand"] }
 
-narwhal-config.workspace = true
-narwhal-crypto.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 mysten-network.workspace = true

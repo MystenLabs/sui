@@ -1276,6 +1276,8 @@ input EventFilter {
 	PTB and emits an event.
 	
 	Modules can be filtered by their package, or package::module.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	emittingModule: String
 	"""
@@ -1351,6 +1353,10 @@ enum Feature {
 	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
+	"""
+	Named packages service (utilizing dotmove package registry).
+	"""
+	MOVE_REGISTRY
 }
 
 
@@ -3316,7 +3322,9 @@ type Query {
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
-	The events that exist in the network.
+	Query events that are emitted in the network.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
 	"""
@@ -3346,6 +3354,14 @@ type Query {
 	Resolves a SuiNS `domain` name to an address, if it has been bound.
 	"""
 	resolveSuinsAddress(domain: String!): Address
+	"""
+	Fetch a package by its name (using dot move service)
+	"""
+	packageByName(name: String!): MovePackage
+	"""
+	Fetch a type that includes dot move service names in it.
+	"""
+	typeByName(name: String!): MoveType!
 	"""
 	The coin metadata associated with the given coin type.
 	"""
@@ -3458,10 +3474,6 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
-	List the available versions for this GraphQL service.
-	"""
-	availableVersions: [String!]!
-	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3511,7 +3523,18 @@ type ServiceConfig {
 	"""
 	requestTimeoutMs: Int!
 	"""
-	Maximum length of a query payload string.
+	The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+	`executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+	
+	It is the value of the maximum transaction bytes (including the signatures) allowed by the
+	protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+	"""
+	maxTransactionPayloadSize: Int!
+	"""
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+	the read part of the query.
+	In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+	included in this limit.
 	"""
 	maxQueryPayloadSize: Int!
 	"""

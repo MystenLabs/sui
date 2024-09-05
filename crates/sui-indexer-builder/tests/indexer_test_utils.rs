@@ -19,6 +19,8 @@ use sui_indexer_builder::Task;
 
 pub struct TestDatasource<T> {
     pub data: Vec<T>,
+    pub live_task_starting_checkpoint: u64,
+    pub genesis_checkpoint: u64,
 }
 
 #[async_trait]
@@ -45,6 +47,14 @@ where
             Ok(())
         }))
     }
+
+    async fn get_live_task_starting_checkpoint(&self) -> Result<u64, Error> {
+        Ok(self.live_task_starting_checkpoint)
+    }
+
+    fn get_genesis_height(&self) -> u64 {
+        self.genesis_checkpoint
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -59,6 +69,20 @@ impl<T> InMemoryPersistent<T> {
             progress_store: Default::default(),
             data: Arc::new(Mutex::new(vec![])),
         }
+    }
+
+    #[cfg(any(feature = "test-utils", test))]
+    pub async fn get_all_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
+        let mut tasks = self
+            .progress_store
+            .lock()
+            .await
+            .values()
+            .filter(|task| task.task_name.starts_with(task_prefix))
+            .cloned()
+            .collect::<Vec<_>>();
+        tasks.sort_by(|t1, t2| t2.checkpoint.cmp(&t1.checkpoint));
+        Ok(tasks)
     }
 }
 
@@ -88,17 +112,33 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
         Ok(())
     }
 
-    async fn tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
+    async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
         let mut tasks = self
             .progress_store
             .lock()
             .await
             .values()
             .filter(|task| task.task_name.starts_with(task_prefix))
+            .filter(|task| task.checkpoint.lt(&task.target_checkpoint))
             .cloned()
             .collect::<Vec<_>>();
         tasks.sort_by(|t1, t2| t2.checkpoint.cmp(&t1.checkpoint));
         Ok(tasks)
+    }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        task_prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        Ok(self
+            .progress_store
+            .lock()
+            .await
+            .values()
+            .filter(|task| task.task_name.starts_with(task_prefix))
+            .filter(|task| task.target_checkpoint.ne(&(i64::MAX as u64)))
+            .max_by(|t1, t2| t1.target_checkpoint.cmp(&t2.target_checkpoint))
+            .map(|t| t.target_checkpoint))
     }
 
     async fn register_task(

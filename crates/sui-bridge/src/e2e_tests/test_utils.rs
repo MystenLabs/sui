@@ -3,6 +3,7 @@
 
 use crate::abi::EthBridgeCommittee;
 use crate::abi::EthBridgeConfig;
+use crate::config::default_ed25519_key_pair;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::events::*;
@@ -179,6 +180,14 @@ impl BridgeTestClusterBuilder {
         let bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
+        info!(
+            "Bridge committee: {:?}",
+            bridge_client
+                .get_bridge_committee()
+                .await
+                .unwrap()
+                .to_string()
+        );
         BridgeTestCluster {
             num_validators: self.num_validators,
             test_cluster,
@@ -206,7 +215,6 @@ impl BridgeTestClusterBuilder {
         test_cluster
             .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
             .await;
-        info!("Bridge committee is finalized");
         test_cluster
     }
 
@@ -518,7 +526,7 @@ pub(crate) async fn deploy_sol_contract(
     };
 
     let serialized_config = serde_json::to_string_pretty(&deploy_config).unwrap();
-    tracing::debug!(
+    tracing::info!(
         "Serialized config written to {:?}: {:?}",
         deploy_config_path,
         serialized_config
@@ -657,7 +665,7 @@ impl EthBridgeEnvironment {
             .arg("--block-time")
             .arg("1") // 1 second block time
             .arg("--slots-in-an-epoch")
-            .arg("3") // 3 slots in an epoch
+            .arg("1") // 1 slots in an epoch
             .spawn()
             .expect("Failed to start anvil");
 
@@ -752,7 +760,7 @@ pub(crate) async fn start_bridge_cluster(
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path: authority_key_path,
             approved_governance_actions,
-            run_client: true,
+            run_client: i == 0,
             db_path: Some(db_path),
             eth: EthConfig {
                 eth_rpc_url: eth_environment.rpc_url.clone(),
@@ -768,12 +776,12 @@ pub(crate) async fn start_bridge_cluster(
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
+            metrics_key_pair: default_ed25519_key_pair(),
         };
         // Spawn bridge node in memory
-        let config_clone = config.clone();
         handles.push(
             run_bridge_node(
-                config_clone,
+                config,
                 BridgeNodePublicMetadata::empty_for_testing(),
                 Registry::new(),
             )

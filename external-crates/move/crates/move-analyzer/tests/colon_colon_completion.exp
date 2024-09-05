@@ -2,7 +2,15 @@
 -- test 0 -------------------
 use line: 15, use_col: 68
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 
@@ -18,6 +26,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Enum 'SE'
 Constant 'SOME_CONST'
@@ -35,6 +51,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -86,6 +110,14 @@ Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
     TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
     TARGET     : '(Completion::colon_colon::one_colon_colon)'
@@ -111,19 +143,28 @@ Method 'targ_type()'
     TARGET     : '(Completion::colon_colon::targ_type)'
     TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 Constant 'SOME_CONST'
 
 -- test 4 -------------------
 use line: 21, use_col: 57
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 5 -------------------
 use line: 22, use_col: 11
@@ -135,12 +176,13 @@ Unit 'std'
 
 -- test 6 -------------------
 use line: 22, use_col: 46
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 7 -------------------
 use line: 23, use_col: 25
@@ -171,12 +213,13 @@ Unit 'std'
 
 -- test 9 -------------------
 use line: 24, use_col: 40
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 10 -------------------
 use line: 25, use_col: 9
@@ -200,6 +243,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -368,6 +419,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Enum 'SE'
 Constant 'SOME_CONST'
@@ -385,6 +444,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -413,12 +480,13 @@ Method 'targ_type()'
 
 -- test 14 -------------------
 use line: 27, use_col: 23
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 15 -------------------
 use line: 28, use_col: 13
@@ -433,6 +501,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -471,6 +547,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Enum 'SE'
 Constant 'SOME_CONST'
@@ -488,6 +572,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -526,6 +618,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Enum 'SE'
 Enum 'SomeEnum'
@@ -544,7 +644,15 @@ Keyword 'address'
 -- test 18 -------------------
 use line: 33, use_col: 37
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 
@@ -576,6 +684,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Constant 'SOME_CONST'
 Enum 'SomeEnum'
@@ -592,6 +708,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -621,14 +745,23 @@ Method 'targ_type()'
 -- test 21 -------------------
 use line: 55, use_col: 26
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 
 -- test 22 -------------------
 use line: 55, use_col: 39
-EnumMember 'Variant{}'
-    INSERT TEXT: 'Variant{${1:field}}'
+EnumMember 'Variant'
+EnumMember 'Variant{..}'
+    INSERT TEXT: 'Variant { ${1:field} }'
 
 -- test 23 -------------------
 use line: 59, use_col: 21
@@ -641,6 +774,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Enum 'SomeEnum'
 Struct 'SomeStruct'
@@ -667,6 +808,14 @@ Module 'Self'
 Module 'option'
 Module 'vector'
 Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'Option'
 Constant 'SOME_CONST'
 Enum 'SomeEnum'
@@ -683,6 +832,14 @@ Method 'complete_chains()'
 Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
     TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
@@ -723,6 +880,14 @@ Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
     TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
     TARGET     : '(Completion::colon_colon::one_colon_colon)'
@@ -748,7 +913,15 @@ Method 'targ_type()'
     TARGET     : '(Completion::colon_colon::targ_type)'
     TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 Constant 'SOME_CONST'
@@ -778,6 +951,14 @@ Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon()'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
     TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon()'
     TARGET     : '(Completion::colon_colon::one_colon_colon)'
@@ -803,19 +984,28 @@ Method 'targ_type()'
     TARGET     : '(Completion::colon_colon::targ_type)'
     TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 Constant 'SOME_CONST'
 
 -- test 28 -------------------
 use line: 21, use_col: 56
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 29 -------------------
 use line: 25, use_col: 16
@@ -949,12 +1139,13 @@ Method 'sha3_256()'
 
 -- test 31 -------------------
 use line: 27, use_col: 23
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 32 -------------------
 use line: 41, use_col: 20
@@ -969,17 +1160,98 @@ Module 'uses'
 
 -- test 33 -------------------
 use line: 44, use_col: 43
-EnumMember 'SomeNamedVariant{}'
-    INSERT TEXT: 'SomeNamedVariant{${1:name1}, ${2:name2}}'
-EnumMember 'SomePositionalVariant()'
+EnumMember 'SomeNamedVariant'
+EnumMember 'SomeNamedVariant{..}'
+    INSERT TEXT: 'SomeNamedVariant { ${1:name1}, ${2:name2} }'
+EnumMember 'SomePositionalVariant'
+EnumMember 'SomePositionalVariant(..)'
     INSERT TEXT: 'SomePositionalVariant(${1}, ${2})'
 EnumMember 'SomeVariant'
-    INSERT TEXT: 'SomeVariant{}'
 
 -- test 34 -------------------
 use line: 55, use_col: 38
-EnumMember 'Variant{}'
-    INSERT TEXT: 'Variant{${1:field}}'
+EnumMember 'Variant'
+EnumMember 'Variant{..}'
+    INSERT TEXT: 'Variant { ${1:field} }'
+
+-- test 35 -------------------
+use line: 78, use_col: 35
+EnumMember 'MultiFieldVariant'
+EnumMember 'MultiFieldVariant{..}'
+    INSERT TEXT: 'MultiFieldVariant {
+	${1:name1},
+	${2:name2},
+	${3:name3},
+}'
+
+-- test 36 -------------------
+use line: 82, use_col: 18
+Unit '0x1'
+Unit '0xA'
+Unit '0xCAFE'
+Unit 'Completion'
+Unit 'std'
+Module 'Self'
+Module 'option'
+Module 'vector'
+Struct 'CompletionStruct'
+Enum 'EnumWithMultiFieldVariant'
+Struct 'MultiFieldStruct'
+Struct 'MultiFieldStruct{..}'
+    INSERT TEXT: 'MultiFieldStruct {
+	${1:field1},
+	${2:field2},
+	${3:field3},
+}'
+Struct 'Option'
+Constant 'SOME_CONST'
+Enum 'SomeEnum'
+Struct 'SomeStruct'
+Enum 'TargEnum'
+Method 'attr_chain()'
+    INSERT TEXT: 'attr_chain()'
+    TARGET     : '(Completion::colon_colon::attr_chain)'
+    TYPE       : 'fun ()'
+Method 'complete_chains()'
+    INSERT TEXT: 'complete_chains(${1:s})'
+    TARGET     : '(Completion::colon_colon::complete_chains)'
+    TYPE       : 'fun (SomeStruct)'
+Method 'multi_colon_colon()'
+    INSERT TEXT: 'multi_colon_colon()'
+    TARGET     : '(Completion::colon_colon::multi_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct()'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant()'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
+Method 'one_colon_colon()'
+    INSERT TEXT: 'one_colon_colon()'
+    TARGET     : '(Completion::colon_colon::one_colon_colon)'
+    TYPE       : 'fun ()'
+Method 'sbar()'
+    INSERT TEXT: 'sbar(${1:_param1}, ${2:_param2})'
+    TARGET     : '(Completion::colon_colon::sbar)'
+    TYPE       : 'fun (u64, SomeStruct)'
+Method 'sbaz()'
+    INSERT TEXT: 'sbaz()'
+    TARGET     : '(Completion::colon_colon::sbaz)'
+    TYPE       : 'fun ()'
+Method 'single_ident()'
+    INSERT TEXT: 'single_ident()'
+    TARGET     : '(Completion::colon_colon::single_ident)'
+    TYPE       : 'fun ()'
+Method 'targ_chain()'
+    INSERT TEXT: 'targ_chain()'
+    TARGET     : '(Completion::colon_colon::targ_chain)'
+    TYPE       : 'fun ()'
+Method 'targ_type()'
+    INSERT TEXT: 'targ_type(${1:p})'
+    TARGET     : '(Completion::colon_colon::targ_type)'
+    TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 
 == uses.move ========================================================
 -- test 0 -------------------
@@ -1136,6 +1408,14 @@ Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
     TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon'
     TARGET     : '(Completion::colon_colon::one_colon_colon)'
@@ -1161,7 +1441,9 @@ Method 'targ_type()'
     TARGET     : '(Completion::colon_colon::targ_type)'
     TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 
@@ -1179,6 +1461,14 @@ Method 'multi_colon_colon()'
     INSERT TEXT: 'multi_colon_colon'
     TARGET     : '(Completion::colon_colon::multi_colon_colon)'
     TYPE       : 'fun ()'
+Method 'multi_field_struct()'
+    INSERT TEXT: 'multi_field_struct'
+    TARGET     : '(Completion::colon_colon::multi_field_struct)'
+    TYPE       : 'fun ()'
+Method 'multi_field_variant()'
+    INSERT TEXT: 'multi_field_variant'
+    TARGET     : '(Completion::colon_colon::multi_field_variant)'
+    TYPE       : 'fun ()'
 Method 'one_colon_colon()'
     INSERT TEXT: 'one_colon_colon'
     TARGET     : '(Completion::colon_colon::one_colon_colon)'
@@ -1204,7 +1494,9 @@ Method 'targ_type()'
     TARGET     : '(Completion::colon_colon::targ_type)'
     TYPE       : 'fun <SOME_TYPE>(SOME_TYPE)'
 Struct 'CompletionStruct'
+Struct 'MultiFieldStruct'
 Struct 'SomeStruct'
+Enum 'EnumWithMultiFieldVariant'
 Enum 'SomeEnum'
 Enum 'TargEnum'
 

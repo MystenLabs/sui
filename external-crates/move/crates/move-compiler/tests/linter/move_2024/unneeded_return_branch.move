@@ -1,7 +1,8 @@
 module 0x42::m;
+const ZERO: u64 = 0;
 
 fun t0(cond: bool): u64 {
-    if (cond) { return 5 } else { abort 0 }
+    if (cond) { return 5 } else { abort ZERO }
 }
 
 fun t1(cond: bool): u64 {
@@ -49,14 +50,14 @@ fun t7(e: E): u64 {
 fun t8(e: E): u64{
     match (e) {
         E::V0 => return 0,
-        E::V1 => abort 0,
+        E::V1 => abort ZERO,
     }
 }
 
 fun t9(e: E): u64 {
     return match (e) {
         E::V0 => 0,
-        E::V1 => abort 0,
+        E::V1 => abort ZERO,
     }
 }
 

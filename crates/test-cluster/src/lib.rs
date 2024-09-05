@@ -1191,6 +1191,10 @@ impl TestClusterBuilder {
 
     pub async fn build_with_bridge(
         self,
+        // Note: caller should make sure to keep the authority with largest stake at the end of the list.
+        // This is because we try to set up eth env and sui cluster at the same time. Since we use evenly
+        // distributed stake, we want to keep the authority with the remainder consistent in eth contracts
+        // and sui cluster.
         bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
         deploy_tokens: bool,
     ) -> TestCluster {
@@ -1221,11 +1225,32 @@ impl TestClusterBuilder {
         let mut server_ports = vec![];
         let mut tasks = vec![];
         let quorum_driver_api = test_cluster.quorum_driver_api().clone();
-        for (node, kp) in test_cluster
+        // Reorder the nodes so that the last node has the largest stake.
+        let validator_with_max_stake = test_cluster
+            .sui_client()
+            .governance_api()
+            .get_committee_info(None)
+            .await
+            .unwrap()
+            .validators
+            .iter()
+            .max_by(|a, b| a.0.cmp(&b.0))
+            .unwrap()
+            .0;
+        let node_with_max_stake = test_cluster
             .swarm
             .active_validators()
-            .zip(bridge_authority_keys.iter())
-        {
+            .find(|v| v.config().protocol_public_key() == validator_with_max_stake)
+            .unwrap();
+        let other_nodes = test_cluster
+            .swarm
+            .active_validators()
+            .filter(|v| v.config().protocol_public_key() != validator_with_max_stake)
+            .collect::<Vec<_>>();
+        let reordered_nodes = other_nodes
+            .iter()
+            .chain(std::iter::once(&node_with_max_stake));
+        for (node, kp) in reordered_nodes.zip(bridge_authority_keys.iter()) {
             let validator_address = node.config().sui_address();
             // create committee registration tx
             let gas = test_cluster

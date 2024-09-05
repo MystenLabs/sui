@@ -3,26 +3,30 @@
 
 use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
-use secrecy::ExposeSecret;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use std::env;
-use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
-use tracing::info;
 
-use crate::db::{new_connection_pool_with_config, ConnectionPoolConfig};
+use crate::config::IngestionConfig;
+use crate::config::PruningOptions;
+use crate::config::SnapshotLagConfig;
+use crate::db::{new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
-use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
-use crate::{IndexerConfig, IndexerMetrics};
+use crate::IndexerMetrics;
 
 pub enum ReaderWriterConfig {
-    Reader { reader_mode_rpc_url: String },
-    Writer { snapshot_config: SnapshotLagConfig },
+    Reader {
+        reader_mode_rpc_url: String,
+    },
+    Writer {
+        snapshot_config: SnapshotLagConfig,
+        pruning_options: PruningOptions,
+    },
 }
 
 impl ReaderWriterConfig {
@@ -32,9 +36,15 @@ impl ReaderWriterConfig {
         }
     }
 
-    pub fn writer_mode(snapshot_config: Option<SnapshotLagConfig>) -> Self {
+    /// Instantiates a config for indexer in writer mode with the given snapshot config and epochs
+    /// to keep.
+    pub fn writer_mode(
+        snapshot_config: Option<SnapshotLagConfig>,
+        epochs_to_keep: Option<u64>,
+    ) -> Self {
         Self::Writer {
             snapshot_config: snapshot_config.unwrap_or_default(),
+            pruning_options: PruningOptions { epochs_to_keep },
         }
     }
 }
@@ -44,16 +54,22 @@ pub async fn start_test_indexer(
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     data_ingestion_path: PathBuf,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    start_test_indexer_impl(
+) -> (
+    PgIndexerStore,
+    JoinHandle<Result<(), IndexerError>>,
+    CancellationToken,
+) {
+    let token = CancellationToken::new();
+    let (store, handle) = start_test_indexer_impl(
         db_url,
         rpc_url,
         reader_writer_config,
         /* reset_database */ false,
         Some(data_ingestion_path),
-        CancellationToken::new(),
+        token.clone(),
     )
-    .await
+    .await;
+    (store, handle, token)
 }
 
 /// Starts an indexer reader or writer for testing depending on the `reader_writer_config`. If
@@ -67,31 +83,24 @@ pub async fn start_test_indexer_impl(
     data_ingestion_path: Option<PathBuf>,
     cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 10 for testing
-    // to prevent maxing out
-    info!("Setting DB_POOL_SIZE to 10");
-    std::env::set_var("DB_POOL_SIZE", "10");
-
     let db_url = db_url.unwrap_or_else(|| {
-        let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
-        let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
+        let pg_host = "localhost";
+        let pg_port = "32770";
+        let pw = "postgrespw";
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    let pool_config = ConnectionPoolConfig::default();
-
-    // Default to writer mode
-    let mut config = IndexerConfig {
-        db_url: Some(db_url.clone().into()),
-        rpc_client_url: rpc_url,
-        reset_db: true,
-        fullnode_sync_worker: true,
-        rpc_server_worker: false,
-        remote_store_url: None,
-        data_ingestion_path,
-        ..Default::default()
+    // Reduce the connection pool size to 10 for testing
+    // to prevent maxing out
+    let pool_config = ConnectionPoolConfig {
+        pool_size: 5,
+        connection_timeout: Duration::from_secs(10),
+        statement_timeout: Duration::from_secs(30),
     };
+
+    println!("db_url: {db_url}");
+    println!("pool_config: {pool_config:?}");
+    println!("{data_ingestion_path:?}");
 
     let registry = prometheus::Registry::default();
 
@@ -99,16 +108,15 @@ pub async fn start_test_indexer_impl(
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let mut parsed_url = config.get_db_url().unwrap();
+    let mut parsed_url = db_url.clone();
 
     if reset_database {
-        let db_name = parsed_url.expose_secret().split('/').last().unwrap();
+        let db_name = parsed_url.split('/').last().unwrap();
         // Switch to default to create a new database
-        let (default_db_url, _) = replace_db_name(parsed_url.expose_secret(), "postgres");
+        let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
 
         // Open in default mode
-        let blocking_pool =
-            new_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
+        let blocking_pool = new_connection_pool(&default_db_url, &pool_config).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -120,40 +128,42 @@ pub async fn start_test_indexer_impl(
         default_conn
             .batch_execute(&format!("CREATE DATABASE {}", db_name))
             .unwrap();
-        parsed_url = replace_db_name(parsed_url.expose_secret(), db_name)
-            .0
-            .into();
+        parsed_url = replace_db_name(&parsed_url, db_name).0;
     }
 
-    let blocking_pool =
-        new_connection_pool_with_config(parsed_url.expose_secret(), Some(5), pool_config).unwrap();
+    let blocking_pool = new_connection_pool(&parsed_url, &pool_config).unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
             reader_mode_rpc_url,
         } => {
-            let reader_mode_rpc_url = reader_mode_rpc_url
-                .parse::<SocketAddr>()
-                .expect("Unable to parse fullnode address");
-            config.fullnode_sync_worker = false;
-            config.rpc_server_worker = true;
-            config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
-            config.rpc_server_port = reader_mode_rpc_url.port();
-            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
+            let config = crate::config::JsonRpcConfig {
+                name_service_options: crate::config::NameServiceOptions::default(),
+                rpc_address: reader_mode_rpc_url.parse().unwrap(),
+                rpc_client_url: rpc_url.parse().unwrap(),
+            };
+            tokio::spawn(
+                async move { Indexer::start_reader(&config, &registry, blocking_pool).await },
+            )
         }
-        ReaderWriterConfig::Writer { snapshot_config } => {
-            if config.reset_db {
-                crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
-            }
+        ReaderWriterConfig::Writer {
+            snapshot_config,
+            pruning_options,
+        } => {
+            crate::db::reset_database(&mut blocking_pool.get().unwrap()).unwrap();
+
             let store_clone = store.clone();
+            let mut ingestion_config = IngestionConfig::default();
+            ingestion_config.sources.data_ingestion_path = data_ingestion_path;
 
             tokio::spawn(async move {
                 Indexer::start_writer_with_config(
-                    &config,
+                    &ingestion_config,
                     store_clone,
                     indexer_metrics,
                     snapshot_config,
+                    pruning_options,
                     cancel,
                 )
                 .await
@@ -172,22 +182,6 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
         format!("{}/{}", &db_url[..pos], new_db_name),
         old_db_name.to_string(),
     )
-}
-
-pub async fn force_delete_database(db_url: String) {
-    // Replace the database name with the default `postgres`, which should be the last string after `/`
-    // This is necessary because you can't drop a database while being connected to it.
-    // Hence switch to the default `postgres` database to drop the active database.
-    let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
-    let pool_config = ConnectionPoolConfig::default();
-
-    let blocking_pool =
-        new_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();
-    blocking_pool
-        .get()
-        .unwrap()
-        .batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name))
-        .unwrap();
 }
 
 #[derive(Clone)]

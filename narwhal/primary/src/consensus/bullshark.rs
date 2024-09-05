@@ -204,7 +204,7 @@ impl Bullshark {
 
         self.metrics
             .committed_certificates
-            .report(total_committed_certificates);
+            .observe(total_committed_certificates as f64);
 
         Ok((Outcome::Commit, committed_sub_dags))
     }

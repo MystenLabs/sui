@@ -34,6 +34,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
+use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
@@ -1087,10 +1088,10 @@ impl SuiClientCommands {
                     }
                 };
 
-                let for_signing = true;
+                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
                 let mut verifier = sui_execution::verifier(
                     &protocol_config,
-                    for_signing,
+                    signing_limits,
                     &bytecode_verifier_metrics,
                 );
 
@@ -1106,7 +1107,7 @@ impl SuiClientCommands {
                 let mut used_ticks = meter.accumulator(Scope::Package).clone();
                 used_ticks.name = pkg_name;
 
-                let meter_config = protocol_config.meter_config_for_signing();
+                let meter_config = VerifierSigningConfig::default().meter_config_for_signing();
 
                 let exceeded = matches!(
                     meter_config.max_per_pkg_meter_units,

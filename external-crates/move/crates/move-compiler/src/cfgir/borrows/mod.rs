@@ -187,7 +187,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             let diags = context.borrow_state.return_(*loc, values);
             context.add_diags(diags);
         }
-        C::Abort(e) => {
+        C::Abort(_, e) => {
             let value = assert_single_value(exp(context, e));
             assert!(!value.is_ref());
             context.borrow_state.abort()

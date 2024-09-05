@@ -5,10 +5,12 @@ use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::path::Path;
+use sui_config::local_ip_utils::get_available_port;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
+use sui_indexer::tempdb::TempDb;
 use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -154,6 +156,13 @@ pub struct LocalNewCluster {
     indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
+    #[allow(unused)]
+    data_ingestion_path: tempfile::TempDir,
+    #[allow(unused)]
+    cancellation_tokens: Vec<tokio_util::sync::DropGuard>,
+    #[allow(unused)]
+    database: Option<TempDb>,
+    graphql_url: Option<String>,
 }
 
 impl LocalNewCluster {
@@ -161,27 +170,20 @@ impl LocalNewCluster {
     pub fn swarm(&self) -> &Swarm {
         &self.test_cluster.swarm
     }
+
+    pub fn graphql_url(&self) -> &Option<String> {
+        &self.graphql_url
+    }
 }
 
 #[async_trait]
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
-        let data_ingestion_path = tempdir()?.into_path();
-        // TODO: options should contain port instead of address
-        let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
-            addr.parse::<SocketAddr>()
-                .expect("Unable to parse fullnode address")
-                .port()
-        });
-
-        let indexer_address = options.indexer_address.as_ref().map(|addr| {
-            addr.parse::<SocketAddr>()
-                .expect("Unable to parse indexer address")
-        });
+        let data_ingestion_path = tempdir()?;
 
         let mut cluster_builder = TestClusterBuilder::new()
             .enable_fullnode_events()
-            .with_data_ingestion_dir(data_ingestion_path.clone());
+            .with_data_ingestion_dir(data_ingestion_path.path().to_path_buf());
 
         // Check if we already have a config directory that is passed
         if let Some(config_dir) = options.config_dir.clone() {
@@ -209,10 +211,6 @@ impl Cluster for LocalNewCluster {
             }
         }
 
-        if let Some(rpc_port) = fullnode_port {
-            cluster_builder = cluster_builder.with_fullnode_rpc_port(rpc_port);
-        }
-
         let mut test_cluster = cluster_builder.build().await;
 
         // Use the wealthy account for faucet
@@ -223,34 +221,40 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
-        if let (Some(pg_address), Some(indexer_address)) =
-            (options.pg_address.clone(), indexer_address)
-        {
-            // Start in writer mode
-            start_test_indexer(
+        let mut cancellation_tokens = vec![];
+        let (database, indexer_url, graphql_url) = if options.with_indexer_and_graphql {
+            let database = TempDb::new()?;
+            let pg_address = database.database().url().as_str().to_owned();
+            let indexer_jsonrpc_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
+            let graphql_address = format!("127.0.0.1:{}", get_available_port("127.0.0.1"));
+            let graphql_url = format!("http://{graphql_address}");
+
+            // Start indexer writer
+            let (_, _, writer_token) = start_test_indexer(
                 Some(pg_address.clone()),
                 fullnode_url.clone(),
-                ReaderWriterConfig::writer_mode(None),
-                data_ingestion_path.clone(),
+                ReaderWriterConfig::writer_mode(None, None),
+                data_ingestion_path.path().to_path_buf(),
             )
             .await;
+            cancellation_tokens.push(writer_token.drop_guard());
 
-            // Start in reader mode
-            start_test_indexer(
-                Some(pg_address),
+            // Start indexer jsonrpc service
+            let (_, _, reader_token) = start_test_indexer(
+                Some(pg_address.clone()),
                 fullnode_url.clone(),
-                ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-                data_ingestion_path,
+                ReaderWriterConfig::reader_mode(indexer_jsonrpc_address.clone()),
+                data_ingestion_path.path().to_path_buf(),
             )
             .await;
-        }
+            cancellation_tokens.push(reader_token.drop_guard());
 
-        if let Some(graphql_address) = &options.graphql_address {
+            // Start the graphql service
             let graphql_address = graphql_address.parse::<SocketAddr>()?;
             let graphql_connection_config = ConnectionConfig::new(
                 Some(graphql_address.port()),
                 Some(graphql_address.ip().to_string()),
-                options.pg_address.clone(),
+                Some(pg_address),
                 None,
                 None,
                 None,
@@ -260,9 +264,18 @@ impl Cluster for LocalNewCluster {
                 graphql_connection_config.clone(),
                 Some(fullnode_url.clone()),
                 /* cancellation_token */ None,
+                ServiceConfig::test_defaults(),
             )
             .await;
-        }
+
+            (
+                Some(database),
+                Some(indexer_jsonrpc_address),
+                Some(graphql_url),
+            )
+        } else {
+            (None, None, None)
+        };
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -273,7 +286,11 @@ impl Cluster for LocalNewCluster {
             fullnode_url,
             faucet_key,
             config_directory: tempfile::tempdir()?,
-            indexer_url: options.indexer_address.clone(),
+            data_ingestion_path,
+            indexer_url,
+            cancellation_tokens,
+            database,
+            graphql_url,
         })
     }
 

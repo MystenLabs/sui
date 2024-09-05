@@ -924,7 +924,7 @@ impl CheckpointBuilder {
 
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
-        'main: loop {
+        loop {
             // Check whether an exit signal has been received, if so we break the loop.
             // This gives us a chance to exit, in case checkpoint making keeps failing.
             match self.exit.has_changed() {
@@ -934,31 +934,47 @@ impl CheckpointBuilder {
                 Ok(false) => (),
             };
 
-            // Collect info about the most recently built checkpoint.
-            let summary = self
-                .epoch_store
-                .last_built_checkpoint_builder_summary()
-                .expect("epoch should not have ended");
-            let mut last_height = summary.clone().and_then(|s| s.checkpoint_height);
-            let mut last_timestamp = summary.map(|s| s.summary.timestamp_ms);
+            self.maybe_build_checkpoints().await;
 
-            let min_checkpoint_interval_ms = self
-                .epoch_store
-                .protocol_config()
-                .min_checkpoint_interval_ms_as_option()
-                .unwrap_or_default();
-            let mut grouped_pending_checkpoints = Vec::new();
-            let mut checkpoints_iter = self
-                .epoch_store
-                .get_pending_checkpoints(last_height)
-                .expect("unexpected epoch store error")
-                .into_iter()
-                .peekable();
-            while let Some((height, pending)) = checkpoints_iter.next() {
-                // Group PendingCheckpoints until:
-                // - minimum interval has elapsed ...
-                let current_timestamp = pending.details().timestamp_ms;
-                let can_build = match last_timestamp {
+            match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
+                Either::Left(_) => {
+                    // break loop on exit signal
+                    break;
+                }
+                Either::Right(_) => {}
+            }
+        }
+        info!("Shutting down CheckpointBuilder");
+    }
+
+    async fn maybe_build_checkpoints(&mut self) {
+        let _scope = monitored_scope("BuildCheckpoints");
+
+        // Collect info about the most recently built checkpoint.
+        let summary = self
+            .epoch_store
+            .last_built_checkpoint_builder_summary()
+            .expect("epoch should not have ended");
+        let mut last_height = summary.clone().and_then(|s| s.checkpoint_height);
+        let mut last_timestamp = summary.map(|s| s.summary.timestamp_ms);
+
+        let min_checkpoint_interval_ms = self
+            .epoch_store
+            .protocol_config()
+            .min_checkpoint_interval_ms_as_option()
+            .unwrap_or_default();
+        let mut grouped_pending_checkpoints = Vec::new();
+        let mut checkpoints_iter = self
+            .epoch_store
+            .get_pending_checkpoints(last_height)
+            .expect("unexpected epoch store error")
+            .into_iter()
+            .peekable();
+        while let Some((height, pending)) = checkpoints_iter.next() {
+            // Group PendingCheckpoints until:
+            // - minimum interval has elapsed ...
+            let current_timestamp = pending.details().timestamp_ms;
+            let can_build = match last_timestamp {
                     Some(last_timestamp) => {
                         current_timestamp >= last_timestamp + min_checkpoint_interval_ms
                     }
@@ -970,47 +986,38 @@ impl CheckpointBuilder {
                     .is_some_and(|(_, next_pending)| next_pending.details().last_of_epoch)
                 // - or, we have reached end of epoch.
                     || pending.details().last_of_epoch;
-                grouped_pending_checkpoints.push(pending);
-                if !can_build {
-                    debug!(
-                        checkpoint_commit_height = height,
-                        ?last_timestamp,
-                        ?current_timestamp,
-                        "waiting for more PendingCheckpoints: minimum interval not yet elapsed"
-                    );
-                    continue;
-                }
-
-                // Min interval has elapsed, we can now coalesce and build a checkpoint.
-                last_height = Some(height);
-                last_timestamp = Some(current_timestamp);
+            grouped_pending_checkpoints.push(pending);
+            if !can_build {
                 debug!(
                     checkpoint_commit_height = height,
-                    "Making checkpoint at commit height"
+                    ?last_timestamp,
+                    ?current_timestamp,
+                    "waiting for more PendingCheckpoints: minimum interval not yet elapsed"
                 );
-                if let Err(e) = self
-                    .make_checkpoint(std::mem::take(&mut grouped_pending_checkpoints))
-                    .await
-                {
-                    error!("Error while making checkpoint, will retry in 1s: {:?}", e);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    self.metrics.checkpoint_errors.inc();
-                    continue 'main;
-                }
+                continue;
             }
+
+            // Min interval has elapsed, we can now coalesce and build a checkpoint.
+            last_height = Some(height);
+            last_timestamp = Some(current_timestamp);
             debug!(
-                "Waiting for more checkpoints from consensus after processing {last_height:?}; {} pending checkpoints left unprocessed until next interval",
-                grouped_pending_checkpoints.len(),
+                checkpoint_commit_height = height,
+                "Making checkpoint at commit height"
             );
-            match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
-                Either::Left(_) => {
-                    // break loop on exit signal
-                    break;
-                }
-                Either::Right(_) => {}
+            if let Err(e) = self
+                .make_checkpoint(std::mem::take(&mut grouped_pending_checkpoints))
+                .await
+            {
+                error!("Error while making checkpoint, will retry in 1s: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                self.metrics.checkpoint_errors.inc();
+                return;
             }
         }
-        info!("Shutting down CheckpointBuilder");
+        debug!(
+            "Waiting for more checkpoints from consensus after processing {last_height:?}; {} pending checkpoints left unprocessed until next interval",
+            grouped_pending_checkpoints.len(),
+        );
     }
 
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
@@ -1511,7 +1518,10 @@ impl CheckpointBuilder {
                 timestamp_ms,
                 matching_randomness_rounds,
             );
-            summary.report_checkpoint_age_ms(&self.metrics.last_created_checkpoint_age_ms);
+            summary.report_checkpoint_age(
+                &self.metrics.last_created_checkpoint_age,
+                &self.metrics.last_created_checkpoint_age_ms,
+            );
             if last_checkpoint_of_epoch {
                 info!(
                     checkpoint_seq = sequence_number,
@@ -1892,9 +1902,10 @@ impl CheckpointAggregator {
                     self.metrics
                         .last_certified_checkpoint
                         .set(current.summary.sequence_number as i64);
-                    current
-                        .summary
-                        .report_checkpoint_age_ms(&self.metrics.last_certified_checkpoint_age_ms);
+                    current.summary.report_checkpoint_age(
+                        &self.metrics.last_certified_checkpoint_age,
+                        &self.metrics.last_certified_checkpoint_age_ms,
+                    );
                     result.push(summary.into_inner());
                     self.current = None;
                     continue 'outer;

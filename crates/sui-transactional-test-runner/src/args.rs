@@ -13,6 +13,7 @@ use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
+use sui_graphql_rpc::test_infra::cluster::SnapshotLagConfig;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
@@ -61,12 +62,14 @@ pub struct SuiInitArgs {
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
-    #[clap(long = "object-snapshot-min-checkpoint-lag")]
-    pub object_snapshot_min_checkpoint_lag: Option<usize>,
-    #[clap(long = "object-snapshot-max-checkpoint-lag")]
-    pub object_snapshot_max_checkpoint_lag: Option<usize>,
+    #[clap(flatten)]
+    pub snapshot_config: SnapshotLagConfig,
     #[clap(long = "flavor")]
     pub flavor: Option<Flavor>,
+    /// The number of epochs to keep in the database. Epochs outside of this range will be pruned by
+    /// the indexer.
+    #[clap(long = "epochs-to-keep")]
+    pub epochs_to_keep: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -165,6 +168,8 @@ pub struct RunGraphqlCommand {
     pub show_service_version: bool,
     #[clap(long, num_args(1..))]
     pub cursors: Vec<String>,
+    #[clap(long)]
+    pub wait_for_checkpoint_pruned: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

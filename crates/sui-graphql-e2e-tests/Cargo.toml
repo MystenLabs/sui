@@ -11,6 +11,7 @@ edition = "2021"
 workspace = true
 
 [dev-dependencies]
+telemetry-subscribers.workspace = true
 datatest-stable.workspace = true
 sui-graphql-rpc.workspace = true
 sui-transactional-test-runner.workspace = true

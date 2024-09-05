@@ -127,7 +127,7 @@ impl<A: Clone> QuorumDriver<A> {
                     }
                     self.metrics
                         .transaction_retry_count
-                        .report(task.retry_times as u64);
+                        .observe(task.retry_times as f64);
                 }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
@@ -210,7 +210,7 @@ impl<A: Clone> QuorumDriver<A> {
                 self.metrics.total_ok_responses.inc();
                 self.metrics
                     .attempt_times_ok_response
-                    .report(total_attempts as u64);
+                    .observe(total_attempts as f64);
                 Ok((transaction.clone(), resp.clone()))
             }
             Err(err) => {
