@@ -238,6 +238,24 @@ export class Runtime extends EventEmitter {
                 this.sendEvent(RuntimeEvents.stopOnStep);
                 return;
             } else if (currentEvent.type === 'OpenFrame') {
+                const stackHeight = this.frameStack.frames.length;
+                if (stackHeight <= 0) {
+                    // should never happen but better to signal than crash
+                    throw new Error("Error stepping back to caller function "
+                        + currentEvent.name
+                        + " as there is no frame on the stack"
+                    );
+                }
+                if (stackHeight <= 1) {
+                    // should never happen as we never step back out of the outermost function
+                    // (never step back to event 0 as per first conditional in this function)
+                    throw new Error("Error stepping back to caller function "
+                        + currentEvent.name
+                        + " from callee "
+                        + this.frameStack.frames[stackHeight - 1].name
+                        + " as there would be no frame on the stack afterwards"
+                    );
+                }
                 // pop the top frame from the stack
                 this.frameStack.frames.pop();
                 // cannot simply call stepBack as we are stepping back to the same line
@@ -249,13 +267,23 @@ export class Runtime extends EventEmitter {
                     return;
                 }
                 this.eventIndex--;
-                let currentEvent = this.trace.events[this.eventIndex];
-                if (currentEvent.type !== 'Instruction') {
-                    throw new Error("Expected an Instruction event before OpenFrame event");
+                let prevCurrentEvent = this.trace.events[this.eventIndex];
+                if (prevCurrentEvent.type !== 'Instruction') {
+                    throw new Error("Expected an Instruction event before OpenFrame event in function"
+                        + currentEvent.name
+                    );
                 }
-                if (!this.instruction(currentEvent)) {
+                if (!this.instruction(prevCurrentEvent)) {
                     // we should be steppping back to the instruction on the same line
                     // as the one in the current frame
+                    throw new Error("Wrong line of an instruction (at PC " + prevCurrentEvent.pc + ")"
+                        + " in the caller function"
+                        + currentEvent.name
+                        + " to step back to from callee "
+                        + this.frameStack.frames[stackHeight - 1].name
+                        + " as there would be no frame on the stack afterwards"
+                    );
+
                     throw new Error("Wrong line to step back to from a function call");
                 }
                 this.sendEvent(RuntimeEvents.stopOnStep);
