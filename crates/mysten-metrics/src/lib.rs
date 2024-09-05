@@ -63,6 +63,7 @@ pub struct Metrics {
     pub channel_inflight: IntGaugeVec,
     pub channel_sent: IntGaugeVec,
     pub channel_received: IntGaugeVec,
+    pub future_active_duration_ns: IntGaugeVec,
     pub scope_iterations: IntGaugeVec,
     pub scope_duration_ns: IntGaugeVec,
     pub scope_entrance: IntGaugeVec,
@@ -103,6 +104,13 @@ impl Metrics {
             channel_received: register_int_gauge_vec_with_registry!(
                 "monitored_channel_received",
                 "Received items in channels.",
+                &["name"],
+                registry,
+            )
+            .unwrap(),
+            future_active_duration_ns: register_int_gauge_vec_with_registry!(
+                "monitored_future_active_duration_ns",
+                "Total duration in nanosecs where the monitored future is active (consuming CPU time)",
                 &["name"],
                 registry,
             )
@@ -349,6 +357,7 @@ impl<F: Future> MonitoredFutureExt for F {
     fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self> {
         MonitoredScopeFuture {
             f: Box::pin(self),
+            name,
             _scope: monitored_scope(name),
         }
     }
@@ -356,6 +365,7 @@ impl<F: Future> MonitoredFutureExt for F {
 
 pub struct MonitoredScopeFuture<F: Sized> {
     f: Pin<Box<F>>,
+    name: &'static str,
     _scope: Option<MonitoredScopeGuard>,
 }
 
@@ -363,7 +373,14 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
     type Output = F::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.f.as_mut().poll(cx)
+        let active_timer = Instant::now();
+        let ret = self.f.as_mut().poll(cx);
+        if let Some(m) = get_metrics() {
+            m.future_active_duration_ns
+                .with_label_values(&[self.name])
+                .add(active_timer.elapsed().as_nanos() as i64);
+        }
+        ret
     }
 }
 
