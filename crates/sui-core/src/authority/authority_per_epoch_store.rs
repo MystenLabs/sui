@@ -316,10 +316,10 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
-    /// Get notified when a verified checkpoint has reached checkpoint executor.
-    verified_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, ()>,
-    /// Caches the highest verified checkpoint sequence number as this has been notified from the checkpoint executor
-    highest_verified_checkpoint: RwLock<CheckpointSequenceNumber>,
+    /// Get notified when a synced checkpoint has reached CheckpointExecutor.
+    synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, ()>,
+    /// Caches the highest synced checkpoint sequence number as this has been notified from the CheckpointExecutor
+    highest_synced_checkpoint: RwLock<CheckpointSequenceNumber>,
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
@@ -881,8 +881,8 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
-            verified_checkpoint_notify_read: NotifyRead::new(),
-            highest_verified_checkpoint: RwLock::new(0),
+            synced_checkpoint_notify_read: NotifyRead::new(),
+            highest_synced_checkpoint: RwLock::new(0),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -2044,26 +2044,26 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    /// Notifies that a verified checkpoint of sequence number `checkpoint_seq` is available. The source of the notification
+    /// Notifies that a synced checkpoint of sequence number `checkpoint_seq` is available. The source of the notification
     /// is the CheckpointExecutor.
-    pub async fn notify_verified_checkpoint(&self, checkpoint_seq: CheckpointSequenceNumber) {
-        let mut highest_verified_checkpoint = self.highest_verified_checkpoint.write();
-        *highest_verified_checkpoint = checkpoint_seq;
-        self.verified_checkpoint_notify_read
+    pub fn notify_synced_checkpoint(&self, checkpoint_seq: CheckpointSequenceNumber) {
+        let mut highest_synced_checkpoint = self.highest_synced_checkpoint.write();
+        *highest_synced_checkpoint = checkpoint_seq;
+        self.synced_checkpoint_notify_read
             .notify(&checkpoint_seq, &());
     }
 
-    /// Get notified when a verified checkpoint of sequence number `>= checkpoint_seq` is available.
-    pub async fn verified_checkpoint_notified(
+    /// Get notified when a synced checkpoint of sequence number `>= checkpoint_seq` is available.
+    pub async fn synced_checkpoint_notify(
         &self,
         checkpoint_seq: CheckpointSequenceNumber,
     ) -> Result<(), SuiError> {
         let registration = self
-            .verified_checkpoint_notify_read
+            .synced_checkpoint_notify_read
             .register_one(&checkpoint_seq);
         {
-            let verified_checkpoint = self.highest_verified_checkpoint.read();
-            if *verified_checkpoint >= checkpoint_seq {
+            let synced_checkpoint = self.highest_synced_checkpoint.read();
+            if *synced_checkpoint >= checkpoint_seq {
                 return Ok(());
             }
         }
