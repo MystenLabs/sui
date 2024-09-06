@@ -254,6 +254,7 @@ pub struct PolicyConfig {
     /// List of String which should all parse to type IPAddr.
     /// If set, only requests from provided IPs will be allowed,
     /// and any blocklist related configuration will be ignored.
+    #[serde(default)]
     pub allow_list: Option<Vec<String>>,
 }
 

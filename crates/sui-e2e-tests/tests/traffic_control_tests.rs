@@ -421,7 +421,7 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
     let mut server = NodeFwTestServer::new();
     server.start(port).await;
     // await for the server to start
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {

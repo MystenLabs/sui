@@ -40,16 +40,21 @@ struct Blocklists {
 }
 
 #[derive(Clone)]
+enum Acl {
+    Blocklists(Blocklists),
+    /// If this variant is set, then we do no tallying or running
+    /// of background tasks, and instead simply block all IPs not
+    /// in the allowlist on calls to `check`. The allowlist should
+    /// only be populated once at initialization.
+    Allowlist(Vec<IpAddr>),
+}
+
+#[derive(Clone)]
 pub struct TrafficController {
     tally_channel: mpsc::Sender<TrafficTally>,
-    blocklists: Blocklists,
+    acl: Acl,
     metrics: Arc<TrafficControllerMetrics>,
     dry_run_mode: bool,
-    /// If this is not None, then we do no tallying or populating
-    /// of blocklists, and instead simply block all IPs not in the
-    /// allowlist. The allowlist should only be populated once at
-    /// initialization.
-    allowlist: Option<Vec<IpAddr>>,
 }
 
 impl Debug for TrafficController {
@@ -90,13 +95,9 @@ impl TrafficController {
                     .collect();
                 Self {
                     tally_channel: mpsc::channel(0).0, // unused
-                    blocklists: Blocklists {
-                        clients: Arc::new(DashMap::new()),         // unused
-                        proxied_clients: Arc::new(DashMap::new()), // unused
-                    },
+                    acl: Acl::Allowlist(allowlist),
                     metrics: Arc::new(metrics),
                     dry_run_mode: policy_config.dry_run,
-                    allowlist: Some(allowlist),
                 }
             }
             None => Self::spawn(policy_config, metrics, fw_config),
@@ -121,21 +122,15 @@ impl TrafficController {
         metrics
             .deadmans_switch_enabled
             .set(mem_drainfile_present as i64);
-
-        let ret = Self {
-            tally_channel: tx,
-            blocklists: Blocklists {
-                clients: Arc::new(DashMap::new()),
-                proxied_clients: Arc::new(DashMap::new()),
-            },
-            metrics: metrics.clone(),
-            dry_run_mode: policy_config.dry_run,
-            allowlist: None,
+        let blocklists = Blocklists {
+            clients: Arc::new(DashMap::new()),
+            proxied_clients: Arc::new(DashMap::new()),
         };
-        let tally_loop_blocklists = ret.blocklists.clone();
-        let clear_loop_blocklists = ret.blocklists.clone();
+        let tally_loop_blocklists = blocklists.clone();
+        let clear_loop_blocklists = blocklists.clone();
         let tally_loop_metrics = metrics.clone();
         let clear_loop_metrics = metrics.clone();
+        let dry_run_mode = policy_config.dry_run;
         spawn_monitored_task!(run_tally_loop(
             rx,
             policy_config,
@@ -148,7 +143,12 @@ impl TrafficController {
             clear_loop_blocklists,
             clear_loop_metrics,
         ));
-        ret
+        Self {
+            tally_channel: tx,
+            acl: Acl::Blocklists(blocklists),
+            metrics: metrics.clone(),
+            dry_run_mode,
+        }
     }
 
     pub fn init_for_test(
@@ -197,32 +197,35 @@ impl TrafficController {
             }
         };
 
-        match self.allowlist {
-            Some(ref allowlist) => {
+        match &self.acl {
+            Acl::Allowlist(allowlist) => {
                 let allowed = client.is_none() || allowlist.contains(&client.unwrap());
                 check_with_dry_run_maybe(allowed)
             }
-            None => {
-                let allowed = self.check_blocklist(client, proxied_client).await;
+            Acl::Blocklists(blocklists) => {
+                let allowed = self
+                    .check_blocklists(blocklists, client, proxied_client)
+                    .await;
                 check_with_dry_run_maybe(allowed)
             }
         }
     }
 
     /// Returns true if the connection is in blocklist, false otherwise
-    pub async fn check_blocklist(
+    async fn check_blocklists(
         &self,
+        blocklists: &Blocklists,
         client: &Option<IpAddr>,
         proxied_client: &Option<IpAddr>,
     ) -> bool {
         let client_check = self.check_and_clear_blocklist(
             client,
-            self.blocklists.clients.clone(),
+            blocklists.clients.clone(),
             &self.metrics.connection_ip_blocklist_len,
         );
         let proxied_client_check = self.check_and_clear_blocklist(
             proxied_client,
-            self.blocklists.proxied_clients.clone(),
+            blocklists.proxied_clients.clone(),
             &self.metrics.proxy_ip_blocklist_len,
         );
         let (client_check, proxied_client_check) =
