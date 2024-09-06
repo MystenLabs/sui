@@ -26,6 +26,7 @@ pub mod postgres_manager;
 pub mod schema;
 pub mod types;
 
+pub mod sui_datasource;
 pub mod sui_deepbook_indexer;
 
 #[derive(Clone)]
