@@ -82,7 +82,10 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         }
         loop {
             tokio::select! {
-                _ = &mut exit_receiver => break,
+                _ = &mut exit_receiver => {
+                    tracing::warn!("Executor received exit signal");
+                    break;
+                }
                 Some((task_name, sequence_number)) = self.pool_progress_receiver.recv() => {
                     self.progress_store.save(task_name.clone(), sequence_number).await?;
                     let seq_number = self.progress_store.min_watermark()?;

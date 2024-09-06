@@ -18,6 +18,7 @@ type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
 
 const INGESTION_BATCH_SIZE: usize = 100;
+const RETRIEVED_CHECKPOINT_CHANNEL_SIZE: usize = 10000;
 
 pub struct IndexerBuilder<D, M, P> {
     name: String,
@@ -308,8 +309,10 @@ pub trait IndexerProgressStore: Send {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
-    ) -> anyhow::Result<()>;
+        checkpoint_numbers: &[u64],
+        start_checkpoint_number: u64,
+        target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>>;
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
 
@@ -333,7 +336,7 @@ pub trait Datasource<T: Send>: Sync + Send {
     async fn start_ingestion_task<M, P, R>(
         &self,
         task_name: String,
-        starting_checkpoint: u64,
+        start_checkpoint: u64,
         target_checkpoint: u64,
         mut storage: P,
         data_mapper: M,
@@ -346,23 +349,29 @@ pub trait Datasource<T: Send>: Sync + Send {
             .unwrap_or(INGESTION_BATCH_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+
+        let checkpoint_channel_size = std::env::var("RETRIEVED_CHECKPOINT_CHANNEL_SIZE")
+            .unwrap_or(RETRIEVED_CHECKPOINT_CHANNEL_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         tracing::info!(
             task_name,
             ingestion_batch_size,
+            checkpoint_channel_size,
             "Starting ingestion task ({}-{})",
-            starting_checkpoint,
+            start_checkpoint,
             target_checkpoint,
         );
         let is_live_task = target_checkpoint == i64::MAX as u64;
         let (data_sender, data_rx) = metered_channel::channel(
-            1000,
+            checkpoint_channel_size,
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
                 .with_label_values(&[&task_name]),
         );
         let join_handle = self
-            .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
+            .start_data_retrieval(start_checkpoint, target_checkpoint, data_sender)
             .await?;
 
         let processed_checkpoints_metrics = self
@@ -373,31 +382,21 @@ pub trait Datasource<T: Send>: Sync + Send {
             let remaining = self
                 .get_tasks_remaining_checkpoints_metric()
                 .with_label_values(&[&task_name]);
-            remaining.set((target_checkpoint - starting_checkpoint + 1) as i64);
+            remaining.set((target_checkpoint - start_checkpoint + 1) as i64);
             Some(remaining)
-        } else {
-            None
-        };
-        // track current checkpoint for live task
-        let live_task_current_checkpoint_metrics = if is_live_task {
-            let m = self
-                .get_live_task_checkpoint_metric()
-                .with_label_values(&[&task_name]);
-            m.set((starting_checkpoint) as i64);
-            Some(m)
         } else {
             None
         };
 
         let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(data_rx)
             .ready_chunks(ingestion_batch_size);
-
+        let mut last_saved_checkpoint = None;
         while let Some(batch) = stream.next().await {
-            // unwrap safe: at least 1 element in the batch
             let mut max_height = 0;
+            let mut heights = vec![];
             let mut data = vec![];
-            let mut batch_size = 0;
             for (height, d) in batch {
+                // Filter out data with height > target_checkpoint, in case data source returns any
                 if height > target_checkpoint {
                     tracing::warn!(
                         task_name,
@@ -407,36 +406,59 @@ pub trait Datasource<T: Send>: Sync + Send {
                     continue;
                 }
                 max_height = std::cmp::max(max_height, height);
-                batch_size += 1;
+                heights.push(height);
                 data.extend(d);
             }
             tracing::debug!(
                 task_name,
                 max_height,
                 "Ingestion task received {} blocks.",
-                batch_size,
+                heights.len(),
             );
             let timer = tokio::time::Instant::now();
 
             if !data.is_empty() {
+                let timer = tokio::time::Instant::now();
                 let processed_data = data.into_iter().try_fold(vec![], |mut result, d| {
                     result.append(&mut data_mapper.map(d)?);
                     Ok::<Vec<_>, Error>(result)
                 })?;
+                tracing::debug!(
+                    task_name,
+                    max_height,
+                    "Data mapper processed {} blocks in {}ms.",
+                    heights.len(),
+                    timer.elapsed().as_millis(),
+                );
+                let timer = tokio::time::Instant::now();
                 // TODO: batch write data
                 // TODO: we might be able to write data and progress in a single transaction.
                 storage.write(processed_data).await?;
+                tracing::debug!(
+                    task_name,
+                    max_height,
+                    "Processed data ({} blocks) was wrote to storage in {}ms.",
+                    heights.len(),
+                    timer.elapsed().as_millis(),
+                );
             }
-            // TODO: batch progress
-            storage.save_progress(task_name.clone(), max_height).await?;
+            last_saved_checkpoint = storage
+                .save_progress(
+                    task_name.clone(),
+                    &heights,
+                    start_checkpoint,
+                    target_checkpoint,
+                )
+                .await?;
             tracing::debug!(
                 task_name,
                 max_height,
-                "Ingestion task processed {} blocks in {}ms",
-                batch_size,
+                "Ingestion task processed {} blocks in {}ms. Saved checkpoint: {:?}",
+                heights.len(),
                 timer.elapsed().as_millis(),
+                last_saved_checkpoint,
             );
-            processed_checkpoints_metrics.inc_by(batch_size as u64);
+            processed_checkpoints_metrics.inc_by(heights.len() as u64);
             if let Some(m) = &remaining_checkpoints_metric {
                 // Note this is only approximate as the data may come in out of order
                 m.set(std::cmp::max(
@@ -444,16 +466,27 @@ pub trait Datasource<T: Send>: Sync + Send {
                     0,
                 ));
             }
-            if let Some(m) = &live_task_current_checkpoint_metrics {
-                m.set((max_height) as i64)
-            }
-            if max_height > target_checkpoint {
-                break;
+
+            // If we have reached the target checkpoint, exit proactively
+            if let Some(cp) = last_saved_checkpoint {
+                if cp >= target_checkpoint {
+                    // Task is done
+                    break;
+                }
             }
         }
         if is_live_task {
             // Live task should never exit, except in unit tests
-            tracing::error!(task_name, "Live task exiting");
+            tracing::error!(task_name, "Live task exiting unexpectedly");
+        } else if last_saved_checkpoint.expect("last_saved_checkpoint is None") < target_checkpoint
+        {
+            tracing::error!(
+                task_name,
+                "Task did not reach target checkpoint, exiting. Last saved checkpoint: {:?}",
+                last_saved_checkpoint
+            );
+        } else {
+            tracing::info!(task_name, "Backfill task is done, exiting");
         }
         join_handle.abort();
         if let Some(m) = &remaining_checkpoints_metric {
@@ -464,7 +497,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
+        start_checkpoint: u64,
         target_checkpoint: u64,
         data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error>;
@@ -476,8 +509,6 @@ pub trait Datasource<T: Send>: Sync + Send {
     fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec;
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec;
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec;
 }
 
 pub enum BackfillStrategy {
