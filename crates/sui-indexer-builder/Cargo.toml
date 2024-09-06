@@ -15,6 +15,7 @@ mysten-metrics.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
 sui-data-ingestion-core.workspace = true
+futures.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true

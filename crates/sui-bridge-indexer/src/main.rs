@@ -25,12 +25,12 @@ use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
 use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
+use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -137,6 +137,7 @@ async fn main() -> Result<()> {
         config.checkpoints_path.clone().into(),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics.clone(),
+        indexer_meterics.clone(),
     );
     let indexer = IndexerBuilder::new(
         "SuiBridgeIndexer",
