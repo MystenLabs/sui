@@ -240,8 +240,11 @@ pub mod setup_postgres {
     }
 
     pub async fn run_migrations(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
-        conn.run_pending_migrations(MIGRATIONS)
+        info!("Start running migrations..");
+        let migrations = conn
+            .run_pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
+        info!("Successfully run pending migrations: {migrations:?}");
         Ok(())
     }
 }
