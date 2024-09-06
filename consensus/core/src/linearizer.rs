@@ -262,9 +262,7 @@ mod tests {
         let commits = linearizer.handle_commit(leaders.clone());
 
         // Write them in DagState
-        dag_state
-            .write()
-            .update_scoring_subdag(|scoring_subdag| scoring_subdag.add_subdags(commits));
+        dag_state.write().add_scoring_subdags(commits);
 
         // Now update the leader schedule
         leader_schedule.update_leader_schedule_v2(&dag_state);

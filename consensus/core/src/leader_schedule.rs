@@ -72,7 +72,7 @@ impl LeaderSchedule {
         {
             tracing::info!(
             "LeaderSchedule recovered using {leader_swap_table:?}. There are {} committed subdags scored in DagState.",
-            dag_state.read().read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count()),
+            dag_state.read().scoring_subdags_count(),
         );
         } else {
             // TODO: Remove when DistributedVoteScoring is enabled.
@@ -95,10 +95,7 @@ impl LeaderSchedule {
             .protocol_config
             .consensus_distributed_vote_scoring_strategy()
         {
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
-                as u64
+            dag_state.read().scoring_subdags_count() as u64
         } else {
             // TODO: Remove when DistributedVoteScoring is enabled.
             dag_state.read().unscored_committed_subdags_count()
@@ -123,9 +120,7 @@ impl LeaderSchedule {
             .protocol_config
             .consensus_distributed_vote_scoring_strategy()
         {
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.is_empty())
+            dag_state.read().is_scoring_subdag_empty()
         } else {
             // TODO: Remove when DistributedVoteScoring is enabled.
             dag_state.read().unscored_committed_subdags_count() == 0
@@ -143,16 +138,9 @@ impl LeaderSchedule {
 
         let (reputation_scores, last_commit_index) = {
             let dag_state = dag_state.read();
-            let reputation_scores =
-                dag_state.read_scoring_subdag(|scoring_subdag| scoring_subdag.calculate_scores());
+            let reputation_scores = dag_state.calculate_scoring_subdag_scores();
 
-            let last_commit_index = dag_state.read_scoring_subdag(|scoring_subdag| {
-                scoring_subdag
-                    .commit_range
-                    .as_ref()
-                    .expect("commit range should exist for scoring subdag")
-                    .end()
-            });
+            let last_commit_index = dag_state.scoring_subdag_commit_range();
 
             (reputation_scores, last_commit_index)
         };
@@ -160,7 +148,7 @@ impl LeaderSchedule {
         {
             let mut dag_state = dag_state.write();
             // Clear scoring subdag as we have updated the leader schedule
-            dag_state.update_scoring_subdag(|scoring_subdag| scoring_subdag.clear());
+            dag_state.clear_scoring_subdag();
             // Buffer score and last commit rounds in dag state to be persisted later
             dag_state.add_commit_info(reputation_scores.clone());
         }
@@ -678,12 +666,7 @@ mod tests {
         );
 
         // Leader Scoring & Schedule Change is disabled, unscored subdags should not be accumulated.
-        assert_eq!(
-            0,
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
-        );
+        assert_eq!(0, dag_state.read().scoring_subdags_count());
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
 
@@ -763,15 +746,8 @@ mod tests {
             last_committed_rounds,
             dag_state.read().last_committed_rounds()
         );
-        assert_eq!(
-            1,
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
-        );
-        let recovered_scores = dag_state
-            .read()
-            .read_scoring_subdag(|scoring_subdag| scoring_subdag.calculate_scores());
+        assert_eq!(1, dag_state.read().scoring_subdags_count());
+        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
         let expected_scores = ReputationScores::new((11..=11).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 
@@ -813,12 +789,7 @@ mod tests {
             expected_last_committed_rounds,
             dag_state.read().last_committed_rounds()
         );
-        assert_eq!(
-            0,
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
-        );
+        assert_eq!(0, dag_state.read().scoring_subdags_count());
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
 
@@ -890,13 +861,9 @@ mod tests {
         );
         assert_eq!(
             expected_scored_subdags.len(),
-            dag_state
-                .read()
-                .read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count())
+            dag_state.read().scoring_subdags_count()
         );
-        let recovered_scores = dag_state
-            .read()
-            .read_scoring_subdag(|scoring_subdag| scoring_subdag.calculate_scores());
+        let recovered_scores = dag_state.read().calculate_scoring_subdag_scores();
         let expected_scores = ReputationScores::new((1..=2).into(), vec![0, 0, 0, 0]);
         assert_eq!(recovered_scores, expected_scores);
 
@@ -925,9 +892,7 @@ mod tests {
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
         )];
-        dag_state
-            .write()
-            .update_scoring_subdag(|scoring_subdag| scoring_subdag.add_subdags(unscored_subdags));
+        dag_state.write().add_scoring_subdags(unscored_subdags);
 
         let commits_until_leader_schedule_update =
             leader_schedule.commits_until_leader_schedule_update(dag_state.clone());
@@ -1026,8 +991,7 @@ mod tests {
 
         let mut dag_state_write = dag_state.write();
         dag_state_write.set_last_commit(last_commit);
-        dag_state_write
-            .update_scoring_subdag(|scoring_subdag| scoring_subdag.add_subdags(unscored_subdags));
+        dag_state_write.add_scoring_subdags(unscored_subdags);
         drop(dag_state_write);
 
         assert_eq!(

@@ -861,18 +861,32 @@ impl DagState {
         std::mem::take(&mut self.unscored_committed_subdags)
     }
 
-    pub(crate) fn update_scoring_subdag<F>(&mut self, update_fn: F)
-    where
-        F: FnOnce(&mut ScoringSubdag),
-    {
-        update_fn(&mut self.scoring_subdag);
+    pub(crate) fn add_scoring_subdags(&mut self, scoring_subdags: Vec<CommittedSubDag>) {
+        self.scoring_subdag.add_subdags(scoring_subdags);
     }
 
-    pub(crate) fn read_scoring_subdag<F, R>(&self, read_fn: F) -> R
-    where
-        F: FnOnce(&ScoringSubdag) -> R,
-    {
-        read_fn(&self.scoring_subdag)
+    pub(crate) fn clear_scoring_subdag(&mut self) {
+        self.scoring_subdag.clear();
+    }
+
+    pub(crate) fn scoring_subdags_count(&self) -> usize {
+        self.scoring_subdag.scored_subdags_count()
+    }
+
+    pub(crate) fn is_scoring_subdag_empty(&self) -> bool {
+        self.scoring_subdag.is_empty()
+    }
+
+    pub(crate) fn calculate_scoring_subdag_scores(&self) -> ReputationScores {
+        self.scoring_subdag.calculate_scores()
+    }
+
+    pub(crate) fn scoring_subdag_commit_range(&self) -> CommitIndex {
+        self.scoring_subdag
+            .commit_range
+            .as_ref()
+            .expect("commit range should exist for scoring subdag")
+            .end()
     }
 
     pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
@@ -1624,10 +1638,7 @@ mod test {
             expected_last_committed_rounds
         );
         // Unscored subdags will be recoverd based on the flushed commits and no commit info
-        assert_eq!(
-            dag_state.read_scoring_subdag(|scoring_subdag| scoring_subdag.scored_subdags_count()),
-            5
-        );
+        assert_eq!(dag_state.scoring_subdags_count(), 5);
     }
 
     #[tokio::test]

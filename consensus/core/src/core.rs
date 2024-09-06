@@ -619,11 +619,7 @@ impl Core {
                     .protocol_config
                     .consensus_distributed_vote_scoring_strategy()
                 {
-                    self.dag_state
-                        .write()
-                        .update_scoring_subdag(|scoring_subdag| {
-                            scoring_subdag.add_subdags(subdags.clone())
-                        });
+                    self.dag_state.write().add_scoring_subdags(subdags.clone());
                 } else {
                     // TODO: Remove when DistributedVoteScoring is enabled.
                     self.dag_state
