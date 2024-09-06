@@ -18,7 +18,7 @@ cargo install --locked --git "https://github.com/MystenLabs/sui.git" --rev {SHA}
 
 The required metadata includes two things:
 * `BridgeAuthorityKey`, a ECDSA key to sign messages. Since this is a hot key that is kept in memory, it’s fine to use the following tool to generate one and write to file.
-* a REST API URL where the bridge node listens to and serves requests. Example: `https://bridge.example-sui-validator.io:443`. Make sure the port is correct.
+* a REST API URL where the bridge node listens to and serves requests. Example: `https://bridge.example-sui-validator.io:443`. Make sure the port is correct and the url does not contain any invalid characters, for exmaple quotes.
 
 To create a `BridgeAuthorityKey`, run
 ```bash
