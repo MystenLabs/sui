@@ -1600,20 +1600,23 @@ impl PgIndexerStore {
         )
     }
 
-    fn get_network_total_transactions_by_end_of_epoch(
+    async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError> {
-        use diesel::RunQueryDsl;
-        read_only_blocking!(&self.blocking_cp, |conn| {
-            checkpoints::table
-                .filter(checkpoints::epoch.eq(epoch as i64))
-                .select(checkpoints::network_total_transactions)
-                .order_by(checkpoints::sequence_number.desc())
-                .first::<i64>(conn)
-        })
-        .context("Failed to get network total transactions in epoch")
-        .map(|v| v as u64)
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        checkpoints::table
+            .filter(checkpoints::epoch.eq(epoch as i64))
+            .select(checkpoints::network_total_transactions)
+            .order_by(checkpoints::sequence_number.desc())
+            .first::<i64>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .context("Failed to get network total transactions in epoch")
+            .map(|v| v as u64)
     }
 
     async fn execute_in_blocking_worker<F, R>(&self, f: F) -> Result<R, IndexerError>
@@ -2279,10 +2282,8 @@ impl IndexerStore for PgIndexerStore {
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError> {
-        self.execute_in_blocking_worker(move |this| {
-            this.get_network_total_transactions_by_end_of_epoch(epoch)
-        })
-        .await
+        self.get_network_total_transactions_by_end_of_epoch(epoch)
+            .await
     }
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch
