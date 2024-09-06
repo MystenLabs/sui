@@ -459,10 +459,11 @@ impl PgIndexerStore {
         })
     }
 
-    fn backfill_objects_snapshot_chunk(
+    async fn backfill_objects_snapshot_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_snapshot_chunks
@@ -479,17 +480,16 @@ impl PgIndexerStore {
             }
         }
 
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for objects_snapshot_chunk in
                     objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    on_conflict_do_update!(
-                        objects_snapshot::table,
-                        objects_snapshot_chunk,
-                        objects_snapshot::object_id,
-                        (
+                    diesel::insert_into(objects_snapshot::table)
+                        .values(objects_snapshot_chunk)
+                        .on_conflict(objects_snapshot::object_id)
+                        .do_update()
+                        .set((
                             objects_snapshot::object_version
                                 .eq(excluded(objects_snapshot::object_version)),
                             objects_snapshot::object_status
@@ -519,34 +519,15 @@ impl PgIndexerStore {
                                 .eq(excluded(objects_snapshot::df_object_type)),
                             objects_snapshot::df_object_id
                                 .eq(excluded(objects_snapshot::df_object_id)),
-                        ),
-                        |excluded: StoredObjectSnapshot| (
-                            objects_snapshot::object_version.eq(excluded.object_version),
-                            objects_snapshot::object_status.eq(excluded.object_status),
-                            objects_snapshot::object_digest.eq(excluded.object_digest),
-                            objects_snapshot::checkpoint_sequence_number
-                                .eq(excluded.checkpoint_sequence_number),
-                            objects_snapshot::owner_type.eq(excluded.owner_type),
-                            objects_snapshot::owner_id.eq(excluded.owner_id),
-                            objects_snapshot::object_type_package.eq(excluded.object_type_package),
-                            objects_snapshot::object_type_module.eq(excluded.object_type_module),
-                            objects_snapshot::object_type_name.eq(excluded.object_type_name),
-                            objects_snapshot::object_type.eq(excluded.object_type),
-                            objects_snapshot::serialized_object.eq(excluded.serialized_object),
-                            objects_snapshot::coin_type.eq(excluded.coin_type),
-                            objects_snapshot::coin_balance.eq(excluded.coin_balance),
-                            objects_snapshot::df_kind.eq(excluded.df_kind),
-                            objects_snapshot::df_name.eq(excluded.df_name),
-                            objects_snapshot::df_object_type.eq(excluded.df_object_type),
-                            objects_snapshot::df_object_id.eq(excluded.df_object_id),
-                        ),
-                        conn
-                    );
+                        ))
+                        .execute(conn)
+                        .await?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
@@ -1787,20 +1768,11 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.backfill_objects_snapshot_chunk(c)))
+            .map(|c| self.backfill_objects_snapshot_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to join backfill_objects_snapshot_chunk futures: {}",
-                    e
-                );
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
