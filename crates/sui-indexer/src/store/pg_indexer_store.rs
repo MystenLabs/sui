@@ -764,10 +764,11 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_transactions_chunk(
+    async fn persist_transactions_chunk(
         &self,
         transactions: Vec<IndexedTransaction>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_transactions_chunks
@@ -782,16 +783,27 @@ impl PgIndexerStore {
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    insert_or_ignore_into!(transactions::table, transaction_chunk, conn);
+                    let error_message = concat!(
+                        "Failed to write to ",
+                        stringify!((transactions::table)),
+                        " DB"
+                    );
+                    diesel::insert_into(transactions::table)
+                        .values(transaction_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context(error_message)?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
@@ -1948,17 +1960,11 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(transactions, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_transactions_chunk(c)))
+            .map(|c| self.persist_transactions_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!("Failed to join persist_transactions_chunk futures: {}", e);
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
