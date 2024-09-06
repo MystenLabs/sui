@@ -55,7 +55,9 @@ struct SendMessageBody {
 
 impl Slack {
     pub async fn new() -> Self {
-        let token = std::env::var("SLACK_BOT_TOKEN").expect("Please set SLACK_BOT_TOKEN env var");
+        let token = std::env::var("SLACK_BOT_TOKEN").expect(
+            "Please set SLACK_BOT_TOKEN env var ('slack bot token (incidentbot)' in 1password)",
+        );
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
