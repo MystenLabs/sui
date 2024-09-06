@@ -37,13 +37,14 @@ pub struct Incident {
     priority: Option<Priority>,
     slack_channel: Option<Channel>,
 }
+const DATE_FORMAT_IN: &str = "%Y-%m-%dT%H:%M:%SZ";
+const DATE_FORMAT_OUT: &str = "%m/%d/%Y %H:%M";
+const DATE_FORMAT_OUT_SHORT: &str = "%m/%d/%y";
 
 impl Incident {
     fn print(&self, long_output: bool) -> Result<()> {
-        let date_format_in = "%Y-%m-%dT%H:%M:%SZ";
         let priority = self.priority();
         if long_output {
-            let date_format_out = "%m/%d/%Y %H:%M";
             println!(
                 "Incident #: {} {}",
                 self.number.to_string().bright_purple(),
@@ -57,8 +58,8 @@ impl Incident {
             if let Some(created_at) = self.created_at.clone() {
                 println!(
                     "Created at: {}",
-                    NaiveDateTime::parse_from_str(&created_at, date_format_in)?
-                        .format(date_format_out)
+                    NaiveDateTime::parse_from_str(&created_at, DATE_FORMAT_IN)?
+                        .format(DATE_FORMAT_OUT)
                         .to_string()
                         .yellow()
                 );
@@ -66,8 +67,8 @@ impl Incident {
             if let Some(resolved_at) = self.resolved_at.clone() {
                 println!(
                     "Resolved at: {}",
-                    NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?
-                        .format(date_format_out)
+                    NaiveDateTime::parse_from_str(&resolved_at, DATE_FORMAT_IN)?
+                        .format(DATE_FORMAT_OUT)
                         .to_string()
                         .yellow()
                 );
@@ -81,7 +82,7 @@ impl Incident {
             let resolved_at = if let Some(resolved_at) = self.resolved_at.clone() {
                 let now = Utc::now().naive_utc();
 
-                Some(now - NaiveDateTime::parse_from_str(&resolved_at, date_format_in)?)
+                Some(now - NaiveDateTime::parse_from_str(&resolved_at, DATE_FORMAT_IN)?)
             } else {
                 None
             };
@@ -97,7 +98,11 @@ impl Incident {
                     format!(" {} ", priority)
                 },
                 self.title.green(),
-                self.html_url.bright_purple(),
+                if let Some(channel) = self.slack_channel.clone() {
+                    format!("({})", channel.url().bright_magenta())
+                } else {
+                    self.html_url.bright_purple().to_string()
+                }
             );
         }
         Ok(())
@@ -247,17 +252,24 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
 
     fn short_print(i: &Incident) -> String {
         format!(
-            "• {} {} {}",
+            "• {} {} {} {}",
             if let Some(channel) = i.slack_channel.clone() {
                 format!("{} ({})", i.number, channel.url())
             } else {
                 i.number.to_string()
             },
+            i.resolved_at
+                .clone()
+                .map(|c| NaiveDateTime::parse_from_str(&c, DATE_FORMAT_IN)
+                    .expect("parsing closed date")
+                    .format(DATE_FORMAT_OUT_SHORT)
+                    .to_string())
+                .unwrap_or("".to_owned()),
             i.title,
             i.slack_channel
                 .clone()
                 .map(|c| c.name)
-                .unwrap_or("".to_string())
+                .unwrap_or("".to_string()),
         )
     }
 
