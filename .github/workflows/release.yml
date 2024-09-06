@@ -44,9 +44,9 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud, # ubuntu-x86_64
-            windows-ghcloud, # windows-x86_64
-            macos-latest-xl, # macos-x86_64
+            # ubuntu-ghcloud, # ubuntu-x86_64
+            # windows-ghcloud, # windows-x86_64
+            # macos-latest-xl, # macos-x86_64
             macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
@@ -95,7 +95,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+          # echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
 
       - name: Download archive, if it exists
         if: ${{ env.s3_archive_exist != '' }}
@@ -157,15 +157,7 @@ jobs:
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --bin sui --release --features indexer && mv target/release/sui target/release/sui-pg
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
-
-      - name: Cargo build sui in debug mode (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-ghcloud' && env.s3_archive_exist == '' }}
-        shell: bash
-        run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --profile=dev --bin sui
-          mkdir -p ${{ env.TMP_BUILD_DIR }}
-          mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_archive_exist == '' }}
@@ -183,6 +175,7 @@ jobs:
           export binary=$(echo "sui-pg" | tr -d $'\r')
           mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
 
+          mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
