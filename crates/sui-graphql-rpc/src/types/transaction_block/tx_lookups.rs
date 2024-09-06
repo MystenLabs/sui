@@ -221,21 +221,10 @@ impl TxBounds {
             (tx_lo, hi_record.2 as u64)
         };
 
-        // // The `after` cursor is outside of the bounds if `after + 1`, the first element in the
-        // // page, lies on or outside the exclusive upper bound.
-        // if matches!(page.after(), Some(a) if a.tx_sequence_number.saturating_add(1) >= tx_hi) {
-        //     return Ok(None);
-        // }
+        let cursor_lo_exclusive = page.after().map(|a| a.tx_sequence_number);
+        let cursor_hi = page.before().map(|b| b.tx_sequence_number);
 
-        // // If `before` cursor is equal to `tx_lo`, there cannot be any txs between the two points.
-        // if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
-        //     return Ok(None);
-        // }
-
-        let after_plus_one = page.after().map(|a| a.tx_sequence_number.saturating_add(1));
-        let before_seq = page.before().map(|b| b.tx_sequence_number);
-
-        if !match (after_plus_one, before_seq) {
+        if !match (cursor_lo_exclusive.map(|a| a.saturating_add(1)), cursor_hi) {
             (Some(a), Some(b)) => tx_lo < a && a < b && b <= tx_hi,
             // a must be strictly less than tx_hi
             (Some(a), None) => tx_lo < a && a < tx_hi,
@@ -247,13 +236,11 @@ impl TxBounds {
             return Ok(None);
         }
 
-        println!("tx_lo: {}, tx_hi: {}", tx_lo, tx_hi);
-
         Ok(Some(Self {
             tx_lo,
             tx_hi,
-            cursor_lo_exclusive: page.after().map(|a| a.tx_sequence_number),
-            cursor_hi: page.before().map(|b| b.tx_sequence_number),
+            cursor_lo_exclusive,
+            cursor_hi,
             scan_limit,
             end: page.end(),
         }))
