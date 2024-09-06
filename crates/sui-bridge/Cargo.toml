@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 ethers = "2.0"
+snap = "1.1.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-authority-aggregation.workspace = true
@@ -25,6 +26,7 @@ mysten-metrics.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-config.workspace = true
+sui-tls.workspace = true
 clap.workspace = true
 tracing.workspace = true
 bin-version.workspace = true
