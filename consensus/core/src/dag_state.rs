@@ -156,7 +156,7 @@ impl DagState {
             .protocol_config
             .consensus_distributed_vote_scoring_strategy()
         {
-            scoring_subdag.add_subdags(unscored_committed_subdags.clone());
+            scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
         }
 
         let mut state = Self {

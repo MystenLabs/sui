@@ -442,45 +442,6 @@ impl UnscoredSubdag {
         self.find_supported_leader_block(leader_slot, potential_vote) == Some(reference)
     }
 
-    // TODO(arun): Remove
-    // pub(crate) fn is_certificate(
-    //     &self,
-    //     potential_certificate: &VerifiedBlock,
-    //     leader_block: &VerifiedBlock,
-    //     all_votes: &mut HashMap<BlockRef, bool>,
-    // ) -> bool {
-    //     let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-    //     for reference in potential_certificate.ancestors() {
-    //         let is_vote = if let Some(is_vote) = all_votes.get(reference) {
-    //             *is_vote
-    //         } else if let Some(potential_vote) = self.get_block(reference) {
-    //             let is_vote = self.is_vote(&potential_vote, leader_block);
-    //             all_votes.insert(*reference, is_vote);
-    //             is_vote
-    //         } else {
-    //             tracing::trace!(
-    //                 "Potential vote not found in unscored committed subdags: {:?}",
-    //                 reference
-    //             );
-    //             false
-    //         };
-
-    //         if is_vote {
-    //             tracing::trace!("{reference} is a vote for {leader_block}");
-    //             if votes_stake_aggregator.add(reference.author, &self.context.committee) {
-    //                 tracing::trace!(
-    //                     "{potential_certificate} is a certificate for leader {leader_block}"
-    //                 );
-    //                 return true;
-    //             }
-    //         } else {
-    //             tracing::trace!("{reference} is not a vote for {leader_block}",);
-    //         }
-    //     }
-    //     tracing::trace!("{potential_certificate} is not a certificate for leader {leader_block}");
-    //     false
-    // }
-
     pub(crate) fn get_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
         let mut blocks = vec![];
         for (_block_ref, block) in self.blocks.range((
