@@ -93,9 +93,9 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
                 .map(|_| false)
                 .collect(),
             N::TypeName_::ModuleType(m, n) => {
-                let ty_params = match info.datatype_kind(&m, &n) {
-                    DatatypeKind::Struct => &info.struct_definition(&m, &n).type_parameters,
-                    DatatypeKind::Enum => &info.enum_definition(&m, &n).type_parameters,
+                let ty_params = match info.datatype_kind(m, n) {
+                    DatatypeKind::Struct => &info.struct_definition(m, n).type_parameters,
+                    DatatypeKind::Enum => &info.enum_definition(m, n).type_parameters,
                 };
                 ty_params.iter().map(|tp| tp.is_phantom).collect()
             }
