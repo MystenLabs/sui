@@ -2218,16 +2218,19 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
 
         let mut buffer = Cursor::new(Vec::new());
         {
             let mut writer = Writer::from_writer(&mut buffer);
 
-            let displays = read_only_blocking!(&self.blocking_cp, |conn| {
-                display::table.load::<StoredDisplay>(conn)
-            })
-            .context("Failed to get display from database")?;
+            let displays = display::table
+                .load::<StoredDisplay>(&mut connection)
+                .await
+                .map_err(Into::into)
+                .context("Failed to get display from database")?;
 
             info!("Read {} displays", displays.len());
             writer
