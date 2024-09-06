@@ -39,15 +39,15 @@ env:
 jobs:
   release-build:
     name: Build & Publish Binaries
-    timeout-minutes: 80
+    timeout-minutes: 120
     strategy:
       matrix:
         os:
           [
             # ubuntu-ghcloud, # ubuntu-x86_64
             # windows-ghcloud, # windows-x86_64
-            macos-latest-xl, # macos-x86_64
-            # macos-latest-xlarge # macos-arm64
+            # macos-latest-xl, # macos-x86_64
+            macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -135,8 +135,8 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Remove unused apps (MacOS platform)
-        if: ${{ startsWith(matrix.os, 'macos') && env.gcloud_archive_exist == '' }}
+      - name: Remove unused apps (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         continue-on-error: true
         shell: bash
         run: |
