@@ -647,7 +647,6 @@ fn owned_object_transaction_locks_table_config(db_options: DBOptions) -> DBOptio
 
 fn objects_table_config(db_options: DBOptions) -> DBOptions {
     db_options
-        .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024))
 }
 
@@ -675,7 +674,6 @@ fn events_table_config(db_options: DBOptions) -> DBOptions {
 
 fn indirect_move_objects_table_config(mut db_options: DBOptions) -> DBOptions {
     db_options = db_options
-        .optimize_for_write_throughput()
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
         );

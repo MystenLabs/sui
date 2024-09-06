@@ -389,6 +389,7 @@ pub struct AuthorityEpochTables {
     /// Note that this may contain signatures for effects from previous epochs, in the case
     /// that a user requests a signature for effects from a previous epoch. However, the
     /// signature is still epoch-specific and so is stored in the epoch store.
+    #[default_options_override_fn = "effects_signatures_table_default_config"]
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// When we sign a TransactionEffects, we must record the digest of the effects in order
@@ -399,6 +400,7 @@ pub struct AuthorityEpochTables {
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Signatures of transaction certificates that are executed locally.
+    #[default_options_override_fn = "transaction_cert_signatures_table_default_config"]
     transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// Transactions that were executed in the current epoch.
@@ -596,6 +598,14 @@ pub struct AuthorityEpochTables {
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
+    default_db_options().optimize_for_write_throughput()
+}
+
+fn effects_signatures_table_default_config() -> DBOptions {
+    default_db_options().optimize_for_write_throughput()
+}
+
+fn transaction_cert_signatures_table_default_config() -> DBOptions {
     default_db_options().optimize_for_write_throughput()
 }
 
