@@ -132,42 +132,22 @@ export class Runtime extends EventEmitter {
      *
      * @param next determines if it's `next` (or otherwise `step`) action.
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @throws Error with a descriptive error message if the step event cannot be handled.
      */
     public step(next: boolean): boolean {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
+            this.sendEvent(RuntimeEvents.stopOnStep);
             return true;
         }
         let currentEvent = this.trace.events[this.eventIndex];
         if (currentEvent.type === 'Instruction') {
-            // process instruction with the current frame
-            const stackHeight = this.frameStack.frames.length;
-            // newest frame is at the top of the stack
-            let currentFrame = this.frameStack.frames[stackHeight - 1];
-            const currentFun = currentFrame.sourceMap.functions.get(currentFrame.name);
-            if (!currentFun) {
-                throw new Error("Cannot find function: " + currentFrame.name + " in source map");
-            }
-
-            // if map does not contain an entry for a PC that can be found in the trace file,
-            // it means that the position of the last PC in the source map should be used
-            let currentPCLoc = currentEvent.pc >= currentFun.pcLocs.length
-                ? currentFun.pcLocs[currentFun.pcLocs.length - 1]
-                : currentFun.pcLocs[currentEvent.pc];
-
-            if (!currentPCLoc) {
-                throw new Error("Cannot find location for PC: "
-                    + currentEvent.pc
-                    + " in function: "
-                    + currentFrame.name);
-            }
-
-            if (currentPCLoc.line === currentFrame.line) {
-                // bypass instructions that are on the same line
+            let sameLine = this.instruction(currentEvent);
+            if (sameLine) {
                 return this.step(next);
             }
-
-            currentFrame.line = currentPCLoc.line;
+            this.sendEvent(RuntimeEvents.stopOnStep);
+            return false;
         } else if (currentEvent.type === 'OpenFrame') {
             if (next) {
                 // skip all events until the corresponding CloseFrame event
@@ -198,40 +178,163 @@ export class Runtime extends EventEmitter {
             // ignore other events
             return this.step(next);
         }
-        this.sendEvent(RuntimeEvents.stopOnStep);
-        return false;
     }
 
     /**
      * Handles "step out" adapter action.
      *
      * @returns `true` if the trace viewing session is finished, `false` otherwise.
+     * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
     public stepOut(): boolean {
         const stackHeight = this.frameStack.frames.length;
         if (stackHeight <= 1) {
-            // finish viewing the current trace
-            return true;
+            // do nothing as there is no frame to step out to
+            return false;
         }
         // newest frame is at the top of the stack
-        const openFrameID = this.frameStack.frames[stackHeight - 1].id;
+        const currentFrame = this.frameStack.frames[stackHeight - 1];
         let currentEvent = this.trace.events[this.eventIndex];
         // skip all events until the corresponding CloseFrame event,
         // pop the top frame from the stack, and proceed to the next event
         while (true) {
             this.eventIndex++;
             if (this.eventIndex >= this.trace.events.length) {
-                return true;
+                throw new Error("Cannot find corresponding CloseFrame event for function: " +
+                    currentFrame.name);
             }
             currentEvent = this.trace.events[this.eventIndex];
-            if (currentEvent.type === 'CloseFrame' && currentEvent.id === openFrameID) {
+            if (currentEvent.type === 'CloseFrame' && currentEvent.id === currentFrame.id) {
                 break;
             }
         }
         this.frameStack.frames.pop();
         return this.step(false);
-
     }
+    /**
+     * Handles "step back" adapter action.
+     * @throws Error with a descriptive error message if the step back event cannot be handled.
+     */
+    public stepBack() {
+        if (this.eventIndex === 1) {
+            // no where to step back to (event 0 is the `OpenFrame` event for the first frame)
+            // and is processed in runtime.start() which is executed only once
+            this.sendEvent(RuntimeEvents.stopOnStep);
+            return;
+        }
+        let currentEvent = this.trace.events[this.eventIndex - 1];
+        if (currentEvent.type === 'CloseFrame') {
+            // cannot step back into or over function calls
+            this.sendEvent(RuntimeEvents.stopOnStep);
+            return;
+        } else {
+            this.eventIndex--;
+            if (currentEvent.type === 'Instruction') {
+                let sameLine = this.instruction(currentEvent);
+                if (sameLine) {
+                    this.stepBack();
+                    return;
+                }
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                return;
+            } else if (currentEvent.type === 'OpenFrame') {
+                const stackHeight = this.frameStack.frames.length;
+                if (stackHeight <= 0) {
+                    // should never happen but better to signal than crash
+                    throw new Error("Error stepping back to caller function "
+                        + currentEvent.name
+                        + " as there is no frame on the stack"
+                    );
+                }
+                if (stackHeight <= 1) {
+                    // should never happen as we never step back out of the outermost function
+                    // (never step back to event 0 as per first conditional in this function)
+                    throw new Error("Error stepping back to caller function "
+                        + currentEvent.name
+                        + " from callee "
+                        + this.frameStack.frames[stackHeight - 1].name
+                        + " as there would be no frame on the stack afterwards"
+                    );
+                }
+                // pop the top frame from the stack
+                this.frameStack.frames.pop();
+                // cannot simply call stepBack as we are stepping back to the same line
+                // that is now in the current frame, which would result in unintentionally
+                // recursing to previous events
+                if (this.eventIndex === 0) {
+                    // no where to step back to
+                    this.sendEvent(RuntimeEvents.stopOnStep);
+                    return;
+                }
+                this.eventIndex--;
+                let prevCurrentEvent = this.trace.events[this.eventIndex];
+                if (prevCurrentEvent.type !== 'Instruction') {
+                    throw new Error("Expected an Instruction event before OpenFrame event in function"
+                        + currentEvent.name
+                    );
+                }
+                if (!this.instruction(prevCurrentEvent)) {
+                    // we should be steppping back to the instruction on the same line
+                    // as the one in the current frame
+                    throw new Error("Wrong line of an instruction (at PC " + prevCurrentEvent.pc + ")"
+                        + " in the caller function"
+                        + currentEvent.name
+                        + " to step back to from callee "
+                        + this.frameStack.frames[stackHeight - 1].name
+                        + " as there would be no frame on the stack afterwards"
+                    );
+
+                    throw new Error("Wrong line to step back to from a function call");
+                }
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                return;
+            } else {
+                // ignore other events
+                this.stepBack();
+                return;
+            }
+        }
+    }
+
+    /**
+     * Handles `Instruction` trace event which represents instruction in the current stack frame.
+     *
+     * @param instructionEvent `Instruction` trace event.
+     * @returns `true` if the instruction is on the same line as the one in the current frame,
+     * `false` otherwise (so that instructions on the same line can be skipped).
+     * @throws Error with a descriptive error message if instruction event cannot be handled.
+     */
+    private instruction(instructionEvent: Extract<TraceEvent, { type: 'Instruction' }>): boolean {
+        const stackHeight = this.frameStack.frames.length;
+        // newest frame is at the top of the stack
+        let currentFrame = this.frameStack.frames[stackHeight - 1];
+        const currentFun = currentFrame.sourceMap.functions.get(currentFrame.name);
+        if (!currentFun) {
+            throw new Error("Cannot find function: " + currentFrame.name + " in source map");
+        }
+
+        // if map does not contain an entry for a PC that can be found in the trace file,
+        // it means that the position of the last PC in the source map should be used
+        let currentPCLoc = instructionEvent.pc >= currentFun.pcLocs.length
+            ? currentFun.pcLocs[currentFun.pcLocs.length - 1]
+            : currentFun.pcLocs[instructionEvent.pc];
+
+        if (!currentPCLoc) {
+            throw new Error("Cannot find location for PC: "
+                + instructionEvent.pc
+                + " in function: "
+                + currentFrame.name);
+        }
+
+        if (currentPCLoc.line === currentFrame.line) {
+            // so that instructions on the same line can be bypassed
+            return true;
+        } else {
+            currentFrame.line = currentPCLoc.line;
+            return false;
+        }
+    }
+
 
     /**
      * Creates a new runtime stack frame based on info from the `OpenFrame` trace event.
