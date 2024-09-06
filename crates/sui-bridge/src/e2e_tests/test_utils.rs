@@ -777,6 +777,7 @@ pub(crate) async fn start_bridge_cluster(
                 sui_bridge_module_last_processed_event_id_override: None,
             },
             metrics_key_pair: default_ed25519_key_pair(),
+            metrics: None,
         };
         // Spawn bridge node in memory
         handles.push(

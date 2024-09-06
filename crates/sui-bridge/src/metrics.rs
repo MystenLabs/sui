@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::MetricsConfig;
+use mysten_metrics::RegistryService;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    register_int_gauge_with_registry, Encoder, HistogramVec, IntCounter, IntCounterVec, IntGauge,
     IntGaugeVec, Registry,
 };
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use sui_types::crypto::NetworkKeyPair;
+use tracing::error;
 
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
@@ -14,6 +19,141 @@ const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     10., 15., 20., 25., 30., 35., 40., 45., 50., 60., 70., 80., 90., 100., 120., 140., 160., 180.,
     200., 250., 300., 350., 400.,
 ];
+
+pub struct MetricsPushClient {
+    certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
+    client: reqwest::Client,
+}
+
+impl MetricsPushClient {
+    pub fn new(metrics_key: sui_types::crypto::NetworkKeyPair) -> Self {
+        use fastcrypto::traits::KeyPair;
+        let certificate = std::sync::Arc::new(sui_tls::SelfSignedCertificate::new(
+            metrics_key.private(),
+            sui_tls::SUI_VALIDATOR_SERVER_NAME,
+        ));
+        let identity = certificate.reqwest_identity();
+        let client = reqwest::Client::builder()
+            .identity(identity)
+            .build()
+            .unwrap();
+
+        Self {
+            certificate,
+            client,
+        }
+    }
+
+    pub fn certificate(&self) -> &sui_tls::SelfSignedCertificate {
+        &self.certificate
+    }
+
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+}
+
+/// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
+/// is configured.
+pub fn start_metrics_push_task(
+    metrics_config: &Option<MetricsConfig>,
+    metrics_key_pair: NetworkKeyPair,
+    registry: RegistryService,
+) {
+    use fastcrypto::traits::KeyPair;
+
+    const DEFAULT_METRICS_PUSH_INTERVAL: Duration = Duration::from_secs(60);
+
+    let (interval, url) = match metrics_config {
+        Some(MetricsConfig {
+            push_interval_seconds,
+            push_url: url,
+        }) => {
+            let interval = push_interval_seconds
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_METRICS_PUSH_INTERVAL);
+            let url = reqwest::Url::parse(url).expect("unable to parse metrics push url");
+            (interval, url)
+        }
+        _ => return,
+    };
+
+    let mut client = MetricsPushClient::new(metrics_key_pair.copy());
+
+    // TODO (johnm) split this out into mysten-common
+    async fn push_metrics(
+        client: &MetricsPushClient,
+        url: &reqwest::Url,
+        registry: &RegistryService,
+    ) -> Result<(), anyhow::Error> {
+        // now represents a collection timestamp for all of the metrics we send to the proxy
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        let mut metric_families = registry.gather_all();
+        for mf in metric_families.iter_mut() {
+            for m in mf.mut_metric() {
+                m.set_timestamp_ms(now);
+            }
+        }
+
+        let mut buf: Vec<u8> = vec![];
+        let encoder = prometheus::ProtobufEncoder::new();
+        encoder.encode(&metric_families, &mut buf)?;
+
+        let mut s = snap::raw::Encoder::new();
+        let compressed = s.compress_vec(&buf).map_err(|err| {
+            error!("unable to snappy encode; {err}");
+            err
+        })?;
+
+        let response = client
+            .client()
+            .post(url.to_owned())
+            .header(reqwest::header::CONTENT_ENCODING, "snappy")
+            .header(reqwest::header::CONTENT_TYPE, prometheus::PROTOBUF_FORMAT)
+            .body(compressed)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = match response.text().await {
+                Ok(body) => body,
+                Err(error) => format!("couldn't decode response body; {error}"),
+            };
+            return Err(anyhow::anyhow!(
+                "metrics push failed: [{}]:{}",
+                status,
+                body
+            ));
+        }
+
+        tracing::debug!("successfully pushed metrics to {url}");
+
+        Ok(())
+    }
+
+    tokio::spawn(async move {
+        tracing::info!(push_url =% url, interval =? interval, "Started Metrics Push Service");
+
+        let mut interval = tokio::time::interval(interval);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            interval.tick().await;
+
+            if let Err(error) = push_metrics(&client, &url, &registry).await {
+                tracing::warn!("unable to push metrics: {error}; new client will be created");
+                // aggressively recreate our client connection if we hit an error
+                // since our tick interval is only every min, this should not be racey
+                client = MetricsPushClient::new(metrics_key_pair.copy());
+            }
+        }
+    });
+}
 
 #[derive(Clone, Debug)]
 pub struct BridgeMetrics {
