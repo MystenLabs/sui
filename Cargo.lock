@@ -13261,7 +13261,7 @@ dependencies = [
  "sui-data-ingestion-core",
  "sui-indexer-builder",
  "sui-json-rpc-types",
- "sui-sdk 1.33.0",
+ "sui-sdk 1.34.0",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",
