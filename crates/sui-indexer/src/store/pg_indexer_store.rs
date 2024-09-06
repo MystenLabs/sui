@@ -1301,17 +1301,16 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+    async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_epoch
             .start_timer();
         let epoch_id = epoch.new_epoch.epoch;
 
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 if let Some(last_epoch) = &epoch.last_epoch {
                     let last_epoch_id = last_epoch.epoch;
                     // Overwrites the `epoch_total_transactions` field on `epoch.last_epoch` because
@@ -1326,6 +1325,7 @@ impl PgIndexerStore {
                                 .filter(checkpoints::epoch.eq(prev_epoch_id as i64))
                                 .select(max(checkpoints::network_total_transactions))
                                 .first::<Option<i64>>(conn)
+                                .await
                                 .map(|o| o.unwrap_or(0))?;
 
                             result as u64
@@ -1338,14 +1338,11 @@ impl PgIndexerStore {
                     let mut last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
                     last_epoch.epoch_total_transactions = Some(epoch_total_transactions as i64);
                     info!(last_epoch_id, "Persisting epoch end data.");
-                    on_conflict_do_update!(
-                        epochs::table,
-                        vec![last_epoch],
-                        epochs::epoch,
-                        (
-                            // Note: Exclude epoch beginning info except system_state below.
-                            // This is to ensure that epoch beginning info columns are not overridden with default values,
-                            // because these columns are default values in `last_epoch`.
+                    diesel::insert_into(epochs::table)
+                        .values(vec![last_epoch])
+                        .on_conflict(epochs::epoch)
+                        .do_update()
+                        .set((
                             epochs::system_state.eq(excluded(epochs::system_state)),
                             epochs::epoch_total_transactions
                                 .eq(excluded(epochs::epoch_total_transactions)),
@@ -1362,36 +1359,28 @@ impl PgIndexerStore {
                             epochs::leftover_storage_fund_inflow
                                 .eq(excluded(epochs::leftover_storage_fund_inflow)),
                             epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                        ),
-                        |excluded: StoredEpochInfo| (
-                            epochs::system_state.eq(excluded.system_state.clone()),
-                            epochs::epoch_total_transactions.eq(excluded.epoch_total_transactions),
-                            epochs::last_checkpoint_id.eq(excluded.last_checkpoint_id),
-                            epochs::epoch_end_timestamp.eq(excluded.epoch_end_timestamp),
-                            epochs::storage_fund_reinvestment
-                                .eq(excluded.storage_fund_reinvestment),
-                            epochs::storage_charge.eq(excluded.storage_charge),
-                            epochs::storage_rebate.eq(excluded.storage_rebate),
-                            epochs::stake_subsidy_amount.eq(excluded.stake_subsidy_amount),
-                            epochs::total_gas_fees.eq(excluded.total_gas_fees),
-                            epochs::total_stake_rewards_distributed
-                                .eq(excluded.total_stake_rewards_distributed),
-                            epochs::leftover_storage_fund_inflow
-                                .eq(excluded.leftover_storage_fund_inflow),
-                            epochs::epoch_commitments.eq(excluded.epoch_commitments)
-                        ),
-                        conn
-                    );
+                        ))
+                        .execute(conn)
+                        .await?;
                 }
 
                 let epoch_id = epoch.new_epoch.epoch;
                 info!(epoch_id, "Persisting epoch beginning info");
                 let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
-                insert_or_ignore_into!(epochs::table, new_epoch, conn);
+                let error_message =
+                    concat!("Failed to write to ", stringify!((epochs::table)), " DB");
+                diesel::insert_into(epochs::table)
+                    .values(new_epoch)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context(error_message)?;
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(elapsed, epoch_id, "Persisted epoch beginning info");
@@ -2113,8 +2102,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.persist_epoch(epoch))
-            .await
+        self.persist_epoch(epoch).await
     }
 
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
