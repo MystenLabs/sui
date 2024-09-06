@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer_builder::{DataSender, Datasource};
 use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};
+use prometheus::IntCounterVec;
+use prometheus::IntGaugeVec;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
+use sui_indexer_builder::indexer_builder::{DataSender, Datasource};
 use sui_sdk::SuiClient;
 use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::CheckpointData as SuiCheckpointData;
@@ -18,7 +20,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
-use tracing::info;
+
+use crate::metrics::BridgeIndexerMetrics;
 
 pub struct SuiCheckpointDatasource {
     remote_store_url: String,
@@ -27,6 +30,7 @@ pub struct SuiCheckpointDatasource {
     checkpoint_path: PathBuf,
     genesis_checkpoint: u64,
     metrics: DataIngestionMetrics,
+    indexer_metrics: BridgeIndexerMetrics,
 }
 impl SuiCheckpointDatasource {
     pub fn new(
@@ -36,6 +40,7 @@ impl SuiCheckpointDatasource {
         checkpoint_path: PathBuf,
         genesis_checkpoint: u64,
         metrics: DataIngestionMetrics,
+        indexer_metrics: BridgeIndexerMetrics,
     ) -> Self {
         SuiCheckpointDatasource {
             remote_store_url,
@@ -43,6 +48,7 @@ impl SuiCheckpointDatasource {
             concurrency,
             checkpoint_path,
             metrics,
+            indexer_metrics,
             genesis_checkpoint,
         }
     }
@@ -97,6 +103,18 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn get_genesis_height(&self) -> u64 {
         self.genesis_checkpoint
     }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.tasks_remaining_checkpoints
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
+    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.live_task_current_checkpoint
+    }
 }
 
 struct PerTaskInMemProgressStore {
@@ -144,7 +162,7 @@ pub type CheckpointTxnData = (CheckpointTransaction, u64, u64);
 #[async_trait]
 impl Worker for IndexerWorker<CheckpointTxnData> {
     async fn process_checkpoint(&self, checkpoint: SuiCheckpointData) -> anyhow::Result<()> {
-        info!(
+        tracing::trace!(
             "Received checkpoint [{}] {}: {}",
             checkpoint.checkpoint_summary.epoch,
             checkpoint.checkpoint_summary.sequence_number,

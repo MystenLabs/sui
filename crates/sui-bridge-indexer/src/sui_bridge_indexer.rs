@@ -15,7 +15,6 @@ use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
-use sui_indexer_builder::sui_datasource::CheckpointTxnData;
 use sui_indexer_builder::Task;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
@@ -27,6 +26,7 @@ use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
+use crate::sui_datasource::CheckpointTxnData;
 use crate::{
     models, schema, BridgeDataSource, ProcessedTxnData, SuiTxnError, TokenTransfer,
     TokenTransferData, TokenTransferStatus,

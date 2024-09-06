@@ -19,6 +19,7 @@ pub mod types;
 
 pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;
+pub mod sui_datasource;
 
 #[derive(Clone)]
 pub enum ProcessedTxnData {
