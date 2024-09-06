@@ -1446,7 +1446,7 @@ export function LockOwnedObjects() {
 ```
 </details>
 
-Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account and the `Locked` object struct type to the call. The struct type is usually identified by the format of `{PACKAGE_ID}::{MODULE_NAME}::{STRUCT_TYPE}`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data will be re-fetched automatically.
+Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data will be re-fetched automatically.
 
 
 <details>
@@ -1639,9 +1639,7 @@ Let's take a look at the **My Locked Objects** tab by examining `src/components/
   {@inject: examples/trading/frontend/src/components/locked/OwnedLockedList.tsx}
 </details>
 
-This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `LockOwnedObjects` component. The difference is that it fetches the locked objects instead of the owned objects. The `Locked` object is a struct type in the smart contract, so you need to supply the struct type to the query call as a filter.
-
-Fetch the owned `Locked` objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`.
+This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `LockOwnedObjects` component. The difference is that it fetches the locked objects instead of the owned objects. The `Locked` object is a struct type in the smart contract, so you need to supply the struct type to the query call as a `filter`. The struct type is usually identified by the format of `{PACKAGE_ID}::{MODULE_NAME}::{STRUCT_TYPE}`.
 
 ##### `LockedObject` and `Locked` component
 
