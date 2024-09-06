@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use ethers::prelude::Transaction;
 use ethers::providers::{Http, Middleware, Provider, StreamExt, Ws};
 use ethers::types::{Address as EthAddress, Block, Filter, H256};
+use prometheus::{IntCounterVec, IntGaugeVec};
 use sui_bridge::error::BridgeError;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
@@ -145,6 +146,18 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
     fn get_genesis_height(&self) -> u64 {
         self.genesis_block
     }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.tasks_remaining_checkpoints
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
+    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.live_task_current_checkpoint
+    }
 }
 
 pub struct EthSyncDatasource {
@@ -266,6 +279,18 @@ impl Datasource<RawEthData> for EthSyncDatasource {
 
     fn get_genesis_height(&self) -> u64 {
         self.genesis_block
+    }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.tasks_remaining_checkpoints
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        &self.indexer_metrics.tasks_processed_checkpoints
+    }
+
+    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
+        &self.indexer_metrics.live_task_current_checkpoint
     }
 }
 

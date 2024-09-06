@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
+use prometheus::{IntCounterVec, IntGaugeVec};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -21,6 +22,8 @@ pub struct TestDatasource<T> {
     pub data: Vec<T>,
     pub live_task_starting_checkpoint: u64,
     pub genesis_checkpoint: u64,
+    pub gauge_metric: IntGaugeVec,
+    pub counter_metric: IntCounterVec,
 }
 
 #[async_trait]
@@ -54,6 +57,21 @@ where
 
     fn get_genesis_height(&self) -> u64 {
         self.genesis_checkpoint
+    }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.gauge_metric
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        // This is dummy
+        &self.counter_metric
+    }
+
+    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.gauge_metric
     }
 }
 

@@ -3,8 +3,11 @@
 
 use clap::Parser;
 use sui_indexer::config::Command;
-use sui_indexer::database::{Connection, ConnectionPool};
-use sui_indexer::db::{new_connection_pool, reset_database};
+use sui_indexer::database::ConnectionPool;
+use sui_indexer::db::{
+    check_db_migration_consistency, get_pool_connection, new_connection_pool, reset_database,
+    run_migrations,
+};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
@@ -43,7 +46,11 @@ async fn main() -> anyhow::Result<()> {
             snapshot_config,
             pruning_options,
         } => {
+            // Make sure to run all migrations on startup, and also serve as a compatibility check.
+            run_migrations(&mut get_pool_connection(&connection_pool)?).await?;
+
             let store = PgIndexerStore::new(connection_pool, pool, indexer_metrics.clone());
+
             Indexer::start_writer_with_config(
                 &ingestion_config,
                 store,
@@ -55,6 +62,8 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
+            check_db_migration_consistency(&mut get_pool_connection(&connection_pool)?)?;
+
             Indexer::start_reader(&json_rpc_config, &registry, connection_pool, pool).await?;
         }
         Command::ResetDatabase { force } => {
@@ -64,8 +73,10 @@ async fn main() -> anyhow::Result<()> {
                 ));
             }
 
-            let connection = Connection::dedicated(&opts.database_url).await?;
-            reset_database(connection).await?;
+            reset_database(&mut get_pool_connection(&connection_pool)?).await?;
+        }
+        Command::RunMigrations => {
+            run_migrations(&mut get_pool_connection(&connection_pool)?).await?;
         }
     }
 

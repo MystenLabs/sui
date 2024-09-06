@@ -190,13 +190,9 @@ impl ObjectsSnapshotProcessor {
                         // `objects_snapshot` table.
                         let max_allowed_cp = latest_indexer_cp - config.snapshot_min_lag as u64;
 
-                        // Fetch `batch_size` more data from the stream if the buffer is empty and
-                        // we still need to catch up.
-                        if unprocessed.is_empty() {
-                            if let Some(new_changes) = stream.next().await {
-                                for checkpoint in new_changes {
-                                    unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
-                                }
+                        if let Some(new_changes) = stream.next().await {
+                            for checkpoint in new_changes {
+                                unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
                             }
                         }
 
@@ -218,8 +214,7 @@ impl ObjectsSnapshotProcessor {
                             let last_checkpoint_seq = batch.last().as_ref().unwrap().checkpoint_sequence_number;
                             info!("Objects snapshot processor is updating objects snapshot table from {} to {}", first_checkpoint_seq, last_checkpoint_seq);
 
-
-                            store.backfill_objects_snapshot(batch.drain(..).map(|obj| obj.object_changes).collect())
+                            store.persist_objects_snapshot(batch.drain(..).map(|obj| obj.object_changes).collect())
                                 .await
                                 .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
                             start_cp = last_checkpoint_seq + 1;

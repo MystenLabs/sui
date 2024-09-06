@@ -12,9 +12,8 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
 use crate::config::SnapshotLagConfig;
-use crate::database::Connection;
 use crate::database::ConnectionPool;
-use crate::db::{new_connection_pool, ConnectionPoolConfig};
+use crate::db::{get_pool_connection, new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
@@ -121,10 +120,9 @@ pub async fn start_test_indexer_impl(
             snapshot_config,
             pruning_options,
         } => {
-            let connection = Connection::dedicated(&db_url.parse().unwrap())
+            crate::db::reset_database(&mut get_pool_connection(&blocking_pool).unwrap())
                 .await
                 .unwrap();
-            crate::db::reset_database(connection).await.unwrap();
 
             let store_clone = store.clone();
             let mut ingestion_config = IngestionConfig::default();

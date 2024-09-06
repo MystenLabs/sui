@@ -29,6 +29,11 @@ module std::u256_tests {
     ];
 
     #[test]
+    fun test_bitwise_not() {
+        integer_tests::test_bitwise_not!(MAX, CASES);
+    }
+
+    #[test]
     fun test_max() {
         integer_tests::test_max!(MAX, CASES);
     }
@@ -63,6 +68,26 @@ module std::u256_tests {
     #[test, expected_failure(arithmetic_error, location = std::u256)]
     fun test_pow_overflow() {
         255u256.pow(255);
+    }
+
+    #[test]
+    fun test_try_as_u8() {
+        integer_tests::test_try_as_u8!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u16() {
+        integer_tests::test_try_as_u16!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u32() {
+        integer_tests::test_try_as_u32!<u256>(MAX);
+    }
+
+    #[test]
+    fun test_try_as_u64() {
+        integer_tests::test_try_as_u64!<u256>(MAX);
     }
 
     #[test]

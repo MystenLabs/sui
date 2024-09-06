@@ -158,6 +158,8 @@ pub enum Command {
         #[clap(long)]
         force: bool,
     },
+    /// Run through the migration scripts.
+    RunMigrations,
 }
 
 #[derive(Args, Default, Debug, Clone)]
