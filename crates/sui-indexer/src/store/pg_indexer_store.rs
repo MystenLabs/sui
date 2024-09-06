@@ -14,6 +14,7 @@ use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::QueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use itertools::Itertools;
 use object_store::path::Path;
 use tap::TapFallible;
@@ -54,6 +55,7 @@ use crate::schema::{
     transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
     tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
+use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
@@ -323,33 +325,32 @@ impl PgIndexerStore {
             )
     }
 
-    fn persist_display_updates(
+    async fn persist_display_updates(
         &self,
         display_updates: BTreeMap<String, StoredDisplay>,
     ) -> Result<(), IndexerError> {
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                on_conflict_do_update!(
-                    display::table,
-                    display_updates.values().collect::<Vec<_>>(),
-                    display::object_type,
-                    (
+        use diesel::ExpressionMethods;
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(display::table)
+                    .values(display_updates.values().collect::<Vec<_>>())
+                    .on_conflict(display::object_type)
+                    .do_update()
+                    .set((
                         display::id.eq(excluded(display::id)),
                         display::version.eq(excluded(display::version)),
                         display::bcs.eq(excluded(display::bcs)),
-                    ),
-                    |excluded: &StoredDisplay| (
-                        display::id.eq(excluded.id.clone()),
-                        display::version.eq(excluded.version),
-                        display::bcs.eq(excluded.bcs.clone()),
-                    ),
-                    conn
-                );
+                    ))
+                    .execute(conn)
+                    .await?;
+
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )?;
+            }
+            .scope_boxed()
+        })
+        .await?;
 
         Ok(())
     }
@@ -2028,8 +2029,7 @@ impl IndexerStore for PgIndexerStore {
             return Ok(());
         }
 
-        self.spawn_blocking_task(move |this| this.persist_display_updates(display_updates))
-            .await?
+        self.persist_display_updates(display_updates).await
     }
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
