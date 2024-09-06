@@ -15,6 +15,7 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use cursor::EvLookup;
 use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use lookups::{add_bounds, select_emit_module, select_event_type, select_sender};
 use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema::{checkpoints, events};
@@ -134,18 +135,18 @@ impl Event {
 
         use checkpoints::dsl;
         let (prev, next, results) = db
-            .execute(move |conn| {
+            .execute(move |conn| async move {
                 let tx_hi: i64 = conn.first(move || {
                     dsl::checkpoints.select(dsl::network_total_transactions)
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
-                })?;
+                }).await?;
 
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {
                         let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_hi);
 
                         let (prev, next, results) =
-                            page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query)?;
+                            page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query).await?;
 
                         let ev_lookups = results
                             .into_iter()
@@ -171,13 +172,13 @@ impl Event {
                                 .join(" UNION ALL ");
 
                             query!(query_string).into_boxed()
-                        })?;
+                        }).await?;
                         (prev, next, events)
                     } else {
                         // No filter is provided so we add bounds to the basic `SELECT * FROM
                         // events` query and call it a day.
                         let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi);
-                        let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query)?;
+                        let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query).await?;
                         let events = events_iter.collect::<Vec<StoredEvent>>();
                         (prev, next, events)
                     };
@@ -191,7 +192,7 @@ impl Event {
 
 
                 Ok::<_, diesel::result::Error>((prev, next, events))
-            })
+            }.scope_boxed())
             .await?;
 
         let mut conn = Connection::new(prev, next);

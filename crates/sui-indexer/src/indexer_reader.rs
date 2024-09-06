@@ -133,8 +133,12 @@ impl IndexerReader {
         .expect("propagate any panics")
     }
 
-    pub fn get_pool(&self) -> BlockingConnectionPool {
+    pub fn get_blocking_pool(&self) -> BlockingConnectionPool {
         self.blocking_pool.clone()
+    }
+
+    pub fn pool(&self) -> &ConnectionPool {
+        &self.pool
     }
 }
 

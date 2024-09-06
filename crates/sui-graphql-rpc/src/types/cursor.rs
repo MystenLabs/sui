@@ -8,9 +8,10 @@ use async_graphql::{
     *,
 };
 use diesel::{
-    deserialize::FromSqlRow, query_builder::QueryFragment, query_dsl::LoadQuery,
-    sql_types::Untyped, QueryDsl, QueryResult, QuerySource,
+    deserialize::FromSqlRow, query_builder::QueryFragment, sql_types::Untyped, QueryDsl,
+    QueryResult, QuerySource,
 };
+use diesel_async::methods::LoadQuery;
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -289,7 +290,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
     ///
     /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
     /// consistent cursor.
-    pub(crate) fn paginate_query<T, Q, ST, GB>(
+    pub(crate) async fn paginate_query<T, Q, ST, GB>(
         &self,
         conn: &mut Conn<'_>,
         checkpoint_viewed_at: u64,
@@ -318,7 +319,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
             }
 
             // Load extra rows to detect the existence of pages on either side.
-            query = query.limit(page.limit() as i64 + 2);
+            query = query.limit(Page::limit(&page) as i64 + 2);
             T::order(page.is_from_front(), query)
         };
 
@@ -326,7 +327,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
             // Avoid the database roundtrip in the degenerate case.
             vec![]
         } else {
-            let mut results = conn.results(query)?;
+            let mut results = conn.results(query).await?;
             if !self.is_from_front() {
                 results.reverse();
             }
@@ -347,7 +348,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
     ///
     /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
     /// consistent cursor.
-    pub(crate) fn paginate_raw_query<T>(
+    pub(crate) async fn paginate_raw_query<T>(
         &self,
         conn: &mut Conn<'_>,
         checkpoint_viewed_at: u64,
@@ -365,7 +366,7 @@ impl<C: CursorType + ScanLimited + Eq + Clone + Send + Sync + 'static> Page<C> {
             // Avoid the database roundtrip in the degenerate case.
             vec![]
         } else {
-            let mut results: Vec<T> = conn.results(new_query)?;
+            let mut results: Vec<T> = conn.results(new_query).await?;
             if !self.is_from_front() {
                 results.reverse();
             }
