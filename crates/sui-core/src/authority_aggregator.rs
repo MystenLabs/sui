@@ -189,7 +189,7 @@ impl AuthAggMetrics {
                 "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
                 "Number of remaining tasks when post quorum certificate broadcasting times out",
                 registry,
-            ).unwrap(),
+            ),
             quorum_reached_without_requested_objects: register_int_counter_with_registry!(
                 "auth_agg_quorum_reached_without_requested_objects",
                 "Number of times quorum was reached without getting the requested objects back from at least 1 validator",
