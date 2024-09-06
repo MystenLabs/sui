@@ -49,6 +49,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    traffic_controller::parse_ip,
     traffic_controller::policies::TrafficTally,
     traffic_controller::TrafficController,
 };
@@ -331,7 +332,7 @@ impl ValidatorService {
             consensus_adapter,
             metrics: validator_metrics,
             traffic_controller: policy_config.clone().map(|policy| {
-                Arc::new(TrafficController::spawn(
+                Arc::new(TrafficController::init(
                     policy,
                     traffic_controller_metrics,
                     firewall_config,
@@ -1008,17 +1009,9 @@ impl ValidatorService {
                                 );
                                 return None;
                             };
-                            client_ip.parse::<IpAddr>().ok().or_else(|| {
-                                client_ip.parse::<SocketAddr>().ok().map(|socket_addr| socket_addr.ip()).or_else(|| {
-                                    self.metrics.forwarded_header_parse_error.inc();
-                                    error!(
-                                        "Failed to parse x-forwarded-for header value of {:?} to ip address or socket. \
-                                        Please ensure that your proxy is configured to resolve client domains to an \
-                                        IP address before writing header",
-                                        client_ip,
-                                    );
-                                    None
-                                })
+                            parse_ip(client_ip).or_else(|| {
+                                self.metrics.forwarded_header_parse_error.inc();
+                                None
                             })
                         }
                         Err(e) => {

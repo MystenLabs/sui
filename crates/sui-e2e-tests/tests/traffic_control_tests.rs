@@ -547,7 +547,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     // NOTE: we need to hold onto this tc handle to ensure we don't inadvertently close
     // the receive channel (this would cause traffic controller to exit the loop and thus
     // we will never engage the dead mans switch)
-    let _tc = TrafficController::spawn_for_test(policy_config, Some(firewall_config));
+    let _tc = TrafficController::init_for_test(policy_config, Some(firewall_config));
     assert!(
         !drain_path.exists(),
         "Expected drain file to not exist after startup unless previously set",

@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use fs::File;
 use prometheus::IntGauge;
 use std::fs;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -45,6 +45,11 @@ pub struct TrafficController {
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
     dry_run_mode: bool,
+    /// If this is not None, then we do no tallying or populating
+    /// of blocklists, and instead simply block all IPs not in the
+    /// allowlist. The allowlist should only be populated once at
+    /// initialization.
+    allowlist: Option<Vec<IpAddr>>,
 }
 
 impl Debug for TrafficController {
@@ -68,7 +73,37 @@ impl Debug for TrafficController {
 }
 
 impl TrafficController {
-    pub fn spawn(
+    pub fn init(
+        policy_config: PolicyConfig,
+        metrics: TrafficControllerMetrics,
+        fw_config: Option<RemoteFirewallConfig>,
+    ) -> Self {
+        match policy_config.allow_list {
+            Some(allow_list) => {
+                let allowlist = allow_list
+                    .into_iter()
+                    .map(|ip_str| {
+                        parse_ip(&ip_str).unwrap_or_else(|| {
+                            panic!("Failed to parse allowlist IP address: {:?}", ip_str)
+                        })
+                    })
+                    .collect();
+                Self {
+                    tally_channel: mpsc::channel(0).0, // unused
+                    blocklists: Blocklists {
+                        clients: Arc::new(DashMap::new()),         // unused
+                        proxied_clients: Arc::new(DashMap::new()), // unused
+                    },
+                    metrics: Arc::new(metrics),
+                    dry_run_mode: policy_config.dry_run,
+                    allowlist: Some(allowlist),
+                }
+            }
+            None => Self::spawn(policy_config, metrics, fw_config),
+        }
+    }
+
+    fn spawn(
         policy_config: PolicyConfig,
         metrics: TrafficControllerMetrics,
         fw_config: Option<RemoteFirewallConfig>,
@@ -95,6 +130,7 @@ impl TrafficController {
             },
             metrics: metrics.clone(),
             dry_run_mode: policy_config.dry_run,
+            allowlist: None,
         };
         let tally_loop_blocklists = ret.blocklists.clone();
         let clear_loop_blocklists = ret.blocklists.clone();
@@ -115,12 +151,12 @@ impl TrafficController {
         ret
     }
 
-    pub fn spawn_for_test(
+    pub fn init_for_test(
         policy_config: PolicyConfig,
         fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         let metrics = TrafficControllerMetrics::new(&prometheus::Registry::new());
-        Self::spawn(policy_config, metrics, fw_config)
+        Self::init(policy_config, metrics, fw_config)
     }
 
     pub fn tally(&self, tally: TrafficTally) {
@@ -146,28 +182,35 @@ impl TrafficController {
 
     /// Handle check with dry-run mode considered
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
-        match (
-            self.check_impl(client, proxied_client).await,
-            self.dry_run_mode(),
-        ) {
-            // check succeeded
-            (true, _) => true,
-            // check failed while in dry-run mode
-            (false, true) => {
-                debug!(
-                    "Dry run mode: Blocked request from client {:?}, proxied client: {:?}",
-                    client, proxied_client
-                );
-                self.metrics.num_dry_run_blocked_requests.inc();
-                true
+        let check_with_dry_run_maybe = |allowed| -> bool {
+            match (allowed, self.dry_run_mode()) {
+                // check succeeded
+                (true, _) => true,
+                // check failed while in dry-run mode
+                (false, true) => {
+                    debug!("Dry run mode: Blocked request from client {:?}", client);
+                    self.metrics.num_dry_run_blocked_requests.inc();
+                    true
+                }
+                // check failed
+                (false, false) => false,
             }
-            // check failed
-            (false, false) => false,
+        };
+
+        match self.allowlist {
+            Some(ref allowlist) => {
+                let allowed = client.is_none() || allowlist.contains(&client.unwrap());
+                check_with_dry_run_maybe(allowed)
+            }
+            None => {
+                let allowed = self.check_blocklist(client, proxied_client).await;
+                check_with_dry_run_maybe(allowed)
+            }
         }
     }
 
-    /// Returns true if the connection is allowed, false if it is blocked
-    pub async fn check_impl(
+    /// Returns true if the connection is in blocklist, false otherwise
+    pub async fn check_blocklist(
         &self,
         client: &Option<IpAddr>,
         proxied_client: &Option<IpAddr>,
@@ -604,7 +647,7 @@ impl TrafficSim {
         assert!(per_client_tps > 0);
         assert!(duration.as_secs() > 0);
 
-        let controller = TrafficController::spawn_for_test(policy.clone(), None);
+        let controller = TrafficController::init_for_test(policy.clone(), None);
         let tasks = (0..num_clients).map(|task_num| {
             tokio::spawn(Self::run_single_client(
                 controller.clone(),
@@ -771,4 +814,16 @@ impl TrafficSim {
             Duration::from_millis(avg_time_blocked)
         );
     }
+}
+
+pub fn parse_ip(ip: &str) -> Option<IpAddr> {
+    ip.parse::<IpAddr>().ok().or_else(|| {
+        ip.parse::<SocketAddr>()
+            .ok()
+            .map(|socket_addr| socket_addr.ip())
+            .or_else(|| {
+                error!("Failed to parse value of {:?} to ip address or socket.", ip,);
+                None
+            })
+    })
 }
