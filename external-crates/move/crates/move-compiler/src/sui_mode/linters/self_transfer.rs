@@ -11,7 +11,8 @@ use crate::{
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
+            calls_special_function, LocalState, SimpleAbsInt, SimpleAbsIntConstructor,
+            SimpleDomain, SimpleExecutionContext,
         },
         CFGContext, MemberName,
     },
@@ -81,7 +82,7 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
     fn new<'a>(
         _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
-        _cfg: &ImmForwardCFG,
+        cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let MemberName::Function(name) = context.member else {
@@ -105,6 +106,10 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
             // do not lint module initializers, since they do not have the option of returning
             // values, and the entire purpose of this linter is to encourage folks to return
             // values instead of using transfer
+            return None;
+        }
+        if !calls_special_function(TRANSFER_FUNCTIONS, cfg) {
+            // skip if it does not use transfer functions
             return None;
         }
         Some(SelfTransferVerifierAI {
