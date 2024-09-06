@@ -62,6 +62,12 @@ module Test::M1 {
     }
   }
   unfiltered: transactionBlocks {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
     nodes {
       digest
       effects {
@@ -134,7 +140,7 @@ module Test::M1 {
 
 
 //# run-graphql --wait-for-checkpoint-pruned 4
-# If the caller tries to fetch data outside of the unpruned range, they should receive an empty response
+# If the caller tries to fetch data outside of the unpruned range, they should receive an error
 {
   transactionBlocks(filter: { atCheckpoint: 0 signAddress: "@{A}" }) {
     pageInfo {
@@ -222,6 +228,91 @@ module Test::M1 {
 # Mirror from the back
 {
   transactionBlocks(last: 10 filter: { beforeCheckpoint: 7 signAddress: "@{A}" }) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":7,"t":6,"i":false}
+# The first tx after pruning has seq num 6.
+# When viewed at checkpoint 7, there are two more txs that follow it.
+{
+  transactionBlocks(after: "@{cursor_0}") {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":7,"t":0,"i":false}
+# Data is pruned and no longer available
+{
+  transactionBlocks(after: "@{cursor_0}") {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+# Data is pruned and no longer available
+{
+  transactionBlocks(after: "@{cursor_0}") {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+# Data is pruned and no longer available
+{
+  transactionBlocks(scanLimit: 10000 after: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor

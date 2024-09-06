@@ -1,4 +1,4 @@
-processed 21 tasks
+processed 25 tasks
 
 init:
 A: object(0,0)
@@ -61,7 +61,7 @@ task 12, line 47:
 //# create-checkpoint
 Checkpoint created: 7
 
-task 13, lines 49-90:
+task 13, lines 49-96:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
@@ -91,6 +91,12 @@ Response: {
       ]
     },
     "unfiltered": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
       "nodes": [
         {
           "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
@@ -147,7 +153,7 @@ Response: {
   }
 }
 
-task 14, lines 92-111:
+task 14, lines 98-117:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
@@ -172,7 +178,7 @@ Response: {
   }
 }
 
-task 15, lines 113-132:
+task 15, lines 119-138:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
@@ -197,7 +203,30 @@ Response: {
   }
 }
 
-task 16, lines 136-155:
+task 16, lines 142-161:
+//# run-graphql --wait-for-checkpoint-pruned 4
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is pruned and no longer available",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 17, lines 163-182:
 //# run-graphql --wait-for-checkpoint-pruned 4
 Response: {
   "data": {
@@ -213,23 +242,7 @@ Response: {
   }
 }
 
-task 17, lines 157-176:
-//# run-graphql --wait-for-checkpoint-pruned 4
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
-        "hasPreviousPage": false,
-        "hasNextPage": false
-      },
-      "nodes": []
-    }
-  }
-}
-
-task 18, lines 179-198:
+task 18, lines 185-204:
 //# run-graphql
 Response: {
   "data": {
@@ -262,7 +275,7 @@ Response: {
   }
 }
 
-task 19, lines 200-219:
+task 19, lines 206-225:
 //# run-graphql
 Response: {
   "data": {
@@ -287,7 +300,7 @@ Response: {
   }
 }
 
-task 20, lines 221-240:
+task 20, lines 227-246:
 //# run-graphql
 Response: {
   "data": {
@@ -310,4 +323,106 @@ Response: {
       ]
     }
   }
+}
+
+task 21, lines 248-268:
+//# run-graphql --cursors {"c":7,"t":6,"i":false}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo3LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "3JTu6zCWqr6ntrcXes17pVGaDsi5TohbZG3KmJMB69wd",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 6
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22, lines 270-289:
+//# run-graphql --cursors {"c":7,"t":0,"i":false}
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is pruned and no longer available",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 23, lines 291-310:
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is pruned and no longer available",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 24, lines 312-331:
+//# run-graphql --cursors {"c":7,"t":0,"i":true}
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is pruned and no longer available",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "transactionBlocks"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }

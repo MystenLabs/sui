@@ -130,8 +130,9 @@ impl TxBounds {
     /// Determines the `tx_sequence_number` range from the checkpoint bounds for a transaction block
     /// query. If no checkpoint range is specified, the default is between 0 and the
     /// `checkpoint_viewed_at`. The corresponding `tx_sequence_number` range is fetched from db, and
-    /// further adjusted by cursors and scan limit. If there are any inconsistencies or invalid
-    /// combinations, i.e. `after` cursor is greater than the upper bound, return None.
+    /// further adjusted by cursors and scan limit. If the checkpoints cannot be found, or if there
+    /// are any inconsistencies or invalid combinations, i.e. `after` cursor is greater than the
+    /// upper bound, return None.
     pub(crate) async fn query(
         conn: &mut Conn<'_>,
         cp_after: Option<u64>,
@@ -220,16 +221,33 @@ impl TxBounds {
             (tx_lo, hi_record.2 as u64)
         };
 
-        // The `after` cursor is outside of the bounds if `after + 1`, the first element in the
-        // page, lies on or outside the exclusive upper bound.
-        if matches!(page.after(), Some(a) if a.tx_sequence_number.saturating_add(1) >= tx_hi) {
+        // // The `after` cursor is outside of the bounds if `after + 1`, the first element in the
+        // // page, lies on or outside the exclusive upper bound.
+        // if matches!(page.after(), Some(a) if a.tx_sequence_number.saturating_add(1) >= tx_hi) {
+        //     return Ok(None);
+        // }
+
+        // // If `before` cursor is equal to `tx_lo`, there cannot be any txs between the two points.
+        // if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
+        //     return Ok(None);
+        // }
+
+        let after_plus_one = page.after().map(|a| a.tx_sequence_number.saturating_add(1));
+        let before_seq = page.before().map(|b| b.tx_sequence_number);
+
+        if !match (after_plus_one, before_seq) {
+            (Some(a), Some(b)) => tx_lo < a && a < b && b <= tx_hi,
+            // a must be strictly less than tx_hi
+            (Some(a), None) => tx_lo < a && a < tx_hi,
+            // b can be equal to tx_hi because both are exclusive
+            (None, Some(b)) => tx_lo < b && b <= tx_hi,
+            // tx_lo must be strictly less than tx_hi for the right-open interval
+            (None, None) => tx_lo < tx_hi,
+        } {
             return Ok(None);
         }
 
-        // If `before` cursor is equal to `tx_lo`, there cannot be any txs between the two points.
-        if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
-            return Ok(None);
-        }
+        println!("tx_lo: {}, tx_hi: {}", tx_lo, tx_hi);
 
         Ok(Some(Self {
             tx_lo,

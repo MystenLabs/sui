@@ -51,6 +51,7 @@ pub(crate) struct Watermark {
     pub epoch: u64,
     /// Smallest queryable checkpoint - checkpoints below this value are pruned.
     pub lo_cp: u64,
+    pub lo_tx: u64,
 }
 
 /// Starts an infinite loop that periodically updates the watermark.
@@ -88,7 +89,7 @@ impl WatermarkTask {
                     return;
                 },
                 _ = interval.tick() => {
-                    let Watermark {lo_cp, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
+                    let Watermark {lo_cp, lo_tx, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
                         Ok(Some(watermark)) => watermark,
                         Ok(None) => continue,
                         Err(e) => {
@@ -104,6 +105,7 @@ impl WatermarkTask {
                         w.hi_cp = hi_cp;
                         w.hi_cp_timestamp_ms = hi_cp_timestamp_ms;
                         w.lo_cp = lo_cp;
+                        w.lo_tx = lo_tx;
                         mem::replace(&mut w.epoch, epoch)
                     };
 
@@ -166,22 +168,33 @@ impl Watermark {
             hi_cp_timestamp_ms: w.hi_cp_timestamp_ms,
             epoch: w.epoch,
             lo_cp: w.lo_cp,
+            lo_tx: w.lo_tx,
         }
     }
 
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
         use checkpoints::dsl;
-        let Some(result): Option<Vec<(i64, i64, i64)>> = db
+        let Some(result): Option<Vec<(i64, i64, i64, Option<i64>)>> = db
             .execute(move |conn| {
                 async {
                     conn.results(move || {
                         let min_cp = dsl::checkpoints
-                            .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
+                            .select((
+                                dsl::sequence_number,
+                                dsl::timestamp_ms,
+                                dsl::epoch,
+                                dsl::min_tx_sequence_number,
+                            ))
                             .order_by(dsl::sequence_number.asc())
                             .limit(1);
 
                         let max_cp = dsl::checkpoints
-                            .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
+                            .select((
+                                dsl::sequence_number,
+                                dsl::timestamp_ms,
+                                dsl::epoch,
+                                dsl::min_tx_sequence_number,
+                            ))
                             .order_by(dsl::sequence_number.desc())
                             .limit(1);
 
@@ -207,11 +220,18 @@ impl Watermark {
             ));
         }
 
+        let Some(lo_tx) = result[0].3 else {
+            return Err(Error::Internal(
+                "Expected min_tx_sequence_number to be non-null".to_string(),
+            ));
+        };
+
         Ok(Some(Watermark {
             hi_cp: result[1].0 as u64,
             hi_cp_timestamp_ms: result[1].1 as u64,
             epoch: result[1].2 as u64,
             lo_cp: result[0].0 as u64,
+            lo_tx: lo_tx as u64,
         }))
     }
 }
