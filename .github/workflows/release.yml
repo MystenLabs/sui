@@ -135,18 +135,14 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Removed unused apps (MacOS arm64)
+      - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         continue-on-error: true
         shell: bash
         run: |
           # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
           df -hI /dev/disk3s1s1
-          sudo rm -rf /Applications/Xcode_14.3.1.app
-          sudo rm -rf /Applications/Xcode_15.0.1.app
-          sudo rm -rf /Applications/Xcode_15.1.app
-          sudo rm -rf /Applications/Xcode_15.2.app
-          sudo rm -rf /Applications/Xcode_15.3.app
+          sudo rm -rf /Applications/Xcode*.app
           sudo rm -rf ~/Library/Developer/Xcode/DerivedData
           sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
