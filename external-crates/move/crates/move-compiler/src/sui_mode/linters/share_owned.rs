@@ -10,6 +10,7 @@ use move_ir_types::location::*;
 use crate::{
     cfgir::{
         absint::JoinResult,
+        cfg::ImmForwardCFG,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
@@ -82,6 +83,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
     fn new<'a>(
         _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        _cfg: &ImmForwardCFG,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         if context.attributes.is_test_or_test_only()

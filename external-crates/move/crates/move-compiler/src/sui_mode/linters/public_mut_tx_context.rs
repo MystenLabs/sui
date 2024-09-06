@@ -54,7 +54,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(&mut self, ident: ModuleIdent, _mdef: &mut T::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, ident: ModuleIdent, _mdef: &T::ModuleDefinition) -> bool {
         // skip if in 'sui::tx_context'
         ident.value.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME)
     }
@@ -63,7 +63,7 @@ impl TypingVisitorContext for Context<'_> {
         &mut self,
         _module: ModuleIdent,
         _function_name: FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         if !matches!(&fdef.visibility, Visibility::Public(_)) {
             return false;

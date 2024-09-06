@@ -13,6 +13,7 @@ use move_ir_types::location::*;
 use crate::{
     cfgir::{
         absint::JoinResult,
+        cfg::ImmForwardCFG,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
@@ -87,6 +88,7 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
     fn new<'a>(
         _env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        _cfg: &ImmForwardCFG,
         _init_state: &mut State,
     ) -> Option<Self::AI<'a>> {
         let MemberName::Function(fn_name) = context.member else {

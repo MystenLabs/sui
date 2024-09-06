@@ -52,7 +52,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only() || ident.value.address.is(SUI_ADDR_NAME)
     }
@@ -61,7 +61,7 @@ impl TypingVisitorContext for Context<'_> {
         &mut self,
         _module: ModuleIdent,
         fname: FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         if fdef.attributes.is_test_or_test_only()
             || !matches!(fdef.visibility, Visibility::Public(_))

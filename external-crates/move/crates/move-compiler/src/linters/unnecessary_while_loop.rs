@@ -35,7 +35,7 @@ impl TypingVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         let UnannotatedExp_::While(_, cond, _) = &exp.exp.value else {
             return false;
         };

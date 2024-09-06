@@ -69,7 +69,7 @@ impl TypingVisitorConstructor for CollectionEqualityVisitor {
 }
 
 impl TypingVisitorContext for Context<'_> {
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         if let E::BinopExp(_, op, t, _) = &exp.exp.value {
             if op.value != P::BinOp_::Eq && op.value != P::BinOp_::Neq {

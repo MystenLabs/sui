@@ -55,7 +55,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
     fn visit_module_custom(
         &mut self,
         _ident: crate::expansion::ast::ModuleIdent,
-        mdef: &mut T::ModuleDefinition,
+        mdef: &T::ModuleDefinition,
     ) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only()
@@ -65,13 +65,13 @@ impl<'a> TypingVisitorContext for Context<'a> {
         &mut self,
         _module: crate::expansion::ast::ModuleIdent,
         _function_name: crate::parser::ast::FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         // skips if true
         fdef.attributes.is_test_or_test_only()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         if let T::UnannotatedExp_::ModuleCall(fun) = &exp.exp.value {
             if is_freeze_function(fun) {
                 check_type_arguments(self, fun, exp.exp.loc);

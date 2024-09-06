@@ -48,7 +48,7 @@ impl CFGIRVisitorContext for Context<'_> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_command_custom(&mut self, cmd: &mut H::Command) -> bool {
+    fn visit_command_custom(&mut self, cmd: &H::Command) -> bool {
         if let H::Command_::Abort(loc, abort_exp) = &cmd.value {
             self.check_named_constant(abort_exp, *loc);
         }
