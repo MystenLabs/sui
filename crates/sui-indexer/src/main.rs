@@ -5,7 +5,7 @@ use clap::Parser;
 use sui_indexer::config::Command;
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::{
-    check_db_migration_consistency, get_pool_connection, new_connection_pool, reset_database,
+    check_db_migration_consistency, new_connection_pool, reset_database,
     run_migrations,
 };
 use sui_indexer::indexer::Indexer;
@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
             restore_config,
         } => {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
-            run_migrations(&mut get_pool_connection(&connection_pool)?).await?;
+            run_migrations(pool.dedicated_connection().await?).await?;
 
             let store = PgIndexerStore::new(
                 connection_pool,
@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Command::JsonRpcService(json_rpc_config) => {
-            check_db_migration_consistency(&mut get_pool_connection(&connection_pool)?)?;
+            check_db_migration_consistency(&mut pool.get().await?).await?;
 
             Indexer::start_reader(&json_rpc_config, &registry, connection_pool, pool).await?;
         }
@@ -79,10 +79,10 @@ async fn main() -> anyhow::Result<()> {
                 ));
             }
 
-            reset_database(&mut get_pool_connection(&connection_pool)?).await?;
+            reset_database(pool.dedicated_connection().await?).await?;
         }
         Command::RunMigrations => {
-            run_migrations(&mut get_pool_connection(&connection_pool)?).await?;
+            run_migrations(pool.dedicated_connection().await?).await?;
         }
     }
 
