@@ -1,15 +1,15 @@
-// Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    interpreter::state::{MachineState, TypeWithLoader},
+    interpreter::state::{CallFrame,  MachineState, TypeWithLoader},
     loader::{
         arena::ArenaPointer,
         ast::{Bytecode, Function},
         Loader, ModuleDefinitionResolver,
     },
     native_functions::NativeContext,
+    native_extensions::NativeContextExtensions,
     trace,
 };
 use fail::fail_point;
@@ -36,17 +36,14 @@ use move_vm_types::{
 };
 use smallvec::SmallVec;
 
-use crate::native_extensions::NativeContextExtensions;
 use std::collections::VecDeque;
 
-use super::state::CallFrame;
+const DEBUG_STEP_PRINT: bool = false;
 
-macro_rules! set_err_info {
-    ($frame:expr, $e:expr) => {{
-        let function = $frame.function();
-        $e.at_code_offset(function.index(), $frame.pc)
-            .finish($frame.location())
-    }};
+#[derive(PartialEq, Eq)]
+enum StepStatus {
+    Running,
+    Done,
 }
 
 struct RunContext<'loader, 'native, 'native_lifetimes> {
@@ -63,17 +60,19 @@ impl RunContext<'_, '_, '_> {
     }
 }
 
-const DEBUG_STEP_PRINT: bool = false;
+macro_rules! set_err_info {
+    ($frame:expr, $e:expr) => {{
+        let function = $frame.function();
+        $e.at_code_offset(function.index(), $frame.pc)
+            .finish($frame.location())
+    }};
+}
 
 /// Main loop for the execution of a function.
 ///
 /// This runs a newly-made Machine until it is complete. It expects the Machine to have a current
 /// call frame set up, with no operands on the stack and no existing call stack. It runs in a loop,
-/// calling `step`, until the call stack is empty.current frame of the
-/// This function sets up a `Frame` and calls `execute_code_unit` to execute code of the
-/// function represented by the frame. Control comes back to this function on return or
-/// on call. When that happens the frame is changes to a new one (call) or to the one
-/// at the top of the stack (return). If the call stack is empty execution is completed.
+/// calling `step`, until the call stack is empty.
 pub fn run(
     start_state: MachineState,
     data_store: &impl DataStore,
@@ -93,8 +92,8 @@ pub fn run(
 
     let mut state = start_state;
 
-    let mut buf = String::new();
     if DEBUG_STEP_PRINT {
+        let mut buf = String::new();
         let _ = state.debug_print_stack_trace(&mut buf, loader);
         println!("Call Frame:\n{:?}", state.current_frame);
         println!("{buf}");
@@ -104,6 +103,7 @@ pub fn run(
     // Run until we're done or we produce an error and bail.
     while step(&mut state, &mut run_context, gas_meter)? != StepStatus::Done {
         if DEBUG_STEP_PRINT {
+            let mut buf = String::new();
             println!("-------------------------------------");
             println!("Call Frame:\n{:?}", state.current_frame);
             let _ = state.debug_print_stack_trace(&mut buf, loader);
@@ -151,7 +151,7 @@ fn step(
         println!("Instruction: {instruction:?}");
     }
     // These are split out because `PartialVMError` and `VMError` are different types. It's unclear
-    // why as the hold identical data, but if we could combine them, we could entirely inline
+    // why as they hold identical data, but if we could combine them, we could entirely inline
     // `op_step` into this function.
     match instruction {
         Bytecode::Ret => {
@@ -355,31 +355,44 @@ fn op_step_impl(
     }
 
     match instruction {
+        // -- CALL/RETURN OPERATIONS -------------
         // These should have been handled in `step` above.
         Bytecode::Ret | Bytecode::CallGeneric(_) | Bytecode::Call(_) => unreachable!(),
-        Bytecode::Pop => {
-            let popped_val = state.pop_operand()?;
-            gas_meter.charge_pop(popped_val)?;
-        }
+        // -- INTERNAL CONTROL FLOW --------------
+        // These all update the current frame's program counter.
         Bytecode::BrTrue(offset) => {
             gas_meter.charge_simple_instr(S::BrTrue)?;
-            if state.pop_operand_as::<bool>()? {
-                state.current_frame.pc = *offset;
+            state.current_frame.pc = if state.pop_operand_as::<bool>()? {
+                *offset
             } else {
-                state.current_frame.pc += 1;
-            }
+                state.current_frame.pc + 1
+            };
         }
         Bytecode::BrFalse(offset) => {
             gas_meter.charge_simple_instr(S::BrFalse)?;
-            if !state.pop_operand_as::<bool>()? {
-                state.current_frame.pc = *offset;
+            state.current_frame.pc = if !state.pop_operand_as::<bool>()? {
+                *offset
             } else {
-                state.current_frame.pc += 1;
-            }
+                state.current_frame.pc + 1
+            };
         }
         Bytecode::Branch(offset) => {
             gas_meter.charge_simple_instr(S::Branch)?;
             state.current_frame.pc = *offset;
+        }
+        Bytecode::VariantSwitch(jump_table_index) => {
+            let reference = state.pop_operand_as::<VariantRef>()?;
+            gas_meter.charge_variant_switch(&reference)?;
+            let tag = reference.get_tag()?;
+            let JumpTableInner::Full(jump_table) = &state.current_frame.function().jump_tables()
+                [jump_table_index.0 as usize]
+                .jump_table;
+            state.current_frame.pc = jump_table[tag as usize];
+        }
+        // -- OTHER OPCODES ----------------------
+        Bytecode::Pop => {
+            let popped_val = state.pop_operand()?;
+            gas_meter.charge_pop(popped_val)?;
         }
         Bytecode::LdU8(int_const) => {
             gas_meter.charge_simple_instr(S::LdU8)?;
@@ -822,15 +835,6 @@ fn op_step_impl(
                 state.push_operand(reference)?;
             }
         }
-        Bytecode::VariantSwitch(jump_table_index) => {
-            let reference = state.pop_operand_as::<VariantRef>()?;
-            gas_meter.charge_variant_switch(&reference)?;
-            let tag = reference.get_tag()?;
-            let JumpTableInner::Full(jump_table) = &state.current_frame.function().jump_tables()
-                [jump_table_index.0 as usize]
-                .jump_table;
-            state.current_frame.pc = jump_table[tag as usize];
-        }
     }
     profile_close_instr!(gas_meter, format!("{:?}", instruction));
     if !control_flow_instruction(instruction) {
@@ -1025,12 +1029,6 @@ where
     F: FnOnce(T, T) -> PartialVMResult<bool>,
 {
     binop(state, |lhs, rhs| Ok(Value::bool(f(lhs, rhs)?)))
-}
-
-#[derive(PartialEq, Eq)]
-enum StepStatus {
-    Running,
-    Done,
 }
 
 fn replace_resolver(state: &MachineState, run_context: &mut RunContext) {
