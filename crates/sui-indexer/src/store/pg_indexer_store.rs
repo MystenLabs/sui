@@ -2,24 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::io::Cursor;
 use std::time::Duration;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
+use csv::Writer;
 use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
 use itertools::Itertools;
+use object_store::path::Path;
 use tap::TapFallible;
-use tracing::info;
+use tracing::{info, warn};
 
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_protocol_config::ProtocolConfig;
+use sui_storage::object_store::util::put;
 use sui_types::base_types::ObjectID;
 
+use crate::config::RestoreConfig;
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::{Context, IndexerError};
@@ -100,6 +105,8 @@ const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
     pub parallel_objects_chunk_size: usize,
+    pub gcs_cred_path: Option<String>,
+    pub gcs_display_bucket: Option<String>,
 }
 
 #[derive(Clone)]
@@ -115,6 +122,7 @@ impl PgIndexerStore {
     pub fn new(
         blocking_cp: BlockingConnectionPool,
         pool: ConnectionPool,
+        restore_config: RestoreConfig,
         metrics: IndexerMetrics,
     ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
@@ -130,6 +138,8 @@ impl PgIndexerStore {
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
+            gcs_cred_path: restore_config.gcs_cred_path,
+            gcs_display_bucket: restore_config.gcs_display_bucket,
         };
 
         Self {
@@ -2071,6 +2081,65 @@ impl IndexerStore for PgIndexerStore {
             .unwrap_or_else(|e| {
                 tracing::error!("Failed to prune epoch table for epoch {}: {}", epoch, e);
             });
+        Ok(())
+    }
+
+    async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut writer = Writer::from_writer(&mut buffer);
+
+            let displays = read_only_blocking!(&self.blocking_cp, |conn| {
+                display::table.load::<StoredDisplay>(conn)
+            })
+            .context("Failed to get display from database")?;
+
+            info!("Read {} displays", displays.len());
+            writer
+                .write_record(["object_type", "id", "version", "bcs"])
+                .map_err(|_| {
+                    IndexerError::GcsError("Failed to write display to csv".to_string())
+                })?;
+
+            for display in displays {
+                writer
+                    .write_record(&[
+                        display.object_type,
+                        hex::encode(display.id),
+                        display.version.to_string(),
+                        hex::encode(display.bcs),
+                    ])
+                    .map_err(|_| IndexerError::GcsError("Failed to write to csv".to_string()))?;
+            }
+
+            writer
+                .flush()
+                .map_err(|_| IndexerError::GcsError("Failed to flush csv".to_string()))?;
+        }
+
+        if let (Some(cred_path), Some(bucket)) = (
+            self.config.gcs_cred_path.clone(),
+            self.config.gcs_display_bucket.clone(),
+        ) {
+            let remote_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::GCS),
+                bucket: Some(bucket),
+                google_service_account: Some(cred_path),
+                object_store_connection_limit: 200,
+                no_sign_request: false,
+                ..Default::default()
+            };
+            let remote_store = remote_store_config.make().map_err(|e| {
+                IndexerError::GcsError(format!("Failed to make GCS remote store: {}", e))
+            })?;
+
+            let path = Path::from(format!("display_{}.csv", epoch_number).as_str());
+            put(&remote_store, &path, buffer.into_inner().into())
+                .await
+                .map_err(|e| IndexerError::GcsError(format!("Failed to put to GCS: {}", e)))?;
+        } else {
+            warn!("Either GCS cred path or bucket is not set, skipping display upload.");
+        }
         Ok(())
     }
 

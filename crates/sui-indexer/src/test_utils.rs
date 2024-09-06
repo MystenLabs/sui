@@ -11,6 +11,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 
 use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
+use crate::config::RestoreConfig;
 use crate::config::SnapshotLagConfig;
 use crate::database::ConnectionPool;
 use crate::db::{get_pool_connection, new_connection_pool, ConnectionPoolConfig};
@@ -101,7 +102,13 @@ pub async fn start_test_indexer_impl(
     let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
         .await
         .unwrap();
-    let store = PgIndexerStore::new(blocking_pool.clone(), pool.clone(), indexer_metrics.clone());
+    let restore_config = RestoreConfig::default();
+    let store = PgIndexerStore::new(
+        blocking_pool.clone(),
+        pool.clone(),
+        restore_config,
+        indexer_metrics.clone(),
+    );
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
