@@ -1410,6 +1410,9 @@ impl IndexerReader {
         let mut connection = self.pool.get().await?;
 
         let object = match objects::table
+            .filter(objects::object_type_package.eq(type_.address.to_vec()))
+            .filter(objects::object_type_module.eq(type_.module.to_string()))
+            .filter(objects::object_type_name.eq(type_.name.to_string()))
             .filter(objects::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)))
             .first::<StoredObject>(&mut connection)
             .await
