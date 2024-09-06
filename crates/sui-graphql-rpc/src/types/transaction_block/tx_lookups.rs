@@ -243,8 +243,7 @@ impl TxBounds {
             return Ok(None);
         }
 
-        // There are no transactions between `tx_lo`
-        // If `before` cursor is equal to `tx_lo`, there cannot be any txs between
+        // If `before` cursor is equal to `tx_lo`, there cannot be any txs between the two points.
         if matches!(page.before(), Some(b) if b.tx_sequence_number <= tx_lo) {
             return Ok(None);
         }
