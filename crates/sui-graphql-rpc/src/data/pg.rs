@@ -246,22 +246,20 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        database::Connection,
-        db::{get_pool_connection, new_connection_pool, reset_database, ConnectionPoolConfig},
-        models::objects::StoredObject,
-        schema::objects,
-        tempdb::TempDb,
-        types::IndexedObject,
+        database::Connection, db::reset_database, models::objects::StoredObject, schema::objects,
+        tempdb::TempDb, types::IndexedObject,
     };
 
     #[tokio::test]
     async fn test_query_cost() {
         let database = TempDb::new().unwrap();
-        let mut pool_config = ConnectionPoolConfig::default();
-        pool_config.set_pool_size(5);
-        let pool = new_connection_pool(database.database().url().as_str(), &pool_config).unwrap();
-        let mut conn = get_pool_connection(&pool).unwrap();
-        reset_database(&mut conn).await.unwrap();
+        reset_database(
+            Connection::dedicated(database.database().url())
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
         let mut connection = Connection::dedicated(database.database().url())
             .await
             .unwrap();
