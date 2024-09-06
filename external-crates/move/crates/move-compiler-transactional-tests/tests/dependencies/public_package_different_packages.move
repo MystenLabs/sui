@@ -8,7 +8,6 @@ module 0x42::X {
     }
 }
 
-// TODO: This test may need to be updated when we add package loading
 //# publish
 module 0x42::Y {
     use 0x42::X;

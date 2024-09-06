@@ -5,7 +5,7 @@
 // Simplifies logic around re-using ModuleIds.
 #![allow(clippy::redundant_clone)]
 
-use crate::compiler::{compile_modules_in_file, expect_modules, serialize_module};
+use crate::compiler::{compile_modules_in_file, expect_modules, serialize_module_at_max_version};
 use move_binary_format::{
     file_format::{
         empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
@@ -133,7 +133,7 @@ impl Adapter {
 
         for module in modules {
             let mut binary = vec![];
-            serialize_module(&module, &mut binary).unwrap_or_else(|e| {
+            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                 panic!("failure in module serialization: {e:?}\n{:#?}", module)
             });
             session
@@ -151,7 +151,7 @@ impl Adapter {
 
         for module in modules {
             let mut binary = vec![];
-            serialize_module(&module, &mut binary).unwrap_or_else(|e| {
+            serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                 panic!("failure in module serialization: {e:?}\n{:#?}", module)
             });
             session
@@ -166,7 +166,7 @@ impl Adapter {
             .into_iter()
             .map(|module| {
                 let mut binary = vec![];
-                serialize_module(&module, &mut binary).unwrap_or_else(|e| {
+                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                     panic!("failure in module serialization: {e:?}\n{:#?}", module)
                 });
                 binary
@@ -189,7 +189,7 @@ impl Adapter {
             .into_iter()
             .map(|module| {
                 let mut binary = vec![];
-                serialize_module(&module, &mut binary).unwrap_or_else(|e| {
+                serialize_module_at_max_version(&module, &mut binary).unwrap_or_else(|e| {
                     panic!("failure in module serialization: {e:?}\n{:#?}", module)
                 });
                 binary

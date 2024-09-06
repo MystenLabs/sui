@@ -59,6 +59,9 @@ pub fn as_module(unit: AnnotatedCompiledUnit) -> CompiledModule {
     unit.named_module.module
 }
 
-pub fn serialize_module(module: &CompiledModule, binary: &mut Vec<u8>) -> Result<()> {
+pub fn serialize_module_at_max_version(
+    module: &CompiledModule,
+    binary: &mut Vec<u8>,
+) -> Result<()> {
     module.serialize_with_version(VERSION_MAX, binary)
 }
