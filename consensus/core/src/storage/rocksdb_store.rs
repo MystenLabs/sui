@@ -53,12 +53,7 @@ impl RocksDBStore {
         let column_family_options = vec![
             (
                 Self::BLOCKS_CF,
-                default_db_options()
-                    .optimize_for_write_throughput()
-                    // Blocks can get large and they don't need to be compacted.
-                    // So keep them in rocksdb blobstore.
-                    .optimize_for_large_values_no_scan(1 << 10)
-                    .options,
+                default_db_options().optimize_for_write_throughput().options,
             ),
             (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),
             (Self::COMMITS_CF, cf_options.clone()),

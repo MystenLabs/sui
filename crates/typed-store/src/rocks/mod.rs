@@ -47,7 +47,7 @@ use std::{collections::HashSet, ffi::CStr};
 use sui_macros::{fail_point, nondeterministic};
 use tap::TapFallible;
 use tokio::sync::oneshot;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
@@ -60,17 +60,15 @@ const ENV_VAR_DB_WAL_SIZE: &str = "DB_WAL_SIZE_MB";
 const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
 // Environment variable to control behavior of write throughput optimized tables.
-const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str = "L0_NUM_FILES_COMPACTION_TRIGGER";
-const DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 4;
+const ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER: &str =
+    "UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER";
+const UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER: usize = 80;
 const ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB: &str = "MAX_WRITE_BUFFER_SIZE_MB";
 const DEFAULT_MAX_WRITE_BUFFER_SIZE_MB: usize = 256;
 const ENV_VAR_MAX_WRITE_BUFFER_NUMBER: &str = "MAX_WRITE_BUFFER_NUMBER";
 const DEFAULT_MAX_WRITE_BUFFER_NUMBER: usize = 6;
 const ENV_VAR_TARGET_FILE_SIZE_BASE_MB: &str = "TARGET_FILE_SIZE_BASE_MB";
 const DEFAULT_TARGET_FILE_SIZE_BASE_MB: usize = 128;
-
-// Set to 1 to disable blob storage for transactions and effects.
-const ENV_VAR_DISABLE_BLOB_STORAGE: &str = "DISABLE_BLOB_STORAGE";
 
 const ENV_VAR_DB_PARALLELISM: &str = "DB_PARALLELISM";
 
@@ -915,7 +913,7 @@ impl<K, V> DBMap<K, V> {
         property_name: &std::ffi::CStr,
     ) -> Result<i64, TypedStoreError> {
         match rocksdb.property_int_value_cf(cf, property_name) {
-            Ok(Some(value)) => Ok(value.try_into().unwrap()),
+            Ok(Some(value)) => Ok(value.try_into().unwrap_or_default()),
             Ok(None) => Ok(0),
             Err(e) => Err(TypedStoreError::RocksDBError(e.into_string())),
         }
@@ -2394,49 +2392,10 @@ pub struct DBOptions {
 
 impl DBOptions {
     // Optimize lookup perf for tables where no scans are performed.
-    // If non-trivial number of values can be > 512B in size, it is beneficial to also
-    // specify optimize_for_large_values_no_scan().
     pub fn optimize_for_point_lookup(mut self, block_cache_size_mb: usize) -> DBOptions {
         // NOTE: this overwrites the block options.
         self.options
             .optimize_for_point_lookup(block_cache_size_mb as u64);
-        self
-    }
-
-    // Optimize write and lookup perf for tables which are rarely scanned, and have large values.
-    // https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html
-    pub fn optimize_for_large_values_no_scan(mut self, min_blob_size: u64) -> DBOptions {
-        if env::var(ENV_VAR_DISABLE_BLOB_STORAGE).is_ok() {
-            info!("Large value blob storage optimization is disabled via env var.");
-            return self;
-        }
-
-        // Blob settings.
-        self.options.set_enable_blob_files(true);
-        self.options
-            .set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
-        self.options.set_enable_blob_gc(true);
-        // Since each blob can have non-trivial size overhead, and compression does not work across blobs,
-        // set a min blob size in bytes to so small transactions and effects are kept in sst files.
-        self.options.set_min_blob_size(min_blob_size);
-
-        // Increase write buffer size to 256MiB.
-        let write_buffer_size = read_size_from_env(ENV_VAR_MAX_WRITE_BUFFER_SIZE_MB)
-            .unwrap_or(DEFAULT_MAX_WRITE_BUFFER_SIZE_MB)
-            * 1024
-            * 1024;
-        self.options.set_write_buffer_size(write_buffer_size);
-        // Since large blobs are not in sst files, reduce the target file size and base level
-        // target size.
-        let target_file_size_base = 64 << 20;
-        self.options
-            .set_target_file_size_base(target_file_size_base);
-        // Level 1 default to 64MiB * 4 ~ 256MiB.
-        let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
-        self.options
-            .set_max_bytes_for_level_base(target_file_size_base * max_level_zero_file_num as u64);
-
         self
     }
 
@@ -2473,9 +2432,17 @@ impl DBOptions {
         self.options
             .set_max_write_buffer_size_to_maintain((write_buffer_size).try_into().unwrap());
 
-        // Increase compaction trigger for level 0 to 6.
+        // Switch to universal compactions.
+        self.options
+            .set_compaction_style(rocksdb::DBCompactionStyle::Universal);
+        self.options.set_num_levels(1);
+        let mut compaction_options = rocksdb::UniversalCompactOptions::default();
+        compaction_options.set_max_size_amplification_percent(10000);
+        compaction_options.set_stop_style(rocksdb::UniversalCompactionStopStyle::Similar);
+        self.options
+            .set_universal_compaction_options(&compaction_options);
         let max_level_zero_file_num = read_size_from_env(ENV_VAR_L0_NUM_FILES_COMPACTION_TRIGGER)
-            .unwrap_or(DEFAULT_L0_NUM_FILES_COMPACTION_TRIGGER);
+            .unwrap_or(UNIVERSAL_COMPACTION_L0_NUM_FILES_COMPACTION_TRIGGER);
         self.options.set_level_zero_file_num_compaction_trigger(
             max_level_zero_file_num.try_into().unwrap(),
         );

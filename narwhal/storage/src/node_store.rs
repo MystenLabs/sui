@@ -78,20 +78,14 @@ impl NodeStorage {
             (Self::VOTES_CF, cf_options.clone()),
             (
                 Self::CERTIFICATES_CF,
-                default_db_options()
-                    .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan(1 << 10)
-                    .options,
+                default_db_options().optimize_for_write_throughput().options,
             ),
             (Self::CERTIFICATE_DIGEST_BY_ROUND_CF, cf_options.clone()),
             (Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF, cf_options.clone()),
             (Self::PAYLOAD_CF, cf_options.clone()),
             (
                 Self::BATCHES_CF,
-                default_db_options()
-                    .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan(1 << 10)
-                    .options,
+                default_db_options().optimize_for_write_throughput().options,
             ),
             (Self::LAST_COMMITTED_CF, cf_options.clone()),
             (Self::SUB_DAG_INDEX_CF, cf_options.clone()),
