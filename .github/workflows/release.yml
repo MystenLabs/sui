@@ -141,12 +141,12 @@ jobs:
         shell: bash
         run: |
           # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
-          df -h
+          df -h /
           sudo rm -rf /Applications/Xcode*.app
           sudo rm -rf ~/Library/Developer/Xcode/DerivedData
           sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
-          df -h
+          df -h /
 
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
