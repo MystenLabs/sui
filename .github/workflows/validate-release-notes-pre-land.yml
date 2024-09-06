@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   diff:
-    name: Determine PR eligibility for 
+    name: Determine PR eligibility for ${{ github.event.pull_request.number }}
     if: github.event.pull_request.number != ''
     runs-on: [ ubuntu-latest ]
     outputs:
