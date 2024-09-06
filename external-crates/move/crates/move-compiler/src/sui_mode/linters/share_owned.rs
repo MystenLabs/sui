@@ -13,7 +13,8 @@ use crate::{
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
+            calls_special_function, LocalState, SimpleAbsInt, SimpleAbsIntConstructor,
+            SimpleDomain, SimpleExecutionContext,
         },
         CFGContext,
     },
@@ -24,8 +25,8 @@ use crate::{
     },
     expansion::ast::ModuleIdent,
     hlir::ast::{
-        BaseType, BaseType_, Command, Command_, Exp, LValue, LValue_, Label, ModuleCall,
-        SingleType, SingleType_, Type, TypeName_, Type_, UnannotatedExp_, Var,
+        BaseType, BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
+        Type, TypeName_, Type_, UnannotatedExp_, Var,
     },
     naming::ast::BuiltinTypeName_,
     parser::ast::{Ability_, DatatypeName},
@@ -113,72 +114,6 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
             return None;
         }
         Some(ShareOwnedVerifierAI { info: context.info })
-    }
-}
-
-fn calls_special_function(special: &[(&str, &str, &str)], cfg: &ImmForwardCFG) -> bool {
-    cfg.blocks().values().any(|block| {
-        block
-            .iter()
-            .any(|cmd| calls_special_function_command(special, cmd))
-    })
-}
-
-fn calls_special_function_command(special: &[(&str, &str, &str)], sp!(_, cmd_): &Command) -> bool {
-    use Command_ as C;
-    match cmd_ {
-        C::Assign(_, _, e)
-        | C::Abort(e)
-        | C::Return { exp: e, .. }
-        | C::IgnoreAndPop { exp: e, .. }
-        | C::JumpIf { cond: e, .. }
-        | C::VariantSwitch { subject: e, .. } => calls_special_function_exp(special, e),
-        C::Mutate(el, er) => {
-            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
-        }
-        C::Jump { .. } => false,
-        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
-    }
-}
-
-#[growing_stack]
-fn calls_special_function_exp(special: &[(&str, &str, &str)], e: &Exp) -> bool {
-    use UnannotatedExp_ as E;
-    match &e.exp.value {
-        E::Unit { .. }
-        | E::Move { .. }
-        | E::Copy { .. }
-        | E::Constant(_)
-        | E::ErrorConstant { .. }
-        | E::BorrowLocal(_, _)
-        | E::Unreachable
-        | E::UnresolvedError
-        | E::Value(_) => false,
-
-        E::Freeze(e)
-        | E::Dereference(e)
-        | E::UnaryExp(_, e)
-        | E::Borrow(_, e, _, _)
-        | E::Cast(e, _) => calls_special_function_exp(special, e),
-
-        E::BinopExp(el, _, er) => {
-            calls_special_function_exp(special, el) || calls_special_function_exp(special, er)
-        }
-
-        E::ModuleCall(call) => {
-            special.iter().any(|(a, m, f)| call.is(*a, *m, *f))
-                || call
-                    .arguments
-                    .iter()
-                    .any(|arg| calls_special_function_exp(special, arg))
-        }
-        E::Vector(_, _, _, es) | E::Multiple(es) => {
-            es.iter().any(|e| calls_special_function_exp(special, e))
-        }
-
-        E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => es
-            .iter()
-            .any(|(_, _, e)| calls_special_function_exp(special, e)),
     }
 }
 
@@ -348,7 +283,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         };
         let Some(tn) = f
             .type_arguments
-            .get(0)
+            .first()
             .and_then(|t| t.value.type_name())
             .and_then(|n| n.value.datatype_name())
         else {
@@ -405,9 +340,9 @@ fn phantom_positions(
     m: &ModuleIdent,
     n: &DatatypeName,
 ) -> Vec</* is_phantom */ bool> {
-    let ty_params = match info.datatype_kind(&m, &n) {
-        DatatypeKind::Struct => &info.struct_definition(&m, &n).type_parameters,
-        DatatypeKind::Enum => &info.enum_definition(&m, &n).type_parameters,
+    let ty_params = match info.datatype_kind(m, n) {
+        DatatypeKind::Struct => &info.struct_definition(m, n).type_parameters,
+        DatatypeKind::Enum => &info.enum_definition(m, n).type_parameters,
     };
     ty_params.iter().map(|tp| tp.is_phantom).collect()
 }
