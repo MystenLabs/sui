@@ -11,6 +11,8 @@ on:
         type: string
         required: true
 
+concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref }}
+
 env:
   TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
   BINARY_LIST_FILE: "./binary-build-list.json"
