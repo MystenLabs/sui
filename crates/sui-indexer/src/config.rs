@@ -80,7 +80,7 @@ pub struct JsonRpcConfig {
     pub rpc_address: SocketAddr,
 
     #[clap(long)]
-    pub rpc_client_url: Url,
+    pub rpc_client_url: String,
 }
 
 #[derive(Args, Debug, Default, Clone)]
