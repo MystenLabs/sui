@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::database::Connection;
 use crate::errors::IndexerError;
 use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::prelude::*;
-use diesel::query_dsl::RunQueryDsl;
 use diesel::r2d2::ConnectionManager;
 use diesel::r2d2::{Pool, PooledConnection};
-use diesel::PgConnection;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::{table, PgConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use std::time::Duration;
 use tracing::info;
@@ -87,6 +88,8 @@ pub struct ConnectionConfig {
 
 impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionConfig {
     fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::RunQueryDsl;
+
         diesel::sql_query(format!(
             "SET statement_timeout = {}",
             self.statement_timeout.as_millis(),
@@ -135,30 +138,36 @@ pub fn get_pool_connection(pool: &ConnectionPool) -> Result<PoolConnection, Inde
 /// existing readers fail over.
 /// We do however need to make sure that whenever we are deploying a new version of either reader or writer,
 /// we must first run migration scripts to ensure that there is not more local scripts than in the DB record.
-pub fn check_db_migration_consistency(conn: &mut PoolConnection) -> Result<(), IndexerError> {
+pub async fn check_db_migration_consistency(conn: &mut Connection<'_>) -> Result<(), IndexerError> {
     info!("Starting compatibility check");
     let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().map_err(|err| {
         IndexerError::DbMigrationError(format!(
             "Failed to fetch local migrations from schema: {err}"
         ))
     })?;
-    let local_migrations: Vec<_> = migrations.iter().map(|m| m.name().version()).collect();
-    check_db_migration_consistency_impl(conn, local_migrations)?;
+    let local_migrations: Vec<_> = migrations
+        .into_iter()
+        .map(|m| m.name().version().as_owned())
+        .collect();
+    check_db_migration_consistency_impl(conn, local_migrations).await?;
     info!("Compatibility check passed");
     Ok(())
 }
 
-fn check_db_migration_consistency_impl(
-    conn: &mut PoolConnection,
-    local_migrations: Vec<MigrationVersion>,
+async fn check_db_migration_consistency_impl(
+    conn: &mut Connection<'_>,
+    local_migrations: Vec<MigrationVersion<'_>>,
 ) -> Result<(), IndexerError> {
+    use diesel_async::RunQueryDsl;
+
     // Unfortunately we cannot call applied_migrations() directly on the connection,
     // since it implicitly creates the __diesel_schema_migrations table if it doesn't exist,
     // which is a write operation that we don't want to do in this function.
     let applied_migrations: Vec<MigrationVersion> = __diesel_schema_migrations::table
         .select(__diesel_schema_migrations::version)
         .order(__diesel_schema_migrations::version.asc())
-        .load(conn)?;
+        .load(conn)
+        .await?;
 
     // We check that the local migrations is a prefix of the applied migrations.
     if local_migrations.len() > applied_migrations.len() {
@@ -181,14 +190,12 @@ fn check_db_migration_consistency_impl(
 pub use setup_postgres::{reset_database, run_migrations};
 
 pub mod setup_postgres {
-    use crate::db::{PoolConnection, MIGRATIONS};
+    use crate::{database::Connection, db::MIGRATIONS};
     use anyhow::anyhow;
-    use diesel::migration::MigrationConnection;
-    use diesel::RunQueryDsl;
-    use diesel_migrations::MigrationHarness;
+    use diesel_async::RunQueryDsl;
     use tracing::info;
 
-    pub async fn reset_database(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
+    pub async fn reset_database(mut conn: Connection<'static>) -> Result<(), anyhow::Error> {
         info!("Resetting PG database ...");
 
         let drop_all_tables = "
@@ -200,7 +207,9 @@ pub mod setup_postgres {
                 EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_tables).execute(conn)?;
+        diesel::sql_query(drop_all_tables)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all tables.");
 
         let drop_all_procedures = "
@@ -214,7 +223,9 @@ pub mod setup_postgres {
                 EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_procedures).execute(conn)?;
+        diesel::sql_query(drop_all_procedures)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all procedures.");
 
         let drop_all_functions = "
@@ -228,19 +239,19 @@ pub mod setup_postgres {
                 EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
             END LOOP;
         END $$;";
-        diesel::sql_query(drop_all_functions).execute(conn)?;
+        diesel::sql_query(drop_all_functions)
+            .execute(&mut conn)
+            .await?;
         info!("Dropped all functions.");
-
-        conn.setup()?;
-        info!("Created __diesel_schema_migrations table.");
 
         run_migrations(conn).await?;
         info!("Reset database complete.");
         Ok(())
     }
 
-    pub async fn run_migrations(conn: &mut PoolConnection) -> Result<(), anyhow::Error> {
+    pub async fn run_migrations(conn: Connection<'static>) -> Result<(), anyhow::Error> {
         conn.run_pending_migrations(MIGRATIONS)
+            .await
             .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
         Ok(())
     }
@@ -249,9 +260,10 @@ pub mod setup_postgres {
 #[cfg(feature = "pg_integration")]
 #[cfg(test)]
 mod tests {
+    use crate::database::{Connection, ConnectionPool};
     use crate::db::{
-        check_db_migration_consistency, check_db_migration_consistency_impl, get_pool_connection,
-        new_connection_pool, reset_database, ConnectionPoolConfig, MIGRATIONS,
+        check_db_migration_consistency, check_db_migration_consistency_impl, reset_database,
+        ConnectionPoolConfig, MIGRATIONS,
     };
     use crate::tempdb::TempDb;
     use diesel::migration::{Migration, MigrationSource};
@@ -263,55 +275,96 @@ mod tests {
     #[tokio::test]
     async fn db_migration_consistency_smoke_test() {
         let database = TempDb::new().unwrap();
-        let blocking_pool = new_connection_pool(
-            database.database().url().as_str(),
-            &ConnectionPoolConfig::default(),
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
         )
+        .await
         .unwrap();
-        let mut conn = get_pool_connection(&blocking_pool).unwrap();
-        reset_database(&mut conn).await.unwrap();
-        check_db_migration_consistency(&mut conn).unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+        check_db_migration_consistency(&mut pool.get().await.unwrap())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn db_migration_consistency_non_prefix_test() {
         let database = TempDb::new().unwrap();
-        let blocking_pool = new_connection_pool(
-            database.database().url().as_str(),
-            &ConnectionPoolConfig::default(),
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
         )
+        .await
         .unwrap();
-        let mut conn = get_pool_connection(&blocking_pool).unwrap();
 
-        reset_database(&mut conn).await.unwrap();
-
-        conn.revert_migration(MIGRATIONS.migrations().unwrap().last().unwrap())
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
             .unwrap();
+        let mut connection = pool.get().await.unwrap();
+
+        let mut sync_connection_wrapper =
+            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<Connection>::from(
+                pool.dedicated_connection().await.unwrap(),
+            );
+
+        tokio::task::spawn_blocking(move || {
+            sync_connection_wrapper
+                .revert_migration(MIGRATIONS.migrations().unwrap().last().unwrap())
+                .unwrap();
+        })
+        .await
+        .unwrap();
         // Local migrations is one record more than the applied migrations.
         // This will fail the consistency check since it's not a prefix.
-        assert!(check_db_migration_consistency(&mut conn).is_err());
+        assert!(check_db_migration_consistency(&mut connection)
+            .await
+            .is_err());
 
-        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        pool.dedicated_connection()
+            .await
+            .unwrap()
+            .run_pending_migrations(MIGRATIONS)
+            .await
+            .unwrap();
         // After running pending migrations they should be consistent.
-        check_db_migration_consistency(&mut conn).unwrap();
+        check_db_migration_consistency(&mut connection)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn db_migration_consistency_prefix_test() {
         let database = TempDb::new().unwrap();
-        let blocking_pool = new_connection_pool(
-            database.database().url().as_str(),
-            &ConnectionPoolConfig::default(),
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
         )
+        .await
         .unwrap();
-        let mut conn = get_pool_connection(&blocking_pool).unwrap();
-        reset_database(&mut conn).await.unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
 
         let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().unwrap();
         let mut local_migrations: Vec<_> = migrations.iter().map(|m| m.name().version()).collect();
         local_migrations.pop();
         // Local migrations is one record less than the applied migrations.
         // This should pass the consistency check since it's still a prefix.
-        check_db_migration_consistency_impl(&mut conn, local_migrations).unwrap();
+        check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
+            .await
+            .unwrap();
     }
 }
