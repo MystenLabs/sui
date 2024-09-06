@@ -2642,8 +2642,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.authority_capabilities_v2 = true;
                     }
 
+                    // Turns on shared object congestion control on testnet.
                     if chain != Chain::Mainnet {
-                        // Turns on shared object congestion control on testnet.
                         cfg.max_accumulated_txn_cost_per_object_in_narwhal_commit = Some(100);
                         cfg.max_accumulated_txn_cost_per_object_in_mysticeti_commit = Some(10);
                         cfg.feature_flags.per_object_congestion_control_mode =
@@ -2725,7 +2725,7 @@ impl ProtocolConfig {
                     }
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        // Enable distributed vote scoring
+                        // Enable distributed vote scoring for devnet
                         cfg.feature_flags
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
