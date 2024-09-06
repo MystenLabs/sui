@@ -104,6 +104,7 @@ pub struct AuthAggMetrics {
     pub cert_broadcasting_post_quorum_timeout: IntCounter,
     pub remaining_tasks_when_reaching_cert_quorum: Histogram,
     pub remaining_tasks_when_cert_broadcasting_post_quorum_timeout: Histogram,
+    pub quorum_reached_without_requested_objects: IntCounter,
 }
 
 impl AuthAggMetrics {
@@ -188,7 +189,13 @@ impl AuthAggMetrics {
                 "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
                 "Number of remaining tasks when post quorum certificate broadcasting times out",
                 registry,
-            ).unwrap()
+            ).unwrap(),
+            quorum_reached_without_requested_objects: register_int_counter_with_registry!(
+                "auth_agg_quorum_reached_without_requested_objects",
+                "Number of times quorum was reached without getting the requested objects back from at least 1 validator",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -1584,6 +1591,7 @@ where
                     // and return.
                     match AuthorityAggregator::<A>::handle_process_certificate_response(
                         committee_clone,
+                        &metrics,
                         &tx_digest, &mut state, response, name)
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
@@ -1696,6 +1704,7 @@ where
 
     fn handle_process_certificate_response(
         committee: Arc<Committee>,
+        metrics: &AuthAggMetrics,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
         response: SuiResult<HandleCertificateResponseV3>,
@@ -1764,6 +1773,7 @@ where
                             || (state.request.include_output_objects
                                 && state.output_objects.is_none())
                         {
+                            metrics.quorum_reached_without_requested_objects.inc();
                             debug!(?tx_digest, "Quorum Reached but requested input/output objects were not returned");
                         }
 
