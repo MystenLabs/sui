@@ -856,7 +856,8 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
+    async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
         if packages.is_empty() {
             return Ok(());
         }
@@ -868,29 +869,25 @@ impl PgIndexerStore {
             .into_iter()
             .map(StoredPackage::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    on_conflict_do_update!(
-                        packages::table,
-                        packages_chunk,
-                        packages::package_id,
-                        (
+                    diesel::insert_into(packages::table)
+                        .values(packages_chunk)
+                        .on_conflict(packages::package_id)
+                        .do_update()
+                        .set((
                             packages::package_id.eq(excluded(packages::package_id)),
                             packages::move_package.eq(excluded(packages::move_package)),
-                        ),
-                        |excluded: StoredPackage| (
-                            packages::package_id.eq(excluded.package_id.clone()),
-                            packages::move_package.eq(excluded.move_package),
-                        ),
-                        conn
-                    );
+                        ))
+                        .execute(conn)
+                        .await?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(elapsed, "Persisted {} packages", packages.len());
@@ -2032,8 +2029,7 @@ impl IndexerStore for PgIndexerStore {
         if packages.is_empty() {
             return Ok(());
         }
-        self.execute_in_blocking_worker(move |this| this.persist_packages(packages))
-            .await
+        self.persist_packages(packages).await
     }
 
     async fn persist_event_indices(&self, indices: Vec<EventIndex>) -> Result<(), IndexerError> {
