@@ -1,4 +1,4 @@
-module 0x1::M {
+module 0x6::M {
 
     #[test(_a=@0x1)]
     fun single_signer_pass(_a: signer) { }

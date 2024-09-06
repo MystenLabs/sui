@@ -1,7 +1,7 @@
-module 0x2::A {
+module 0x7::A {
     public struct S has copy, drop {
-        f1: 0x2::B::S,
-        f2: 0x2::C::S,
+        f1: 0x7::B::S,
+        f2: 0x7::C::S,
     }
 
       public struct Box<T> has copy, drop, store { x: T }
@@ -13,58 +13,58 @@ module 0x2::A {
       public struct Box127<T> has copy, drop, store { x: Box63<Box63<T>> }
 }
 
-module 0x2::B {
+module 0x7::B {
     public struct S has copy, drop {
         f1: u64,
         f2: u128,
     }
 }
-module 0x2::C {
+module 0x7::C {
     public struct S has copy, drop {
         f1: address,
         f2: bool,
     }
 }
 
-module 0x2::D {
+module 0x7::D {
     public struct S has copy, drop {
-        f1: 0x2::B::S,
+        f1: 0x7::B::S,
     }
 }
 
-module 0x2::E {
+module 0x7::E {
     public struct S<T> has copy, drop {
-        f1: 0x2::F::S<T>,
+        f1: 0x7::F::S<T>,
         f2: u64,
     }
 }
 
-module 0x2::F {
+module 0x7::F {
     public struct S<T> has copy, drop {
         f1: T,
         f2: u64,
     }
 }
 
-module 0x2::G {
+module 0x7::G {
     public struct S<A, B> has copy, drop {
-        f1: 0x2::H::S<B, A>,
+        f1: 0x7::H::S<B, A>,
         f2: u64,
     }
 }
 
-module 0x2::H {
+module 0x7::H {
     public struct S<A, B> has copy, drop {
-        f1: 0x2::F::S<A>,
-        f2: 0x2::E::S<B>,
-        f3: 0x2::E::S<0x2::F::S<B>>,
+        f1: 0x7::F::S<A>,
+        f2: 0x7::E::S<B>,
+        f3: 0x7::E::S<0x7::F::S<B>>,
         f4: A,
         f5: B,
         f6: u64,
     }
 }
 
-module 0x2::I {
+module 0x7::I {
     public struct S<A, B> {
         f1: F<A>,
         f2: E<B>,
