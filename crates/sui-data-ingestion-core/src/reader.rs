@@ -51,6 +51,7 @@ pub struct ReaderOptions {
     /// number of maximum concurrent requests to the remote store. Increase it for backfills
     pub batch_size: usize,
     pub data_limit: usize,
+    pub upper_limit: Option<CheckpointSequenceNumber>,
 }
 
 impl Default for ReaderOptions {
@@ -60,6 +61,7 @@ impl Default for ReaderOptions {
             timeout_secs: 5,
             batch_size: 10,
             data_limit: 0,
+            upper_limit: None,
         }
     }
 }
