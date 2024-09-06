@@ -1,6 +1,5 @@
 name: Split Cluster Check
-on: 
-  pull_request:
+on:
   push:
     branches:
       - main
