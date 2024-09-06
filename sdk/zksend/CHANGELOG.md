@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.11.1
+
+### Patch Changes
+
+- 22844ae: Add network param to zksend links
+
 ## 0.11.0
 
 ### Minor Changes
