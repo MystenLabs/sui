@@ -15,6 +15,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 
+use crate::metrics::BridgeIndexerMetrics;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
@@ -26,11 +27,21 @@ use sui_indexer_builder::Task;
 #[derive(Clone)]
 pub struct PgBridgePersistent {
     pool: PgPool,
+    save_progress_policy: ProgressSavingPolicy,
+    indexer_metrics: BridgeIndexerMetrics,
 }
 
 impl PgBridgePersistent {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(
+        pool: PgPool,
+        save_progress_policy: ProgressSavingPolicy,
+        indexer_metrics: BridgeIndexerMetrics,
+    ) -> Self {
+        Self {
+            pool,
+            save_progress_policy,
+            indexer_metrics,
+        }
     }
 }
 
@@ -96,27 +107,44 @@ impl IndexerProgressStore for PgBridgePersistent {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
-        let mut conn = self.pool.get().await?;
-        diesel::insert_into(schema::progress_store::table)
-            .values(&models::ProgressStore {
-                task_name,
-                checkpoint: checkpoint_number as i64,
-                // Target checkpoint and timestamp will only be written for new entries
-                target_checkpoint: i64::MAX,
-                // Timestamp is defaulted to current time in DB if None
-                timestamp: None,
-            })
-            .on_conflict(dsl::task_name)
-            .do_update()
-            .set((
-                columns::checkpoint.eq(checkpoint_number as i64),
-                columns::timestamp.eq(now),
-            ))
-            .execute(&mut conn)
-            .await?;
-        Ok(())
+        checkpoint_numbers: &[u64],
+        start_checkpoint_number: u64,
+        target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        if checkpoint_numbers.is_empty() {
+            return Ok(None);
+        }
+        if let Some(checkpoint_to_save) = self.save_progress_policy.cache_progress(
+            task_name.clone(),
+            checkpoint_numbers,
+            start_checkpoint_number,
+            target_checkpoint_number,
+        ) {
+            let mut conn = self.pool.get().await?;
+            diesel::insert_into(schema::progress_store::table)
+                .values(&models::ProgressStore {
+                    task_name: task_name.clone(),
+                    checkpoint: checkpoint_to_save as i64,
+                    // Target checkpoint and timestamp will only be written for new entries
+                    target_checkpoint: i64::MAX,
+                    // Timestamp is defaulted to current time in DB if None
+                    timestamp: None,
+                })
+                .on_conflict(dsl::task_name)
+                .do_update()
+                .set((
+                    columns::checkpoint.eq(checkpoint_to_save as i64),
+                    columns::timestamp.eq(now),
+                ))
+                .execute(&mut conn)
+                .await?;
+            self.indexer_metrics
+                .tasks_current_checkpoints
+                .with_label_values(&[&task_name])
+                .set(checkpoint_to_save as i64);
+            return Ok(Some(checkpoint_to_save));
+        }
+        Ok(None)
     }
 
     async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {

@@ -111,10 +111,6 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
-    }
 }
 
 struct PerTaskInMemProgressStore {
@@ -134,11 +130,19 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
     async fn save(
         &mut self,
-        _task_name: String,
+        task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         if checkpoint_number >= self.exit_checkpoint {
+            tracing::info!(
+                task_name,
+                checkpoint_number,
+                exit_checkpoint = self.exit_checkpoint,
+                "Task completed, sending exit signal"
+            );
+            // `exit_sender` may be `None` if we have already sent the exit signal.
             if let Some(sender) = self.exit_sender.take() {
+                // Ignore the error if the receiver has already been dropped.
                 let _ = sender.send(());
             }
         }
