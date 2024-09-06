@@ -150,6 +150,56 @@ procedure {:inline 1} $1_real_gte(x: real, y: real) returns (z: bool) {
     z := x >= y;
 }
 
+// temporary stuff
+procedure {:inline 1} $0_prover_requires_begin() {}
+procedure {:inline 1} $0_prover_requires_end() {}
+procedure {:inline 1} $0_prover_ensures_begin() {}
+procedure {:inline 1} $0_prover_ensures_end() {}
+procedure {:inline 1} $0_prover_aborts_begin() {}
+procedure {:inline 1} $0_prover_aborts_end() {}
+procedure {:inline 1} $0_prover_val'address'(x: int) returns (y: int) {
+    y := x;
+}
+procedure {:inline 1} $0_prover_val'$2_balance_Balance'#0''(x: $2_balance_Balance'#0') returns (y: $2_balance_Balance'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_val'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') returns (y: $2_coin_Coin'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_val'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_val'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') returns (y: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_val'$2_coin_Coin'$0_house_StakedHouseCoin'#0'''(x: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') returns (y: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'address'(x: int) returns (y: int) {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$2_balance_Balance'#0''(x: $2_balance_Balance'#0') returns (y: $2_balance_Balance'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') returns (y: $2_coin_Coin'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$0_house_House'#0''(x: $0_house_House'#0') returns (y: $0_house_House'#0') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') returns (y: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_ref'$2_coin_Coin'$0_house_StakedHouseCoin'#0'''(x: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') returns (y: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') {
+    y := x;
+}
+procedure {:inline 1} $0_prover_drop'address'(x: int) {}
+procedure {:inline 1} $0_prover_drop'$2_balance_Balance'#0''(x: $2_balance_Balance'#0') {}
+procedure {:inline 1} $0_prover_drop'$2_coin_Coin'#0''(x: $2_coin_Coin'#0') {}
+procedure {:inline 1} $0_prover_drop'$0_house_House'#0''(x: $0_house_House'#0') {}
+procedure {:inline 1} $0_prover_drop'$2_balance_Balance'$0_house_StakedHouseCoin'#0'''(x: $2_balance_Balance'$0_house_StakedHouseCoin'#0'') {}
+procedure {:inline 1} $0_prover_drop'$2_coin_Coin'$0_house_StakedHouseCoin'#0'''(x: $2_coin_Coin'$0_house_StakedHouseCoin'#0'') {}
+
 // temporary specs for sui native functions
 procedure {:inline 1} $2_tx_context_derive_id(x: Vec (int), y: int) returns (z: int) {}
 procedure {:inline 1} $2_object_delete_impl(x: int) returns () {}

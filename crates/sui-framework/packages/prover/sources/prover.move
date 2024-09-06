@@ -8,17 +8,72 @@ module prover::prover {
         !p || q
     }
 
-    public macro fun fun_spec<$T>($fun_call: $T, $requires_spec: ||, $ensures_spec: |&$T|, $aborts_if_spec: |&$T|): $T {
-        $requires_spec();
-        let result = $fun_call;
-        $ensures_spec(&result);
-        $aborts_if_spec(&result);
-        result
+    public macro fun specs<$T>($call: &$T, $requires: ||, $ensures: |&$T|, $aborts_if: |&$T|) {
+        requires_begin();
+        $requires();
+        requires_end();
+        let result = $call;
+        ensures_begin();
+        $ensures(result);
+        ensures_end();
+        aborts_begin();
+        $aborts_if(result);
+        aborts_end();
     }
 
-    public macro fun ensures_($cond: bool) {
-        let cond = $cond;
-        ensures(cond);
+    public macro fun spec3<$T0, $T1, $T2, $R>($call: &$R, $a0: &$T0, $a1: &$T1, $a2: &$T2, $requires: ||, $ensures: |&$T0, &$T1, &$T2, &$R|, $aborts_if: |&$T0, &$T1, &$T2, &$R|) {
+        requires_begin();
+        $requires();
+        requires_end();
+        let a0 = $a0;
+        let a1 = $a1;
+        let a2 = $a2;
+        let old_a0 = old!(a0);
+        let old_a1 = old!(a1);
+        let old_a2 = old!(a2);
+        let result = $call;
+        ensures_begin();
+        $ensures(old_a0, old_a1, old_a2, result);
+        ensures_end();
+        aborts_begin();
+        $aborts_if(old_a0, old_a1, old_a2, result);
+        aborts_end();
+    }
+
+    public macro fun requires_block($requires: ||) {
+        requires_begin();
+        $requires();
+        requires_end();
+    }
+
+    public macro fun ensures_block($ensures: ||) {
+        ensures_begin();
+        $ensures();
+        ensures_end();
+    }
+
+    public macro fun aborts_if_block($aborts_if: ||) {
+        aborts_begin();
+        $aborts_if();
+        aborts_end();
+    }
+
+    native public fun requires_begin();
+    native public fun requires_end();
+    native public fun ensures_begin();
+    native public fun ensures_end();
+    native public fun aborts_begin();
+    native public fun aborts_end();
+
+    public fun asserts(p: bool) {
+        ensures(p);
+    }
+
+    native public fun val<T>(x: &T): T;
+    native public fun ref<T>(x: T): &T;
+    native public fun drop<T>(x: T);
+    public macro fun old<$T>($x: &$T): &$T {
+        ref(val($x))
     }
 
     const MAX_U8: u8 = 255u8;
