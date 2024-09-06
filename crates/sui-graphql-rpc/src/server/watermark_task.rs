@@ -6,7 +6,10 @@ use crate::error::Error;
 use crate::metrics::Metrics;
 use crate::types::chain_identifier::ChainIdentifier;
 use async_graphql::ServerError;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{
+    query_dsl::positional_order_dsl::PositionalOrderDsl, CombineDsl, ExpressionMethods,
+    OptionalExtension, QueryDsl,
+};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use std::mem;
 use std::sync::Arc;
@@ -40,15 +43,17 @@ pub(crate) type WatermarkLock = Arc<RwLock<Watermark>>;
 /// changes.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Watermark {
-    /// The checkpoint upper-bound for the query.
-    pub checkpoint: u64,
-    /// The checkpoint upper-bound timestamp for the query.
-    pub checkpoint_timestamp_ms: u64,
+    /// The inclusive checkpoint upper-bound for the query.
+    pub hi_cp: u64,
+    /// The timestamp of the inclusive upper-bound checkpoint for the query.
+    pub hi_cp_timestamp_ms: u64,
     /// The current epoch.
     pub epoch: u64,
+    /// Smallest queryable checkpoint - checkpoints below this value are pruned.
+    pub lo_cp: u64,
 }
 
-/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
+/// Starts an infinite loop that periodically updates the watermark.
 impl WatermarkTask {
     pub(crate) fn new(
         db: Db,
@@ -83,7 +88,7 @@ impl WatermarkTask {
                     return;
                 },
                 _ = interval.tick() => {
-                    let Watermark {checkpoint, epoch, checkpoint_timestamp_ms } = match Watermark::query(&self.db).await {
+                    let Watermark {lo_cp, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
                         Ok(Some(watermark)) => watermark,
                         Ok(None) => continue,
                         Err(e) => {
@@ -96,11 +101,13 @@ impl WatermarkTask {
                     // Write the watermark as follows to limit how long we hold the lock
                     let prev_epoch = {
                         let mut w = self.watermark.write().await;
-                        w.checkpoint = checkpoint;
-                        w.checkpoint_timestamp_ms = checkpoint_timestamp_ms;
+                        w.hi_cp = hi_cp;
+                        w.hi_cp_timestamp_ms = hi_cp_timestamp_ms;
+                        w.lo_cp = lo_cp;
                         mem::replace(&mut w.epoch, epoch)
                     };
 
+                    // On epoch boundary, notify subscribers
                     if epoch > prev_epoch {
                         self.sender.send(epoch).unwrap();
                     }
@@ -155,21 +162,31 @@ impl Watermark {
     pub(crate) async fn new(lock: WatermarkLock) -> Self {
         let w = lock.read().await;
         Self {
-            checkpoint: w.checkpoint,
-            checkpoint_timestamp_ms: w.checkpoint_timestamp_ms,
+            hi_cp: w.hi_cp,
+            hi_cp_timestamp_ms: w.hi_cp_timestamp_ms,
             epoch: w.epoch,
+            lo_cp: w.lo_cp,
         }
     }
 
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
         use checkpoints::dsl;
-        let Some((checkpoint, checkpoint_timestamp_ms, epoch)): Option<(i64, i64, i64)> = db
+        let Some(result): Option<Vec<(i64, i64, i64)>> = db
             .execute(move |conn| {
                 async {
-                    conn.first(move || {
-                        dsl::checkpoints
+                    conn.results(move || {
+                        let min_cp = dsl::checkpoints
+                            .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
+                            .order_by(dsl::sequence_number.asc())
+                            .limit(1);
+
+                        let max_cp = dsl::checkpoints
                             .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
                             .order_by(dsl::sequence_number.desc())
+                            .limit(1);
+
+                        // Order by sequence_number, which is in the 1st position
+                        min_cp.union_all(max_cp).positional_order_by(1)
                     })
                     .await
                     .optional()
@@ -177,14 +194,24 @@ impl Watermark {
                 .scope_boxed()
             })
             .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?
+            .map_err(|e| Error::Internal(format!("Failed to fetch watermark data: {e}")))?
         else {
+            // An empty response from the db is valid when indexer has not written any checkpoints
+            // to the db yet.
             return Ok(None);
         };
+
+        if result.len() != 2 {
+            return Err(Error::Internal(
+                "Expected 2 rows from watermark query".to_string(),
+            ));
+        }
+
         Ok(Some(Watermark {
-            checkpoint: checkpoint as u64,
-            checkpoint_timestamp_ms: checkpoint_timestamp_ms as u64,
-            epoch: epoch as u64,
+            hi_cp: result[1].0 as u64,
+            hi_cp_timestamp_ms: result[1].1 as u64,
+            epoch: result[1].2 as u64,
+            lo_cp: result[0].0 as u64,
         }))
     }
 }

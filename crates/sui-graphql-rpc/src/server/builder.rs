@@ -652,7 +652,7 @@ async fn health_check(
         .unwrap_or_else(|| DEFAULT_MAX_CHECKPOINT_LAG);
 
     let checkpoint_timestamp =
-        Duration::from_millis(watermark_lock.read().await.checkpoint_timestamp_ms);
+        Duration::from_millis(watermark_lock.read().await.hi_cp_timestamp_ms);
 
     let now_millis = Utc::now().timestamp_millis();
 

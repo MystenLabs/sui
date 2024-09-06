@@ -1,4 +1,4 @@
-processed 18 tasks
+processed 21 tasks
 
 init:
 A: object(0,0)
@@ -225,6 +225,89 @@ Response: {
         "hasNextPage": false
       },
       "nodes": []
+    }
+  }
+}
+
+task 18, lines 179-198:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        },
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 200-219:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo4LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "6d7jabN5eUfM7okBxvBZM39HAjAB7tmUuSFv7Yzs5P68",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 7
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20, lines 221-240:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjo3LCJ0Ijo2LCJpIjpmYWxzZX0",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "digest": "2Ba4H9L5Lgqvf7j42ZQt1io3EZq4QzRVMX9KQcHVi3fY",
+          "effects": {
+            "checkpoint": {
+              "sequenceNumber": 5
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -150,8 +150,8 @@ impl TransactionBlock {
             // Non-stored transactions have a sentinel checkpoint_viewed_at value that generally
             // prevents access to further queries, but inputs should generally be available so try
             // to access them at the high watermark.
-            let Watermark { checkpoint, .. } = *ctx.data_unchecked();
-            checkpoint
+            let Watermark { hi_cp, .. } = *ctx.data_unchecked();
+            hi_cp
         };
 
         Some(GasInput::from(
@@ -325,6 +325,9 @@ impl TransactionBlock {
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
         let db: &Db = ctx.data_unchecked();
         let is_from_front = page.is_from_front();
+        // If we've entered this function, we already fetched `checkpoint_viewed_at` from the
+        // `Watermark`, and so we must be able to retrieve `lo_cp` as well.
+        let Watermark { lo_cp, .. } = *ctx.data_unchecked();
 
         use transactions::dsl as tx;
         let (prev, next, transactions, tx_bounds): (
@@ -340,6 +343,7 @@ impl TransactionBlock {
                         filter.after_checkpoint.map(u64::from),
                         filter.at_checkpoint.map(u64::from),
                         filter.before_checkpoint.map(u64::from),
+                        lo_cp,
                         checkpoint_viewed_at,
                         scan_limit,
                         &page,

@@ -174,3 +174,67 @@ module Test::M1 {
     }
   }
 }
+
+
+//# run-graphql
+# Mirror from the back
+{
+  transactionBlocks(last: 10 filter: { signAddress: "@{A}" }) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+# Mirror from the back
+{
+  transactionBlocks(last: 10 filter: { afterCheckpoint: 5 signAddress: "@{A}" }) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+# Mirror from the back
+{
+  transactionBlocks(last: 10 filter: { beforeCheckpoint: 7 signAddress: "@{A}" }) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
