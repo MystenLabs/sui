@@ -40,7 +40,6 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::store::diesel_macro::*;
 use crate::{
     errors::IndexerError,
     models::{
@@ -96,24 +95,6 @@ impl IndexerReader {
             pool,
             package_resolver,
         })
-    }
-
-    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
-    where
-        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
-        R: Send + 'static,
-        E: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            CALLED_FROM_BLOCKING_POOL
-                .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
-            let _guard = current_span.enter();
-            f(this)
-        })
-        .await
-        .expect("propagate any panics")
     }
 
     pub fn pool(&self) -> &ConnectionPool {
