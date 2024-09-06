@@ -59,9 +59,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    governance_actions (txn_digest) {
+        txn_digest -> Bytea,
+        sender_address -> Bytea,
+        timestamp_ms -> Int8,
+        action -> Text,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     progress_store,
     sui_error_transactions,
+    governance_actions,
     sui_progress_store,
     token_transfer,
     token_transfer_data,

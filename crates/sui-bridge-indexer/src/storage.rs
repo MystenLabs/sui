@@ -128,6 +128,13 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
                                         .await?;
                                 }
                             }
+                            ProcessedTxnData::GovernanceAction(a) => {
+                                diesel::insert_into(schema::governance_actions::table)
+                                    .values(&a.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
                             ProcessedTxnData::Error(e) => {
                                 diesel::insert_into(sui_error_transactions::table)
                                     .values(&e.to_db())

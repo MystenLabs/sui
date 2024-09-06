@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 
 use sui_types::base_types::{SuiAddress, TransactionDigest};
 
+use crate::models::GovernanceAction as DBGovernanceAction;
 use crate::models::TokenTransferData as DBTokenTransferData;
 use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 
@@ -25,6 +26,7 @@ pub mod sui_datasource;
 #[derive(Clone)]
 pub enum ProcessedTxnData {
     TokenTransfer(TokenTransfer),
+    GovernanceAction(GovernanceAction),
     Error(SuiTxnError),
 }
 
@@ -50,6 +52,14 @@ pub struct TokenTransfer {
     data_source: BridgeDataSource,
     data: Option<TokenTransferData>,
     is_finalized: bool,
+}
+
+#[derive(Clone)]
+pub struct GovernanceAction {
+    tx_digest: Vec<u8>,
+    sender: Vec<u8>,
+    timestamp_ms: u64,
+    action: GovernanceActionType,
 }
 
 #[derive(Clone)]
@@ -107,6 +117,17 @@ impl SuiTxnError {
     }
 }
 
+impl GovernanceAction {
+    fn to_db(&self) -> DBGovernanceAction {
+        DBGovernanceAction {
+            txn_digest: self.tx_digest.clone(),
+            sender_address: self.sender.to_vec(),
+            timestamp_ms: self.timestamp_ms as i64,
+            action: self.action.to_string(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum TokenTransferStatus {
     Deposited,
@@ -120,6 +141,32 @@ impl Display for TokenTransferStatus {
             TokenTransferStatus::Deposited => "Deposited",
             TokenTransferStatus::Approved => "Approved",
             TokenTransferStatus::Claimed => "Claimed",
+        };
+        write!(f, "{str}")
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum GovernanceActionType {
+    UpdateCommitteeBlocklist,
+    EmergencyOperation,
+    UpdateBridgeLimit,
+    UpdateTokenPrices,
+    UpgradeEVMContract,
+    AddSuiTokens,
+    AddEVMTokens,
+}
+
+impl Display for GovernanceActionType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            GovernanceActionType::UpdateCommitteeBlocklist => "UpdateCommitteeBlocklist",
+            GovernanceActionType::EmergencyOperation => "EmergencyOperation",
+            GovernanceActionType::UpdateBridgeLimit => "UpdateBridgeLimit",
+            GovernanceActionType::UpdateTokenPrices => "UpdateTokenPrices",
+            GovernanceActionType::UpgradeEVMContract => "UpgradeEVMContract",
+            GovernanceActionType::AddSuiTokens => "AddSuiTokens",
+            GovernanceActionType::AddEVMTokens => "AddEVMTokens",
         };
         write!(f, "{str}")
     }
