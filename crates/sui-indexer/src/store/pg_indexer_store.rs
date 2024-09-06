@@ -541,10 +541,11 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_objects_history_chunk(
+    async fn persist_objects_history_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_history_chunks
@@ -565,34 +566,63 @@ impl PgIndexerStore {
             }
         }
 
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for mutated_object_change_chunk in
                     mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    insert_or_ignore_into!(
-                        objects_history::table,
-                        mutated_object_change_chunk,
-                        conn
+                    let error_message = concat!(
+                        "Failed to write to ",
+                        stringify!((objects_history::table)),
+                        " DB"
                     );
+                    diesel::insert_into(objects_history::table)
+                        .values(mutated_object_change_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context(error_message)?;
                 }
 
                 for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
+                    let error_message = concat!(
+                        "Failed to write to ",
+                        stringify!((objects_version::table)),
+                        " DB"
+                    );
+                    diesel::insert_into(objects_version::table)
+                        .values(object_version_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context(error_message)?;
                 }
 
                 for deleted_objects_chunk in
                     deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    insert_or_ignore_into!(objects_history::table, deleted_objects_chunk, conn);
+                    let error_message = concat!(
+                        "Failed to write to ",
+                        stringify!((objects_history::table)),
+                        " DB"
+                    );
+                    diesel::insert_into(objects_history::table)
+                        .values(deleted_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context(error_message)?;
                 }
 
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
@@ -1811,20 +1841,11 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_history_chunk(c)))
+            .map(|c| self.persist_objects_history_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to join persist_objects_history_chunk futures: {}",
-                    e
-                );
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
