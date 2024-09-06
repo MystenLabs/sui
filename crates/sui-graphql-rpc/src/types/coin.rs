@@ -28,6 +28,7 @@ use super::uint53::UInt53;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
@@ -335,15 +336,22 @@ impl Coin {
 
         let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    coins_query(coin_type, owner, range, &page),
-                )?))
+                    Ok(Some(
+                        page.paginate_raw_query::<StoredHistoryObject>(
+                            conn,
+                            checkpoint_viewed_at,
+                            coins_query(coin_type, owner, range, &page),
+                        )
+                        .await?,
+                    ))
+                }
+                .scope_boxed()
             })
             .await?
         else {

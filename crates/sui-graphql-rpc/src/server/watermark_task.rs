@@ -7,6 +7,7 @@ use crate::metrics::Metrics;
 use crate::types::chain_identifier::ChainIdentifier;
 use async_graphql::ServerError;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
@@ -164,12 +165,16 @@ impl Watermark {
         use checkpoints::dsl;
         let Some((checkpoint, checkpoint_timestamp_ms, epoch)): Option<(i64, i64, i64)> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    dsl::checkpoints
-                        .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
-                        .order_by(dsl::sequence_number.desc())
-                })
-                .optional()
+                async {
+                    conn.first(move || {
+                        dsl::checkpoints
+                            .select((dsl::sequence_number, dsl::timestamp_ms, dsl::epoch))
+                            .order_by(dsl::sequence_number.desc())
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?

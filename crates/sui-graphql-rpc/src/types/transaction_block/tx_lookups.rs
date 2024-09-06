@@ -82,8 +82,8 @@ impl TxBounds {
     /// `checkpoint_viewed_at`. The corresponding `tx_sequence_number` range is fetched from db, and
     /// further adjusted by cursors and scan limit. If there are any inconsistencies or invalid
     /// combinations, i.e. `after` cursor is greater than the upper bound, return None.
-    pub(crate) fn query(
-        conn: &mut Conn,
+    pub(crate) async fn query(
+        conn: &mut Conn<'_>,
         cp_after: Option<u64>,
         cp_at: Option<u64>,
         cp_before: Option<u64>,
@@ -111,12 +111,14 @@ impl TxBounds {
 
         use checkpoints::dsl;
         let (tx_lo, tx_hi) = if let Some(cp_prev) = cp_lo.checked_sub(1) {
-            let res: Vec<i64> = conn.results(move || {
-                dsl::checkpoints
-                    .select(dsl::network_total_transactions)
-                    .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
-                    .order_by(dsl::network_total_transactions.asc())
-            })?;
+            let res: Vec<i64> = conn
+                .results(move || {
+                    dsl::checkpoints
+                        .select(dsl::network_total_transactions)
+                        .filter(dsl::sequence_number.eq_any([cp_prev as i64, cp_hi as i64]))
+                        .order_by(dsl::network_total_transactions.asc())
+                })
+                .await?;
 
             // If there are not two distinct results, it means that the transaction bounds are
             // empty (lo and hi are the same), or it means that the one or other of the checkpoints
@@ -133,6 +135,7 @@ impl TxBounds {
                         .select(dsl::network_total_transactions)
                         .filter(dsl::sequence_number.eq(cp_hi as i64))
                 })
+                .await
                 .optional()?;
 
             // If there is no result, it means that the checkpoint doesn't exist, so we can return

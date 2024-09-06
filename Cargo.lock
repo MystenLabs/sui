@@ -13498,6 +13498,7 @@ dependencies = [
  "clap",
  "const-str",
  "diesel",
+ "diesel-async",
  "downcast",
  "either",
  "expect-test",

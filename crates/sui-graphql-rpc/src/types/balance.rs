@@ -16,6 +16,7 @@ use diesel::{
     sql_types::{BigInt as SqlBigInt, Nullable, Text},
     OptionalExtension, QueryableByName,
 };
+use diesel_async::scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_indexer::types::OwnerType;
@@ -69,14 +70,19 @@ impl Balance {
     ) -> Result<Option<Balance>, Error> {
         let stored: Option<StoredBalance> = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                conn.result(move || {
-                    balance_query(address, Some(coin_type.clone()), range).into_boxed()
-                })
-                .optional()
+                    conn.result(move || {
+                        balance_query(address, Some(coin_type.clone()), range).into_boxed()
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
             })
             .await?;
 
@@ -99,17 +105,23 @@ impl Balance {
 
         let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                let result = page.paginate_raw_query::<StoredBalance>(
-                    conn,
-                    checkpoint_viewed_at,
-                    balance_query(address, None, range),
-                )?;
+                    let result = page
+                        .paginate_raw_query::<StoredBalance>(
+                            conn,
+                            checkpoint_viewed_at,
+                            balance_query(address, None, range),
+                        )
+                        .await?;
 
-                Ok(Some(result))
+                    Ok(Some(result))
+                }
+                .scope_boxed()
             })
             .await?
         else {
