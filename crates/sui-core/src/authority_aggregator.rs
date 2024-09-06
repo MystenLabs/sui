@@ -454,6 +454,7 @@ struct ProcessCertificateState {
     input_objects: Option<Vec<Object>>,
     output_objects: Option<Vec<Object>>,
     auxiliary_data: Option<Vec<u8>>,
+    request: HandleCertificateRequestV3,
 }
 
 #[derive(Debug)]
@@ -1497,13 +1498,14 @@ where
             input_objects: None,
             output_objects: None,
             auxiliary_data: None,
+            request: request.clone(),
         };
 
         // create a set of validators that we should sample to request input/output objects from
         let validators_to_sample =
             if request.include_input_objects || request.include_output_objects {
                 // Number of validators to request input/output objects from
-                const NUMBER_TO_SAMPLE: usize = 5;
+                const NUMBER_TO_SAMPLE: usize = 10;
 
                 self.committee
                     .choose_multiple_weighted_iter(NUMBER_TO_SAMPLE)
@@ -1547,7 +1549,6 @@ where
                             request_ref
                         } else {
                             HandleCertificateRequestV3 {
-                                include_events: false,
                                 include_input_objects: false,
                                 include_output_objects: false,
                                 include_auxiliary_data: false,
@@ -1758,6 +1759,14 @@ where
                             signed_effects.into_data(),
                             cert_sig,
                         );
+
+                        if (state.request.include_input_objects && state.input_objects.is_none())
+                            || (state.request.include_output_objects
+                                && state.output_objects.is_none())
+                        {
+                            debug!(?tx_digest, "Quorum Reached but requested input/output objects were not returned");
+                        }
+
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             Some(QuorumDriverResponse {
