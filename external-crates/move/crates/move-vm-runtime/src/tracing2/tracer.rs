@@ -59,6 +59,7 @@ mod vm_tracer_impl {
     /// Information about a frame that we keep during trace building
     #[derive(Debug, Clone)]
     struct FrameInfo {
+        frame_identifier: TraceIndex,
         is_native: bool,
         locals_types: Vec<LocalType>,
         return_types: Vec<TagWithLayoutInfoOpt>,
@@ -84,8 +85,8 @@ mod vm_tracer_impl {
 
     /// A runtime location can refer to the stack to make it easier to refer to values on the stack and
     /// resolving them. However, the stack is not a valid location for a reference and all references
-    /// are rooted in a local so the Trace `Location` does not include the stack, and only `Local` and
-    /// `Indexed` locations.
+    /// are rooted in a local or global so the Trace `Location` does not include the stack, and
+    /// only `Local`, `Global`, and `Indexed` locations.
     #[derive(Debug, Clone)]
     enum RuntimeLocation {
         Stack(usize),
@@ -96,9 +97,10 @@ mod vm_tracer_impl {
 
     /// The reference information for a local. This is used to track the state of a local in a frame.
     /// * It can be a value, in which case the reference type is `Value`.
-    /// * It can be a local that does not currently hold a value (is "empty"), in which case the
+    /// * It can be a local that does not currently hold a value (is "empty"), in which case
     ///   we track the reference type and the type of the local, but we don't have a `RuntimeLocation`
-    ///   for the reference.
+    ///   for the reference. This is e.g., the case when we open a frame and the local is not
+    ///   initialized yet.
     /// * It can be a local that holds a value (is "filled"), in which case we track the reference type and the
     ///   location the reference resolves to.
     #[derive(Debug, Clone)]
@@ -121,9 +123,9 @@ mod vm_tracer_impl {
         ref_type: Option<(RefType, RuntimeLocation)>,
     }
 
-    /// A `LocalType` is a type layot where a reference type may not be rooted to a
+    /// A `LocalType` layout where a reference type may not be rooted to a
     /// specific location (or it may be rooted to a specific location if the location is filled with a
-    /// value at the time). Not the type layout may be `None` in the case where the type is not
+    /// value at the time). Note the type layout may be `None` in the case where the type is not
     /// calculable at runtime without error.
     #[derive(Debug, Clone)]
     struct LocalType {
@@ -194,39 +196,42 @@ mod vm_tracer_impl {
     }
 
     impl<'a> VMTracer<'a> {
-        /// Unwrap or emit an error event to the trace
-        fn unwrap_or_emit_err(&mut self, x: Option<()>) {
-            x.unwrap_or_else(|| {
+        /// Emit an error event to the trace if `true`
+        fn emit_trace_error_if_err(&mut self, is_err: bool) {
+            if is_err {
                 self.trace.effect(EF::ExecutionError(
                     "!! TRACING ERROR !! Events below this may be incorrect.".to_string(),
                 ));
-            });
+            }
+        }
+
+        fn current_frame(&self) -> Option<&FrameInfo> {
+            self.active_frames.last_key_value().map(|(_, v)| v)
+        }
+
+        fn current_frame_mut(&mut self) -> Option<&mut FrameInfo> {
+            self.active_frames.last_entry().map(|e| e.into_mut())
         }
 
         /// Get the current locals type and reference state(s)
         fn current_frame_locals(&self) -> Option<&[LocalType]> {
-            Some(
-                self.active_frames
-                    .last_key_value()?
-                    .1
-                    .locals_types
-                    .as_slice(),
-            )
+            Some(self.current_frame()?.locals_types.as_slice())
         }
 
         /// Return the current frame identifier. This is trace index of the frame and is used to
         /// identify reference locations rooted higher up the call stack.
-        fn current_frame_identifier(&self) -> TraceIndex {
-            *self.active_frames.last_key_value().unwrap().0
+        fn current_frame_identifier(&self) -> Option<TraceIndex> {
+            Some(self.current_frame()?.frame_identifier)
         }
 
         /// Given the trace index for a frame, return the index of the frame in the call stack.
         fn trace_index_to_frame_index(&self, idx: TraceIndex) -> Option<usize> {
             self.active_frames
-                .iter()
+                .range(..=idx)
+                .into_iter()
                 .enumerate()
-                .find(|(_, (i, _))| **i == idx)
-                .map(|(idx, _)| idx)
+                .last()
+                .map(|(i, _)| i)
         }
 
         /// Register the pre-effects for the instruction (i.e., reads, pops.)
@@ -245,9 +250,7 @@ mod vm_tracer_impl {
         /// Insert a local with a specifice runtime location into the current frame.
         fn insert_local(&mut self, local_index: usize, local: RootedType) -> Option<()> {
             *self
-                .active_frames
-                .last_entry()?
-                .get_mut()
+                .current_frame_mut()?
                 .locals_types
                 .get_mut(local_index)? = local.into_local_type();
             Some(())
@@ -256,8 +259,10 @@ mod vm_tracer_impl {
         /// Invalidate a local in the current frame. This is used to mark a local as uninitialized and
         /// remove its reference information.
         fn invalidate_local(&mut self, local_index: usize) -> Option<()> {
-            let mut frame = self.active_frames.last_entry()?;
-            let local = frame.get_mut().locals_types.get_mut(local_index)?;
+            let local = self
+                .current_frame_mut()?
+                .locals_types
+                .get_mut(local_index)?;
             match &local.ref_type {
                 ReferenceType::Filled { ref_type, .. } => {
                     local.ref_type = ReferenceType::Empty {
@@ -298,7 +303,7 @@ mod vm_tracer_impl {
             local_index: usize,
         ) -> Option<TraceValue> {
             self.resolve_location(
-                &RuntimeLocation::Local(self.current_frame_identifier(), local_index),
+                &RuntimeLocation::Local(self.current_frame_identifier()?, local_index),
                 Some(frame),
                 interpreter,
             )
@@ -479,7 +484,7 @@ mod vm_tracer_impl {
             interpreter: &Interpreter,
         ) -> Option<()> {
             assert!(function.is_native());
-            let trace_frame = self.active_frames.last_key_value()?.1.clone();
+            let trace_frame = self.current_frame()?.clone();
             assert!(trace_frame.is_native);
             let len = interpreter.operand_stack.value.len();
             for (i, r_ty) in trace_frame.return_types.iter().cloned().enumerate() {
@@ -550,6 +555,7 @@ mod vm_tracer_impl {
             self.active_frames.insert(
                 current_trace_offset,
                 FrameInfo {
+                    frame_identifier: current_trace_offset,
                     is_native: function.is_native(),
                     locals_types,
                     return_types: function_type_info.return_types.clone(),
@@ -557,7 +563,7 @@ mod vm_tracer_impl {
             );
 
             self.trace.open_frame(
-                self.current_frame_identifier(),
+                self.current_frame_identifier()?,
                 function.index(),
                 function.name().to_string(),
                 function.module_id().clone(),
@@ -581,18 +587,13 @@ mod vm_tracer_impl {
 
         fn close_initial_frame_(
             &mut self,
-            ty_args: &[Type],
             return_values: &[Value],
-            function: &Function,
-            loader: &Loader,
             remaining_gas: u64,
-            link_context: AccountAddress,
         ) -> Option<()> {
-            let function_type_info =
-                FunctionTypeInfo::new(function, loader, ty_args, link_context)?;
+            let current_frame_return_tys = self.current_frame()?.return_types.clone();
             let return_values: Vec<_> = return_values
                 .iter()
-                .zip(function_type_info.return_types.iter().cloned())
+                .zip(current_frame_return_tys.into_iter())
                 .map(|(value, tag_with_layout_info_opt)| {
                     let (layout, ref_type) = tag_with_layout_info_opt.layout;
                     let move_value = value.as_annotated_move_value(&layout?)?;
@@ -601,7 +602,7 @@ mod vm_tracer_impl {
                 })
                 .collect::<Option<_>>()?;
             self.trace.close_frame(
-                self.current_frame_identifier(),
+                self.current_frame_identifier()?,
                 return_values,
                 remaining_gas,
             );
@@ -666,6 +667,7 @@ mod vm_tracer_impl {
             self.active_frames.insert(
                 current_trace_offset,
                 FrameInfo {
+                    frame_identifier: current_trace_offset,
                     is_native: function.is_native(),
                     locals_types,
                     return_types: function_type_info.return_types.clone(),
@@ -673,7 +675,7 @@ mod vm_tracer_impl {
             );
 
             self.trace.open_frame(
-                self.current_frame_identifier(),
+                self.current_frame_identifier()?,
                 function.index(),
                 function.name().to_string(),
                 function.module_id().clone(),
@@ -723,7 +725,7 @@ mod vm_tracer_impl {
             }
 
             self.trace.close_frame(
-                self.current_frame_identifier(),
+                self.current_frame_identifier()?,
                 return_values,
                 remaining_gas,
             );
@@ -834,7 +836,7 @@ mod vm_tracer_impl {
                 i @ (B::MoveLoc(l) | B::CopyLoc(l)) => {
                     let v = self.resolve_local(frame, interpreter, *l as usize)?;
                     let effects = vec![EF::Read(Read {
-                        location: Location::Local(self.current_frame_identifier(), *l as usize),
+                        location: Location::Local(self.current_frame_identifier()?, *l as usize),
                         root_value_read: v.clone(),
                         moved: matches!(i, B::MoveLoc(_)),
                     })];
@@ -850,7 +852,7 @@ mod vm_tracer_impl {
                 B::ImmBorrowLoc(l_idx) | B::MutBorrowLoc(l_idx) => {
                     let val = self.resolve_local(frame, interpreter, *l_idx as usize)?;
                     let location =
-                        Location::Local(self.current_frame_identifier(), *l_idx as usize);
+                        Location::Local(self.current_frame_identifier()?, *l_idx as usize);
                     self.register_pre_effects(vec![EF::Read(Read {
                         location,
                         root_value_read: val,
@@ -1029,7 +1031,7 @@ mod vm_tracer_impl {
                     self.insert_local(*lidx as usize, ty.clone())?;
                     let v = self.resolve_local(frame, interpreter, *lidx as usize)?;
                     let effects = self.register_post_effects(vec![EF::Write(Write {
-                        location: Location::Local(self.current_frame_identifier(), *lidx as usize),
+                        location: Location::Local(self.current_frame_identifier()?, *lidx as usize),
                         root_value_after_write: v.clone(),
                     })]);
                     self.trace
@@ -1215,7 +1217,7 @@ mod vm_tracer_impl {
                         ref_type: Some((
                             ref_type,
                             RuntimeLocation::Local(
-                                self.current_frame_identifier(),
+                                self.current_frame_identifier()?,
                                 *l_idx as usize,
                             ),
                         )),
@@ -1608,27 +1610,12 @@ mod vm_tracer_impl {
                 remaining_gas,
                 link_context,
             );
-            self.unwrap_or_emit_err(opt);
+            self.emit_trace_error_if_err(opt.is_none());
         }
 
-        pub(crate) fn close_initial_frame(
-            &mut self,
-            ty_args: &[Type],
-            return_values: &[Value],
-            function: &Function,
-            loader: &Loader,
-            remaining_gas: u64,
-            link_context: AccountAddress,
-        ) {
-            let opt = self.close_initial_frame_(
-                ty_args,
-                return_values,
-                function,
-                loader,
-                remaining_gas,
-                link_context,
-            );
-            self.unwrap_or_emit_err(opt);
+        pub(crate) fn close_initial_frame(&mut self, return_values: &[Value], remaining_gas: u64) {
+            let opt = self.close_initial_frame_(return_values, remaining_gas);
+            self.emit_trace_error_if_err(opt.is_none());
         }
 
         pub(crate) fn open_frame(
@@ -1650,7 +1637,7 @@ mod vm_tracer_impl {
                 remaining_gas,
                 link_context,
             );
-            self.unwrap_or_emit_err(opt)
+            self.emit_trace_error_if_err(opt.is_none())
         }
 
         pub(crate) fn close_frame(
@@ -1670,7 +1657,7 @@ mod vm_tracer_impl {
                 remaining_gas,
                 link_context,
             );
-            self.unwrap_or_emit_err(opt)
+            self.emit_trace_error_if_err(opt.is_none())
         }
 
         pub(crate) fn open_instruction(
@@ -1681,7 +1668,7 @@ mod vm_tracer_impl {
             remaining_gas: u64,
         ) {
             let opt = self.open_instruction_(frame, interpreter, loader, remaining_gas);
-            self.unwrap_or_emit_err(opt);
+            self.emit_trace_error_if_err(opt.is_none());
         }
 
         pub(crate) fn close_instruction(

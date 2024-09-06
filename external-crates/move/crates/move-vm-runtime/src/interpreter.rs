@@ -156,14 +156,7 @@ impl Interpreter {
 
             #[cfg(feature = "gas-profiler")]
             tracer.as_mut().map(|tracer| {
-                tracer.close_initial_frame(
-                    &ty_args,
-                    &return_values,
-                    &function,
-                    &loader,
-                    gas_meter.remaining_gas().into(),
-                    link_context,
-                )
+                tracer.close_initial_frame(&return_values, gas_meter.remaining_gas().into())
             });
             profile_close_frame!(gas_meter, function.pretty_string());
 

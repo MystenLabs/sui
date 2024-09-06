@@ -21,8 +21,13 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct TraceState {
+    // Tracks "global memory" state (i.e., references out in to global memory/references returned
+    // from native functions).
     pub loaded_state: BTreeMap<TraceIndex, MoveValue>,
+    // The current state (i.e., values) of the VM's operand stack.
     pub operand_stack: Vec<TraceValue>,
+    // The current call stack indexed by frame id. Maps from the frame id to the current state of
+    // the frame's locals. The bool indicates if the frame is native or not.
     pub call_stack: BTreeMap<TraceIndex, (BTreeMap<usize, TraceValue>, bool)>,
 }
 
@@ -35,35 +40,26 @@ impl TraceState {
         }
     }
 
-    /// Given a reference "location" return the value it points to.
-    pub fn dereference(&self, location: &Location) -> MoveValue {
-        match location {
-            Location::Local(frame_idx, idx) => {
-                let frame = &self.call_stack[frame_idx];
-                frame.0.get(idx).unwrap().snapshot().clone()
-            }
-            Location::Indexed(loc, _offset) => self.dereference(loc),
-            Location::Global(id) => self.loaded_state[id].clone(),
-        }
-    }
-
     /// Apply an event to the state machine and update the locals state accordingly.
-    pub fn apply_event(&mut self, event: &TraceEvent) {
+    fn apply_event(&mut self, event: &TraceEvent) {
         match event {
             TraceEvent::OpenFrame { frame, .. } => {
                 let mut locals = BTreeMap::new();
                 for (i, p) in frame.parameters.iter().enumerate() {
                     // NB: parameters are passed directly, so we just pop to make sure they aren't also
-                    //  left on the operand stack. For the initial call, these pops may (should) fail, but that
+                    // left on the operand stack. For the initial call, these pops may (should) fail, but that
                     // is fine as we already have the values in the parameter list.
                     self.operand_stack.pop();
                     locals.insert(i, p.clone());
                 }
+
                 self.call_stack
                     .insert(frame.frame_id, (locals, frame.is_native));
             }
             TraceEvent::CloseFrame { .. } => {
-                self.call_stack.pop_last().unwrap();
+                self.call_stack
+                    .pop_last()
+                    .expect("Unbalanced call stack in memory tracer -- this should never happen");
             }
             TraceEvent::Effect(ef) => match &**ef {
                 Effect::ExecutionError(_) => (),
@@ -71,7 +67,9 @@ impl TraceState {
                     self.operand_stack.push(value.clone());
                 }
                 Effect::Pop(_) => {
-                    self.operand_stack.pop().unwrap();
+                    self.operand_stack.pop().expect(
+                        "Tried to pop off the empty operand stack -- this should never happen",
+                    );
                 }
                 Effect::Read(Read {
                     location,
@@ -143,6 +141,8 @@ impl TraceState {
 impl Tracer for TraceState {
     fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>) {
         self.apply_event(event);
+        // We only emit the state when we hit a non-effect internal event. This coincides with
+        // emitting the current state of the VM before each instruction/function call.
         match event {
             TraceEvent::Instruction { .. }
             | TraceEvent::OpenFrame { .. }

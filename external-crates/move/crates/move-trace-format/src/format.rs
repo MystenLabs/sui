@@ -21,7 +21,7 @@ pub type TraceIndex = usize;
 pub type TraceVersion = u64;
 
 /// The current version of the trace format.
-const TRACE_VERSION: TraceVersion = 0;
+const TRACE_VERSION: TraceVersion = 1;
 
 /// A Location is a valid root for a reference. This can either be a local in a frame, a stack
 /// value, or a reference into another location (e.g., vec[0][2]).
@@ -59,7 +59,7 @@ pub struct Write {
     pub root_value_after_write: TraceValue,
 }
 
-/// A TraceValue is a value is the standard MoveValue domain + references.
+/// A TraceValue is a value in the standard MoveValue domain + references.
 /// References hold their own snapshot of the root value they point to, along with the rooted path to
 /// the value that they reference within that snapshot.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -114,12 +114,12 @@ pub struct Frame {
 /// or a reference to a value, or a read/write of a value.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Effect {
-    // Pop a value off of the stack (pre-effect only)
+    // Pop a value off the stack (pre-effect only)
     Pop(TraceValue),
     // Read a value from a location (pre-effect only)
     Read(Read),
 
-    // Push a value off the stack (post-effect only)
+    // Push a value on the stack (post-effect only)
     Push(TraceValue),
     // Write a value to a location (post-effect only)
     Write(Write),
@@ -232,11 +232,6 @@ impl MoveTraceBuilder {
             tracer,
             trace: MoveTrace::new(),
         }
-    }
-
-    /// Add a custom tracer to an existing `MoveTraceBuilder`.
-    pub fn set_tracer(&mut self, tracer: Box<dyn Tracer>) {
-        self.tracer = tracer;
     }
 
     /// Consume the `MoveTraceBuilder` and return the `MoveTrace` that has been built by it.
