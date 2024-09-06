@@ -117,7 +117,7 @@ pub async fn start_test_indexer_impl(
             let config = crate::config::JsonRpcConfig {
                 name_service_options: crate::config::NameServiceOptions::default(),
                 rpc_address: reader_mode_rpc_url.parse().unwrap(),
-                rpc_client_url: rpc_url.parse().unwrap(),
+                rpc_client_url: rpc_url,
             };
             tokio::spawn(async move {
                 Indexer::start_reader(&config, &registry, blocking_pool, pool).await
