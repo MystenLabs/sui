@@ -169,6 +169,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    full_objects_history (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        serialized_object -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
     objects (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
