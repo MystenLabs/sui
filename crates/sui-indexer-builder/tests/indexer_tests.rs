@@ -7,7 +7,7 @@ use prometheus::{
     IntGaugeVec, Registry,
 };
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 mod indexer_test_utils;
 
@@ -119,9 +119,10 @@ async fn indexer_partitioned_task_with_data_already_in_db_test1() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -170,9 +171,10 @@ async fn indexer_partitioned_task_with_data_already_in_db_test2() {
         "test_indexer - backfill - 1".to_string(),
         Task {
             task_name: "test_indexer - backfill - 1".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -222,18 +224,20 @@ async fn indexer_partitioned_task_with_data_already_in_db_test3() {
         "test_indexer - backfill - 20:30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 20:30".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 10:19".to_string(),
         Task {
             task_name: "test_indexer - backfill - 10:19".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 19,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -278,18 +282,20 @@ async fn indexer_partitioned_task_with_data_already_in_db_test4() {
         "test_indexer - backfill - 20:30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 20:30".to_string(),
-            checkpoint: 30,
+            start_checkpoint: 30,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     persistent.progress_store.lock().await.insert(
         "test_indexer - backfill - 10:19".to_string(),
         Task {
             task_name: "test_indexer - backfill - 10:19".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 19,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -338,9 +344,10 @@ async fn indexer_with_existing_live_task1() {
         "test_indexer - Live".to_string(),
         Task {
             task_name: "test_indexer - Live".to_string(),
-            checkpoint: 30,
-            target_checkpoint: i64::MAX as u64,
+            start_checkpoint: 30,
+            target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
             timestamp: 0,
+            is_live_task: true,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -383,9 +390,10 @@ async fn indexer_with_existing_live_task2() {
         "test_indexer - Live".to_string(),
         Task {
             task_name: "test_indexer - Live".to_string(),
-            checkpoint: 30,
-            target_checkpoint: i64::MAX as u64,
+            start_checkpoint: 30,
+            target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
             timestamp: 10,
+            is_live_task: true,
         },
     );
     let mut indexer = IndexerBuilder::new(
@@ -414,7 +422,7 @@ fn assert_ranges(desc_ordered_tasks: &[Task], ranges: Vec<(u64, u64)>) {
     let mut iter = desc_ordered_tasks.iter();
     for (start, end) in ranges {
         let task = iter.next().unwrap();
-        assert_eq!(start, task.checkpoint);
+        assert_eq!(start, task.start_checkpoint);
         assert_eq!(end, task.target_checkpoint);
     }
 }
@@ -438,9 +446,10 @@ async fn resume_test() {
         "test_indexer - backfill - 30".to_string(),
         Task {
             task_name: "test_indexer - backfill - 30".to_string(),
-            checkpoint: 10,
+            start_checkpoint: 10,
             target_checkpoint: 30,
             timestamp: 0,
+            is_live_task: false,
         },
     );
     let mut indexer = IndexerBuilder::new(
