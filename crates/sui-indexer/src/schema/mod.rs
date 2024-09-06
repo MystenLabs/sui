@@ -18,6 +18,7 @@ pub use pg::event_struct_name;
 pub use pg::event_struct_package;
 pub use pg::events;
 pub use pg::feature_flags;
+pub use pg::full_objects_history;
 pub use pg::objects;
 pub use pg::objects_history;
 pub use pg::objects_snapshot;
