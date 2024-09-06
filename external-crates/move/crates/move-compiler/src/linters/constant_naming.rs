@@ -34,7 +34,7 @@ impl TypingVisitorContext for Context<'_> {
         &mut self,
         _module: ModuleIdent,
         constant_name: ConstantName,
-        cdef: &mut T::Constant,
+        cdef: &T::Constant,
     ) -> bool {
         let name = constant_name.0.value.as_str();
         if !is_valid_name(name) {

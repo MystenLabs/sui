@@ -82,13 +82,13 @@ pub fn program(
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
     let module_info = TypingProgramInfo::new(pre_compiled_lib, &modules, module_use_funs);
-    let mut prog = T::Program {
+    let prog = T::Program {
         modules,
         info: Arc::new(module_info),
     };
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
-        v.visit(compilation_env, &mut prog);
+        v.visit(compilation_env, &prog);
     }
     prog
 }

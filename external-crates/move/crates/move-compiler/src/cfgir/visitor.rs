@@ -24,7 +24,7 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program);
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -59,7 +59,7 @@ pub trait CFGIRVisitorConstructor {
 
     fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
         let mut context = Self::context(env, program);
         context.visit(program);
     }
@@ -69,35 +69,31 @@ pub trait CFGIRVisitorContext {
     fn add_warning_filter_scope(&mut self, filter: WarningFilters);
     fn pop_warning_filter_scope(&mut self);
 
-    fn visit_module_custom(
-        &mut self,
-        _ident: ModuleIdent,
-        _mdef: &mut G::ModuleDefinition,
-    ) -> bool {
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
         false
     }
 
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
     /// required.
-    fn visit(&mut self, program: &mut G::Program) {
-        for (mident, mdef) in program.modules.key_cloned_iter_mut() {
+    fn visit(&mut self, program: &G::Program) {
+        for (mident, mdef) in program.modules.key_cloned_iter() {
             self.add_warning_filter_scope(mdef.warning_filter.clone());
             if self.visit_module_custom(mident, mdef) {
                 self.pop_warning_filter_scope();
                 continue;
             }
 
-            for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
+            for (struct_name, sdef) in mdef.structs.key_cloned_iter() {
                 self.visit_struct(mident, struct_name, sdef)
             }
-            for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
+            for (enum_name, edef) in mdef.enums.key_cloned_iter() {
                 self.visit_enum(mident, enum_name, edef)
             }
-            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter() {
                 self.visit_constant(mident, constant_name, cdef)
             }
-            for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
+            for (function_name, fdef) in mdef.functions.key_cloned_iter() {
                 self.visit_function(mident, function_name, fdef)
             }
 
@@ -111,7 +107,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _struct_name: DatatypeName,
-        _sdef: &mut H::StructDefinition,
+        _sdef: &H::StructDefinition,
     ) -> bool {
         false
     }
@@ -119,7 +115,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         struct_name: DatatypeName,
-        sdef: &mut H::StructDefinition,
+        sdef: &H::StructDefinition,
     ) {
         self.add_warning_filter_scope(sdef.warning_filter.clone());
         if self.visit_struct_custom(module, struct_name, sdef) {
@@ -133,7 +129,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _enum_name: DatatypeName,
-        _edef: &mut H::EnumDefinition,
+        _edef: &H::EnumDefinition,
     ) -> bool {
         false
     }
@@ -141,7 +137,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         enum_name: DatatypeName,
-        edef: &mut H::EnumDefinition,
+        edef: &H::EnumDefinition,
     ) {
         self.add_warning_filter_scope(edef.warning_filter.clone());
         if self.visit_enum_custom(module, enum_name, edef) {
@@ -155,7 +151,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _constant_name: ConstantName,
-        _cdef: &mut G::Constant,
+        _cdef: &G::Constant,
     ) -> bool {
         false
     }
@@ -163,7 +159,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         constant_name: ConstantName,
-        cdef: &mut G::Constant,
+        cdef: &G::Constant,
     ) {
         self.add_warning_filter_scope(cdef.warning_filter.clone());
         if self.visit_constant_custom(module, constant_name, cdef) {
@@ -177,7 +173,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         _module: ModuleIdent,
         _function_name: FunctionName,
-        _fdef: &mut G::Function,
+        _fdef: &G::Function,
     ) -> bool {
         false
     }
@@ -185,7 +181,7 @@ pub trait CFGIRVisitorContext {
         &mut self,
         module: ModuleIdent,
         function_name: FunctionName,
-        fdef: &mut G::Function,
+        fdef: &G::Function,
     ) {
         self.add_warning_filter_scope(fdef.warning_filter.clone());
         if self.visit_function_custom(module, function_name, fdef) {
@@ -197,7 +193,7 @@ pub trait CFGIRVisitorContext {
             start: _,
             block_info: _,
             blocks,
-        } = &mut fdef.body.value
+        } = &fdef.body.value
         {
             for (lbl, block) in blocks {
                 self.visit_block(*lbl, block);
@@ -206,24 +202,24 @@ pub trait CFGIRVisitorContext {
         self.pop_warning_filter_scope();
     }
 
-    fn visit_block_custom(&mut self, _lbl: Label, _block: &mut G::BasicBlock) -> bool {
+    fn visit_block_custom(&mut self, _lbl: Label, _block: &G::BasicBlock) -> bool {
         false
     }
-    fn visit_block(&mut self, _lbl: Label, block: &mut G::BasicBlock) {
+    fn visit_block(&mut self, _lbl: Label, block: &G::BasicBlock) {
         for cmd in block {
             self.visit_command(cmd)
         }
     }
 
-    fn visit_command_custom(&mut self, _cmd: &mut H::Command) -> bool {
+    fn visit_command_custom(&mut self, _cmd: &H::Command) -> bool {
         false
     }
-    fn visit_command(&mut self, cmd: &mut H::Command) {
+    fn visit_command(&mut self, cmd: &H::Command) {
         use H::Command_ as C;
         if self.visit_command_custom(cmd) {
             return;
         }
-        match &mut cmd.value {
+        match &cmd.value {
             C::Assign(_, _, e)
             | C::Abort(_, e)
             | C::Return { exp: e, .. }
@@ -241,16 +237,16 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    fn visit_exp_custom(&mut self, _e: &mut H::Exp) -> bool {
+    fn visit_exp_custom(&mut self, _e: &H::Exp) -> bool {
         false
     }
     #[growing_stack]
-    fn visit_exp(&mut self, e: &mut H::Exp) {
+    fn visit_exp(&mut self, e: &H::Exp) {
         use H::UnannotatedExp_ as E;
         if self.visit_exp_custom(e) {
             return;
         }
-        match &mut e.exp.value {
+        match &e.exp.value {
             E::Unit { .. }
             | E::Move { .. }
             | E::Copy { .. }
@@ -274,7 +270,7 @@ pub trait CFGIRVisitorContext {
             }
 
             E::ModuleCall(m) => {
-                for arg in &mut m.arguments {
+                for arg in &m.arguments {
                     self.visit_exp(arg)
                 }
             }
@@ -292,16 +288,16 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    fn visit_value_custom(&mut self, _v: &mut H::Value) -> bool {
+    fn visit_value_custom(&mut self, _v: &H::Value) -> bool {
         false
     }
     #[growing_stack]
-    fn visit_value(&mut self, v: &mut H::Value) {
+    fn visit_value(&mut self, v: &H::Value) {
         use H::Value_ as V;
         if self.visit_value_custom(v) {
             return;
         }
-        match &mut v.value {
+        match &v.value {
             V::Address(_)
             | V::U8(_)
             | V::U16(_)
@@ -326,7 +322,7 @@ impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
 }
 
 impl<V: CFGIRVisitorConstructor> CFGIRVisitor for V {
-    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
         self.visit(env, program)
     }
 }
@@ -454,6 +450,7 @@ pub trait SimpleAbsIntConstructor: Sized {
     fn new<'a>(
         env: &CompilationEnv,
         context: &'a CFGContext<'a>,
+        cfg: &ImmForwardCFG,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
@@ -481,7 +478,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, context, &mut init_state) else {
+        let Some(mut ai) = Self::new(env, context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);

@@ -55,7 +55,7 @@ impl TypingVisitorContext for Context<'_> {
         &mut self,
         _module: ModuleIdent,
         _struct_name: DatatypeName,
-        sdef: &mut StructDefinition,
+        sdef: &StructDefinition,
     ) -> bool {
         if first_field_has_id_field_of_type_uid(sdef) && lacks_key_ability(sdef) {
             let uid_msg =

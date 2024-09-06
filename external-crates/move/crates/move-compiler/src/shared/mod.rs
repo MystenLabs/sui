@@ -611,6 +611,14 @@ impl CompilationEnv {
             .unwrap_or(&self.default_config)
     }
 
+    pub fn package_configs(&self) -> impl Iterator<Item = (Option<Symbol>, &PackageConfig)> {
+        std::iter::once((None, &self.default_config)).chain(
+            self.package_configs
+                .iter()
+                .map(|(n, config)| (Some(*n), config)),
+        )
+    }
+
     pub fn set_primitive_type_definers(
         &mut self,
         m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>,
