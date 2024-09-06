@@ -39,6 +39,7 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
+use crate::models::objects::StoredFullHistoryObject;
 use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
@@ -48,10 +49,10 @@ use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
-    event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
-    objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
-    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
+    objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
+    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -594,6 +595,39 @@ impl PgIndexerStore {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
+        })
+    }
+
+    fn persist_full_objects_history_chunk(
+        &self,
+        objects: Vec<StoredFullHistoryObject>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_full_objects_history_chunks
+            .start_timer();
+
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for objects_chunk in objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    insert_or_ignore_into!(full_objects_history::table, objects_chunk, conn);
+                }
+
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked full objects history",
+                objects.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist full object history with error: {}", e);
         })
     }
 
@@ -1806,6 +1840,74 @@ impl IndexerStore for PgIndexerStore {
             })?;
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} objects history", len);
+        Ok(())
+    }
+
+    // TODO: There are quite some shared boiler-plate code in all functions.
+    // We should clean them up eventually.
+    async fn persist_full_objects_history(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError> {
+        let skip_history = std::env::var("SKIP_OBJECT_HISTORY")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_history {
+            info!("skipping object history");
+            return Ok(());
+        }
+
+        if object_changes.is_empty() {
+            return Ok(());
+        }
+        let objects: Vec<StoredFullHistoryObject> = object_changes
+            .into_iter()
+            .flat_map(|c| {
+                let TransactionObjectChangesToCommit {
+                    changed_objects,
+                    deleted_objects,
+                } = c;
+                changed_objects
+                    .into_iter()
+                    .map(|o| o.into())
+                    .chain(deleted_objects.into_iter().map(|o| o.into()))
+            })
+            .collect();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_full_objects_history
+            .start_timer();
+
+        let len = objects.len();
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                self.spawn_blocking_task(move |this| this.persist_full_objects_history_chunk(c))
+            })
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_full_objects_history_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all full objects history chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} full objects history", len);
         Ok(())
     }
 
