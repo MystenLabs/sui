@@ -58,9 +58,19 @@ where
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
+            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
                 commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
                 batch = vec![];
+            }
+            if let Some(epoch_number) = epoch_number_option {
+                state.upload_display(epoch_number).await.tap_err(|e| {
+                    error!(
+                        "Failed to upload display table before epoch {} with error: {}",
+                        epoch_number,
+                        e.to_string()
+                    );
+                })?;
             }
         }
         if !batch.is_empty() && unprocessed.is_empty() {

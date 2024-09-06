@@ -88,6 +88,9 @@ pub enum IndexerError {
     #[error("Indexer generic error: `{0}`")]
     GenericError(String),
 
+    #[error("GCS error: `{0}`")]
+    GcsError(String),
+
     #[error("Indexer failed to resolve object to move struct with error: `{0}`")]
     ResolveMoveStructError(String),
 
