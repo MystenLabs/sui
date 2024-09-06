@@ -67,7 +67,7 @@ pub fn start_metrics_push_task(
     let (interval, url) = match metrics_config {
         Some(MetricsConfig {
             push_interval_seconds,
-            push_url: Some(url),
+            push_url: url,
         }) => {
             let interval = push_interval_seconds
                 .map(Duration::from_secs)
@@ -80,6 +80,7 @@ pub fn start_metrics_push_task(
 
     let mut client = MetricsPushClient::new(metrics_key_pair.copy());
 
+    // TODO (johnm) split this out into mysten-common
     async fn push_metrics(
         client: &MetricsPushClient,
         url: &reqwest::Url,

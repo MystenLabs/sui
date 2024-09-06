@@ -130,8 +130,7 @@ pub fn default_ed25519_key_pair() -> NetworkKeyPair {
 pub struct MetricsConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub push_interval_seconds: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub push_url: Option<String>,
+    pub push_url: String,
 }
 
 impl Config for BridgeNodeConfig {}
