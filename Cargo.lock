@@ -14155,7 +14155,6 @@ dependencies = [
  "prometheus",
  "reqwest 0.12.5",
  "serde",
- "snap",
  "sui-archival",
  "sui-config",
  "sui-core",

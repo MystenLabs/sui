@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-snap = "1.1.0"
+snap.workspace = true
 tokio.workspace = true
 futures.workspace = true
 parking_lot.workspace = true

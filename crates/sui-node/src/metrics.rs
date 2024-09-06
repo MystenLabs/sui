@@ -4,15 +4,13 @@ use mysten_common::metrics::{push_metrics, MetricsPushClient};
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, Encoder, HistogramVec, IntCounterVec, IntGaugeVec,
-    Registry, PROTOBUF_FORMAT,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use sui_network::tonic::Code;
 
 use mysten_metrics::RegistryService;
-use tracing::error;
 
 /// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
 /// is configured.
