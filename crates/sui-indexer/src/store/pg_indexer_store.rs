@@ -329,7 +329,6 @@ impl PgIndexerStore {
         &self,
         display_updates: BTreeMap<String, StoredDisplay>,
     ) -> Result<(), IndexerError> {
-        use diesel::ExpressionMethods;
         use diesel_async::RunQueryDsl;
 
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
@@ -419,19 +418,18 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_object_deletion_chunk(
+    async fn persist_object_deletion_chunk(
         &self,
         deleted_objects_chunk: Vec<StoredDeletedObject>,
     ) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+        use diesel_async::RunQueryDsl;
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
         let len = deleted_objects_chunk.len();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 diesel::delete(
                     objects::table.filter(
                         objects::object_id.eq_any(
@@ -443,13 +441,15 @@ impl PgIndexerStore {
                     ),
                 )
                 .execute(conn)
+                .await
                 .map_err(IndexerError::from)
                 .context("Failed to write object deletion to PostgresDB")?;
 
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(elapsed, "Deleted {} chunked objects", len);
@@ -1747,19 +1747,10 @@ impl IndexerStore for PgIndexerStore {
             })?;
         let deletion_futures = object_deletion_chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_object_deletion_chunk(c)))
+            .map(|c| self.persist_object_deletion_chunk(c))
             .collect::<Vec<_>>();
         futures::future::join_all(deletion_futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to join persist_object_deletion_chunk futures: {}",
-                    e
-                );
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
