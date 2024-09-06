@@ -105,7 +105,7 @@ pub async fn start_test_indexer_impl(
         .unwrap();
     let restore_config = RestoreConfig::default();
     let store = PgIndexerStore::new(
-        blocking_pool.clone(),
+        blocking_pool,
         pool.clone(),
         restore_config,
         indexer_metrics.clone(),
@@ -120,9 +120,7 @@ pub async fn start_test_indexer_impl(
                 rpc_address: reader_mode_rpc_url.parse().unwrap(),
                 rpc_client_url: rpc_url,
             };
-            tokio::spawn(async move {
-                Indexer::start_reader(&config, &registry, blocking_pool, pool).await
-            })
+            tokio::spawn(async move { Indexer::start_reader(&config, &registry, pool).await })
         }
         ReaderWriterConfig::Writer {
             snapshot_config,
