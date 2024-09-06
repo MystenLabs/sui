@@ -730,9 +730,11 @@ pub mod tests {
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
         let watermark = Watermark {
-            checkpoint: 1,
-            checkpoint_timestamp_ms: 1,
+            hi_cp: 1,
+            hi_cp_timestamp_ms: 1,
             epoch: 0,
+            lo_cp: 0,
+            lo_tx: 0,
         };
         let state = AppState::new(
             connection_config.clone(),
