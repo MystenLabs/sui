@@ -89,6 +89,7 @@ const config = {
     },
     path.resolve(__dirname, `./src/plugins/descriptions`),
     path.resolve(__dirname, `./src/plugins/framework`),
+    path.resolve(__dirname, `./src/plugins/askcookbook`),
   ],
   presets: [
     [
