@@ -172,6 +172,7 @@ impl Watermark {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
         use checkpoints::dsl;
         let Some(result): Option<Vec<(i64, i64, i64, Option<i64>)>> = db
