@@ -177,14 +177,14 @@ where
     // for chunking the query.
     pub async fn get_raw_events_in_range(
         &self,
-        address: ethers::types::Address,
+        addresses: Vec<ethers::types::Address>,
         start_block: u64,
         end_block: u64,
     ) -> BridgeResult<Vec<RawEthLog>> {
         let filter = Filter::new()
             .from_block(start_block)
             .to_block(end_block)
-            .address(address);
+            .address(addresses.clone());
         let logs = self
             .provider
             .get_logs(&filter)
@@ -197,11 +197,11 @@ where
                     e
                 )
             })?;
-        // Safeguard check that all events are emitted from requested contract address
+        // Safeguard check that all events are emitted from requested contract addresses
         logs.into_iter().map(
             |log| {
-                if log.address != address {
-                    return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", address, log)));
+                if !addresses.contains(&log.address) {
+                    return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", addresses, log)));
                 }
                 Ok(RawEthLog {
                 block_number: log.block_number.ok_or(BridgeError::ProviderError("Provider returns log without block_number".into()))?.as_u64(),

@@ -105,12 +105,14 @@ pub fn into_token_transfers(
                     status: TokenTransferStatus::Deposited,
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
+                    is_finalized: true,
                     data: Some(TokenTransferData {
                         destination_chain: move_event.target_chain,
                         sender_address: move_event.sender_address.clone(),
                         recipient_address: move_event.target_address.clone(),
                         token_id: move_event.token_type,
                         amount: move_event.amount_sui_adjusted,
+                        is_finalized: true,
                     }),
                 }));
             }
@@ -129,6 +131,7 @@ pub fn into_token_transfers(
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
                     data: None,
+                    is_finalized: true,
                 }));
             }
             "TokenTransferClaimed" => {
@@ -146,6 +149,7 @@ pub fn into_token_transfers(
                     gas_usage: effects.gas_cost_summary().net_gas_usage(),
                     data_source: BridgeDataSource::Sui,
                     data: None,
+                    is_finalized: true,
                 }));
             }
             _ => {
