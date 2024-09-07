@@ -10,7 +10,7 @@ use crate::messages_checkpoint::{
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
-use crate::transaction::CertifiedTransaction;
+use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
@@ -100,6 +100,7 @@ pub enum ConsensusTransactionKey {
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
     RandomnessDkgMessage(AuthorityName),
     RandomnessDkgConfirmation(AuthorityName),
+    UserTransaction(TransactionDigest),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -132,6 +133,7 @@ impl Debug for ConsensusTransactionKey {
             Self::RandomnessDkgConfirmation(name) => {
                 write!(f, "RandomnessDkgConfirmation({:?})", name.concise())
             }
+            Self::UserTransaction(digest) => write!(f, "UserTransaction({:?})", digest),
         }
     }
 }
@@ -273,6 +275,8 @@ pub enum ConsensusTransactionKind {
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 
     CapabilityNotificationV2(AuthorityCapabilitiesV2),
+
+    UserTransaction(Box<Transaction>),
 }
 
 impl ConsensusTransactionKind {
@@ -526,6 +530,9 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
+            }
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                ConsensusTransactionKey::UserTransaction(*tx.digest())
             }
         }
     }
