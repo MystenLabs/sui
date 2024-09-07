@@ -173,6 +173,7 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 //             Note: do not use version 56 for any new features.
 // Version 57: Reduce minimum number of random beacon shares.
 // Version 58: Optimize boolean binops
+//             Finalize bridge committee on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2708,7 +2709,11 @@ impl ProtocolConfig {
                     // Reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(800);
                 }
-                58 => {}
+                58 => {
+                    if chain == Chain::Mainnet {
+                        cfg.bridge_should_try_to_finalize_committee = Some(true);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
