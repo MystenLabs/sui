@@ -68,11 +68,6 @@ where
         // This is dummy
         &self.counter_metric
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        // This is dummy
-        &self.gauge_metric
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -119,15 +114,18 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
+        checkpoint_numbers: &[u64],
+        _start_checkpoint_number: u64,
+        _target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let checkpoint_number = *checkpoint_numbers.last().unwrap();
         self.progress_store
             .lock()
             .await
             .get_mut(&task_name)
             .unwrap()
             .checkpoint = checkpoint_number;
-        Ok(())
+        Ok(Some(checkpoint_number))
     }
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
