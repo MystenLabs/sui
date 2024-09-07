@@ -129,61 +129,43 @@ pub async fn append_info_headers(
     State(state): State<RestService>,
     response: Response,
 ) -> impl IntoResponse {
-    let latest_checkpoint = state.reader.inner().get_latest_checkpoint().unwrap();
-    let lowest_available_checkpoint = state
-        .reader
-        .inner()
-        .get_lowest_available_checkpoint()
-        .unwrap();
+    let mut headers = HeaderMap::new();
 
-    let lowest_available_checkpoint_objects = state
+    if let Ok(chain_id) = state.chain_id().to_string().try_into() {
+        headers.insert(X_SUI_CHAIN_ID, chain_id);
+    }
+
+    if let Ok(chain) = state.chain_id().chain().as_str().try_into() {
+        headers.insert(X_SUI_CHAIN, chain);
+    }
+
+    if let Ok(latest_checkpoint) = state.reader.inner().get_latest_checkpoint() {
+        headers.insert(X_SUI_EPOCH, latest_checkpoint.epoch().into());
+        headers.insert(
+            X_SUI_CHECKPOINT_HEIGHT,
+            latest_checkpoint.sequence_number.into(),
+        );
+        headers.insert(X_SUI_TIMESTAMP_MS, latest_checkpoint.timestamp_ms.into());
+    }
+
+    if let Ok(lowest_available_checkpoint) = state.reader.inner().get_lowest_available_checkpoint()
+    {
+        headers.insert(
+            X_SUI_LOWEST_AVAILABLE_CHECKPOINT,
+            lowest_available_checkpoint.into(),
+        );
+    }
+
+    if let Ok(lowest_available_checkpoint_objects) = state
         .reader
         .inner()
         .get_lowest_available_checkpoint_objects()
-        .unwrap();
-
-    let mut headers = HeaderMap::new();
-
-    headers.insert(
-        X_SUI_CHAIN_ID,
-        state.chain_id().to_string().try_into().unwrap(),
-    );
-    headers.insert(
-        X_SUI_CHAIN,
-        state.chain_id().chain().as_str().try_into().unwrap(),
-    );
-    headers.insert(
-        X_SUI_EPOCH,
-        latest_checkpoint.epoch().to_string().try_into().unwrap(),
-    );
-    headers.insert(
-        X_SUI_CHECKPOINT_HEIGHT,
-        latest_checkpoint
-            .sequence_number()
-            .to_string()
-            .try_into()
-            .unwrap(),
-    );
-    headers.insert(
-        X_SUI_TIMESTAMP_MS,
-        latest_checkpoint
-            .timestamp_ms
-            .to_string()
-            .try_into()
-            .unwrap(),
-    );
-    headers.insert(
-        X_SUI_LOWEST_AVAILABLE_CHECKPOINT,
-        lowest_available_checkpoint.to_string().try_into().unwrap(),
-    );
-
-    headers.insert(
-        X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
-        lowest_available_checkpoint_objects
-            .to_string()
-            .try_into()
-            .unwrap(),
-    );
+    {
+        headers.insert(
+            X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
+            lowest_available_checkpoint_objects.into(),
+        );
+    }
 
     (headers, response)
 }
