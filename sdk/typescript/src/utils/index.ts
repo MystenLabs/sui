@@ -32,4 +32,4 @@ export {
 	isValidNamedPackage,
 	isValidNamedType,
 	type NamedPackagesPluginCache,
-} from './move_registry.js';
+} from './move-registry.js';

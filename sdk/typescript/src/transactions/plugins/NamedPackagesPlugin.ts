@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiGraphQLClient } from '../../graphql/client.js';
-import type { NamedPackagesPluginCache, NameResolutionRequest } from '../../utils/move_registry.js';
+import type { NamedPackagesPluginCache, NameResolutionRequest } from '../../utils/move-registry.js';
 import {
 	findTransactionBlockNames,
 	listToRequests,
 	replaceNames,
-} from '../../utils/move_registry.js';
+} from '../../utils/move-registry.js';
 import type { BuildTransactionOptions } from '../json-rpc-resolver.js';
 import type { TransactionDataBuilder } from '../TransactionData.js';
 
-export type NamedPackagesPlugin = {
+export type NamedPackagesPluginOptions = {
 	/**
 	 * The SuiGraphQLClient to use for resolving names.
 	 * The endpoint should be the GraphQL endpoint of the network you are targeting.
@@ -58,7 +58,11 @@ export type NamedPackagesPlugin = {
  * 	```
  */
 export const namedPackagesPlugin =
-	({ suiGraphQLClient, pageSize = 10, cache = { packages: {}, types: {} } }: NamedPackagesPlugin) =>
+	({
+		suiGraphQLClient,
+		pageSize = 10,
+		cache = { packages: {}, types: {} },
+	}: NamedPackagesPluginOptions) =>
 	async (
 		transactionData: TransactionDataBuilder,
 		_buildOptions: BuildTransactionOptions,

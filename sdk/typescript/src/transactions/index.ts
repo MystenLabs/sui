@@ -48,4 +48,7 @@ export type {
 
 export { Arguments } from './Arguments.js';
 
-export { namedPackagesPlugin, type NamedPackagesPlugin } from './plugins/NamedPackagesPlugin.js';
+export {
+	namedPackagesPlugin,
+	type NamedPackagesPluginOptions,
+} from './plugins/NamedPackagesPlugin.js';
