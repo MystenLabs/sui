@@ -116,9 +116,7 @@ impl<P, D, M> Indexer<P, D, M> {
         let live_task_future = match ongoing_tasks.live_task() {
             Some(live_task) if !self.disable_live_task => {
                 let live_task_future = self.datasource.start_ingestion_task(
-                    live_task.task_name.clone(),
-                    live_task.checkpoint,
-                    live_task.target_checkpoint,
+                    live_task,
                     self.storage.clone(),
                     self.data_mapper.clone(),
                 );
@@ -127,7 +125,7 @@ impl<P, D, M> Indexer<P, D, M> {
             _ => None,
         };
 
-        let backfill_tasks = ongoing_tasks.backfill_tasks();
+        let backfill_tasks = ongoing_tasks.backfill_tasks_ordered_desc();
         let storage_clone = self.storage.clone();
         let data_mapper_clone = self.data_mapper.clone();
         let datasource_clone = self.datasource.clone();
@@ -135,12 +133,10 @@ impl<P, D, M> Indexer<P, D, M> {
         let handle = spawn_monitored_task!(async {
             // Execute tasks one by one
             for backfill_task in backfill_tasks {
-                if backfill_task.checkpoint < backfill_task.target_checkpoint {
+                if backfill_task.start_checkpoint < backfill_task.target_checkpoint {
                     datasource_clone
                         .start_ingestion_task(
-                            backfill_task.task_name.clone(),
-                            backfill_task.checkpoint,
-                            backfill_task.target_checkpoint,
+                            backfill_task,
                             storage_clone.clone(),
                             data_mapper_clone.clone(),
                         )
@@ -181,10 +177,9 @@ impl<P, D, M> Indexer<P, D, M> {
             match ongoing_tasks.live_task() {
                 None => {
                     self.storage
-                        .register_task(
+                        .register_live_task(
                             format!("{} - Live", self.name),
                             live_task_from_checkpoint,
-                            i64::MAX as u64,
                         )
                         .await
                         .tap_err(|e| {
@@ -199,8 +194,8 @@ impl<P, D, M> Indexer<P, D, M> {
                     // We still check this because in the case of slow
                     // block generation (e.g. Ethereum), it's possible we will
                     // stay on the same block for a bit.
-                    if live_task_from_checkpoint != live_task.checkpoint {
-                        live_task.checkpoint = live_task_from_checkpoint;
+                    if live_task_from_checkpoint != live_task.start_checkpoint {
+                        live_task.start_checkpoint = live_task_from_checkpoint;
                         self.storage.update_task(live_task).await.tap_err(|e| {
                             tracing::error!(
                                 "Failed to update live task to ({}-MAX): {:?}",
@@ -318,7 +313,7 @@ pub trait IndexerProgressStore: Send {
         target_checkpoint_number: u64,
     ) -> anyhow::Result<Option<u64>>;
 
-    async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error>;
+    async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Tasks, Error>;
 
     async fn get_largest_backfill_task_target_checkpoint(
         &self,
@@ -328,8 +323,14 @@ pub trait IndexerProgressStore: Send {
     async fn register_task(
         &mut self,
         task_name: String,
-        checkpoint: u64,
+        start_checkpoint: u64,
         target_checkpoint: u64,
+    ) -> Result<(), anyhow::Error>;
+
+    async fn register_live_task(
+        &mut self,
+        task_name: String,
+        start_checkpoint: u64,
     ) -> Result<(), anyhow::Error>;
 
     async fn update_task(&mut self, task: Task) -> Result<(), Error>;
@@ -339,9 +340,7 @@ pub trait IndexerProgressStore: Send {
 pub trait Datasource<T: Send>: Sync + Send {
     async fn start_ingestion_task<M, P, R>(
         &self,
-        task_name: String,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         mut storage: P,
         data_mapper: M,
     ) -> Result<(), Error>
@@ -349,6 +348,9 @@ pub trait Datasource<T: Send>: Sync + Send {
         M: DataMapper<T, R>,
         P: Persistent<R>,
     {
+        let task_name = task.task_name.clone();
+        let starting_checkpoint = task.start_checkpoint;
+        let target_checkpoint = task.target_checkpoint;
         let ingestion_batch_size = std::env::var("INGESTION_BATCH_SIZE")
             .unwrap_or(INGESTION_BATCH_SIZE.to_string())
             .parse::<usize>()
@@ -365,7 +367,6 @@ pub trait Datasource<T: Send>: Sync + Send {
             starting_checkpoint,
             target_checkpoint,
         );
-        let is_live_task = target_checkpoint == i64::MAX as u64;
         let (data_sender, data_rx) = metered_channel::channel(
             checkpoint_channel_size,
             &mysten_metrics::get_metrics()
@@ -373,10 +374,8 @@ pub trait Datasource<T: Send>: Sync + Send {
                 .channel_inflight
                 .with_label_values(&[&task_name]),
         );
-        let join_handle = self
-            .start_data_retrieval(starting_checkpoint, target_checkpoint, data_sender)
-            .await?;
-
+        let is_live_task = task.is_live_task;
+        let join_handle = self.start_data_retrieval(task, data_sender).await?;
         let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
             .with_label_values(&[&task_name]);
@@ -499,8 +498,7 @@ pub trait Datasource<T: Send>: Sync + Send {
 
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error>;
 
