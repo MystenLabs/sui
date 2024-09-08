@@ -5,6 +5,7 @@ import { UseSignTransactionExample } from '../../../examples/wallet-hooks';
 Use the `useSignTransaction` hook to prompt the user to sign a transaction with their wallet.
 
 ```ts
+import { Transaction } from '@mysten/sui/transactions';
 import {
 	ConnectButton,
 	useCurrentAccount,
@@ -42,7 +43,7 @@ function MyComponent() {
 								});
 
 								// Always report transaction effects to the wallet after execution
-								reportTransactionEffects(result.rawEffects!);
+								reportTransactionEffects(executeResult.rawEffects!);
 
 								console.log(executeResult);
 							}}
