@@ -15,12 +15,12 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
-    object::{Data, Object},
+    object::{bounded_visitor::BoundedVisitor, Data, Object},
 };
 
 use sui_config::genesis::Genesis;
 
-use sui_json::SuiJsonValue;
+use sui_json::{move_value_to_json, SuiJsonValue};
 use sui_package_resolver::Result as ResolverResult;
 use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
@@ -558,8 +558,11 @@ pub async fn main() {
                         .await
                         .unwrap();
 
+                    let result = BoundedVisitor::deserialize_value(&event.contents, &type_layout)
+                        .expect("Cannot deserialize");
+                    let json = move_value_to_json(&result).expect("Cannot convert to json");
                     let json_val =
-                        SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
+                        SuiJsonValue::new_unchecked(json).expect("Cannot convert to json");
 
                     println!(
                         "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
@@ -586,9 +589,11 @@ pub async fn main() {
                     .await
                     .unwrap();
 
-                let json_val =
-                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), move_object.contents())
-                        .unwrap();
+                let result =
+                    BoundedVisitor::deserialize_value(move_object.contents(), &type_layout)
+                        .expect("Cannot deserialize");
+                let json = move_value_to_json(&result).expect("Cannot convert to json");
+                let json_val = SuiJsonValue::new_unchecked(json).expect("Cannot convert to json");
 
                 let (oid, version, hash) = object.compute_object_reference();
                 println!(
