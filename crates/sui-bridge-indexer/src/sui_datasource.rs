@@ -70,8 +70,9 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             exit_checkpoint: task.target_checkpoint,
             exit_sender: Some(exit_sender),
         };
-        // Live task uses smaller number to be cost effective
+        // The max concurrnecy of checkpoint to fetch at the same time for ingestion framework
         let ingestion_reader_batch_size = if task.is_live_task {
+            // Live task uses smaller number to be cost effective
             LIVE_TASK_INGESTION_READER_BATCH_SIZE
         } else {
             std::env::var("BACKFILL_TASK_INGESTION_READER_BATCH_SIZE")
