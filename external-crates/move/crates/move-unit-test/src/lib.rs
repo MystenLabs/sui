@@ -68,7 +68,7 @@ pub struct UnitTestingConfig {
     )]
     pub dep_files: Vec<String>,
 
-    /// Bytecode dependnecy files
+    /// Bytecode dependency files
     #[clap(
         name = "bytecode-depencencies",
         long = "bytecode-dependencies",

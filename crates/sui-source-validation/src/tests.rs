@@ -672,42 +672,36 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
-    let b_ref_fixtures = tempfile::tempdir()?;
-    let b_ref = {
-        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
-        publish_package(context, b_src).await.0
-    };
+    let tempdir = tempfile::tempdir()?;
 
-    let b_pkg_fixtures = tempfile::tempdir()?;
     {
-        let pkg_path = copy_published_package(&b_pkg_fixtures, "b", b_ref.0.into()).await?;
-        let pkg = compile_package(&pkg_path);
+        // publish b
+        fs::create_dir_all(tempdir.path().join("publish"))?;
+        let b_src =
+            copy_published_package(&tempdir.path().join("publish"), "b", SuiAddress::ZERO).await?;
+        let b_ref = publish_package(context, b_src).await.0;
 
-        // convert to a bytecode package
+        // setup b as a bytecode package
+        let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
+
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+        BuildConfig::default().build(&pkg_path).unwrap();
+
         fs::remove_dir_all(pkg_path.join("sources"))?;
-        fs::create_dir(pkg_path.join("sources"))?;
-        let modules_out = pkg_path.join("build").join("b").join("bytecode_modules");
-        fs::create_dir_all(&modules_out)?;
-        for module in pkg.package.root_modules() {
-            let out = modules_out.join(format!("{}.mv", module.unit.name));
-            let mut buf = vec![];
-            module
-                .unit
-                .module
-                .serialize_with_version(module.unit.module.version, &mut buf)?;
-            fs::write(out, buf)?;
-        }
     };
 
-    let a_fixtures = tempfile::tempdir()?;
     let (a_pkg, a_ref) = {
-        fs::rename(b_pkg_fixtures.path().join("b"), a_fixtures.path().join("b"))?;
-        let a_src = copy_published_package(&a_fixtures, "a", SuiAddress::ZERO).await?;
+        let a_src = copy_published_package(&tempdir, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, a_src).await.0,
         )
     };
+
+    assert!(
+        !a_pkg.bytecode_deps.is_empty(),
+        "Invalid test setup: expected bytecode deps to be present."
+    );
 
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());

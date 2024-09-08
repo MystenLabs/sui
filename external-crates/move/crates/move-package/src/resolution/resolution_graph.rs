@@ -610,6 +610,9 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
     }
 
     places_to_look
+        .into_iter()
+        .filter(|path| path.exists())
+        .collect()
 }
 
 fn package_digest_for_config(package_path: &Path, config: &BuildConfig) -> Result<PackageDigest> {
