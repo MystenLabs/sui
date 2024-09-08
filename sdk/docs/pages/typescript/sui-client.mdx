@@ -139,7 +139,8 @@ const result = await client.executeTransactionBlock({
 
 - `transactionBlock` - either a Transaction or BCS serialized transaction data bytes as a Uint8Array
   or as a base-64 encoded string.
-- `signer` - A `Keypair` instance to sign the transaction
+- `signature` - A signature, or list of signatures committed to the intent message of the
+  transaction data, as a base-64 encoded string.
 - `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
   should return the response. Default to be `WaitForLocalExecution`
 - `options`:
@@ -170,8 +171,7 @@ const result = await client.signAndExecuteTransaction({
 
 - `transaction` - BCS serialized transaction data bytes as a Uint8Array or as a base-64 encoded
   string.
-- `signature` - A signature, or list of signatures committed to the intent message of the
-  transaction data, as a base-64 encoded string.
+- `signer` - A `Keypair` instance to sign the transaction
 - `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
   should return the response. Default to be `WaitForLocalExecution`
 - `options`:
