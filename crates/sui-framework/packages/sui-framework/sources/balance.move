@@ -46,6 +46,13 @@ module sui::balance {
     public fun create_supply<T: drop>(_: T): Supply<T> {
         Supply { value: 0 }
     }
+    public use fun destroy_zero_supply as Supply.destroy_zero;
+
+    /// Destroy an empty supply
+    public fun destroy_zero_supply<T: drop>(self: Supply<T>) {
+        assert!(self.value == 0, ENonZero);
+        let Supply { value: _ } = self;
+    }
 
     /// Increase supply by `value` and create a new `Balance<T>` with this value.
     public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
