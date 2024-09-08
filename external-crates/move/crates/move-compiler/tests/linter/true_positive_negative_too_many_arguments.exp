@@ -1,0 +1,11 @@
+warning[Lint W01006]: too many arguments
+   ┌─ tests/linter/true_positive_negative_too_many_arguments.move:8:7
+   │  
+ 8 │       ) {
+   │ ╭───────^
+ 9 │ │         // Function body
+10 │ │     }
+   │ ╰─────^ Function 'true_positive' has too many parameters (11). Consider refactoring to improve readability.
+   │  
+   = This warning can be suppressed with '#[allow(lint(too_many_arguments))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
