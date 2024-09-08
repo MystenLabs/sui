@@ -21,7 +21,7 @@ use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
 use crate::{models, schema, ProcessedTxnData};
 use sui_indexer_builder::indexer_builder::{IndexerProgressStore, Persistent};
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 
 /// Persistent layer impl
 #[derive(Clone)]
@@ -147,7 +147,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(None)
     }
 
-    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, anyhow::Error> {
         let mut conn = self.pool.get().await?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -157,7 +157,8 @@ impl IndexerProgressStore for PgBridgePersistent {
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)
             .await?;
-        Ok(cp.into_iter().map(|d| d.into()).collect())
+        let tasks = cp.into_iter().map(|d| d.into()).collect();
+        Ok(Tasks::new(tasks)?)
     }
 
     async fn get_largest_backfill_task_target_checkpoint(
@@ -177,6 +178,8 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(cp.map(|c| c as u64))
     }
 
+    /// Register a new task to progress store with a start checkpoint and target checkpoint.
+    /// Usually used for backfill tasks.
     async fn register_task(
         &mut self,
         task_name: String,
@@ -197,11 +200,31 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(())
     }
 
+    /// Register a live task to progress store with a start checkpoint.
+    async fn register_live_task(
+        &mut self,
+        task_name: String,
+        start_checkpoint: u64,
+    ) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get().await?;
+        diesel::insert_into(schema::progress_store::table)
+            .values(models::ProgressStore {
+                task_name,
+                checkpoint: start_checkpoint as i64,
+                target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT,
+                // Timestamp is defaulted to current time in DB if None
+                timestamp: None,
+            })
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
+
     async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get().await?;
         diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
             .set((
-                columns::checkpoint.eq(task.checkpoint as i64),
+                columns::checkpoint.eq(task.start_checkpoint as i64),
                 columns::target_checkpoint.eq(task.target_checkpoint as i64),
                 columns::timestamp.eq(now),
             ))
