@@ -1,0 +1,56 @@
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+  ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:6:17
+  │
+6 │         let _ = vector::borrow(&v, 3); // This should trigger the lint
+  │                 ^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 3 in array 'v' with size known at compile time.
+  │
+  = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:11:17
+   │
+11 │         let _ = vector::borrow(&v, 18446744073709551615); // This is -1 as u64, should trigger the lint
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 18446744073709551615 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:22:17
+   │
+22 │         let _ = vector::borrow(&v, 2); // This should trigger the lint
+   │                 ^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 2 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:27:17
+   │
+27 │         let _ = vector::borrow(&v, 1000000); // This should trigger the lint
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 1000000 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:32:17
+   │
+32 │         let _ = vector::borrow(&v, 3);
+   │                 ^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 3 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:33:17
+   │
+33 │         let _ = vector::borrow(&v, 4);
+   │                 ^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 4 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00006]: indexing into a vector or array with a value that is out of bounds
+   ┌─ tests/linter/true_positive_out_of_bounds_indexing.move:34:17
+   │
+34 │         let _ = vector::borrow(&v, 5);
+   │                 ^^^^^^^^^^^^^^^^^^^^^ Array index out of bounds: attempting to access index 5 in array 'v' with size known at compile time.
+   │
+   = This warning can be suppressed with '#[allow(lint(out_of_bounds_indexing))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
