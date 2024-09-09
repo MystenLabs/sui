@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::sql_types::{BigInt, VarChar};
-use diesel::{QueryableByName, RunQueryDsl};
+use diesel::QueryableByName;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use tracing::{error, info};
 
 use crate::database::ConnectionPool;
-use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::EpochToCommit;
 use crate::models::epoch::StoredEpochInfo;
-use crate::store::{diesel_macro::*, transaction_with_retry};
+use crate::store::transaction_with_retry;
 
 const GET_PARTITION_SQL: &str = r"
 SELECT parent.relname                                            AS table_name,
@@ -30,7 +29,6 @@ GROUP BY table_name;
 
 #[derive(Clone)]
 pub struct PgPartitionManager {
-    cp: BlockingConnectionPool,
     pool: ConnectionPool,
 
     partition_strategies: HashMap<&'static str, PgPartitionStrategy>,
@@ -88,13 +86,12 @@ impl EpochPartitionData {
 }
 
 impl PgPartitionManager {
-    pub fn new(cp: BlockingConnectionPool, pool: ConnectionPool) -> Result<Self, IndexerError> {
+    pub fn new(pool: ConnectionPool) -> Result<Self, IndexerError> {
         let mut partition_strategies = HashMap::new();
         partition_strategies.insert("events", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("transactions", PgPartitionStrategy::TxSequenceNumber);
         partition_strategies.insert("objects_version", PgPartitionStrategy::ObjectId);
         let manager = Self {
-            cp,
             pool,
             partition_strategies,
         };
@@ -207,19 +204,25 @@ impl PgPartitionManager {
         Ok(())
     }
 
-    pub fn drop_table_partition(&self, table: String, partition: u64) -> Result<(), IndexerError> {
-        transactional_blocking_with_retry!(
-            &self.cp,
-            |conn| {
-                RunQueryDsl::execute(
+    pub async fn drop_table_partition(
+        &self,
+        table: String,
+        partition: u64,
+    ) -> Result<(), IndexerError> {
+        transaction_with_retry(&self.pool, Duration::from_secs(10), |conn| {
+            async {
+                diesel_async::RunQueryDsl::execute(
                     diesel::sql_query("CALL drop_partition($1, $2)")
                         .bind::<diesel::sql_types::Text, _>(table.clone())
                         .bind::<diesel::sql_types::BigInt, _>(partition as i64),
                     conn,
                 )
-            },
-            Duration::from_secs(10)
-        )?;
+                .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await?;
         Ok(())
     }
 }
