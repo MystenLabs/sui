@@ -152,8 +152,8 @@ pub enum SuiCommand {
     /// follows:
     /// - SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE=1
     /// - Then, to configure an override, use the prefix `SUI_PROTOCOL_CONFIG_OVERRIDE_`
-    ///   along with the parameter name. For example, to reduce the rate of checkpoint
-    ///   creation to <1/s, you might set:
+    ///   along with the parameter name. For example, to increase the interval between
+    ///   checkpoint creation to >1/s, you might set:
     ///   SUI_PROTOCOL_CONFIG_OVERRIDE_min_checkpoint_interval_ms=1000
     ///
     /// Note that ProtocolConfig parameters must match between all nodes, or the network
