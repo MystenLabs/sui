@@ -11621,6 +11621,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-env"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d13536c0c431652192b75c7d5afa83dedae98f91d7e687ff30a009e9d15284fb"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
 name = "serde-name"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14288,6 +14298,7 @@ dependencies = [
  "move-vm-config",
  "schemars",
  "serde",
+ "serde-env",
  "serde_with 3.9.0",
  "sui-protocol-config-macros",
  "tracing",
