@@ -163,25 +163,27 @@ impl PgIndexerStore {
     }
 
     /// Get the range of the protocol versions that need to be indexed.
-    pub fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
-        use diesel::RunQueryDsl;
+    pub async fn get_protocol_version_index_range(&self) -> Result<(i64, i64), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
         // We start indexing from the next protocol version after the latest one stored in the db.
-        let start = read_only_blocking!(&self.blocking_cp, |conn| {
-            protocol_configs::dsl::protocol_configs
-                .select(max(protocol_configs::protocol_version))
-                .first::<Option<i64>>(conn)
-        })
-        .context("Failed reading latest protocol version from PostgresDB")?
-        .map_or(1, |v| v + 1);
+        let start = protocol_configs::table
+            .select(max(protocol_configs::protocol_version))
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .context("Failed reading latest protocol version from PostgresDB")?
+            .map_or(1, |v| v + 1);
 
         // We end indexing at the protocol version of the latest epoch stored in the db.
-        let end = read_only_blocking!(&self.blocking_cp, |conn| {
-            epochs::dsl::epochs
-                .select(max(epochs::protocol_version))
-                .first::<Option<i64>>(conn)
-        })
-        .context("Failed reading latest epoch protocol version from PostgresDB")?
-        .unwrap_or(1);
+        let end = epochs::table
+            .select(max(epochs::protocol_version))
+            .first::<Option<i64>>(&mut connection)
+            .await
+            .map_err(Into::into)
+            .context("Failed reading latest epoch protocol version from PostgresDB")?
+            .unwrap_or(1);
         Ok((start, end))
     }
 
@@ -2305,7 +2307,7 @@ impl IndexerStore for PgIndexerStore {
         let mut all_configs = vec![];
         let mut all_flags = vec![];
 
-        let (start_version, end_version) = self.get_protocol_version_index_range()?;
+        let (start_version, end_version) = self.get_protocol_version_index_range().await?;
         info!(
             "Persisting protocol configs with start_version: {}, end_version: {}",
             start_version, end_version
