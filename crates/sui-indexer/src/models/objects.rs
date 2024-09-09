@@ -13,9 +13,8 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ObjectDigest;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
-use sui_types::object::Object;
-use sui_types::object::ObjectRead;
+use sui_types::dynamic_field::{DynamicFieldType, Field};
+use sui_types::object::{Object, ObjectRead};
 
 use crate::errors::IndexerError;
 use crate::schema::{full_objects_history, objects, objects_history, objects_snapshot};
@@ -316,128 +315,6 @@ impl StoredObject {
         }?;
 
         Ok(ObjectRead::Exists(oref, object, Some(move_struct_layout)))
-    }
-
-    pub async fn try_into_expectant_dynamic_field_info(
-        self,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
-    ) -> Result<DynamicFieldInfo, IndexerError> {
-        match self
-            .try_into_dynamic_field_info(package_resolver)
-            .await
-            .transpose()
-        {
-            Some(Ok(info)) => Ok(info),
-            Some(Err(e)) => Err(e),
-            None => Err(IndexerError::PersistentStorageDataCorruptionError(
-                "Dynamic field object has incompatible dynamic field type: empty df_kind".into(),
-            )),
-        }
-    }
-
-    pub async fn try_into_dynamic_field_info(
-        self,
-        package_resolver: Arc<Resolver<impl PackageStore>>,
-    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
-        if self.df_kind.is_none() {
-            return Ok(None);
-        }
-
-        // Past this point, if there is any unexpected field, it's a data corruption error
-        let object_id = ObjectID::from_bytes(&self.object_id).map_err(|_| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Can't convert {:?} to object_id",
-                self.object_id
-            ))
-        })?;
-        let object_digest = ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|e| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible object digest. Error: {e}",
-                object_id
-            ))
-        })?;
-        let df_object_id = if let Some(df_object_id) = self.df_object_id.clone() {
-            ObjectID::from_bytes(df_object_id).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: df_object_id. Error: {e}",
-                    object_id
-                ))
-            })
-        } else {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_object_id",
-                object_id
-            )));
-        }?;
-        let type_ = match self.df_kind {
-            Some(0) => DynamicFieldType::DynamicField,
-            Some(1) => DynamicFieldType::DynamicObject,
-            _ => {
-                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: empty df_kind",
-                    object_id
-                )))
-            }
-        };
-        let name = if let Some(field_name) = self.df_name.clone() {
-            let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: df_name. Error: {e}",
-                    object_id
-                ))
-            })?;
-            name
-        } else {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_name",
-                object_id
-            )));
-        };
-
-        let oref = self.get_object_ref()?;
-        let object: sui_types::object::Object = self.clone().try_into()?;
-        let Some(move_object) = object.data.try_as_move().cloned() else {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a Move object",
-                oref,
-            )));
-        };
-        if !move_object.type_().is_dynamic_field() {
-            return Err(IndexerError::PostgresReadError(format!(
-                "Object {:?} is not a dynamic field",
-                oref,
-            )));
-        }
-
-        let layout = package_resolver
-            .type_layout(name.type_.clone())
-            .await
-            .map_err(|e| {
-                IndexerError::ResolveMoveStructError(format!(
-                    "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
-                    object.id(),
-                    object.version(),
-                    move_object.type_(),
-                ))
-            })?;
-        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
-        let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
-        let object_type = self.df_object_type.clone().ok_or(
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "object {} has incompatible dynamic field type: empty df_object_type",
-                object_id
-            )),
-        )?;
-
-        Ok(Some(DynamicFieldInfo {
-            version: oref.1,
-            digest: object_digest,
-            type_,
-            name,
-            bcs_name,
-            object_type,
-            object_id: df_object_id,
-        }))
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
