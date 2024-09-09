@@ -1325,65 +1325,69 @@ impl PgIndexerStore {
         .await
     }
 
-    fn prune_event_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+    async fn prune_event_indices_table(
+        &self,
+        min_tx: u64,
+        max_tx: u64,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                prune_tx_or_event_indice_table!(
-                    event_emit_module,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_emit_module table"
-                );
-                prune_tx_or_event_indice_table!(
-                    event_emit_package,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_emit_package table"
-                );
-                prune_tx_or_event_indice_table![
-                    event_senders,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_senders table"
-                ];
-                prune_tx_or_event_indice_table![
-                    event_struct_instantiation,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_struct_instantiation table"
-                ];
-                prune_tx_or_event_indice_table![
-                    event_struct_module,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_struct_module table"
-                ];
-                prune_tx_or_event_indice_table![
-                    event_struct_name,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_struct_name table"
-                ];
-                prune_tx_or_event_indice_table![
-                    event_struct_package,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune event_struct_package table"
-                ];
-                Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::delete(
+                    event_emit_module::table
+                        .filter(event_emit_module::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    event_emit_package::table
+                        .filter(event_emit_package::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    event_senders::table
+                        .filter(event_senders::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(event_struct_instantiation::table.filter(
+                    event_struct_instantiation::tx_sequence_number.between(min_tx, max_tx),
+                ))
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    event_struct_module::table
+                        .filter(event_struct_module::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    event_struct_name::table
+                        .filter(event_struct_name::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    event_struct_package::table
+                        .filter(event_struct_package::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
@@ -1935,17 +1939,7 @@ impl IndexerStore for PgIndexerStore {
                 "Pruned transactions for checkpoint {} from tx {} to tx {}",
                 cp, min_tx, max_tx
             );
-            self.execute_in_blocking_worker(move |this| {
-                this.prune_event_indices_table(min_tx, max_tx)
-            })
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!(
-                    "Failed to prune events of transactions for cp {}: {}",
-                    cp,
-                    e
-                );
-            });
+            self.prune_event_indices_table(min_tx, max_tx).await?;
             info!(
                 "Pruned events of transactions for checkpoint {} from tx {} to tx {}",
                 cp, min_tx, max_tx
