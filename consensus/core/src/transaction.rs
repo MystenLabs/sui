@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 use tracing::{error, warn};
 
 use crate::{
-    block::{BlockRef, Transaction},
+    block::{BlockRef, Transaction, TransactionIndex},
     context::Context,
 };
 
@@ -211,8 +211,13 @@ impl TransactionClient {
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
 pub trait TransactionVerifier: Send + Sync + 'static {
-    /// Determines if this batch can be voted on
+    /// Determines if this batch of transactions are valid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
+
+    /// Returns indices of transactions to reject.
+    /// Currently only uncertified user transactions can be rejected.
+    /// The rest of transactions are implicitly voted to accept.
+    fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
 }
 
 #[derive(Debug, Error)]
@@ -228,6 +233,10 @@ pub(crate) struct NoopTransactionVerifier;
 impl TransactionVerifier for NoopTransactionVerifier {
     fn verify_batch(&self, _batch: &[&[u8]]) -> Result<(), ValidationError> {
         Ok(())
+    }
+
+    fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
+        vec![]
     }
 }
 
