@@ -25,8 +25,7 @@ impl Pruner {
         epochs_to_keep: u64,
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
-        let blocking_cp = store.blocking_cp();
-        let partition_manager = PgPartitionManager::new(blocking_cp, store.pool())?;
+        let partition_manager = PgPartitionManager::new(store.pool())?;
         Ok(Self {
             store,
             partition_manager,
@@ -76,7 +75,8 @@ impl Pruner {
                 // would have been pruned already if the pruner was running.
                 for epoch in *min_partition..min_epoch {
                     self.partition_manager
-                        .drop_table_partition(table_name.clone(), epoch)?;
+                        .drop_table_partition(table_name.clone(), epoch)
+                        .await?;
                     info!(
                         "Batch dropped table partition {} epoch {}",
                         table_name, epoch
@@ -92,7 +92,8 @@ impl Pruner {
                 info!("Pruning epoch {}", epoch);
                 for table_name in table_partitions.keys() {
                     self.partition_manager
-                        .drop_table_partition(table_name.clone(), epoch)?;
+                        .drop_table_partition(table_name.clone(), epoch)
+                        .await?;
                     info!("Dropped table partition {} epoch {}", table_name, epoch);
                 }
                 self.store.prune_epoch(epoch).await.unwrap_or_else(|e| {
