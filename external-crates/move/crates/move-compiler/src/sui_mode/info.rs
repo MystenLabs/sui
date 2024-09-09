@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! ProgramInfo extension for Sui Flavor
+//! Contains information that may be expensive to compute and is needed only for Sui
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -27,22 +28,28 @@ use move_ir_types::location::Loc;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UIDHolder {
+    /// is `sui::object::UID``
     IsUID,
+    /// holds UID directly as one of the fields
     Direct { field: Field, ty: Loc },
+    /// holds a type which in turn `Direct`ly or `Indirect`ly holds UID
     Indirect { field: Field, ty: Loc, uid: Loc },
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum TransferKind {
-    /// has store
+    /// The object has store
     PublicTransfer(Loc),
-    /// transferred within the module to an address
+    /// transferred within the module to an address vis `sui::transfer::transfer`
     PrivateTransfer(Loc),
 }
 
 #[derive(Debug, Clone)]
 pub struct SuiInfo {
+    /// All types that contain a UID, directly or indirectly
+    /// This requires a DFS traversal of type declarations
     pub uid_holders: BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
+    /// All types that either have store or are transferred privately
     pub transferred: BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
 }
 
@@ -62,6 +69,7 @@ impl SuiInfo {
     }
 }
 
+/// DFS traversal to find all UID holders
 fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeName), UIDHolder> {
     fn merge_uid_holder(u1: UIDHolder, u2: UIDHolder) -> UIDHolder {
         match (u1, u2) {
@@ -81,6 +89,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
         }
     }
 
+    // returns true if the type at the given position is a phantom type
     fn phantom_positions(
         info: &TypingProgramInfo,
         sp!(_, tn_): &N::TypeName,
@@ -200,6 +209,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
         }
     }
 
+    // iterate over all struct/enum declarations
     let visited = &mut BTreeSet::new();
     let mut uid_holders = BTreeMap::new();
     for (mident, mdef) in info.modules.key_cloned_iter() {
