@@ -39,7 +39,7 @@ module sui::groth16_tests {
     #[test]
     #[expected_failure(abort_code = groth16::EInvalidScalar)]
     fun test_invalid_public_inputs() {
-        let public_inputs_too_short = vector[x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", x"1234"].concat!();
+        let public_inputs_too_short = vector[x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", x"1234"].flatten();
         groth16::public_proof_inputs_from_bytes(public_inputs_too_short);
     }
 
@@ -86,7 +86,7 @@ module sui::groth16_tests {
             x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
             x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849", 
             x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849"
-        ].concat!();
+        ].flatten();
         groth16::public_proof_inputs_from_bytes(inputs_bytes);
     }
 
@@ -123,7 +123,7 @@ module sui::groth16_tests {
     #[test]
     #[expected_failure(abort_code = groth16::EInvalidScalar)]
     fun test_invalid_public_inputs_bn254() {
-        let public_inputs_too_short = vector[x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", x"1234"].concat!();
+        let public_inputs_too_short = vector[x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a", x"1234"].flatten();
         groth16::public_proof_inputs_from_bytes(public_inputs_too_short);
     }
 
