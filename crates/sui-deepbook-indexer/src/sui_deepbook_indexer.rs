@@ -6,8 +6,8 @@
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
-use diesel::{Connection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use diesel::{ExpressionMethods, TextExpressionMethods};
+use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::ObjectID;
@@ -34,10 +34,11 @@ use crate::schema::{
     sui_error_transactions, trade_params_update, votes,
 };
 use crate::sui_datasource::CheckpointTxnData;
-use crate::{
-    models, schema, Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice,
-    ProcessedTxnData, Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes,
+use crate::types::{
+    Balances, Flashloan, OrderFill, OrderUpdate, OrderUpdateStatus, PoolPrice, ProcessedTxnData,
+    Proposals, Rebates, Stakes, SuiTxnError, TradeParamsUpdate, Votes,
 };
+use crate::{models, schema};
 
 /// Persistent layer impl
 #[derive(Clone)]
@@ -61,25 +62,10 @@ impl PgDeepbookPersistent {
     }
 }
 
+// TODO: move this to indexer builder and share with bridge indexer
 #[derive(Debug, Clone)]
 pub enum ProgressSavingPolicy {
-    SaveAfterDuration(SaveAfterDurationPolicy),
     OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy),
-}
-
-#[derive(Debug, Clone)]
-pub struct SaveAfterDurationPolicy {
-    duration: tokio::time::Duration,
-    last_save_time: Arc<Mutex<HashMap<String, Option<tokio::time::Instant>>>>,
-}
-
-impl SaveAfterDurationPolicy {
-    pub fn new(duration: tokio::time::Duration) -> Self {
-        Self {
-            duration,
-            last_save_time: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -111,27 +97,6 @@ impl ProgressSavingPolicy {
         target_height: u64,
     ) -> Option<u64> {
         match self {
-            ProgressSavingPolicy::SaveAfterDuration(policy) => {
-                let height = *heights.iter().max().unwrap();
-                let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
-                let last_save_time = last_save_time_guard.entry(task_name).or_insert(None);
-                if height >= target_height {
-                    *last_save_time = Some(tokio::time::Instant::now());
-                    return Some(height);
-                }
-                if let Some(v) = last_save_time {
-                    if v.elapsed() >= policy.duration {
-                        *last_save_time = Some(tokio::time::Instant::now());
-                        Some(height)
-                    } else {
-                        None
-                    }
-                } else {
-                    // update `last_save_time` to now but don't actually save progress
-                    *last_save_time = Some(tokio::time::Instant::now());
-                    None
-                }
-            }
             ProgressSavingPolicy::OutOfOrderSaveAfterDuration(policy) => {
                 let mut next_to_fill = {
                     let mut next_to_fill_guard = policy.next_to_fill.lock().unwrap();

@@ -5,11 +5,11 @@ use crate::schema::{
     balances, flashloans, order_fills, order_updates, pool_prices, proposals, rebates, stakes,
     sui_error_transactions, trade_params_update, votes,
 };
-use crate::ProcessedTxnData;
+use crate::types::ProcessedTxnData;
 use diesel::{
     pg::PgConnection,
     r2d2::{ConnectionManager, Pool},
-    Connection, RunQueryDsl,
+    RunQueryDsl,
 };
 
 pub(crate) type PgPool = Pool<ConnectionManager<PgConnection>>;
