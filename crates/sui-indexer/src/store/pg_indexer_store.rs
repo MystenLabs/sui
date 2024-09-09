@@ -1504,34 +1504,6 @@ impl PgIndexerStore {
         .map_err(Into::into)
         .and_then(std::convert::identity)
     }
-
-    fn spawn_blocking_task<F, R>(
-        &self,
-        f: F,
-    ) -> tokio::task::JoinHandle<std::result::Result<R, IndexerError>>
-    where
-        F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
-        R: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        let guard = self.metrics.tokio_blocking_task_wait_latency.start_timer();
-        tokio::task::spawn_blocking(move || {
-            let _guard = current_span.enter();
-            let _elapsed = guard.stop_and_record();
-            f(this)
-        })
-    }
-
-    fn spawn_task<F, Fut, R>(&self, f: F) -> tokio::task::JoinHandle<Result<R, IndexerError>>
-    where
-        F: FnOnce(Self) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = Result<R, IndexerError>> + Send + 'static,
-        R: Send + 'static,
-    {
-        let this = self.clone();
-        tokio::task::spawn(async move { f(this).await })
-    }
 }
 
 #[async_trait]
@@ -1865,20 +1837,10 @@ impl IndexerStore for PgIndexerStore {
 
         let futures = chunks
             .into_iter()
-            .map(|chunk| {
-                self.spawn_task(move |this: Self| async move {
-                    this.persist_event_indices_chunk(chunk).await
-                })
-            })
+            .map(|chunk| self.persist_event_indices_chunk(chunk))
             .collect::<Vec<_>>();
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!("Failed to join persist_event_indices_chunk futures: {}", e);
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
@@ -1905,20 +1867,10 @@ impl IndexerStore for PgIndexerStore {
 
         let futures = chunks
             .into_iter()
-            .map(|chunk| {
-                self.spawn_task(move |this: Self| async move {
-                    this.persist_tx_indices_chunk(chunk).await
-                })
-            })
+            .map(|chunk| self.persist_tx_indices_chunk(chunk))
             .collect::<Vec<_>>();
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!("Failed to join persist_tx_indices_chunk futures: {}", e);
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
