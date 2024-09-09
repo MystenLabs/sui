@@ -1487,22 +1487,6 @@ impl PgIndexerStore {
             .context("Failed to get network total transactions in epoch")
             .map(|v| v as u64)
     }
-
-    async fn execute_in_blocking_worker<F, R>(&self, f: F) -> Result<R, IndexerError>
-    where
-        F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
-        R: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            let _guard = current_span.enter();
-            f(this)
-        })
-        .await
-        .map_err(Into::into)
-        .and_then(std::convert::identity)
-    }
 }
 
 #[async_trait]
