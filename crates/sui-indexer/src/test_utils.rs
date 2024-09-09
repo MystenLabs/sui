@@ -11,9 +11,11 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 
 use crate::config::IngestionConfig;
 use crate::config::PruningOptions;
+use crate::config::RestoreConfig;
 use crate::config::SnapshotLagConfig;
+use crate::database::Connection;
 use crate::database::ConnectionPool;
-use crate::db::{get_pool_connection, new_connection_pool, ConnectionPoolConfig};
+use crate::db::{new_connection_pool, ConnectionPoolConfig};
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
@@ -101,7 +103,13 @@ pub async fn start_test_indexer_impl(
     let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
         .await
         .unwrap();
-    let store = PgIndexerStore::new(blocking_pool.clone(), pool.clone(), indexer_metrics.clone());
+    let restore_config = RestoreConfig::default();
+    let store = PgIndexerStore::new(
+        blocking_pool,
+        pool.clone(),
+        restore_config,
+        indexer_metrics.clone(),
+    );
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
@@ -110,19 +118,18 @@ pub async fn start_test_indexer_impl(
             let config = crate::config::JsonRpcConfig {
                 name_service_options: crate::config::NameServiceOptions::default(),
                 rpc_address: reader_mode_rpc_url.parse().unwrap(),
-                rpc_client_url: rpc_url.parse().unwrap(),
+                rpc_client_url: rpc_url,
             };
-            tokio::spawn(async move {
-                Indexer::start_reader(&config, &registry, blocking_pool, pool).await
-            })
+            tokio::spawn(async move { Indexer::start_reader(&config, &registry, pool).await })
         }
         ReaderWriterConfig::Writer {
             snapshot_config,
             pruning_options,
         } => {
-            crate::db::reset_database(&mut get_pool_connection(&blocking_pool).unwrap())
+            let connection = Connection::dedicated(&db_url.parse().unwrap())
                 .await
                 .unwrap();
+            crate::db::reset_database(connection).await.unwrap();
 
             let store_clone = store.clone();
             let mut ingestion_config = IngestionConfig::default();

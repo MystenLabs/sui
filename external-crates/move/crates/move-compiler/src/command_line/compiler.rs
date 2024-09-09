@@ -1061,13 +1061,3 @@ fn run(
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
 }
-
-//**************************************************************************************************
-// traits
-//**************************************************************************************************
-
-impl From<AbsIntVisitorObj> for Visitor {
-    fn from(f: AbsIntVisitorObj) -> Self {
-        Self::AbsIntVisitor(f)
-    }
-}

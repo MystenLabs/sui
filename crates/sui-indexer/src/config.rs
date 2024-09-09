@@ -80,7 +80,7 @@ pub struct JsonRpcConfig {
     pub rpc_address: SocketAddr,
 
     #[clap(long)]
-    pub rpc_client_url: Url,
+    pub rpc_client_url: String,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -152,6 +152,8 @@ pub enum Command {
         snapshot_config: SnapshotLagConfig,
         #[command(flatten)]
         pruning_options: PruningOptions,
+        #[command(flatten)]
+        restore_config: RestoreConfig,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
@@ -196,6 +198,14 @@ impl Default for SnapshotLagConfig {
             sleep_duration: Self::DEFAULT_SLEEP_DURATION_SEC,
         }
     }
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct RestoreConfig {
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: Option<String>,
+    #[arg(long, env = "GCS_DISPLAY_BUCKET")]
+    pub gcs_display_bucket: Option<String>,
 }
 
 #[cfg(test)]

@@ -12,8 +12,8 @@ use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
 use sui_indexer_builder::indexer_builder::{DataSender, Datasource};
+use sui_indexer_builder::Task;
 use sui_sdk::SuiClient;
-use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::CheckpointData as SuiCheckpointData;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -22,6 +22,9 @@ use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
 use crate::metrics::BridgeIndexerMetrics;
+
+const BACKFILL_TASK_INGESTION_READER_BATCH_SIZE: usize = 300;
+const LIVE_TASK_INGESTION_READER_BATCH_SIZE: usize = 10;
 
 pub struct SuiCheckpointDatasource {
     remote_store_url: String,
@@ -58,23 +61,32 @@ impl SuiCheckpointDatasource {
 impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<CheckpointTxnData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let progress_store = PerTaskInMemProgressStore {
-            current_checkpoint: starting_checkpoint,
-            exit_checkpoint: target_checkpoint,
+            current_checkpoint: task.start_checkpoint,
+            exit_checkpoint: task.target_checkpoint,
             exit_sender: Some(exit_sender),
         };
+        // The max concurrnecy of checkpoint to fetch at the same time for ingestion framework
+        let ingestion_reader_batch_size = if task.is_live_task {
+            // Live task uses smaller number to be cost effective
+            LIVE_TASK_INGESTION_READER_BATCH_SIZE
+        } else {
+            std::env::var("BACKFILL_TASK_INGESTION_READER_BATCH_SIZE")
+                .unwrap_or(BACKFILL_TASK_INGESTION_READER_BATCH_SIZE.to_string())
+                .parse::<usize>()
+                .unwrap()
+        };
+        tracing::info!(
+            "Starting Sui checkpoint data retrieval with batch size {}",
+            ingestion_reader_batch_size
+        );
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
         let worker = IndexerWorker::new(data_sender);
-        let worker_pool = WorkerPool::new(
-            worker,
-            TransactionDigest::random().to_string(),
-            self.concurrency,
-        );
+        let worker_pool = WorkerPool::new(worker, task.task_name.clone(), self.concurrency);
         executor.register(worker_pool).await?;
         let checkpoint_path = self.checkpoint_path.clone();
         let remote_store_url = self.remote_store_url.clone();
@@ -84,7 +96,10 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
                     checkpoint_path,
                     Some(remote_store_url),
                     vec![], // optional remote store access options
-                    ReaderOptions::default(),
+                    ReaderOptions {
+                        batch_size: ingestion_reader_batch_size,
+                        ..Default::default()
+                    },
                     exit_receiver,
                 )
                 .await?;
@@ -111,10 +126,6 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
-    }
 }
 
 struct PerTaskInMemProgressStore {
@@ -134,11 +145,19 @@ impl ProgressStore for PerTaskInMemProgressStore {
 
     async fn save(
         &mut self,
-        _task_name: String,
+        task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> anyhow::Result<()> {
         if checkpoint_number >= self.exit_checkpoint {
+            tracing::info!(
+                task_name,
+                checkpoint_number,
+                exit_checkpoint = self.exit_checkpoint,
+                "Task completed, sending exit signal"
+            );
+            // `exit_sender` may be `None` if we have already sent the exit signal.
             if let Some(sender) = self.exit_sender.take() {
+                // Ignore the error if the receiver has already been dropped.
                 let _ = sender.send(());
             }
         }

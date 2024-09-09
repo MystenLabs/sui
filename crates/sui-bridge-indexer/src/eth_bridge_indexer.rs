@@ -16,6 +16,7 @@ use sui_bridge::error::BridgeError;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::retry_with_max_elapsed_time;
+use sui_indexer_builder::Task;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -63,14 +64,13 @@ impl EthSubscriptionDatasource {
 impl Datasource<RawEthData> for EthSubscriptionDatasource {
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let filter = Filter::new()
             .address(self.bridge_address)
-            .from_block(starting_checkpoint)
-            .to_block(target_checkpoint);
+            .from_block(task.start_checkpoint)
+            .to_block(task.target_checkpoint);
 
         let eth_ws_url = self.eth_ws_url.clone();
         let indexer_metrics: BridgeIndexerMetrics = self.indexer_metrics.clone();
@@ -154,10 +154,6 @@ impl Datasource<RawEthData> for EthSubscriptionDatasource {
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
     }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
-    }
 }
 
 pub struct EthSyncDatasource {
@@ -198,8 +194,7 @@ impl EthSyncDatasource {
 impl Datasource<RawEthData> for EthSyncDatasource {
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<RawEthData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let provider = Arc::new(
@@ -218,8 +213,8 @@ impl Datasource<RawEthData> for EthSyncDatasource {
             let Ok(Ok(logs)) = retry_with_max_elapsed_time!(
                 client.get_raw_events_in_range(
                     bridge_address,
-                    starting_checkpoint,
-                    target_checkpoint
+                    task.start_checkpoint,
+                    task.target_checkpoint
                 ),
                 Duration::from_secs(30000)
             ) else {
@@ -258,7 +253,7 @@ impl Datasource<RawEthData> for EthSyncDatasource {
                 data.push((log, block, transaction));
             }
 
-            data_sender.send((target_checkpoint, data)).await?;
+            data_sender.send((task.target_checkpoint, data)).await?;
 
             indexer_metrics
                 .last_synced_eth_block
@@ -287,10 +282,6 @@ impl Datasource<RawEthData> for EthSyncDatasource {
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
-    }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
     }
 }
 

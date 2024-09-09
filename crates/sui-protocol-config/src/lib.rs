@@ -173,6 +173,8 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 //             Note: do not use version 56 for any new features.
 // Version 57: Reduce minimum number of random beacon shares.
 // Version 58: Optimize boolean binops
+//             Finalize bridge committee on mainnet.
+//             Switch to distributed vote scoring in consensus in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -515,6 +517,10 @@ struct FeatureFlags {
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     rethrow_serialization_type_layout_errors: bool,
+
+    // Use distributed vote leader scoring strategy in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_distributed_vote_scoring_strategy: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1560,6 +1566,11 @@ impl ProtocolConfig {
 
     pub fn rethrow_serialization_type_layout_errors(&self) -> bool {
         self.feature_flags.rethrow_serialization_type_layout_errors
+    }
+
+    pub fn consensus_distributed_vote_scoring_strategy(&self) -> bool {
+        self.feature_flags
+            .consensus_distributed_vote_scoring_strategy
     }
 }
 
@@ -2708,7 +2719,17 @@ impl ProtocolConfig {
                     // Reduce minimum number of random beacon shares.
                     cfg.random_beacon_reduction_lower_bound = Some(800);
                 }
-                58 => {}
+                58 => {
+                    if chain == Chain::Mainnet {
+                        cfg.bridge_should_try_to_finalize_committee = Some(true);
+                    }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // Enable distributed vote scoring for devnet
+                        cfg.feature_flags
+                            .consensus_distributed_vote_scoring_strategy = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2863,6 +2884,11 @@ impl ProtocolConfig {
 
     pub fn set_passkey_auth_for_testing(&mut self, val: bool) {
         self.feature_flags.passkey_auth = val
+    }
+
+    pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .consensus_distributed_vote_scoring_strategy = val;
     }
 }
 

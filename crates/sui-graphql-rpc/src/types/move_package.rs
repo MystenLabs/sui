@@ -30,6 +30,7 @@ use async_graphql::dataloader::Loader;
 use async_graphql::*;
 use diesel::prelude::QueryableByName;
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, Selectable};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::schema::packages;
@@ -707,8 +708,9 @@ impl MovePackage {
 
         let (prev, next, results) = db
             .execute(move |conn| {
-                let mut q = query!(
-                    r#"
+                async move {
+                    let mut q = query!(
+                        r#"
                     SELECT
                             p.original_id,
                             o.*
@@ -721,17 +723,20 @@ impl MovePackage {
                     AND     p.package_version = o.object_version
                     AND     p.checkpoint_sequence_number = o.checkpoint_sequence_number
                 "#
-                );
+                    );
 
-                q = filter!(
-                    q,
-                    format!("o.checkpoint_sequence_number < {before_checkpoint}")
-                );
-                if let Some(after) = after_checkpoint {
-                    q = filter!(q, format!("{after} < o.checkpoint_sequence_number"));
+                    q = filter!(
+                        q,
+                        format!("o.checkpoint_sequence_number < {before_checkpoint}")
+                    );
+                    if let Some(after) = after_checkpoint {
+                        q = filter!(q, format!("{after} < o.checkpoint_sequence_number"));
+                    }
+
+                    page.paginate_raw_query::<StoredHistoryPackage>(conn, checkpoint_viewed_at, q)
+                        .await
                 }
-
-                page.paginate_raw_query::<StoredHistoryPackage>(conn, checkpoint_viewed_at, q)
+                .scope_boxed()
             })
             .await?;
 
@@ -772,15 +777,19 @@ impl MovePackage {
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_raw_query::<StoredHistoryPackage>(
-                    conn,
-                    checkpoint_viewed_at,
-                    if is_system_package(package) {
-                        system_package_version_query(package, filter)
-                    } else {
-                        user_package_version_query(package, filter)
-                    },
-                )
+                async move {
+                    page.paginate_raw_query::<StoredHistoryPackage>(
+                        conn,
+                        checkpoint_viewed_at,
+                        if is_system_package(package) {
+                            system_package_version_query(package, filter)
+                        } else {
+                            user_package_version_query(package, filter)
+                        },
+                    )
+                    .await
+                }
+                .scope_boxed()
             })
             .await?;
 
@@ -901,26 +910,32 @@ impl Loader<PackageVersionKey> for Db {
 
         let stored_packages: Vec<(Vec<u8>, i64, Vec<u8>)> = self
             .execute(move |conn| {
-                conn.results(|| {
-                    let mut query = dsl::packages
-                        .inner_join(other.on(dsl::original_id.eq(other.field(dsl::original_id))))
-                        .select((
-                            dsl::package_id,
-                            other.field(dsl::package_version),
-                            other.field(dsl::package_id),
-                        ))
-                        .into_boxed();
+                async move {
+                    conn.results(|| {
+                        let mut query = dsl::packages
+                            .inner_join(
+                                other.on(dsl::original_id.eq(other.field(dsl::original_id))),
+                            )
+                            .select((
+                                dsl::package_id,
+                                other.field(dsl::package_version),
+                                other.field(dsl::package_id),
+                            ))
+                            .into_boxed();
 
-                    for (id, version) in id_versions.iter().cloned() {
-                        query = query.or_filter(
-                            dsl::package_id
-                                .eq(id)
-                                .and(other.field(dsl::package_version).eq(version)),
-                        );
-                    }
+                        for (id, version) in id_versions.iter().cloned() {
+                            query = query.or_filter(
+                                dsl::package_id
+                                    .eq(id)
+                                    .and(other.field(dsl::package_version).eq(version)),
+                            );
+                        }
 
-                    query
-                })
+                        query
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to load packages: {e}")))?;
@@ -962,28 +977,33 @@ impl Loader<LatestKey> for Db {
             .into_iter()
             .map(|(checkpoint_viewed_at, ids)| {
                 self.execute(move |conn| {
-                    let results: Vec<(Vec<u8>, Vec<u8>)> = conn.results(|| {
-                        let o_original_id = other.field(dsl::original_id);
-                        let o_package_id = other.field(dsl::package_id);
-                        let o_cp_seq_num = other.field(dsl::checkpoint_sequence_number);
-                        let o_version = other.field(dsl::package_version);
+                    async move {
+                        let results: Vec<(Vec<u8>, Vec<u8>)> = conn
+                            .results(|| {
+                                let o_original_id = other.field(dsl::original_id);
+                                let o_package_id = other.field(dsl::package_id);
+                                let o_cp_seq_num = other.field(dsl::checkpoint_sequence_number);
+                                let o_version = other.field(dsl::package_version);
 
-                        let query = dsl::packages
-                            .inner_join(other.on(dsl::original_id.eq(o_original_id)))
-                            .select((dsl::package_id, o_package_id))
-                            .filter(dsl::package_id.eq_any(ids.iter().cloned()))
-                            .filter(o_cp_seq_num.le(checkpoint_viewed_at as i64))
-                            .order_by((dsl::package_id, dsl::original_id, o_version.desc()))
-                            .distinct_on((dsl::package_id, dsl::original_id));
-                        query
-                    })?;
+                                let query = dsl::packages
+                                    .inner_join(other.on(dsl::original_id.eq(o_original_id)))
+                                    .select((dsl::package_id, o_package_id))
+                                    .filter(dsl::package_id.eq_any(ids.iter().cloned()))
+                                    .filter(o_cp_seq_num.le(checkpoint_viewed_at as i64))
+                                    .order_by((dsl::package_id, dsl::original_id, o_version.desc()))
+                                    .distinct_on((dsl::package_id, dsl::original_id));
+                                query
+                            })
+                            .await?;
 
-                    Ok::<_, diesel::result::Error>(
-                        results
-                            .into_iter()
-                            .map(|(p, latest)| (checkpoint_viewed_at, p, latest))
-                            .collect::<Vec<_>>(),
-                    )
+                        Ok::<_, diesel::result::Error>(
+                            results
+                                .into_iter()
+                                .map(|(p, latest)| (checkpoint_viewed_at, p, latest))
+                                .collect::<Vec<_>>(),
+                        )
+                    }
+                    .scope_boxed()
                 })
             });
 

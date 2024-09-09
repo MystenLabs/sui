@@ -117,10 +117,20 @@ pub struct BridgeNodeConfig {
     /// Network key used for metrics pushing
     #[serde(default = "default_ed25519_key_pair")]
     pub metrics_key_pair: NetworkKeyPair,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsConfig>,
 }
 
 pub fn default_ed25519_key_pair() -> NetworkKeyPair {
     get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetricsConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_interval_seconds: Option<u64>,
+    pub push_url: String,
 }
 
 impl Config for BridgeNodeConfig {}

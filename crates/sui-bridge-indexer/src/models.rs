@@ -4,7 +4,7 @@
 use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
 
 use crate::schema::{
     progress_store, sui_error_transactions, sui_progress_store, token_transfer, token_transfer_data,
@@ -23,10 +23,11 @@ impl From<ProgressStore> for Task {
     fn from(value: ProgressStore) -> Self {
         Self {
             task_name: value.task_name,
-            checkpoint: value.checkpoint as u64,
+            start_checkpoint: value.checkpoint as u64,
             target_checkpoint: value.target_checkpoint as u64,
             // Ok to unwrap, timestamp is defaulted to now() in database
             timestamp: value.timestamp.expect("Timestamp not set").0 as u64,
+            is_live_task: value.target_checkpoint == LIVE_TASK_TARGET_CHECKPOINT,
         }
     }
 }

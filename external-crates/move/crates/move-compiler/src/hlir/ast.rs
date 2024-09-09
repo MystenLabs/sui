@@ -593,6 +593,13 @@ impl TypeName_ {
             }
         }
     }
+
+    pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
+        match self {
+            TypeName_::Builtin(_) => None,
+            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+        }
+    }
 }
 
 impl BaseType_ {
@@ -659,6 +666,13 @@ impl BaseType_ {
 
     pub fn u256(loc: Loc) -> BaseType {
         Self::builtin(loc, BuiltinTypeName_::U256, vec![])
+    }
+
+    pub fn type_name(&self) -> Option<&TypeName> {
+        match self {
+            Self::Apply(_, tn, _) => Some(tn),
+            _ => None,
+        }
     }
 
     pub fn is_apply(

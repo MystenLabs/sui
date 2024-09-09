@@ -83,7 +83,7 @@ impl Connection<'static> {
     }
 
     /// Run the provided Migrations
-    pub async fn run_migrations<M>(
+    pub async fn run_pending_migrations<M>(
         self,
         migrations: M,
     ) -> diesel::migration::Result<Vec<diesel::migration::MigrationVersion<'static>>>

@@ -104,6 +104,7 @@ pub struct AuthAggMetrics {
     pub cert_broadcasting_post_quorum_timeout: IntCounter,
     pub remaining_tasks_when_reaching_cert_quorum: Histogram,
     pub remaining_tasks_when_cert_broadcasting_post_quorum_timeout: Histogram,
+    pub quorum_reached_without_requested_objects: IntCounter,
 }
 
 impl AuthAggMetrics {
@@ -188,7 +189,13 @@ impl AuthAggMetrics {
                 "auth_agg_remaining_tasks_when_cert_broadcasting_post_quorum_timeout",
                 "Number of remaining tasks when post quorum certificate broadcasting times out",
                 registry,
-            ).unwrap()
+            ).unwrap(),
+            quorum_reached_without_requested_objects: register_int_counter_with_registry!(
+                "auth_agg_quorum_reached_without_requested_objects",
+                "Number of times quorum was reached without getting the requested objects back from at least 1 validator",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -454,6 +461,7 @@ struct ProcessCertificateState {
     input_objects: Option<Vec<Object>>,
     output_objects: Option<Vec<Object>>,
     auxiliary_data: Option<Vec<u8>>,
+    request: HandleCertificateRequestV3,
 }
 
 #[derive(Debug)]
@@ -1497,13 +1505,14 @@ where
             input_objects: None,
             output_objects: None,
             auxiliary_data: None,
+            request: request.clone(),
         };
 
         // create a set of validators that we should sample to request input/output objects from
         let validators_to_sample =
             if request.include_input_objects || request.include_output_objects {
                 // Number of validators to request input/output objects from
-                const NUMBER_TO_SAMPLE: usize = 5;
+                const NUMBER_TO_SAMPLE: usize = 10;
 
                 self.committee
                     .choose_multiple_weighted_iter(NUMBER_TO_SAMPLE)
@@ -1547,7 +1556,6 @@ where
                             request_ref
                         } else {
                             HandleCertificateRequestV3 {
-                                include_events: false,
                                 include_input_objects: false,
                                 include_output_objects: false,
                                 include_auxiliary_data: false,
@@ -1583,6 +1591,7 @@ where
                     // and return.
                     match AuthorityAggregator::<A>::handle_process_certificate_response(
                         committee_clone,
+                        &metrics,
                         &tx_digest, &mut state, response, name)
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
@@ -1695,6 +1704,7 @@ where
 
     fn handle_process_certificate_response(
         committee: Arc<Committee>,
+        metrics: &AuthAggMetrics,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
         response: SuiResult<HandleCertificateResponseV3>,
@@ -1758,6 +1768,15 @@ where
                             signed_effects.into_data(),
                             cert_sig,
                         );
+
+                        if (state.request.include_input_objects && state.input_objects.is_none())
+                            || (state.request.include_output_objects
+                                && state.output_objects.is_none())
+                        {
+                            metrics.quorum_reached_without_requested_objects.inc();
+                            debug!(?tx_digest, "Quorum Reached but requested input/output objects were not returned");
+                        }
+
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             Some(QuorumDriverResponse {

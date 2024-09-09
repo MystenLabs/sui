@@ -2,24 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::io::Cursor;
 use std::time::Duration;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
+use csv::Writer;
 use diesel::dsl::{max, min};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
 use itertools::Itertools;
+use object_store::path::Path;
 use tap::TapFallible;
-use tracing::info;
+use tracing::{info, warn};
 
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_protocol_config::ProtocolConfig;
+use sui_storage::object_store::util::put;
 use sui_types::base_types::ObjectID;
 
+use crate::config::RestoreConfig;
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::{Context, IndexerError};
@@ -34,6 +39,7 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::models::epoch::{StoredFeatureFlag, StoredProtocolConfig};
 use crate::models::events::StoredEvent;
 use crate::models::obj_indices::StoredObjectVersion;
+use crate::models::objects::StoredFullHistoryObject;
 use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
@@ -43,10 +49,10 @@ use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     chain_identifier, checkpoints, display, epochs, event_emit_module, event_emit_package,
     event_senders, event_struct_instantiation, event_struct_module, event_struct_name,
-    event_struct_package, events, feature_flags, objects, objects_history, objects_snapshot,
-    objects_version, packages, protocol_configs, pruner_cp_watermark, transactions, tx_calls_fun,
-    tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests, tx_input_objects, tx_kinds,
-    tx_recipients, tx_senders,
+    event_struct_package, events, feature_flags, full_objects_history, objects, objects_history,
+    objects_snapshot, objects_version, packages, protocol_configs, pruner_cp_watermark,
+    transactions, tx_calls_fun, tx_calls_mod, tx_calls_pkg, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
@@ -100,6 +106,8 @@ const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 pub struct PgIndexerStoreConfig {
     pub parallel_chunk_size: usize,
     pub parallel_objects_chunk_size: usize,
+    pub gcs_cred_path: Option<String>,
+    pub gcs_display_bucket: Option<String>,
 }
 
 #[derive(Clone)]
@@ -115,6 +123,7 @@ impl PgIndexerStore {
     pub fn new(
         blocking_cp: BlockingConnectionPool,
         pool: ConnectionPool,
+        restore_config: RestoreConfig,
         metrics: IndexerMetrics,
     ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
@@ -130,6 +139,8 @@ impl PgIndexerStore {
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
+            gcs_cred_path: restore_config.gcs_cred_path,
+            gcs_display_bucket: restore_config.gcs_display_bucket,
         };
 
         Self {
@@ -584,6 +595,39 @@ impl PgIndexerStore {
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
+        })
+    }
+
+    fn persist_full_objects_history_chunk(
+        &self,
+        objects: Vec<StoredFullHistoryObject>,
+    ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_full_objects_history_chunks
+            .start_timer();
+
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for objects_chunk in objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    insert_or_ignore_into!(full_objects_history::table, objects_chunk, conn);
+                }
+
+                Ok::<(), IndexerError>(())
+            },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )
+        .tap_ok(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} chunked full objects history",
+                objects.len(),
+            );
+        })
+        .tap_err(|e| {
+            tracing::error!("Failed to persist full object history with error: {}", e);
         })
     }
 
@@ -1799,6 +1843,74 @@ impl IndexerStore for PgIndexerStore {
         Ok(())
     }
 
+    // TODO: There are quite some shared boiler-plate code in all functions.
+    // We should clean them up eventually.
+    async fn persist_full_objects_history(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError> {
+        let skip_history = std::env::var("SKIP_OBJECT_HISTORY")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_history {
+            info!("skipping object history");
+            return Ok(());
+        }
+
+        if object_changes.is_empty() {
+            return Ok(());
+        }
+        let objects: Vec<StoredFullHistoryObject> = object_changes
+            .into_iter()
+            .flat_map(|c| {
+                let TransactionObjectChangesToCommit {
+                    changed_objects,
+                    deleted_objects,
+                } = c;
+                changed_objects
+                    .into_iter()
+                    .map(|o| o.into())
+                    .chain(deleted_objects.into_iter().map(|o| o.into()))
+            })
+            .collect();
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_full_objects_history
+            .start_timer();
+
+        let len = objects.len();
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                self.spawn_blocking_task(move |this| this.persist_full_objects_history_chunk(c))
+            })
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to join persist_full_objects_history_chunk futures: {}",
+                    e
+                );
+                IndexerError::from(e)
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all full objects history chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} full objects history", len);
+        Ok(())
+    }
+
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
@@ -2071,6 +2183,65 @@ impl IndexerStore for PgIndexerStore {
             .unwrap_or_else(|e| {
                 tracing::error!("Failed to prune epoch table for epoch {}: {}", epoch, e);
             });
+        Ok(())
+    }
+
+    async fn upload_display(&self, epoch_number: u64) -> Result<(), IndexerError> {
+        let mut buffer = Cursor::new(Vec::new());
+        {
+            let mut writer = Writer::from_writer(&mut buffer);
+
+            let displays = read_only_blocking!(&self.blocking_cp, |conn| {
+                display::table.load::<StoredDisplay>(conn)
+            })
+            .context("Failed to get display from database")?;
+
+            info!("Read {} displays", displays.len());
+            writer
+                .write_record(["object_type", "id", "version", "bcs"])
+                .map_err(|_| {
+                    IndexerError::GcsError("Failed to write display to csv".to_string())
+                })?;
+
+            for display in displays {
+                writer
+                    .write_record(&[
+                        display.object_type,
+                        hex::encode(display.id),
+                        display.version.to_string(),
+                        hex::encode(display.bcs),
+                    ])
+                    .map_err(|_| IndexerError::GcsError("Failed to write to csv".to_string()))?;
+            }
+
+            writer
+                .flush()
+                .map_err(|_| IndexerError::GcsError("Failed to flush csv".to_string()))?;
+        }
+
+        if let (Some(cred_path), Some(bucket)) = (
+            self.config.gcs_cred_path.clone(),
+            self.config.gcs_display_bucket.clone(),
+        ) {
+            let remote_store_config = ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::GCS),
+                bucket: Some(bucket),
+                google_service_account: Some(cred_path),
+                object_store_connection_limit: 200,
+                no_sign_request: false,
+                ..Default::default()
+            };
+            let remote_store = remote_store_config.make().map_err(|e| {
+                IndexerError::GcsError(format!("Failed to make GCS remote store: {}", e))
+            })?;
+
+            let path = Path::from(format!("display_{}.csv", epoch_number).as_str());
+            put(&remote_store, &path, buffer.into_inner().into())
+                .await
+                .map_err(|e| IndexerError::GcsError(format!("Failed to put to GCS: {}", e)))?;
+        } else {
+            warn!("Either GCS cred path or bucket is not set, skipping display upload.");
+        }
         Ok(())
     }
 

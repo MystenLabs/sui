@@ -50,7 +50,7 @@ pub async fn build_json_rpc_server(
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder =
         JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
-    let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
+    let http_client = crate::get_http_client(&config.rpc_client_url)?;
 
     builder.register_module(WriteApi::new(http_client.clone()))?;
     builder.register_module(IndexerApi::new(

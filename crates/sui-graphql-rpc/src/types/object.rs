@@ -37,6 +37,7 @@ use async_graphql::connection::{CursorType, Edge};
 use async_graphql::dataloader::Loader;
 use async_graphql::{connection::Connection, *};
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
@@ -806,15 +807,22 @@ impl Object {
 
         let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    objects_query(&filter, range, &page),
-                )?))
+                    Ok(Some(
+                        page.paginate_raw_query::<StoredHistoryObject>(
+                            conn,
+                            checkpoint_viewed_at,
+                            objects_query(&filter, range, &page),
+                        )
+                        .await?,
+                    ))
+                }
+                .scope_boxed()
             })
             .await?
         else {
@@ -1232,24 +1240,28 @@ impl Loader<HistoricalKey> for Db {
 
         let objects: Vec<StoredHistoryObject> = self
             .execute(move |conn| {
-                conn.results(move || {
-                    let mut query = h::objects_history
-                        .inner_join(
-                            v::objects_version.on(v::cp_sequence_number
-                                .eq(h::checkpoint_sequence_number)
-                                .and(v::object_id.eq(h::object_id))
-                                .and(v::object_version.eq(h::object_version))),
-                        )
-                        .select(StoredHistoryObject::as_select())
-                        .into_boxed();
+                async {
+                    conn.results(move || {
+                        let mut query = h::objects_history
+                            .inner_join(
+                                v::objects_version.on(v::cp_sequence_number
+                                    .eq(h::checkpoint_sequence_number)
+                                    .and(v::object_id.eq(h::object_id))
+                                    .and(v::object_version.eq(h::object_version))),
+                            )
+                            .select(StoredHistoryObject::as_select())
+                            .into_boxed();
 
-                    for (id, version) in id_versions.iter().cloned() {
-                        query =
-                            query.or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
-                    }
+                        for (id, version) in id_versions.iter().cloned() {
+                            query = query
+                                .or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
+                        }
 
-                    query
-                })
+                        query
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?;
@@ -1321,32 +1333,37 @@ impl Loader<ParentVersionKey> for Db {
             .into_iter()
             .map(|(group_key, ids)| {
                 self.execute(move |conn| {
-                    let stored: Vec<StoredHistoryObject> = conn.results(move || {
-                        use objects_history::dsl as h;
-                        use objects_version::dsl as v;
+                    async move {
+                        let stored: Vec<StoredHistoryObject> = conn
+                            .results(move || {
+                                use objects_history::dsl as h;
+                                use objects_version::dsl as v;
 
-                        h::objects_history
-                            .inner_join(
-                                v::objects_version.on(v::cp_sequence_number
-                                    .eq(h::checkpoint_sequence_number)
-                                    .and(v::object_id.eq(h::object_id))
-                                    .and(v::object_version.eq(h::object_version))),
-                            )
-                            .select(StoredHistoryObject::as_select())
-                            .filter(v::object_id.eq_any(ids.iter().cloned()))
-                            .filter(v::object_version.le(group_key.parent_version as i64))
-                            .distinct_on(v::object_id)
-                            .order_by(v::object_id)
-                            .then_order_by(v::object_version.desc())
-                            .into_boxed()
-                    })?;
+                                h::objects_history
+                                    .inner_join(
+                                        v::objects_version.on(v::cp_sequence_number
+                                            .eq(h::checkpoint_sequence_number)
+                                            .and(v::object_id.eq(h::object_id))
+                                            .and(v::object_version.eq(h::object_version))),
+                                    )
+                                    .select(StoredHistoryObject::as_select())
+                                    .filter(v::object_id.eq_any(ids.iter().cloned()))
+                                    .filter(v::object_version.le(group_key.parent_version as i64))
+                                    .distinct_on(v::object_id)
+                                    .order_by(v::object_id)
+                                    .then_order_by(v::object_version.desc())
+                                    .into_boxed()
+                            })
+                            .await?;
 
-                    Ok::<_, diesel::result::Error>(
-                        stored
-                            .into_iter()
-                            .map(|stored| (group_key, stored))
-                            .collect::<Vec<_>>(),
-                    )
+                        Ok::<_, diesel::result::Error>(
+                            stored
+                                .into_iter()
+                                .map(|stored| (group_key, stored))
+                                .collect::<Vec<_>>(),
+                        )
+                    }
+                    .scope_boxed()
                 })
             });
 
@@ -1408,32 +1425,37 @@ impl Loader<LatestAtKey> for Db {
                 .into_iter()
                 .map(|(checkpoint_viewed_at, ids)| {
                     self.execute_repeatable(move |conn| {
-                        let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)?
-                        else {
-                            return Ok::<Vec<(u64, StoredHistoryObject)>, diesel::result::Error>(
-                                vec![],
-                            );
-                        };
+                        async move {
+                            let Some(range) =
+                                AvailableRange::result(conn, checkpoint_viewed_at).await?
+                            else {
+                                return Ok::<Vec<(u64, StoredHistoryObject)>, diesel::result::Error>(
+                                    vec![],
+                                );
+                            };
 
-                        let filter = ObjectFilter {
-                            object_ids: Some(ids.iter().cloned().collect()),
-                            ..Default::default()
-                        };
+                            let filter = ObjectFilter {
+                                object_ids: Some(ids.iter().cloned().collect()),
+                                ..Default::default()
+                            };
 
-                        Ok(conn
-                            .results(move || {
-                                build_objects_query(
-                                    View::Consistent,
-                                    range,
-                                    &Page::bounded(ids.len() as u64),
-                                    |q| filter.apply(q),
-                                    |q| q,
-                                )
-                                .into_boxed()
-                            })?
-                            .into_iter()
-                            .map(|r| (checkpoint_viewed_at, r))
-                            .collect())
+                            Ok(conn
+                                .results(move || {
+                                    build_objects_query(
+                                        View::Consistent,
+                                        range,
+                                        &Page::bounded(ids.len() as u64),
+                                        |q| filter.apply(q),
+                                        |q| q,
+                                    )
+                                    .into_boxed()
+                                })
+                                .await?
+                                .into_iter()
+                                .map(|r| (checkpoint_viewed_at, r))
+                                .collect())
+                        }
+                        .scope_boxed()
                     })
                 });
 

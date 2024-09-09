@@ -3,11 +3,10 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
-use diesel::PgConnection;
+use anyhow::Result;
 use diesel::{
-    dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
-    QueryDsl, TextExpressionMethods,
+    dsl::sql, sql_types::Bool, ExpressionMethods, OptionalExtension, QueryDsl,
+    TextExpressionMethods,
 };
 use itertools::{any, Itertools};
 use tap::Pipe;
@@ -39,9 +38,8 @@ use sui_types::{
 use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::database::ConnectionPool;
-use crate::db::{ConnectionConfig, ConnectionPool as BlockingConnectionPool, ConnectionPoolConfig};
+use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
-use crate::store::diesel_macro::*;
 use crate::{
     errors::IndexerError,
     models::{
@@ -64,7 +62,6 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
-    blocking_pool: BlockingConnectionPool,
     pool: ConnectionPool,
     package_resolver: PackageResolver,
 }
@@ -73,12 +70,11 @@ pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePac
 
 // Impl for common initialization and utilities
 impl IndexerReader {
-    pub fn new(blocking_pool: BlockingConnectionPool, pool: ConnectionPool) -> Self {
+    pub fn new(pool: ConnectionPool) -> Self {
         let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         Self {
-            blocking_pool,
             pool,
             package_resolver,
         }
@@ -89,19 +85,6 @@ impl IndexerReader {
         config: ConnectionPoolConfig,
     ) -> Result<Self> {
         let db_url = db_url.into();
-        let manager = ConnectionManager::<PgConnection>::new(db_url.clone());
-
-        let connection_config = ConnectionConfig {
-            statement_timeout: config.statement_timeout,
-            read_only: true,
-        };
-
-        let blocking_pool = diesel::r2d2::Pool::builder()
-            .max_size(config.pool_size)
-            .connection_timeout(config.connection_timeout)
-            .connection_customizer(Box::new(connection_config))
-            .build(manager)
-            .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
 
         let pool = ConnectionPool::new(db_url.parse()?, config).await?;
 
@@ -109,32 +92,13 @@ impl IndexerReader {
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
         Ok(Self {
-            blocking_pool,
             pool,
             package_resolver,
         })
     }
 
-    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
-    where
-        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
-        R: Send + 'static,
-        E: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            CALLED_FROM_BLOCKING_POOL
-                .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
-            let _guard = current_span.enter();
-            f(this)
-        })
-        .await
-        .expect("propagate any panics")
-    }
-
-    pub fn get_pool(&self) -> BlockingConnectionPool {
-        self.blocking_pool.clone()
+    pub fn pool(&self) -> &ConnectionPool {
+        &self.pool
     }
 }
 
@@ -1410,6 +1374,9 @@ impl IndexerReader {
         let mut connection = self.pool.get().await?;
 
         let object = match objects::table
+            .filter(objects::object_type_package.eq(type_.address.to_vec()))
+            .filter(objects::object_type_module.eq(type_.module.to_string()))
+            .filter(objects::object_type_name.eq(type_.name.to_string()))
             .filter(objects::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)))
             .first::<StoredObject>(&mut connection)
             .await

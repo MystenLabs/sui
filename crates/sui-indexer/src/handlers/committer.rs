@@ -58,9 +58,19 @@ where
             let epoch = checkpoint.epoch.clone();
             batch.push(checkpoint);
             next_checkpoint_sequence_number += 1;
+            let epoch_number_option = epoch.as_ref().map(|epoch| epoch.new_epoch.epoch);
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
                 commit_checkpoints(&state, batch, epoch, &metrics, &commit_notifier).await;
                 batch = vec![];
+            }
+            if let Some(epoch_number) = epoch_number_option {
+                state.upload_display(epoch_number).await.tap_err(|e| {
+                    error!(
+                        "Failed to upload display table before epoch {} with error: {}",
+                        epoch_number,
+                        e.to_string()
+                    );
+                })?;
             }
         }
         if !batch.is_empty() && unprocessed.is_empty() {
@@ -143,8 +153,13 @@ async fn commit_checkpoints<S>(
             state.persist_event_indices(event_indices_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
+            // TODO: There are a few ways we could make the following more memory efficient.
+            // 1. persist_objects and persist_object_history both call another function to make the final
+            //    committed object list. We could call it early and share the result.
+            // 2. We could avoid clone by using Arc.
             state.persist_objects(object_changes_batch.clone()),
             state.persist_object_history(object_history_changes_batch.clone()),
+            state.persist_full_objects_history(object_history_changes_batch.clone()),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

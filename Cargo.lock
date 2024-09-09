@@ -10291,9 +10291,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.6"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba92fb39ec7ad06ca2582c0ca834dfeadcaf06ddfc8e635c80aa7e1c05315fdd"
+checksum = "fadfaed2cd7f389d0161bb73eeb07b7b78f8691047a6f3e73caaeae55310a4a6"
 dependencies = [
  "bytes",
  "rand 0.8.5",
@@ -12906,6 +12906,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "shared-crypto",
+ "snap",
  "sui-authority-aggregation",
  "sui-config",
  "sui-json-rpc-api",
@@ -12913,6 +12914,7 @@ dependencies = [
  "sui-keys",
  "sui-sdk 1.34.0",
  "sui-test-transaction-builder",
+ "sui-tls",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -13546,6 +13548,7 @@ dependencies = [
  "clap",
  "const-str",
  "diesel",
+ "diesel-async",
  "downcast",
  "either",
  "expect-test",
@@ -13637,15 +13640,18 @@ dependencies = [
  "backoff",
  "bb8",
  "bcs",
+ "bytes",
  "cached",
  "chrono",
  "clap",
  "criterion",
+ "csv",
  "diesel",
  "diesel-async",
  "diesel_migrations",
  "fastcrypto",
  "futures",
+ "hex",
  "itertools 0.10.5",
  "jsonrpsee",
  "move-binary-format",
@@ -13653,6 +13659,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "ntest",
+ "object_store",
  "prometheus",
  "rayon",
  "regex",
@@ -13660,6 +13667,7 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "simulacrum",
+ "sui-config",
  "sui-data-ingestion-core",
  "sui-json",
  "sui-json-rpc",
@@ -13672,6 +13680,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-rest-api",
  "sui-sdk 1.34.0",
+ "sui-storage",
  "sui-test-transaction-builder",
  "sui-transaction-builder",
  "sui-types",
