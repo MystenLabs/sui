@@ -669,8 +669,13 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
-        let Some(first_checkpoint) = checkpoints.first() else {
+    async fn persist_checkpoints(
+        &self,
+        checkpoints: Vec<IndexedCheckpoint>,
+    ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let Some(first_checkpoint) = checkpoints.as_slice().first() else {
             return Ok(());
         };
 
@@ -679,20 +684,23 @@ impl PgIndexerStore {
         if first_checkpoint.sequence_number == 0 {
             let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
             self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())?;
-            transactional_blocking_with_retry!(
-                &self.blocking_cp,
-                |conn| {
+
+            transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+                async {
                     let checkpoint_digest =
                         first_checkpoint.checkpoint_digest.into_inner().to_vec();
-                    insert_or_ignore_into!(
-                        chain_identifier::table,
-                        StoredChainIdentifier { checkpoint_digest },
-                        conn
-                    );
+                    diesel::insert_into(chain_identifier::table)
+                        .values(StoredChainIdentifier { checkpoint_digest })
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("failed to write to chain_identifier table")?;
                     Ok::<(), IndexerError>(())
-                },
-                PG_DB_COMMIT_SLEEP_DURATION
-            )?;
+                }
+                .scope_boxed()
+            })
+            .await?;
         }
         let guard = self
             .metrics
@@ -700,16 +708,22 @@ impl PgIndexerStore {
             .start_timer();
 
         let stored_cp_txs = checkpoints.iter().map(StoredCpTx::from).collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for stored_cp_tx_chunk in stored_cp_txs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    insert_or_ignore_into!(pruner_cp_watermark::table, stored_cp_tx_chunk, conn);
+                    diesel::insert_into(pruner_cp_watermark::table)
+                        .values(stored_cp_tx_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to pruner_cp_watermark table")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             info!(
                 "Persisted {} pruner_cp_watermark rows.",
@@ -724,33 +738,46 @@ impl PgIndexerStore {
             .iter()
             .map(StoredCheckpoint::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for stored_checkpoint_chunk in
                     stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
+                    diesel::insert_into(checkpoints::table)
+                        .values(stored_checkpoint_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to checkpoints table")?;
                     let time_now_ms = chrono::Utc::now().timestamp_millis();
                     for stored_checkpoint in stored_checkpoint_chunk {
                         self.metrics
                             .db_commit_lag_ms
                             .set(time_now_ms - stored_checkpoint.timestamp_ms);
-                        self.metrics.max_committed_checkpoint_sequence_number.set(
-                            stored_checkpoint.sequence_number,
-                        );
-                        self.metrics.committed_checkpoint_timestamp_ms.set(
-                            stored_checkpoint.timestamp_ms,
-                        );
+                        self.metrics
+                            .max_committed_checkpoint_sequence_number
+                            .set(stored_checkpoint.sequence_number);
+                        self.metrics
+                            .committed_checkpoint_timestamp_ms
+                            .set(stored_checkpoint.timestamp_ms);
                     }
+
                     for stored_checkpoint in stored_checkpoint_chunk {
-                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", stored_checkpoint.sequence_number, time_now_ms, stored_checkpoint.timestamp_ms);
+                        info!(
+                            "Indexer lag: \
+                            persisted checkpoint {} with time now {} and checkpoint time {}",
+                            stored_checkpoint.sequence_number,
+                            time_now_ms,
+                            stored_checkpoint.timestamp_ms
+                        );
                     }
                 }
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
@@ -1938,8 +1965,7 @@ impl IndexerStore for PgIndexerStore {
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
     ) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.persist_checkpoints(checkpoints))
-            .await
+        self.persist_checkpoints(checkpoints).await
     }
 
     async fn persist_transactions(
