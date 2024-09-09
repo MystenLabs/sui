@@ -636,26 +636,34 @@ impl PgIndexerStore {
         })
     }
 
-    fn persist_full_objects_history_chunk(
+    async fn persist_full_objects_history_chunk(
         &self,
         objects: Vec<StoredFullHistoryObject>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_full_objects_history_chunks
             .start_timer();
 
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 for objects_chunk in objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    insert_or_ignore_into!(full_objects_history::table, objects_chunk, conn);
+                    diesel::insert_into(full_objects_history::table)
+                        .values(objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to full_objects_history table")?;
                 }
 
-                Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(
@@ -1932,22 +1940,11 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| {
-                self.spawn_blocking_task(move |this| this.persist_full_objects_history_chunk(c))
-            })
+            .map(|c| self.persist_full_objects_history_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to join persist_full_objects_history_chunk futures: {}",
-                    e
-                );
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
