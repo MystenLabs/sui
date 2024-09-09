@@ -51,7 +51,7 @@ enum Acl {
 
 #[derive(Clone)]
 pub struct TrafficController {
-    tally_channel: mpsc::Sender<TrafficTally>,
+    tally_channel: Option<mpsc::Sender<TrafficTally>>,
     acl: Acl,
     metrics: Arc<TrafficControllerMetrics>,
     dry_run_mode: bool,
@@ -94,7 +94,7 @@ impl TrafficController {
                     })
                     .collect();
                 Self {
-                    tally_channel: mpsc::channel(0).0, // unused
+                    tally_channel: None,
                     acl: Acl::Allowlist(allowlist),
                     metrics: Arc::new(metrics),
                     dry_run_mode: policy_config.dry_run,
@@ -144,7 +144,7 @@ impl TrafficController {
             clear_loop_metrics,
         ));
         Self {
-            tally_channel: tx,
+            tally_channel: Some(tx),
             acl: Acl::Blocklists(blocklists),
             metrics: metrics.clone(),
             dry_run_mode,
@@ -160,23 +160,25 @@ impl TrafficController {
     }
 
     pub fn tally(&self, tally: TrafficTally) {
-        // Use try_send rather than send mainly to avoid creating backpressure
-        // on the caller if the channel is full, which may slow down the critical
-        // path. Dropping the tally on the floor should be ok, as in this case
-        // we are effectively sampling traffic, which we would need to do anyway
-        // if we are overloaded
-        match self.tally_channel.try_send(tally) {
-            Err(TrySendError::Full(_)) => {
-                warn!("TrafficController tally channel full, dropping tally");
-                self.metrics.tally_channel_overflow.inc();
-                // TODO: once we've verified this doesn't happen under normal
-                // conditions, we can consider dropping the request itself given
-                // that clearly the system is overloaded
+        if let Some(channel) = self.tally_channel.as_ref() {
+            // Use try_send rather than send mainly to avoid creating backpressure
+            // on the caller if the channel is full, which may slow down the critical
+            // path. Dropping the tally on the floor should be ok, as in this case
+            // we are effectively sampling traffic, which we would need to do anyway
+            // if we are overloaded
+            match channel.try_send(tally) {
+                Err(TrySendError::Full(_)) => {
+                    warn!("TrafficController tally channel full, dropping tally");
+                    self.metrics.tally_channel_overflow.inc();
+                    // TODO: once we've verified this doesn't happen under normal
+                    // conditions, we can consider dropping the request itself given
+                    // that clearly the system is overloaded
+                }
+                Err(TrySendError::Closed(_)) => {
+                    panic!("TrafficController tally channel closed unexpectedly");
+                }
+                Ok(_) => {}
             }
-            Err(TrySendError::Closed(_)) => {
-                panic!("TrafficController tally channel closed unexpectedly");
-            }
-            Ok(_) => {}
         }
     }
 

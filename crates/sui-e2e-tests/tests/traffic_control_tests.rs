@@ -704,6 +704,32 @@ async fn test_traffic_sketch_with_sampled_spam() {
     assert!(metrics.num_blocked > (expected_requests / 5) - 1000);
 }
 
+#[sim_test]
+async fn test_traffic_sketch_allowlist_mode() {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        // first two clients allowlisted, rest blocked
+        allow_list: Some(vec![String::from("127.0.0.0"), String::from("127.0.0.1")]),
+        dry_run: false,
+        ..Default::default()
+    };
+    let metrics = TrafficSim::run(
+        policy_config,
+        4,      // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(10),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 4;
+    // ~half of all requests blocked
+    assert!(metrics.num_blocked >= expected_requests / 2 - 1000);
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+}
+
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
