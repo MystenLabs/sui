@@ -20,11 +20,11 @@ use move_binary_format::{
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     compiled_unit::{FunctionInfo, SpecInfo},
-    expansion::ast as EA,
+    expansion::{ast as EA, self},
     parser::ast as PA,
     shared::{unique_map::UniqueMap, Name, TName},
 };
-use move_ir_types::ast::ConstantName;
+use move_ir_types::{ast::ConstantName, location::Spanned};
 
 use crate::{
     ast::{
@@ -155,10 +155,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
     ) {
         self.decl_ana(&module_def, &compiled_module, &source_map);
-        self.def_ana(&module_def, function_infos);
+        self.def_ana(&module_def, &function_infos);
         //self.collect_spec_block_infos(&module_def);
         let attrs = self.translate_attributes(&module_def.attributes);
-        self.populate_env_from_result(loc, attrs, compiled_module, source_map);
+        self.populate_env_from_result(loc, attrs, compiled_module, source_map, &function_infos);
     }
 }
 
@@ -681,7 +681,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     fn def_ana(
         &mut self,
         module_def: &EA::ModuleDefinition,
-        function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
+        function_infos: &UniqueMap<PA::FunctionName, FunctionInfo>,
     ) {
         // Analyze all structs.
         for (name, def) in module_def.structs.key_cloned_iter() {
@@ -3159,6 +3159,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         attributes: Vec<Attribute>,
         module: CompiledModule,
         source_map: SourceMap,
+        function_infos: &UniqueMap<PA::FunctionName, FunctionInfo>,
     ) {
         let struct_data: BTreeMap<DatatypeId, StructData> = (0..module.struct_defs().len())
             .filter_map(|idx| {
@@ -3250,12 +3251,21 @@ ot in AST",
                 if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
                     let arg_names = project_1st(&entry.params);
                     let type_arg_names = project_1st(&entry.type_params);
+                    let res = function_infos
+                        .get(&PA::FunctionName(Spanned::unsafe_no_loc(move_symbol_pool::Symbol::from(name_str))))
+                        .map(|finfo| finfo.attributes.clone());
+                    let toplevel_attributes = if let Some(ta) = res {
+                        ta
+                    } else {
+                        expansion::ast::Attributes::default()
+                    };
                     Some((FunId::new(name), self.parent.env.create_function_data(
                         &module,
                         def_idx,
                         name,
                         entry.loc.clone(),
                         entry.attributes.clone(),
+                        toplevel_attributes,
                         arg_names,
                         type_arg_names,
                         fun_spec,

@@ -32,6 +32,7 @@ use codespan_reporting::{
 use itertools::Itertools;
 #[allow(unused_imports)]
 use log::{info, warn};
+use move_compiler::expansion;
 use move_ir_types::ast as IR;
 use num::{BigUint, One, ToPrimitive};
 use serde::{Deserialize, Serialize};
@@ -1219,6 +1220,7 @@ impl GlobalEnv {
         name: Symbol,
         loc: Loc,
         attributes: Vec<Attribute>,
+        toplevel_attributes: expansion::ast::Attributes,
         arg_names: Vec<Symbol>,
         type_arg_names: Vec<Symbol>,
         spec: Spec,
@@ -1228,6 +1230,7 @@ impl GlobalEnv {
             name,
             loc,
             attributes,
+            toplevel_attributes,
             def_idx,
             handle_idx,
             arg_names,
@@ -3676,6 +3679,9 @@ pub struct FunctionData {
     /// Attributes attached to this function.
     attributes: Vec<Attribute>,
 
+    /// Top-level attributes attached to this function.
+    toplevel_attributes: expansion::ast::Attributes,
+
     /// List of function argument names. Not in bytecode but obtained from AST.
     arg_names: Vec<Symbol>,
 
@@ -3706,6 +3712,7 @@ impl FunctionData {
             name,
             loc: Loc::default(),
             attributes: Vec::default(),
+            toplevel_attributes: expansion::ast::Attributes::default(),
             def_idx,
             handle_idx,
             arg_names: vec![],
@@ -3834,6 +3841,11 @@ impl<'env> FunctionEnv<'env> {
             .module
             .function_def_at(self.get_def_idx());
         &function_definition.code.as_ref().unwrap().jump_tables
+    }
+
+    /// Returns the top-level attributes for this function
+    pub fn get_toplevel_attributes(&self) -> &expansion::ast::Attributes {
+        &self.data.toplevel_attributes
     }
 
     /// Returns the value of a boolean pragma for this function. This first looks up a
