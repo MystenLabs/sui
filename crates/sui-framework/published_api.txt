@@ -4264,6 +4264,9 @@ insert
 swap_remove
 	public fun
 	0x1::vector
+flatten
+	public fun
+	0x1::vector
 Option
 	public struct
 	0x1::option
