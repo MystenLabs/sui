@@ -33,7 +33,7 @@ export type NamedPackagesPluginOptions = {
 	 * 2. For types: `app@org::type::Type` -> `0x1234::type::Type`
 	 *
 	 */
-	cache?: NamedPackagesPluginCache;
+	overrides?: NamedPackagesPluginCache;
 };
 
 /**
@@ -57,13 +57,17 @@ export type NamedPackagesPluginOptions = {
  * 	Transaction.registerGlobalSerializationPlugin(namedPackagesPlugin({ suiGraphQLClient, cache }));
  * 	```
  */
-export const namedPackagesPlugin =
-	({
-		suiGraphQLClient,
-		pageSize = 10,
-		cache = { packages: {}, types: {} },
-	}: NamedPackagesPluginOptions) =>
-	async (
+export const namedPackagesPlugin = ({
+	suiGraphQLClient,
+	pageSize = 10,
+	overrides = { packages: {}, types: {} },
+}: NamedPackagesPluginOptions) => {
+	const cache = {
+		packages: { ...overrides.packages },
+		types: { ...overrides.types },
+	};
+
+	return async (
 		transactionData: TransactionDataBuilder,
 		_buildOptions: BuildTransactionOptions,
 		next: () => Promise<void>,
@@ -88,14 +92,14 @@ export const namedPackagesPlugin =
 		await next();
 	};
 
-async function query(client: SuiGraphQLClient, requests: NameResolutionRequest[]) {
-	const results: NamedPackagesPluginCache = { packages: {}, types: {} };
-	// avoid making a request if there are no names to resolve.
-	if (requests.length === 0) return results;
+	async function query(client: SuiGraphQLClient, requests: NameResolutionRequest[]) {
+		const results: NamedPackagesPluginCache = { packages: {}, types: {} };
+		// avoid making a request if there are no names to resolve.
+		if (requests.length === 0) return results;
 
-	// Create multiple queries for each name / type we need to resolve
-	// TODO: Replace with bulk APIs when available.
-	const gqlQuery = `{
+		// Create multiple queries for each name / type we need to resolve
+		// TODO: Replace with bulk APIs when available.
+		const gqlQuery = `{
         ${requests.map((req) => {
 					const request = req.type === 'package' ? 'packageByName' : 'typeByName';
 					const fields = req.type === 'package' ? 'address' : 'repr';
@@ -106,24 +110,25 @@ async function query(client: SuiGraphQLClient, requests: NameResolutionRequest[]
 				})}
     }`;
 
-	const result = await client.query({
-		query: gqlQuery,
-		variables: undefined,
-	});
+		const result = await client.query({
+			query: gqlQuery,
+			variables: undefined,
+		});
 
-	if (result.errors) throw new Error(JSON.stringify({ query: gqlQuery, errors: result.errors }));
+		if (result.errors) throw new Error(JSON.stringify({ query: gqlQuery, errors: result.errors }));
 
-	// Parse the results and create a map of `<name|type> -> <address|repr>`
-	for (const req of requests) {
-		const key = gqlQueryKey(req.id);
-		if (!result.data || !result.data[key]) throw new Error(`No result found for: ${req.name}`);
-		const data = result.data[key] as { address?: string; repr?: string };
+		// Parse the results and create a map of `<name|type> -> <address|repr>`
+		for (const req of requests) {
+			const key = gqlQueryKey(req.id);
+			if (!result.data || !result.data[key]) throw new Error(`No result found for: ${req.name}`);
+			const data = result.data[key] as { address?: string; repr?: string };
 
-		if (req.type === 'package') results.packages[req.name] = data.address!;
-		if (req.type === 'moveType') results.types[req.name] = data.repr!;
+			if (req.type === 'package') results.packages[req.name] = data.address!;
+			if (req.type === 'moveType') results.types[req.name] = data.repr!;
+		}
+
+		return results;
 	}
-
-	return results;
-}
+};
 
 const gqlQueryKey = (idx: number) => `key_${idx}`;
