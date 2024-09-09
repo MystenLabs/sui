@@ -13227,6 +13227,7 @@ dependencies = [
  "bin-version",
  "clap",
  "diesel",
+ "diesel-async",
  "futures",
  "hex-literal 0.3.4",
  "mysten-metrics",

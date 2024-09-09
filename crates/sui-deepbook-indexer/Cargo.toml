@@ -10,6 +10,7 @@ edition = "2021"
 serde.workspace = true
 tap.workspace = true
 diesel = { workspace = true, features = ["serde_json"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres"] }
 tokio = { workspace = true, features = ["full"] }
 anyhow.workspace = true
 futures.workspace = true

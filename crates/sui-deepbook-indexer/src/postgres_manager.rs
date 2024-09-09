@@ -6,24 +6,32 @@ use crate::schema::{
     sui_error_transactions, trade_params_update, votes,
 };
 use crate::types::ProcessedTxnData;
-use diesel::{
-    pg::PgConnection,
-    r2d2::{ConnectionManager, Pool},
-    RunQueryDsl,
-};
+// use diesel::{
+//     pg::PgConnection,
+//     r2d2::{ConnectionManager, Pool},
+//     RunQueryDsl,
+// };
+use diesel_async::pooled_connection::bb8::Pool;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::AsyncConnection;
+use diesel_async::AsyncPgConnection;
+use diesel_async::RunQueryDsl;
 
-pub(crate) type PgPool = Pool<ConnectionManager<PgConnection>>;
+pub(crate) type PgPool =
+    diesel_async::pooled_connection::bb8::Pool<diesel_async::AsyncPgConnection>;
 
-pub fn get_connection_pool(database_url: String) -> PgPool {
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
+pub async fn get_connection_pool(database_url: String) -> PgPool {
+    let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
     Pool::builder()
         .test_on_check_out(true)
         .build(manager)
+        .await
         .expect("Could not build Postgres DB connection pool")
 }
 
 // TODO: add retry logic
-pub fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::Error> {
+pub async fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::Error> {
     if txns.is_empty() {
         return Ok(());
     }
@@ -116,52 +124,68 @@ pub fn write(pool: &PgPool, txns: Vec<ProcessedTxnData>) -> Result<(), anyhow::E
         },
     );
 
-    let connection = &mut pool.get()?;
-    connection.transaction(|conn| {
-        diesel::insert_into(order_updates::table)
-            .values(&order_updates)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(order_fills::table)
-            .values(&order_fills)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(flashloans::table)
-            .values(&flahloans)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(pool_prices::table)
-            .values(&pool_prices)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(balances::table)
-            .values(&balances)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(proposals::table)
-            .values(&proposals)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(rebates::table)
-            .values(&rebates)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(stakes::table)
-            .values(&stakes)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(trade_params_update::table)
-            .values(&trade_params_update)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(votes::table)
-            .values(&votes)
-            .on_conflict_do_nothing()
-            .execute(conn)?;
-        diesel::insert_into(sui_error_transactions::table)
-            .values(&errors)
-            .on_conflict_do_nothing()
-            .execute(conn)
-    })?;
+    let connection = &mut pool.get().await?;
+    connection
+        .transaction(|conn| {
+            async move {
+                diesel::insert_into(order_updates::table)
+                    .values(&order_updates)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(order_fills::table)
+                    .values(&order_fills)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(flashloans::table)
+                    .values(&flahloans)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(pool_prices::table)
+                    .values(&pool_prices)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(balances::table)
+                    .values(&balances)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(proposals::table)
+                    .values(&proposals)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(rebates::table)
+                    .values(&rebates)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(stakes::table)
+                    .values(&stakes)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(trade_params_update::table)
+                    .values(&trade_params_update)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(votes::table)
+                    .values(&votes)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(sui_error_transactions::table)
+                    .values(&errors)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+            }
+            .scope_boxed()
+        })
+        .await?;
     Ok(())
 }

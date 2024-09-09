@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(dead_code)] // TODO: remove in next PR where integration of ProgressSavingPolicy is done
-
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
 use diesel::{ExpressionMethods, TextExpressionMethods};
-use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::AsyncConnection;
+use diesel_async::RunQueryDsl;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::ObjectID;
@@ -45,19 +46,13 @@ use crate::{models, schema};
 pub struct PgDeepbookPersistent {
     pool: PgPool,
     save_progress_policy: ProgressSavingPolicy,
-    indexer_metrics: DeepBookIndexerMetrics,
 }
 
 impl PgDeepbookPersistent {
-    pub fn new(
-        pool: PgPool,
-        save_progress_policy: ProgressSavingPolicy,
-        indexer_metrics: DeepBookIndexerMetrics,
-    ) -> Self {
+    pub fn new(pool: PgPool, save_progress_policy: ProgressSavingPolicy) -> Self {
         Self {
             pool,
             save_progress_policy,
-            indexer_metrics,
         }
     }
 }
@@ -159,91 +154,108 @@ impl Persistent<ProcessedTxnData> for PgDeepbookPersistent {
         if data.is_empty() {
             return Ok(());
         }
-        let connection = &mut self.pool.get()?;
-        connection.transaction(|conn| {
-            for d in data {
-                match d {
-                    ProcessedTxnData::OrderUpdate(t) => {
-                        diesel::insert_into(order_updates::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
+        let connection = &mut self.pool.get().await?;
+        connection
+            .transaction(|conn| {
+                async move {
+                    for d in data {
+                        match d {
+                            ProcessedTxnData::OrderUpdate(t) => {
+                                diesel::insert_into(order_updates::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::OrderFill(t) => {
+                                diesel::insert_into(order_fills::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Flashloan(t) => {
+                                diesel::insert_into(flashloans::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::PoolPrice(t) => {
+                                diesel::insert_into(pool_prices::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Balances(t) => {
+                                diesel::insert_into(balances::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Proposals(t) => {
+                                diesel::insert_into(proposals::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Rebates(t) => {
+                                diesel::insert_into(rebates::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Stakes(t) => {
+                                diesel::insert_into(stakes::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::TradeParamsUpdate(t) => {
+                                diesel::insert_into(trade_params_update::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Votes(t) => {
+                                diesel::insert_into(votes::table)
+                                    .values(&t.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                            ProcessedTxnData::Error(e) => {
+                                diesel::insert_into(sui_error_transactions::table)
+                                    .values(&e.to_db())
+                                    .on_conflict_do_nothing()
+                                    .execute(conn)
+                                    .await?;
+                            }
+                        }
                     }
-                    ProcessedTxnData::OrderFill(t) => {
-                        diesel::insert_into(order_fills::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Flashloan(t) => {
-                        diesel::insert_into(flashloans::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::PoolPrice(t) => {
-                        diesel::insert_into(pool_prices::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Balances(t) => {
-                        diesel::insert_into(balances::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Proposals(t) => {
-                        diesel::insert_into(proposals::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Rebates(t) => {
-                        diesel::insert_into(rebates::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Stakes(t) => {
-                        diesel::insert_into(stakes::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::TradeParamsUpdate(t) => {
-                        diesel::insert_into(trade_params_update::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Votes(t) => {
-                        diesel::insert_into(votes::table)
-                            .values(&t.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
-                    ProcessedTxnData::Error(e) => {
-                        diesel::insert_into(sui_error_transactions::table)
-                            .values(&e.to_db())
-                            .on_conflict_do_nothing()
-                            .execute(conn)?;
-                    }
+                    Ok(())
                 }
-            }
-            Ok(())
-        })
+                .scope_boxed()
+            })
+            .await
     }
 }
 
 #[async_trait]
 impl IndexerProgressStore for PgDeepbookPersistent {
     async fn load_progress(&self, task_name: String) -> anyhow::Result<u64> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         let cp: Option<models::ProgressStore> = dsl::progress_store
             .find(&task_name)
             .select(models::ProgressStore::as_select())
             .first(&mut conn)
+            .await
             .optional()?;
         Ok(cp
             .ok_or(anyhow!("Cannot found progress for task {task_name}"))?
@@ -267,7 +279,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
             start_checkpoint_number,
             target_checkpoint_number,
         ) {
-            let mut conn = self.pool.get()?;
+            let mut conn = self.pool.get().await?;
             diesel::insert_into(schema::progress_store::table)
                 .values(&models::ProgressStore {
                     task_name,
@@ -283,20 +295,22 @@ impl IndexerProgressStore for PgDeepbookPersistent {
                     columns::checkpoint.eq(checkpoint_to_save as i64),
                     columns::timestamp.eq(now),
                 ))
-                .execute(&mut conn)?;
+                .execute(&mut conn)
+                .await?;
         }
         Ok(None)
     }
 
     async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, anyhow::Error> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
             .filter(columns::task_name.like(format!("{prefix} - %")))
             .filter(columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
-            .load(&mut conn)?;
+            .load(&mut conn)
+            .await?;
         let tasks = cp.into_iter().map(|d| d.into()).collect();
         Ok(Tasks::new(tasks)?)
     }
@@ -305,7 +319,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         &self,
         prefix: &str,
     ) -> Result<Option<u64>, Error> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         let cp: Option<i64> = dsl::progress_store
             .select(columns::target_checkpoint)
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
@@ -313,6 +327,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
             .filter(columns::target_checkpoint.ne(i64::MAX))
             .order_by(columns::target_checkpoint.desc())
             .first::<i64>(&mut conn)
+            .await
             .optional()?;
         Ok(cp.map(|c| c as u64))
     }
@@ -323,7 +338,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         checkpoint: u64,
         target_checkpoint: u64,
     ) -> Result<(), anyhow::Error> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         diesel::insert_into(schema::progress_store::table)
             .values(models::ProgressStore {
                 task_name,
@@ -332,7 +347,8 @@ impl IndexerProgressStore for PgDeepbookPersistent {
                 // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
             })
-            .execute(&mut conn)?;
+            .execute(&mut conn)
+            .await?;
         Ok(())
     }
 
@@ -342,7 +358,7 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         task_name: String,
         start_checkpoint: u64,
     ) -> Result<(), anyhow::Error> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         diesel::insert_into(schema::progress_store::table)
             .values(models::ProgressStore {
                 task_name,
@@ -351,19 +367,21 @@ impl IndexerProgressStore for PgDeepbookPersistent {
                 // Timestamp is defaulted to current time in DB if None
                 timestamp: None,
             })
-            .execute(&mut conn)?;
+            .execute(&mut conn)
+            .await?;
         Ok(())
     }
 
     async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
-        let mut conn = self.pool.get()?;
+        let mut conn = self.pool.get().await?;
         diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
             .set((
                 columns::checkpoint.eq(task.start_checkpoint as i64),
                 columns::target_checkpoint.eq(task.target_checkpoint as i64),
                 columns::timestamp.eq(now),
             ))
-            .execute(&mut conn)?;
+            .execute(&mut conn)
+            .await?;
         Ok(())
     }
 }

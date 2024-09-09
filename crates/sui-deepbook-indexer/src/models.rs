@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use bigdecimal::BigDecimal;
 use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
@@ -21,7 +20,7 @@ pub struct OrderUpdate {
     pub package: String,
     pub status: String,
     pub pool_id: String,
-    pub order_id: BigDecimal,
+    pub order_id: String, // u128
     pub client_order_id: i64,
     pub price: i64,
     pub is_bid: bool,
@@ -40,8 +39,8 @@ pub struct OrderFill {
     pub checkpoint: i64,
     pub package: String,
     pub pool_id: String,
-    pub maker_order_id: BigDecimal,
-    pub taker_order_id: BigDecimal,
+    pub maker_order_id: String, // u128
+    pub taker_order_id: String, // u128
     pub maker_client_order_id: i64,
     pub taker_client_order_id: i64,
     pub price: i64,

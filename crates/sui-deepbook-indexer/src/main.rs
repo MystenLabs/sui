@@ -66,11 +66,10 @@ async fn main() -> Result<()> {
 
     let db_url = config.db_url.clone();
     let datastore = PgDeepbookPersistent::new(
-        get_connection_pool(db_url.clone()),
+        get_connection_pool(db_url.clone()).await,
         ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
             tokio::time::Duration::from_secs(30),
         )),
-        indexer_meterics.clone(),
     );
 
     let sui_client = Arc::new(

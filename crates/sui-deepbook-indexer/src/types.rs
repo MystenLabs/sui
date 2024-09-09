@@ -53,21 +53,21 @@ impl Display for OrderUpdateStatus {
 
 #[derive(Clone)]
 pub struct OrderUpdate {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    status: OrderUpdateStatus,
-    pool_id: String,
-    order_id: u128,
-    client_order_id: u64,
-    price: u64,
-    is_bid: bool,
-    original_quantity: u64,
-    quantity: u64,
-    onchain_timestamp: u64,
-    trader: String,
-    balance_manager_id: String,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) status: OrderUpdateStatus,
+    pub(crate) pool_id: String,
+    pub(crate) order_id: u128,
+    pub(crate) client_order_id: u64,
+    pub(crate) price: u64,
+    pub(crate) is_bid: bool,
+    pub(crate) original_quantity: u64,
+    pub(crate) quantity: u64,
+    pub(crate) onchain_timestamp: u64,
+    pub(crate) trader: String,
+    pub(crate) balance_manager_id: String,
 }
 
 impl OrderUpdate {
@@ -79,7 +79,7 @@ impl OrderUpdate {
             package: self.package.clone(),
             status: self.status.clone().to_string(),
             pool_id: self.pool_id.clone(),
-            order_id: BigDecimal::from(self.order_id),
+            order_id: BigDecimal::from(self.order_id).to_string(),
             client_order_id: self.client_order_id as i64,
             trader: self.trader.clone(),
             price: self.price as i64,
@@ -94,24 +94,24 @@ impl OrderUpdate {
 
 #[derive(Clone)]
 pub struct OrderFill {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    pool_id: String,
-    maker_order_id: u128,
-    taker_order_id: u128,
-    maker_client_order_id: u64,
-    taker_client_order_id: u64,
-    price: u64,
-    taker_is_bid: bool,
-    taker_fee: u64,
-    maker_fee: u64,
-    base_quantity: u64,
-    quote_quantity: u64,
-    maker_balance_manager_id: String,
-    taker_balance_manager_id: String,
-    onchain_timestamp: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) pool_id: String,
+    pub(crate) maker_order_id: u128,
+    pub(crate) taker_order_id: u128,
+    pub(crate) maker_client_order_id: u64,
+    pub(crate) taker_client_order_id: u64,
+    pub(crate) price: u64,
+    pub(crate) taker_is_bid: bool,
+    pub(crate) taker_fee: u64,
+    pub(crate) maker_fee: u64,
+    pub(crate) base_quantity: u64,
+    pub(crate) quote_quantity: u64,
+    pub(crate) maker_balance_manager_id: String,
+    pub(crate) taker_balance_manager_id: String,
+    pub(crate) onchain_timestamp: u64,
 }
 
 impl OrderFill {
@@ -122,8 +122,8 @@ impl OrderFill {
             checkpoint: self.checkpoint as i64,
             package: self.package.clone(),
             pool_id: self.pool_id.clone(),
-            maker_order_id: BigDecimal::from(self.maker_order_id),
-            taker_order_id: BigDecimal::from(self.taker_order_id),
+            maker_order_id: BigDecimal::from(self.maker_order_id).to_string(),
+            taker_order_id: BigDecimal::from(self.taker_order_id).to_string(),
             maker_client_order_id: self.maker_client_order_id as i64,
             taker_client_order_id: self.taker_client_order_id as i64,
             price: self.price as i64,
@@ -141,14 +141,14 @@ impl OrderFill {
 
 #[derive(Clone)]
 pub struct Flashloan {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    borrow: bool,
-    pool_id: String,
-    borrow_quantity: u64,
-    type_name: String,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) borrow: bool,
+    pub(crate) pool_id: String,
+    pub(crate) borrow_quantity: u64,
+    pub(crate) type_name: String,
 }
 
 impl Flashloan {
@@ -168,13 +168,13 @@ impl Flashloan {
 
 #[derive(Clone)]
 pub struct PoolPrice {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    target_pool: String,
-    reference_pool: String,
-    conversion_rate: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) target_pool: String,
+    pub(crate) reference_pool: String,
+    pub(crate) conversion_rate: u64,
 }
 
 impl PoolPrice {
@@ -193,14 +193,14 @@ impl PoolPrice {
 
 #[derive(Clone)]
 pub struct Balances {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    balance_manager_id: String,
-    asset: String,
-    amount: u64,
-    deposit: bool,
+    pub digest: String,
+    pub sender: String,
+    pub checkpoint: u64,
+    pub package: String,
+    pub balance_manager_id: String,
+    pub asset: String,
+    pub amount: u64,
+    pub deposit: bool,
 }
 
 impl Balances {
@@ -220,15 +220,15 @@ impl Balances {
 
 #[derive(Clone)]
 pub struct Proposals {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    balance_manager_id: String,
-    epoch: u64,
-    taker_fee: u64,
-    maker_fee: u64,
-    stake_required: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) balance_manager_id: String,
+    pub(crate) epoch: u64,
+    pub(crate) taker_fee: u64,
+    pub(crate) maker_fee: u64,
+    pub(crate) stake_required: u64,
 }
 
 impl Proposals {
@@ -249,14 +249,14 @@ impl Proposals {
 
 #[derive(Clone)]
 pub struct Rebates {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    pool_id: String,
-    balance_manager_id: String,
-    epoch: u64,
-    claim_amount: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) pool_id: String,
+    pub(crate) balance_manager_id: String,
+    pub(crate) epoch: u64,
+    pub(crate) claim_amount: u64,
 }
 
 impl Rebates {
@@ -276,15 +276,15 @@ impl Rebates {
 
 #[derive(Clone)]
 pub struct Stakes {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    pool_id: String,
-    balance_manager_id: String,
-    epoch: u64,
-    amount: u64,
-    stake: bool,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) pool_id: String,
+    pub(crate) balance_manager_id: String,
+    pub(crate) epoch: u64,
+    pub(crate) amount: u64,
+    pub(crate) stake: bool,
 }
 
 impl Stakes {
@@ -305,14 +305,14 @@ impl Stakes {
 
 #[derive(Clone)]
 pub struct TradeParamsUpdate {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    pool_id: String,
-    taker_fee: u64,
-    maker_fee: u64,
-    stake_required: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) pool_id: String,
+    pub(crate) taker_fee: u64,
+    pub(crate) maker_fee: u64,
+    pub(crate) stake_required: u64,
 }
 
 impl TradeParamsUpdate {
@@ -332,16 +332,16 @@ impl TradeParamsUpdate {
 
 #[derive(Clone)]
 pub struct Votes {
-    digest: String,
-    sender: String,
-    checkpoint: u64,
-    package: String,
-    pool_id: String,
-    balance_manager_id: String,
-    epoch: u64,
-    from_proposal_id: Option<String>,
-    to_proposal_id: String,
-    stake: u64,
+    pub(crate) digest: String,
+    pub(crate) sender: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) package: String,
+    pub(crate) pool_id: String,
+    pub(crate) balance_manager_id: String,
+    pub(crate) epoch: u64,
+    pub(crate) from_proposal_id: Option<String>,
+    pub(crate) to_proposal_id: String,
+    pub(crate) stake: u64,
 }
 
 impl Votes {
@@ -363,12 +363,12 @@ impl Votes {
 
 #[derive(Clone)]
 pub struct SuiTxnError {
-    tx_digest: TransactionDigest,
-    sender: SuiAddress,
-    timestamp_ms: u64,
-    failure_status: String,
-    package: String,
-    cmd_idx: Option<u64>,
+    pub(crate) tx_digest: TransactionDigest,
+    pub(crate) sender: SuiAddress,
+    pub(crate) timestamp_ms: u64,
+    pub(crate) failure_status: String,
+    pub(crate) package: String,
+    pub(crate) cmd_idx: Option<u64>,
 }
 
 impl SuiTxnError {
