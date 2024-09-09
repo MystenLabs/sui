@@ -4,14 +4,13 @@
 #[cfg(feature = "pg_integration")]
 mod ingestion_tests {
     use diesel::ExpressionMethods;
-    use diesel::{QueryDsl, RunQueryDsl};
+    use diesel::QueryDsl;
+    use diesel_async::RunQueryDsl;
     use simulacrum::Simulacrum;
     use std::net::SocketAddr;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_indexer::db::get_pool_connection;
-    use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::{objects::StoredObject, transactions::StoredTransaction};
     use sui_indexer::schema::{objects, transactions};
@@ -25,17 +24,6 @@ mod ingestion_tests {
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tempfile::tempdir;
     use tokio::task::JoinHandle;
-
-    macro_rules! read_only_blocking {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = get_pool_connection($pool)?;
-            pg_pool_conn
-                .build_transaction()
-                .read_only()
-                .run($query)
-                .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-        }};
-    }
 
     /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
     async fn set_up(
@@ -113,12 +101,12 @@ mod ingestion_tests {
         let digest = effects.transaction_digest();
 
         // Read the transaction from the database directly.
-        let db_txn: StoredTransaction = read_only_blocking!(&pg_store.blocking_cp(), |conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.inner().to_vec()))
-                .first::<StoredTransaction>(conn)
-        })
-        .context("Failed reading transaction from PostgresDB")?;
+        let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
+        let db_txn: StoredTransaction = transactions::table
+            .filter(transactions::transaction_digest.eq(digest.inner().to_vec()))
+            .first::<StoredTransaction>(&mut connection)
+            .await
+            .expect("Failed reading transaction from PostgresDB");
 
         // Check that the transaction was stored correctly.
         assert_eq!(db_txn.tx_sequence_number, 1);
@@ -159,12 +147,12 @@ mod ingestion_tests {
         let obj_id = transaction.gas()[0].0;
 
         // Read the transaction from the database directly.
-        let db_object: StoredObject = read_only_blocking!(&pg_store.blocking_cp(), |conn| {
-            objects::table
-                .filter(objects::object_id.eq(obj_id.to_vec()))
-                .first::<StoredObject>(conn)
-        })
-        .context("Failed reading object from PostgresDB")?;
+        let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
+        let db_object: StoredObject = objects::table
+            .filter(objects::object_id.eq(obj_id.to_vec()))
+            .first::<StoredObject>(&mut connection)
+            .await
+            .expect("Failed reading object from PostgresDB");
 
         let obj_type_tag = GasCoin::type_();
 
