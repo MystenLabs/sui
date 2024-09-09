@@ -745,18 +745,18 @@ fn try_create_dynamic_field_info(
             ))
         })?;
     let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-    let (name_value, type_, object_id) =
+    let (move_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
     let name_type = move_object.type_().try_extract_field_name(&type_)?;
-    let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
+    let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
         IndexerError::SerdeError(format!(
             "Failed to serialize dynamic field name {:?}: {e}",
-            name_value
+            move_value
         ))
     })?;
     let name = DynamicFieldName {
         type_: name_type,
-        value: SuiMoveValue::from(name_value).to_json_value(),
+        value: SuiMoveValue::from(move_value).to_json_value(),
     };
     Ok(Some(match type_ {
         DynamicFieldType::DynamicObject => {
