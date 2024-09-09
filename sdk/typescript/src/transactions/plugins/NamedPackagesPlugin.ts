@@ -25,37 +25,36 @@ export type NamedPackagesPluginOptions = {
 	 */
 	pageSize?: number;
 	/**
-	 * Local cache of the resolution plugin. Pass this to pre-populate
-	 * the cache with known packages / types (mainly useful for local or CI testing).
+	 * Local overrides for the resolution plugin. Pass this to pre-populate
+	 * the cache with known packages / types (especially useful for local or CI testing).
 	 *
-	 * Expected format is:
-	 * 1. For packages: `app@org` -> `0x1234`
-	 * 2. For types: `app@org::type::Type` -> `0x1234::type::Type`
+	 * 	Expected format example:
+	 *  {
+	 * 		packages: {
+	 * 			'std@framework': '0x1234',
+	 * 		},
+	 * 		types: {
+	 * 			'std@framework::string::String': '0x1234::string::String',
+	 * 		},
+	 * 	}
 	 *
 	 */
 	overrides?: NamedPackagesPluginCache;
 };
 
 /**
+ * @experimental This plugin is in experimental phase and there might be breaking changes in the future
+ *
  * Adds named resolution so that you can use .move names in your transactions.
  * e.g. `app@org::type::Type` will be resolved to `0x1234::type::Type`.
  * This plugin will resolve all names & types in the transaction block.
  *
  * To install this plugin globally in your app, use:
  * ```
- * Transaction.registerGlobalSerializationPlugin(namedPackagesPlugin({ suiGraphQLClient }));
+ * Transaction.registerGlobalSerializationPlugin("namedPackagesPlugin", namedPackagesPlugin({ suiGraphQLClient }));
  * ```
  *
- * You can also define `cache` to pre-populate name resolutions locally (removes the GraphQL request).
- *
- * Example:
- * const cache = {
- *  'std@framework': '0x1',
- * 	'std@framework::string::String': '0x1::string::String',
- * }
- *	```
- * 	Transaction.registerGlobalSerializationPlugin(namedPackagesPlugin({ suiGraphQLClient, cache }));
- * 	```
+ * You can also define `overrides` to pre-populate name resolutions locally (removes the GraphQL request).
  */
 export const namedPackagesPlugin = ({
 	suiGraphQLClient,

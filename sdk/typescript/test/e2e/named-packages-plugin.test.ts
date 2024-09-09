@@ -12,7 +12,7 @@ Transaction.registerGlobalSerializationPlugin(
 		suiGraphQLClient: new SuiGraphQLClient({
 			url: 'http://127.0.0.1:9125',
 		}),
-		cache: {
+		overrides: {
 			packages: {
 				'std@framework': '0x1',
 				'std@framework/v1': '0x1',
