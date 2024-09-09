@@ -55,7 +55,8 @@ impl Pruner {
             // Not all partitioned tables are epoch-partitioned, so we need to filter them out.
             let table_partitions: HashMap<_, _> = self
                 .partition_manager
-                .get_table_partitions()?
+                .get_table_partitions()
+                .await?
                 .into_iter()
                 .filter(|(table_name, _)| {
                     self.partition_manager
