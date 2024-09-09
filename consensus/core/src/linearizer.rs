@@ -6,12 +6,11 @@ use std::{collections::HashSet, sync::Arc};
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use crate::commit::sort_sub_dag_blocks;
-use crate::leader_schedule::LeaderSchedule;
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{Commit, CommittedSubDag, TrustedCommit},
+    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
+    leader_schedule::LeaderSchedule,
 };
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
@@ -263,10 +262,79 @@ mod tests {
         let commits = linearizer.handle_commit(leaders.clone());
 
         // Write them in DagState
+        dag_state.write().add_scoring_subdags(commits);
+
+        // Now update the leader schedule
+        leader_schedule.update_leader_schedule_v2(&dag_state);
+
+        assert!(
+            leader_schedule.leader_schedule_updated(&dag_state),
+            "Leader schedule should have been updated"
+        );
+
+        // Try to commit now the rest of the 10 leaders
+        let leaders = dag_builder
+            .leader_blocks(11..=20)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
+
+        // Now on the commits only the first one should contain the updated scores, the other should be empty
+        let commits = linearizer.handle_commit(leaders.clone());
+        assert_eq!(commits.len(), 10);
+        let scores = vec![
+            (AuthorityIndex::new_for_test(1), 29),
+            (AuthorityIndex::new_for_test(0), 29),
+            (AuthorityIndex::new_for_test(3), 29),
+            (AuthorityIndex::new_for_test(2), 29),
+        ];
+        assert_eq!(commits[0].reputation_scores_desc, scores);
+
+        for commit in commits.into_iter().skip(1) {
+            assert_eq!(commit.reputation_scores_desc, vec![]);
+        }
+    }
+
+    // TODO: Remove when DistributedVoteScoring is enabled.
+    #[tokio::test]
+    async fn test_handle_commit_with_schedule_update_with_unscored_subdags() {
+        telemetry_subscribers::init_for_testing();
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        const NUM_OF_COMMITS_PER_SCHEDULE: u64 = 10;
+        let leader_schedule = Arc::new(
+            LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
+                .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
+        );
+        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule.clone());
+
+        // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
+        let num_rounds: u32 = 20;
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=num_rounds)
+            .build()
+            .persist_layers(dag_state.clone());
+
+        // Take the first 10 leaders
+        let leaders = dag_builder
+            .leader_blocks(1..=10)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
+
+        // Create some commits
+        let commits = linearizer.handle_commit(leaders.clone());
+
+        // Write them in DagState
         dag_state.write().add_unscored_committed_subdags(commits);
 
         // Now update the leader schedule
-        leader_schedule.update_leader_schedule(&dag_state);
+        leader_schedule.update_leader_schedule_v1(&dag_state);
 
         assert!(
             leader_schedule.leader_schedule_updated(&dag_state),
