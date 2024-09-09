@@ -1290,22 +1290,23 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+    async fn prune_checkpoints_table(&self, cp: u64) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 diesel::delete(
                     checkpoints::table.filter(checkpoints::sequence_number.eq(cp as i64)),
                 )
                 .execute(conn)
+                .await
                 .map_err(IndexerError::from)
                 .context("Failed to prune checkpoints table")?;
 
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     fn prune_epochs_table(&self, epoch: u64) -> Result<(), IndexerError> {
@@ -1919,11 +1920,7 @@ impl IndexerStore for PgIndexerStore {
                 "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
                 cp, epoch, min_prunable_cp
             );
-            self.execute_in_blocking_worker(move |this| this.prune_checkpoints_table(cp))
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("Failed to prune checkpoint {}: {}", cp, e);
-                });
+            self.prune_checkpoints_table(cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.execute_in_blocking_worker(move |this| {
