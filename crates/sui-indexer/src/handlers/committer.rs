@@ -209,7 +209,7 @@ async fn commit_checkpoints<S>(
             .await
             .expect("Failed to get chain identifier")
             .expect("Chain identifier should have been indexed at this point");
-        let _ = state.persist_protocol_configs_and_feature_flags(chain_id);
+        let _ = state.persist_protocol_configs_and_feature_flags(chain_id).await;
     }
 
     let elapsed = guard.stop_and_record();
