@@ -16,7 +16,7 @@ bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
 csv.workspace = true
-diesel = { workspace = true, features = ["postgres", "chrono", "r2d2", "serde_json"] }
+diesel = { workspace = true, features = ["chrono", "serde_json"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 bb8 = "0.8.5"
 futures.workspace = true
