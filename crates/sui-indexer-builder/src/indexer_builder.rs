@@ -479,15 +479,21 @@ pub trait Datasource<T: Send>: Sync + Send {
         if is_live_task {
             // Live task should never exit, except in unit tests
             tracing::error!(task_name, "Live task exiting unexpectedly");
-        } else if last_saved_checkpoint.expect("last_saved_checkpoint is None") < target_checkpoint
-        {
+        } else if let Some(last_saved_checkpoint) = last_saved_checkpoint {
+            if last_saved_checkpoint < target_checkpoint {
+                tracing::error!(
+                    task_name,
+                    last_saved_checkpoint,
+                    "Task exiting before reaching target checkpoint",
+                );
+            } else {
+                tracing::info!(task_name, "Backfill task is done, exiting");
+            }
+        } else {
             tracing::error!(
                 task_name,
-                last_saved_checkpoint,
-                "Task exiting before reaching target checkpoint",
+                "Task exiting unexpectedly with no progress saved"
             );
-        } else {
-            tracing::info!(task_name, "Backfill task is done, exiting");
         }
         join_handle.abort();
         if let Some(m) = &remaining_checkpoints_metric {

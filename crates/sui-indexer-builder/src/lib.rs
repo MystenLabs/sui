@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod indexer_builder;
+pub mod progress;
 
 pub const LIVE_TASK_TARGET_CHECKPOINT: i64 = i64::MAX;
 
