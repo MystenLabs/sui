@@ -39,6 +39,9 @@ use sui_types::{coin::CoinMetadata, event::EventID};
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
 use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
+use crate::models::tx_indices::StoredTxDigest;
+use crate::schema::pruner_cp_watermark;
+use crate::schema::tx_digests;
 use crate::{
     errors::IndexerError,
     models::{
@@ -460,11 +463,18 @@ impl IndexerReader {
             .map(|digest| digest.inner().to_vec())
             .collect::<Vec<_>>();
 
-        transactions::table
-            .filter(transactions::transaction_digest.eq_any(digests))
-            .load::<StoredTransaction>(&mut connection)
+        // There is no index for `transaction_digest` on the `transactions` table, so an initial
+        // roundtrip is needed to map digest to sequence number.
+        let tx_seq_nums = tx_digests::table
+            .filter(tx_digests::tx_digest.eq_any(digests))
+            .load::<StoredTxDigest>(&mut connection)
+            .await?
+            .into_iter()
+            .map(|tx_digest| tx_digest.tx_sequence_number)
+            .collect::<Vec<i64>>();
+
+        self.multi_get_transactions_with_sequence_numbers(tx_seq_nums, None)
             .await
-            .map_err(Into::into)
     }
 
     async fn stored_transaction_to_transaction_block(
@@ -628,11 +638,19 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
+        let tx_range: (i64, i64) = pruner_cp_watermark::dsl::pruner_cp_watermark
+            .select((
+                pruner_cp_watermark::min_tx_sequence_number,
+                pruner_cp_watermark::max_tx_sequence_number,
+            ))
+            .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+            .first::<(i64, i64)>(&mut connection)
+            .await?;
+
         let mut query = transactions::table
-            .filter(transactions::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+            .filter(transactions::checkpoint_sequence_number.between(tx_range.0, tx_range.1))
             .into_boxed();
 
-        // Translate transaction digest cursor to tx sequence number
         if let Some(cursor_tx_seq) = cursor_tx_seq {
             if is_descending {
                 query = query.filter(transactions::tx_sequence_number.lt(cursor_tx_seq));
@@ -666,9 +684,9 @@ impl IndexerReader {
         let mut connection = self.pool.get().await?;
 
         let cursor_tx_seq = if let Some(cursor) = cursor {
-            let tx_seq = transactions::table
-                .select(transactions::tx_sequence_number)
-                .filter(transactions::transaction_digest.eq(cursor.into_inner().to_vec()))
+            let tx_seq = tx_digests::table
+                .select(tx_digests::tx_sequence_number)
+                .filter(tx_digests::tx_digest.eq(cursor.into_inner().to_vec()))
                 .first::<i64>(&mut connection)
                 .await?;
             Some(tx_seq)
@@ -904,8 +922,14 @@ impl IndexerReader {
 
         let mut connection = self.pool.get().await?;
 
+        let tx_seq: i64 = tx_digests::table
+            .select(tx_digests::tx_sequence_number)
+            .filter(tx_digests::tx_digest.eq(digest.into_inner().to_vec()))
+            .first(&mut connection)
+            .await?;
+
         let (timestamp_ms, serialized_events) = transactions::table
-            .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+            .filter(transactions::tx_sequence_number.eq(tx_seq))
             .select((transactions::timestamp_ms, transactions::events))
             .first::<(i64, StoredTransactionEvents)>(&mut connection)
             .await?;
