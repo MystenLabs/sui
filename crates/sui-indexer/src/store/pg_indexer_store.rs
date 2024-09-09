@@ -55,9 +55,9 @@ use crate::schema::{
     tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
+use crate::transactional_blocking_with_retry;
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
-use crate::{read_only_blocking, transactional_blocking_with_retry};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
@@ -132,7 +132,7 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
-        let partition_manager = PgPartitionManager::new(blocking_cp.clone())
+        let partition_manager = PgPartitionManager::new(blocking_cp.clone(), pool.clone())
             .expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
@@ -1242,18 +1242,20 @@ impl PgIndexerStore {
         })
     }
 
-    fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+    async fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let last_epoch_id = epoch_to_commit.last_epoch.as_ref().map(|e| e.epoch);
         // partition_0 has been created, so no need to advance it.
         if let Some(last_epoch_id) = last_epoch_id {
-            let last_db_epoch: Option<StoredEpochInfo> =
-                read_only_blocking!(&self.blocking_cp, |conn| {
-                    epochs::table
-                        .filter(epochs::epoch.eq(last_epoch_id as i64))
-                        .first::<StoredEpochInfo>(conn)
-                        .optional()
-                })
+            let last_db_epoch: Option<StoredEpochInfo> = epochs::table
+                .filter(epochs::epoch.eq(last_epoch_id as i64))
+                .first::<StoredEpochInfo>(&mut connection)
+                .await
+                .optional()
+                .map_err(Into::into)
                 .context("Failed to read last epoch from PostgresDB")?;
             if let Some(last_epoch) = last_db_epoch {
                 let epoch_partition_data =
@@ -1269,11 +1271,9 @@ impl PgIndexerStore {
                         continue;
                     }
                     let guard = self.metrics.advance_epoch_latency.start_timer();
-                    self.partition_manager.advance_epoch(
-                        table.clone(),
-                        last_partition,
-                        &epoch_partition_data,
-                    )?;
+                    self.partition_manager
+                        .advance_epoch(table.clone(), last_partition, &epoch_partition_data)
+                        .await?;
                     let elapsed = guard.stop_and_record();
                     info!(
                         elapsed,
@@ -1937,8 +1937,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.advance_epoch(epoch))
-            .await
+        self.advance_epoch(epoch).await
     }
 
     async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError> {
