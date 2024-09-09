@@ -122,8 +122,8 @@ impl PgIndexerStore {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
-        let partition_manager = PgPartitionManager::new(blocking_cp.clone(), pool.clone())
-            .expect("Failed to initialize partition manager");
+        let partition_manager =
+            PgPartitionManager::new(pool.clone()).expect("Failed to initialize partition manager");
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
