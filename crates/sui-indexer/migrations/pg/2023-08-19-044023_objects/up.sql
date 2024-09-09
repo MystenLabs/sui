@@ -102,5 +102,6 @@ CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (ch
 CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id, object_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_snapshot_coin_owner ON objects_snapshot (owner_id, coin_type, object_id) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_snapshot_coin_only ON objects_snapshot (coin_type, object_id) WHERE coin_type IS NOT NULL;
-CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type);
+CREATE INDEX objects_snapshot_type_id ON objects_snapshot (object_type_package, object_type_module, object_type_name, object_type, object_id);
+CREATE INDEX objects_snapshot_id_type ON objects_snapshot (object_id, object_type_package, object_type_module, object_type_name, object_type);
 CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id, object_type_package, object_type_module, object_type_name, object_type);
