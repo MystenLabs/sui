@@ -55,7 +55,6 @@ use crate::schema::{
     tx_input_objects, tx_kinds, tx_recipients, tx_senders,
 };
 use crate::store::transaction_with_retry;
-use crate::transactional_blocking_with_retry;
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
@@ -1450,22 +1449,24 @@ impl PgIndexerStore {
         .await
     }
 
-    fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
+    async fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
                 diesel::delete(
                     pruner_cp_watermark::table
                         .filter(pruner_cp_watermark::checkpoint_sequence_number.eq(cp as i64)),
                 )
                 .execute(conn)
+                .await
                 .map_err(IndexerError::from)
                 .context("Failed to prune pruner_cp_watermark table")?;
-                Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     async fn get_network_total_transactions_by_end_of_epoch(
@@ -1932,15 +1933,7 @@ impl IndexerStore for PgIndexerStore {
             );
             self.metrics.last_pruned_transaction.set(max_tx as i64);
 
-            self.execute_in_blocking_worker(move |this| this.prune_cp_tx_table(cp))
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!(
-                        "Failed to prune pruner_cp_watermark table for cp {}: {}",
-                        cp,
-                        e
-                    );
-                });
+            self.prune_cp_tx_table(cp).await?;
             info!("Pruned checkpoint {} of epoch {}", cp, epoch);
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }
