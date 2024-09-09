@@ -8,6 +8,7 @@ import { namedPackagesPlugin, Transaction } from '../../src/transactions';
 import { normalizeSuiAddress } from '../../src/utils';
 
 Transaction.registerGlobalSerializationPlugin(
+	'namedPackagesPlugin',
 	namedPackagesPlugin({
 		suiGraphQLClient: new SuiGraphQLClient({
 			url: 'http://127.0.0.1:9125',
