@@ -9,8 +9,7 @@ use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use sui_indexer_builder::progress::ProgressSavingPolicy;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Command, TransactionDataAPI};
 use tracing::info;
@@ -53,97 +52,6 @@ impl PgDeepbookPersistent {
         Self {
             pool,
             save_progress_policy,
-        }
-    }
-}
-
-// TODO: move this to indexer builder and share with bridge indexer
-#[derive(Debug, Clone)]
-pub enum ProgressSavingPolicy {
-    OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy),
-}
-
-#[derive(Debug, Clone)]
-pub struct OutOfOrderSaveAfterDurationPolicy {
-    duration: tokio::time::Duration,
-    last_save_time: Arc<Mutex<HashMap<String, Option<tokio::time::Instant>>>>,
-    seen: Arc<Mutex<HashMap<String, HashSet<u64>>>>,
-    next_to_fill: Arc<Mutex<HashMap<String, Option<u64>>>>,
-}
-
-impl OutOfOrderSaveAfterDurationPolicy {
-    pub fn new(duration: tokio::time::Duration) -> Self {
-        Self {
-            duration,
-            last_save_time: Arc::new(Mutex::new(HashMap::new())),
-            seen: Arc::new(Mutex::new(HashMap::new())),
-            next_to_fill: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-impl ProgressSavingPolicy {
-    /// If returns Some(progress), it means we should save the progress to DB.
-    fn cache_progress(
-        &mut self,
-        task_name: String,
-        heights: &[u64],
-        start_height: u64,
-        target_height: u64,
-    ) -> Option<u64> {
-        match self {
-            ProgressSavingPolicy::OutOfOrderSaveAfterDuration(policy) => {
-                let mut next_to_fill = {
-                    let mut next_to_fill_guard = policy.next_to_fill.lock().unwrap();
-                    (*next_to_fill_guard
-                        .entry(task_name.clone())
-                        .or_insert(Some(start_height)))
-                    .unwrap()
-                };
-                let old_next_to_fill = next_to_fill;
-                {
-                    let mut seen_guard = policy.seen.lock().unwrap();
-                    let seen = seen_guard
-                        .entry(task_name.clone())
-                        .or_insert(HashSet::new());
-                    seen.extend(heights.iter().cloned());
-                    while seen.remove(&next_to_fill) {
-                        next_to_fill += 1;
-                    }
-                }
-                // We made some progress in filling gaps
-                if old_next_to_fill != next_to_fill {
-                    policy
-                        .next_to_fill
-                        .lock()
-                        .unwrap()
-                        .insert(task_name.clone(), Some(next_to_fill));
-                }
-
-                let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
-                let last_save_time = last_save_time_guard
-                    .entry(task_name.clone())
-                    .or_insert(None);
-
-                // If we have reached the target height, we always save
-                if next_to_fill > target_height {
-                    *last_save_time = Some(tokio::time::Instant::now());
-                    return Some(next_to_fill - 1);
-                }
-                // Regardless of whether we made progress, we should save if we have waited long enough
-                if let Some(v) = last_save_time {
-                    if v.elapsed() >= policy.duration && next_to_fill > start_height {
-                        *last_save_time = Some(tokio::time::Instant::now());
-                        Some(next_to_fill - 1)
-                    } else {
-                        None
-                    }
-                } else {
-                    // update `last_save_time` to now but don't actually save progress
-                    *last_save_time = Some(tokio::time::Instant::now());
-                    None
-                }
-            }
         }
     }
 }

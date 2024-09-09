@@ -5,6 +5,8 @@ use anyhow::Result;
 use clap::*;
 use mysten_metrics::start_prometheus_server;
 use std::env;
+use std::net::IpAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::Config;
@@ -13,11 +15,10 @@ use sui_deepbook_indexer::config::IndexerConfig;
 use sui_deepbook_indexer::metrics::DeepBookIndexerMetrics;
 use sui_deepbook_indexer::postgres_manager::get_connection_pool;
 use sui_deepbook_indexer::sui_datasource::SuiCheckpointDatasource;
-use sui_deepbook_indexer::sui_deepbook_indexer::{
-    OutOfOrderSaveAfterDurationPolicy, PgDeepbookPersistent, ProgressSavingPolicy,
-    SuiDeepBookDataMapper,
-};
+use sui_deepbook_indexer::sui_deepbook_indexer::PgDeepbookPersistent;
+use sui_deepbook_indexer::sui_deepbook_indexer::SuiDeepBookDataMapper;
 use sui_indexer_builder::indexer_builder::IndexerBuilder;
+use sui_indexer_builder::progress::{OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy};
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectID;
 use tracing::info;
@@ -48,19 +49,13 @@ async fn main() -> Result<()> {
     let config = IndexerConfig::load(&config_path)?;
 
     // Init metrics server
-    let registry_service = start_prometheus_server(
-        format!("{}:{}", config.metric_url, config.metric_port,)
-            .parse()
-            .unwrap_or_else(|err| panic!("Failed to parse metric address: {}", err)),
-    );
+    let metrics_address =
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.metric_port);
+    let registry_service = start_prometheus_server(metrics_address);
     let registry = registry_service.default_registry();
-
     mysten_metrics::init_metrics(&registry);
+    info!("Metrics server started at port {}", config.metric_port);
 
-    info!(
-        "Metrics server started at {}::{}",
-        config.metric_url, config.metric_port
-    );
     let indexer_meterics = DeepBookIndexerMetrics::new(&registry);
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
 

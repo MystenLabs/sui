@@ -15,7 +15,6 @@ pub struct IndexerConfig {
     pub deepbook_package_id: String,
     pub deepbook_genesis_checkpoint: u64,
     pub concurrency: u64,
-    pub metric_url: String,
     pub metric_port: u16,
     pub resume_from_checkpoint: Option<u64>,
 }
