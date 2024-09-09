@@ -6,6 +6,7 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use tracing::debug;
 
+use crate::operations::Operations;
 use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
     TransactionIdentifier,
@@ -57,7 +58,7 @@ pub async fn transaction(
         .await?;
     let hash = response.digest;
 
-    let operations = response.try_into()?;
+    let operations = Operations::try_from_response(response, &context.coin_metadata_cache).await?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

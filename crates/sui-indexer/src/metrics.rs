@@ -774,7 +774,7 @@ impl IndexerMetrics {
 
 pub fn spawn_connection_pool_metric_collector(
     metrics: IndexerMetrics,
-    connection_pool: crate::db::ConnectionPool,
+    connection_pool: crate::database::ConnectionPool,
 ) {
     tokio::spawn(async move {
         loop {

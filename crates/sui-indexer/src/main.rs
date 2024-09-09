@@ -4,9 +4,7 @@
 use clap::Parser;
 use sui_indexer::config::Command;
 use sui_indexer::database::ConnectionPool;
-use sui_indexer::db::{
-    check_db_migration_consistency, new_connection_pool, reset_database, run_migrations,
-};
+use sui_indexer::db::{check_db_migration_consistency, reset_database, run_migrations};
 use sui_indexer::indexer::Indexer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
@@ -30,14 +28,12 @@ async fn main() -> anyhow::Result<()> {
     mysten_metrics::init_metrics(&registry);
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let connection_pool =
-        new_connection_pool(opts.database_url.as_str(), &opts.connection_pool_config)?;
     let pool = ConnectionPool::new(
         opts.database_url.clone(),
         opts.connection_pool_config.clone(),
     )
     .await?;
-    spawn_connection_pool_metric_collector(indexer_metrics.clone(), connection_pool.clone());
+    spawn_connection_pool_metric_collector(indexer_metrics.clone(), pool.clone());
 
     match opts.command {
         Command::Indexer {
@@ -49,12 +45,7 @@ async fn main() -> anyhow::Result<()> {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
 
-            let store = PgIndexerStore::new(
-                connection_pool,
-                pool,
-                restore_config,
-                indexer_metrics.clone(),
-            );
+            let store = PgIndexerStore::new(pool, restore_config, indexer_metrics.clone());
 
             Indexer::start_writer_with_config(
                 &ingestion_config,
