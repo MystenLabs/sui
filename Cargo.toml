@@ -238,7 +238,10 @@ overflow-checks = true
 opt-level = 1
 
 [workspace.lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)', 'cfg(fail_points)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(msim)',
+    'cfg(fail_points)',
+] }
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
@@ -347,7 +350,12 @@ http-body = "1"
 humantime = "2.1.0"
 hyper = "1"
 hyper-util = "0.1.6"
-hyper-rustls = { version = "0.27", default-features = false, features = ["webpki-roots", "http2", "ring", "tls12"] }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+    "webpki-roots",
+    "http2",
+    "ring",
+    "tls12",
+] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
@@ -408,7 +416,7 @@ proptest-derive = "0.3.0"
 prost = "0.13"
 prost-build = "0.13"
 protobuf = { version = "2.28", features = ["with-bytes"] }
-quinn-proto = "0.11.6"
+quinn-proto = "0.11.7"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
@@ -431,7 +439,11 @@ rusoto_kms = { version = "0.48.0", default-features = false, features = [
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "tls12",
+    "ring",
+] }
 rustls-pemfile = "2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -472,7 +484,10 @@ thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
 tokio = "1.36.0"
 tokio-retry = "0.3"
-tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = [
+    "tls12",
+    "ring",
+] }
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
@@ -558,7 +573,9 @@ move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", features = ["experimental"] }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", features = [
+    "experimental",
+] }
 passkey-types = { version = "0.2.0" }
 passkey-client = { version = "0.2.0" }
 passkey-authenticator = { version = "0.2.0" }
@@ -572,7 +589,11 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 
 # core-types with json format for REST api
-sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bd233b6879b917fb95e17f21927c198e7a60c924", features = ["hash", "serde", "schemars"] }
+sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "bd233b6879b917fb95e17f21927c198e7a60c924", features = [
+    "hash",
+    "serde",
+    "schemars",
+] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
