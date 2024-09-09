@@ -101,7 +101,9 @@ impl Indexer {
         // Otherwise, we would do the persisting in `commit_checkpoint` while the first cp is
         // being indexed.
         if let Some(chain_id) = IndexerStore::get_chain_identifier(&store).await? {
-            store.persist_protocol_configs_and_feature_flags(chain_id).await?;
+            store
+                .persist_protocol_configs_and_feature_flags(chain_id)
+                .await?;
         }
 
         let cancel_clone = cancel.clone();
