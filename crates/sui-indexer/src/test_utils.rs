@@ -9,10 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 
-use crate::config::IngestionConfig;
-use crate::config::PruningOptions;
-use crate::config::RestoreConfig;
-use crate::config::SnapshotLagConfig;
+use crate::config::{IngestionConfig, PruningOptions, SnapshotLagConfig, UploadOptions};
 use crate::database::Connection;
 use crate::database::ConnectionPool;
 use crate::db::ConnectionPoolConfig;
@@ -102,8 +99,11 @@ pub async fn start_test_indexer_impl(
     let pool = ConnectionPool::new(db_url.parse().unwrap(), pool_config)
         .await
         .unwrap();
-    let restore_config = RestoreConfig::default();
-    let store = PgIndexerStore::new(pool.clone(), restore_config, indexer_metrics.clone());
+    let store = PgIndexerStore::new(
+        pool.clone(),
+        UploadOptions::default(),
+        indexer_metrics.clone(),
+    );
 
     let handle = match reader_writer_config {
         ReaderWriterConfig::Reader {
