@@ -57,7 +57,8 @@ pub struct AllowedPeer {
 /// Handlers also use this data in an Extractor extension to check incoming clients on the http api against known keys.
 #[derive(Debug, Clone)]
 pub struct SuiNodeProvider {
-    nodes: AllowedPeers,
+    sui_nodes: AllowedPeers,
+    bridge_nodes: AllowedPeers,
     static_nodes: AllowedPeers,
     rpc_url: String,
     rpc_poll_interval: Duration,
@@ -66,7 +67,8 @@ pub struct SuiNodeProvider {
 impl Allower for SuiNodeProvider {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
         self.static_nodes.read().unwrap().contains_key(key)
-            || self.nodes.read().unwrap().contains_key(key)
+            || self.sui_nodes.read().unwrap().contains_key(key)
+            || self.bridge_nodes.read().unwrap().contains_key(key)
     }
 }
 
@@ -82,9 +84,11 @@ impl SuiNodeProvider {
             .map(|v| (v.public_key.clone(), v))
             .collect();
         let static_nodes = Arc::new(RwLock::new(static_nodes));
-        let nodes = Arc::new(RwLock::new(HashMap::new()));
+        let sui_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let bridge_nodes = Arc::new(RwLock::new(HashMap::new()));
         Self {
-            nodes,
+            sui_nodes,
+            bridge_nodes,
             static_nodes,
             rpc_url,
             rpc_poll_interval,
@@ -101,8 +105,15 @@ impl SuiNodeProvider {
                 public_key: v.public_key.to_owned(),
             });
         }
-        // check dynamic nodes
-        if let Some(v) = self.nodes.read().unwrap().get(key) {
+        // check sui validators
+        if let Some(v) = self.sui_nodes.read().unwrap().get(key) {
+            return Some(AllowedPeer {
+                name: v.name.to_owned(),
+                public_key: v.public_key.to_owned(),
+            });
+        }
+        // check bridge validators
+        if let Some(v) = self.bridge_nodes.read().unwrap().get(key) {
             return Some(AllowedPeer {
                 name: v.name.to_owned(),
                 public_key: v.public_key.to_owned(),
@@ -110,14 +121,10 @@ impl SuiNodeProvider {
         }
         None
     }
-    /// Get a reference to the inner service
-    pub fn get_ref(&self) -> &AllowedPeers {
-        &self.nodes
-    }
 
-    /// Get a mutable reference to the inner service
-    pub fn get_mut(&mut self) -> &mut AllowedPeers {
-        &mut self.nodes
+    /// Get a mutable reference to the allowed sui validator map
+    pub fn get_sui_mut(&mut self) -> &mut AllowedPeers {
+        &mut self.sui_nodes
     }
 
     /// get_validators will retrieve known validators
@@ -238,55 +245,65 @@ impl SuiNodeProvider {
         Ok(summary)
     }
 
+    async fn update_sui_validator_set(&self) {
+        match Self::get_validators(self.rpc_url.to_owned()).await {
+            Ok(summary) => {
+                let validators = extract(summary);
+                let mut allow = self.sui_nodes.write().unwrap();
+                allow.clear();
+                allow.extend(validators);
+                info!(
+                    "{} sui validators managed to make it on the allow list",
+                    allow.len()
+                );
+            }
+            Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&["update_peer_count", "failed"])
+                    .inc();
+                error!("unable to refresh peer list: {error}");
+            }
+        };
+    }
+
+    async fn update_bridge_validator_set(&self, metrics_keys: Arc<HashMap<String, String>>) {
+        match Self::get_bridge_validators(self.rpc_url.to_owned()).await {
+            Ok(summary) => {
+                let validators = extract_bridge(summary).await;
+                let mut allow = self.bridge_nodes.write().unwrap();
+                allow.clear();
+                allow.extend(validators);
+                info!(
+                    "{} bridge validators managed to make it on the allow list",
+                    allow.len()
+                );
+            }
+            Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&["update_bridge_peer_count", "failed"])
+                    .inc();
+                error!("unable to refresh sui bridge peer list: {error}");
+            }
+        };
+    }
     /// poll_peer_list will act as a refresh interval for our cache
     pub fn poll_peer_list(&self) {
         info!("Started polling for peers using rpc: {}", self.rpc_url);
 
         let rpc_poll_interval = self.rpc_poll_interval;
-        let rpc_url = self.rpc_url.to_owned();
-        let nodes = self.nodes.clone();
+        let cloned_self = self.clone();
+        let bridge_metrics_keys: Arc<HashMap<String, String>> = Arc::new(HashMap::new());
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(rpc_poll_interval);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 interval.tick().await;
-                let sui_validators_summary = match Self::get_validators(rpc_url.to_owned()).await {
-                    Ok(summary) => summary,
-                    Err(error) => {
-                        JSON_RPC_STATE
-                            .with_label_values(&["update_peer_count", "failed"])
-                            .inc();
-                        error!("unable to refresh peer list: {error}");
-                        continue;
-                    }
-                };
-                let bridge_validators_summary =
-                    match Self::get_bridge_validators(rpc_url.to_owned()).await {
-                        Ok(summary) => summary,
-                        Err(error) => {
-                            JSON_RPC_STATE
-                                .with_label_values(&["update_bridge_peer_count", "failed"])
-                                .inc();
-                            error!("unable to refresh sui bridge peer list: {error}");
-                            continue;
-                        }
-                    };
-                // iff both the `sui_validators` and `bridge_validators` lists are up to date, then clear and update the allow list
-                {
-                    let sui_validators = extract(sui_validators_summary);
-                    let bridge_validators = extract_bridge(bridge_validators_summary).await;
 
-                    let mut allow = nodes.write().unwrap();
-                    allow.clear();
-                    allow.extend(sui_validators);
-                    allow.extend(bridge_validators);
-
-                    info!("{} peers managed to make it on the allow list", allow.len());
-                    JSON_RPC_STATE
-                        .with_label_values(&["update_peer_count", "success"])
-                        .inc_by(allow.len() as f64);
-                }
+                cloned_self.update_sui_validator_set().await;
+                cloned_self
+                    .update_bridge_validator_set(bridge_metrics_keys.clone())
+                    .await;
             }
         });
     }

@@ -141,7 +141,7 @@ mod tests {
         client.get(&server_url).send().await.unwrap_err();
 
         // Insert the client's public key into the allowlist and verify the request is successful
-        allower.get_mut().write().unwrap().insert(
+        allower.get_sui_mut().write().unwrap().insert(
             client_pub_key.to_owned(),
             peers::AllowedPeer {
                 name: "some-node".into(),
