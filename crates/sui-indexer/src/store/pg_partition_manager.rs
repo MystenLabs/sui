@@ -98,16 +98,10 @@ impl PgPartitionManager {
             pool,
             partition_strategies,
         };
-        let tables = manager.get_table_partitions()?;
-        info!(
-            "Found {} tables with partitions : [{:?}]",
-            tables.len(),
-            tables
-        );
         Ok(manager)
     }
 
-    pub fn get_table_partitions(&self) -> Result<BTreeMap<String, (u64, u64)>, IndexerError> {
+    pub async fn get_table_partitions(&self) -> Result<BTreeMap<String, (u64, u64)>, IndexerError> {
         #[derive(QueryableByName, Debug, Clone)]
         struct PartitionedTable {
             #[diesel(sql_type = VarChar)]
@@ -118,19 +112,19 @@ impl PgPartitionManager {
             last_partition: i64,
         }
 
+        let mut connection = self.pool.get().await?;
+
         Ok(
-            read_only_blocking!(&self.cp, |conn| diesel::RunQueryDsl::load(
-                diesel::sql_query(GET_PARTITION_SQL),
-                conn
-            ))?
-            .into_iter()
-            .map(|table: PartitionedTable| {
-                (
-                    table.table_name,
-                    (table.first_partition as u64, table.last_partition as u64),
-                )
-            })
-            .collect(),
+            diesel_async::RunQueryDsl::load(diesel::sql_query(GET_PARTITION_SQL), &mut connection)
+                .await?
+                .into_iter()
+                .map(|table: PartitionedTable| {
+                    (
+                        table.table_name,
+                        (table.first_partition as u64, table.last_partition as u64),
+                    )
+                })
+                .collect(),
         )
     }
 
