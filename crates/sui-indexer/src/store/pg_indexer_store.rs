@@ -78,15 +78,6 @@ macro_rules! chunk {
     }};
 }
 
-macro_rules! prune_tx_or_event_indice_table {
-    ($table:ident, $conn:expr, $min_tx:expr, $max_tx:expr, $context_msg:expr) => {
-        diesel::delete($table::table.filter($table::tx_sequence_number.between($min_tx, $max_tx)))
-            .execute($conn)
-            .map_err(IndexerError::from)
-            .context($context_msg)?;
-    };
-}
-
 // In one DB transaction, the update could be chunked into
 // a few statements, this is the amount of rows to update in one statement
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
@@ -1390,72 +1381,73 @@ impl PgIndexerStore {
         .await
     }
 
-    fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
-        use diesel::RunQueryDsl;
+    async fn prune_tx_indices_table(&self, min_tx: u64, max_tx: u64) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let (min_tx, max_tx) = (min_tx as i64, max_tx as i64);
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                prune_tx_or_event_indice_table!(
-                    tx_senders,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_senders table"
-                );
-                prune_tx_or_event_indice_table!(
-                    tx_recipients,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_recipients table"
-                );
-                prune_tx_or_event_indice_table![
-                    tx_input_objects,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_input_objects table"
-                ];
-                prune_tx_or_event_indice_table![
-                    tx_changed_objects,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_changed_objects table"
-                ];
-                prune_tx_or_event_indice_table![
-                    tx_calls_pkg,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_calls_pkg table"
-                ];
-                prune_tx_or_event_indice_table![
-                    tx_calls_mod,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_calls_mod table"
-                ];
-                prune_tx_or_event_indice_table![
-                    tx_calls_fun,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_calls_fun table"
-                ];
-                prune_tx_or_event_indice_table![
-                    tx_digests,
-                    conn,
-                    min_tx,
-                    max_tx,
-                    "Failed to prune tx_digests table"
-                ];
-                Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::delete(
+                    tx_senders::table
+                        .filter(tx_senders::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_recipients::table
+                        .filter(tx_recipients::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_input_objects::table
+                        .filter(tx_input_objects::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_changed_objects::table
+                        .filter(tx_changed_objects::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_calls_pkg::table
+                        .filter(tx_calls_pkg::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_calls_mod::table
+                        .filter(tx_calls_mod::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_calls_fun::table
+                        .filter(tx_calls_fun::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                diesel::delete(
+                    tx_digests::table
+                        .filter(tx_digests::tx_sequence_number.between(min_tx, max_tx)),
+                )
+                .execute(conn)
+                .await?;
+
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     fn prune_cp_tx_table(&self, cp: u64) -> Result<(), IndexerError> {
@@ -1928,13 +1920,7 @@ impl IndexerStore for PgIndexerStore {
             self.prune_checkpoints_table(cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
-            self.execute_in_blocking_worker(move |this| {
-                this.prune_tx_indices_table(min_tx, max_tx)
-            })
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to prune transactions for cp {}: {}", cp, e);
-            });
+            self.prune_tx_indices_table(min_tx, max_tx).await?;
             info!(
                 "Pruned transactions for checkpoint {} from tx {} to tx {}",
                 cp, min_tx, max_tx
