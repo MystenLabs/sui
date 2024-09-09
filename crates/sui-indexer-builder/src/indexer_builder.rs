@@ -182,6 +182,13 @@ impl<P, D, M> Indexer<P, D, M> {
                             live_task_from_checkpoint,
                         )
                         .await
+                        .tap_ok(|_| {
+                            tracing::info!(
+                                task_name = self.name.as_str(),
+                                "Created live task from {}",
+                                live_task_from_checkpoint,
+                            );
+                        })
                         .tap_err(|e| {
                             tracing::error!(
                                 "Failed to register live task ({}-MAX): {:?}",
@@ -195,14 +202,26 @@ impl<P, D, M> Indexer<P, D, M> {
                     // block generation (e.g. Ethereum), it's possible we will
                     // stay on the same block for a bit.
                     if live_task_from_checkpoint != live_task.start_checkpoint {
+                        let old_checkpoint = live_task.start_checkpoint;
                         live_task.start_checkpoint = live_task_from_checkpoint;
-                        self.storage.update_task(live_task).await.tap_err(|e| {
-                            tracing::error!(
-                                "Failed to update live task to ({}-MAX): {:?}",
-                                live_task_from_checkpoint,
-                                e
-                            );
-                        })?;
+                        self.storage
+                            .update_task(live_task)
+                            .await
+                            .tap_ok(|_| {
+                                tracing::info!(
+                                    task_name = self.name.as_str(),
+                                    "Updated live task starting point from {} to {}",
+                                    old_checkpoint,
+                                    live_task_from_checkpoint,
+                                );
+                            })
+                            .tap_err(|e| {
+                                tracing::error!(
+                                    "Failed to update live task to ({}-MAX): {:?}",
+                                    live_task_from_checkpoint,
+                                    e
+                                );
+                            })?;
                     }
                 }
             }
