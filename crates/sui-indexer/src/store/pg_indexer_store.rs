@@ -59,7 +59,7 @@ use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
-    insert_or_ignore_into, persist_chunk_into_table, read_only_blocking,
+    insert_or_ignore_into, read_only_blocking,
     transactional_blocking_with_retry,
 };
 
@@ -925,6 +925,8 @@ impl PgIndexerStore {
         &self,
         indices: Vec<EventIndex>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_event_indices_chunks
@@ -977,76 +979,56 @@ impl PgIndexerStore {
             },
         );
 
-        // Now persist all the event indices in parallel into their tables.
-        let mut futures = vec![];
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_emit_package::table,
-                event_emit_packages,
-                &this.blocking_cp
-            )
-        }));
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(event_emit_package::table)
+                    .values(&event_emit_packages)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_emit_module::table,
-                event_emit_modules,
-                &this.blocking_cp
-            )
-        }));
+                diesel::insert_into(event_emit_module::table)
+                    .values(&event_emit_modules)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(event_senders::table, event_senders, &this.blocking_cp)
-        }));
+                diesel::insert_into(event_senders::table)
+                    .values(&event_senders)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_struct_package::table,
-                event_struct_packages,
-                &this.blocking_cp
-            )
-        }));
+                diesel::insert_into(event_struct_package::table)
+                    .values(&event_struct_packages)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_struct_module::table,
-                event_struct_modules,
-                &this.blocking_cp
-            )
-        }));
+                diesel::insert_into(event_struct_module::table)
+                    .values(&event_struct_modules)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_struct_name::table,
-                event_struct_names,
-                &this.blocking_cp
-            )
-        }));
+                diesel::insert_into(event_struct_name::table)
+                    .values(&event_struct_names)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures.push(self.spawn_blocking_task(move |this| {
-            persist_chunk_into_table!(
-                event_struct_instantiation::table,
-                event_struct_instantiations,
-                &this.blocking_cp
-            )
-        }));
+                diesel::insert_into(event_struct_instantiation::table)
+                    .values(&event_struct_instantiations)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await?;
 
-        futures::future::join_all(futures)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!("Failed to join event indices futures in a chunk: {}", e);
-                IndexerError::from(e)
-            })?
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed to persist all event indices in a chunk: {:?}",
-                    e
-                ))
-            })?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await?;
+
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} chunked event indices", len);
         Ok(())
