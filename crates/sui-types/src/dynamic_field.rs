@@ -240,7 +240,7 @@ fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
     extract_id_value(id_value)
 }
 
-fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
+pub fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
     // the id struct has a single bytes field
     let id_bytes_value = match id_value {
         MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
