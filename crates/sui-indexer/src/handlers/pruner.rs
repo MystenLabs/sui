@@ -26,7 +26,7 @@ impl Pruner {
         metrics: IndexerMetrics,
     ) -> Result<Self, IndexerError> {
         let blocking_cp = store.blocking_cp();
-        let partition_manager = PgPartitionManager::new(blocking_cp.clone())?;
+        let partition_manager = PgPartitionManager::new(blocking_cp, store.pool())?;
         Ok(Self {
             store,
             partition_manager,
