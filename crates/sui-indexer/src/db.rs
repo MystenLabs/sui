@@ -6,11 +6,9 @@ use crate::errors::IndexerError;
 use clap::Args;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::r2d2::ConnectionManager;
-use diesel::r2d2::{Pool, PooledConnection};
+use diesel::table;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
-use diesel::{table, PgConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use std::time::Duration;
 use tracing::info;
@@ -23,9 +21,6 @@ table! {
 }
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
-
-pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
-pub type PoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 #[derive(Args, Debug, Clone)]
 pub struct ConnectionPoolConfig {
@@ -84,53 +79,6 @@ impl Default for ConnectionPoolConfig {
 pub struct ConnectionConfig {
     pub statement_timeout: Duration,
     pub read_only: bool,
-}
-
-impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionConfig {
-    fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
-        use diesel::RunQueryDsl;
-
-        diesel::sql_query(format!(
-            "SET statement_timeout = {}",
-            self.statement_timeout.as_millis(),
-        ))
-        .execute(conn)
-        .map_err(diesel::r2d2::Error::QueryError)?;
-
-        if self.read_only {
-            diesel::sql_query("SET default_transaction_read_only = 't'")
-                .execute(conn)
-                .map_err(diesel::r2d2::Error::QueryError)?;
-        }
-        Ok(())
-    }
-}
-
-pub fn new_connection_pool(
-    db_url: &str,
-    config: &ConnectionPoolConfig,
-) -> Result<ConnectionPool, IndexerError> {
-    let manager = ConnectionManager::<PgConnection>::new(db_url);
-
-    Pool::builder()
-        .max_size(config.pool_size)
-        .connection_timeout(config.connection_timeout)
-        .connection_customizer(Box::new(config.connection_config()))
-        .build(manager)
-        .map_err(|e| {
-            IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool for {db_url} with error: {e:?}"
-            ))
-        })
-}
-
-pub fn get_pool_connection(pool: &ConnectionPool) -> Result<PoolConnection, IndexerError> {
-    pool.get().map_err(|e| {
-        IndexerError::PgPoolConnectionError(format!(
-            "Failed to get connection from PG connection pool with error: {:?}",
-            e
-        ))
-    })
 }
 
 /// Checks that the local migration scripts is a prefix of the records in the database.
