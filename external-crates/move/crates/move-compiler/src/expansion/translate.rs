@@ -713,12 +713,11 @@ pub(super) fn make_address(
     loc: Loc,
     value: NumericalAddress,
 ) -> Address {
-    Address::new(
-        name,
-        loc,
-        value,
-        context.address_conflicts.contains(&name.value),
-    )
+    Address::Numerical {
+        name: Some(name),
+        value: sp(loc, value),
+        name_conflict: context.address_conflicts.contains(&name.value),
+    }
 }
 
 pub(super) fn module_ident(

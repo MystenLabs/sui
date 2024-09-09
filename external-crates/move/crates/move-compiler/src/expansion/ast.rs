@@ -637,14 +637,6 @@ impl UseFuns {
 }
 
 impl Address {
-    pub fn new(name: Name, loc: Loc, address: NumericalAddress, name_conflict: bool) -> Self {
-        Self::Numerical {
-            name: Some(name),
-            value: sp(loc, address),
-            name_conflict,
-        }
-    }
-
     pub const fn anonymous(loc: Loc, address: NumericalAddress) -> Self {
         Self::Numerical {
             name: None,

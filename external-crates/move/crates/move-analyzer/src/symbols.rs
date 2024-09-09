@@ -2103,7 +2103,11 @@ pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap)
             // set `name_conflict` to `true` to force displaying (addr==pkg_name) so that the string
             // representing map key is consistent with what's generated for expansion ModuleIdent in
             // `expansion_mod_ident_to_map_key`
-            Some(addr) => E::Address::new(name, loc, addr, /* name_conflict */ true),
+            Some(addr) => E::Address::Numerical {
+                name: Some(name),
+                value: sp(loc, addr),
+                name_conflict: true,
+            },
             None => E::Address::NamedUnassigned(name),
         },
     }
