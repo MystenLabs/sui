@@ -61,7 +61,13 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
 
             let incidents = fetch_incidents(*limit, start_time, current_time).await?;
             if *interactive {
-                review_recent_incidents(incidents).await?
+                review_recent_incidents(
+                    incidents
+                        .into_iter()
+                        .filter(|i| i.priority.is_some() || i.slack_channel.is_some())
+                        .collect::<Vec<_>>(),
+                )
+                .await?
             } else {
                 print_recent_incidents(incidents, *long, *with_priority).await?
             }
