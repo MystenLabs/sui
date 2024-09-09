@@ -1,17 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(dead_code)] // TODO: remove in next PR where integration of ProgressSavingPolicy is done
+
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
 use diesel::{Connection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use diesel::{ExpressionMethods, TextExpressionMethods};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Command, TransactionDataAPI};
 use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
@@ -39,11 +43,148 @@ use crate::{
 #[derive(Clone)]
 pub struct PgDeepbookPersistent {
     pool: PgPool,
+    save_progress_policy: ProgressSavingPolicy,
+    indexer_metrics: DeepBookIndexerMetrics,
 }
 
 impl PgDeepbookPersistent {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(
+        pool: PgPool,
+        save_progress_policy: ProgressSavingPolicy,
+        indexer_metrics: DeepBookIndexerMetrics,
+    ) -> Self {
+        Self {
+            pool,
+            save_progress_policy,
+            indexer_metrics,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ProgressSavingPolicy {
+    SaveAfterDuration(SaveAfterDurationPolicy),
+    OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy),
+}
+
+#[derive(Debug, Clone)]
+pub struct SaveAfterDurationPolicy {
+    duration: tokio::time::Duration,
+    last_save_time: Arc<Mutex<HashMap<String, Option<tokio::time::Instant>>>>,
+}
+
+impl SaveAfterDurationPolicy {
+    pub fn new(duration: tokio::time::Duration) -> Self {
+        Self {
+            duration,
+            last_save_time: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OutOfOrderSaveAfterDurationPolicy {
+    duration: tokio::time::Duration,
+    last_save_time: Arc<Mutex<HashMap<String, Option<tokio::time::Instant>>>>,
+    seen: Arc<Mutex<HashMap<String, HashSet<u64>>>>,
+    next_to_fill: Arc<Mutex<HashMap<String, Option<u64>>>>,
+}
+
+impl OutOfOrderSaveAfterDurationPolicy {
+    pub fn new(duration: tokio::time::Duration) -> Self {
+        Self {
+            duration,
+            last_save_time: Arc::new(Mutex::new(HashMap::new())),
+            seen: Arc::new(Mutex::new(HashMap::new())),
+            next_to_fill: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+impl ProgressSavingPolicy {
+    /// If returns Some(progress), it means we should save the progress to DB.
+    fn cache_progress(
+        &mut self,
+        task_name: String,
+        heights: &[u64],
+        start_height: u64,
+        target_height: u64,
+    ) -> Option<u64> {
+        match self {
+            ProgressSavingPolicy::SaveAfterDuration(policy) => {
+                let height = *heights.iter().max().unwrap();
+                let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
+                let last_save_time = last_save_time_guard.entry(task_name).or_insert(None);
+                if height >= target_height {
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    return Some(height);
+                }
+                if let Some(v) = last_save_time {
+                    if v.elapsed() >= policy.duration {
+                        *last_save_time = Some(tokio::time::Instant::now());
+                        Some(height)
+                    } else {
+                        None
+                    }
+                } else {
+                    // update `last_save_time` to now but don't actually save progress
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    None
+                }
+            }
+            ProgressSavingPolicy::OutOfOrderSaveAfterDuration(policy) => {
+                let mut next_to_fill = {
+                    let mut next_to_fill_guard = policy.next_to_fill.lock().unwrap();
+                    (*next_to_fill_guard
+                        .entry(task_name.clone())
+                        .or_insert(Some(start_height)))
+                    .unwrap()
+                };
+                let old_next_to_fill = next_to_fill;
+                {
+                    let mut seen_guard = policy.seen.lock().unwrap();
+                    let seen = seen_guard
+                        .entry(task_name.clone())
+                        .or_insert(HashSet::new());
+                    seen.extend(heights.iter().cloned());
+                    while seen.remove(&next_to_fill) {
+                        next_to_fill += 1;
+                    }
+                }
+                // We made some progress in filling gaps
+                if old_next_to_fill != next_to_fill {
+                    policy
+                        .next_to_fill
+                        .lock()
+                        .unwrap()
+                        .insert(task_name.clone(), Some(next_to_fill));
+                }
+
+                let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
+                let last_save_time = last_save_time_guard
+                    .entry(task_name.clone())
+                    .or_insert(None);
+
+                // If we have reached the target height, we always save
+                if next_to_fill > target_height {
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    return Some(next_to_fill - 1);
+                }
+                // Regardless of whether we made progress, we should save if we have waited long enough
+                if let Some(v) = last_save_time {
+                    if v.elapsed() >= policy.duration && next_to_fill > start_height {
+                        *last_save_time = Some(tokio::time::Instant::now());
+                        Some(next_to_fill - 1)
+                    } else {
+                        None
+                    }
+                } else {
+                    // update `last_save_time` to now but don't actually save progress
+                    *last_save_time = Some(tokio::time::Instant::now());
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -147,29 +288,42 @@ impl IndexerProgressStore for PgDeepbookPersistent {
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
-        let mut conn = self.pool.get()?;
-        diesel::insert_into(schema::progress_store::table)
-            .values(&models::ProgressStore {
-                task_name,
-                checkpoint: checkpoint_number as i64,
-                // Target checkpoint and timestamp will only be written for new entries
-                target_checkpoint: i64::MAX,
-                // Timestamp is defaulted to current time in DB if None
-                timestamp: None,
-            })
-            .on_conflict(dsl::task_name)
-            .do_update()
-            .set((
-                columns::checkpoint.eq(checkpoint_number as i64),
-                columns::timestamp.eq(now),
-            ))
-            .execute(&mut conn)?;
-        Ok(())
+        checkpoint_numbers: &[u64],
+        start_checkpoint_number: u64,
+        target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        if checkpoint_numbers.is_empty() {
+            return Ok(None);
+        }
+
+        if let Some(checkpoint_to_save) = self.save_progress_policy.cache_progress(
+            task_name.clone(),
+            checkpoint_numbers,
+            start_checkpoint_number,
+            target_checkpoint_number,
+        ) {
+            let mut conn = self.pool.get()?;
+            diesel::insert_into(schema::progress_store::table)
+                .values(&models::ProgressStore {
+                    task_name,
+                    checkpoint: checkpoint_to_save as i64,
+                    // Target checkpoint and timestamp will only be written for new entries
+                    target_checkpoint: i64::MAX,
+                    // Timestamp is defaulted to current time in DB if None
+                    timestamp: None,
+                })
+                .on_conflict(dsl::task_name)
+                .do_update()
+                .set((
+                    columns::checkpoint.eq(checkpoint_to_save as i64),
+                    columns::timestamp.eq(now),
+                ))
+                .execute(&mut conn)?;
+        }
+        Ok(None)
     }
 
-    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Vec<Task>, anyhow::Error> {
+    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, anyhow::Error> {
         let mut conn = self.pool.get()?;
         // get all unfinished tasks
         let cp: Vec<models::ProgressStore> = dsl::progress_store
@@ -178,7 +332,8 @@ impl IndexerProgressStore for PgDeepbookPersistent {
             .filter(columns::checkpoint.lt(columns::target_checkpoint))
             .order_by(columns::target_checkpoint.desc())
             .load(&mut conn)?;
-        Ok(cp.into_iter().map(|d| d.into()).collect())
+        let tasks = cp.into_iter().map(|d| d.into()).collect();
+        Ok(Tasks::new(tasks)?)
     }
 
     async fn get_largest_backfill_task_target_checkpoint(
@@ -216,11 +371,30 @@ impl IndexerProgressStore for PgDeepbookPersistent {
         Ok(())
     }
 
+    /// Register a live task to progress store with a start checkpoint.
+    async fn register_live_task(
+        &mut self,
+        task_name: String,
+        start_checkpoint: u64,
+    ) -> Result<(), anyhow::Error> {
+        let mut conn = self.pool.get()?;
+        diesel::insert_into(schema::progress_store::table)
+            .values(models::ProgressStore {
+                task_name,
+                checkpoint: start_checkpoint as i64,
+                target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT,
+                // Timestamp is defaulted to current time in DB if None
+                timestamp: None,
+            })
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
     async fn update_task(&mut self, task: Task) -> Result<(), anyhow::Error> {
         let mut conn = self.pool.get()?;
         diesel::update(dsl::progress_store.filter(columns::task_name.eq(task.task_name)))
             .set((
-                columns::checkpoint.eq(task.checkpoint as i64),
+                columns::checkpoint.eq(task.start_checkpoint as i64),
                 columns::target_checkpoint.eq(task.target_checkpoint as i64),
                 columns::timestamp.eq(now),
             ))

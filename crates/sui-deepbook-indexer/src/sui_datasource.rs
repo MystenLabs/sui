@@ -12,6 +12,7 @@ use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
 use sui_indexer_builder::indexer_builder::{DataSender, Datasource};
+use sui_indexer_builder::Task;
 use sui_sdk::SuiClient;
 use sui_types::base_types::TransactionDigest;
 use sui_types::full_checkpoint_content::CheckpointData as SuiCheckpointData;
@@ -58,14 +59,13 @@ impl SuiCheckpointDatasource {
 impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<CheckpointTxnData>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let (exit_sender, exit_receiver) = oneshot::channel();
         let progress_store = PerTaskInMemProgressStore {
-            current_checkpoint: starting_checkpoint,
-            exit_checkpoint: target_checkpoint,
+            current_checkpoint: task.start_checkpoint,
+            exit_checkpoint: task.target_checkpoint,
             exit_sender: Some(exit_sender),
         };
         let mut executor = IndexerExecutor::new(progress_store, 1, self.metrics.clone());
@@ -110,10 +110,6 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
 
     fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
         &self.indexer_metrics.tasks_processed_checkpoints
-    }
-
-    fn get_live_task_checkpoint_metric(&self) -> &IntGaugeVec {
-        &self.indexer_metrics.live_task_current_checkpoint
     }
 }
 

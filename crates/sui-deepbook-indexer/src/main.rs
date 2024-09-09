@@ -13,7 +13,10 @@ use sui_deepbook_indexer::config::IndexerConfig;
 use sui_deepbook_indexer::metrics::DeepBookIndexerMetrics;
 use sui_deepbook_indexer::postgres_manager::get_connection_pool;
 use sui_deepbook_indexer::sui_datasource::SuiCheckpointDatasource;
-use sui_deepbook_indexer::sui_deepbook_indexer::{PgDeepbookPersistent, SuiDeepBookDataMapper};
+use sui_deepbook_indexer::sui_deepbook_indexer::{
+    OutOfOrderSaveAfterDurationPolicy, PgDeepbookPersistent, ProgressSavingPolicy,
+    SuiDeepBookDataMapper,
+};
 use sui_indexer_builder::indexer_builder::IndexerBuilder;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectID;
@@ -62,7 +65,13 @@ async fn main() -> Result<()> {
     let ingestion_metrics = DataIngestionMetrics::new(&registry);
 
     let db_url = config.db_url.clone();
-    let datastore = PgDeepbookPersistent::new(get_connection_pool(db_url.clone()));
+    let datastore = PgDeepbookPersistent::new(
+        get_connection_pool(db_url.clone()),
+        ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
+            tokio::time::Duration::from_secs(30),
+        )),
+        indexer_meterics.clone(),
+    );
 
     let sui_client = Arc::new(
         SuiClientBuilder::default()

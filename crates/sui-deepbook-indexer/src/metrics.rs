@@ -11,7 +11,7 @@ pub struct DeepBookIndexerMetrics {
     pub(crate) total_deepbook_transactions: IntCounter,
     pub(crate) tasks_remaining_checkpoints: IntGaugeVec,
     pub(crate) tasks_processed_checkpoints: IntCounterVec,
-    pub(crate) live_task_current_checkpoint: IntGaugeVec,
+    pub(crate) _live_task_current_checkpoint: IntGaugeVec,
 }
 
 impl DeepBookIndexerMetrics {
@@ -37,7 +37,7 @@ impl DeepBookIndexerMetrics {
                 registry,
             )
             .unwrap(),
-            live_task_current_checkpoint: register_int_gauge_vec_with_registry!(
+            _live_task_current_checkpoint: register_int_gauge_vec_with_registry!(
                 "bridge_indexer_live_task_current_checkpoint",
                 "Current checkpoint of live task",
                 &["task_name"],
