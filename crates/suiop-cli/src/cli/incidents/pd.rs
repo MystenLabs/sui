@@ -21,7 +21,7 @@ use crate::DEBUG_MODE;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Priority {
-    name: String,
+    pub name: String,
     id: String,
     color: String,
 }
