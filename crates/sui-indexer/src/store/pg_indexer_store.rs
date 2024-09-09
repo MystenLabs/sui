@@ -59,7 +59,7 @@ use crate::store::transaction_with_retry;
 use crate::types::EventIndex;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
-    insert_or_ignore_into, on_conflict_do_update, persist_chunk_into_table, read_only_blocking,
+    insert_or_ignore_into, persist_chunk_into_table, read_only_blocking,
     transactional_blocking_with_retry,
 };
 
@@ -356,23 +356,24 @@ impl PgIndexerStore {
         Ok(())
     }
 
-    fn persist_object_mutation_chunk(
+    async fn persist_object_mutation_chunk(
         &self,
         mutated_object_mutation_chunk: Vec<StoredObject>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
         let len = mutated_object_mutation_chunk.len();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                on_conflict_do_update!(
-                    objects::table,
-                    mutated_object_mutation_chunk.clone(),
-                    objects::object_id,
-                    (
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(objects::table)
+                    .values(mutated_object_mutation_chunk.clone())
+                    .on_conflict(objects::object_id)
+                    .do_update()
+                    .set((
                         objects::object_id.eq(excluded(objects::object_id)),
                         objects::object_version.eq(excluded(objects::object_version)),
                         objects::object_digest.eq(excluded(objects::object_digest)),
@@ -388,29 +389,14 @@ impl PgIndexerStore {
                         objects::df_name.eq(excluded(objects::df_name)),
                         objects::df_object_type.eq(excluded(objects::df_object_type)),
                         objects::df_object_id.eq(excluded(objects::df_object_id)),
-                    ),
-                    |excluded: StoredObject| (
-                        objects::object_id.eq(excluded.object_id.clone()),
-                        objects::object_version.eq(excluded.object_version),
-                        objects::object_digest.eq(excluded.object_digest.clone()),
-                        objects::checkpoint_sequence_number.eq(excluded.checkpoint_sequence_number),
-                        objects::owner_type.eq(excluded.owner_type),
-                        objects::owner_id.eq(excluded.owner_id.clone()),
-                        objects::object_type.eq(excluded.object_type.clone()),
-                        objects::serialized_object.eq(excluded.serialized_object.clone()),
-                        objects::coin_type.eq(excluded.coin_type.clone()),
-                        objects::coin_balance.eq(excluded.coin_balance),
-                        objects::df_kind.eq(excluded.df_kind),
-                        objects::df_name.eq(excluded.df_name.clone()),
-                        objects::df_object_type.eq(excluded.df_object_type.clone()),
-                        objects::df_object_id.eq(excluded.df_object_id.clone()),
-                    ),
-                    conn
-                );
+                    ))
+                    .execute(conn)
+                    .await?;
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )
+            }
+            .scope_boxed()
+        })
+        .await
         .tap_ok(|_| {
             let elapsed = guard.stop_and_record();
             info!(elapsed, "Persisted {} chunked objects", len);
@@ -1780,19 +1766,10 @@ impl IndexerStore for PgIndexerStore {
             chunk!(object_deletions, self.config.parallel_objects_chunk_size);
         let mutation_futures = object_mutation_chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_object_mutation_chunk(c)))
+            .map(|c| self.persist_object_mutation_chunk(c))
             .collect::<Vec<_>>();
         futures::future::join_all(mutation_futures)
             .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                tracing::error!(
-                    "Failed to join persist_object_mutation_chunk futures: {}",
-                    e
-                );
-                IndexerError::from(e)
-            })?
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
