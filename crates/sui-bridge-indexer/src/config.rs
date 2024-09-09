@@ -24,6 +24,9 @@ pub struct IndexerConfig {
     pub eth_sui_bridge_contract_address: String,
 
     pub metric_port: u16,
+
+    /// A temporary flag to disable the eth indexer to test mainnet before eth contracts are deployed.
+    pub disable_eth: Option<bool>,
 }
 
 impl sui_config::Config for IndexerConfig {}
