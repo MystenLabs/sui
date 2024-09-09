@@ -691,7 +691,8 @@ impl PgIndexerStore {
         // chain identifier.
         if first_checkpoint.sequence_number == 0 {
             let checkpoint_digest = first_checkpoint.checkpoint_digest.into_inner().to_vec();
-            self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())?;
+            self.persist_protocol_configs_and_feature_flags(checkpoint_digest.clone())
+                .await?;
 
             transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
                 async {
@@ -2291,10 +2292,12 @@ impl IndexerStore for PgIndexerStore {
 
     /// Persist protocol configs and feature flags until the protocol version for the latest epoch
     /// we have stored in the db, inclusive.
-    fn persist_protocol_configs_and_feature_flags(
+    async fn persist_protocol_configs_and_feature_flags(
         &self,
         chain_id: Vec<u8>,
     ) -> Result<(), IndexerError> {
+        use diesel_async::RunQueryDsl;
+
         let chain_id = ChainIdentifier::from(
             CheckpointDigest::try_from(chain_id).expect("Unable to convert chain id"),
         );
@@ -2344,15 +2347,28 @@ impl IndexerStore for PgIndexerStore {
 
         // Now insert all of them into the db.
         // TODO: right now the size of these updates is manageable but later we may consider batching.
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                insert_or_ignore_into!(protocol_configs::table, all_configs.clone(), conn);
-                insert_or_ignore_into!(feature_flags::table, all_flags.clone(), conn);
+        transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
+            async {
+                diesel::insert_into(protocol_configs::table)
+                    .values(all_configs.clone())
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to write to protocol_configs table")?;
+
+                diesel::insert_into(feature_flags::table)
+                    .values(all_flags.clone())
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(IndexerError::from)
+                    .context("Failed to write to feature_flags table")?;
                 Ok::<(), IndexerError>(())
-            },
-            PG_DB_COMMIT_SLEEP_DURATION
-        )?;
+            }
+            .scope_boxed()
+        })
+        .await?;
         Ok(())
     }
 }
