@@ -33,6 +33,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::config::IndexerMode;
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
 use crate::handlers::tx_processor::IndexingPackageBuffer;
@@ -56,6 +57,7 @@ const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
 pub async fn new_handlers(
     state: PgIndexerStore,
+    mode: IndexerMode,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
@@ -78,6 +80,7 @@ pub async fn new_handlers(
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
+        mode,
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,

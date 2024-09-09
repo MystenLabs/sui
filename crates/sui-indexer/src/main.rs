@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     spawn_connection_pool_metric_collector(indexer_metrics.clone(), pool.clone());
+    let mode = opts.mode;
 
     match opts.command {
         Command::Indexer {
@@ -45,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
             // Make sure to run all migrations on startup, and also serve as a compatibility check.
             run_migrations(pool.dedicated_connection().await?).await?;
 
-            let store = PgIndexerStore::new(pool, restore_config, indexer_metrics.clone());
+            let store = PgIndexerStore::new(pool, restore_config, mode, indexer_metrics.clone());
 
             Indexer::start_writer_with_config(
                 &ingestion_config,
@@ -53,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 indexer_metrics,
                 snapshot_config,
                 pruning_options,
+                mode,
                 CancellationToken::new(),
             )
             .await?;
