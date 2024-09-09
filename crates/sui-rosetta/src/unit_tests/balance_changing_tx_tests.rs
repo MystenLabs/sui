@@ -3,6 +3,7 @@
 
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
+use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -26,7 +27,7 @@ use sui_sdk::rpc_types::{
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::GasCoin;
+use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
@@ -629,6 +630,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         total_coin_value: 0,
         gas_price: rgp,
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
+        currency: None,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
     assert_eq!(ops, Operations::try_from(parsed_data)?);
@@ -748,8 +750,10 @@ async fn test_transaction(
             SuiExecutionStatus::Failure { .. }
         ));
     }
-
-    let ops = response.clone().try_into().unwrap();
+    let coin_cache = CoinMetadataCache::new(client.clone());
+    let ops = Operations::try_from_response(response.clone(), &coin_cache)
+        .await
+        .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction
@@ -775,11 +779,15 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
+                    | OperationType::PayCoin
                     | OperationType::StakeReward
                     | OperationType::StakePrinciple
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
-                            *changes.entry(addr.address).or_default() += amount.value
+                            // Todo: amend this method and tests to cover other coin types too (eg. test_publish_and_move_call also mints MY_COIN)
+                            if amount.currency.metadata.coin_type == GAS::type_().to_string() {
+                                *changes.entry(addr.address).or_default() += amount.value
+                            }
                         }
                     }
                     _ => {}

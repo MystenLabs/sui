@@ -16,7 +16,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
@@ -198,7 +198,6 @@ pub async fn preprocess(
     let internal_operation = request.operations.into_internal()?;
     let sender = internal_operation.sender();
     let budget = request.metadata.and_then(|m| m.budget);
-
     Ok(ConstructionPreprocessResponse {
         options: Some(MetadataOptions {
             internal_operation,
@@ -239,6 +238,12 @@ pub async fn metadata(
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let budget = option.budget;
     let sender = option.internal_operation.sender();
+    let currency = match &option.internal_operation {
+        InternalOperation::PayCoin { currency, .. } => Some(currency.clone()),
+        _ => None,
+    };
+    let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
+
     let mut gas_price = context
         .client
         .governance_api()
@@ -252,6 +257,20 @@ pub async fn metadata(
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
             (Some(amount), vec![])
+        }
+        InternalOperation::PayCoin { amounts, .. } => {
+            let amount = amounts.iter().sum::<u64>();
+            let coin_objs: Vec<ObjectRef> = context
+                .client
+                .coin_read_api()
+                .select_coins(sender, coin_type, amount.into(), vec![])
+                .await
+                .ok()
+                .unwrap_or_default()
+                .iter()
+                .map(|coin| coin.object_ref())
+                .collect();
+            (Some(0), coin_objs) // amount is 0 for gas coin
         }
         InternalOperation::Stake { amount, .. } => (*amount, vec![]),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
@@ -313,6 +332,7 @@ pub async fn metadata(
                     gas_price,
                     // MAX BUDGET
                     budget: 50_000_000_000,
+                    currency: currency.clone(),
                 })?;
 
             let dry_run = context
@@ -329,7 +349,7 @@ pub async fn metadata(
         }
     };
 
-    // Try select coins for required amounts
+    // Try select gas coins for required amounts
     let coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
@@ -369,8 +389,9 @@ pub async fn metadata(
             total_coin_value,
             gas_price,
             budget,
+            currency,
         },
-        suggested_fee: vec![Amount::new(budget as i128)],
+        suggested_fee: vec![Amount::new(budget as i128, None)],
     })
 }
 
