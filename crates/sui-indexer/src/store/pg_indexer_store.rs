@@ -26,7 +26,6 @@ use sui_types::base_types::ObjectID;
 
 use crate::config::RestoreConfig;
 use crate::database::ConnectionPool;
-use crate::db::ConnectionPool as BlockingConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
@@ -100,7 +99,6 @@ pub struct PgIndexerStoreConfig {
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    blocking_cp: BlockingConnectionPool,
     pool: ConnectionPool,
     metrics: IndexerMetrics,
     partition_manager: PgPartitionManager,
@@ -109,7 +107,6 @@ pub struct PgIndexerStore {
 
 impl PgIndexerStore {
     pub fn new(
-        blocking_cp: BlockingConnectionPool,
         pool: ConnectionPool,
         restore_config: RestoreConfig,
         metrics: IndexerMetrics,
@@ -132,16 +129,11 @@ impl PgIndexerStore {
         };
 
         Self {
-            blocking_cp,
             pool,
             metrics,
             partition_manager,
             config,
         }
-    }
-
-    pub fn blocking_cp(&self) -> BlockingConnectionPool {
-        self.blocking_cp.clone()
     }
 
     pub fn pool(&self) -> ConnectionPool {
