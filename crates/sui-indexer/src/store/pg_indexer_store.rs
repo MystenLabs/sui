@@ -24,7 +24,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_storage::object_store::util::put;
 use sui_types::base_types::ObjectID;
 
-use crate::config::RestoreConfig;
+use crate::config::UploadOptions;
 use crate::database::ConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::EpochToCommit;
@@ -108,7 +108,7 @@ pub struct PgIndexerStore {
 impl PgIndexerStore {
     pub fn new(
         pool: ConnectionPool,
-        restore_config: RestoreConfig,
+        upload_options: UploadOptions,
         metrics: IndexerMetrics,
     ) -> Self {
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
@@ -124,8 +124,8 @@ impl PgIndexerStore {
         let config = PgIndexerStoreConfig {
             parallel_chunk_size,
             parallel_objects_chunk_size,
-            gcs_cred_path: restore_config.gcs_cred_path,
-            gcs_display_bucket: restore_config.gcs_display_bucket,
+            gcs_cred_path: upload_options.gcs_cred_path,
+            gcs_display_bucket: upload_options.gcs_display_bucket,
         };
 
         Self {
@@ -344,7 +344,6 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        let len = mutated_object_mutation_chunk.len();
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::insert_into(objects::table)
@@ -376,8 +375,7 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked objects", len);
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object mutations with error: {}", e);
@@ -393,7 +391,6 @@ impl PgIndexerStore {
             .metrics
             .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        let len = deleted_objects_chunk.len();
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
                 diesel::delete(
@@ -417,15 +414,14 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(elapsed, "Deleted {} chunked objects", len);
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object deletions with error: {}", e);
         })
     }
 
-    async fn backfill_objects_snapshot_chunk(
+    async fn persist_objects_snapshot_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
@@ -495,12 +491,7 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects snapshot",
-                objects_snapshot.len(),
-            );
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object snapshot with error: {}", e);
@@ -570,12 +561,7 @@ impl PgIndexerStore {
         })
         .await
         .tap_ok(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} chunked objects history",
-                mutated_objects.len() + deleted_object_ids.len(),
-            );
+            guard.stop_and_record();
         })
         .tap_err(|e| {
             tracing::error!("Failed to persist object history with error: {}", e);
@@ -1600,7 +1586,7 @@ impl IndexerStore for PgIndexerStore {
         let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
-            .map(|c| self.backfill_objects_snapshot_chunk(c))
+            .map(|c| self.persist_objects_snapshot_chunk(c))
             .collect::<Vec<_>>();
 
         futures::future::join_all(futures)
