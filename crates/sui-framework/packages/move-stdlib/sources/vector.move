@@ -264,7 +264,7 @@ module std::vector {
     }
 
     /// Concatenate the vectors of `v` into a single vector, keeping the order of the elements.
-    public macro fun concat<$T>($v: vector<vector<$T>>): vector<$T> {
+    public fun concat<T>(v: vector<vector<T>>): vector<T> {
         let v = $v;
         let mut r = vector[];
         v.do!(|u| r.append(u));
