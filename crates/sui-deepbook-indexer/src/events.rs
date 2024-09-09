@@ -129,3 +129,4 @@ pub struct MoveRebateEvent {
     pub epoch: u64,
     pub claim_amount: u64,
 }
+
