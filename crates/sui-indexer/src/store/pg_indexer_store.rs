@@ -2050,13 +2050,15 @@ impl IndexerStore for PgIndexerStore {
         // TODO: right now the size of these updates is manageable but later we may consider batching.
         transaction_with_retry(&self.pool, PG_DB_COMMIT_SLEEP_DURATION, |conn| {
             async {
-                diesel::insert_into(protocol_configs::table)
-                    .values(all_configs.clone())
-                    .on_conflict_do_nothing()
-                    .execute(conn)
-                    .await
-                    .map_err(IndexerError::from)
-                    .context("Failed to write to protocol_configs table")?;
+                for config_chunk in all_configs.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                    diesel::insert_into(protocol_configs::table)
+                        .values(config_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .await
+                        .map_err(IndexerError::from)
+                        .context("Failed to write to protocol_configs table")?;
+                }
 
                 diesel::insert_into(feature_flags::table)
                     .values(all_flags.clone())
