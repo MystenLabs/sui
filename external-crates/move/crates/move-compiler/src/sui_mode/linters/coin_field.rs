@@ -26,6 +26,7 @@ const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     "sub-optimal 'sui::coin::Coin' field type",
 );
 
+<<<<<<< HEAD
 simple_visitor!(
     CoinFieldVisitor,
     fn visit_module_custom(&mut self, _ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
@@ -41,6 +42,22 @@ simple_visitor!(
     ) -> bool {
         if sdef.attributes.is_test_or_test_only() {
             return false;
+=======
+pub struct CoinFieldVisitor;
+
+impl TypingVisitor for CoinFieldVisitor {
+    fn visit(&self, env: &mut CompilationEnv, program: &T::Program) {
+        for (_, _, mdef) in program.modules.iter() {
+            if mdef.attributes.is_test_or_test_only() {
+                continue;
+            }
+            env.add_warning_filter_scope(mdef.warning_filter.clone());
+            mdef.structs
+                .iter()
+                .filter(|(_, _, sdef)| !sdef.attributes.is_test_or_test_only())
+                .for_each(|(sloc, sname, sdef)| struct_def(env, *sname, sdef, sloc));
+            env.pop_warning_filter_scope();
+>>>>>>> 185cdf3961 (Make visitors more parallel friendly)
         }
 
         if let N::StructFields::Defined(_, sfields) = &sdef.fields {
