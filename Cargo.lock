@@ -7936,9 +7936,18 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 name = "mysten-common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "fastcrypto",
  "futures",
+ "mysten-metrics",
  "parking_lot 0.12.1",
+ "prometheus",
+ "reqwest 0.12.5",
+ "snap",
+ "sui-tls",
+ "sui-types",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -12871,6 +12880,7 @@ dependencies = [
  "lru 0.10.0",
  "maplit",
  "move-core-types",
+ "mysten-common",
  "mysten-metrics",
  "num_enum 0.6.1",
  "once_cell",
@@ -12881,7 +12891,6 @@ dependencies = [
  "serde_json",
  "serde_with 3.9.0",
  "shared-crypto",
- "snap",
  "sui-authority-aggregation",
  "sui-config",
  "sui-json-rpc-api",
@@ -12889,7 +12898,6 @@ dependencies = [
  "sui-keys",
  "sui-sdk 1.34.0",
  "sui-test-transaction-builder",
- "sui-tls",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -14147,7 +14155,6 @@ dependencies = [
  "prometheus",
  "reqwest 0.12.5",
  "serde",
- "snap",
  "sui-archival",
  "sui-config",
  "sui-core",
