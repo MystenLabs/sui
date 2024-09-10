@@ -175,6 +175,7 @@ const MAX_PROTOCOL_VERSION: u64 = 59;
 // Version 58: Optimize boolean binops
 //             Finalize bridge committee on mainnet.
 //             Switch to distributed vote scoring in consensus in devnet
+// Version 59: Validation of public inputs for Groth16 verification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
