@@ -5,7 +5,7 @@ rust_binary(
 )
 mypkg(
     name="sui-proxy",
-    version="e9dde845342a0e5a92db22beb79bb5ef",
+    version="bf9f49ff50ff1c4b3378319dfb16dd0a",
 )
 podman_build(
     name="sui-proxy-image",
