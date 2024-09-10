@@ -11,12 +11,23 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
-import { Runtime, RuntimeEvents } from './runtime';
+import { Runtime, RuntimeEvents, IRuntimeStack } from './runtime';
 
 const enum LogLevel {
     Log = 'log',
     Verbose = 'verbose',
     None = 'none'
+}
+
+/**
+ * Customized stack trace response that includes additional data.
+ */
+interface CustomizedStackTraceResponse extends DebugProtocol.StackTraceResponse {
+    body: {
+        stackFrames: StackFrame[];
+        totalFrames?: number;
+        optimized_lines: number[];
+    };
 }
 
 /**
@@ -163,15 +174,19 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
+    protected stackTraceRequest(response: CustomizedStackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
         try {
             const runtimeStack = this.runtime.stack();
+            const stack_height = runtimeStack.frames.length;
             response.body = {
                 stackFrames: runtimeStack.frames.map(frame => {
                     const fileName = path.basename(frame.file);
                     return new StackFrame(frame.id, frame.name, new Source(fileName, frame.file), frame.line);
                 }).reverse(),
-                totalFrames: runtimeStack.frames.length
+                totalFrames: stack_height,
+                optimized_lines: stack_height > 0
+                    ? runtimeStack.frames[stack_height - 1].sourceMap.optimized_lines
+                    : []
             };
         } catch (err) {
             response.success = false;
