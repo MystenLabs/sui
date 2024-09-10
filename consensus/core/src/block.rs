@@ -50,16 +50,31 @@ impl Transaction {
     }
 }
 
+/// Index of a transaction in a block.
+pub type TransactionIndex = u16;
+
+/// Votes on transactions in a specific block.
+/// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
+// TODO: look into making fields `pub`.
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct BlockTransactionVotes {
+    pub(crate) block_ref: BlockRef,
+    pub(crate) rejects: Vec<TransactionIndex>,
+}
+
 /// A block includes references to previous round blocks and transactions that the authority
 /// considers valid.
 /// Well behaved authorities produce at most one block per round, but malicious authorities can
 /// equivocate.
+#[allow(private_interfaces)]
 #[derive(Clone, Deserialize, Serialize)]
 #[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
+    V2(BlockV2),
 }
 
+#[allow(private_interfaces)]
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
@@ -70,15 +85,15 @@ pub trait BlockAPI {
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
     fn commit_votes(&self) -> &[CommitVote];
+    fn transaction_votes(&self) -> &[BlockTransactionVotes];
     fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
-pub struct BlockV1 {
+pub(crate) struct BlockV1 {
     epoch: Epoch,
     round: Round,
     author: AuthorityIndex,
-    // TODO: during verification ensure that timestamp_ms >= ancestors.timestamp
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
@@ -150,6 +165,106 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn transaction_votes(&self) -> &[BlockTransactionVotes] {
+        &[]
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
+    }
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+pub(crate) struct BlockV2 {
+    epoch: Epoch,
+    round: Round,
+    author: AuthorityIndex,
+    timestamp_ms: BlockTimestampMs,
+    ancestors: Vec<BlockRef>,
+    transactions: Vec<Transaction>,
+    transaction_votes: Vec<BlockTransactionVotes>,
+    commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
+}
+
+#[allow(unused)]
+impl BlockV2 {
+    pub(crate) fn new(
+        epoch: Epoch,
+        round: Round,
+        author: AuthorityIndex,
+        timestamp_ms: BlockTimestampMs,
+        ancestors: Vec<BlockRef>,
+        transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitVote>,
+        transaction_votes: Vec<BlockTransactionVotes>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
+    ) -> BlockV2 {
+        Self {
+            epoch,
+            round,
+            author,
+            timestamp_ms,
+            ancestors,
+            transactions,
+            commit_votes,
+            transaction_votes,
+            misbehavior_reports,
+        }
+    }
+
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
+        Self {
+            epoch,
+            round: GENESIS_ROUND,
+            author,
+            timestamp_ms: 0,
+            ancestors: vec![],
+            transactions: vec![],
+            commit_votes: vec![],
+            transaction_votes: vec![],
+            misbehavior_reports: vec![],
+        }
+    }
+}
+
+impl BlockAPI for BlockV2 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn round(&self) -> Round {
+        self.round
+    }
+
+    fn author(&self) -> AuthorityIndex {
+        self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
+    }
+
+    fn ancestors(&self) -> &[BlockRef] {
+        &self.ancestors
+    }
+
+    fn transactions(&self) -> &[Transaction] {
+        &self.transactions
+    }
+
+    fn transaction_votes(&self) -> &[BlockTransactionVotes] {
+        &self.transaction_votes
     }
 
     fn commit_votes(&self) -> &[CommitVote] {

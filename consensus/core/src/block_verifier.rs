@@ -227,7 +227,7 @@ mod test {
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, TestBlock, Transaction},
+        block::{BlockDigest, BlockRef, TestBlock, Transaction, TransactionIndex},
         context::Context,
         transaction::{TransactionVerifier, ValidationError},
     };
@@ -246,6 +246,10 @@ mod test {
                 }
             }
             Ok(())
+        }
+
+        fn vote_batch(&self, _batch: &[&[u8]]) -> Vec<TransactionIndex> {
+            vec![]
         }
     }
 
