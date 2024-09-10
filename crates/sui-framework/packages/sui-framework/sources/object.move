@@ -6,15 +6,6 @@ module sui::object {
     use std::bcs;
     use sui::address;
 
-    /* friend sui::clock; */
-    /* friend sui::coin; */
-    /* friend sui::dynamic_field; */
-    /* friend sui::dynamic_object_field; */
-    /* friend sui::transfer; */
-    /* friend sui::authenticator_state; */
-    /* friend sui::random; */
-    /* friend sui::deny_list; */
-
     /// Allows calling `.to_address` on an `ID` to get an `address`.
     public use fun id_to_address as ID.to_address;
 
@@ -33,9 +24,6 @@ module sui::object {
     /// Allows calling `.to_bytes` on a `UID` to get a `vector<u8>`.
     public use fun uid_to_bytes as UID.to_bytes;
 
-    /* #[test_only] */
-    /* friend sui::test_scenario; */
-
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
 
@@ -50,6 +38,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton DenyList.
     const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
+
+    /// The hardcoded ID for the Bridge Object.
+    const SUI_BRIDGE_ID: address = @0x9;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -141,6 +132,15 @@ module sui::object {
     public(package) fun sui_deny_list_object_id(): UID {
         UID {
             id: ID { bytes: SUI_DENY_LIST_OBJECT_ID }
+        }
+    }
+
+    #[allow(unused_function)]
+    /// Create the `UID` for the singleton `Bridge` object.
+    /// This should only be called once from `bridge`.
+    fun bridge(): UID {
+        UID {
+            id: ID { bytes: SUI_BRIDGE_ID }
         }
     }
 

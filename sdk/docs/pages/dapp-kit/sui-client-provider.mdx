@@ -13,7 +13,7 @@ currently active network.
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 
 // Config options for the networks you want to connect to
 const { networkConfig } = createNetworkConfig({
@@ -49,7 +49,7 @@ The following example demonstrates a `SuiClientProvider` used as a controlled co
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { useState } from 'react';
 
 // Config options for the networks you want to connect to
@@ -81,7 +81,7 @@ The following example demonstrates how to create a custom `SuiClient`.
 
 ```tsx
 import { SuiClientProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui/client';
 
 // Config options for the networks you want to connect to
 const networks = {
@@ -166,7 +166,7 @@ to get the variables defined in your configuration.
 import { createNetworkConfig, SuiClientProvider } from '@mysten/dapp-kit';
 
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to

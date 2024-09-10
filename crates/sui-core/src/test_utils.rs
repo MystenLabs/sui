@@ -6,9 +6,8 @@ use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use prometheus::Registry;
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,6 +27,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
 use sui_types::error::SuiError;
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
     CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -46,8 +46,7 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
+use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder, TimeoutConfig};
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 
@@ -60,6 +59,7 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
+    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
@@ -71,7 +71,7 @@ pub async fn send_and_confirm_transaction(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .try_into_verified_for_testing(&committee, &Default::default())
             .unwrap();
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -79,7 +79,8 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.get_execution_cache().clone());
+    let state_acc =
+        StateAccumulator::new_for_tests(authority.get_accumulator_store().clone(), &epoch_store);
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -124,7 +125,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[digest]),
     )
     .await
@@ -141,7 +142,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
         state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&digests),
     )
     .await
@@ -188,7 +189,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
-    compile_example_package("../../sui_programmability/examples/basics")
+    compile_example_package("../../examples/move/basics")
 }
 
 pub fn compile_managed_coin_package() -> CompiledPackage {
@@ -200,7 +201,7 @@ pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push(relative_path);
 
-    BuildConfig::new_for_testing().build(path).unwrap()
+    BuildConfig::new_for_testing().build(&path).unwrap()
 }
 
 async fn init_genesis(
@@ -214,10 +215,12 @@ async fn init_genesis(
     // add object_basics package object to genesis
     let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
     let genesis_move_packages: Vec<_> = BuiltInFramework::genesis_move_packages().collect();
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let pkg = Object::new_package(
         &modules,
         TransactionDigest::genesis_marker(),
-        ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
+        config.max_move_package_size(),
+        config.move_binary_format_version(),
         &genesis_move_packages,
     )
     .unwrap();
@@ -307,8 +310,6 @@ pub async fn init_local_authorities_with_genesis(
     authorities: Vec<Arc<AuthorityState>>,
 ) -> AuthorityAggregator<LocalAuthorityClient> {
     telemetry_subscribers::init_for_testing();
-    let committee = genesis.committee().unwrap();
-
     let mut clients = BTreeMap::new();
     for state in authorities {
         let name = state.name;
@@ -320,15 +321,9 @@ pub async fn init_local_authorities_with_genesis(
         post_quorum_timeout: Duration::from_secs(5),
         serial_authority_request_interval: Duration::from_secs(1),
     };
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    AuthorityAggregator::new_with_timeouts(
-        committee,
-        committee_store,
-        clients,
-        &Registry::new(),
-        Arc::new(HashMap::new()),
-        timeouts,
-    )
+    AuthorityAggregatorBuilder::from_genesis(genesis)
+        .with_timeouts_config(timeouts)
+        .build_custom_clients(clients)
 }
 
 pub fn make_transfer_sui_transaction(
@@ -464,7 +459,11 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
-    cert.verify_signatures_authenticated(committee, &Default::default())
-        .unwrap();
+    cert.verify_signatures_authenticated(
+        committee,
+        &Default::default(),
+        Arc::new(VerifiedDigestCache::new_empty()),
+    )
+    .unwrap();
     cert
 }

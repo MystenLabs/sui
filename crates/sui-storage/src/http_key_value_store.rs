@@ -4,14 +4,14 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
-use hyper::client::HttpConnector;
-use hyper::header::{HeaderValue, CONTENT_LENGTH};
-use hyper::Client;
-use hyper::Uri;
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use moka::sync::{Cache as MokaCache, CacheBuilder as MokaCacheBuilder};
+use reqwest::header::{HeaderValue, CONTENT_LENGTH};
+use reqwest::Client;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
@@ -28,14 +28,15 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tracing::{error, info, instrument, trace, warn};
-use url::Url;
 
 use crate::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use crate::key_value_store_metrics::KeyValueStoreMetrics;
 
 pub struct HttpKVStore {
     base_url: Url,
-    client: Arc<Client<HttpsConnector<HttpConnector>>>,
+    client: Client,
+    cache: MokaCache<Url, Bytes>,
+    metrics: Arc<KeyValueStoreMetrics>,
 }
 
 pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
@@ -43,7 +44,7 @@ pub fn encode_digest<T: AsRef<[u8]>>(digest: &T) -> String {
 }
 
 // for non-digest keys, we need a tag to make sure we don't have collisions
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaggedKey {
     CheckpointSequenceNumber(CheckpointSequenceNumber),
 }
@@ -95,7 +96,7 @@ enum Value {
     TxToCheckpoint(CheckpointSequenceNumber),
 }
 
-fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
+pub fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
     match key {
         Key::Tx(digest) => Ok((encode_digest(digest), "tx")),
         Key::Fx(digest) => Ok((encode_digest(digest), "fx")),
@@ -115,26 +116,70 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
     }
 }
 
+pub fn path_elements_to_key(digest: &str, type_: &str) -> anyhow::Result<Key> {
+    let decoded_digest = base64_url::decode(digest)?;
+
+    match type_ {
+        "tx" => Ok(Key::Tx(TransactionDigest::try_from(decoded_digest)?)),
+        "fx" => Ok(Key::Fx(TransactionDigest::try_from(decoded_digest)?)),
+        "ev" => Ok(Key::Events(TransactionEventsDigest::try_from(
+            decoded_digest,
+        )?)),
+        "cc" => {
+            // first try to decode as digest, otherwise try to decode as tagged key
+            match CheckpointContentsDigest::try_from(decoded_digest.clone()) {
+                Err(_) => {
+                    let tagged_key = bcs::from_bytes(&decoded_digest)?;
+                    match tagged_key {
+                        TaggedKey::CheckpointSequenceNumber(seq) => {
+                            Ok(Key::CheckpointContents(seq))
+                        }
+                    }
+                }
+                Ok(cc_digest) => Ok(Key::CheckpointContentsByDigest(cc_digest)),
+            }
+        }
+        "cs" => {
+            // first try to decode as digest, otherwise try to decode as tagged key
+            match CheckpointDigest::try_from(decoded_digest.clone()) {
+                Err(_) => {
+                    let tagged_key = bcs::from_bytes(&decoded_digest)?;
+                    match tagged_key {
+                        TaggedKey::CheckpointSequenceNumber(seq) => Ok(Key::CheckpointSummary(seq)),
+                    }
+                }
+                Ok(cs_digest) => Ok(Key::CheckpointSummaryByDigest(cs_digest)),
+            }
+        }
+        "tx2c" => Ok(Key::TxToCheckpoint(TransactionDigest::try_from(
+            decoded_digest,
+        )?)),
+        "ob" => {
+            let object_key: ObjectKey = bcs::from_bytes(&decoded_digest)?;
+            Ok(Key::ObjectKey(object_key.0, object_key.1))
+        }
+        _ => Err(anyhow::anyhow!("Invalid type: {}", type_)),
+    }
+}
+
 impl HttpKVStore {
     pub fn new_kv(
         base_url: &str,
+        cache_size: u64,
         metrics: Arc<KeyValueStoreMetrics>,
     ) -> SuiResult<TransactionKeyValueStore> {
-        let inner = Arc::new(Self::new(base_url)?);
+        let inner = Arc::new(Self::new(base_url, cache_size, metrics.clone())?);
         Ok(TransactionKeyValueStore::new("http", metrics, inner))
     }
 
-    pub fn new(base_url: &str) -> SuiResult<Self> {
+    pub fn new(
+        base_url: &str,
+        cache_size: u64,
+        metrics: Arc<KeyValueStoreMetrics>,
+    ) -> SuiResult<Self> {
         info!("creating HttpKVStore with base_url: {}", base_url);
-        let http = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http2()
-            .build();
 
-        let client = Client::builder()
-            .http2_only(true)
-            .build::<_, hyper::Body>(http);
+        let client = Client::builder().http2_prior_knowledge().build().unwrap();
 
         let base_url = if base_url.ends_with('/') {
             base_url.to_string()
@@ -144,39 +189,61 @@ impl HttpKVStore {
 
         let base_url = Url::parse(&base_url).into_sui_result()?;
 
+        let cache = MokaCacheBuilder::new(cache_size)
+            .time_to_idle(Duration::from_secs(600))
+            .build();
+
         Ok(Self {
             base_url,
-            client: Arc::new(client),
+            client,
+            cache,
+            metrics,
         })
     }
 
-    fn get_url(&self, key: &Key) -> SuiResult<Uri> {
+    fn get_url(&self, key: &Key) -> SuiResult<Url> {
         let (digest, item_type) = key_to_path_elements(key)?;
         let joined = self
             .base_url
             .join(&format!("{}/{}", digest, item_type))
             .into_sui_result()?;
-        Uri::from_str(joined.as_str()).into_sui_result()
+        Url::from_str(joined.as_str()).into_sui_result()
     }
 
     async fn multi_fetch(&self, uris: Vec<Key>) -> Vec<SuiResult<Option<Bytes>>> {
         let uris_vec = uris.to_vec();
-        let fetches = stream::iter(
-            uris_vec
-                .into_iter()
-                .enumerate()
-                .map(|(_i, uri)| self.fetch(uri)),
-        );
+        let fetches = stream::iter(uris_vec.into_iter().map(|url| self.fetch(url)));
         fetches.buffered(uris.len()).collect::<Vec<_>>().await
     }
 
     async fn fetch(&self, key: Key) -> SuiResult<Option<Bytes>> {
-        let uri = self.get_url(&key)?;
-        trace!("fetching uri: {}", uri);
-        let resp = self.client.get(uri.clone()).await.into_sui_result()?;
+        let url = self.get_url(&key)?;
+
+        trace!("fetching url: {}", url);
+
+        if let Some(res) = self.cache.get(&url) {
+            trace!("found cached data for url: {}, len: {:?}", url, res.len());
+            self.metrics
+                .key_value_store_num_fetches_success
+                .with_label_values(&["http_cache", "url"])
+                .inc();
+            return Ok(Some(res));
+        }
+
+        self.metrics
+            .key_value_store_num_fetches_not_found
+            .with_label_values(&["http_cache", "url"])
+            .inc();
+
+        let resp = self
+            .client
+            .get(url.clone())
+            .send()
+            .await
+            .into_sui_result()?;
         trace!(
-            "got response {} for uri: {}, len: {:?}",
-            uri,
+            "got response {} for url: {}, len: {:?}",
+            url,
             resp.status(),
             resp.headers()
                 .get(CONTENT_LENGTH)
@@ -184,10 +251,10 @@ impl HttpKVStore {
         );
         // return None if 400
         if resp.status().is_success() {
-            hyper::body::to_bytes(resp.into_body())
-                .await
-                .map(Some)
-                .into_sui_result()
+            let bytes = resp.bytes().await.into_sui_result()?;
+            self.cache.insert(url, bytes.clone());
+
+            Ok(Some(bytes))
         } else {
             Ok(None)
         }
@@ -232,7 +299,7 @@ fn multi_split_slice<'a, T>(slice: &'a [T], lengths: &'a [usize]) -> Vec<&'a [T]
         .collect()
 }
 
-fn deser_check_digest<T, D: std::fmt::Debug>(
+fn deser_check_digest<T, D>(
     digest: &D,
     bytes: &Bytes,
     get_expected_digest: impl FnOnce(&T) -> D,

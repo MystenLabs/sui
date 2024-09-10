@@ -19,7 +19,10 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_tls::{rustls::ServerConfig, AllowAll, CertVerifier, SelfSignedCertificate, TlsAcceptor};
+use sui_tls::SUI_VALIDATOR_SERVER_NAME;
+use sui_tls::{
+    rustls::ServerConfig, AllowAll, ClientCertVerifier, SelfSignedCertificate, TlsAcceptor,
+};
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -163,28 +166,26 @@ pub fn generate_self_cert(hostname: String) -> CertKeyPair {
 }
 
 /// Load a certificate for use by the listening service
-fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
+fn load_certs(filename: &str) -> Vec<rustls::pki_types::CertificateDer<'static>> {
     let certfile = fs::File::open(filename)
         .unwrap_or_else(|e| panic!("cannot open certificate file: {}; {}", filename, e));
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
         .unwrap()
-        .iter()
-        .map(|v| rustls::Certificate(v.clone()))
-        .collect()
 }
 
 /// Load a private key
-fn load_private_key(filename: &str) -> rustls::PrivateKey {
+fn load_private_key(filename: &str) -> rustls::pki_types::PrivateKeyDer<'static> {
     let keyfile = fs::File::open(filename)
         .unwrap_or_else(|e| panic!("cannot open private key file {}; {}", filename, e));
     let mut reader = BufReader::new(keyfile);
 
     loop {
         match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
-            Some(rustls_pemfile::Item::RSAKey(key)) => return rustls::PrivateKey(key),
-            Some(rustls_pemfile::Item::PKCS8Key(key)) => return rustls::PrivateKey(key),
-            Some(rustls_pemfile::Item::ECKey(key)) => return rustls::PrivateKey(key),
+            Some(rustls_pemfile::Item::Pkcs1Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Pkcs8Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Sec1Key(key)) => return key.into(),
             None => break,
             _ => {}
         }
@@ -232,7 +233,7 @@ pub fn create_server_cert_default_allow(
 ) -> Result<ServerConfig, sui_tls::rustls::Error> {
     let CertKeyPair(server_certificate, _) = generate_self_cert(hostname);
 
-    CertVerifier::new(AllowAll).rustls_server_config(
+    ClientCertVerifier::new(AllowAll, SUI_VALIDATOR_SERVER_NAME.to_string()).rustls_server_config(
         vec![server_certificate.rustls_certificate()],
         server_certificate.rustls_private_key(),
     )
@@ -256,9 +257,10 @@ pub fn create_server_cert_enforce_peer(
     })?;
     let allower = SuiNodeProvider::new(dynamic_peers.url, dynamic_peers.interval, static_peers);
     allower.poll_peer_list();
-    let c = CertVerifier::new(allower.clone()).rustls_server_config(
-        load_certs(&certificate_path),
-        load_private_key(&private_key_path),
-    )?;
+    let c = ClientCertVerifier::new(allower.clone(), SUI_VALIDATOR_SERVER_NAME.to_string())
+        .rustls_server_config(
+            load_certs(&certificate_path),
+            load_private_key(&private_key_path),
+        )?;
     Ok((c, Some(allower)))
 }

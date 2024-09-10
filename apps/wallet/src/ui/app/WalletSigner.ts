@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 import {
 	type DryRunTransactionBlockResponse,
 	type ExecuteTransactionRequestType,
 	type SuiClient,
 	type SuiTransactionBlockResponse,
 	type SuiTransactionBlockResponseOptions,
-} from '@mysten/sui.js/client';
-import { IntentScope, messageWithIntent } from '@mysten/sui.js/cryptography';
-import { isTransactionBlock, type TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
+import { isTransaction, type Transaction } from '@mysten/sui/transactions';
+import { fromB64, toB64 } from '@mysten/sui/utils';
 
 export type SignedTransaction = {
 	transactionBlockBytes: string;
@@ -39,10 +39,7 @@ export abstract class WalletSigner {
 		clientIdentifier?: string,
 	): Promise<SignedMessage> {
 		const signature = await this.signData(
-			messageWithIntent(
-				IntentScope.PersonalMessage,
-				bcs.ser(['vector', 'u8'], input.message).toBytes(),
-			),
+			messageWithIntent('PersonalMessage', bcs.vector(bcs.u8()).serialize(input.message).toBytes()),
 		);
 
 		return {
@@ -51,10 +48,8 @@ export abstract class WalletSigner {
 		};
 	}
 
-	protected async prepareTransactionBlock(
-		transactionBlock: Uint8Array | TransactionBlock | string,
-	) {
-		if (isTransactionBlock(transactionBlock)) {
+	protected async prepareTransactionBlock(transactionBlock: Uint8Array | Transaction | string) {
+		if (isTransaction(transactionBlock)) {
 			// If the sender has not yet been set on the transaction, then set it.
 			// NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
 			transactionBlock.setSenderIfNotSet(await this.getAddress());
@@ -75,12 +70,12 @@ export abstract class WalletSigner {
 
 	async signTransactionBlock(
 		input: {
-			transactionBlock: Uint8Array | TransactionBlock;
+			transactionBlock: Uint8Array | Transaction;
 		},
 		clientIdentifier?: string,
 	): Promise<SignedTransaction> {
 		const bytes = await this.prepareTransactionBlock(input.transactionBlock);
-		const signature = await this.signData(messageWithIntent(IntentScope.TransactionData, bytes));
+		const signature = await this.signData(messageWithIntent('TransactionData', bytes));
 
 		return {
 			transactionBlockBytes: toB64(bytes),
@@ -90,7 +85,7 @@ export abstract class WalletSigner {
 
 	async signAndExecuteTransactionBlock(
 		input: {
-			transactionBlock: Uint8Array | TransactionBlock;
+			transactionBlock: Uint8Array | Transaction;
 			options?: SuiTransactionBlockResponseOptions;
 			requestType?: ExecuteTransactionRequestType;
 		},
@@ -110,7 +105,7 @@ export abstract class WalletSigner {
 	}
 
 	async dryRunTransactionBlock(input: {
-		transactionBlock: TransactionBlock | string | Uint8Array;
+		transactionBlock: Transaction | string | Uint8Array;
 	}): Promise<DryRunTransactionBlockResponse> {
 		return this.client.dryRunTransactionBlock({
 			transactionBlock: await this.prepareTransactionBlock(input.transactionBlock),

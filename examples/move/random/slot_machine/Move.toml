@@ -1,0 +1,10 @@
+[package]
+name = "slot_machine"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+slot_machine = "0x0"

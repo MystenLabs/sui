@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::Value;
-use hyper::header::ToStrError;
+use reqwest::header::ToStrError;
 use serde_json::Number;
 
 pub mod response;

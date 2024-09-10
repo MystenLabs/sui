@@ -30,7 +30,6 @@ use sui_types::object::Object;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::{EndOfEpochTransactionKind, TransactionKind};
-use tracing::error;
 
 /// This trait defines the interfaces for fetching data from some local or remote store
 #[async_trait]
@@ -85,6 +84,12 @@ pub(crate) trait DataFetcher {
     ) -> Result<Vec<SuiEvent>, ReplayEngineError>;
 
     async fn get_chain_id(&self) -> Result<String, ReplayEngineError>;
+
+    async fn get_child_object(
+        &self,
+        object_id: &ObjectID,
+        version_upper_bound: VersionNumber,
+    ) -> Result<Object, ReplayEngineError>;
 }
 
 #[derive(Clone)]
@@ -103,7 +108,12 @@ impl Fetchers {
 
     pub fn into_remote(self) -> RemoteFetcher {
         match self {
-            Fetchers::Remote(q) => q,
+            Fetchers::Remote(q) => {
+                // Since `into_remote` is called when we use this fetcher to create a new fetcher,
+                // we should clear the cache to avoid using stale data.
+                q.clear_cache_for_new_task();
+                q
+            }
             Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
         }
     }
@@ -218,6 +228,16 @@ impl DataFetcher for Fetchers {
             Fetchers::NodeStateDump(q) => q.get_chain_id().await,
         }
     }
+    async fn get_child_object(
+        &self,
+        object_id: &ObjectID,
+        version_upper_bound: VersionNumber,
+    ) -> Result<Object, ReplayEngineError> {
+        match self {
+            Fetchers::Remote(q) => q.get_child_object(object_id, version_upper_bound).await,
+            Fetchers::NodeStateDump(q) => q.get_child_object(object_id, version_upper_bound).await,
+        }
+    }
 }
 
 const VERSIONED_OBJECT_CACHE_CAPACITY: Option<NonZeroUsize> = NonZeroUsize::new(1_000);
@@ -316,6 +336,12 @@ impl RemoteFetcher {
 
         (cached, to_fetch)
     }
+
+    pub fn clear_cache_for_new_task(&self) {
+        // Only the latest object cache cannot be reused across tasks.
+        // All other caches should be valid as long as the network doesn't change.
+        self.latest_object_cache.write().clear();
+    }
 }
 
 #[async_trait]
@@ -365,6 +391,20 @@ impl DataFetcher for RemoteFetcher {
                 }
                 x
             })
+    }
+
+    async fn get_child_object(
+        &self,
+        object_id: &ObjectID,
+        version_upper_bound: VersionNumber,
+    ) -> Result<Object, ReplayEngineError> {
+        let response = self
+            .rpc_client
+            .read_api()
+            .try_get_object_before_version(*object_id, version_upper_bound)
+            .await
+            .map_err(|q| ReplayEngineError::SuiRpcError { err: q.to_string() })?;
+        convert_past_obj_response(response)
     }
 
     async fn multi_get_latest(
@@ -430,29 +470,9 @@ impl DataFetcher for RemoteFetcher {
 
     async fn get_loaded_child_objects(
         &self,
-        tx_digest: &TransactionDigest,
+        _: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
-        let loaded_child_objs = match self
-            .rpc_client
-            .read_api()
-            .get_loaded_child_objects(*tx_digest)
-            .await
-        {
-            Ok(objs) => objs,
-            Err(e) => {
-                error!("Error getting dynamic fields loaded objects: {}. This RPC server might not support this feature yet", e);
-                return Err(ReplayEngineError::UnableToGetDynamicFieldLoadedObjects {
-                    rpc_err: e.to_string(),
-                });
-            }
-        };
-
-        // Fetch the refs
-        Ok(loaded_child_objs
-            .loaded_child_objects
-            .iter()
-            .map(|obj| (obj.object_id(), obj.sequence_number()))
-            .collect::<Vec<_>>())
+        Ok(vec![])
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, ReplayEngineError> {
@@ -794,5 +814,13 @@ impl DataFetcher for NodeStateDumpFetcher {
 
     async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
         unimplemented!("get_chain_id for state dump is not implemented")
+    }
+
+    async fn get_child_object(
+        &self,
+        _object_id: &ObjectID,
+        _version_upper_bound: VersionNumber,
+    ) -> Result<Object, ReplayEngineError> {
+        unimplemented!("get child object is not implemented for state dump");
     }
 }

@@ -20,6 +20,11 @@ trait Worker: Send + Sync {
 
 In this example, the `CheckpointData` struct represents full checkpoint content. The struct contains checkpoint summary and contents, as well as detailed information about each individual transaction. The individual transaction data includes events and input/output objects. The full definition for this content is in the [full_checkpoint_content.rs](https://github.com/MystenLabs/sui/blob/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-types/src/full_checkpoint_content.rs) file of the `sui-types` crate.
 
+:::tip
+
+See the [Source code for an implementation](#source-code) section for a complete code example.
+
+:::
 
 ## Checkpoint stream sources
 
@@ -31,6 +36,8 @@ The most straightforward stream source is to subscribe to a remote store of chec
 
 - Testnet: `https://checkpoints.testnet.sui.io`
 - Mainnet: `https://checkpoints.mainnet.sui.io`
+
+The checkpoint files are stored in the following format: `https://checkpoints.testnet.sui.io/<checkpoint_id>.chk`. You can download the checkpoint file by sending an HTTP GET request to the relevant URL. Try it yourself for checkpoint 1 at [https://checkpoints.testnet.sui.io/1.chk](https://checkpoints.testnet.sui.io/1.chk).
 
 ```mermaid
 flowchart LR
@@ -47,6 +54,12 @@ flowchart LR
   end
   B-->External
 ```
+
+The Sui data ingestion framework provides a helper function to quickly bootstrap an indexer workflow.
+
+{@inject: examples/custom-indexer/rust/remote_reader.rs}
+
+This is suitable for setups with a single ingestion pipeline where progress tracking is managed outside of the framework.
 
 ### Local reader
 
@@ -79,77 +92,12 @@ flowchart LR
   C<-->D("fa:fa-floppy-disk Progress store");
 ```
 
-
-### Hybrid mode
-
-Specify both a local and remote store as a fallback to ensure constant data flow. The framework always prioritizes locally available checkpoint data over remote data. It's useful when you want to start utilizing your own Full node for data ingestion but need to partially backfill historical data or just have a failover. 
-
-
-## Examples
-
-The Sui data ingestion framework provides a helper function to quickly bootstrap an indexer workflow.
-```rust
-struct CustomWorker;
-
-#[async_trait]
-impl Worker for CustomWorker {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
-        // custom processing logic
-        ...
-        Ok(())
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let (executor, term_sender) = setup_single_workflow(
-        CustomWorker,
-        "https://checkpoints.mainnet.sui.io".to_string(),
-        0, /* initial checkpoint number */
-        5, /* concurrency */
-        None, /* extra reader options */
-    ).await?;
-    executor.await?;
-    Ok(())
-}
-```
-This is suitable for setups with a single ingestion pipeline where progress tracking is managed outside of the framework.
-
-For more complex setups, refer to the following example:
-```rust
-struct CustomWorker;
-
-#[async_trait]
-impl Worker for CustomWorker {
-    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
-        // custom processing logic
-        ...
-        Ok(())
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-  let (exit_sender, exit_receiver) = oneshot::channel();
-  let metrics = DataIngestionMetrics::new(&Registry::new());
-  let progress_store = FileProgressStore::new("path_to_file");
-  let mut executor = IndexerExecutor::new(progress_store, 1 /* number of workflow types */, metrics);
-  let worker_pool = WorkerPool::new(CustomWorker, "custom worker", 100);
-  executor.register(worker_pool).await?;
-  executor.run(
-      PathBuf::from("..."), // path to a local directory
-      Some("https://checkpoints.mainnet.sui.io".to_string()),
-      vec![], // optional remote store access options
-      exit_receiver,
-  ).await?;
-  Ok(())
-}
-```
+{@inject: examples/custom-indexer/rust/local_reader.rs}
 
 Let's highlight a couple lines of code:
 
 ```rust
-let worker_pool = WorkerPool::new(CustomWorker, "custom worker", 100);
+let worker_pool = WorkerPool::new(CustomWorker, "local_reader".to_string(), concurrency);
 executor.register(worker_pool).await?;
 ```
 
@@ -157,7 +105,33 @@ The data ingestion executor can run multiple workflows simultaneously. For each 
 
 The concurrency parameter specifies how many threads the workflow uses. Having a concurrency value greater than 1 is helpful when tasks are idempotent and can be processed in parallel and out of order. The executor only updates the progress/watermark to a certain checkpoint when all preceding checkpoints are processed.
 
-Find more examples of custom ingestion pipelines in the Sui repository:
-* Sui data ingestion daemon that runs internal [pipelines](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/).
-* Sui Name Service's custom [indexer](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src).
+### Hybrid mode
+
+Specify both a local and remote store as a fallback to ensure constant data flow. The framework always prioritizes locally available checkpoint data over remote data. It's useful when you want to start utilizing your own Full node for data ingestion but need to partially backfill historical data or just have a failover. 
+```rust
+executor.run(
+    PathBuf::from("./chk".to_string()), // path to a local directory
+    Some("https://checkpoints.testnet.sui.io".to_string()), // Remote Checkpoint Store
+    vec![], // optional remote store access options
+    ReaderOptions::default(),
+    exit_receiver,
+    ).await?;
+```
+
+
+### Manifest 
+
+Code for the cargo.toml manifest file for the custom indexer.
+
+{@inject: examples/custom-indexer/rust/Cargo.toml}
+
+## Source code for an implementation {#source-code}
+
+Find the following source code in the [Sui repo](https://github.com/mystenlabs/sui/tree/main/examples/custom-indexer/rust). 
+
+
+## Related links
+
+- [Sui internal example](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/): Sui data ingestion daemon that runs internal pipelines.
+- [Production example](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src): Sui Name Service custom indexer.
 

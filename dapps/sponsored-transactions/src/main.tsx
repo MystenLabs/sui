@@ -11,7 +11,7 @@ import { App } from './App';
 import '@mysten/dapp-kit/dist/index.css';
 import './index.css';
 
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 
 const queryClient = new QueryClient();
 

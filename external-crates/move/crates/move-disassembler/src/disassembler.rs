@@ -4,27 +4,31 @@
 
 use std::collections::HashMap;
 
-use anyhow::{bail, format_err, Error, Result};
+use anyhow::{bail, format_err, Result};
 use clap::Parser;
 use colored::*;
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
-    binary_views::BinaryIndexedView,
-    control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
-        Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
-        FunctionDefinitionIndex, FunctionHandle, ModuleHandle, Signature, SignatureIndex,
-        SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
-        StructTypeParameter, TableIndex, TypeSignature, Visibility,
+        Ability, AbilitySet, Bytecode, CodeUnit, Constant, DatatypeTyParameter, EnumDefinition,
+        EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandle, JumpTableInner, ModuleHandle, Signature, SignatureIndex, SignatureToken,
+        StructDefinition, StructDefinitionIndex, StructFieldInformation, TableIndex, TypeSignature,
+        Visibility,
     },
+    CompiledModule,
 };
 use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceName},
 };
+use move_command_line_common::display::{try_render_constant, RenderResult};
 use move_compiler::compiled_unit::CompiledUnit;
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
 use move_ir_types::location::Loc;
+
+const PREVIEW_LEN: usize = 4;
 
 /// Holds the various options that we support while disassembling code.
 #[derive(Debug, Default, Parser)]
@@ -73,12 +77,7 @@ impl<'a> Disassembler<'a> {
     pub fn new(source_mapper: SourceMapping<'a>, options: DisassemblerOptions) -> Self {
         let mut module_names = HashMap::new();
         let mut module_aliases = HashMap::new();
-        module_names.extend(
-            source_mapper
-                .bytecode
-                .self_id()
-                .map(|id| (id.name().to_string(), 0)),
-        );
+        module_names.insert(source_mapper.bytecode.self_id().name().to_string(), 0);
         for h in source_mapper.bytecode.module_handles() {
             let id = source_mapper.bytecode.module_id_for_handle(h);
             let module_name = id.name().to_string();
@@ -101,11 +100,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    pub fn from_view(view: BinaryIndexedView<'a>, default_loc: Loc) -> Result<Self> {
+    pub fn from_module(module: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
         let mut options = DisassemblerOptions::new();
         options.print_code = true;
         Ok(Self::new(
-            SourceMapping::new_from_view(view, default_loc)?,
+            SourceMapping::new_without_source_map(module, default_loc)?,
             options,
         ))
     }
@@ -113,9 +112,8 @@ impl<'a> Disassembler<'a> {
     pub fn from_unit(unit: &'a CompiledUnit) -> Self {
         let options = DisassemblerOptions::new();
         let source_map = unit.source_map().clone();
-        let index_view = BinaryIndexedView::Module(&unit.module);
 
-        let source_mapping = SourceMapping::new(source_map, index_view);
+        let source_mapping = SourceMapping::new(source_map, &unit.module);
         Disassembler::new(source_mapping, options)
     }
 
@@ -179,57 +177,44 @@ impl<'a> Disassembler<'a> {
     }
 
     fn is_self_id(&self, mid: &ModuleId) -> bool {
-        self.source_mapper
-            .bytecode
-            .self_id()
-            .map(|id| &id == mid)
-            .unwrap_or(false)
+        &self.source_mapper.bytecode.self_id() == mid
     }
 
     fn get_function_def(
         &self,
         function_definition_index: FunctionDefinitionIndex,
     ) -> Result<&FunctionDefinition> {
-        if function_definition_index.0 as usize
-            >= self
-                .source_mapper
-                .bytecode
-                .function_defs()
-                .map_or(0, |f| f.len())
+        if function_definition_index.0 as usize >= self.source_mapper.bytecode.function_defs().len()
         {
             bail!("Invalid function definition index supplied when marking function")
         }
-        match self
+        Ok(self
             .source_mapper
             .bytecode
-            .function_def_at(function_definition_index)
-        {
-            Ok(definition) => Ok(definition),
-            Err(err) => Err(Error::new(err)),
-        }
+            .function_def_at(function_definition_index))
     }
 
     fn get_struct_def(
         &self,
         struct_definition_index: StructDefinitionIndex,
     ) -> Result<&StructDefinition> {
-        if struct_definition_index.0 as usize
-            >= self
-                .source_mapper
-                .bytecode
-                .struct_defs()
-                .map_or(0, |d| d.len())
-        {
+        if struct_definition_index.0 as usize >= self.source_mapper.bytecode.struct_defs().len() {
             bail!("Invalid struct definition index supplied when marking struct")
         }
-        match self
+        Ok(self
             .source_mapper
             .bytecode
-            .struct_def_at(struct_definition_index)
-        {
-            Ok(definition) => Ok(definition),
-            Err(err) => Err(Error::new(err)),
+            .struct_def_at(struct_definition_index))
+    }
+
+    fn get_enum_def(&self, enum_definition_index: EnumDefinitionIndex) -> Result<&EnumDefinition> {
+        if enum_definition_index.0 as usize >= self.source_mapper.bytecode.enum_defs().len() {
+            bail!("Invalid enum definition index supplied when marking enum")
         }
+        Ok(self
+            .source_mapper
+            .bytecode
+            .enum_def_at(enum_definition_index))
     }
 
     //***************************************************************************
@@ -285,11 +270,11 @@ impl<'a> Disassembler<'a> {
     //***************************************************************************
 
     fn name_for_field(&self, field_idx: FieldHandleIndex) -> Result<String> {
-        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx)?;
+        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx);
         let struct_def = self
             .source_mapper
             .bytecode
-            .struct_def_at(field_handle.owner)?;
+            .struct_def_at(field_handle.owner);
         let field_def = match &struct_def.field_information {
             StructFieldInformation::Native => {
                 return Err(format_err!("Attempt to access field on a native struct"));
@@ -306,7 +291,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_def.struct_handle);
+            .datatype_handle_at(struct_def.struct_handle);
         let struct_name = self
             .source_mapper
             .bytecode
@@ -316,11 +301,11 @@ impl<'a> Disassembler<'a> {
     }
 
     fn type_for_field(&self, field_idx: FieldHandleIndex) -> Result<String> {
-        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx)?;
+        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx);
         let struct_def = self
             .source_mapper
             .bytecode
-            .struct_def_at(field_handle.owner)?;
+            .struct_def_at(field_handle.owner);
         let field_def = match &struct_def.field_information {
             StructFieldInformation::Native => {
                 return Err(format_err!("Attempt to access field on a native struct"));
@@ -354,7 +339,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_definition.struct_handle);
+            .datatype_handle_at(struct_definition.struct_handle);
         let name = self
             .source_mapper
             .bytecode
@@ -435,7 +420,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    fn format_function_body(locals: Vec<String>, bytecode: Vec<String>) -> String {
+    fn format_function_body(
+        locals: Vec<String>,
+        bytecode: Vec<String>,
+        jump_tables: Vec<String>,
+    ) -> String {
         if locals.is_empty() && bytecode.is_empty() {
             "".to_string()
         } else {
@@ -444,16 +433,28 @@ impl<'a> Disassembler<'a> {
                 .enumerate()
                 .map(|(local_idx, local)| format!("L{}:\t{}", local_idx, local))
                 .chain(bytecode)
+                .chain(jump_tables)
                 .collect();
             format!(" {{\n{}\n}}", body_iter.join("\n"))
         }
     }
 
     fn preview_const(slice: &[u8]) -> String {
-        if slice.len() <= 4 {
+        // Account for the .. in the preview
+        if slice.len() <= PREVIEW_LEN + 2 {
             hex::encode(slice)
         } else {
-            format!("{}..", hex::encode(&slice[..4]))
+            format!("{}..", hex::encode(&slice[..PREVIEW_LEN]))
+        }
+    }
+
+    fn preview_string(s: &str) -> String {
+        if s.len() <= PREVIEW_LEN + 2 {
+            s.to_string()
+        } else {
+            let mut preview: String = s.chars().take(PREVIEW_LEN).collect();
+            preview.push_str("..");
+            preview
         }
     }
 
@@ -478,17 +479,17 @@ impl<'a> Disassembler<'a> {
             SignatureToken::U256 => "u256".to_string(),
             SignatureToken::Address => "address".to_string(),
             SignatureToken::Signer => "signer".to_string(),
-            SignatureToken::Struct(struct_handle_idx) => self
+            SignatureToken::Datatype(struct_handle_idx) => self
                 .source_mapper
                 .bytecode
                 .identifier_at(
                     self.source_mapper
                         .bytecode
-                        .struct_handle_at(struct_handle_idx)
+                        .datatype_handle_at(struct_handle_idx)
                         .name,
                 )
                 .to_string(),
-            SignatureToken::StructInstantiation(struct_inst) => {
+            SignatureToken::DatatypeInstantiation(struct_inst) => {
                 let (struct_handle_idx, instantiation) = *struct_inst;
                 let instantiation = instantiation
                     .into_iter()
@@ -501,7 +502,7 @@ impl<'a> Disassembler<'a> {
                     .identifier_at(
                         self.source_mapper
                             .bytecode
-                            .struct_handle_at(struct_handle_idx)
+                            .datatype_handle_at(struct_handle_idx)
                             .name,
                     )
                     .to_string();
@@ -535,6 +536,7 @@ impl<'a> Disassembler<'a> {
     fn disassemble_instruction(
         &self,
         parameters: &Signature,
+        constants: &[(String, String)],
         instruction: &Bytecode,
         locals_sigs: &Signature,
         function_source_map: &FunctionSourceMap,
@@ -542,13 +544,20 @@ impl<'a> Disassembler<'a> {
     ) -> Result<String> {
         match instruction {
             Bytecode::LdConst(idx) => {
-                let constant = self.source_mapper.bytecode.constant_at(*idx);
-                Ok(format!(
-                    "LdConst[{}]({:?}: {})",
-                    idx,
-                    &constant.type_,
-                    Self::preview_const(&constant.data),
-                ))
+                let constant = constants
+                    .get(idx.0 as usize)
+                    .map(|(ty_str, val_str)| {
+                        format!("{}: {}", ty_str, Self::preview_string(val_str))
+                    })
+                    .unwrap_or_else(|| {
+                        let constant = self.source_mapper.bytecode.constant_at(*idx);
+                        format!(
+                            "{:?}: {}",
+                            &constant.type_,
+                            Self::preview_const(&constant.data)
+                        )
+                    });
+                Ok(format!("LdConst[{}]({})", idx, constant,))
             }
             Bytecode::CopyLoc(local_idx) => {
                 let name =
@@ -614,7 +623,7 @@ impl<'a> Disassembler<'a> {
                 let field_inst = self
                     .source_mapper
                     .bytecode
-                    .field_instantiation_at(*field_idx)?;
+                    .field_instantiation_at(*field_idx);
                 let name = self.name_for_field(field_inst.handle)?;
                 let ty = self.type_for_field(field_inst.handle)?;
                 Ok(format!(
@@ -631,7 +640,7 @@ impl<'a> Disassembler<'a> {
                 let field_inst = self
                     .source_mapper
                     .bytecode
-                    .field_instantiation_at(*field_idx)?;
+                    .field_instantiation_at(*field_idx);
                 let name = self.name_for_field(field_inst.handle)?;
                 let ty = self.type_for_field(field_inst.handle)?;
                 Ok(format!(
@@ -651,7 +660,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -678,7 +687,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -705,7 +714,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -735,7 +744,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -765,7 +774,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -792,7 +801,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -819,7 +828,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -927,11 +936,51 @@ impl<'a> Disassembler<'a> {
         }
     }
 
+    fn disassemble_jump_tables(&self, code: &CodeUnit) -> Result<Vec<String>> {
+        if !self.options.print_code || code.jump_tables.is_empty() {
+            return Ok(vec!["".to_string()]);
+        }
+
+        let mut jump_tables = vec!["Jump tables:".to_string()];
+
+        for (i, jt) in code.jump_tables.iter().enumerate() {
+            let enum_def = self.get_enum_def(jt.head_enum)?;
+            let enum_handle = self
+                .source_mapper
+                .bytecode
+                .datatype_handle_at(enum_def.enum_handle);
+            let enum_source_map = self
+                .source_mapper
+                .source_map
+                .get_enum_source_map(jt.head_enum)?;
+            let enum_name = self.source_mapper.bytecode.identifier_at(enum_handle.name);
+            let JumpTableInner::Full(jt) = &jt.jump_table;
+            let jt: Vec<_> = jt
+                .iter()
+                .enumerate()
+                .map(|(tag, jump_loc)| {
+                    let enum_name = enum_source_map
+                        .get_variant_location(tag as u16)
+                        .map(|((name, _), _)| name)
+                        .unwrap_or(format!("Variant{}", tag));
+                    format!("{} => jump {}", enum_name, jump_loc)
+                })
+                .collect();
+            jump_tables.push(format!(
+                "[{i}]:\tvariant_switch {} {{\n\t\t{}\n\t}}",
+                enum_name,
+                jt.join("\n\t\t")
+            ))
+        }
+        Ok(jump_tables)
+    }
+
     fn disassemble_bytecode(
         &self,
         function_source_map: &FunctionSourceMap,
         function_name: &IdentStr,
         parameters: SignatureIndex,
+        constants: &[(String, String)],
         code: &CodeUnit,
     ) -> Result<Vec<String>> {
         if !self.options.print_code {
@@ -950,6 +999,7 @@ impl<'a> Disassembler<'a> {
             .map(|instruction| {
                 self.disassemble_instruction(
                     parameters,
+                    constants,
                     instruction,
                     locals_sigs,
                     function_source_map,
@@ -971,7 +1021,7 @@ impl<'a> Disassembler<'a> {
             .collect();
 
         if self.options.print_basic_blocks {
-            let cfg = VMControlFlowGraph::new(&code.code);
+            let cfg = VMControlFlowGraph::new(&code.code, &code.jump_tables);
             for (block_number, block_id) in cfg.blocks().iter().enumerate() {
                 instrs.insert(
                     *block_id as usize + block_number,
@@ -983,9 +1033,9 @@ impl<'a> Disassembler<'a> {
         Ok(instrs)
     }
 
-    fn disassemble_struct_type_formals(
+    fn disassemble_datatype_type_formals(
         source_map_ty_params: &[SourceName],
-        type_parameters: &[StructTypeParameter],
+        type_parameters: &[DatatypeTyParameter],
     ) -> String {
         let ty_params: Vec<String> = source_map_ty_params
             .iter()
@@ -1071,6 +1121,7 @@ impl<'a> Disassembler<'a> {
         type_parameters: &[AbilitySet],
         parameters: SignatureIndex,
         code: Option<&CodeUnit>,
+        constants: &[(String, String)],
     ) -> Result<String> {
         debug_assert_eq!(
             function_source_map.parameters.len(),
@@ -1145,9 +1196,15 @@ impl<'a> Disassembler<'a> {
             Some(code) => {
                 let locals =
                     self.disassemble_locals(function_source_map, code.locals, params.len())?;
-                let bytecode =
-                    self.disassemble_bytecode(function_source_map, name, parameters, code)?;
-                Self::format_function_body(locals, bytecode)
+                let bytecode = self.disassemble_bytecode(
+                    function_source_map,
+                    name,
+                    parameters,
+                    constants,
+                    code,
+                )?;
+                let jump_tables = self.disassemble_jump_tables(code)?;
+                Self::format_function_body(locals, bytecode, jump_tables)
             }
             None => "".to_string(),
         };
@@ -1168,7 +1225,7 @@ impl<'a> Disassembler<'a> {
         let struct_handle = self
             .source_mapper
             .bytecode
-            .struct_handle_at(struct_definition.struct_handle);
+            .datatype_handle_at(struct_definition.struct_handle);
         let struct_source_map = self
             .source_mapper
             .source_map
@@ -1211,7 +1268,7 @@ impl<'a> Disassembler<'a> {
             .identifier_at(struct_handle.name)
             .to_string();
 
-        let ty_params = Self::disassemble_struct_type_formals(
+        let ty_params = Self::disassemble_datatype_type_formals(
             &struct_source_map.type_parameters,
             &struct_handle.type_parameters,
         );
@@ -1245,25 +1302,88 @@ impl<'a> Disassembler<'a> {
         ))
     }
 
-    pub fn disassemble_constant(
-        &self,
-        constant_index: usize,
-        Constant { type_, data }: &Constant,
-    ) -> Result<String> {
-        let data_str = match type_ {
-            SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8 => {
-                match bcs::from_bytes::<Vec<u8>>(data)
-                    .ok()
-                    .and_then(|data| String::from_utf8(data).ok())
-                {
-                    Some(str) => "\"".to_owned() + &str + "\" // interpreted as UTF8 string",
-                    None => hex::encode(data),
-                }
+    pub fn disassemble_enum_def(&self, enum_def_idx: EnumDefinitionIndex) -> Result<String> {
+        let enum_definition = self.get_enum_def(enum_def_idx)?;
+        let enum_handle = self
+            .source_mapper
+            .bytecode
+            .datatype_handle_at(enum_definition.enum_handle);
+        let enum_source_map = self
+            .source_mapper
+            .source_map
+            .get_enum_source_map(enum_def_idx)?;
+
+        let mut variants_formatted = vec![];
+        for variant in &enum_definition.variants {
+            let variant_name = self
+                .source_mapper
+                .bytecode
+                .identifier_at(variant.variant_name);
+            let mut variant_fields = vec![];
+            for field_definition in &variant.fields {
+                let type_sig = &field_definition.signature;
+                let field_name = self
+                    .source_mapper
+                    .bytecode
+                    .identifier_at(field_definition.name);
+                let ty_str =
+                    self.disassemble_sig_tok(type_sig.0.clone(), &enum_source_map.type_parameters)?;
+                variant_fields.push(format!("{}: {}", field_name, ty_str))
             }
-            _ => hex::encode(data),
+            variants_formatted.push(format!(
+                "{} {{ {} }}",
+                variant_name,
+                variant_fields.join(", ")
+            ));
+        }
+
+        let abilities = if enum_handle.abilities == AbilitySet::EMPTY {
+            String::new()
+        } else {
+            let ability_vec: Vec<_> = enum_handle
+                .abilities
+                .into_iter()
+                .map(Self::format_ability)
+                .collect();
+            format!(" has {}", ability_vec.join(", "))
         };
-        let type_str = self.disassemble_sig_tok(type_.clone(), &[])?;
-        Ok(format!("\t{constant_index} => {}: {}", type_str, data_str))
+
+        let name = self
+            .source_mapper
+            .bytecode
+            .identifier_at(enum_handle.name)
+            .to_string();
+
+        let ty_params = Self::disassemble_datatype_type_formals(
+            &enum_source_map.type_parameters,
+            &enum_handle.type_parameters,
+        );
+
+        if let Some(first_elem) = variants_formatted.first_mut() {
+            first_elem.insert_str(0, "{\n\t");
+        }
+
+        if let Some(last_elem) = variants_formatted.last_mut() {
+            last_elem.push_str("\n}");
+        }
+
+        Ok(format!(
+            "enum {name}{ty_params}{abilities} {variants}",
+            name = name,
+            ty_params = ty_params,
+            abilities = abilities,
+            variants = &variants_formatted.join(",\n\t"),
+        ))
+    }
+
+    pub fn disassemble_constant(&self, constant: &Constant) -> Result<(String, String)> {
+        let data_str = match try_render_constant(constant) {
+            RenderResult::NotRendered => hex::encode(&constant.data),
+            RenderResult::AsValue(v_str) => v_str,
+            RenderResult::AsString(s) => "\"".to_owned() + &s + "\" // interpreted as UTF8 string",
+        };
+        let type_str = self.disassemble_sig_tok(constant.type_.clone(), &[])?;
+        Ok((type_str, data_str))
     }
 
     pub fn disassemble(&self) -> Result<String> {
@@ -1279,59 +1399,45 @@ impl<'a> Disassembler<'a> {
             .iter()
             .filter_map(|h| self.get_import_string(h))
             .collect::<Vec<String>>();
-        let struct_defs: Vec<String> = (0..self
-            .source_mapper
-            .bytecode
-            .struct_defs()
-            .map_or(0, |d| d.len()))
+        let struct_defs: Vec<String> = (0..self.source_mapper.bytecode.struct_defs().len())
             .map(|i| self.disassemble_struct_def(StructDefinitionIndex(i as TableIndex)))
             .collect::<Result<Vec<String>>>()?;
 
-        let constants: Vec<String> = self
+        let enum_defs: Vec<String> = (0..self.source_mapper.bytecode.enum_defs().len())
+            .map(|i| self.disassemble_enum_def(EnumDefinitionIndex(i as TableIndex)))
+            .collect::<Result<Vec<String>>>()?;
+
+        let constants: Vec<(String, String)> = self
             .source_mapper
             .bytecode
             .constant_pool()
             .iter()
-            .enumerate()
-            .map(|(i, constant)| self.disassemble_constant(i, constant))
-            .collect::<Result<Vec<String>>>()?;
+            .map(|constant| self.disassemble_constant(constant))
+            .collect::<Result<Vec<(String, String)>>>()?;
 
-        let function_defs: Vec<String> = match self.source_mapper.bytecode {
-            BinaryIndexedView::Script(script) => {
-                vec![self.disassemble_function_def(
+        let function_defs: Vec<String> = (0..self.source_mapper.bytecode.function_defs.len())
+            .map(|i| {
+                let function_definition_index = FunctionDefinitionIndex(i as TableIndex);
+                let function_definition = self.get_function_def(function_definition_index)?;
+                let function_handle = self
+                    .source_mapper
+                    .bytecode
+                    .function_handle_at(function_definition.function);
+                self.disassemble_function_def(
                     self.source_mapper
                         .source_map
-                        .get_function_source_map(FunctionDefinitionIndex(0_u16))?,
-                    None,
-                    IdentStr::new("main")?,
-                    &script.type_parameters,
-                    script.parameters,
-                    Some(&script.code),
-                )?]
-            }
-            BinaryIndexedView::Module(module) => (0..module.function_defs.len())
-                .map(|i| {
-                    let function_definition_index = FunctionDefinitionIndex(i as TableIndex);
-                    let function_definition = self.get_function_def(function_definition_index)?;
-                    let function_handle = self
-                        .source_mapper
+                        .get_function_source_map(function_definition_index)?,
+                    Some((function_definition, function_handle)),
+                    self.source_mapper
                         .bytecode
-                        .function_handle_at(function_definition.function);
-                    self.disassemble_function_def(
-                        self.source_mapper
-                            .source_map
-                            .get_function_source_map(function_definition_index)?,
-                        Some((function_definition, function_handle)),
-                        self.source_mapper
-                            .bytecode
-                            .identifier_at(function_handle.name),
-                        &function_handle.type_parameters,
-                        function_handle.parameters,
-                        function_definition.code.as_ref(),
-                    )
-                })
-                .collect::<Result<Vec<String>>>()?,
-        };
+                        .identifier_at(function_handle.name),
+                    &function_handle.type_parameters,
+                    function_handle.parameters,
+                    function_definition.code.as_ref(),
+                    &constants,
+                )
+            })
+            .collect::<Result<Vec<String>>>()?;
         let imports_str = if imports.is_empty() {
             "".to_string()
         } else {
@@ -1342,15 +1448,21 @@ impl<'a> Disassembler<'a> {
         } else {
             format!(
                 "\nConstants [\n{constants}\n]\n",
-                constants = constants.join("\n")
+                constants = constants
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (ty, s))| format!("\t{i} => {ty}: {s}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             )
         };
         Ok(format!(
-            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{function_defs}\n{constant_pool_string}}}",
+            "// Move bytecode v{version}\n{header} {{{imports}\n{struct_defs}\n\n{enum_defs}\n\n{function_defs}\n{constant_pool_string}}}",
             version = version,
             header = header,
             imports = &imports_str,
             struct_defs = &struct_defs.join("\n"),
+            enum_defs = &enum_defs.join("\n"),
             function_defs = &function_defs.join("\n"),
         ))
     }

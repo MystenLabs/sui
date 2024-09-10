@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs, fromHEX } from '@mysten/bcs';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import * as template from '../pkg';
 
@@ -57,16 +57,45 @@ describe('move-binary-template', () => {
 		expect(
 			template
 				.get_constants(updatedConsts)
-				.find((c) => c.value_bcs == bcs.string().serialize('TMPL').toBytes())
+				.find((c) => c.value_bcs == bcs.string().serialize('TMPL').toBytes()),
 		).toBeFalsy();
 
 		console.log(
 			template
 				.get_constants(updatedConsts)
-				.find((c) => c.value_bcs == bcs.string().serialize('MCN').toBytes())
-        );
+				.find((c) => c.value_bcs == bcs.string().serialize('MCN').toBytes()),
+		);
 	});
 
+	it('should not update constants if there is an expected_value value miss-match', () => {
+		let bytesBefore = coinTemplateBytes();
+		expect(() => {
+			let bytesAfter = template.update_constants(
+				bytesBefore,
+				bcs.u8().serialize(8).toBytes(), // new value
+				bcs.u8().serialize(0).toBytes(), // incorrect expected current value (it should be 6)
+				'U8', // expected type
+			);
+
+			// If they are equal the produced bytecode should be the same
+			assert(template.get_constants(bytesBefore) === template.get_constants(bytesAfter));
+		});
+	});
+
+	it('should not update constants if there is an expected_type miss-match', () => {
+		let bytesBefore = coinTemplateBytes();
+		expect(() => {
+			let bytesAfter = template.update_constants(
+				bytesBefore,
+				bcs.u8().serialize(8).toBytes(), // new value
+				bcs.u8().serialize(6).toBytes(), // expected current value
+				'Vector(U8)', // incorrect expected type (it should be U8)
+			);
+
+			// If they are equal the produced bytecode should be the same
+			assert(template.get_constants(bytesBefore) === template.get_constants(bytesAfter));
+		});
+	});
 	it('should fail on incorrect identifier', () => {
 		expect(() => {
 			template.update_identifiers(pokemonBytes(), { Stats: '123123PokeStats' });

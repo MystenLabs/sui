@@ -1,63 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::sync::Arc;
 
+use anyhow::Result;
+use diesel::{
+    dsl::sql, sql_types::Bool, ExpressionMethods, OptionalExtension, QueryDsl,
+    TextExpressionMethods,
+};
+use itertools::Itertools;
+use tap::{Pipe, TapFallible};
+use tracing::{debug, error, warn};
+
+use fastcrypto::encoding::Encoding;
+use fastcrypto::encoding::Hex;
+use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
+use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_json_rpc_types::DisplayFieldsResponse;
+use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
+    SuiTransactionBlockResponse, TransactionFilter,
+};
+use sui_package_resolver::Package;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use sui_types::effects::TransactionEvents;
+use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress, VersionNumber},
+    committee::EpochId,
+    digests::TransactionDigest,
+    dynamic_field::{DynamicFieldInfo, DynamicFieldType},
+    object::{Object, ObjectRead},
+    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
+};
+use sui_types::{coin::CoinMetadata, event::EventID};
+
+use crate::database::ConnectionPool;
+use crate::db::ConnectionPoolConfig;
+use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
 use crate::{
-    db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
     models::{
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
-        objects::{CoinBalance, ObjectRefColumn, StoredObject},
-        packages::StoredPackage,
-        transactions::StoredTransaction,
+        objects::{CoinBalance, StoredObject},
+        transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{
-        checkpoints, display, epochs, events, objects, objects_snapshot, packages, transactions,
-    },
+    schema::{checkpoints, display, epochs, events, objects, transactions},
+    store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
-use anyhow::{anyhow, Result};
-use cached::proc_macro::cached;
-use cached::SizedCache;
-use diesel::{
-    dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
-    PgConnection, QueryDsl, RunQueryDsl, TextExpressionMethods,
-};
-use fastcrypto::encoding::Encoding;
-use fastcrypto::encoding::Hex;
-use itertools::{any, Itertools};
-use move_core_types::annotated_value::MoveStructLayout;
-use move_core_types::language_storage::StructTag;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::{Arc, RwLock},
-};
-use sui_json_rpc_types::DisplayFieldsResponse;
-use sui_json_rpc_types::{
-    Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
-};
-use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
-    SuiTransactionBlockResponse, TransactionFilter,
-};
-use sui_types::{
-    balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName, object::MoveObject,
-};
-use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
-    committee::EpochId,
-    digests::{ObjectDigest, TransactionDigest},
-    dynamic_field::DynamicFieldInfo,
-    is_system_package,
-    move_package::MovePackage,
-    object::{Object, ObjectRead},
-    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
-};
-use sui_types::{coin::CoinMetadata, event::EventID};
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
@@ -65,175 +61,77 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
-    pool: crate::db::PgConnectionPool,
-    package_cache: PackageCache,
+    pool: ConnectionPool,
+    package_resolver: PackageResolver,
 }
+
+pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>;
 
 // Impl for common initialization and utilities
 impl IndexerReader {
-    pub fn new<T: Into<String>>(db_url: T) -> Result<Self> {
-        let config = PgConnectionPoolConfig::default();
-        Self::new_with_config(db_url, config)
+    pub fn new(pool: ConnectionPool) -> Self {
+        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
+        let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
+        let package_resolver = Arc::new(Resolver::new(package_cache));
+        Self {
+            pool,
+            package_resolver,
+        }
     }
 
-    pub fn new_with_config<T: Into<String>>(
+    pub async fn new_with_config<T: Into<String>>(
         db_url: T,
-        config: PgConnectionPoolConfig,
+        config: ConnectionPoolConfig,
     ) -> Result<Self> {
-        let manager = ConnectionManager::<PgConnection>::new(db_url);
+        let db_url = db_url.into();
 
-        let connection_config = PgConnectionConfig {
-            statement_timeout: config.statement_timeout,
-            read_only: true,
-        };
+        let pool = ConnectionPool::new(db_url.parse()?, config).await?;
 
-        let pool = diesel::r2d2::Pool::builder()
-            .max_size(config.pool_size)
-            .connection_timeout(config.connection_timeout)
-            .connection_customizer(Box::new(connection_config))
-            .build(manager)
-            .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
-
+        let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
+        let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
+        let package_resolver = Arc::new(Resolver::new(package_cache));
         Ok(Self {
             pool,
-            package_cache: Default::default(),
+            package_resolver,
         })
     }
 
-    fn get_connection(&self) -> Result<PgPoolConnection, IndexerError> {
-        self.pool.get().map_err(|e| {
-            IndexerError::PgPoolConnectionError(format!(
-                "Failed to get connection from PG connection pool with error: {:?}",
-                e
-            ))
-        })
-    }
-
-    pub fn run_query<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E>,
-        E: From<diesel::result::Error> + std::error::Error,
-    {
-        blocking_call_is_ok_or_panic();
-
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-    }
-
-    pub fn run_query_repeatable<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E>,
-        E: From<diesel::result::Error> + std::error::Error,
-    {
-        blocking_call_is_ok_or_panic();
-
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .repeatable_read()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-    }
-
-    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
-    where
-        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
-        R: Send + 'static,
-        E: Send + 'static,
-    {
-        let this = self.clone();
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || {
-            CALLED_FROM_BLOCKING_POOL
-                .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
-            let _guard = current_span.enter();
-            f(this)
-        })
-        .await
-        .expect("propagate any panics")
-    }
-
-    pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.spawn_blocking(move |this| this.run_query(query)).await
-    }
-
-    pub async fn run_query_repeatable_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.spawn_blocking(move |this| this.run_query_repeatable(query))
-            .await
-    }
-}
-
-thread_local! {
-    static CALLED_FROM_BLOCKING_POOL: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
-}
-
-/// Check that we are in a context conducive to making blocking calls.
-/// This is done by either:
-/// - Checking that we are not inside a tokio runtime context
-/// Or:
-/// - If we are inside a tokio runtime context, ensure that the call went through
-/// `IndexerReader::spawn_blocking` which properly moves the blocking call to a blocking thread
-/// pool.
-fn blocking_call_is_ok_or_panic() {
-    if tokio::runtime::Handle::try_current().is_ok()
-        && !CALLED_FROM_BLOCKING_POOL.with(|in_blocking_pool| *in_blocking_pool.borrow())
-    {
-        panic!(
-            "You are calling a blocking DB operation directly on an async thread. \
-                Please use IndexerReader::spawn_blocking instead to move the \
-                operation to a blocking thread"
-        );
+    pub fn pool(&self) -> &ConnectionPool {
+        &self.pool
     }
 }
 
 // Impl for reading data from the DB
 impl IndexerReader {
-    fn get_object_from_db(
+    async fn get_object_from_db(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<StoredObject>, IndexerError> {
-        let object_id = object_id.to_vec();
+        use diesel_async::RunQueryDsl;
 
-        let stored_object = self.run_query(|conn| {
-            if let Some(version) = version {
-                objects::dsl::objects
-                    .filter(objects::dsl::object_id.eq(object_id))
-                    .filter(objects::dsl::object_version.eq(version.value() as i64))
-                    .first::<StoredObject>(conn)
-                    .optional()
-            } else {
-                objects::dsl::objects
-                    .filter(objects::dsl::object_id.eq(object_id))
-                    .first::<StoredObject>(conn)
-                    .optional()
-            }
-        })?;
+        let mut connection = self.pool.get().await?;
 
-        Ok(stored_object)
+        let mut query = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+        if let Some(version) = version {
+            query = query.filter(objects::object_version.eq(version.value() as i64))
+        }
+
+        query
+            .first::<StoredObject>(&mut connection)
+            .await
+            .optional()
+            .map_err(Into::into)
     }
 
-    fn get_object(
+    pub async fn get_object(
         &self,
         object_id: &ObjectID,
         version: Option<VersionNumber>,
     ) -> Result<Option<Object>, IndexerError> {
-        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+        let Some(stored_package) = self.get_object_from_db(object_id, version).await? else {
             return Ok(None);
         };
 
@@ -241,126 +139,84 @@ impl IndexerReader {
         Ok(Some(object))
     }
 
-    pub async fn get_object_in_blocking_task(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<Object>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_object(&object_id, None))
+    pub async fn get_object_read(&self, object_id: ObjectID) -> Result<ObjectRead, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_object = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .first::<StoredObject>(&mut connection)
             .await
-    }
-
-    pub async fn get_object_read_in_blocking_task(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<ObjectRead, IndexerError> {
-        self.spawn_blocking(move |this| this.get_object_read(&object_id))
-            .await
-    }
-
-    fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, IndexerError> {
-        let id = object_id.to_vec();
-
-        let stored_object = self.run_query(|conn| {
-            objects::dsl::objects
-                .filter(objects::dsl::object_id.eq(id))
-                .first::<StoredObject>(conn)
-                .optional()
-        })?;
+            .optional()?;
 
         if let Some(object) = stored_object {
-            object.try_into_object_read(self)
+            object
+                .try_into_object_read(self.package_resolver.clone())
+                .await
         } else {
-            Ok(ObjectRead::NotExists(*object_id))
+            Ok(ObjectRead::NotExists(object_id))
         }
     }
 
-    fn get_package_from_db(
-        &self,
-        package_id: &ObjectID,
-    ) -> Result<Option<MovePackage>, IndexerError> {
-        let package_id = package_id.to_vec();
-        let stored_package = self.run_query(|conn| {
-            packages::dsl::packages
-                .filter(packages::dsl::package_id.eq(package_id))
-                .first::<StoredPackage>(conn)
-                .optional()
-        })?;
-
-        let stored_package = match stored_package {
-            Some(pkg) => pkg,
-            None => return Ok(None),
-        };
-
-        let move_package =
-            bcs::from_bytes::<MovePackage>(&stored_package.move_package).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Error deserializing move package. Error: {}",
+    pub async fn get_package(&self, package_id: ObjectID) -> Result<Package, IndexerError> {
+        let store = self.package_resolver.package_store();
+        let pkg = store
+            .fetch(package_id.into())
+            .await
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Fail to fetch package from package store with error {:?}",
                     e
                 ))
-            })?;
-        Ok(Some(move_package))
+            })?
+            .as_ref()
+            .clone();
+        Ok(pkg)
     }
 
-    pub fn get_package(&self, package_id: &ObjectID) -> Result<Option<MovePackage>, IndexerError> {
-        if let Some(package) = self.package_cache.get(package_id) {
-            return Ok(Some(package));
-        }
-
-        match self.get_package_from_db(package_id) {
-            Ok(Some(package)) => {
-                self.package_cache.insert(*package_id, package.clone());
-
-                Ok(Some(package))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn get_package_in_blocking_task(
-        &self,
-        package_id: ObjectID,
-    ) -> Result<Option<MovePackage>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_package(&package_id))
-            .await
-    }
-
-    pub fn get_epoch_info_from_db(
+    async fn get_epoch_info_from_db(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<Option<StoredEpochInfo>, IndexerError> {
-        let stored_epoch = self.run_query(|conn| {
-            if let Some(epoch) = epoch {
-                epochs::dsl::epochs
-                    .filter(epochs::epoch.eq(epoch as i64))
-                    .first::<StoredEpochInfo>(conn)
-                    .optional()
-            } else {
-                epochs::dsl::epochs
-                    .order_by(epochs::epoch.desc())
-                    .first::<StoredEpochInfo>(conn)
-                    .optional()
-            }
-        })?;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_epoch = epochs::table
+            .into_boxed()
+            .pipe(|query| {
+                if let Some(epoch) = epoch {
+                    query.filter(epochs::epoch.eq(epoch as i64))
+                } else {
+                    query.order_by(epochs::epoch.desc())
+                }
+            })
+            .first::<StoredEpochInfo>(&mut connection)
+            .await
+            .optional()?;
 
         Ok(stored_epoch)
     }
 
-    pub fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
-        let stored_epoch = self.run_query(|conn| {
-            epochs::dsl::epochs
-                .order_by(epochs::epoch.desc())
-                .first::<StoredEpochInfo>(conn)
-        })?;
+    pub async fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let stored_epoch = epochs::table
+            .order_by(epochs::epoch.desc())
+            .first::<StoredEpochInfo>(&mut connection)
+            .await?;
 
         Ok(stored_epoch)
     }
 
-    pub fn get_epoch_info(
+    pub async fn get_epoch_info(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<Option<EpochInfo>, IndexerError> {
-        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = self.get_epoch_info_from_db(epoch).await?;
 
         let stored_epoch = match stored_epoch {
             Some(stored_epoch) => stored_epoch,
@@ -371,49 +227,86 @@ impl IndexerReader {
         Ok(Some(epoch_info))
     }
 
-    fn get_epochs_from_db(
+    async fn get_epochs_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredEpochInfo>, IndexerError> {
-        self.run_query(|conn| {
-            let mut boxed_query = epochs::table.into_boxed();
-            if let Some(cursor) = cursor {
-                if descending_order {
-                    boxed_query = boxed_query.filter(epochs::epoch.lt(cursor as i64));
-                } else {
-                    boxed_query = boxed_query.filter(epochs::epoch.gt(cursor as i64));
-                }
-            }
-            if descending_order {
-                boxed_query = boxed_query.order_by(epochs::epoch.desc());
-            } else {
-                boxed_query = boxed_query.order_by(epochs::epoch.asc());
-            }
+        use diesel_async::RunQueryDsl;
 
-            boxed_query.limit(limit as i64).load(conn)
-        })
+        let mut connection = self.pool.get().await?;
+
+        let mut query = epochs::table.into_boxed();
+
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(epochs::epoch.lt(cursor as i64));
+            } else {
+                query = query.filter(epochs::epoch.gt(cursor as i64));
+            }
+        }
+
+        if descending_order {
+            query = query.order_by(epochs::epoch.desc());
+        } else {
+            query = query.order_by(epochs::epoch.asc());
+        }
+
+        query
+            .limit(limit as i64)
+            .load(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub fn get_epochs(
+    pub async fn get_epochs(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<EpochInfo>, IndexerError> {
-        self.get_epochs_from_db(cursor, limit, descending_order)?
+        self.get_epochs_from_db(cursor, limit, descending_order)
+            .await?
             .into_iter()
             .map(EpochInfo::try_from)
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
 
-    pub fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
-        let system_state: SuiSystemStateSummary =
-            sui_types::sui_system_state::get_sui_system_state(self)?
-                .into_sui_system_state_summary();
+    pub async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
+        let object_store = ConnectionAsObjectStore::from_pool(&self.pool)
+            .await
+            .map_err(|e| IndexerError::PgPoolConnectionError(e.to_string()))?;
+
+        let system_state = tokio::task::spawn_blocking(move || {
+            sui_types::sui_system_state::get_sui_system_state(&object_store)
+        })
+        .await
+        .unwrap()?
+        .into_sui_system_state_summary();
+
         Ok(system_state)
+    }
+
+    pub async fn get_validator_from_table(
+        &self,
+        table_id: ObjectID,
+        pool_id: sui_types::id::ID,
+    ) -> Result<
+        sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary,
+        IndexerError,
+    > {
+        let object_store = ConnectionAsObjectStore::from_pool(&self.pool)
+            .await
+            .map_err(|e| IndexerError::PgPoolConnectionError(e.to_string()))?;
+
+        let validator = tokio::task::spawn_blocking(move || {
+            sui_types::sui_system_state::get_validator_from_table(&object_store, table_id, &pool_id)
+        })
+        .await
+        .unwrap()?;
+        Ok(validator)
     }
 
     /// Retrieve the system state data for the given epoch. If no epoch is given,
@@ -421,11 +314,11 @@ impl IndexerReader {
     /// System state of the an epoch is written at the end of the epoch, so system state
     /// of the current epoch is empty until the epoch ends. You can call
     /// `get_latest_sui_system_state` for current epoch instead.
-    pub fn get_epoch_sui_system_state(
+    pub async fn get_epoch_sui_system_state(
         &self,
         epoch: Option<EpochId>,
     ) -> Result<SuiSystemStateSummary, IndexerError> {
-        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = self.get_epoch_info_from_db(epoch).await?;
         let stored_epoch = match stored_epoch {
             Some(stored_epoch) => stored_epoch,
             None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
@@ -441,39 +334,47 @@ impl IndexerReader {
         Ok(system_state)
     }
 
-    pub fn get_checkpoint_from_db(
+    async fn get_checkpoint_from_db(
         &self,
         checkpoint_id: CheckpointId,
     ) -> Result<Option<StoredCheckpoint>, IndexerError> {
-        let stored_checkpoint = self.run_query(|conn| match checkpoint_id {
-            CheckpointId::SequenceNumber(seq) => checkpoints::dsl::checkpoints
-                .filter(checkpoints::sequence_number.eq(seq as i64))
-                .first::<StoredCheckpoint>(conn)
-                .optional(),
-            CheckpointId::Digest(digest) => checkpoints::dsl::checkpoints
-                .filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
-                .first::<StoredCheckpoint>(conn)
-                .optional(),
-        })?;
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+        let stored_checkpoint = checkpoints::table
+            .into_boxed()
+            .pipe(|query| match checkpoint_id {
+                CheckpointId::SequenceNumber(seq) => {
+                    query.filter(checkpoints::sequence_number.eq(seq as i64))
+                }
+                CheckpointId::Digest(digest) => {
+                    query.filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
+                }
+            })
+            .first::<StoredCheckpoint>(&mut connection)
+            .await
+            .optional()?;
 
         Ok(stored_checkpoint)
     }
 
-    pub fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
-        let stored_checkpoint = self.run_query(|conn| {
-            checkpoints::dsl::checkpoints
-                .order_by(checkpoints::sequence_number.desc())
-                .first::<StoredCheckpoint>(conn)
-        })?;
+    async fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
+        use diesel_async::RunQueryDsl;
 
-        Ok(stored_checkpoint)
+        let mut connection = self.pool.get().await?;
+
+        checkpoints::table
+            .order_by(checkpoints::sequence_number.desc())
+            .first::<StoredCheckpoint>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub fn get_checkpoint(
+    pub async fn get_checkpoint(
         &self,
         checkpoint_id: CheckpointId,
     ) -> Result<Option<sui_json_rpc_types::Checkpoint>, IndexerError> {
-        let stored_checkpoint = match self.get_checkpoint_from_db(checkpoint_id)? {
+        let stored_checkpoint = match self.get_checkpoint_from_db(checkpoint_id).await? {
             Some(stored_checkpoint) => stored_checkpoint,
             None => return Ok(None),
         };
@@ -482,111 +383,114 @@ impl IndexerReader {
         Ok(Some(checkpoint))
     }
 
-    pub fn get_latest_checkpoint(&self) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
-        let stored_checkpoint = self.get_latest_checkpoint_from_db()?;
+    pub async fn get_latest_checkpoint(
+        &self,
+    ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
+        let stored_checkpoint = self.get_latest_checkpoint_from_db().await?;
 
         sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
     }
 
-    fn get_checkpoints_from_db(
+    async fn get_checkpoints_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredCheckpoint>, IndexerError> {
-        self.run_query(|conn| {
-            let mut boxed_query = checkpoints::table.into_boxed();
-            if let Some(cursor) = cursor {
-                if descending_order {
-                    boxed_query =
-                        boxed_query.filter(checkpoints::sequence_number.lt(cursor as i64));
-                } else {
-                    boxed_query =
-                        boxed_query.filter(checkpoints::sequence_number.gt(cursor as i64));
-                }
-            }
-            if descending_order {
-                boxed_query = boxed_query.order_by(checkpoints::sequence_number.desc());
-            } else {
-                boxed_query = boxed_query.order_by(checkpoints::sequence_number.asc());
-            }
+        use diesel_async::RunQueryDsl;
 
-            boxed_query
-                .limit(limit as i64)
-                .load::<StoredCheckpoint>(conn)
-        })
+        let mut connection = self.pool.get().await?;
+
+        let mut query = checkpoints::table.into_boxed();
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(checkpoints::sequence_number.lt(cursor as i64));
+            } else {
+                query = query.filter(checkpoints::sequence_number.gt(cursor as i64));
+            }
+        }
+        if descending_order {
+            query = query.order_by(checkpoints::sequence_number.desc());
+        } else {
+            query = query.order_by(checkpoints::sequence_number.asc());
+        }
+
+        query
+            .limit(limit as i64)
+            .load::<StoredCheckpoint>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub fn get_checkpoints(
+    pub async fn get_checkpoints(
         &self,
         cursor: Option<u64>,
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
-        self.get_checkpoints_from_db(cursor, limit, descending_order)?
+        self.get_checkpoints_from_db(cursor, limit, descending_order)
+            .await?
             .into_iter()
             .map(sui_json_rpc_types::Checkpoint::try_from)
             .collect()
     }
 
-    fn get_transaction_effects_with_digest(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        let stored_txn: StoredTransaction = self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.inner().to_vec()))
-                .first::<StoredTransaction>(conn)
-        })?;
-
-        stored_txn.try_into_sui_transaction_effects()
-    }
-
-    fn get_transaction_effects_with_sequence_number(
-        &self,
-        sequence_number: i64,
-    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        let stored_txn: StoredTransaction = self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::tx_sequence_number.eq(sequence_number))
-                .first::<StoredTransaction>(conn)
-        })?;
-
-        stored_txn.try_into_sui_transaction_effects()
-    }
-
-    fn multi_get_transactions(
+    async fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let digests = digests
             .iter()
             .map(|digest| digest.inner().to_vec())
             .collect::<Vec<_>>();
-        self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq_any(digests))
-                .load::<StoredTransaction>(conn)
-        })
+
+        transactions::table
+            .filter(transactions::transaction_digest.eq_any(digests))
+            .load::<StoredTransaction>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    fn stored_transaction_to_transaction_block(
+    async fn stored_transaction_to_transaction_block(
         &self,
         stored_txes: Vec<StoredTransaction>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        stored_txes
+        let mut tx_block_responses_futures = vec![];
+        for stored_tx in stored_txes {
+            let package_resolver_clone = self.package_resolver();
+            let options_clone = options.clone();
+            tx_block_responses_futures.push(tokio::task::spawn(
+                stored_tx
+                    .try_into_sui_transaction_block_response(options_clone, package_resolver_clone),
+            ));
+        }
+
+        let tx_blocks = futures::future::join_all(tx_block_responses_futures)
+            .await
             .into_iter()
-            .map(|stored_tx| stored_tx.try_into_sui_transaction_block_response(&options, self))
-            .collect::<IndexerResult<Vec<_>>>()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to join all tx block futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to collect tx block futures: {}", e))?;
+        Ok(tx_blocks)
     }
 
-    fn multi_get_transactions_with_sequence_numbers(
+    async fn multi_get_transactions_with_sequence_numbers(
         &self,
         tx_sequence_numbers: Vec<i64>,
         // Some(true) for desc, Some(false) for asc, None for undefined order
         is_descending: Option<bool>,
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let mut query = transactions::table
             .filter(transactions::tx_sequence_number.eq_any(tx_sequence_numbers))
             .into_boxed();
@@ -599,148 +503,108 @@ impl IndexerReader {
             }
             None => (),
         }
-        self.run_query(|conn| query.load::<StoredTransaction>(conn))
-    }
 
-    pub async fn get_owned_objects_in_blocking_task(
-        &self,
-        address: SuiAddress,
-        filter: Option<SuiObjectDataFilter>,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, filter, cursor, limit))
+        query
+            .load::<StoredTransaction>(&mut connection)
             .await
+            .map_err(Into::into)
     }
 
-    fn get_owned_objects_impl(
+    pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
         filter: Option<SuiObjectDataFilter>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.run_query(|conn| {
-            let mut query = objects::dsl::objects
-                .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
-                .filter(objects::dsl::owner_id.eq(address.to_vec()))
-                .order(objects::dsl::object_id.asc())
-                .limit(limit as i64)
-                .into_boxed();
-            if let Some(filter) = filter {
-                match filter {
-                    SuiObjectDataFilter::StructType (struct_tag ) => {
-                        let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                        query = query.filter(objects::dsl::object_type.like(format!("{}%",object_type)));
-                    },
-                    SuiObjectDataFilter::MatchAny(filters) => {
-                        let mut condition = "(".to_string();
-                        for (i, filter) in filters.iter().enumerate() {
-                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                                if i == 0 {
-                                    condition += format!("objects.object_type LIKE '{}%'",object_type).as_str();
-                                } else {
-                                    condition += format!(" OR objects.object_type LIKE '{}%'",object_type).as_str();
-                                }
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = objects::table
+            .filter(objects::owner_type.eq(OwnerType::Address as i16))
+            .filter(objects::owner_id.eq(address.to_vec()))
+            .order(objects::object_id.asc())
+            .limit(limit as i64)
+            .into_boxed();
+        if let Some(filter) = filter {
+            match filter {
+                SuiObjectDataFilter::StructType(struct_tag) => {
+                    let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
+                    query = query.filter(objects::object_type.like(format!("{}%", object_type)));
+                }
+                SuiObjectDataFilter::MatchAny(filters) => {
+                    let mut condition = "(".to_string();
+                    for (i, filter) in filters.iter().enumerate() {
+                        if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                            let object_type =
+                                struct_tag.to_canonical_string(/* with_prefix */ true);
+                            if i == 0 {
+                                condition +=
+                                    format!("objects.object_type LIKE '{}%'", object_type).as_str();
                             } else {
-                                return Err(IndexerError::InvalidArgumentError(
+                                condition +=
+                                    format!(" OR objects.object_type LIKE '{}%'", object_type)
+                                        .as_str();
+                            }
+                        } else {
+                            return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
                                 ));
-                            }
-                        }
-                        condition += ")";
-                        query = query.filter(sql::<Bool>(&condition));
-                    },
-                    SuiObjectDataFilter::MatchNone(filters) => {
-                        for filter in filters {
-                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%", object_type)));
-                            } else {
-                                return Err(IndexerError::InvalidArgumentError(
-                                    "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
-                                ));
-                            }
                         }
                     }
-                    _ => {
-                        return Err(IndexerError::InvalidArgumentError(
-                            "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
-                        ));
+                    condition += ")";
+                    query = query.filter(sql::<Bool>(&condition));
+                }
+                SuiObjectDataFilter::MatchNone(filters) => {
+                    for filter in filters {
+                        if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                            let object_type =
+                                struct_tag.to_canonical_string(/* with_prefix */ true);
+                            query = query
+                                .filter(objects::object_type.not_like(format!("{}%", object_type)));
+                        } else {
+                            return Err(IndexerError::InvalidArgumentError(
+                                    "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                                ));
+                        }
                     }
                 }
+                _ => {
+                    return Err(IndexerError::InvalidArgumentError(
+                            "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                        ));
+                }
             }
+        }
 
-            if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
-            }
+        if let Some(object_cursor) = cursor {
+            query = query.filter(objects::object_id.gt(object_cursor.to_vec()));
+        }
 
-            query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-        })
-    }
-
-    pub async fn query_events_in_blocking_task(
-        &self,
-        filter: EventFilter,
-        cursor: Option<EventID>,
-        limit: usize,
-        descending_order: bool,
-    ) -> IndexerResult<Vec<SuiEvent>> {
-        self.spawn_blocking(move |this| {
-            this.query_events_impl(filter, cursor, limit, descending_order)
-        })
-        .await
-    }
-
-    fn filter_object_id_with_type(
-        &self,
-        object_ids: Vec<ObjectID>,
-        object_type: String,
-    ) -> Result<Vec<ObjectID>, IndexerError> {
-        let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
-        let filtered_ids = self.run_query(|conn| {
-            objects::dsl::objects
-                .filter(objects::object_id.eq_any(object_ids))
-                .filter(objects::object_type.eq(object_type))
-                .select(objects::object_id)
-                .load::<Vec<u8>>(conn)
-        })?;
-        filtered_ids
-            .into_iter()
-            .map(|id| {
-                ObjectID::from_bytes(id.clone()).map_err(|_e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "Can't convert {:?} to ObjectID",
-                        id,
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
-    }
-
-    pub async fn multi_get_objects_in_blocking_task(
-        &self,
-        object_ids: Vec<ObjectID>,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| this.multi_get_objects_impl(object_ids))
+        query
+            .load::<StoredObject>(&mut connection)
             .await
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
-    fn multi_get_objects_impl(
+    pub async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
     ) -> Result<Vec<StoredObject>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
         let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
 
-        self.run_query(|conn| {
-            objects::dsl::objects
-                .filter(objects::object_id.eq_any(object_ids))
-                .load::<StoredObject>(conn)
-        })
+        objects::table
+            .filter(objects::object_id.eq_any(object_ids))
+            .load::<StoredObject>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    fn query_transaction_blocks_by_checkpoint_impl(
+    async fn query_transaction_blocks_by_checkpoint(
         &self,
         checkpoint_seq: u64,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -748,31 +612,36 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        let mut query = transactions::dsl::transactions
-            .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = transactions::table
+            .filter(transactions::checkpoint_sequence_number.eq(checkpoint_seq as i64))
             .into_boxed();
 
         // Translate transaction digest cursor to tx sequence number
         if let Some(cursor_tx_seq) = cursor_tx_seq {
             if is_descending {
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(cursor_tx_seq));
+                query = query.filter(transactions::tx_sequence_number.lt(cursor_tx_seq));
             } else {
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(cursor_tx_seq));
+                query = query.filter(transactions::tx_sequence_number.gt(cursor_tx_seq));
             }
         }
         if is_descending {
-            query = query.order(transactions::dsl::tx_sequence_number.desc());
+            query = query.order(transactions::tx_sequence_number.desc());
         } else {
-            query = query.order(transactions::dsl::tx_sequence_number.asc());
+            query = query.order(transactions::tx_sequence_number.asc());
         }
-
-        let stored_txes =
-            self.run_query(|conn| query.limit((limit) as i64).load::<StoredTransaction>(conn))?;
-
+        let stored_txes = query
+            .limit(limit as i64)
+            .load::<StoredTransaction>(&mut connection)
+            .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
-    pub async fn query_transaction_blocks_in_blocking_task(
+    pub async fn query_transaction_blocks(
         &self,
         filter: Option<TransactionFilter>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
@@ -780,27 +649,17 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
-        self.spawn_blocking(move |this| {
-            this.query_transaction_blocks_impl(filter, options, cursor, limit, is_descending)
-        })
-        .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn query_transaction_blocks_impl(
-        &self,
-        filter: Option<TransactionFilter>,
-        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
-        cursor: Option<TransactionDigest>,
-        limit: usize,
-        is_descending: bool,
-    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
+        let mut connection = self.pool.get().await?;
+
         let cursor_tx_seq = if let Some(cursor) = cursor {
-            Some(self.run_query(|conn| {
-                transactions::dsl::transactions
-                    .select(transactions::tx_sequence_number)
-                    .filter(transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()))
-                    .first::<i64>(conn)
-            })?)
+            let tx_seq = transactions::table
+                .select(transactions::tx_sequence_number)
+                .filter(transactions::transaction_digest.eq(cursor.into_inner().to_vec()))
+                .first::<i64>(&mut connection)
+                .await?;
+            Some(tx_seq)
         } else {
             None
         };
@@ -817,13 +676,15 @@ impl IndexerReader {
         let (table_name, main_where_clause) = match filter {
             // Processed above
             Some(TransactionFilter::Checkpoint(seq)) => {
-                return self.query_transaction_blocks_by_checkpoint_impl(
-                    seq,
-                    options,
-                    cursor_tx_seq,
-                    limit,
-                    is_descending,
-                )
+                return self
+                    .query_transaction_blocks_by_checkpoint(
+                        seq,
+                        options,
+                        cursor_tx_seq,
+                        limit,
+                        is_descending,
+                    )
+                    .await
             }
             // FIXME: sanitize module & function
             Some(TransactionFilter::MoveFunction {
@@ -834,14 +695,14 @@ impl IndexerReader {
                 let package = Hex::encode(package.to_vec());
                 match (module, function) {
                     (Some(module), Some(function)) => (
-                        "tx_calls".into(),
+                        "tx_calls_fun".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
                             package, module, function
                         ),
                     ),
                     (Some(module), None) => (
-                        "tx_calls".into(),
+                        "tx_calls_mod".into(),
                         format!(
                             "package = '\\x{}'::bytea AND module = '{}'",
                             package, module
@@ -849,11 +710,11 @@ impl IndexerReader {
                     ),
                     (None, Some(_)) => {
                         return Err(IndexerError::InvalidArgumentError(
-                            "Function cannot be present wihtout Module.".into(),
+                            "Function cannot be present without Module.".into(),
                         ));
                     }
                     (None, None) => (
-                        "tx_calls".into(),
+                        "tx_calls_pkg".into(),
                         format!("package = '\\x{}'::bytea", package),
                     ),
                 }
@@ -975,40 +836,43 @@ impl IndexerReader {
             limit,
         );
 
-        tracing::debug!("query transaction blocks: {}", query);
-
-        let tx_sequence_numbers = self
-            .run_query(|conn| diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn))?
+        debug!("query transaction blocks: {}", query);
+        let tx_sequence_numbers = diesel::sql_query(query.clone())
+            .load::<TxSequenceNumber>(&mut connection)
+            .await?
             .into_iter()
             .map(|tsn| tsn.tx_sequence_number)
-            .collect::<Vec<_>>();
-
+            .collect::<Vec<i64>>();
         self.multi_get_transaction_block_response_by_sequence_numbers(
             tx_sequence_numbers,
             options,
             Some(is_descending),
         )
+        .await
     }
 
-    fn multi_get_transaction_block_response_impl(
+    async fn multi_get_transaction_block_response_in_blocking_task_impl(
         &self,
         digests: &[TransactionDigest],
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        let stored_txes = self.multi_get_transactions(digests)?;
+        let stored_txes = self.multi_get_transactions(digests).await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
-    fn multi_get_transaction_block_response_by_sequence_numbers(
+    async fn multi_get_transaction_block_response_by_sequence_numbers(
         &self,
         tx_sequence_numbers: Vec<i64>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
         // Some(true) for desc, Some(false) for asc, None for undefined order
         is_descending: Option<bool>,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        let stored_txes: Vec<StoredTransaction> =
-            self.multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)?;
+        let stored_txes: Vec<StoredTransaction> = self
+            .multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)
+            .await?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
+            .await
     }
 
     pub async fn multi_get_transaction_block_response_in_blocking_task(
@@ -1016,44 +880,35 @@ impl IndexerReader {
         digests: Vec<TransactionDigest>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.multi_get_transaction_block_response_impl(&digests, options)
-        })
-        .await
+        self.multi_get_transaction_block_response_in_blocking_task_impl(&digests, options)
+            .await
     }
 
-    fn get_transaction_events_impl(
+    pub async fn get_transaction_events(
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        let (timestamp_ms, serialized_events) = self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                .select((transactions::timestamp_ms, transactions::events))
-                .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
-        })?;
+        use diesel_async::RunQueryDsl;
 
-        let events = serialized_events
-            .into_iter()
-            .flatten()
-            .map(|event| bcs::from_bytes::<sui_types::event::Event>(&event))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut connection = self.pool.get().await?;
 
-        events
-            .into_iter()
-            .enumerate()
-            .map(|(i, event)| {
-                let layout = MoveObject::get_layout_from_struct_tag(event.type_.clone(), self)?;
-                sui_json_rpc_types::SuiEvent::try_from(
-                    event,
-                    digest,
-                    i as u64,
-                    Some(timestamp_ms as u64),
-                    layout,
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        let (timestamp_ms, serialized_events) = transactions::table
+            .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+            .select((transactions::timestamp_ms, transactions::events))
+            .first::<(i64, StoredTransactionEvents)>(&mut connection)
+            .await?;
+
+        let events = stored_events_to_events(serialized_events)?;
+        let tx_events = TransactionEvents { data: events };
+
+        let sui_tx_events = tx_events_to_sui_tx_events(
+            tx_events,
+            self.package_resolver(),
+            digest,
+            timestamp_ms as u64,
+        )
+        .await?;
+        Ok(sui_tx_events.map_or(vec![], |ste| ste.data))
     }
 
     fn query_events_by_tx_digest_query(
@@ -1095,37 +950,34 @@ impl IndexerReader {
         ))
     }
 
-    fn query_events_impl(
+    pub async fn query_events(
         &self,
         filter: EventFilter,
         cursor: Option<EventID>,
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
         let (tx_seq, event_seq) = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
             } = cursor;
-            (
-                self.run_query(|conn| {
-                    transactions::dsl::transactions
-                        .select(transactions::tx_sequence_number)
-                        .filter(
-                            transactions::dsl::transaction_digest
-                                .eq(tx_digest.into_inner().to_vec()),
-                        )
-                        .first::<i64>(conn)
-                })?,
-                event_seq,
-            )
+            let tx_seq = transactions::table
+                .select(transactions::tx_sequence_number)
+                .filter(transactions::transaction_digest.eq(tx_digest.into_inner().to_vec()))
+                .first::<i64>(&mut connection)
+                .await?;
+            (tx_seq, event_seq)
         } else if descending_order {
-            let max_tx_seq: i64 = self.run_query(|conn| {
-                events::dsl::events
-                    .select(events::tx_sequence_number)
-                    .order(events::dsl::tx_sequence_number.desc())
-                    .first::<i64>(conn)
-            })?;
+            let max_tx_seq = events::table
+                .select(events::tx_sequence_number)
+                .order(events::tx_sequence_number.desc())
+                .first::<i64>(&mut connection)
+                .await?;
             (max_tx_seq + 1, 0)
         } else {
             (-1, 0)
@@ -1221,190 +1073,206 @@ impl IndexerReader {
                 main_where_clause, cursor_clause, order_clause, limit,
             )
         };
-        tracing::debug!("query events: {}", query);
-        let stored_events =
-            self.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))?;
-        stored_events
-            .into_iter()
-            .map(|se| se.try_into_sui_event(self))
-            .collect()
-    }
+        debug!("query events: {}", query);
+        let stored_events = diesel::sql_query(query)
+            .load::<StoredEvent>(&mut connection)
+            .await?;
 
-    pub async fn get_transaction_events_in_blocking_task(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_transaction_events_impl(digest))
+        let mut sui_event_futures = vec![];
+        for stored_event in stored_events {
+            sui_event_futures.push(tokio::task::spawn(
+                stored_event.try_into_sui_event(self.package_resolver.clone()),
+            ));
+        }
+
+        let sui_events = futures::future::join_all(sui_event_futures)
             .await
-    }
-
-    pub async fn get_dynamic_fields_in_blocking_task(
-        &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.get_dynamic_fields_impl(parent_object_id, cursor, limit)
-        })
-        .await
-    }
-
-    fn get_dynamic_fields_impl(
-        &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        let objects = self.get_dynamic_fields_raw(parent_object_id, cursor, limit)?;
-
-        if any(objects.iter(), |o| o.df_object_id.is_none()) {
-            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Dynamic field has empty df_object_id column for parent object {}",
-                parent_object_id
-            )));
-        }
-
-        // for Dynamic field objects, df_object_id != object_id, we need another look up
-        // to get the version and digests.
-        // TODO: simply store df_object_version and df_object_digest as well?
-        let dfo_ids = objects
-            .iter()
-            .filter_map(|o| {
-                // Unwrap safe: checked nullity above
-                if o.df_object_id.as_ref().unwrap() == &o.object_id {
-                    None
-                } else {
-                    Some(o.df_object_id.clone().unwrap())
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let object_refs = self.get_object_refs(dfo_ids)?;
-        let mut dynamic_fields = objects
             .into_iter()
-            .map(|object| object.try_into_expectant_dynamic_field_info(self))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to join sui event futures: {}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Failed to collect sui event futures: {}", e))?;
+        Ok(sui_events)
+    }
 
-        for df in dynamic_fields.iter_mut() {
-            if let Some(obj_ref) = object_refs.get(&df.object_id) {
-                df.version = obj_ref.1;
-                df.digest = obj_ref.2;
-            }
+    pub async fn get_dynamic_fields(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
+        let stored_objects = self
+            .get_dynamic_fields_raw(parent_object_id, cursor, limit)
+            .await?;
+        let mut df_futures = vec![];
+        let indexer_reader_arc = Arc::new(self.clone());
+        for stored_object in stored_objects {
+            let indexer_reader_arc_clone = Arc::clone(&indexer_reader_arc);
+            df_futures.push(tokio::task::spawn(async move {
+                indexer_reader_arc_clone
+                    .try_create_dynamic_field_info(stored_object)
+                    .await
+            }));
+        }
+        let df_infos = futures::future::join_all(df_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Error joining DF futures: {:?}", e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| error!("Error calling try_create_dynamic_field_info: {:?}", e))?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(df_infos)
+    }
+
+    pub async fn get_dynamic_fields_raw(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
+
+        let mut query = objects::table
+            .filter(objects::owner_type.eq(OwnerType::Object as i16))
+            .filter(objects::owner_id.eq(parent_object_id.to_vec()))
+            .order(objects::object_id.asc())
+            .limit(limit as i64)
+            .into_boxed();
+
+        if let Some(object_cursor) = cursor {
+            query = query.filter(objects::object_id.gt(object_cursor.to_vec()));
         }
 
-        Ok(dynamic_fields)
+        query
+            .load::<StoredObject>(&mut connection)
+            .await
+            .map_err(Into::into)
     }
 
-    pub async fn get_dynamic_fields_raw_in_blocking_task(
+    async fn try_create_dynamic_field_info(
         &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.spawn_blocking(move |this| {
-            this.get_dynamic_fields_raw(parent_object_id, cursor, limit)
-        })
-        .await
-    }
+        stored_object: StoredObject,
+    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
+        if stored_object.df_kind.is_none() {
+            return Ok(None);
+        }
 
-    fn get_dynamic_fields_raw(
-        &self,
-        parent_object_id: ObjectID,
-        cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<StoredObject>, IndexerError> {
-        let objects: Vec<StoredObject> = self.run_query(|conn| {
-            let mut query = objects::dsl::objects
-                .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
-                .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
-                .order(objects::dsl::object_id.asc())
-                .limit(limit as i64)
-                .into_boxed();
-            if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
+        let object: Object = stored_object.try_into()?;
+        let move_object = match object.data.try_as_move().cloned() {
+            Some(move_object) => move_object,
+            None => {
+                return Err(IndexerError::ResolveMoveStructError(
+                    "Object is not a MoveObject".to_string(),
+                ));
             }
-            query.load::<StoredObject>(conn)
-        })?;
+        };
+        let struct_tag: StructTag = move_object.type_().clone().into();
+        let move_type_layout = self
+            .package_resolver
+            .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to get type layout for type {}: {}",
+                    struct_tag, e
+                ))
+            })?;
+        let MoveTypeLayout::Struct(move_struct_layout) = move_type_layout else {
+            return Err(IndexerError::ResolveMoveStructError(
+                "MoveTypeLayout is not Struct".to_string(),
+            ));
+        };
 
-        Ok(objects)
+        let move_struct = move_object.to_move_struct(&move_struct_layout)?;
+        let (move_value, type_, object_id) =
+            DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
+        let name_type = move_object.type_().try_extract_field_name(&type_)?;
+        let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to serialize dynamic field name {:?}: {e}",
+                move_value
+            ))
+        })?;
+        let name = DynamicFieldName {
+            type_: name_type,
+            value: SuiMoveValue::from(move_value).to_json_value(),
+        };
+
+        Ok(Some(match type_ {
+            DynamicFieldType::DynamicObject => {
+                let object = self.get_object(&object_id, None).await?.ok_or(
+                    IndexerError::UncategorizedError(anyhow::anyhow!(
+                        "Failed to find object_id {:?} when trying to create dynamic field info",
+                        object_id
+                    )),
+                )?;
+
+                let version = object.version();
+                let digest = object.digest();
+                let object_type = object.data.type_().unwrap().clone();
+                DynamicFieldInfo {
+                    name,
+                    bcs_name,
+                    type_,
+                    object_type: object_type.to_canonical_string(/* with_prefix */ true),
+                    object_id,
+                    version,
+                    digest,
+                }
+            }
+            DynamicFieldType::DynamicField => DynamicFieldInfo {
+                name,
+                bcs_name,
+                type_,
+                object_type: move_object.into_type().into_type_params()[1]
+                    .to_canonical_string(/* with_prefix */ true),
+                object_id: object.id(),
+                version: object.version(),
+                digest: object.digest(),
+            },
+        }))
     }
 
-    fn bcs_name_from_dynamic_field_name(
+    pub async fn bcs_name_from_dynamic_field_name(
         &self,
         name: &DynamicFieldName,
     ) -> Result<Vec<u8>, IndexerError> {
-        let layout =
-            move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(&name.type_, self)?;
+        let move_type_layout = self
+            .package_resolver()
+            .type_layout(name.type_.clone())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to get type layout for type {}: {}",
+                    name.type_, e
+                ))
+            })?;
         let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
-        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&move_type_layout)?;
         Ok(name_bcs_value)
     }
 
-    pub async fn bcs_name_from_dynamic_field_name_in_blocking_task(
-        &self,
-        name: &DynamicFieldName,
-    ) -> Result<Vec<u8>, IndexerError> {
-        let name = name.clone();
-        self.spawn_blocking(move |this| this.bcs_name_from_dynamic_field_name(&name))
-            .await
-    }
-
-    fn get_object_refs(
-        &self,
-        object_ids: Vec<Vec<u8>>,
-    ) -> IndexerResult<HashMap<ObjectID, ObjectRef>> {
-        self.run_query(|conn| {
-            let query = objects::dsl::objects
-                .select((
-                    objects::dsl::object_id,
-                    objects::dsl::object_version,
-                    objects::dsl::object_digest,
-                ))
-                .filter(objects::dsl::object_id.eq_any(object_ids))
-                .into_boxed();
-            query.load::<ObjectRefColumn>(conn)
-        })?
-        .into_iter()
-        .map(|object_ref: ObjectRefColumn| {
-            let object_id = ObjectID::from_bytes(object_ref.object_id.clone()).map_err(|_e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Can't convert {:?} to ObjectID",
-                    object_ref.object_id
-                ))
-            })?;
-            let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
-            let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
-                .map_err(|e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "object {:?} has incompatible object digest. Error: {e}",
-                        object_ref.object_digest
-                    ))
-                })?;
-            Ok((object_id, (object_id, seq, object_digest)))
-        })
-        .collect::<IndexerResult<HashMap<_, _>>>()
-    }
-
-    pub async fn get_display_object_by_type(
+    async fn get_display_object_by_type(
         &self,
         object_type: &move_core_types::language_storage::StructTag,
     ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
-        self.spawn_blocking(move |this| this.get_display_update_event(object_type))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_display_update_event(
-        &self,
-        object_type: String,
-    ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        let stored_display = self.run_query(|conn| {
-            display::table
-                .filter(display::object_type.eq(object_type))
-                .first::<StoredDisplay>(conn)
-                .optional()
-        })?;
+        let mut connection = self.pool.get().await?;
+
+        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
+        let stored_display = display::table
+            .filter(display::object_type.eq(object_type))
+            .first::<StoredDisplay>(&mut connection)
+            .await
+            .optional()?;
 
         let stored_display = match stored_display {
             Some(display) => display,
@@ -1416,18 +1284,7 @@ impl IndexerReader {
         Ok(Some(display_update))
     }
 
-    pub async fn get_owned_coins_in_blocking_task(
-        &self,
-        owner: SuiAddress,
-        coin_type: Option<String>,
-        cursor: ObjectID,
-        limit: usize,
-    ) -> Result<Vec<SuiCoin>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_coins(owner, coin_type, cursor, limit))
-            .await
-    }
-
-    fn get_owned_coins(
+    pub async fn get_owned_coins(
         &self,
         owner: SuiAddress,
         // If coin_type is None, look for all coins.
@@ -1435,6 +1292,9 @@ impl IndexerReader {
         cursor: ObjectID,
         limit: usize,
     ) -> Result<Vec<SuiCoin>, IndexerError> {
+        use diesel_async::RunQueryDsl;
+
+        let mut connection = self.pool.get().await?;
         let mut query = objects::dsl::objects
             .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
             .filter(objects::dsl::owner_id.eq(owner.to_vec()))
@@ -1445,34 +1305,27 @@ impl IndexerReader {
         } else {
             query = query.filter(objects::dsl::coin_type.is_not_null());
         }
-        query = query
+
+        query
             .order((objects::dsl::coin_type.asc(), objects::dsl::object_id.asc()))
-            .limit(limit as i64);
-
-        let stored_objects = self.run_query(|conn| query.load::<StoredObject>(conn))?;
-
-        stored_objects
+            .limit(limit as i64)
+            .load::<StoredObject>(&mut connection)
+            .await?
             .into_iter()
             .map(|o| o.try_into())
             .collect::<IndexerResult<Vec<_>>>()
     }
 
-    pub async fn get_coin_balances_in_blocking_task(
+    pub async fn get_coin_balances(
         &self,
         owner: SuiAddress,
         // If coin_type is None, look for all coins.
         coin_type: Option<String>,
     ) -> Result<Vec<Balance>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_coin_balances(owner, coin_type))
-            .await
-    }
+        use diesel_async::RunQueryDsl;
 
-    fn get_coin_balances(
-        &self,
-        owner: SuiAddress,
-        // If coin_type is None, look for all coins.
-        coin_type: Option<String>,
-    ) -> Result<Vec<Balance>, IndexerError> {
+        let mut connection = self.pool.get().await?;
+
         let coin_type_filter = if let Some(coin_type) = coin_type {
             format!("= '{}'", coin_type)
         } else {
@@ -1496,10 +1349,10 @@ impl IndexerReader {
             coin_type_filter,
         );
 
-        tracing::debug!("get coin balances query: {query}");
-        let coin_balances =
-            self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
-        coin_balances
+        debug!("get coin balances query: {query}");
+        diesel::sql_query(query)
+            .load::<CoinBalance>(&mut connection)
+            .await?
             .into_iter()
             .map(|cb| cb.try_into())
             .collect::<IndexerResult<Vec<_>>>()
@@ -1532,115 +1385,120 @@ impl IndexerReader {
         })
     }
 
-    pub async fn get_coin_metadata_in_blocking_task(
-        &self,
-        coin_struct: StructTag,
-    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_coin_metadata(coin_struct))
-            .await
-    }
+    pub async fn get_singleton_object(&self, type_: &StructTag) -> Result<Option<Object>> {
+        use diesel_async::RunQueryDsl;
 
-    fn get_coin_metadata(
-        &self,
-        coin_struct: StructTag,
-    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
-        let package_id = coin_struct.address.into();
-        let coin_metadata_type =
-            CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let coin_metadata_obj_id =
-            get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
-        if let Some(id) = coin_metadata_obj_id {
-            let metadata_object = self.get_object(&id, None)?;
-            Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
-        } else {
-            Ok(None)
+        let mut connection = self.pool.get().await?;
+
+        let object = match objects::table
+            .filter(objects::object_type_package.eq(type_.address.to_vec()))
+            .filter(objects::object_type_module.eq(type_.module.to_string()))
+            .filter(objects::object_type_name.eq(type_.name.to_string()))
+            .filter(objects::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)))
+            .first::<StoredObject>(&mut connection)
+            .await
+            .optional()?
+        {
+            Some(object) => object,
+            None => return Ok(None),
         }
+        .try_into()?;
+
+        Ok(Some(object))
     }
 
-    pub async fn get_total_supply_in_blocking_task(
+    pub async fn get_coin_metadata(
         &self,
         coin_struct: StructTag,
-    ) -> Result<Supply, IndexerError> {
-        self.spawn_blocking(move |this| this.get_total_supply(coin_struct))
-            .await
+    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
+        let coin_metadata_type = CoinMetadata::type_(coin_struct);
+
+        self.get_singleton_object(&coin_metadata_type)
+            .await?
+            .and_then(|o| SuiCoinMetadata::try_from(o).ok())
+            .pipe(Ok)
     }
 
-    fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
-        let package_id = coin_struct.address.into();
-        let treasury_cap_type =
-            TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let treasury_cap_obj_id =
-            get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())?
-                .ok_or(IndexerError::GenericError(format!(
-                    "Cannot find treasury cap for type {}",
-                    treasury_cap_type
-                )))?;
-        let treasury_cap_obj_object =
-            self.get_object(&treasury_cap_obj_id, None)?
-                .ok_or(IndexerError::GenericError(format!(
-                    "Cannot find treasury cap object with id {}",
-                    treasury_cap_obj_id
-                )))?;
-        Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
+    pub async fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
+        let treasury_cap_type = TreasuryCap::type_(coin_struct);
+
+        self.get_singleton_object(&treasury_cap_type)
+            .await?
+            .and_then(|o| TreasuryCap::try_from(o).ok())
+            .ok_or(IndexerError::GenericError(format!(
+                "Cannot find treasury cap object with type {}",
+                treasury_cap_type
+            )))?
+            .total_supply
+            .pipe(Ok)
     }
 
-    pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
-        let latest_checkpoint_sequence = self
-            .run_query(|conn| {
-                checkpoints::table
-                    .select(checkpoints::sequence_number)
-                    .order(checkpoints::sequence_number.desc())
-                    .first::<i64>(conn)
-                    .optional()
-            })?
-            .unwrap_or_default();
-        let latest_object_snapshot_checkpoint_sequence = self
-            .run_query(|conn| {
-                objects_snapshot::table
-                    .select(objects_snapshot::checkpoint_sequence_number)
-                    .order(objects_snapshot::checkpoint_sequence_number.desc())
-                    .first::<i64>(conn)
-                    .optional()
-            })?
-            .unwrap_or_default();
-        Ok((
-            latest_object_snapshot_checkpoint_sequence,
-            latest_checkpoint_sequence,
-        ))
+    pub fn package_resolver(&self) -> PackageResolver {
+        self.package_resolver.clone()
     }
 }
 
-#[derive(Clone, Default)]
-struct PackageCache {
-    inner: Arc<RwLock<BTreeMap<ObjectID, MovePackage>>>,
+// NOTE: Do not make this public and easily accessible as we need to be careful that it is only
+// used in non-async contexts via the use of tokio::task::spawn_blocking in order to avoid blocking
+// the async runtime.
+//
+// Maybe we should look into introducing an async object store trait...
+struct ConnectionAsObjectStore {
+    inner: std::sync::Mutex<
+        diesel_async::async_connection_wrapper::AsyncConnectionWrapper<
+            crate::database::Connection<'static>,
+        >,
+    >,
 }
 
-impl PackageCache {
-    fn insert(&self, object_id: ObjectID, package: MovePackage) {
-        self.inner.write().unwrap().insert(object_id, package);
+impl ConnectionAsObjectStore {
+    async fn from_pool(
+        pool: &ConnectionPool,
+    ) -> Result<Self, diesel_async::pooled_connection::PoolError> {
+        let connection = std::sync::Mutex::new(pool.dedicated_connection().await?.into());
+
+        Ok(Self { inner: connection })
     }
 
-    fn get(&self, object_id: &ObjectID) -> Option<MovePackage> {
-        self.inner.read().unwrap().get(object_id).cloned()
-    }
-}
-
-impl move_core_types::resolver::ModuleResolver for IndexerReader {
-    type Error = IndexerError;
-
-    fn get_module(
+    fn get_object_from_db(
         &self,
-        id: &move_core_types::language_storage::ModuleId,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = ObjectID::from(*id.address());
-        let module_name = id.name().to_string();
-        Ok(self
-            .get_package(&package_id)?
-            .and_then(|package| package.serialized_module_map().get(&module_name).cloned()))
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<StoredObject>, IndexerError> {
+        use diesel::RunQueryDsl;
+
+        let mut guard = self.inner.lock().unwrap();
+        let connection: &mut diesel_async::async_connection_wrapper::AsyncConnectionWrapper<_> =
+            &mut guard;
+
+        let mut query = objects::table
+            .filter(objects::object_id.eq(object_id.to_vec()))
+            .into_boxed();
+        if let Some(version) = version {
+            query = query.filter(objects::object_version.eq(version.value() as i64))
+        }
+
+        query
+            .first::<StoredObject>(connection)
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<Object>, IndexerError> {
+        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+            return Ok(None);
+        };
+
+        let object = stored_package.try_into()?;
+        Ok(Some(object))
     }
 }
 
-impl sui_types::storage::ObjectStore for IndexerReader {
+impl sui_types::storage::ObjectStore for ConnectionAsObjectStore {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -1656,75 +1514,5 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, Some(version))
             .map_err(sui_types::storage::error::Error::custom)
-    }
-}
-
-impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
-    type Error = IndexerError;
-    type Item = move_binary_format::CompiledModule;
-
-    fn get_module_by_id(
-        &self,
-        id: &move_core_types::language_storage::ModuleId,
-    ) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = ObjectID::from(*id.address());
-        let module_name = id.name().to_string();
-        // TODO: we need a cache here for deserialized module and take care of package upgrades
-        self.get_package(&package_id)?
-            .and_then(|package| package.serialized_module_map().get(&module_name).cloned())
-            .map(|bytes| move_binary_format::CompiledModule::deserialize_with_defaults(&bytes))
-            .transpose()
-            .map_err(|e| {
-                IndexerError::ModuleResolutionError(format!(
-                    "Error deserializing module {}: {}",
-                    id, e
-                ))
-            })
-    }
-}
-
-#[cached(
-    type = "SizedCache<String, Option<ObjectID>>",
-    create = "{ SizedCache::with_size(10000) }",
-    convert = r#"{ format!("{}{}", package_id, obj_type) }"#,
-    result = true
-)]
-fn get_single_obj_id_from_package_publish(
-    reader: &IndexerReader,
-    package_id: ObjectID,
-    obj_type: String,
-) -> Result<Option<ObjectID>, IndexerError> {
-    let publish_txn_effects_opt = if is_system_package(package_id) {
-        Some(reader.get_transaction_effects_with_sequence_number(0))
-    } else {
-        reader.get_object(&package_id, None)?.map(|o| {
-            let publish_txn_digest = o.previous_transaction;
-            reader.get_transaction_effects_with_digest(publish_txn_digest)
-        })
-    };
-    if let Some(publish_txn_effects) = publish_txn_effects_opt {
-        let created_objs = publish_txn_effects?
-            .created()
-            .iter()
-            .map(|o| o.object_id())
-            .collect::<Vec<_>>();
-        let obj_ids_with_type =
-            reader.filter_object_id_with_type(created_objs, obj_type.clone())?;
-        if obj_ids_with_type.len() == 1 {
-            Ok(Some(obj_ids_with_type[0]))
-        } else if obj_ids_with_type.is_empty() {
-            // The package exists but no such object is created in that transaction. Or maybe it is wrapped and we don't know yet.
-            Ok(None)
-        } else {
-            // We expect there to be only one object of this type created by the package but more than one is found.
-            tracing::error!(
-                "There are more than one objects found for type {}",
-                obj_type
-            );
-            Ok(None)
-        }
-    } else {
-        // The coin package does not exist.
-        Ok(None)
     }
 }

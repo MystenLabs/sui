@@ -80,7 +80,7 @@ impl BlockVerifier for SignedBlockVerifier {
             });
         }
 
-        // Verifiy the block's signature.
+        // Verify the block's signature.
         block.verify_signature(&self.context)?;
 
         // Verify the block's ancestor refs are consistent with the block's round,
@@ -142,10 +142,43 @@ impl BlockVerifier for SignedBlockVerifier {
             });
         }
 
-        // TODO: check transaction size, total size and count.
         let batch: Vec<_> = block.transactions().iter().map(|t| t.data()).collect();
+
+        let max_transaction_size_limit =
+            self.context.protocol_config.max_transaction_size_bytes() as usize;
+        for t in &batch {
+            if t.len() > max_transaction_size_limit && max_transaction_size_limit > 0 {
+                return Err(ConsensusError::TransactionTooLarge {
+                    size: t.len(),
+                    limit: max_transaction_size_limit,
+                });
+            }
+        }
+
+        let max_num_transactions_limit =
+            self.context.protocol_config.max_num_transactions_in_block() as usize;
+        if batch.len() > max_num_transactions_limit && max_num_transactions_limit > 0 {
+            return Err(ConsensusError::TooManyTransactions {
+                count: batch.len(),
+                limit: max_num_transactions_limit,
+            });
+        }
+
+        let total_transactions_size_limit = self
+            .context
+            .protocol_config
+            .max_transactions_in_block_bytes() as usize;
+        if batch.iter().map(|t| t.len()).sum::<usize>() > total_transactions_size_limit
+            && total_transactions_size_limit > 0
+        {
+            return Err(ConsensusError::TooManyTransactionBytes {
+                size: batch.len(),
+                limit: total_transactions_size_limit,
+            });
+        }
+
         self.transaction_verifier
-            .verify_batch(&self.context.protocol_config, &batch)
+            .verify_batch(&batch)
             .map_err(|e| ConsensusError::InvalidTransaction(format!("{e:?}")))
     }
 
@@ -171,6 +204,7 @@ impl BlockVerifier for SignedBlockVerifier {
     }
 }
 
+#[allow(unused)]
 pub(crate) struct NoopBlockVerifier;
 
 impl BlockVerifier for NoopBlockVerifier {
@@ -202,15 +236,11 @@ mod test {
 
     impl TransactionVerifier for TxnSizeVerifier {
         // Fails verification if any transaction is < 4 bytes.
-        fn verify_batch(
-            &self,
-            _protocol_config: &sui_protocol_config::ProtocolConfig,
-            transactions: &[&[u8]],
-        ) -> Result<(), ValidationError> {
+        fn verify_batch(&self, transactions: &[&[u8]]) -> Result<(), ValidationError> {
             for txn in transactions {
                 if txn.len() < 4 {
                     return Err(ValidationError::InvalidTransaction(format!(
-                        "Lenght {} too short!",
+                        "Length {} is too short!",
                         txn.len()
                     )));
                 }
@@ -219,8 +249,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_verify_block() {
+    #[tokio::test]
+    async fn test_verify_block() {
         let (context, keypairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let authority_2_protocol_keypair = &keypairs[2].1;
@@ -445,10 +475,53 @@ mod test {
                 Err(ConsensusError::InvalidTransaction(_))
             ));
         }
+
+        // Block with transaction too large.
+        {
+            let block = test_block
+                .clone()
+                .set_transactions(vec![Transaction::new(vec![4; 257 * 1024])])
+                .build();
+            let signed_block = SignedBlock::new(block, authority_2_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify(&signed_block),
+                Err(ConsensusError::TransactionTooLarge { size: _, limit: _ })
+            ));
+        }
+
+        // Block with too many transactions.
+        {
+            let block = test_block
+                .clone()
+                .set_transactions((0..1000).map(|_| Transaction::new(vec![4; 8])).collect())
+                .build();
+            let signed_block = SignedBlock::new(block, authority_2_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify(&signed_block),
+                Err(ConsensusError::TooManyTransactions { count: _, limit: _ })
+            ));
+        }
+
+        // Block with too many transaction bytes.
+        {
+            let block = test_block
+                .clone()
+                .set_transactions(
+                    (0..100)
+                        .map(|_| Transaction::new(vec![4; 8 * 1024]))
+                        .collect(),
+                )
+                .build();
+            let signed_block = SignedBlock::new(block, authority_2_protocol_keypair).unwrap();
+            assert!(matches!(
+                verifier.verify(&signed_block),
+                Err(ConsensusError::TooManyTransactionBytes { size: _, limit: _ })
+            ));
+        }
     }
 
-    #[test]
-    fn test_check_ancestors() {
+    #[tokio::test]
+    async fn test_check_ancestors() {
         let num_authorities = 4;
         let (context, _keypairs) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);

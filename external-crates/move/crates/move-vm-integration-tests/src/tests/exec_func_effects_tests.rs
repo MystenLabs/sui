@@ -8,7 +8,7 @@ use crate::compiler::{as_module, compile_units};
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{ChangeSet, Event},
+    effects::ChangeSet,
     identifier::Identifier,
     language_storage::ModuleId,
     runtime_value::{serialize_values, MoveValue},
@@ -57,7 +57,7 @@ fn fail_arg_deserialize() {
 fn mutref_output_success() {
     let mod_code = setup_module();
     let result = run(&mod_code, USE_MUTREF_LABEL, MoveValue::U64(1));
-    let (_, _, ret_values) = result.unwrap();
+    let (_, ret_values) = result.unwrap();
     assert_eq!(1, ret_values.mutable_reference_outputs.len());
     let parsed = parse_u64_arg(&ret_values.mutable_reference_outputs.first().unwrap().1);
     assert_eq!(EXPECT_MUTREF_OUT_VALUE, parsed);
@@ -86,7 +86,7 @@ fn run(
     module: &ModuleCode,
     fun_name: &str,
     arg_val0: MoveValue,
-) -> VMResult<(ChangeSet, Vec<Event>, SerializedReturnValues)> {
+) -> VMResult<(ChangeSet, SerializedReturnValues)> {
     let module_id = &module.0;
     let modules = vec![module.clone()];
     let (vm, storage) = setup_vm(&modules);
@@ -103,8 +103,8 @@ fn run(
             &mut UnmeteredGasMeter,
         )
         .and_then(|ret_values| {
-            let (change_set, events) = session.finish().0?;
-            Ok((change_set, events, ret_values))
+            let change_set = session.finish().0?;
+            Ok((change_set, ret_values))
         })
 }
 

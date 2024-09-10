@@ -98,19 +98,19 @@ The actual state is stored in a versioned inner field.
 
 <dl>
 <dt>
-<code>version: u64</code>
+<code>version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>epoch: u64</code>
+<code>epoch: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>randomness_round: u64</code>
+<code>randomness_round: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -175,7 +175,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -184,7 +184,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EWrongInnerVersion">EWrongInnerVersion</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -193,7 +193,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_CURRENT_VERSION">CURRENT_VERSION</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -202,7 +202,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidLength">EInvalidLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -211,7 +211,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
 </code></pre>
 
 
@@ -220,7 +220,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidRange">EInvalidRange</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_EInvalidRange">EInvalidRange</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -238,7 +238,7 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_U16_MAX">U16_MAX</a>: u64 = 65535;
+<pre><code><b>const</b> <a href="../sui-framework/random.md#0x2_random_U16_MAX">U16_MAX</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 65535;
 </code></pre>
 
 
@@ -357,7 +357,7 @@ Record new randomness. Called when executing the RandomnessStateUpdate system
 transaction.
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">random::Random</a>, new_round: u64, new_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">random::Random</a>, new_round: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, new_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -368,7 +368,7 @@ transaction.
 
 <pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_update_randomness_state">update_randomness_state</a>(
     self: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_Random">Random</a>,
-    new_round: u64,
+    new_round: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     new_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &TxContext,
 ) {
@@ -507,7 +507,7 @@ Generate n random bytes.
         num_of_blocks = num_of_blocks - 1;
     };
     // Fill the generator's buffer <b>if</b> needed.
-    <b>let</b> num_of_bytes = num_of_bytes <b>as</b> u64;
+    <b>let</b> num_of_bytes = num_of_bytes <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>;
     <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; (num_of_bytes - <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result))) {
         <a href="../sui-framework/random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
@@ -539,7 +539,7 @@ Generate n random bytes.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u8): u256 {
-    <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; num_of_bytes <b>as</b> u64) {
+    <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; num_of_bytes <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
         <a href="../sui-framework/random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
     <b>let</b> <b>mut</b> result: u256 = 0;
@@ -614,7 +614,7 @@ Generate a u128.
 Generate a u64.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -623,8 +623,8 @@ Generate a u64.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u64 {
-    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 8) <b>as</b> u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 8) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 }
 </code></pre>
 
@@ -796,7 +796,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: u64, max: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, max: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -805,8 +805,8 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u64, max: u64): u64 {
-    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 16) <b>as</b> u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, max: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 16) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 }
 </code></pre>
 
@@ -916,7 +916,7 @@ Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
     <b>let</b> end = n - 1;
     <b>while</b> (i &lt; end) {
         <b>let</b> j = <a href="../sui-framework/random.md#0x2_random_generate_u16_in_range">generate_u16_in_range</a>(g, i, end);
-        <a href="../move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, i <b>as</b> u64, j <b>as</b> u64);
+        <a href="../move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, i <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, j <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>);
         i = i + 1;
     };
 }

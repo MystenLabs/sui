@@ -13,7 +13,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    effects::{ChangeSet, Event},
+    effects::ChangeSet,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
@@ -22,13 +22,13 @@ use move_core_types::{
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };
 use std::{borrow::Borrow, sync::Arc};
 
 pub struct Session<'r, 'l, S> {
     pub(crate) runtime: &'l VMRuntime,
-    pub(crate) data_cache: TransactionDataCache<'l, S>,
+    pub(crate) data_cache: TransactionDataCache<S>,
     pub(crate) native_extensions: NativeContextExtensions<'r>,
 }
 
@@ -122,39 +122,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
-    /// Execute a transaction script.
-    ///
-    /// The Move VM MUST return a user error (in other words, an error that's not an invariant
-    /// violation) if
-    ///   - The script fails to deserialize or verify. Not all expressible signatures are valid.
-    ///     See `move_bytecode_verifier::script_signature` for the rules.
-    ///   - Type arguments refer to a non-existent type.
-    ///   - Arguments (senders included) fail to deserialize or fail to match the signature of the
-    ///     script function.
-    ///
-    /// If any other error occurs during execution, the Move VM MUST propagate that error back to
-    /// the caller.
-    /// Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn execute_script(
-        &mut self,
-        script: impl Borrow<[u8]>,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        self.runtime.execute_script(
-            script,
-            ty_args,
-            args,
-            &mut self.data_cache,
-            gas_meter,
-            &mut self.native_extensions,
-        )
-    }
-
     /// Publish the given module.
     ///
     /// The Move VM MUST return a user error, i.e., an error that's not an invariant violation, if
@@ -197,16 +164,12 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .publish_module_bundle(modules, sender, &mut self.data_cache, gas_meter)
     }
 
-    pub fn num_mutated_accounts(&self, sender: &AccountAddress) -> u64 {
-        self.data_cache.num_mutated_accounts(sender)
-    }
-
     /// Finish up the session and produce the side effects.
     ///
     /// This function should always succeed with no user errors returned, barring invariant violations.
     ///
     /// This MUST NOT be called if there is a previous invocation that failed with an invariant violation.
-    pub fn finish(self) -> (VMResult<(ChangeSet, Vec<Event>)>, S) {
+    pub fn finish(self) -> (VMResult<ChangeSet>, S) {
         let (res, remote) = self.data_cache.into_effects();
         (res.map_err(|e| e.finish(Location::Undefined)), remote)
     }
@@ -216,12 +179,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.
-    pub fn finish_with_extensions(
-        self,
-    ) -> (
-        VMResult<(ChangeSet, Vec<Event>, NativeContextExtensions<'r>)>,
-        S,
-    ) {
+    pub fn finish_with_extensions(self) -> (VMResult<(ChangeSet, NativeContextExtensions<'r>)>, S) {
         let Session {
             data_cache,
             native_extensions,
@@ -229,23 +187,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         } = self;
         let (res, remote) = data_cache.into_effects();
         (
-            res.map(|(change_set, events)| (change_set, events, native_extensions))
+            res.map(|change_set| (change_set, native_extensions))
                 .map_err(|e| e.finish(Location::Undefined)),
             remote,
         )
-    }
-
-    /// Load a script and all of its types into cache
-    pub fn load_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        ty_args: &[Type],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, instantiation) =
-            self.runtime
-                .loader()
-                .load_script(script.borrow(), ty_args, &self.data_cache)?;
-        Ok(instantiation)
     }
 
     /// Load a module, a function, and all of its types into cache
@@ -271,7 +216,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.runtime
             .loader()
             .load_struct_by_name(struct_name, module_id, &self.data_cache)
@@ -319,7 +264,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
 
     /// Fetch a struct type from cache, if the index is in bounds
     /// Helpful when paired with load_type, or any other API that returns 'Type'
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
+    pub fn get_struct_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.runtime.loader().get_struct_type(index)
     }
 

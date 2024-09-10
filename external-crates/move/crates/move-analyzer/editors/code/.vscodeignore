@@ -12,6 +12,8 @@
 !node_modules/vscode-languageclient/**/*
 !node_modules/vscode-languageserver-protocol/**/*
 !node_modules/vscode-languageserver-types/**/*
+!node_modules/balanced-match/**/*
+!node_modules/semver/**/*
 !language-configuration.json
 !language-server/**/*
 !move.tmLanguage.json

@@ -1,6 +1,6 @@
 # 🏄‍♂️ Quick Start
 
-This project leverages [Foundry](https://github.com/foundry-rs/foundry) to manage dependencies, contract compilation, testing, deployment, and on chain interactions via Solidity scripting.
+This project leverages [Foundry](https://github.com/foundry-rs/foundry) to manage dependencies (via soldeer), contract compilation, testing, deployment, and on chain interactions via Solidity scripting.
 
 #### Environment configuration
 
@@ -11,8 +11,10 @@ Duplicate rename the `.env.example` file to `.env`. You'll need accounts and api
 
 #### Dependencies
 
+To install the project dependencies, run: 
+
 ```bash
-forge install
+forge soldeer update
 ```
 
 #### Compilation
@@ -26,8 +28,7 @@ forge compile
 #### Testing
 
 ```bash
-forge clean
-forge test --ffi
+forge test
 ```
 
 #### Coverage
@@ -43,15 +44,13 @@ forge coverage
 > The file should be named `<chainID>.json` and should have the same fields and in the same order (alphabetical) as the `example.json`.
 
 ```bash
-forge clean
-forge script script/deploy_bridge.s.sol --rpc-url <<alias>> --broadcast --verify --ffi
+forge script script/deploy_bridge.s.sol --rpc-url <<alias>> --broadcast --verify
 ```
 
 **Local deployment**
 
 ```bash
-forge clean
-forge script script/deploy_bridge.s.sol --fork-url anvil --broadcast --ffi
+forge script script/deploy_bridge.s.sol --fork-url anvil --broadcast
 ```
 
 All deployments are saved in the `broadcast` directory.

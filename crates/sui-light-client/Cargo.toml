@@ -1,10 +1,17 @@
 [package]
 name = "sui-light-client"
-version = "0.0.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "sui-light-client"
+path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
@@ -25,4 +32,3 @@ sui-sdk.workspace = true
 move-binary-format.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
-

@@ -1,127 +1,234 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+use futures::StreamExt;
+use mysten_metrics::get_metrics;
+use mysten_metrics::metered_channel::{Receiver, Sender};
+use mysten_metrics::spawn_monitored_task;
+use sui_data_ingestion_core::Worker;
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use sui_rest_api::CheckpointData;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::SnapshotLagConfig;
+use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
+use crate::store::PgIndexerStore;
 use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStore};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
-const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
+use super::checkpoint_handler::CheckpointHandler;
+use super::tx_processor::IndexingPackageBuffer;
+use super::TransactionObjectChangesToCommit;
 
-pub struct ObjectsSnapshotProcessor<S> {
-    pub store: S,
+pub struct ObjectsSnapshotProcessor {
+    pub store: PgIndexerStore,
+    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver>>>,
+    pub indexed_obj_sender: Sender<CheckpointObjectChanges>,
     metrics: IndexerMetrics,
-    pub config: SnapshotLagConfig,
 }
 
-#[derive(Clone)]
-pub struct SnapshotLagConfig {
-    pub snapshot_min_lag: usize,
-    pub snapshot_max_lag: usize,
-    pub sleep_duration: u64,
+pub struct CheckpointObjectChanges {
+    pub checkpoint_sequence_number: u64,
+    pub object_changes: TransactionObjectChangesToCommit,
 }
 
-impl SnapshotLagConfig {
+#[async_trait]
+impl Worker for ObjectsSnapshotProcessor {
+    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let checkpoint_sequence_number = checkpoint.checkpoint_summary.sequence_number;
+        // Index the object changes and send them to the committer.
+        let object_changes: TransactionObjectChangesToCommit = CheckpointHandler::index_objects(
+            checkpoint,
+            &self.metrics,
+            self.package_resolver.clone(),
+        )
+        .await?;
+        self.indexed_obj_sender
+            .send(CheckpointObjectChanges {
+                checkpoint_sequence_number,
+                object_changes,
+            })
+            .await?;
+        Ok(())
+    }
+
+    fn preprocess_hook(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let package_objects = CheckpointHandler::get_package_objects(&[checkpoint]);
+        self.package_buffer
+            .lock()
+            .unwrap()
+            .insert_packages(package_objects);
+        Ok(())
+    }
+}
+
+// Start both the ingestion pipeline and committer for objects snapshot table.
+pub async fn start_objects_snapshot_processor(
+    store: PgIndexerStore,
+    metrics: IndexerMetrics,
+    snapshot_config: SnapshotLagConfig,
+    cancel: CancellationToken,
+) -> IndexerResult<(ObjectsSnapshotProcessor, u64)> {
+    info!("Starting object snapshot processor...");
+
+    let watermark = store
+        .get_latest_object_snapshot_checkpoint_sequence_number()
+        .await
+        .expect("Failed to get latest snapshot checkpoint sequence number from DB")
+        .map(|seq| seq + 1)
+        .unwrap_or_default();
+
+    let (commit_notifier, commit_receiver) = watch::channel(None);
+
+    let global_metrics = get_metrics().unwrap();
+    // Channel for actually communicating indexed object changes between the ingestion pipeline and the committer.
+    let (indexed_obj_sender, indexed_obj_receiver) = mysten_metrics::metered_channel::channel(
+        // TODO: placeholder for now
+        600,
+        &global_metrics
+            .channel_inflight
+            .with_label_values(&["obj_indexing_for_snapshot"]),
+    );
+
+    // Start an ingestion pipeline with the objects snapshot processor as a worker.
+    let worker = ObjectsSnapshotProcessor::new(
+        store.clone(),
+        indexed_obj_sender,
+        commit_receiver,
+        metrics.clone(),
+    );
+
+    // Now start the task that will commit the indexed object changes to the store.
+    spawn_monitored_task!(ObjectsSnapshotProcessor::commit_objects_snapshot(
+        store,
+        watermark,
+        indexed_obj_receiver,
+        commit_notifier,
+        metrics,
+        snapshot_config,
+        cancel,
+    ));
+    Ok((worker, watermark))
+}
+
+impl ObjectsSnapshotProcessor {
     pub fn new(
-        min_lag: Option<usize>,
-        max_lag: Option<usize>,
-        sleep_duration: Option<u64>,
-    ) -> Self {
-        let default_config = Self::default();
-        Self {
-            snapshot_min_lag: min_lag.unwrap_or(default_config.snapshot_min_lag),
-            snapshot_max_lag: max_lag.unwrap_or(default_config.snapshot_max_lag),
-            sleep_duration: sleep_duration.unwrap_or(default_config.sleep_duration),
-        }
-    }
-}
-
-impl Default for SnapshotLagConfig {
-    fn default() -> Self {
-        let snapshot_min_lag = std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG);
-
-        let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG);
-
-        SnapshotLagConfig {
-            snapshot_min_lag,
-            snapshot_max_lag,
-            sleep_duration: 5,
-        }
-    }
-}
-
-// NOTE: "handler"
-impl<S> ObjectsSnapshotProcessor<S>
-where
-    S: IndexerStore + Clone + Sync + Send + 'static,
-{
-    pub fn new_with_config(
-        store: S,
+        store: PgIndexerStore,
+        indexed_obj_sender: Sender<CheckpointObjectChanges>,
+        commit_receiver: watch::Receiver<Option<CheckpointSequenceNumber>>,
         metrics: IndexerMetrics,
-        config: SnapshotLagConfig,
-    ) -> ObjectsSnapshotProcessor<S> {
+    ) -> ObjectsSnapshotProcessor {
+        // Start the package buffer used for buffering packages before they are written to the db.
+        // We include a commit receiver which will be paged when a checkpoint has been processed and
+        // the corresponding package data can be deleted from the buffer.
+        let package_buffer = IndexingPackageBuffer::start(commit_receiver);
+        let package_db_resolver = IndexerStorePackageResolver::new(store.pool());
+        let in_mem_package_resolver = InterimPackageResolver::new(
+            package_db_resolver,
+            package_buffer.clone(),
+            metrics.clone(),
+        );
+        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
+        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
+
         Self {
             store,
+            indexed_obj_sender,
+            package_resolver,
+            package_buffer,
             metrics,
-            config,
         }
     }
 
-    // The `objects_snapshot` table maintains a delayed snapshot of the `objects` table,
-    // controlled by `object_snapshot_max_checkpoint_lag` (max lag) and
-    // `object_snapshot_min_checkpoint_lag` (min lag). For instance, with a max lag of 900
-    // and a min lag of 300 checkpoints, the `objects_snapshot` table will lag behind the
-    // `objects` table by 300 to 900 checkpoints. The snapshot is updated when the lag
-    // exceeds the max lag threshold, and updates continue until the lag is reduced to
-    // the min lag threshold. Then, we have a consistent read range between
-    // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
-    // where the size of this range varies between the min and max lag values.
-    pub async fn start(&self) -> IndexerResult<()> {
-        info!("Starting object snapshot processor...");
-        let latest_snapshot_cp = self
-            .store
-            .get_latest_object_snapshot_checkpoint_sequence_number()
-            .await?
-            .unwrap_or_default();
-        // make sure cp 0 is handled
-        let mut start_cp = if latest_snapshot_cp == 0 {
-            0
-        } else {
-            latest_snapshot_cp + 1
-        };
-        // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
-        let snapshot_window =
-            self.config.snapshot_max_lag as u64 - self.config.snapshot_min_lag as u64;
-        let mut latest_cp = self
-            .store
-            .get_latest_tx_checkpoint_sequence_number()
-            .await?
-            .unwrap_or_default();
+    // Receives object changes from the ingestion pipeline and commits them to the store,
+    // keeping the appropriate amount of checkpoint lag behind the rest of the indexer.
+    pub async fn commit_objects_snapshot(
+        store: PgIndexerStore,
+        watermark: CheckpointSequenceNumber,
+        indexed_obj_receiver: Receiver<CheckpointObjectChanges>,
+        commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
+        metrics: IndexerMetrics,
+        config: SnapshotLagConfig,
+        cancel: CancellationToken,
+    ) -> IndexerResult<()> {
+        let batch_size = 100;
+        let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(indexed_obj_receiver)
+            .ready_chunks(batch_size);
 
+        let mut start_cp = watermark;
+        // To prevent the processor from committing more data than allowed by the min lag, keep an
+        // in-memory buffer of changes that should not be committed to `objects_snapshot` yet.
+        let mut unprocessed = HashMap::new();
+        let mut batch = vec![];
+
+        info!("Starting objects snapshot committer...");
         loop {
-            while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
-                    .await;
-                latest_cp = self
-                    .store
-                    .get_latest_tx_checkpoint_sequence_number()
-                    .await?
-                    .unwrap_or_default();
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    info!("Shutdown signal received, terminating object snapshot processor");
+                    return Ok(());
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(config.sleep_duration)) => {
+                    let latest_indexer_cp = store
+                        .get_latest_checkpoint_sequence_number()
+                        .await?
+                        .unwrap_or_default();
+
+                    // We update the snapshot table when it falls behind the rest of the indexer by
+                    // more than the min_lag. When `latest_indexer_cp = start_cp +
+                    // config.snapshot_min_lag`, we have not actually indexed `start_cp` yet, hence
+                    // why the condition is `>=`.
+                    while latest_indexer_cp >= start_cp + config.snapshot_min_lag as u64 {
+                        // The maximum checkpoint sequence number that can be committed to the
+                        // `objects_snapshot` table.
+                        let max_allowed_cp = latest_indexer_cp - config.snapshot_min_lag as u64;
+
+                        if let Some(new_changes) = stream.next().await {
+                            for checkpoint in new_changes {
+                                unprocessed.insert(checkpoint.checkpoint_sequence_number, checkpoint);
+                            }
+                        }
+
+                        // Collect the checkpoint object changes to write to `objects_snapshot`,
+                        // stopping when there are gaps in the sequence of unprocessed checkpoints.
+                        // This is an inclusive range, so if `start_cp` is equal to
+                        // `max_allowed_cp`, we'll still index the one checkpoint.
+                        for cp in start_cp..=max_allowed_cp {
+                            if let Some(checkpoint) = unprocessed.remove(&cp) {
+                                batch.push(checkpoint);
+                            }
+                            else {
+                                break;
+                            }
+                        }
+
+                        if !batch.is_empty() {
+                            let first_checkpoint_seq = batch.first().as_ref().unwrap().checkpoint_sequence_number;
+                            let last_checkpoint_seq = batch.last().as_ref().unwrap().checkpoint_sequence_number;
+                            info!("Objects snapshot processor is updating objects snapshot table from {} to {}", first_checkpoint_seq, last_checkpoint_seq);
+
+                            store.persist_objects_snapshot(batch.drain(..).map(|obj| obj.object_changes).collect())
+                                .await
+                                .unwrap_or_else(|_| panic!("Failed to backfill objects snapshot from {} to {}", first_checkpoint_seq, last_checkpoint_seq));
+                            start_cp = last_checkpoint_seq + 1;
+
+                            // Tells the package buffer that this checkpoint has been processed and
+                            // the corresponding package data can be deleted.
+                            commit_notifier.send(Some(last_checkpoint_seq)).expect("Commit watcher should not be closed");
+                            metrics
+                                .latest_object_snapshot_sequence_number
+                                .set(last_checkpoint_seq as i64);
+                        }
+                    }
+                }
             }
-            self.store
-                .persist_object_snapshot(start_cp, start_cp + snapshot_window)
-                .await?;
-            start_cp += snapshot_window;
-            self.metrics
-                .latest_object_snapshot_sequence_number
-                .set(start_cp as i64);
         }
     }
 }

@@ -63,6 +63,18 @@ impl ToFromBytes for BridgeAuthorityPublicKeyBytes {
     }
 }
 
+/// implement `FromStr` for `BridgeAuthorityPublicKeyBytes`
+/// to convert a hex-string to public key bytes.
+impl std::str::FromStr for BridgeAuthorityPublicKeyBytes {
+    type Err = FastCryptoError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = Hex::decode(s).map_err(|e| {
+            FastCryptoError::GeneralError(format!("Failed to decode hex string: {}", e))
+        })?;
+        Self::from_bytes(&bytes)
+    }
+}
+
 pub struct ConciseBridgeAuthorityPublicKeyBytesRef<'a>(&'a BridgeAuthorityPublicKeyBytes);
 
 impl Debug for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
@@ -107,7 +119,6 @@ pub struct BridgeAuthoritySignInfo {
 impl BridgeAuthoritySignInfo {
     pub fn new(msg: &BridgeAction, secret: &BridgeAuthorityKeyPair) -> Self {
         let msg_bytes = msg.to_bytes();
-
         Self {
             authority_pub_key: secret.public().clone(),
             signature: secret.sign_recoverable_with_hash::<Keccak256>(&msg_bytes),
@@ -171,15 +182,14 @@ mod tests {
     use crate::events::EmittedSuiToEthTokenBridgeV1;
     use crate::test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action};
     use crate::types::SignedBridgeAction;
-    use crate::types::{
-        BridgeAction, BridgeAuthority, BridgeChainId, SuiToEthBridgeAction, TokenId,
-    };
+    use crate::types::{BridgeAction, BridgeAuthority, SuiToEthBridgeAction};
     use ethers::types::Address as EthAddress;
     use fastcrypto::traits::{KeyPair, ToFromBytes};
     use prometheus::Registry;
     use std::str::FromStr;
     use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_ETH};
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
 
@@ -200,7 +210,7 @@ mod tests {
         let committee = BridgeCommittee::new(vec![authority1.clone(), authority2.clone()]).unwrap();
 
         let action: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100));
+            get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100), None, None, None);
 
         let sig = BridgeAuthoritySignInfo::new(&action, &secret);
 
@@ -219,7 +229,7 @@ mod tests {
         ));
 
         let mismatched_action: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(2), Some(3), Some(4));
+            get_test_sui_to_eth_bridge_action(None, Some(2), Some(3), Some(4), None, None, None);
         // Verification should fail - mismatched action
         assert!(matches!(
             verify_signed_bridge_action(
@@ -234,7 +244,7 @@ mod tests {
 
         // Signature is invalid (signed over different message), verification should fail
         let action2: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(3), Some(5), Some(77));
+            get_test_sui_to_eth_bridge_action(None, Some(3), Some(5), Some(77), None, None, None);
 
         let invalid_sig = BridgeAuthoritySignInfo::new(&action2, &secret);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), invalid_sig);
@@ -331,8 +341,8 @@ mod tests {
                 eth_chain_id: BridgeChainId::EthSepolia,
                 eth_address: EthAddress::from_str("0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96")
                     .unwrap(),
-                token_id: TokenId::ETH,
-                amount: 100000u64,
+                token_id: TOKEN_ID_ETH,
+                amount_sui_adjusted: 100000u64,
             },
         });
         let sig = BridgeAuthoritySignInfo {

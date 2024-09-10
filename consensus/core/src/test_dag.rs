@@ -5,13 +5,16 @@ use std::sync::Arc;
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
-    block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
+    block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
-    leader_schedule::LeaderSchedule,
+    test_dag_builder::DagBuilder,
 };
+
+// todo: remove this once tests have been refactored to use DagBuilder/DagParser
 
 /// Build a fully interconnected dag up to the specified round. This function
 /// starts building the dag from the specified [`start`] parameter or from
@@ -38,6 +41,7 @@ pub(crate) fn build_dag(
             .collect::<Vec<_>>(),
     };
 
+    let num_authorities = context.committee.size();
     let starting_round = ancestors.first().unwrap().round + 1;
     for round in starting_round..=stop {
         let (references, blocks): (Vec<_>, Vec<_>) = context
@@ -45,10 +49,12 @@ pub(crate) fn build_dag(
             .authorities()
             .map(|authority| {
                 let author_idx = authority.0.value() as u32;
-                let base_ts = round as BlockTimestampMs * 1000;
+                // Test the case where a block from round R+1 has smaller timestamp than a block from round R.
+                let ts = round as BlockTimestampMs / 2 * num_authorities as BlockTimestampMs
+                    + author_idx as BlockTimestampMs;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author_idx)
-                        .set_timestamp_ms(base_ts + (author_idx + round) as u64)
+                        .set_timestamp_ms(ts)
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
@@ -85,24 +91,27 @@ pub(crate) fn build_dag_layer(
     references
 }
 
-// TODO: confirm pipelined & multi-leader cases work properly
-pub(crate) fn get_all_leader_blocks(
-    dag_state: Arc<RwLock<DagState>>,
-    leader_schedule: LeaderSchedule,
-    num_rounds: u32,
-    wave_length: u32,
-    pipelined: bool,
-    num_leaders: u32,
-) -> Vec<VerifiedBlock> {
-    let mut blocks = Vec::new();
-    for round in 1..=num_rounds {
-        for leader_offset in 0..num_leaders {
-            if pipelined || round % wave_length == 0 {
-                let slot = Slot::new(round, leader_schedule.elect_leader(round, leader_offset));
-                let uncommitted_blocks = dag_state.read().get_uncommitted_blocks_at_slot(slot);
-                blocks.extend(uncommitted_blocks);
-            }
-        }
+pub(crate) fn create_random_dag(
+    seed: u64,
+    include_leader_percentage: u64,
+    num_rounds: Round,
+    context: Arc<Context>,
+) -> DagBuilder {
+    assert!(
+        (0..=100).contains(&include_leader_percentage),
+        "include_leader_percentage must be in the range 0..100"
+    );
+
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut dag_builder = DagBuilder::new(context);
+
+    for r in 1..=num_rounds {
+        let random_num = rng.gen_range(0..100);
+        let include_leader = random_num <= include_leader_percentage;
+        dag_builder
+            .layer(r)
+            .min_ancestor_links(include_leader, Some(random_num));
     }
-    blocks
+
+    dag_builder
 }

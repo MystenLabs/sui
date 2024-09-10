@@ -20,13 +20,13 @@ async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "data", "dummy_modules_publish"]);
-    let compiled_package = BuildConfig::default().build(path)?;
+    let compiled_package = BuildConfig::default().build(&path)?;
     let compiled_modules_bytes = compiled_package
         .get_package_base64(false)
         .into_iter()
         .map(|b| b.to_vec().unwrap())
         .collect::<Vec<_>>();
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(compiled_modules_bytes, dependencies);

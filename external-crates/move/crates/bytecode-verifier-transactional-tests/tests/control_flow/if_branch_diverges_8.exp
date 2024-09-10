@@ -1,6 +1,7 @@
 processed 1 task
 
-task 0 'run'. lines 1-24:
+task 0, lines 1-24:
+//# run
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: INDEX_OUT_OF_BOUNDS,
     sub_status: None,

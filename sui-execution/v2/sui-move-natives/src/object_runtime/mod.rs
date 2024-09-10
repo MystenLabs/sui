@@ -198,7 +198,7 @@ impl<'a> ObjectRuntime<'a> {
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction. In that case, we also skip adding it
         // to new_ids.
-        let was_present = self.state.deleted_ids.remove(&id);
+        let was_present = self.state.deleted_ids.shift_remove(&id);
         if !was_present {
             // mark the id as new
             self.state.new_ids.insert(id);
@@ -226,7 +226,7 @@ impl<'a> ObjectRuntime<'a> {
                 ));
         };
 
-        let was_new = self.state.new_ids.remove(&id);
+        let was_new = self.state.new_ids.shift_remove(&id);
         if !was_new {
             self.state.deleted_ids.insert(id);
         }
@@ -639,6 +639,7 @@ pub fn get_all_uids(
     bcs_bytes: &[u8],
 ) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
     let mut ids = BTreeSet::new();
+    // TODO (annotated-visitor): Replace with a custom visitor
     let v = MoveValue::simple_deserialize(bcs_bytes, fully_annotated_layout)
         .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
     get_all_uids_in_value(&mut ids, &v)?;

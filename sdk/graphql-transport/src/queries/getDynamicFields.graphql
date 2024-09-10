@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
-	object(address: $parentId) {
+	owner(address: $parentId) {
 		dynamicFields(first: $first, after: $cursor) {
 			pageInfo {
 				hasNextPage

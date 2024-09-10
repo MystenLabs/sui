@@ -41,6 +41,8 @@ export interface SuiSignMessageInput {
  * @deprecated Wallets can still implement this method for compatibility, but this has been replaced by the `sui:signPersonalMessage` feature
  */
 export interface SuiSignMessageOutput {
+	/** Base64 message bytes. */
 	messageBytes: string;
+	/** Base64 encoded signature */
 	signature: string;
 }

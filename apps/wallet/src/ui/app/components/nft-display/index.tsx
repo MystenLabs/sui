@@ -7,7 +7,7 @@ import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
 import { useFileExtensionType, useGetNFTMeta } from '_hooks';
 import { isKioskOwnerToken, useGetObject } from '@mysten/core';
 import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import { cva } from 'class-variance-authority';
 import type { VariantProps } from 'class-variance-authority';
 

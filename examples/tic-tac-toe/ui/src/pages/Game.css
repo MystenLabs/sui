@@ -1,0 +1,25 @@
+@import '@radix-ui/colors/gray.css';
+
+.board {
+	background-color: var(--gray-12);
+}
+
+.board .cell {
+	background-color: var(--color-background);
+	color: var(--gray-12);
+	width: 100%;
+}
+
+.board .cell::before {
+	content: '';
+	display: block;
+	padding-top: 100%;
+}
+
+.board .cell.empty {
+	color: var(--color-background);
+}
+
+.board .cell.empty:hover {
+	color: var(--gray-8);
+}

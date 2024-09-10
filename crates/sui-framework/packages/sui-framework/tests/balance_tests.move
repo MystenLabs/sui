@@ -23,13 +23,13 @@ module sui::coin_balance_tests {
         let balance_mut = coin::balance_mut(&mut coin);
         let sub_balance = balance_mut.split(50);
 
-        assert!(sub_balance.value() == 50, 0);
-        assert!(coin.value() == 50, 0);
+        assert!(sub_balance.value() == 50);
+        assert!(coin.value() == 50);
 
         let mut balance = coin.into_balance();
         balance.join(sub_balance);
 
-        assert!(balance.value() == 100, 0);
+        assert!(balance.value() == 100);
 
         let coin = balance.into_coin(scenario.ctx());
         pay::keep(coin, scenario.ctx());

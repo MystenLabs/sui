@@ -32,37 +32,8 @@ impl GovernanceReadApi {
         Self { inner }
     }
 
-    /// Get a validator's APY by its address
-    pub async fn get_validator_apy(
-        &self,
-        address: &SuiAddress,
-    ) -> Result<Option<f64>, IndexerError> {
-        let apys = validators_apys_map(self.get_validators_apy().await?);
-        Ok(apys.get(address).copied())
-    }
-
-    async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
-        let system_state_summary: SuiSystemStateSummary =
-            self.get_latest_sui_system_state().await?;
-        let epoch = system_state_summary.epoch;
-        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
-
-        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
-
-        let apys = sui_json_rpc::governance_api::calculate_apys(
-            stake_subsidy_start_epoch,
-            exchange_rate_table,
-        );
-
-        Ok(ValidatorApys { apys, epoch })
-    }
-
     pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
-        match self
-            .inner
-            .spawn_blocking(move |this| this.get_epoch_info(epoch))
-            .await
-        {
+        match self.inner.get_epoch_info(epoch).await {
             Ok(Some(epoch_info)) => Ok(epoch_info),
             Ok(None) => Err(IndexerError::InvalidArgumentError(format!(
                 "Missing epoch {epoch:?}"
@@ -72,9 +43,7 @@ impl GovernanceReadApi {
     }
 
     async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
-        self.inner
-            .spawn_blocking(|this| this.get_latest_sui_system_state())
-            .await
+        self.inner.get_latest_sui_system_state().await
     }
 
     async fn get_stakes_by_ids(
@@ -82,7 +51,7 @@ impl GovernanceReadApi {
         ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, IndexerError> {
         let mut stakes = vec![];
-        for stored_object in self.inner.multi_get_objects_in_blocking_task(ids).await? {
+        for stored_object in self.inner.multi_get_objects(ids).await? {
             let object = sui_types::object::Object::try_from(stored_object)?;
             let stake_object = StakedSui::try_from(&object)?;
             stakes.push(stake_object);
@@ -98,7 +67,7 @@ impl GovernanceReadApi {
         let mut stakes = vec![];
         for stored_object in self
             .inner
-            .get_owned_objects_in_blocking_task(
+            .get_owned_objects(
                 owner,
                 Some(SuiObjectDataFilter::StructType(
                     MoveObjectType::staked_sui().into(),
@@ -131,7 +100,7 @@ impl GovernanceReadApi {
         let system_state_summary = self.get_latest_sui_system_state().await?;
         let epoch = system_state_summary.epoch;
 
-        let rates = exchange_rates(self, system_state_summary)
+        let rates = exchange_rates(self, &system_state_summary)
             .await?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
@@ -196,17 +165,17 @@ impl GovernanceReadApi {
 #[cached(
     type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
     create = "{ SizedCache::with_size(1) }",
-    convert = "{ system_state_summary.epoch }",
+    convert = " { system_state_summary.epoch } ",
     result = true
 )]
-async fn exchange_rates(
+pub async fn exchange_rates(
     state: &GovernanceReadApi,
-    system_state_summary: SuiSystemStateSummary,
+    system_state_summary: &SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
     let mut tables = vec![];
 
-    for validator in system_state_summary.active_validators {
+    for validator in &system_state_summary.active_validators {
         tables.push((
             validator.sui_address,
             validator.staking_pool_id,
@@ -219,7 +188,7 @@ async fn exchange_rates(
     // Get inactive validator rate tables
     for df in state
         .inner
-        .get_dynamic_fields_in_blocking_task(
+        .get_dynamic_fields(
             system_state_summary.inactive_pools_id,
             None,
             system_state_summary.inactive_pools_size as usize,
@@ -234,13 +203,7 @@ async fn exchange_rates(
         let inactive_pools_id = system_state_summary.inactive_pools_id;
         let validator = state
             .inner
-            .spawn_blocking(move |this| {
-                sui_types::sui_system_state::get_validator_from_table(
-                    &this,
-                    inactive_pools_id,
-                    &pool_id,
-                )
-            })
+            .get_validator_from_table(inactive_pools_id, pool_id)
             .await?;
         tables.push((
             validator.sui_address,
@@ -257,11 +220,7 @@ async fn exchange_rates(
         let mut rates = vec![];
         for df in state
             .inner
-            .get_dynamic_fields_raw_in_blocking_task(
-                exchange_rates_id,
-                None,
-                exchange_rates_size as usize,
-            )
+            .get_dynamic_fields_raw(exchange_rates_id, None, exchange_rates_size as usize)
             .await?
         {
             let dynamic_field = df
@@ -283,16 +242,6 @@ async fn exchange_rates(
         });
     }
     Ok(exchange_rates)
-}
-
-/// Cache a map representing the validators' APYs for this epoch
-#[cached(
-    type = "SizedCache<EpochId, BTreeMap<SuiAddress, f64>>",
-    create = "{ SizedCache::with_size(1) }",
-    convert = " {apys.epoch} "
-)]
-fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
-    BTreeMap::from_iter(apys.apys.iter().map(|x| (x.address, x.apy)))
 }
 
 #[async_trait]

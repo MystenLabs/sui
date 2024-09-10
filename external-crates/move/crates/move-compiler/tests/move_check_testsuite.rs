@@ -23,6 +23,7 @@ const KEEP_TMP: &str = "KEEP";
 const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
+const IDE_EXT: &str = "ide";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
@@ -63,12 +64,13 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     } else if path_contains(DEV_DIR) {
         Edition::DEVELOPMENT
     } else {
-        Edition::default()
+        Edition::LEGACY
     };
     let config = PackageConfig {
         flavor,
         edition,
-        ..PackageConfig::default()
+        is_dependency: false,
+        warning_filter: WarningFilters::new_for_source(),
     };
     testsuite(path, config, lint)
 }
@@ -78,14 +80,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // file.
     if path.with_extension(TEST_EXT).exists() {
         let test_exp_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let test_out_path = format!(
-            "{}.unit_test.{}",
+            "{}.{TEST_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -105,16 +105,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // `path.migration` file.
     if path.with_extension(MIGRATION_EXT).exists() {
         let migration_exp_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            EXP_EXT
         );
         let migration_out_path = format!(
-            "{}.{}.{}",
+            "{}.{MIGRATION_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            MIGRATION_EXT,
-            OUT_EXT
         );
         let mut config = config.clone();
         config
@@ -134,14 +130,12 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     // A cross-module unused case that should run without unused warnings suppression
     if path.with_extension(UNUSED_EXT).exists() {
         let unused_exp_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{EXP_EXT}",
             path.with_extension("").to_string_lossy(),
-            EXP_EXT
         );
         let unused_out_path = format!(
-            "{}.unused.{}",
+            "{}.{UNUSED_EXT}.{OUT_EXT}",
             path.with_extension("").to_string_lossy(),
-            OUT_EXT
         );
         run_test(
             path,
@@ -153,15 +147,33 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         )?;
     }
 
+    // A cross-module unused case that should run without unused warnings suppression
+    if path.with_extension(IDE_EXT).exists() {
+        let ide_exp_path = format!(
+            "{}.{IDE_EXT}.{EXP_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        let ide_out_path = format!(
+            "{}.{IDE_EXT}.{OUT_EXT}",
+            path.with_extension("").to_string_lossy(),
+        );
+        run_test(
+            path,
+            Path::new(&ide_exp_path),
+            Path::new(&ide_out_path),
+            Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
+            config.clone(),
+            lint,
+        )?;
+    }
+
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
-
-    let flags = Flags::empty();
 
     config
         .warning_filter
         .union(&WarningFilters::unused_warnings_filter_for_test());
-    run_test(path, &exp_path, &out_path, flags, config, lint)?;
+    run_test(path, &exp_path, &out_path, Flags::empty(), config, lint)?;
     Ok(())
 }
 
@@ -210,7 +222,7 @@ pub fn run_test_inner(
 
     let flags = flags.set_sources_shadow_deps(true);
 
-    let mut compiler = Compiler::from_package_paths(targets, deps)
+    let mut compiler = Compiler::from_package_paths(None, targets, deps)
         .unwrap()
         .set_flags(flags)
         .set_default_config(package_config);

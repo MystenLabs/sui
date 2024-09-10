@@ -4,7 +4,7 @@
 use clap::Parser;
 use move_cli::base::migrate;
 use move_package::BuildConfig as MoveBuildConfig;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Parser)]
 #[group(id = "sui-move-migrate")]
@@ -14,7 +14,7 @@ pub struct Migrate {
 }
 
 impl Migrate {
-    pub fn execute(self, path: Option<PathBuf>, config: MoveBuildConfig) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>, config: MoveBuildConfig) -> anyhow::Result<()> {
         self.migrate.execute(path, config)
     }
 }

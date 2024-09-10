@@ -15,7 +15,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{BackingPackageStore, PackageObject};
-use sui_types::{error::SuiError, type_resolver::LayoutResolver};
+use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
 
 /// Retrieve a `MoveStructLayout` from a `Type`.
 /// Invocation into the `Session` to leverage the `LinkageView` implementation
@@ -42,7 +42,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
     fn get_annotated_layout(
         &mut self,
         struct_tag: &StructTag,
-    ) -> Result<A::MoveStructLayout, SuiError> {
+    ) -> Result<A::MoveDatatypeLayout, SuiError> {
         let type_tag: TypeTag = TypeTag::from(struct_tag.clone());
         let Ok(ty) = load_type(&mut self.session, &type_tag) else {
             return Err(SuiError::FailObjectLayout {
@@ -55,7 +55,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
                 st: format!("{}", struct_tag),
             });
         };
-        Ok(layout)
+        Ok(A::MoveDatatypeLayout::Struct(layout))
     }
 }
 

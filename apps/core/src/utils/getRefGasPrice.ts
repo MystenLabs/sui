@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiValidatorSummary } from '@mysten/sui.js/client';
+import { SuiValidatorSummary } from '@mysten/sui/client';
 
 import { calculateStakeShare } from './calculateStakeShare';
 

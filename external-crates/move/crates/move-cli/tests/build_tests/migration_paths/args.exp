@@ -16,13 +16,13 @@ BUILDING migration
 The following changes will be made.
 ============================================================
 
---- sources/other.move
-+++ sources/other.move
+--- ./sources/other.move
++++ ./sources/other.move
 @@ -4 +4 @@
 -    public fun t() { migration::migration::t() }
 +    public fun t() { ::migration::migration::t() }
---- tests/test0.move
-+++ tests/test0.move
+--- ./tests/test0.move
++++ ./tests/test0.move
 @@ -6 +6 @@
 -    #[expected_failure(abort_code = migration::validate::ErrorCode)]
 +    #[expected_failure(abort_code = ::migration::validate::ErrorCode)]
@@ -30,8 +30,8 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/other.move" . . .
-Updating "tests/test0.move" . . .
+Updating "./sources/other.move" . . .
+Updating "./tests/test0.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

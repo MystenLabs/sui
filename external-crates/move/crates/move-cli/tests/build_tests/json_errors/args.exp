@@ -1,0 +1,113 @@
+Command `build --json-errors`:
+BUILDING Test
+[
+  {
+    "file": "./sources/m.move",
+    "line": 2,
+    "column": 15,
+    "level": "Warning",
+    "category": 9,
+    "code": 2,
+    "msg": "unused variable"
+  },
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]
+Command `disassemble --json-errors --package Test --name m`:
+[
+  {
+    "file": "./sources/m.move",
+    "line": 2,
+    "column": 15,
+    "level": "Warning",
+    "category": 9,
+    "code": 2,
+    "msg": "unused variable"
+  },
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]
+Command `build --json-errors --silence-warnings`:
+BUILDING Test
+[
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]
+Command `build --json-errors --silence-warnings --warnings-are-errors`:
+BUILDING Test
+[
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]
+Command `build --json-errors --warnings-are-errors`:
+BUILDING Test
+[
+  {
+    "file": "./sources/m.move",
+    "line": 2,
+    "column": 15,
+    "level": "NonblockingError",
+    "category": 9,
+    "code": 2,
+    "msg": "unused variable"
+  },
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]
+Command `build --json-errors --warnings-are-errors`:
+BUILDING Test
+[
+  {
+    "file": "./sources/m.move",
+    "line": 2,
+    "column": 15,
+    "level": "NonblockingError",
+    "category": 9,
+    "code": 2,
+    "msg": "unused variable"
+  },
+  {
+    "file": "./sources/m.move",
+    "line": 6,
+    "column": 9,
+    "level": "BlockingError",
+    "category": 4,
+    "code": 7,
+    "msg": "incompatible types"
+  }
+]

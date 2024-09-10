@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::consistency::{build_objects_query, consistent_range, View};
+use crate::connection::ScanConnection;
+use crate::consistency::{build_objects_query, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
 use crate::raw_query::RawQuery;
 
+use super::available_range::AvailableRange;
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
@@ -22,9 +24,11 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
+use super::uint53::UInt53;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
@@ -149,7 +153,7 @@ impl Coin {
             .await
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_.super_).version().await
     }
 
@@ -191,6 +195,25 @@ impl Coin {
     }
 
     /// The transaction blocks that sent objects to this object.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     pub(crate) async fn received_transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -199,9 +222,10 @@ impl Coin {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(&self.super_.super_)
-            .received_transaction_blocks(ctx, first, after, last, before, filter)
+            .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await
     }
 
@@ -243,7 +267,7 @@ impl Coin {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -260,7 +284,7 @@ impl Coin {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -283,7 +307,7 @@ impl Coin {
                 after,
                 last,
                 before,
-                Some(self.super_.super_.version_impl()),
+                Some(self.super_.root_version()),
             )
             .await
     }
@@ -302,31 +326,35 @@ impl Coin {
         page: Page<object::Cursor>,
         coin_type: TypeTag,
         owner: Option<SuiAddress>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Coin>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        let response = db
+        let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                let result = page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    rhs,
-                    coins_query(coin_type, owner, lhs as i64, rhs as i64, &page),
-                )?;
-
-                Ok(Some((result, rhs)))
+                    Ok(Some(
+                        page.paginate_raw_query::<StoredHistoryObject>(
+                            conn,
+                            checkpoint_viewed_at,
+                            coins_query(coin_type, owner, range, &page),
+                        )
+                        .await?,
+                    ))
+                }
+                .scope_boxed()
             })
-            .await?;
-
-        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            .await?
+        else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
@@ -339,7 +367,7 @@ impl Coin {
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             let object =
-                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
+                Object::try_from_stored_history_object(stored, checkpoint_viewed_at, None)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -381,14 +409,12 @@ impl TryFrom<&MoveObject> for Coin {
 fn coins_query(
     coin_type: TypeTag,
     owner: Option<SuiAddress>,
-    lhs: i64,
-    rhs: i64,
+    range: AvailableRange,
     page: &Page<object::Cursor>,
 ) -> RawQuery {
     build_objects_query(
         View::Consistent,
-        lhs,
-        rhs,
+        range,
         page,
         move |query| apply_filter(query, &coin_type, owner),
         move |newer| newer,

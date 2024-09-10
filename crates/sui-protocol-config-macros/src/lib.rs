@@ -224,6 +224,64 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
     TokenStream::from(output)
 }
 
+#[proc_macro_derive(ProtocolConfigOverride)]
+pub fn protocol_config_override_macro(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    // Create a new struct name by appending "Optional".
+    let struct_name = &ast.ident;
+    let optional_struct_name =
+        syn::Ident::new(&format!("{}Optional", struct_name), struct_name.span());
+
+    // Extract the fields from the struct
+    let fields = match &ast.data {
+        Data::Struct(data_struct) => match &data_struct.fields {
+            Fields::Named(fields_named) => &fields_named.named,
+            _ => panic!("ProtocolConfig must have named fields"),
+        },
+        _ => panic!("ProtocolConfig must be a struct"),
+    };
+
+    // Create new fields with types wrapped in Option.
+    let optional_fields = fields.iter().map(|field| {
+        let field_name = &field.ident;
+        let field_type = &field.ty;
+        quote! {
+            #field_name: Option<#field_type>
+        }
+    });
+
+    // Generate the function to update the original struct.
+    let update_fields = fields.iter().map(|field| {
+        let field_name = &field.ident;
+        quote! {
+            if let Some(value) = self.#field_name {
+                tracing::warn!(
+                    "ProtocolConfig field \"{}\" has been overridden with the value: {value:?}",
+                    stringify!(#field_name),
+                );
+                config.#field_name = value;
+            }
+        }
+    });
+
+    // Generate the new struct definition.
+    let output = quote! {
+        #[derive(serde::Deserialize, Debug)]
+        pub struct #optional_struct_name {
+            #(#optional_fields,)*
+        }
+
+        impl #optional_struct_name {
+            pub fn apply_to(self, config: &mut #struct_name) {
+                #(#update_fields)*
+            }
+        }
+    };
+
+    TokenStream::from(output)
+}
+
 #[proc_macro_derive(ProtocolConfigFeatureFlagsGetters)]
 pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

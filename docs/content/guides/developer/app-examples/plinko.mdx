@@ -58,23 +58,19 @@ The `plinko::plinko` module combines various Sui blockchain features, such as co
 ```move title="plinko.move"
 module plinko::plinko {
 // === Imports ===
-use std::vector;
 use sui::coin::{Self, Coin};
-use sui::balance::{Self, Balance};
+use sui::balance::Balance;
 use sui::sui::SUI;
 use sui::bls12381::bls12381_min_pk_verify;
-use sui::object::{Self, UID, ID};
-use sui::tx_context::{Self, TxContext};
-use sui::transfer;
 use sui::event::emit;
 use sui::hash::{blake2b256};
 use sui::dynamic_object_field::{Self as dof};
 
 // Import Counter NFT module
-use plinko::counter_nft::{Self, Counter};
+use plinko::counter_nft::Counter;
 
 // Import HouseData module
-use plinko::house_data::{Self as hd, HouseData};
+use plinko::house_data::HouseData;
 
 // === Errors ===
 const EStakeTooLow: u64 = 0;
@@ -86,7 +82,7 @@ const EGameDoesNotExist: u64 = 6;
 // === Structs ===
 
 /// Represents a game and holds the accrued stake.
-struct Game has key, store {
+public struct Game has key, store {
     id: UID,
     game_start_epoch: u64,
     stake: Balance<SUI>,
@@ -99,7 +95,7 @@ struct Game has key, store {
 // === Events ===
 
 /// Emitted when a new game has started.
-struct NewGame has copy, drop {
+public struct NewGame has copy, drop {
     game_id: ID,
     player: address,
     vrf_input: vector<u8>,
@@ -108,25 +104,25 @@ struct NewGame has copy, drop {
 }
 
 /// Emitted when a game has finished.
-struct Outcome has copy, drop {
+public struct Outcome has copy, drop {
     game_id: ID,
     result: u64,
     player: address,
     // The trace path of the extended beacon
-    trace: vector<u8> 
+    trace: vector<u8>
 }
 
 // === Public Functions ===
 
 /// Function used to create a new game. The player must provide a Counter NFT and the number of balls.
 public fun start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, house_data: &mut HouseData, ctx: &mut TxContext): ID {
-    let fee_bp = hd::base_fee_in_bp(house_data);
+    let fee_bp = house_data.base_fee_in_bp();
     let (id, new_game) = internal_start_game(counter, num_balls, coin, house_data, fee_bp, ctx);
-    dof::add(hd::borrow_mut(house_data), id, new_game);
+    dof::add(house_data.borrow_mut(), id, new_game);
     id
 }
 
-/// Completes the game by calculating the outcome and transferring the funds to the player.
+/// finish_game Completes the game by calculating the outcome and transferring the funds to the player.
 /// The player must provide a BLS signature of the VRF input and the number of balls to calculate the outcome.
 /// It emits an Outcome event with the game result and the trace path of the extended beacon.
 public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, num_balls: u64, ctx: &mut TxContext): (u64, address, vector<u8>) {
@@ -141,50 +137,50 @@ public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseD
         player,
         vrf_input,
         fee_bp: _
-    } = dof::remove<ID, Game>(hd::borrow_mut(house_data), game_id);
+    } = dof::remove<ID, Game>(house_data.borrow_mut(), game_id);
 
     object::delete(id);
 
     // Validates the BLS signature against the VRF input.
-    let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &hd::public_key(house_data), &vrf_input);
+    let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &house_data.public_key(), &vrf_input);
     assert!(is_sig_valid, EInvalidBlsSig);
 
     // Initialize the extended beacon vector and a counter for hashing.
-    let extended_beacon = vector::empty<u8>();
-    let counter: u8 = 0;
+    let mut extended_beacon = vector[];
+    let mut counter: u8 = 0;
 
     // Extends the beacon until it has enough data for all ball outcomes.
-    while (vector::length(&extended_beacon) < (num_balls * 12)) {
+    while (extended_beacon.length() < (num_balls * 12)) {
         // Create a new vector combining the original BLS signature with the current counter value.
-        let hash_input = vector::empty<u8>();
-        vector::append(&mut hash_input, bls_sig);
-        vector::append(&mut hash_input, vector::singleton(counter));
+        let mut hash_input = vector[];
+        hash_input.append(bls_sig);
+        hash_input.push_back(counter);
         // Generate a new hash block from the unique hash input.
         let block = blake2b256(&hash_input);
         // Append the generated hash block to the extended beacon.
-        vector::append(&mut extended_beacon, block);
+        extended_beacon.append(block);
         // Increment the counter for the next iteration to ensure a new unique hash input.
         counter = counter + 1;
     };
 
     // Initializes variables for calculating game outcome.
-    let trace = vector::empty<u8>();
+    let mut trace = vector[];
     // Calculate the stake amount per ball
-    let stake_per_ball = balance::value<SUI>(&stake) / num_balls;
-    let total_funds_amount: u64 = 0;
+    let stake_per_ball = stake.value<SUI>() / num_balls;
+    let mut total_funds_amount: u64 = 0;
 
     // Calculates outcome for each ball based on the extended beacon.
-    let ball_index = 0;
+    let mut ball_index = 0;
     while (ball_index < num_balls) {
-        let state: u64 = 0;
-        let i = 0;
+        let mut state: u64 = 0;
+        let mut i = 0;
         while (i < 12) {
             // Calculate the byte index for the current ball and iteration.
             let byte_index = (ball_index * 12) + i;
             // Retrieve the byte from the extended beacon.
-            let byte = *vector::borrow(&extended_beacon, byte_index);
+            let byte = extended_beacon[byte_index];
             // Add the byte to the trace vector
-            vector::push_back<u8>(&mut trace, byte);
+            trace.push_back<u8>(byte);
             // Count the number of even bytes
             // If even, add 1 to the state
             // Odd byte -> 0, Even byte -> 1
@@ -194,23 +190,23 @@ public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseD
         };
 
     // Calculate multiplier index based on state
-    let multiplier_index = state % vector::length(&hd::multiplier(house_data));
+    let multiplier_index = state % house_data.multiplier().length();
     // Retrieve the multiplier from the house data
-    let result = *vector::borrow(&hd::multiplier(house_data), multiplier_index);
-    
+    let result = house_data.multiplier()[multiplier_index];
+
     // Calculate funds amount for this particular ball
     // Divide by 100 to adjust for multiplier scale and SUI units
-    let funds_amount_per_ball = (result * stake_per_ball)/100; 
+    let funds_amount_per_ball = (result * stake_per_ball)/100;
     // Add the funds amount to the total funds amount
     total_funds_amount = total_funds_amount + funds_amount_per_ball;
     ball_index = ball_index + 1;
 };
 
 // Processes the payout to the player and returns the game outcome.
-let payout_balance_mut = hd::borrow_balance_mut(house_data);
-let payout_coin = coin::take(payout_balance_mut, total_funds_amount, ctx);
+let payout_balance_mut = house_data.borrow_balance_mut();
+let payout_coin: Coin<SUI> = coin::take(payout_balance_mut, total_funds_amount, ctx);
 
-balance::join(payout_balance_mut, stake);
+payout_balance_mut.join(stake);
 
 // transfer the payout coins to the player
 transfer::public_transfer(payout_coin, player);
@@ -224,7 +220,7 @@ emit(Outcome {
 
 // return the total amount to be sent to the player, (and the player address)
 (total_funds_amount, player, trace)
-}
+
 
 // === Public-View Functions ===
 
@@ -235,7 +231,7 @@ public fun game_start_epoch(game: &Game): u64 {
 
 /// Returns the total stake.
 public fun stake(game: &Game): u64 {
-    balance::value(&game.stake)
+    game.stake.value()
 }
 
 /// Returns the player's address.
@@ -257,32 +253,32 @@ public fun fee_in_bp(game: &Game): u16 {
 
 /// Helper function to check if a game exists.
 public fun game_exists(house_data: &HouseData, game_id: ID): bool {
-    dof::exists_(hd::borrow(house_data), game_id)
+    dof::exists_(house_data.borrow(), game_id)
 }
 
 /// Helper function to check that a game exists and return a reference to the game Object.
 /// Can be used in combination with any accessor to retrieve the desired game field.
 public fun borrow_game(game_id: ID, house_data: &HouseData): &Game {
     assert!(game_exists(house_data, game_id), EGameDoesNotExist);
-    dof::borrow(hd::borrow(house_data), game_id)
+    dof::borrow(house_data.borrow(), game_id)
 }
 
 // === Private Functions ===
 
-/// Internal helper function used to create a new game. 
+/// Internal helper function used to create a new game.
 /// The player must provide a guess and a Counter NFT.
-/// Stake is taken from the player's coin and added to the game's stake. 
+/// Stake is taken from the player's coin and added to the game's stake.
 fun internal_start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, house_data: &HouseData, fee_bp: u16, ctx: &mut TxContext): (ID, Game) {
-    let user_stake = coin::value(&coin);
+    let user_stake = coin.value();
     // Ensure that the stake is not higher than the max stake.
-    assert!(user_stake <= hd::max_stake(house_data), EStakeTooHigh);
+    assert!(user_stake <= house_data.max_stake(), EStakeTooHigh);
     // Ensure that the stake is not lower than the min stake.
-    assert!(user_stake >= hd::min_stake(house_data), EStakeTooLow);
+    assert!(user_stake >= house_data.min_stake(), EStakeTooLow);
     // Ensure that the house has enough balance to play for this game.
-    assert!(hd::balance(house_data) >= (user_stake*(*vector::borrow(&hd::multiplier(house_data), 0)))/100, EInsufficientHouseBalance);
+    assert!(house_data.balance() >= (user_stake*(house_data.multiplier()[0]))/100, EInsufficientHouseBalance);
 
     // Get the VRF input and increment the counter
-    let vrf_input = counter_nft::get_vrf_input_and_increment(counter, num_balls);
+    let vrf_input = counter.get_vrf_input_and_increment(num_balls);
 
     let id = object::new(ctx);
     let game_id = object::uid_to_inner(&id);
@@ -290,16 +286,16 @@ fun internal_start_game(counter: &mut Counter, num_balls: u64, coin: Coin<SUI>, 
     // Create a new game object and emit a NewGame event.
     let new_game = Game {
         id,
-        game_start_epoch: tx_context::epoch(ctx),
-        stake: coin::into_balance<SUI>(coin),
-        player: tx_context::sender(ctx),
+        game_start_epoch: ctx.epoch(),
+        stake: coin.into_balance<SUI>(),
+        player: ctx.sender(),
         vrf_input,
         fee_bp
     };
     // Emit a NewGame event
     emit(NewGame {
         game_id,
-        player: tx_context::sender(ctx),
+        player: ctx.sender(),
         vrf_input,
         user_stake,
         fee_bp
@@ -363,17 +359,10 @@ The `plinko::house_data` module in the Plinko game is designed to manage the gam
 ```move title="house_data.move"
 module plinko::house_data {
 // === Imports ===
-use std::vector;
-use sui::object::{Self, UID};
 use sui::balance::{Self, Balance};
 use sui::sui::SUI;
 use sui::coin::{Self, Coin};
 use sui::package::{Self};
-use sui::tx_context::{Self, TxContext};
-use sui::transfer::{Self};
-
-// === Friends ===
-friend plinko::plinko;
 
 // === Errors ===
 const ECallerNotHouse: u64 = 0;
@@ -383,34 +372,34 @@ const EInsufficientBalance: u64 = 1;
 // === Structs ===
 
 /// Configuration and Treasury shared object, managed by the house.
-struct HouseData has key {
+public struct HouseData has key {
     id: UID,
     // House's balance which also contains the accrued winnings of the house.
-    balance: Balance<SUI>, 
+    balance: Balance<SUI>,
     // Address of the house or the game operator.
     house: address,
     // Public key used to verify the beacon produced by the back-end.
-    public_key: vector<u8>, 
+    public_key: vector<u8>,
     // Maximum stake amount a player can bet in a single game.
     max_stake: u64,
     // Minimum stake amount required to play the game.
     min_stake: u64,
     // The accrued fees from games played.
-    fees: Balance<SUI>, 
+    fees: Balance<SUI>,
     // The default fee in basis points. 1 basis point = 0.01%.
-    base_fee_in_bp: u16, 
+    base_fee_in_bp: u16,
     // Multipliers used to calculate winnings based on the game outcome.
     multiplier: vector<u64>
 }
 
-/// A one-time use capability to initialize the house data; 
+/// A one-time use capability to initialize the house data;
 /// created and sent to sender in the initializer.
-struct HouseCap has key {
+public struct HouseCap has key {
     id: UID
 }
 
 /// Used as a one time witness to generate the publisher.
-struct HOUSE_DATA has drop {}
+public struct HOUSE_DATA has drop {}
 
 fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
     // Creating and sending the Publisher object to the sender.
@@ -421,7 +410,7 @@ fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
         id: object::new(ctx)
     };
 
-    transfer::transfer(house_cap, tx_context::sender(ctx));
+    transfer::transfer(house_cap, ctx.sender());
 }
 
 /// Initializer function that should only be called once and by the creator of the contract.
@@ -430,21 +419,21 @@ fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
 /// Stores the house address and the base fee in basis points.
 /// This object is involved in all games created by the same instance of this package.
 public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, multiplier: vector<u64>, ctx: &mut TxContext) {
-    assert!(coin::value(&coin) > 0, EInsufficientBalance);
+    assert!(coin.value() > 0, EInsufficientBalance);
 
-    let house_data = HouseData {
+    let mut house_data = HouseData {
         id: object::new(ctx),
-        balance: coin::into_balance(coin),
-        house: tx_context::sender(ctx),
+        balance: coin.into_balance(),
+        house: ctx.sender(),
         public_key,
         max_stake: 10_000_000_000, // 10 SUI = 10^9.
         min_stake: 1_000_000_000, // 1 SUI.
         fees: balance::zero(),
         base_fee_in_bp: 100, // 1% in basis points.
-        multiplier: vector::empty<u64>()
+        multiplier: vector[]
     };
 
-    set_multiplier_vector(&mut house_data, multiplier);
+    house_data.set_multiplier_vector(multiplier);
 
     let HouseCap { id } = house_cap;
     object::delete(id);
@@ -454,14 +443,10 @@ public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_ke
 
 // === Public-Mutative Functions ===
 
-fun set_multiplier_vector(house_data: &mut HouseData, v: vector<u64>) {
-    vector::append<u64>(&mut house_data.multiplier, v);
-}
-
-public fun update_multiplier_vector(house_data: &mut HouseData, v: vector<u64>, ctx: &mut TxContext) { 
-   assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse); 
-   house_data.multiplier = vector::empty<u64>(); 
-   set_multiplier_vector(house_data, v); 
+public fun update_multiplier_vector(house_data: &mut HouseData, v: vector<u64>, ctx: &mut TxContext) {
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+    house_data.multiplier = vector[];
+    house_data.set_multiplier_vector(v);
 }
 
 /// Function used to top up the house balance. Can be called by anyone.
@@ -474,27 +459,27 @@ public fun top_up(house_data: &mut HouseData, coin: Coin<SUI>, _: &mut TxContext
 /// It can be called only by the house
 public fun withdraw(house_data: &mut HouseData, ctx: &mut TxContext) {
     // Only the house address can withdraw funds.
-    assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-    let total_balance = balance(house_data);
+    let total_balance = house_data.balance();
     let coin = coin::take(&mut house_data.balance, total_balance, ctx);
-    transfer::public_transfer(coin, house(house_data));
+    transfer::public_transfer(coin, house_data.house());
 }
 
 /// House can withdraw the accumulated fees of the house object.
 public fun claim_fees(house_data: &mut HouseData, ctx: &mut TxContext) {
     // Only the house address can withdraw fee funds.
-    assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
-    let total_fees = fees(house_data);
+    let total_fees = house_data.fees();
     let coin = coin::take(&mut house_data.fees, total_fees, ctx);
-    transfer::public_transfer(coin, house(house_data));
+    transfer::public_transfer(coin, house_data.house());
 }
 
 /// House can update the max stake. This allows larger stake to be placed.
 public fun update_max_stake(house_data: &mut HouseData, max_stake: u64, ctx: &mut TxContext) {
     // Only the house address can update the base fee.
-    assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
     house_data.max_stake = max_stake;
 }
@@ -502,36 +487,16 @@ public fun update_max_stake(house_data: &mut HouseData, max_stake: u64, ctx: &mu
 /// House can update the min stake. This allows smaller stake to be placed.
 public fun update_min_stake(house_data: &mut HouseData, min_stake: u64, ctx: &mut TxContext) {
     // Only the house address can update the min stake.
-    assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+    assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
 
     house_data.min_stake = min_stake;
 }
 
-/// Returns a mutable reference to the balance of the house.
-public(friend) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
-    &mut house_data.balance
-}
-
-/// Returns a mutable reference to the fees of the house.
-public(friend) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
-    &mut house_data.fees
-}
-
-/// Returns a mutable reference to the house id.
-public(friend) fun borrow_mut(house_data: &mut HouseData): &mut UID {
-    &mut house_data.id
-}
-
 // === Public-View Functions ===
-
-/// Returns a reference to the house id.
-public(friend) fun borrow(house_data: &HouseData): &UID {
-    &house_data.id
-}
 
 /// Returns the balance of the house.
 public fun balance(house_data: &HouseData): u64 {
-    balance::value(&house_data.balance)
+    house_data.balance.value()
 }
 
 /// Returns the address of the house.
@@ -556,7 +521,7 @@ public fun min_stake(house_data: &HouseData): u64 {
 
 /// Returns the fees of the house.
 public fun fees(house_data: &HouseData): u64 {
-    balance::value(&house_data.fees)
+    house_data.fees.value()
 }
 
 /// Returns the base fee.
@@ -567,6 +532,34 @@ public fun base_fee_in_bp(house_data: &HouseData): u16 {
 /// Returns the multiplier vector
 public fun multiplier(house_data: &HouseData): vector<u64> {
     house_data.multiplier
+}
+
+// === Public-Friend Functions ===
+
+/// Returns a reference to the house id.
+public(package) fun borrow(house_data: &HouseData): &UID {
+    &house_data.id
+}
+
+    /// Returns a mutable reference to the balance of the house.
+public(package) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    &mut house_data.balance
+}
+
+/// Returns a mutable reference to the fees of the house.
+public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    &mut house_data.fees
+}
+
+/// Returns a mutable reference to the house id.
+public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
+    &mut house_data.id
+}
+
+// === Private Functions ===
+
+fun set_multiplier_vector(house_data: &mut HouseData, v: vector<u64>) {
+    house_data.multiplier.append(v);
 }
 
 // === Test Functions ===
@@ -633,83 +626,78 @@ Unlike traditional NFTs, the Counter NFT is non-transferable, ensuring it remain
 
 ```move title="counter_nft.move"
 module plinko::counter_nft {
-    // === Imports ===
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self};
-    use sui::bcs::{Self};
+// === Imports ===
+use sui::bcs::{Self};
 
-    // === Structs ===
+// === Structs ===
 
-    /// A Counter object serves as a unique, NFT
-    /// that increments with each use. It's designed to provide a unique
-    /// Verifiable Random Function (VRF) input for each round of the game,
-    /// ensuring the randomness and fairness of game outcomes.
-    struct Counter has key {
-        id: UID,
-        // A numerical value that increments with each use of the Counter.
-        // This incrementing behavior is critical for ensuring that each game round
-        // receives a fresh, unique input for randomness generation.
-        count: u64,
+/// A Counter object serves as a unique, NFT
+/// that increments with each use. It's designed to provide a unique
+/// Verifiable Random Function (VRF) input for each round of the game,
+/// ensuring the randomness and fairness of game outcomes.
+public struct Counter has key {
+    id: UID,
+    // A numerical value that increments with each use of the Counter.
+    // This incrementing behavior is critical for ensuring that each game round
+    // receives a fresh, unique input for randomness generation.
+    count: u64,
+}
+
+/// Deletes a counter object.
+entry fun burn(self: Counter) {
+    let Counter { id, count: _ } = self;
+    object::delete(id);
+}
+
+/// Creates a new counter object. Used in combination with the transfer_to_sender method to provide the same
+/// UX when creating a Counter NFT for the first time.
+public fun mint(ctx: &mut TxContext): Counter {
+    Counter {
+        id: object::new(ctx),
+        count: 0
     }
+}
 
-    /// Deletes a counter object.
-    entry fun burn(self: Counter) {
-        let Counter { id, count: _ } = self;
-        object::delete(id);
-    }
+/// Transfers a counter object to the sender.
+public fun transfer_to_sender(counter: Counter, ctx: &mut TxContext) {
+    transfer::transfer(counter, ctx.sender());
+}
 
-    /// Creates a new counter object. Used in combination with the transfer_to_sender method to provide the same 
-    /// UX when creating a Counter NFT for the first time.
-    public fun mint(ctx: &mut TxContext): Counter {
-        Counter {
-            id: object::new(ctx),
-            count: 0
-        }
-    }
+/// Generates a unique VRF input by concatenating the Counter's ID, its current count, and the number of balls
+/// selected by the player. This composite input ensures each game round has a distinct random seed.
+/// The count is incremented after use to maintain uniqueness for subsequent rounds.
+public fun get_vrf_input_and_increment(self: &mut Counter, num_balls: u64): vector<u8> {
+    let mut vrf_input = object::id_bytes(self);
+    let count_to_bytes = bcs::to_bytes(&self.count());
+    let num_balls_to_bytes = bcs::to_bytes(&num_balls);
+    vrf_input.append(count_to_bytes);
+    vrf_input.append(num_balls_to_bytes);
+    self.increment();
+    vrf_input
+}
 
-    /// Transfers a counter object to the sender.
-    public fun transfer_to_sender(counter: Counter, ctx: &mut TxContext) {
-        transfer::transfer(counter, tx_context::sender(ctx));
-    }
+/// Returns the current count of the counter object.
+public fun count(self: &Counter): u64 {
+    self.count
+}
 
-    /// Generates a unique VRF input by concatenating the Counter's ID, its current count, and the number of balls
-    /// selected by the player. This composite input ensures each game round has a distinct random seed.
-    /// The count is incremented after use to maintain uniqueness for subsequent rounds.
-    public fun get_vrf_input_and_increment(self: &mut Counter, num_balls: u64): vector<u8> {
-        let vrf_input = object::id_bytes(self);
-        let count_to_bytes = bcs::to_bytes(&count(self));
-        let num_balls_to_bytes = bcs::to_bytes(&num_balls); 
-        vector::append(&mut vrf_input, count_to_bytes);
-        vector::append(&mut vrf_input, num_balls_to_bytes);
-        increment(self);
-        vrf_input
-    }
+/// Internal function to increment the counter by 1.
+fun increment(self: &mut Counter) {
+    self.count = self.count + 1;
+}
 
-    /// Returns the current count of the counter object.
-    public fun count(self: &Counter): u64 {
-        self.count
-    }
+// === Test Functions ===
 
-    /// Internal function to increment the counter by 1.
-    fun increment(self: &mut Counter) {
-        self.count = self.count + 1;
-    }
+#[test_only]
+public fun burn_for_testing(self: Counter) {
+    self.burn();
+}
 
-    // === Test Functions ===
-    
-    #[test_only]
-    public fun burn_for_testing(self: Counter) {
-        burn(self);
-    }
-
-    #[test_only]
-    public fun get_vrf_input_for_testing(self: &mut Counter): vector<u8> {
-        let vrf_input: vector<u8> = get_vrf_input_and_increment(self, 1);
-        vrf_input
-    }
-
+#[test_only]
+public fun get_vrf_input_for_testing(self: &mut Counter): vector<u8> {
+    let vrf_input: vector<u8> = self.get_vrf_input_and_increment(1);
+    vrf_input
+}
 }
 ```
 

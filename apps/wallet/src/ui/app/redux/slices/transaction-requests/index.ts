@@ -10,9 +10,9 @@ import {
 	type WalletSigner,
 } from '_src/ui/app/WalletSigner';
 import type { AppThunkConfig } from '_store/thunk-extras';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
@@ -61,7 +61,7 @@ export const respondToTransactionRequest = createAsyncThunk<
 						clientIdentifier,
 					);
 				} else if (txRequest.tx.type === 'transaction') {
-					const tx = TransactionBlock.from(txRequest.tx.data);
+					const tx = Transaction.from(txRequest.tx.data);
 					if (txRequest.tx.justSign) {
 						// Just a signing request, do not submit
 						txSigned = await signer.signTransactionBlock(

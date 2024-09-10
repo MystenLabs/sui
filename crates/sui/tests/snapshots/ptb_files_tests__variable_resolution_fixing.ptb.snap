@@ -11,8 +11,6 @@ expression: "results.join(\"\\n\")"
 │ assign        │ s @0x1                            │
 │ move-call     │ sui::coin::value<sui::sui::SUI> s │
 │ make-move-vec │ <address> [s]                     │
-├───────────────┼───────────────────────────────────┤
-│ gas-budget    │ 100000                            │
 ╰───────────────┴───────────────────────────────────╯
  === BUILT PTB === 
 Input 0: ImmutableOrOwnedObject

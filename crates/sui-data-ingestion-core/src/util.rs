@@ -19,7 +19,9 @@ pub fn create_remote_store_client(
         retry_timeout: Duration::from_secs(timeout_secs + 1),
         ..Default::default()
     };
-    let client_options = ClientOptions::new().with_timeout(Duration::from_secs(timeout_secs));
+    let client_options = ClientOptions::new()
+        .with_timeout(Duration::from_secs(timeout_secs))
+        .with_allow_http(true);
     if remote_store_options.is_empty() {
         let http_store = object_store::http::HttpBuilder::new()
             .with_url(url)

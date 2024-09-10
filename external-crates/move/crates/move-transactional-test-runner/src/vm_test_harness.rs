@@ -46,7 +46,7 @@ struct SimpleVMTestAdapter {
 
 #[derive(Debug, Parser)]
 pub struct AdapterInitArgs {
-    #[clap(long = "edition")]
+    #[arg(long = "edition")]
     pub edition: Option<Edition>,
 }
 
@@ -113,7 +113,9 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                 |session, gas_status| {
                     for module in &*MOVE_STDLIB_COMPILED {
                         let mut module_bytes = vec![];
-                        module.serialize(&mut module_bytes).unwrap();
+                        module
+                            .serialize_with_version(module.version, &mut module_bytes)
+                            .unwrap();
 
                         let id = module.self_id();
                         let sender = *id.address();
@@ -153,7 +155,8 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes)?;
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<Result<_>>()?;
@@ -239,7 +242,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
 pub fn format_vm_error(e: &VMError) -> String {
     let location_string = match e.location() {
         Location::Undefined => "undefined".to_owned(),
-        Location::Script => "script".to_owned(),
         Location::Module(id) => format!("0x{}::{}", id.address().short_str_lossless(), id.name()),
     };
     format!(
@@ -268,10 +270,11 @@ impl SimpleVMTestAdapter {
     ) -> VMResult<Ret> {
         // start session
         let vm = MoveVM::new_with_config(
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 STD_ADDR,
                 // TODO: come up with a suitable gas schedule
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
+                /* silent */ false,
             ),
             vm_config,
         )
@@ -291,13 +294,13 @@ impl SimpleVMTestAdapter {
 
         // save changeset
         // TODO support events
-        let (changeset, _events) = session.finish().0?;
+        let changeset = session.finish().0?;
         self.storage.apply(changeset).unwrap();
         Ok(res)
     }
 }
 
-static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -306,6 +309,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         }],
         None,
         move_compiler::Flags::empty(),
+        None,
     )
     .unwrap();
     match program_res {
@@ -319,6 +323,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
 
 static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
+        None,
         move_stdlib::move_stdlib_files(),
         vec![],
         move_stdlib::move_stdlib_named_addresses(),

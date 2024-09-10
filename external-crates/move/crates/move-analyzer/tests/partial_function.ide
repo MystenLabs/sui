@@ -1,0 +1,14 @@
+// Tests symbolication of partially defined function
+{
+  "UseDef": {
+    "project": "tests/partial-function",
+    "file_tests": {
+      "M1.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

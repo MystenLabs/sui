@@ -28,7 +28,7 @@ title: Module `0xdee9::math`
 
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>: u64 = 1;
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -38,7 +38,7 @@ title: Module `0xdee9::math`
 scaling setting for float
 
 
-<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a>: u64 = 1000000000;
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1000000000;
 </code></pre>
 
 
@@ -58,7 +58,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -67,7 +67,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
     result
 }
@@ -83,7 +83,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -92,12 +92,12 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>let</b> x = x <b>as</b> u128;
     <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
-    (is_round_down, (x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64)
+    (is_round_down, (x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 }
 </code></pre>
 
@@ -111,7 +111,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -120,7 +120,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
     <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
     result
@@ -137,7 +137,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -146,7 +146,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
     <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
     (is_round_down, result)
@@ -163,7 +163,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -172,7 +172,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
     result
 }
@@ -188,7 +188,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -197,12 +197,12 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>let</b> x = x <b>as</b> u128;
     <b>let</b> y = y <b>as</b> u128;
     <b>let</b> <b>mut</b> is_round_down = <b>true</b>;
     <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
-    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64)
+    (is_round_down, (x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 }
 </code></pre>
 
@@ -216,7 +216,7 @@ scaling setting for float
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>)
 </code></pre>
 
 
@@ -225,7 +225,7 @@ scaling setting for float
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64) {
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, y: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): (bool, <a href="../move-stdlib/u64.md#0x1_u64">u64</a>) {
     <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
     <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
     (is_round_down, result)

@@ -26,11 +26,21 @@ To migrate a project to Move 2024 Beta:
    - Run `sui move migrate` in the root of your Move project. See [Automatic migration](#automatic-migration).
    - Alternatively, update your `Move.toml` file's `[package]` entry to include `edition = "2024.beta"`. If you do this, you might receive a number of new errors related to the [breaking changes](#breaking-changes).
 
-## Automatic migration {#automatic-migration}
+### Automatic migration {#automatic-migration}
 
 Move 2024 includes an automatic migration script that you can use by calling `sui move migrate` in the root of your Move project. Upon running, your console prompts you for which Move edition to use. If you select `2024.beta`, the script invokes the compiler and attempts to automatically update your code to avoid the [breaking changes](#breaking-changes) the update introduces (including marking structs as `public`, mutable variables with the `mut` keyword, avoiding restricted keywords, swapping `friend`s for `public(package)`, and even updating paths to global paths in many cases).
 
 After this is done, your console displays a diff of the changes the script intends to make. If you accept the changes, the script updates your code and your `Move.toml` file automatically. You are now using Move 2024 Beta.
+
+### Update IDE support
+
+Use the new [VSCode Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get support for Move 2024 features. The new extension has a number of improvements over the original [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), but if you would like to keep using the original one, be sure to rebuild and reinstall the `move-analyzer` binary to get 2024 support:
+
+```shell
+cargo install --git https://github.com/MystenLabs/sui.git move-analyzer
+```
+
+See the getting started guide on [Move IDEs and plugins](../../../references/contribute/sui-environment.mdx#move-ides-and-plugins) for more information.
 
 ## New features
 

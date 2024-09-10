@@ -35,7 +35,7 @@ title: Module `0x2::address`
 Error from <code>from_bytes</code> when it is supplied too many or too few bytes.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -45,7 +45,7 @@ Error from <code>from_bytes</code> when it is supplied too many or too few bytes
 The length of an address, in bytes
 
 
-<pre><code><b>const</b> <a href="../sui-framework/address.md#0x2_address_LENGTH">LENGTH</a>: u64 = 32;
+<pre><code><b>const</b> <a href="../sui-framework/address.md#0x2_address_LENGTH">LENGTH</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 32;
 </code></pre>
 
 
@@ -279,7 +279,7 @@ or if an invalid character is encountered.
 Length of a Sui address in bytes
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_length">length</a>(): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_length">length</a>(): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -288,7 +288,7 @@ Length of a Sui address in bytes
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_length">length</a>(): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_length">length</a>(): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/address.md#0x2_address_LENGTH">LENGTH</a>
 }
 </code></pre>

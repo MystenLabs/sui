@@ -4,6 +4,7 @@
 use async_graphql::*;
 
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
 use sui_indexer::{models::display::StoredDisplay, schema::display};
 use sui_types::TypeTag;
@@ -50,13 +51,17 @@ impl Display {
     pub(crate) async fn query(db: &Db, type_: TypeTag) -> Result<Option<Display>, Error> {
         let stored: Option<StoredDisplay> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    use display::dsl;
-                    dsl::display.filter(
-                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
-                    )
-                })
-                .optional()
+                async move {
+                    conn.first(move || {
+                        use display::dsl;
+                        dsl::display.filter(
+                            dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
+                        )
+                    })
+                    .await
+                    .optional()
+                }
+                .scope_boxed()
             })
             .await?;
 

@@ -6,13 +6,16 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::syntax::make_loc,
+    parser::{syntax::make_loc, token_set::TokenSet},
     shared::CompilationEnv,
     FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
+
+// This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
+pub const TOK_COUNT: usize = 77;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -47,6 +50,7 @@ pub enum Tok {
     LessLess,
     Equal,
     EqualEqual,
+    EqualGreater,
     EqualEqualGreater,
     LessEqualEqualGreater,
     Greater,
@@ -126,11 +130,12 @@ impl fmt::Display for Tok {
             Semicolon => ";",
             Less => "<",
             LessEqual => "<=",
-            LessLess => "<<",
             Equal => "=",
             EqualEqual => "==",
             EqualEqualGreater => "==>",
+            EqualGreater => "=>",
             LessEqualEqualGreater => "<==>",
+            LessLess => "<<",
             Greater => ">",
             GreaterEqual => ">=",
             GreaterGreater => ">>",
@@ -180,7 +185,7 @@ impl fmt::Display for Tok {
 }
 
 pub struct Lexer<'input> {
-    text: &'input str,
+    pub text: &'input str,
     file_hash: FileHash,
     edition: Edition,
     doc_comments: FileCommentMap,
@@ -208,6 +213,22 @@ impl<'input> Lexer<'input> {
 
     pub fn peek(&self) -> Tok {
         self.token
+    }
+
+    pub fn remaining(&self) -> &'input str {
+        &self.text[self.cur_start..]
+    }
+
+    pub fn at(&self, tok: Tok) -> bool {
+        self.token == tok
+    }
+
+    pub fn at_any(&self, toks: &BTreeSet<Tok>) -> bool {
+        toks.contains(&self.token)
+    }
+
+    pub fn at_set(&self, set: &TokenSet) -> bool {
+        set.contains(self.token, self.content())
     }
 
     pub fn content(&self) -> &'input str {
@@ -417,6 +438,16 @@ impl<'input> Lexer<'input> {
     // comments. The documentation comments are not stored in the AST, but can be retrieved by
     // using the start position of an item as an index into `matched_doc_comments`.
     pub fn match_doc_comments(&mut self) {
+        if let Some(comments) = self.read_doc_comments() {
+            self.attach_doc_comments(comments);
+        };
+    }
+
+    // Matches the doc comments after the last token (or the beginning of the file) to the position
+    // of the current token. This moves the comments out of `doc_comments` and
+    // into `matched_doc_comments`. At the end of parsing, if `doc_comments` is not empty, errors
+    // for stale doc comments will be produced.
+    pub fn read_doc_comments(&mut self) -> Option<String> {
         let start = self.previous_end_loc() as u32;
         let end = self.cur_start as u32;
         let mut matched = vec![];
@@ -429,10 +460,23 @@ impl<'input> Lexer<'input> {
             })
             .collect::<Vec<String>>()
             .join("\n");
-        for span in matched {
-            self.doc_comments.remove(&span);
+        if !matched.is_empty() {
+            for span in matched {
+                self.doc_comments.remove(&span);
+            }
+            Some(merged)
+        } else {
+            None
         }
-        self.matched_doc_comments.insert(end, merged);
+    }
+
+    // Calling this function during parsing adds the `doc_comments` to the current location. The
+    // documentation comments are not stored in the AST, but can be retrieved by using the start
+    // position of an item as an index into `matched_doc_comments`.
+    pub fn attach_doc_comments(&mut self, doc_comments: String) {
+        let attachment_location = self.cur_start as u32;
+        self.matched_doc_comments
+            .insert(attachment_location, doc_comments);
     }
 
     // At the end of parsing, checks whether there are any unmatched documentation comments,
@@ -714,6 +758,8 @@ fn find_token(
         '=' => {
             if text.starts_with("==>") {
                 (Ok(Tok::EqualEqualGreater), 3)
+            } else if text.starts_with("=>") && edition.supports(FeatureGate::Enums) {
+                (Ok(Tok::EqualGreater), 2)
             } else if text.starts_with("==") {
                 (Ok(Tok::EqualEqual), 2)
             } else {

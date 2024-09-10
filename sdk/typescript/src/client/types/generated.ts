@@ -91,7 +91,14 @@ export type CompressedSignature =
 	  }
 	| {
 			Secp256r1: string;
+	  }
+	| {
+			ZkLogin: string;
 	  };
+/** Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments. */
+export type ConsensusDeterminedVersionAssignments = {
+	CancelledTransactions: [string, [string, string][]][];
+};
 export type SuiParsedData =
 	| {
 			dataType: 'moveObject';
@@ -112,6 +119,19 @@ export interface DelegatedStake {
 	/** Validator's Address. */
 	validatorAddress: string;
 }
+/** Additional rguments supplied to dev inspect beyond what is allowed in today's API. */
+export interface DevInspectArgs {
+	/** The gas budget for the transaction. */
+	gasBudget?: string | null;
+	/** The gas objects used to pay for the transaction. */
+	gasObjects?: [string, string, string][] | null;
+	/** The sponsor of the gas for the transaction, might be different from the sender. */
+	gasSponsor?: string | null;
+	/** Whether to return the raw transaction data and effects. */
+	showRawTxnDataAndEffects?: boolean | null;
+	/** Whether to skip transaction checks for the transaction. */
+	skipChecks?: boolean | null;
+}
 /** The response from processing a dev inspect transaction */
 export interface DevInspectResults {
 	/**
@@ -124,6 +144,10 @@ export interface DevInspectResults {
 	error?: string | null;
 	/** Events that likely would be generated if the transaction is actually run. */
 	events: SuiEvent[];
+	/** The raw effects of the transaction that was dev inspected. */
+	rawEffects?: number[];
+	/** The raw transaction data that was dev inspected. */
+	rawTxnData?: number[];
 	/** Execution results (including return values) from executing the transactions */
 	results?: SuiExecutionResult[] | null;
 }
@@ -208,7 +232,11 @@ export type SuiEventFilter =
 	  } /** Return events emitted in a specified Package. */
 	| {
 			Package: string;
-	  } /** Return events emitted in a specified Move module. */
+	  } /**
+	 * Return events emitted in a specified Move module. If the event is defined in Module A but emitted in
+	 * a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by
+	 * module A returns the event too.
+	 */
 	| {
 			MoveModule: {
 				/** the module name */
@@ -216,10 +244,17 @@ export type SuiEventFilter =
 				/** the Move package ID */
 				package: string;
 			};
-	  } /** Return events with the given move event struct name */
+	  } /**
+	 * Return events with the given Move event struct name (struct tag). For example, if the event is
+	 * defined in `0xabcd::MyModule`, and named `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.
+	 */
 	| {
 			MoveEventType: string;
-	  } /** Return events with the given move event module name */
+	  } /**
+	 * Return events with the given Move module name where the event struct is defined. If the event is
+	 * defined in Module A but emitted in a tx with Module B, query `MoveEventModule` by module A returns
+	 * the event. Query `MoveModule` by module B returns the event too.
+	 */
 	| {
 			MoveEventModule: {
 				/** the module name */
@@ -325,13 +360,6 @@ export type InputObjectKind =
 				mutable?: boolean;
 			};
 	  };
-export interface LoadedChildObject {
-	objectId: string;
-	sequenceNumber: string;
-}
-export interface LoadedChildObjectsResponse {
-	loadedChildObjects: LoadedChildObject[];
-}
 export interface MoveCallParams {
 	arguments: unknown[];
 	function: string;
@@ -365,7 +393,15 @@ export type MoveValue =
 			id: string;
 	  }
 	| MoveStruct
-	| null;
+	| null
+	| MoveVariant;
+export interface MoveVariant {
+	fields: {
+		[key: string]: MoveValue;
+	};
+	type: string;
+	variant: string;
+}
 /** The struct that contains signatures and public keys necessary for authenticating a MultiSig. */
 export interface MultiSig {
 	/** A bitmap that indicates the position of which public key the signature should be authenticated with. */
@@ -379,8 +415,8 @@ export interface MultiSig {
 	sigs: CompressedSignature[];
 }
 /**
- * Deprecated, use [struct MultiSig] instead. The struct that contains signatures and public keys
- * necessary for authenticating a MultiSigLegacy.
+ * Deprecated, use [struct MultiSig] instead. The struct that contains signatures and public keys necessary
+ * for authenticating a MultiSigLegacy.
  */
 export interface MultiSigLegacy {
 	/** A bitmap that indicates the position of which public key the signature should be authenticated with. */
@@ -684,6 +720,24 @@ export interface PaginatedTransactionResponse {
 	hasNextPage: boolean;
 	nextCursor?: string | null;
 }
+/**
+ * An passkey authenticator with parsed fields. See field defition below. Can be initialized from
+ * [struct RawPasskeyAuthenticator].
+ */
+export interface PasskeyAuthenticator {
+	/**
+	 * `authenticatorData` is a bytearray that encodes
+	 * [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) structure returned
+	 * by the authenticator attestation response as is.
+	 */
+	authenticator_data: number[];
+	/**
+	 * `clientDataJSON` contains a JSON-compatible UTF-8 encoded string of the client data which is passed
+	 * to the authenticator by the client during the authentication request (see
+	 * [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))
+	 */
+	client_data_json: string;
+}
 export interface ProtocolConfig {
 	attributes: {
 		[key: string]: ProtocolConfigValue | null;
@@ -697,6 +751,9 @@ export interface ProtocolConfig {
 }
 export type ProtocolConfigValue =
 	| {
+			u16: string;
+	  }
+	| {
 			u32: string;
 	  }
 	| {
@@ -704,6 +761,9 @@ export type ProtocolConfigValue =
 	  }
 	| {
 			f64: string;
+	  }
+	| {
+			bool: string;
 	  };
 export type PublicKey =
 	| {
@@ -714,6 +774,12 @@ export type PublicKey =
 	  }
 	| {
 			Secp256r1: string;
+	  }
+	| {
+			ZkLogin: string;
+	  }
+	| {
+			Passkey: string;
 	  };
 export type RPCTransactionRequestParams =
 	| {
@@ -851,11 +917,19 @@ export interface CoinMetadata {
 }
 export type SuiEndOfEpochTransactionKind =
 	| 'AuthenticatorStateCreate'
+	| 'RandomnessStateCreate'
+	| 'CoinDenyListStateCreate'
 	| {
 			ChangeEpoch: SuiChangeEpoch;
 	  }
 	| {
 			AuthenticatorStateExpire: SuiAuthenticatorStateExpire;
+	  }
+	| {
+			BridgeStateCreate: string;
+	  }
+	| {
+			BridgeCommitteeUpdate: string;
 	  };
 export interface SuiExecutionResult {
 	/** The value of any arguments that were mutably borrowed. Non-mut borrowed values are not included */
@@ -1319,10 +1393,32 @@ export type SuiTransactionBlockKind =
 			kind: 'AuthenticatorStateUpdate';
 			new_active_jwks: SuiActiveJwk[];
 			round: string;
+	  } /** A transaction which updates global randomness state */
+	| {
+			epoch: string;
+			kind: 'RandomnessStateUpdate';
+			random_bytes: number[];
+			randomness_round: string;
 	  } /** The transaction which occurs only at the end of the epoch */
 	| {
 			kind: 'EndOfEpochTransaction';
 			transactions: SuiEndOfEpochTransactionKind[];
+	  }
+	| {
+			commit_timestamp_ms: string;
+			consensus_commit_digest: string;
+			epoch: string;
+			kind: 'ConsensusCommitPrologueV2';
+			round: string;
+	  }
+	| {
+			commit_timestamp_ms: string;
+			consensus_commit_digest: string;
+			consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments;
+			epoch: string;
+			kind: 'ConsensusCommitPrologueV3';
+			round: string;
+			sub_dag_index?: string | null;
 	  };
 export interface SuiTransactionBlockResponse {
 	balanceChanges?: BalanceChange[] | null;
@@ -1337,6 +1433,7 @@ export interface SuiTransactionBlockResponse {
 	errors?: string[];
 	events?: SuiEvent[] | null;
 	objectChanges?: SuiObjectChange[] | null;
+	rawEffects?: number[];
 	/**
 	 * BCS encoded [SenderSignedData] that includes input object references returns empty array if
 	 * `show_raw_transaction` is false
@@ -1357,6 +1454,8 @@ export interface SuiTransactionBlockResponseOptions {
 	showInput?: boolean;
 	/** Whether to show object_changes. Default to be False */
 	showObjectChanges?: boolean;
+	/** Whether to show raw transaction effects. Default to be False */
+	showRawEffects?: boolean;
 	/** Whether to show bcs-encoded transaction input data */
 	showRawInput?: boolean;
 }
@@ -1413,9 +1512,9 @@ export interface TransferObjectParams {
 }
 /** Identifies a struct and the module it was defined in */
 export interface TypeOrigin {
+	datatype_name: string;
 	module_name: string;
 	package: string;
-	struct_name: string;
 }
 /** Upgraded package info for the linkage table */
 export interface UpgradeInfo {

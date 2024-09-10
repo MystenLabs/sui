@@ -1,17 +1,21 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-18:
+task 0, lines 1-18:
+//# print-bytecode
 // Move bytecode v6
 module 1d12.M {
 struct T {
 	b: bool
 }
 
+
+
 new(): T {
 B0:
 	0: LdTrue
 	1: Pack[0](T)
 	2: Ret
+
 }
 f() {
 L0:	loc0: T
@@ -23,8 +27,10 @@ B0:
 	3: Unpack[0](T)
 	4: StLoc[1](loc1: bool)
 	5: Ret
+
 }
 }
 
-task 2 'print-bytecode'. lines 31-44:
+task 2, lines 31-44:
+//# print-bytecode
 Error: Missing struct definition for T

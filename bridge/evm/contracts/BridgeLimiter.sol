@@ -11,16 +11,14 @@ import "./utils/CommitteeUpgradeable.sol";
 /// @notice A contract that limits the amount of tokens that can be bridged from a given chain within
 /// a rolling 24-hour window. This is accomplished by storing the amount bridged from a given chain in USD
 /// within a given hourly timestamp. It also provides functions to update the token prices and the total
-/// limit of the given chainID measured in USD with a 4 decimal precision.
+/// limit of the given chainID measured in USD with 8 decimal precision.
 /// The contract is intended to be used and owned by the SuiBridge contract.
 contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeable {
     /* ========== STATE VARIABLES ========== */
 
     mapping(uint256 chainHourTimestamp => uint256 totalAmountBridged) public
         chainHourlyTransferAmount;
-    // price in USD (4 decimal precision) (e.g. 1 ETH = 2000 USD => 20000000)
-    mapping(uint8 tokenID => uint256 tokenPrice) public tokenPrices;
-    // total limit in USD (4 decimal precision) (e.g. 10000000 => 1000 USD)
+    // total limit in USD (8 decimal precision) (e.g. 1000_00000000 => 1000 USD)
     mapping(uint8 chainID => uint64 totalLimit) public chainLimits;
     mapping(uint8 chainID => uint32 oldestHourTimestamp) public oldestChainTimestamp;
 
@@ -30,24 +28,19 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @dev this function should be called directly after deployment (see OpenZeppelin upgradeable
     /// standards).
     /// @param _committee The address of the BridgeCommittee contract.
-    /// @param _tokenPrices An array of token prices (with 4 decimal precision).
     /// @param chainIDs An array of chain IDs to limit.
-    /// @param _totalLimits The total limit for the bridge (4 decimal precision).
-    function initialize(
-        address _committee,
-        uint256[] memory _tokenPrices,
-        uint8[] memory chainIDs,
-        uint64[] memory _totalLimits
-    ) external initializer {
+    /// @param _totalLimits The total limit for the bridge (8 decimal precision).
+    function initialize(address _committee, uint8[] memory chainIDs, uint64[] memory _totalLimits)
+        external
+        initializer
+    {
         require(
             chainIDs.length == _totalLimits.length,
             "BridgeLimiter: invalid chainIDs and totalLimits length"
         );
         __CommitteeUpgradeable_init(_committee);
         __Ownable_init(msg.sender);
-        for (uint8 i; i < _tokenPrices.length; i++) {
-            tokenPrices[i] = _tokenPrices[i];
-        }
+
         for (uint8 i; i < chainIDs.length; i++) {
             require(
                 committee.config().isChainSupported(chainIDs[i]),
@@ -97,17 +90,18 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         return total;
     }
 
-    /// @notice Calculates the given token amount in USD (4 decimal precision).
+    /// @notice Calculates the given token amount in USD (8 decimal precision).
     /// @param tokenID The ID of the token.
     /// @param amount The amount of tokens.
-    /// @return amount in USD (4 decimal precision).
+    /// @return amount in USD (8 decimal precision).
     function calculateAmountInUSD(uint8 tokenID, uint256 amount) public view returns (uint256) {
         // get the token address
-        address tokenAddress = committee.config().getTokenAddress(tokenID);
+        address tokenAddress = committee.config().tokenAddressOf(tokenID);
         // get the decimals
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
-        return amount * tokenPrices[tokenID] / (10 ** decimals);
+        // calculate amount in USD
+        return amount * committee.config().tokenPriceOf(tokenID) / (10 ** decimals);
     }
 
     /// @notice Returns the current hour timestamp.
@@ -159,44 +153,22 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         key = getChainHourTimestampKey(chainID, _currentHour);
         // update hourly transfers
         chainHourlyTransferAmount[key] += usdAmount;
-
-        emit HourlyTransferAmountUpdated(_currentHour, usdAmount);
-    }
-
-    /// @notice Updates the token price with the provided message if the provided signatures are valid.
-    /// @param signatures array of signatures to validate the message.
-    /// @param message BridgeMessage containing the update token price payload.
-    function updateTokenPriceWithSignatures(
-        bytes[] memory signatures,
-        BridgeMessage.Message memory message
-    )
-        external
-        nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.UPDATE_TOKEN_PRICE)
-    {
-        // decode the update token payload
-        (uint8 tokenID, uint64 price) = BridgeMessage.decodeUpdateTokenPricePayload(message.payload);
-
-        // update the token price
-        tokenPrices[tokenID] = price;
-
-        emit AssetPriceUpdated(tokenID, price);
     }
 
     /// @notice Updates the total limit with the provided message if the provided signatures are valid.
     /// @param signatures array of signatures to validate the message.
-    /// @param message The BridgeMessage containing the update limit payload.
+    /// @param message The BridgeUtils containing the update limit payload.
     function updateLimitWithSignatures(
         bytes[] memory signatures,
-        BridgeMessage.Message memory message
+        BridgeUtils.Message memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.UPDATE_BRIDGE_LIMIT)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.UPDATE_BRIDGE_LIMIT)
     {
         // decode the update limit payload
         (uint8 sourceChainID, uint64 newLimit) =
-            BridgeMessage.decodeUpdateLimitPayload(message.payload);
+            BridgeUtils.decodeUpdateLimitPayload(message.payload);
 
         require(
             committee.config().isChainSupported(sourceChainID),

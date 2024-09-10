@@ -1,23 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ConciseableName;
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
-use crate::transaction::CertifiedTransaction;
+use crate::supported_protocol_versions::{
+    Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
+};
+use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::{dkg, dkg_v1};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_protocol_config::SupportedProtocolVersions;
 
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
@@ -43,6 +48,30 @@ pub struct ConsensusCommitPrologueV2 {
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
 
+/// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+pub enum ConsensusDeterminedVersionAssignments {
+    // Cancelled transaction version assignment.
+    CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV3 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// The sub DAG index of the consensus commit. This field will be populated if there
+    /// are multiple consensus commits per round.
+    pub sub_dag_index: Option<u64>,
+    /// Unix timestamp from consensus
+    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    /// Stores consensus handler determined shared object version assignments.
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+}
+
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
 // 4096 should give us plenty of space for any imaginable JWK while preventing DoSes.
 static MAX_TOTAL_JWK_SIZE: usize = 4096;
@@ -54,13 +83,13 @@ pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusTransaction {
-    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
+    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and consensus.
     /// Use an byte array instead of u64 to ensure stable serialization.
     pub tracking_id: [u8; 8],
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
@@ -71,6 +100,7 @@ pub enum ConsensusTransactionKey {
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
     RandomnessDkgMessage(AuthorityName),
     RandomnessDkgConfirmation(AuthorityName),
+    UserTransaction(TransactionDigest),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -103,15 +133,16 @@ impl Debug for ConsensusTransactionKey {
             Self::RandomnessDkgConfirmation(name) => {
                 write!(f, "RandomnessDkgConfirmation({:?})", name.concise())
             }
+            Self::UserTransaction(digest) => write!(f, "UserTransaction({:?})", digest),
         }
     }
 }
 
-/// Used to advertise capabilities of each authority via narwhal. This allows validators to
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
-pub struct AuthorityCapabilities {
-    /// Originating authority - must match narwhal transaction source.
+pub struct AuthorityCapabilitiesV1 {
+    /// Originating authority - must match consensus transaction source.
     pub authority: AuthorityName,
     /// Generation number set by sending authority. Used to determine which of multiple
     /// AuthorityCapabilities messages from the same authority is the most recent.
@@ -128,7 +159,7 @@ pub struct AuthorityCapabilities {
     pub available_system_packages: Vec<ObjectRef>,
 }
 
-impl Debug for AuthorityCapabilities {
+impl Debug for AuthorityCapabilitiesV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AuthorityCapabilities")
             .field("authority", &self.authority.concise())
@@ -142,7 +173,7 @@ impl Debug for AuthorityCapabilities {
     }
 }
 
-impl AuthorityCapabilities {
+impl AuthorityCapabilitiesV1 {
     pub fn new(
         authority: AuthorityName,
         supported_protocol_versions: SupportedProtocolVersions,
@@ -163,12 +194,75 @@ impl AuthorityCapabilities {
     }
 }
 
+/// Used to advertise capabilities of each authority via consensus. This allows validators to
+/// negotiate the creation of the ChangeEpoch transaction.
+#[derive(Serialize, Deserialize, Clone, Hash)]
+pub struct AuthorityCapabilitiesV2 {
+    /// Originating authority - must match transaction source authority from consensus.
+    pub authority: AuthorityName,
+    /// Generation number set by sending authority. Used to determine which of multiple
+    /// AuthorityCapabilities messages from the same authority is the most recent.
+    ///
+    /// (Currently, we just set this to the current time in milliseconds since the epoch, but this
+    /// should not be interpreted as a timestamp.)
+    pub generation: u64,
+
+    /// ProtocolVersions that the authority supports.
+    pub supported_protocol_versions: SupportedProtocolVersionsWithHashes,
+
+    /// The ObjectRefs of all versions of system packages that the validator possesses.
+    /// Used to determine whether to do a framework/movestdlib upgrade.
+    pub available_system_packages: Vec<ObjectRef>,
+}
+
+impl Debug for AuthorityCapabilitiesV2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthorityCapabilities")
+            .field("authority", &self.authority.concise())
+            .field("generation", &self.generation)
+            .field(
+                "supported_protocol_versions",
+                &self.supported_protocol_versions,
+            )
+            .field("available_system_packages", &self.available_system_packages)
+            .finish()
+    }
+}
+
+impl AuthorityCapabilitiesV2 {
+    pub fn new(
+        authority: AuthorityName,
+        chain: Chain,
+        supported_protocol_versions: SupportedProtocolVersions,
+        available_system_packages: Vec<ObjectRef>,
+    ) -> Self {
+        let generation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Sui did not exist prior to 1970")
+            .as_millis()
+            .try_into()
+            .expect("This build of sui is not supported in the year 500,000,000");
+        Self {
+            authority,
+            generation,
+            supported_protocol_versions:
+                SupportedProtocolVersionsWithHashes::from_supported_versions(
+                    supported_protocol_versions,
+                    chain,
+                ),
+            available_system_packages,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
-    UserTransaction(Box<CertifiedTransaction>),
+    CertifiedTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
-    CapabilityNotification(AuthorityCapabilities),
+
+    CapabilityNotification(AuthorityCapabilitiesV1),
+
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
@@ -179,6 +273,10 @@ pub enum ConsensusTransactionKind {
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+
+    CapabilityNotificationV2(AuthorityCapabilitiesV2),
+
+    UserTransaction(Box<Transaction>),
 }
 
 impl ConsensusTransactionKind {
@@ -188,6 +286,94 @@ impl ConsensusTransactionKind {
             ConsensusTransactionKind::RandomnessDkgMessage(_, _)
                 | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
         )
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum VersionedDkgMessage {
+    V0(), // deprecated
+    V1(dkg_v1::Message<bls12381::G2Element, bls12381::G2Element>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VersionedDkgConfirmation {
+    V0(), // deprecated
+    V1(dkg::Confirmation<bls12381::G2Element>),
+}
+
+impl Debug for VersionedDkgMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VersionedDkgMessage::V0() => write!(f, "Deprecated VersionedDkgMessage version 0"),
+            VersionedDkgMessage::V1(msg) => write!(
+                f,
+                "DKG V1 Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+                msg.sender,
+                msg.vss_pk.degree(),
+                msg.encrypted_shares.len(),
+            ),
+        }
+    }
+}
+
+impl VersionedDkgMessage {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgMessage::V0() => panic!("BUG: invalid VersionedDkgMessage version"),
+            VersionedDkgMessage::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn create(
+        dkg_version: u64,
+        party: Arc<dkg::Party<bls12381::G2Element, bls12381::G2Element>>,
+    ) -> FastCryptoResult<VersionedDkgMessage> {
+        assert_eq!(dkg_version, 1, "BUG: invalid DKG version");
+        let msg = party.create_message_v1(&mut rand::thread_rng())?;
+        Ok(VersionedDkgMessage::V1(msg))
+    }
+
+    pub fn unwrap_v1(self) -> dkg_v1::Message<bls12381::G2Element, bls12381::G2Element> {
+        match self {
+            VersionedDkgMessage::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 message"),
+        }
+    }
+
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgMessage::V1(_), 1))
+    }
+}
+
+impl VersionedDkgConfirmation {
+    pub fn sender(&self) -> u16 {
+        match self {
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.sender,
+        }
+    }
+
+    pub fn num_of_complaints(&self) -> usize {
+        match self {
+            VersionedDkgConfirmation::V0() => {
+                panic!("BUG: invalid VersionedDkgConfimation version")
+            }
+            VersionedDkgConfirmation::V1(msg) => msg.complaints.len(),
+        }
+    }
+
+    pub fn unwrap_v1(&self) -> &dkg::Confirmation<bls12381::G2Element> {
+        match self {
+            VersionedDkgConfirmation::V1(msg) => msg,
+            _ => panic!("BUG: expected V1 confirmation"),
+        }
+    }
+
+    pub fn is_valid_version(&self, dkg_version: u64) -> bool {
+        matches!((self, dkg_version), (VersionedDkgConfirmation::V1(_), 1))
     }
 }
 
@@ -203,7 +389,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -227,13 +413,23 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_capability_notification(capabilities: AuthorityCapabilities) -> Self {
+    pub fn new_capability_notification(capabilities: AuthorityCapabilitiesV1) -> Self {
         let mut hasher = DefaultHasher::new();
         capabilities.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
+        }
+    }
+
+    pub fn new_capability_notification_v2(capabilities: AuthorityCapabilitiesV2) -> Self {
+        let mut hasher = DefaultHasher::new();
+        capabilities.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CapabilityNotificationV2(capabilities),
         }
     }
 
@@ -250,7 +446,7 @@ impl ConsensusTransaction {
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
-            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
         }
     }
 
@@ -266,9 +462,10 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_message(
         authority: AuthorityName,
-        message: &dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+        versioned_message: &VersionedDkgMessage,
     ) -> Self {
-        let message = bcs::to_bytes(message).expect("message serialization should not fail");
+        let message =
+            bcs::to_bytes(versioned_message).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         message.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -277,13 +474,12 @@ impl ConsensusTransaction {
             kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, message),
         }
     }
-
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        confirmation: &dkg::Confirmation<bls12381::G2Element>,
+        versioned_confirmation: &VersionedDkgConfirmation,
     ) -> Self {
         let confirmation =
-            bcs::to_bytes(confirmation).expect("message serialization should not fail");
+            bcs::to_bytes(versioned_confirmation).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
         confirmation.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
@@ -301,7 +497,7 @@ impl ConsensusTransaction {
 
     pub fn key(&self) -> ConsensusTransactionKey {
         match &self.kind {
-            ConsensusTransactionKind::UserTransaction(cert) => {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
                 ConsensusTransactionKey::Certificate(*cert.digest())
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
@@ -314,6 +510,9 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::EndOfPublish(*authority)
             }
             ConsensusTransactionKind::CapabilityNotification(cap) => {
+                ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
+            }
+            ConsensusTransactionKind::CapabilityNotificationV2(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
             ConsensusTransactionKind::NewJWKFetched(authority, id, key) => {
@@ -332,11 +531,14 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
             }
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                ConsensusTransactionKey::UserTransaction(*tx.digest())
+            }
         }
     }
 
     pub fn is_user_certificate(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(self.kind, ConsensusTransactionKind::CertifiedTransaction(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

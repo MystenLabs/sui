@@ -16,6 +16,11 @@ for external tools. The difference is otherwise not observable from within Move.
 -  [Function `exists_`](#0x2_dynamic_object_field_exists_)
 -  [Function `exists_with_type`](#0x2_dynamic_object_field_exists_with_type)
 -  [Function `id`](#0x2_dynamic_object_field_id)
+-  [Function `internal_add`](#0x2_dynamic_object_field_internal_add)
+-  [Function `internal_borrow`](#0x2_dynamic_object_field_internal_borrow)
+-  [Function `internal_borrow_mut`](#0x2_dynamic_object_field_internal_borrow_mut)
+-  [Function `internal_remove`](#0x2_dynamic_object_field_internal_remove)
+-  [Function `internal_exists_with_type`](#0x2_dynamic_object_field_internal_exists_with_type)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -75,11 +80,7 @@ Aborts with <code>EFieldAlreadyExists</code> if the object already has that fiel
     name: Name,
     value: Value,
 ) {
-    <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> id = <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&value);
-    field::add(<a href="../sui-framework/object.md#0x2_object">object</a>, key, id);
-    <b>let</b> (field, _) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    add_child_object(field.to_address(), value);
+    add_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name, value)
 }
 </code></pre>
 
@@ -110,9 +111,7 @@ specified type.
     <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): &Value {
-    <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    borrow_child_object&lt;Value&gt;(field, value_id)
+    borrow_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
 
@@ -143,9 +142,7 @@ specified type.
     <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): &<b>mut</b> Value {
-    <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field, value_id) = field::field_info_mut&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    borrow_child_object_mut&lt;Value&gt;(field, value_id)
+    borrow_mut_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
 
@@ -177,11 +174,7 @@ specified type.
     <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Value {
-    <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    <b>let</b> value = remove_child_object&lt;Value&gt;(field.to_address(), value_id);
-    field::remove&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    value
+    remove_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
 
@@ -240,10 +233,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
     <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): bool {
-    <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>if</b> (!field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)) <b>return</b> <b>false</b>;
-    <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    field::has_child_object_with_ty&lt;Value&gt;(field.to_address(), value_id)
+    exists_with_type_impl!&lt;_, Value&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
 
@@ -276,6 +266,143 @@ Returns none otherwise
     <b>if</b> (!field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     <b>let</b> (_field, value_addr) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
     <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value_addr.to_id())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_object_field_internal_add"></a>
+
+## Function `internal_add`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_add">internal_add</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name, value: Value)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_add">internal_add</a>&lt;Name: <b>copy</b> + drop + store, Value: key&gt;(
+    // we <b>use</b> &<b>mut</b> UID in several spots for access control
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+    value: Value,
+) {
+    add_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name, value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_object_field_internal_borrow"></a>
+
+## Function `internal_borrow`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_borrow">internal_borrow</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): &Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_borrow">internal_borrow</a>&lt;Name: <b>copy</b> + drop + store, Value: key&gt;(
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
+    name: Name,
+): &Value {
+    borrow_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_object_field_internal_borrow_mut"></a>
+
+## Function `internal_borrow_mut`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_borrow_mut">internal_borrow_mut</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): &<b>mut</b> Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_borrow_mut">internal_borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: key&gt;(
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+): &<b>mut</b> Value {
+    borrow_mut_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_object_field_internal_remove"></a>
+
+## Function `internal_remove`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_remove">internal_remove</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_remove">internal_remove</a>&lt;Name: <b>copy</b> + drop + store, Value: key&gt;(
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+): Value {
+    remove_impl!(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_object_field_internal_exists_with_type"></a>
+
+## Function `internal_exists_with_type`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_exists_with_type">internal_exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: key&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>: &<a href="../sui-framework/object.md#0x2_object_UID">object::UID</a>, name: Name): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_internal_exists_with_type">internal_exists_with_type</a>&lt;Name: <b>copy</b> + drop + store, Value: key&gt;(
+    <a href="../sui-framework/object.md#0x2_object">object</a>: &UID,
+    name: Name,
+): bool {
+    exists_with_type_impl!&lt;_, Value&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, name)
 }
 </code></pre>
 

@@ -11,8 +11,6 @@ expression: "results.join(\"\\n\")"
 │ make-move-vec │ <address> [@0x1]         │
 │ assign        │ a                        │
 │ make-move-vec │ <vector<address>> [a, a] │
-├───────────────┼──────────────────────────┤
-│ gas-budget    │ 1000000000               │
 ╰───────────────┴──────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])

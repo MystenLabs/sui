@@ -70,7 +70,7 @@ impl Executor {
         let arc_metrics = Arc::new(metrics);
 
         // Spawn the subscriber.
-        let subscriber_handle = spawn_subscriber(
+        let subscriber_handles = spawn_subscriber(
             authority_id,
             worker_cache,
             committee,
@@ -86,7 +86,7 @@ impl Executor {
         // Return the handle.
         info!("Consensus subscriber successfully started");
 
-        Ok(subscriber_handle)
+        Ok(subscriber_handles)
     }
 }
 

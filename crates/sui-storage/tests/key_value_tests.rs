@@ -5,8 +5,11 @@ use async_trait::async_trait;
 use futures::FutureExt;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ExecutionDigests, ObjectID, VersionNumber};
+use sui_types::base_types::{
+    random_object_ref, ExecutionDigests, ObjectID, SequenceNumber, VersionNumber,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -24,6 +27,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::transaction::Transaction;
 
+use sui_storage::http_key_value_store::*;
 use sui_storage::key_value_store::*;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::object::Object;
@@ -106,6 +110,7 @@ impl MockTxStore {
 
         let (committee, keys) = Committee::new_simple_test_committee_of_size(1);
         let summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             committee.epoch,
             next_seq,
             1,
@@ -114,6 +119,7 @@ impl MockTxStore {
             Default::default(),
             None,
             0,
+            Vec::new(),
         );
 
         let signed = SignedCheckpointSummary::new(
@@ -425,20 +431,32 @@ async fn test_get_tx_from_fallback() {
 
 #[cfg(msim)]
 mod simtests {
-
     use super::*;
-    use hyper::{
-        service::{make_service_fn, service_fn},
-        Body, Request, Response, Server,
-    };
-    use std::convert::Infallible;
+    use axum::routing::get;
+    use axum::{body::Body, extract::Request, extract::State, response::Response};
     use std::net::SocketAddr;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
     use sui_macros::sim_test;
     use sui_simulator::configs::constant_latency_ms;
-    use sui_storage::http_key_value_store::*;
     use tracing::info;
+
+    async fn svc(
+        State(state): State<Arc<Mutex<HashMap<String, Vec<u8>>>>>,
+        request: Request<Body>,
+    ) -> Response {
+        let path = request.uri().path().to_string();
+        let key = path.trim_start_matches('/');
+        let value = state.lock().unwrap().get(key).cloned();
+        info!("Got request for key: {:?}, value: {:?}", key, value);
+        match value {
+            Some(v) => Response::new(Body::from(v)),
+            None => Response::builder()
+                .status(hyper::StatusCode::NOT_FOUND)
+                .body(Body::empty())
+                .unwrap(),
+        }
+    }
 
     async fn test_server(data: Arc<Mutex<HashMap<String, Vec<u8>>>>) {
         let handle = sui_simulator::runtime::Handle::current();
@@ -453,41 +471,12 @@ mod simtests {
                 let data = data.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
-                    let make_svc = make_service_fn(move |_| {
-                        let data = data.clone();
-                        async {
-                            Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
-                                let data = data.clone();
-                                async move {
-                                    let path = req.uri().path().to_string();
-                                    let key = path.trim_start_matches('/');
-                                    let value = data.lock().unwrap().get(key).cloned();
-                                    info!("Got request for key: {:?}, value: {:?}", key, value);
-                                    match value {
-                                        Some(v) => {
-                                            Ok::<_, Infallible>(Response::new(Body::from(v)))
-                                        }
-                                        None => Ok::<_, Infallible>(
-                                            Response::builder()
-                                                .status(hyper::StatusCode::NOT_FOUND)
-                                                .body(Body::empty())
-                                                .unwrap(),
-                                        ),
-                                    }
-                                }
-                            }))
-                        }
-                    });
-
+                    let router = get(svc).with_state(data);
                     let addr = SocketAddr::from(([10, 10, 10, 10], 8080));
-                    let server = Server::bind(&addr).serve(make_svc);
-
-                    let graceful = server.with_graceful_shutdown(async {
-                        tokio::time::sleep(Duration::from_secs(86400)).await;
-                    });
+                    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
                     tokio::spawn(async {
-                        let _ = graceful.await;
+                        axum::serve(listener, router).await.unwrap();
                     });
 
                     startup_sender.send(true).ok();
@@ -541,8 +530,9 @@ mod simtests {
 
         let server_data = Arc::new(Mutex::new(data));
         test_server(server_data).await;
+        let metrics = KeyValueStoreMetrics::new_for_tests();
 
-        let store = HttpKVStore::new("http://10.10.10.10:8080").unwrap();
+        let store = HttpKVStore::new("http://10.10.10.10:8080", 1000, metrics.clone()).unwrap();
 
         // send one request to warm up the client (and open a connection)
         store.multi_get(&[*tx.digest()], &[], &[]).await.unwrap();
@@ -566,7 +556,87 @@ mod simtests {
             (vec![Some(tx), None], vec![Some(fx)], vec![Some(events)])
         );
 
+        // the tx was fetched twice, so there should be one cache hit
+        assert_eq!(
+            metrics
+                .key_value_store_num_fetches_success
+                .get_metric_with_label_values(&["http_cache", "url"])
+                .unwrap()
+                .get(),
+            1
+        );
+
         let result = store.multi_get(&[random_digest], &[], &[]).await.unwrap();
         assert_eq!(result, (vec![None], vec![], vec![]));
     }
+}
+
+#[test]
+fn test_key_to_path_and_back() {
+    let tx = TransactionDigest::random();
+    let key = Key::Tx(tx);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::Fx(TransactionDigest::random());
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let events = TransactionEventsDigest::random();
+    let key = Key::Events(events);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::CheckpointSummary(42);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::CheckpointContents(42);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let ckpt_contents = CheckpointContentsDigest::random();
+    let key = Key::CheckpointContentsByDigest(ckpt_contents);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let ckpt_summary = CheckpointDigest::random();
+    let key = Key::CheckpointSummaryByDigest(ckpt_summary);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::TxToCheckpoint(tx);
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
+
+    let key = Key::ObjectKey(ObjectID::random(), SequenceNumber::from_u64(42));
+    let path_elts = key_to_path_elements(&key).unwrap();
+    assert_eq!(
+        path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
+        key
+    );
 }

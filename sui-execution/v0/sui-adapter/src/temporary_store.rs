@@ -14,9 +14,9 @@ use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, Sh
 use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
+use sui_types::layout_resolver::LayoutResolver;
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
-use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -265,6 +265,9 @@ impl<'backing> TemporaryStore<'backing> {
                 SharedInput::Deleted(_) => {
                     unreachable!("Shared object deletion not supported in effects v1")
                 }
+                SharedInput::Cancelled(_) => {
+                    unreachable!("Per object congestion control not supported in effects v1.")
+                }
             })
             .collect();
 
@@ -347,7 +350,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
         // there should be no write after delete
-        debug_assert!(self.deleted.get(&object.id()).is_none());
+        debug_assert!(!self.deleted.contains_key(&object.id()));
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -377,7 +380,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn delete_object(&mut self, id: &ObjectID, kind: DeleteKindWithOldVersion) {
         // there should be no deletion after write
-        debug_assert!(self.written.get(id).is_none());
+        debug_assert!(!self.written.contains_key(id));
 
         // TODO: promote this to an on-in-prod check that raises an invariant_violation
         // Check that we are not deleting an immutable object
@@ -410,7 +413,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
-        debug_assert!(self.deleted.get(id).is_none());
+        debug_assert!(!self.deleted.contains_key(id));
         self.written
             .get(id)
             .map(|(obj, _kind)| obj)
@@ -936,7 +939,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         // there should be no read after delete
-        debug_assert!(self.deleted.get(child).is_none());
+        debug_assert!(!self.deleted.contains_key(child));
         let obj_opt = self.written.get(child).map(|(obj, _kind)| obj);
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
@@ -955,8 +958,8 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
     ) -> SuiResult<Option<Object>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
-        debug_assert!(self.deleted.get(receiving_object_id).is_none());
-        debug_assert!(self.written.get(receiving_object_id).is_none());
+        debug_assert!(!self.deleted.contains_key(receiving_object_id));
+        debug_assert!(!self.written.contains_key(receiving_object_id));
         self.store.get_object_received_at_version(
             owner,
             receiving_object_id,
@@ -997,6 +1000,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
         unreachable!("Unused in v0")
+    }
+
+    fn check_coin_deny_list(
+        &self,
+        _written_objects: &BTreeMap<ObjectID, Object>,
+    ) -> DenyListResult {
+        unreachable!("Coin denylist v2 is not supported in sui-execution v0");
     }
 }
 

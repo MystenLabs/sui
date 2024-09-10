@@ -1,5 +1,209 @@
 # @mysten/zklogin
 
+## 0.7.18
+
+### Patch Changes
+
+- Updated dependencies [569511a]
+  - @mysten/sui@1.8.0
+
+## 0.7.17
+
+### Patch Changes
+
+- Updated dependencies [143cd9d]
+- Updated dependencies [4357ac6]
+- Updated dependencies [4019dd7]
+- Updated dependencies [4019dd7]
+- Updated dependencies [00a974d]
+  - @mysten/sui@1.7.0
+
+## 0.7.16
+
+### Patch Changes
+
+- Updated dependencies [a3e32fe]
+  - @mysten/sui@1.6.0
+
+## 0.7.15
+
+### Patch Changes
+
+- 6f79ed9: Additional check for bigints
+
+## 0.7.14
+
+### Patch Changes
+
+- Updated dependencies [0851b31]
+- Updated dependencies [f37b3c2]
+- Updated dependencies [f37b3c2]
+  - @mysten/sui@1.5.0
+  - @mysten/bcs@1.0.4
+
+## 0.7.13
+
+### Patch Changes
+
+- Updated dependencies [4419234]
+  - @mysten/sui@1.4.0
+
+## 0.7.12
+
+### Patch Changes
+
+- Updated dependencies [a45f461]
+  - @mysten/sui@1.3.1
+
+## 0.7.11
+
+### Patch Changes
+
+- 0f27a97: Update dependencies
+- Updated dependencies [7fc464a]
+- Updated dependencies [086b2bc]
+- Updated dependencies [0fb0628]
+- Updated dependencies [cdedf69]
+- Updated dependencies [0f27a97]
+- Updated dependencies [beed646]
+  - @mysten/sui@1.3.0
+  - @mysten/bcs@1.0.3
+
+## 0.7.10
+
+### Patch Changes
+
+- 06a900c1ab: Fix nonce generation inconsistency
+- Updated dependencies [06a900c1ab]
+- Updated dependencies [45877014d1]
+- Updated dependencies [87d6f75403]
+  - @mysten/sui@1.2.1
+
+## 0.7.9
+
+### Patch Changes
+
+- Updated dependencies [fef99d377f]
+  - @mysten/sui@1.2.0
+
+## 0.7.8
+
+### Patch Changes
+
+- Updated dependencies [0dfff33b95]
+  - @mysten/sui@1.1.2
+
+## 0.7.7
+
+### Patch Changes
+
+- Updated dependencies [101f1ff4b8]
+  - @mysten/sui@1.1.1
+
+## 0.7.6
+
+### Patch Changes
+
+- Updated dependencies [bae8f9683c]
+  - @mysten/sui@1.1.0
+
+## 0.7.5
+
+### Patch Changes
+
+- Updated dependencies [369b924343]
+- Updated dependencies [369b924343]
+  - @mysten/bcs@1.0.2
+  - @mysten/sui@1.0.5
+
+## 0.7.4
+
+### Patch Changes
+
+- Updated dependencies [f1e828f557]
+- Updated dependencies [f1e828f557]
+  - @mysten/sui@1.0.4
+  - @mysten/bcs@1.0.1
+
+## 0.7.3
+
+### Patch Changes
+
+- Updated dependencies [1f20580841]
+  - @mysten/sui@1.0.3
+
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [f0a839f874]
+  - @mysten/sui@1.0.2
+
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [6fc6235984]
+  - @mysten/sui@1.0.1
+
+## 0.7.0
+
+### Minor Changes
+
+- a92b03de42: The Typescript SDK has been renamed to `@mysten/sui` and includes many new features
+  and breaking changes. See the
+  [full migration guide](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0) for details on
+  how to upgrade.
+
+### Patch Changes
+
+- Updated dependencies [ebdfe7cf21]
+- Updated dependencies [a92b03de42]
+  - @mysten/sui@1.0.0
+  - @mysten/bcs@1.0.0
+
+## 0.6.3
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+
+## 0.6.0
+
+### Minor Changes
+
+- e279098cff: add support for verify zklogin signature in sdk
+
+## 0.5.3
+
+### Patch Changes
+
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+
 ## 0.5.1
 
 ### Patch Changes
@@ -156,7 +360,8 @@
 
 ### Minor Changes
 
-- d80a6ed62: Remove toBigIntBE, expose new `getExtendedEphemeralPublicKey` method. Methods now return base64-encoded strings instead of bigints.
+- d80a6ed62: Remove toBigIntBE, expose new `getExtendedEphemeralPublicKey` method. Methods now
+  return base64-encoded strings instead of bigints.
 
 ### Patch Changes
 

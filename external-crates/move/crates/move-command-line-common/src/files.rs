@@ -121,6 +121,21 @@ pub fn find_move_filenames(
     }
 }
 
+/// Similar to find_filenames but it will keep any file explicitly passed in `paths`
+pub fn find_filenames_and_keep_specified<Predicate: FnMut(&Path) -> bool>(
+    paths: &[impl AsRef<Path>],
+    is_file_desired: Predicate,
+) -> anyhow::Result<Vec<String>> {
+    let (file_paths, other_paths): (Vec<&Path>, Vec<&Path>) =
+        paths.iter().map(|p| p.as_ref()).partition(|s| s.is_file());
+    let mut files = file_paths
+        .into_iter()
+        .map(path_to_string)
+        .collect::<anyhow::Result<Vec<String>>>()?;
+    files.extend(find_filenames(&other_paths, is_file_desired)?);
+    Ok(files)
+}
+
 pub fn path_to_string(path: &Path) -> anyhow::Result<String> {
     match path.to_str() {
         Some(p) => Ok(p.to_string()),
@@ -197,6 +212,7 @@ pub fn try_exists_vfs(vfs_path: &VfsPath) -> VfsResult<bool> {
 /// - For each directory in `paths`, it will return all files that satisfy the predicate
 /// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
 ///   of the file extension
+///
 /// It implements the same functionality as find_filenames above but for the virtual file system
 pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
     paths: &[VfsPath],
@@ -229,7 +245,8 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
 ///   recursively in that directory
 /// - If `keep_specified_files` any file explicitly passed in `paths`, will be added to the result
-///   Otherwise, they will be discarded
+///
+/// Otherwise, they will be discarded
 /// It implements the same functionality as find_move_filenames above but for the virtual file
 /// system
 pub fn find_move_filenames_vfs(

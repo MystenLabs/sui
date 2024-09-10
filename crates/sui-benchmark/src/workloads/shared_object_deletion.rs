@@ -23,7 +23,7 @@ use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
     transaction::Transaction,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, info, warn};
 
 /// The max amount of gas units needed for a payload.
 pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
@@ -50,7 +50,10 @@ impl Payload for SharedCounterDeletionTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() && !self.is_counter_deleted {
             effects.print_gas_summary();
-            error!("Shared counter deletion tx failed...");
+            warn!(
+                "Shared counter deletion tx failed...  Status: {:?}",
+                effects.status()
+            );
         }
 
         self.gas.0 = effects.gas_object().0;
@@ -142,8 +145,8 @@ impl SharedCounterDeletionWorkloadBuilder {
         let max_ops = target_qps * in_flight_ratio;
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
-        if num_shared_counters == 0 || num_workers == 0 {
+        let num_shared_counters = std::cmp::max(1, (max_ops as f32 * shared_counter_ratio) as u64);
+        if max_ops == 0 || num_shared_counters == 0 || num_workers == 0 {
             None
         } else {
             let workload_params = WorkloadParams {
@@ -268,11 +271,12 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref.execute_transaction_block(transaction).await {
-                    effects.created()[0].0
-                } else {
-                    panic!("Failed to create shared counter!");
-                }
+                proxy_ref
+                    .execute_transaction_block(transaction)
+                    .await
+                    .unwrap()
+                    .created()[0]
+                    .0
             });
         }
         self.counters = join_all(futures).await;

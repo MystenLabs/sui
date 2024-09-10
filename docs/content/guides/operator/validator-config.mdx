@@ -90,6 +90,8 @@ In practice, the process for submitting a gas price quote for the Gas Price Surv
 
 For example, to set the price quote for the next epoch to 42, run:
 
+{@include: ../../snippets/info-gas-budget.mdx}
+
 ```shell
 sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>
 ```

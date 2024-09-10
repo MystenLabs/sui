@@ -6,13 +6,11 @@
 //! parameters, locals, and fields of structs are well-formed. References can only occur at the
 //! top-level in all tokens.  Additionally, references cannot occur at all in field types.
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
-    binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeUnit, CompiledModule, CompiledScript, FunctionDefinition,
+        AbilitySet, Bytecode, CodeUnit, CompiledModule, DatatypeTyParameter, FunctionDefinition,
         FunctionHandle, Signature, SignatureIndex, SignatureToken, StructDefinition,
-        StructFieldInformation, StructTypeParameter, TableIndex,
+        StructFieldInformation, TableIndex,
     },
     file_format_common::VERSION_6,
     IndexKind,
@@ -21,7 +19,7 @@ use move_core_types::vm_status::StatusCode;
 use std::collections::{HashMap, HashSet};
 
 pub struct SignatureChecker<'a> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
@@ -32,28 +30,13 @@ impl<'a> SignatureChecker<'a> {
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut sig_check = Self {
-            resolver: BinaryIndexedView::Module(module),
+            resolver: module,
             abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
         sig_check.verify_function_signatures(module.function_handles())?;
         sig_check.verify_fields(module.struct_defs())?;
         sig_check.verify_code_units(module.function_handles(), module.function_defs())
-    }
-
-    pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let mut sig_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-            abilities_cache: HashMap::new(),
-        };
-        sig_check.verify_signature_pool(script.signatures())?;
-        sig_check.verify_function_signatures(script.function_handles())?;
-        sig_check.check_instantiation(script.parameters, &script.type_parameters)?;
-        sig_check.verify_code(script.code(), &script.type_parameters)
     }
 
     fn verify_signature_pool(&self, signatures: &[Signature]) -> PartialVMResult<()> {
@@ -88,7 +71,7 @@ impl<'a> SignatureChecker<'a> {
                 StructFieldInformation::Native => continue,
                 StructFieldInformation::Declared(fields) => fields,
             };
-            let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = self.resolver.datatype_handle_at(struct_def.struct_handle);
             let err_handler = |err: PartialVMError, idx| {
                 err.at_index(IndexKind::FieldDefinition, idx as TableIndex)
                     .at_index(IndexKind::StructDefinition, struct_def_idx as TableIndex)
@@ -162,9 +145,9 @@ impl<'a> SignatureChecker<'a> {
                 | MoveToGenericDeprecated(idx)
                 | ImmBorrowGlobalGenericDeprecated(idx)
                 | MutBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    let struct_def = self.resolver.struct_def_at(struct_inst.def)?;
-                    let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
+                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
+                    let struct_def = self.resolver.struct_def_at(struct_inst.def);
+                    let struct_handle = self.resolver.datatype_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(struct_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
                     self.check_generic_instance(
@@ -174,10 +157,10 @@ impl<'a> SignatureChecker<'a> {
                     )
                 }
                 ImmBorrowFieldGeneric(idx) | MutBorrowFieldGeneric(idx) => {
-                    let field_inst = self.resolver.field_instantiation_at(*idx)?;
-                    let field_handle = self.resolver.field_handle_at(field_inst.handle)?;
-                    let struct_def = self.resolver.struct_def_at(field_handle.owner)?;
-                    let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
+                    let field_inst = self.resolver.field_instantiation_at(*idx);
+                    let field_handle = self.resolver.field_handle_at(field_inst.handle);
+                    let struct_def = self.resolver.struct_def_at(field_handle.owner);
+                    let struct_handle = self.resolver.datatype_handle_at(struct_def.struct_handle);
                     let type_arguments = &self.resolver.signature_at(field_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
                     self.check_generic_instance(
@@ -268,6 +251,20 @@ impl<'a> SignatureChecker<'a> {
                 | MoveFromDeprecated(_)
                 | Abort
                 | Nop => Ok(()),
+                PackVariant(_)
+                | PackVariantGeneric(_)
+                | UnpackVariant(_)
+                | UnpackVariantGeneric(_)
+                | UnpackVariantImmRef(_)
+                | UnpackVariantGenericImmRef(_)
+                | UnpackVariantMutRef(_)
+                | UnpackVariantGenericMutRef(_)
+                | VariantSwitch(_) => {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message("Unexpected variant opcode in version 0".to_string()),
+                    );
+                }
             };
             result.map_err(|err| {
                 err.append_message_with_separator(' ', format!("at offset {} ", offset))
@@ -281,13 +278,13 @@ impl<'a> SignatureChecker<'a> {
         &self,
         ty: &SignatureToken,
         is_phantom_pos: bool,
-        type_parameters: &[StructTypeParameter],
+        type_parameters: &[DatatypeTyParameter],
     ) -> PartialVMResult<()> {
         match ty {
             SignatureToken::Vector(ty) => self.check_phantom_params(ty, false, type_parameters)?,
-            SignatureToken::StructInstantiation(struct_inst) => {
+            SignatureToken::DatatypeInstantiation(struct_inst) => {
                 let (idx, type_arguments) = &**struct_inst;
-                let sh = self.resolver.struct_handle_at(*idx);
+                let sh = self.resolver.datatype_handle_at(*idx);
                 for (i, ty) in type_arguments.iter().enumerate() {
                     self.check_phantom_params(
                         ty,
@@ -307,7 +304,7 @@ impl<'a> SignatureChecker<'a> {
                 }
             }
 
-            SignatureToken::Struct(_)
+            SignatureToken::Datatype(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::Bool
@@ -351,7 +348,7 @@ impl<'a> SignatureChecker<'a> {
     fn check_signature_token(&self, ty: &SignatureToken) -> PartialVMResult<()> {
         use SignatureToken::*;
         match ty {
-            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Struct(_)
+            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Datatype(_)
             | TypeParameter(_) => Ok(()),
             Reference(_) | MutableReference(_) => {
                 // TODO: Prop tests expect us to NOT check the inner types.
@@ -360,10 +357,10 @@ impl<'a> SignatureChecker<'a> {
                     .with_message("reference not allowed".to_string()))
             }
             Vector(ty) => self.check_signature_token(ty),
-            StructInstantiation(struct_inst) => {
+            DatatypeInstantiation(struct_inst) => {
                 let (_, type_arguments) = &**struct_inst;
                 self.check_signature_tokens(type_arguments)
-            },
+            }
         }
     }
 
@@ -407,13 +404,13 @@ impl<'a> SignatureChecker<'a> {
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
         match s {
-            SignatureToken::StructInstantiation(struct_inst) => {
+            SignatureToken::DatatypeInstantiation(struct_inst) => {
                 let (idx, type_arguments) = &**struct_inst;
                 // Check that the instantiation satisfies the `idx` struct's constraints
                 // Cannot be checked completely if we do not know the constraints of type parameters
                 // i.e. it cannot be checked unless we are inside some module member. The only case
                 // where that happens is when checking the signature pool itself
-                let sh = self.resolver.struct_handle_at(*idx);
+                let sh = self.resolver.datatype_handle_at(*idx);
                 self.check_generic_instance(
                     type_arguments,
                     sh.type_param_constraints(),
@@ -424,7 +421,7 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::MutableReference(_)
             | SignatureToken::Vector(_)
             | SignatureToken::TypeParameter(_)
-            | SignatureToken::Struct(_)
+            | SignatureToken::Datatype(_)
             | SignatureToken::Bool
             | SignatureToken::U8
             | SignatureToken::U16

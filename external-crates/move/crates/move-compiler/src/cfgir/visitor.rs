@@ -5,29 +5,39 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use crate::{
     cfgir::{
-        self,
         absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
+        ast as G,
         cfg::ImmForwardCFG,
         CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{Diagnostic, Diagnostics},
-    hlir::ast::{
-        Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, UnannotatedExp_,
-        Var,
-    },
+    diagnostics::{Diagnostic, Diagnostics, WarningFilters},
+    expansion::ast::ModuleIdent,
+    hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
+    parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::CompilationEnv,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
+pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
+
+pub trait CFGIRVisitor {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program);
+
+    fn visitor(self) -> Visitor
+    where
+        Self: 'static + Sized,
+    {
+        Visitor::CFGIRVisitor(Box::new(self))
+    }
+}
 
 pub trait AbstractInterpreterVisitor {
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics;
@@ -41,7 +51,284 @@ pub trait AbstractInterpreterVisitor {
 }
 
 //**************************************************************************************************
-// simple visitor
+// simple ast visitor
+//**************************************************************************************************
+
+pub trait CFGIRVisitorConstructor {
+    type Context<'a>: Sized + CFGIRVisitorContext;
+
+    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
+
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
+        let mut context = Self::context(env, program);
+        context.visit(program);
+    }
+}
+
+pub trait CFGIRVisitorContext {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn pop_warning_filter_scope(&mut self);
+
+    fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
+        false
+    }
+
+    /// By default, the visitor will visit all all expressions in all functions in all modules. A
+    /// custom version should of this function should be created if different type of analysis is
+    /// required.
+    fn visit(&mut self, program: &G::Program) {
+        for (mident, mdef) in program.modules.key_cloned_iter() {
+            self.add_warning_filter_scope(mdef.warning_filter.clone());
+            if self.visit_module_custom(mident, mdef) {
+                self.pop_warning_filter_scope();
+                continue;
+            }
+
+            for (struct_name, sdef) in mdef.structs.key_cloned_iter() {
+                self.visit_struct(mident, struct_name, sdef)
+            }
+            for (enum_name, edef) in mdef.enums.key_cloned_iter() {
+                self.visit_enum(mident, enum_name, edef)
+            }
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter() {
+                self.visit_constant(mident, constant_name, cdef)
+            }
+            for (function_name, fdef) in mdef.functions.key_cloned_iter() {
+                self.visit_function(mident, function_name, fdef)
+            }
+
+            self.pop_warning_filter_scope();
+        }
+    }
+
+    // TODO  type visiting
+
+    fn visit_struct_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _struct_name: DatatypeName,
+        _sdef: &H::StructDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_struct(
+        &mut self,
+        module: ModuleIdent,
+        struct_name: DatatypeName,
+        sdef: &H::StructDefinition,
+    ) {
+        self.add_warning_filter_scope(sdef.warning_filter.clone());
+        if self.visit_struct_custom(module, struct_name, sdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_enum_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _enum_name: DatatypeName,
+        _edef: &H::EnumDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_enum(
+        &mut self,
+        module: ModuleIdent,
+        enum_name: DatatypeName,
+        edef: &H::EnumDefinition,
+    ) {
+        self.add_warning_filter_scope(edef.warning_filter.clone());
+        if self.visit_enum_custom(module, enum_name, edef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_constant_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _constant_name: ConstantName,
+        _cdef: &G::Constant,
+    ) -> bool {
+        false
+    }
+    fn visit_constant(
+        &mut self,
+        module: ModuleIdent,
+        constant_name: ConstantName,
+        cdef: &G::Constant,
+    ) {
+        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        if self.visit_constant_custom(module, constant_name, cdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_function_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _function_name: FunctionName,
+        _fdef: &G::Function,
+    ) -> bool {
+        false
+    }
+    fn visit_function(
+        &mut self,
+        module: ModuleIdent,
+        function_name: FunctionName,
+        fdef: &G::Function,
+    ) {
+        self.add_warning_filter_scope(fdef.warning_filter.clone());
+        if self.visit_function_custom(module, function_name, fdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        if let G::FunctionBody_::Defined {
+            locals: _,
+            start: _,
+            block_info: _,
+            blocks,
+        } = &fdef.body.value
+        {
+            for (lbl, block) in blocks {
+                self.visit_block(*lbl, block);
+            }
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_block_custom(&mut self, _lbl: Label, _block: &G::BasicBlock) -> bool {
+        false
+    }
+    fn visit_block(&mut self, _lbl: Label, block: &G::BasicBlock) {
+        for cmd in block {
+            self.visit_command(cmd)
+        }
+    }
+
+    fn visit_command_custom(&mut self, _cmd: &H::Command) -> bool {
+        false
+    }
+    fn visit_command(&mut self, cmd: &H::Command) {
+        use H::Command_ as C;
+        if self.visit_command_custom(cmd) {
+            return;
+        }
+        match &cmd.value {
+            C::Assign(_, _, e)
+            | C::Abort(_, e)
+            | C::Return { exp: e, .. }
+            | C::IgnoreAndPop { exp: e, .. }
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => {
+                self.visit_exp(e);
+            }
+            C::Mutate(el, er) => {
+                self.visit_exp(el);
+                self.visit_exp(er);
+            }
+            C::Jump { .. } => (),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+        }
+    }
+
+    fn visit_exp_custom(&mut self, _e: &H::Exp) -> bool {
+        false
+    }
+    #[growing_stack]
+    fn visit_exp(&mut self, e: &H::Exp) {
+        use H::UnannotatedExp_ as E;
+        if self.visit_exp_custom(e) {
+            return;
+        }
+        match &e.exp.value {
+            E::Unit { .. }
+            | E::Move { .. }
+            | E::Copy { .. }
+            | E::Constant(_)
+            | E::ErrorConstant { .. }
+            | E::BorrowLocal(_, _)
+            | E::Unreachable
+            | E::UnresolvedError => (),
+
+            E::Value(v) => self.visit_value(v),
+
+            E::Freeze(e)
+            | E::Dereference(e)
+            | E::UnaryExp(_, e)
+            | E::Borrow(_, e, _, _)
+            | E::Cast(e, _) => self.visit_exp(e),
+
+            E::BinopExp(el, _, er) => {
+                self.visit_exp(el);
+                self.visit_exp(er);
+            }
+
+            E::ModuleCall(m) => {
+                for arg in &m.arguments {
+                    self.visit_exp(arg)
+                }
+            }
+            E::Vector(_, _, _, es) | E::Multiple(es) => {
+                for e in es {
+                    self.visit_exp(e)
+                }
+            }
+
+            E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
+                for (_, _, e) in es {
+                    self.visit_exp(e)
+                }
+            }
+        }
+    }
+
+    fn visit_value_custom(&mut self, _v: &H::Value) -> bool {
+        false
+    }
+    #[growing_stack]
+    fn visit_value(&mut self, v: &H::Value) {
+        use H::Value_ as V;
+        if self.visit_value_custom(v) {
+            return;
+        }
+        match &v.value {
+            V::Address(_)
+            | V::U8(_)
+            | V::U16(_)
+            | V::U32(_)
+            | V::U64(_)
+            | V::U128(_)
+            | V::U256(_)
+            | V::Bool(_) => (),
+            V::Vector(_, vs) => {
+                for v in vs {
+                    self.visit_value(v)
+                }
+            }
+        }
+    }
+}
+
+impl<V: CFGIRVisitor + 'static> From<V> for CFGIRVisitorObj {
+    fn from(value: V) -> Self {
+        Box::new(value)
+    }
+}
+
+impl<V: CFGIRVisitorConstructor> CFGIRVisitor for V {
+    fn visit(&mut self, env: &mut CompilationEnv, program: &G::Program) {
+        self.visit(env, program)
+    }
+}
+
+//**************************************************************************************************
+// simple absint visitor
 //**************************************************************************************************
 
 /// The reason why a local variable is unavailable (mostly useful for error messages)
@@ -162,15 +449,14 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Return None if it should not be run given this context
     fn new<'a>(
         env: &CompilationEnv,
-        program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
+        cfg: &ImmForwardCFG,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
 
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
@@ -192,7 +478,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, program, context, &mut init_state) else {
+        let Some(mut ai) = Self::new(env, context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -239,7 +525,7 @@ pub trait SimpleAbsInt: Sized {
         state: &mut Self::State,
         cmd: &Command,
     ) {
-        use Command_ as C;
+        use H::Command_ as C;
         if self.command_custom(context, state, cmd) {
             return;
         }
@@ -254,9 +540,10 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, el);
             }
             C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::Return { exp: e, .. }
-            | C::Abort(e) => {
+            | C::Abort(_, e) => {
                 self.exp(context, state, e);
             }
             C::Jump { .. } => (),
@@ -314,6 +601,12 @@ pub trait SimpleAbsInt: Sized {
                     self.lvalue(context, state, l, v)
                 }
             }
+            L::UnpackVariant(_, _, _, _, _, fields) => {
+                for (_, l) in fields {
+                    let v = <Self::State as SimpleDomain>::Value::default();
+                    self.lvalue(context, state, l, v)
+                }
+            }
         }
     }
 
@@ -344,7 +637,7 @@ pub trait SimpleAbsInt: Sized {
         state: &mut Self::State,
         parent_e: &Exp,
     ) -> Vec<<Self::State as SimpleDomain>::Value> {
-        use UnannotatedExp_ as E;
+        use H::UnannotatedExp_ as E;
         if let Some(vs) = self.exp_custom(context, state, parent_e) {
             return vs;
         }
@@ -403,7 +696,7 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => {
+            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant { .. } => {
                 default_values(1)
             }
 
@@ -413,6 +706,12 @@ pub trait SimpleAbsInt: Sized {
                 default_values(1)
             }
             E::Pack(_, _, fields) => {
+                for (_, _, e) in fields {
+                    self.exp(context, state, e);
+                }
+                default_values(1)
+            }
+            E::PackVariant(_, _, _, fields) => {
                 for (_, _, e) in fields {
                     self.exp(context, state, e);
                 }
@@ -463,10 +762,9 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, env, program, context, cfg)
+        SimpleAbsIntConstructor::verify(self, env, context, cfg)
     }
 }

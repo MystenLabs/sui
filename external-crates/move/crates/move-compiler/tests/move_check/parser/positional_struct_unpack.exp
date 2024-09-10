@@ -9,8 +9,11 @@ error[E13001]: feature is not supported in specified edition
 error[E03013]: positional call mismatch
   ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
   │
+4 │     struct Foo { f: u64 }
+  │            --- 'Foo' is declared here
+  ·
 7 │         Foo(_) = x;
-  │         ^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+  │         ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9

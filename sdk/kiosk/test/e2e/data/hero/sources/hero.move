@@ -6,16 +6,16 @@ module hero::hero {
     use sui::object::{Self, UID};
     use sui::package;
 
-    struct Hero has key, store {
+    public struct Hero has key, store {
         id: UID,
         level: u8,
     }
 
-    struct Villain has key, store {
+    public struct Villain has key, store {
         id: UID,
     }
 
-    struct HERO has drop {}
+    public struct HERO has drop {}
 
     fun init(witness: HERO, ctx: &mut TxContext) {
         package::claim_and_keep(witness, ctx);

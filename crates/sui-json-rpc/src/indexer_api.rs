@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -13,7 +15,6 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
-use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::{
@@ -147,7 +148,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         with_tracing!(async move {
             let limit =
                 validate_limit(limit, *QUERY_MAX_RESULT_LIMIT).map_err(SuiRpcInputError::from)?;
-            self.metrics.get_owned_objects_limit.report(limit as u64);
+            self.metrics.get_owned_objects_limit.observe(limit as f64);
             let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
             let options = options.unwrap_or_default();
             let mut objects = self
@@ -178,7 +179,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             self.metrics
                 .get_owned_objects_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_owned_objects_result_size_total
                 .inc_by(data.len() as u64);
@@ -201,7 +202,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     ) -> RpcResult<TransactionBlocksPage> {
         with_tracing!(async move {
             let limit = cap_page_limit(limit);
-            self.metrics.query_tx_blocks_limit.report(limit as u64);
+            self.metrics.query_tx_blocks_limit.observe(limit as f64);
             let descending = descending_order.unwrap_or_default();
             let opts = query.options.unwrap_or_default();
 
@@ -217,6 +218,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 )
                 .await
                 .map_err(Error::from)?;
+            // De-dup digests, duplicate digests are possible, for example,
+            // when get_transactions_by_move_function with module or function being None.
+            let mut seen = HashSet::new();
+            digests.retain(|digest| seen.insert(*digest));
 
             // extract next cursor
             let has_next_page = digests.len() > limit;
@@ -236,7 +241,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             self.metrics
                 .query_tx_blocks_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .query_tx_blocks_result_size_total
                 .inc_by(data.len() as u64);
@@ -259,7 +264,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         with_tracing!(async move {
             let descending = descending_order.unwrap_or_default();
             let limit = cap_page_limit(limit);
-            self.metrics.query_events_limit.report(limit as u64);
+            self.metrics.query_events_limit.observe(limit as f64);
             // Retrieve 1 extra item for next cursor
             let mut data = self
                 .state
@@ -277,7 +282,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let next_cursor = data.last().map_or(cursor, |e| Some(e.id));
             self.metrics
                 .query_events_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .query_events_result_size_total
                 .inc_by(data.len() as u64);
@@ -328,7 +333,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     ) -> RpcResult<DynamicFieldPage> {
         with_tracing!(async move {
             let limit = cap_page_limit(limit);
-            self.metrics.get_dynamic_fields_limit.report(limit as u64);
+            self.metrics.get_dynamic_fields_limit.observe(limit as f64);
             let mut data = self
                 .state
                 .get_dynamic_fields(parent_object_id, cursor, limit + 1)
@@ -338,7 +343,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.0));
             self.metrics
                 .get_dynamic_fields_result_size
-                .report(data.len() as u64);
+                .observe(data.len() as f64);
             self.metrics
                 .get_dynamic_fields_result_size_total
                 .inc_by(data.len() as u64);
@@ -413,7 +418,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let name_record = NameRecord::try_from(object)?;
 
             // Handling SLD names & node subdomains is the same (we handle them as `node` records)
-            // We check their expiration, and and if not expired, return the target address.
+            // We check their expiration, and if not expired, return the target address.
             if !name_record.is_leaf_record() {
                 return if !name_record.is_node_expired(current_timestamp_ms) {
                     Ok(name_record.target_address)

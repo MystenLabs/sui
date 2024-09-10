@@ -16,23 +16,8 @@ use sui_tls::TlsAcceptor;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
 
-// WARNING!!!
-//
-// Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unessesary builds.
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-
-// VERSION mimics what other sui binaries use for the same const
-pub const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 /// user agent we use when posting to mimir
 static APP_USER_AGENT: &str = const_str::concat!(

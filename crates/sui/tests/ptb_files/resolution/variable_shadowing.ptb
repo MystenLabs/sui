@@ -4,4 +4,3 @@
 # Make sure that the second usage of 's' here is not the same as the first definition of 's' 
 --make-move-vec <address> [s]
 
---gas-budget 100000

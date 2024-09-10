@@ -1,0 +1,14 @@
+[package]
+name = "Bridge"
+version = "0.0.1"
+published-at = "0xb"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../move-stdlib" }
+Sui = { local = "../sui-framework" }
+SuiSystem = { local = "../sui-system" }
+
+[addresses]
+bridge = "0xb"
+

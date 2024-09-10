@@ -3,7 +3,7 @@
 
 import { API_ENV } from '_src/shared/api-env';
 import { useFeatureValue } from '@growthbook/growthbook-react';
-import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui.js/utils';
+import { SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS } from '@mysten/sui/utils';
 
 import useAppSelector from './useAppSelector';
 

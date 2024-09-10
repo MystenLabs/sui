@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
@@ -8,11 +10,11 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, StructName},
+    parser::ast::{Ability_, DatatypeName, FunctionName},
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{
@@ -30,12 +32,8 @@ pub struct SuiTypeChecks;
 
 impl TypingVisitorConstructor for SuiTypeChecks {
     type Context<'a> = Context<'a>;
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
-        Context::new(env, program_info)
+    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+        Context::new(env, program.info.clone())
     }
 }
 
@@ -46,16 +44,16 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 #[allow(unused)]
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    info: &'a TypingProgramInfo,
+    info: Arc<TypingProgramInfo>,
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
     otw_name: Option<Symbol>,
-    one_time_witness: Option<Result<StructName, ()>>,
+    one_time_witness: Option<Result<DatatypeName, ()>>,
     in_test: bool,
 }
 
 impl<'a> Context<'a> {
-    fn new(env: &'a mut CompilationEnv, info: &'a TypingProgramInfo) -> Self {
+    fn new(env: &'a mut CompilationEnv, info: Arc<TypingProgramInfo>) -> Self {
         let sui_module_ident = info
             .modules
             .key_cloned_iter()
@@ -108,13 +106,18 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
             // Skip if not sui
             return true;
         }
-        if config.is_dependency || !mdef.is_source_module {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return true;
         }
@@ -122,7 +125,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.set_module(ident);
         self.in_test = mdef.attributes.is_test_or_test_only();
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
-            let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+            let valid_fields = if let N::StructFields::Defined(_, fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
             } else {
                 true
@@ -142,6 +145,10 @@ impl<'a> TypingVisitorContext for Context<'a> {
             struct_def(self, name, sdef)
         }
 
+        for (name, edef) in mdef.enums.key_cloned_iter() {
+            enum_def(self, name, edef)
+        }
+
         // do not skip module
         false
     }
@@ -150,7 +157,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         &mut self,
         module: ModuleIdent,
         name: FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         debug_assert!(self.current_module.as_ref() == Some(&module));
         function(self, name, fdef);
@@ -158,7 +165,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         true
     }
 
-    fn visit_exp_custom(&mut self, e: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         exp(self, e);
         // do not skip recursion
         false
@@ -169,10 +176,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
 // Structs
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinition) {
     let N::StructDefinition {
         warning_filter: _,
         index: _,
+        loc: _,
         attributes: _,
         abilities,
         type_parameters: _,
@@ -183,7 +191,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         return;
     };
 
-    let StructFields::Defined(fields) = fields else {
+    let StructFields::Defined(_, fields) = fields else {
         return;
     };
     let invalid_first_field = if fields.is_empty() {
@@ -219,7 +227,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
     }
 }
 
-fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Diagnostic {
+fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: DatatypeName) -> Diagnostic {
     const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
 
     let msg = format!(
@@ -236,10 +244,32 @@ fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Dia
 }
 
 //**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition) {
+    let N::EnumDefinition {
+        warning_filter: _,
+        index: _,
+        loc: _loc,
+        attributes: _,
+        abilities,
+        type_parameters: _,
+        variants: _,
+    } = edef;
+    if let Some(key_loc) = abilities.ability_loc_(Ability_::Key) {
+        let msg = format!("Invalid object '{name}'");
+        let key_msg = format!("Enums cannot have the '{}' ability.", Ability_::Key);
+        let diag = diag!(OBJECT_DECL_DIAG, (name.loc(), msg), (key_loc, key_msg));
+        context.env.add_diag(diag);
+    };
+}
+
+//**************************************************************************************************
 // Functions
 //**********************************************************************************************
 
-fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
+fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     let T::Function {
         compiled_visibility: _,
         visibility,
@@ -344,6 +374,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         ))
     }
 
+    let info = context.info.clone();
     let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1
         && context.one_time_witness.is_some()
@@ -390,8 +421,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             );
             diag.add_note(OTW_NOTE);
             context.env.add_diag(diag)
-        } else if let Some(sdef) = context
-            .info
+        } else if let Some(sdef) = info
             .module(context.current_module())
             .structs
             .get_(&otw_name)
@@ -424,7 +454,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
 // when trying to write an 'init' function.
 fn check_otw_type(
     context: &mut Context,
-    name: StructName,
+    name: DatatypeName,
     sdef: &N::StructDefinition,
     usage_loc: Option<Loc>,
 ) {
@@ -451,7 +481,7 @@ fn check_otw_type(
         valid = false;
     }
 
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         let invalid_otw_opt = invalid_otw_field_loc(fields);
         if let Some(invalid_otw_opt) = invalid_otw_opt {
             let msg_base = format!(
@@ -838,8 +868,8 @@ fn entry_return(
                 let (declared_loc_opt, declared_abilities) = match tn_ {
                     TypeName_::Multiple(_) => (None, AbilitySet::collection(*tloc)),
                     TypeName_::ModuleType(m, n) => (
-                        Some(context.info.struct_declared_loc(m, n)),
-                        context.info.struct_declared_abilities(m, n).clone(),
+                        Some(context.info.datatype_declared_loc(m, n)),
+                        context.info.datatype_declared_abilities(m, n).clone(),
                     ),
                     TypeName_::Builtin(b) => (None, b.value.declared_abilities(b.loc)),
                 };
@@ -1034,7 +1064,7 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
             let store_loc = if let Some((first_ty_module, first_ty_name)) = &first_ty_tn {
                 let abilities = context
                     .info
-                    .struct_declared_abilities(first_ty_module, first_ty_name);
+                    .datatype_declared_abilities(first_ty_module, first_ty_name);
                 abilities.ability_loc_(Ability_::Store).unwrap()
             } else {
                 first_ty

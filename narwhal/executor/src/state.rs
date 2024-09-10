@@ -15,16 +15,6 @@ pub struct ExecutionIndices {
     pub transaction_index: SequenceNumber,
 }
 
-impl ExecutionIndices {
-    pub fn end_for_commit(commit_round: u64) -> Self {
-        ExecutionIndices {
-            last_committed_round: commit_round,
-            sub_dag_index: SequenceNumber::MAX,
-            transaction_index: SequenceNumber::MAX,
-        }
-    }
-}
-
 impl Ord for ExecutionIndices {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (

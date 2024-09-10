@@ -6,10 +6,14 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 
 [dev-dependencies]
 move-package.workspace = true
+move-core-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-keys.workspace = true

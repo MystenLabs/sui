@@ -16,7 +16,6 @@ module deepbook::clob_v2 {
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
 
-    /* friend deepbook::order_query; */
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EIncorrectPoolOwner: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
@@ -2016,19 +2015,8 @@ module deepbook::clob_v2 {
 
         if (price_low < price_low_) price_low = price_low_;
         if (price_high > price_high_) price_high = price_high_;
-        let closest_low = critbit::find_closest_key(&pool.bids, price_low);
-        let closest_high = critbit::find_closest_key(&pool.bids, price_high);
-        if (price_low <= closest_low){
-            price_low = closest_low;
-        } else {
-            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
-        };
-        if (price_high >= closest_high){
-            price_high = closest_high;
-        } else {
-            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
-        };
-
+        price_low = critbit::find_closest_key(&pool.bids, price_low);
+        price_high = critbit::find_closest_key(&pool.bids, price_high);
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.bids,
@@ -2060,7 +2048,6 @@ module deepbook::clob_v2 {
         let mut depth_vec = vector::empty<u64>();
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
-        let (price_high_, _) = critbit::max_leaf(&pool.asks);
 
         // Price_high is less than the lowest leaf in the tree then we return an empty array
         if (price_high < price_low_) {
@@ -2068,20 +2055,10 @@ module deepbook::clob_v2 {
         };
 
         if (price_low < price_low_) price_low = price_low_;
+        let (price_high_, _) = critbit::max_leaf(&pool.asks);
         if (price_high > price_high_) price_high = price_high_;
-        let closest_low = critbit::find_closest_key(&pool.asks, price_low);
-        let closest_high = critbit::find_closest_key(&pool.asks, price_high);
-        if (price_low <= closest_low){
-            price_low = closest_low;
-        } else {
-            (price_low, _) = critbit::next_leaf(&pool.bids, closest_low);
-        };
-        if (price_high >= closest_high){
-            price_high = closest_high;
-        } else {
-            (price_high, _) = critbit::previous_leaf(&pool.bids, closest_high);
-        };
-
+        price_low = critbit::find_closest_key(&pool.asks, price_low);
+        price_high = critbit::find_closest_key(&pool.asks, price_high);
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
                 &pool.asks,
@@ -2257,8 +2234,6 @@ module deepbook::clob_v2 {
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
 
-    #[test_only] const E_NULL: u64 = 0;
-
     #[test_only] const CLIENT_ID_ALICE: u64 = 0;
     #[test_only] const CLIENT_ID_BOB: u64 = 1;
 
@@ -2404,17 +2379,17 @@ module deepbook::clob_v2 {
         open_orders: &vector<Order>,
     ) {
         let (tick_exists, tick_index) = find_leaf(tree, price);
-        assert!(tick_exists, E_NULL);
+        assert!(tick_exists);
         let tick_level = borrow_leaf_by_index(tree, tick_index);
-        assert!(tick_level.price == price, E_NULL);
+        assert!(tick_level.price == price);
         let mut total_quote_amount: u64 = 0;
-        assert!(linked_table::length(&tick_level.open_orders) == vector::length(open_orders), E_NULL);
+        assert!(linked_table::length(&tick_level.open_orders) == vector::length(open_orders));
         let mut i_order = 0;
         while (i_order < vector::length(open_orders)) {
             let order = vector::borrow(open_orders, i_order);
             total_quote_amount = total_quote_amount + order.quantity;
-            assert!(order.price == price, E_NULL);
-            assert!(contains_order(&tick_level.open_orders, order), E_NULL);
+            assert!(order.price == price);
+            assert!(contains_order(&tick_level.open_orders, order));
             i_order = i_order + 1;
         };
     }
@@ -2425,7 +2400,7 @@ module deepbook::clob_v2 {
         price: u64,
     ) {
         let (tick_exists, _) = find_leaf(tree, price);
-        assert!(!tick_exists, E_NULL);
+        assert!(!tick_exists);
     }
 
 
@@ -3107,10 +3082,10 @@ module deepbook::clob_v2 {
                 &account_cap,
                 test_scenario::ctx(&mut test)
             );
-            assert!(base_filled == 0, E_NULL);
-            assert!(quote_filled == 0, E_NULL);
-            assert!(maker_injected, E_NULL);
-            assert!(maker_order_id == order_id_for_test(0, false), E_NULL);
+            assert!(base_filled == 0);
+            assert!(quote_filled == 0);
+            assert!(maker_injected);
+            assert!(maker_order_id == order_id_for_test(0, false));
 
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
             assert!(next_bid_order_id == order_id_for_test(3, true), 0);
@@ -3153,9 +3128,9 @@ module deepbook::clob_v2 {
                 &account_cap,
                 test_scenario::ctx(&mut test)
             );
-            assert!(base_filled == 600 * 100000000, E_NULL);
-            assert!(quote_filled == 2600 * 100000000, E_NULL);
-            assert!(!maker_injected, E_NULL);
+            assert!(base_filled == 600 * 100000000);
+            assert!(quote_filled == 2600 * 100000000);
+            assert!(!maker_injected);
 
             custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 300 * 100000000, 0);
             {

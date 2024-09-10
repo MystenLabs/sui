@@ -25,7 +25,7 @@ HEX (Base16) encoding utility.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/hex.md#0x2_hex_EInvalidHexLength">EInvalidHexLength</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/hex.md#0x2_hex_EInvalidHexLength">EInvalidHexLength</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -34,7 +34,7 @@ HEX (Base16) encoding utility.
 
 
 
-<pre><code><b>const</b> <a href="../sui-framework/hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/hex.md#0x2_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -69,7 +69,7 @@ Encode <code>bytes</code> in lowercase hex
     <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[], bytes.length());
     <b>let</b> hex_vector = <a href="../sui-framework/hex.md#0x2_hex_HEX">HEX</a>;
     <b>while</b> (i &lt; l) {
-        r.append(hex_vector[bytes[i] <b>as</b> u64]);
+        r.append(hex_vector[bytes[i] <b>as</b> <a href="../move-stdlib/u64.md#0x1_u64">u64</a>]);
         i = i + 1;
     };
     r

@@ -9,8 +9,6 @@ module sui::balance {
     /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
     public use fun sui::coin::from_balance as Balance.into_coin;
 
-    /* friend sui::sui; */
-
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
     /// For when an overflow is happening on Supply operations.
@@ -19,6 +17,8 @@ module sui::balance {
     const ENotEnough: u64 = 2;
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 3;
+    /// System operation performed for a coin other than SUI
+    const ENotSUI: u64 = 4;
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
@@ -93,12 +93,19 @@ module sui::balance {
         let Balance { value: _ } = balance;
     }
 
+    const SUI_TYPE_NAME: vector<u8> =
+        b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
+
     #[allow(unused_function)]
     /// CAUTION: this function creates a `Balance` without increasing the supply.
     /// It should only be called by the epoch change system txn to create staking rewards,
     /// and nowhere else.
     fun create_staking_rewards<T>(value: u64, ctx: &TxContext): Balance<T> {
         assert!(ctx.sender() == @0x0, ENotSystemAddress);
+        assert!(
+            std::type_name::get<T>().into_string().into_bytes() == SUI_TYPE_NAME,
+            ENotSUI,
+        );
         Balance { value }
     }
 
@@ -108,6 +115,10 @@ module sui::balance {
     /// and nowhere else.
     fun destroy_storage_rebates<T>(self: Balance<T>, ctx: &TxContext) {
         assert!(ctx.sender() == @0x0, ENotSystemAddress);
+        assert!(
+            std::type_name::get<T>().into_string().into_bytes() == SUI_TYPE_NAME,
+            ENotSUI,
+        );
         let Balance { value: _ } = self;
     }
 
@@ -150,7 +161,7 @@ module sui::balance_tests {
 
         balance.join(another);
 
-        assert!(balance.value() == 1000, 0);
+        assert!(balance.value() == 1000);
 
         let balance1 = balance.split(333);
         let balance2 = balance.split(333);
@@ -158,9 +169,9 @@ module sui::balance_tests {
 
         balance.destroy_zero();
 
-        assert!(balance1.value() == 333, 1);
-        assert!(balance2.value() == 333, 2);
-        assert!(balance3.value() == 334, 3);
+        assert!(balance1.value() == 333);
+        assert!(balance2.value() == 333);
+        assert!(balance3.value() == 334);
 
         test_utils::destroy(balance1);
         test_utils::destroy(balance2);

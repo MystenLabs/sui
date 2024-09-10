@@ -6,6 +6,6 @@
 	"wallet-provider": "WalletProvider",
 	"wallet-components": "Wallet Components",
 	"wallet-hooks": "Wallet Hooks",
-	"zksend": "zkSend Integration",
+	"stashed": "Stashed Integration",
 	"themes": "Themes"
 }

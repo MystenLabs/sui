@@ -1,0 +1,47 @@
+//# publish
+module 0x1.Enums {
+    enum PolyEnumWithTwoVariants<T> {
+        One { },
+        Two { x: T }
+    }
+
+    public g<T>(t: T, x2: T): T {
+        let e: Self.PolyEnumWithTwoVariants<T>;
+        let x: &mut T;
+        label b0:
+            e = PolyEnumWithTwoVariants.Two<T> { x: move(t) };
+            variant_switch PolyEnumWithTwoVariants (&e) {
+                One : b1,
+                Two : b1,
+            };
+        label b1:
+            &mut PolyEnumWithTwoVariants.Two<T> { x: x } = &mut e;
+            *move(x) = move(x2);
+            abort 0;
+    }
+}
+
+//# publish
+module 0x1.Enums {
+    struct X { b: bool }
+
+    enum MonoEnumWithTwoVariants {
+        One { },
+        Two { x: Self.X }
+    }
+
+    public g(t: Self.X, x2: Self.X): Self.X {
+        let e: Self.MonoEnumWithTwoVariants;
+        let x: &mut Self.X;
+        label b0:
+            e = MonoEnumWithTwoVariants.Two { x: move(t) };
+            variant_switch MonoEnumWithTwoVariants (&e) {
+                One : b1,
+                Two : b1,
+            };
+        label b1:
+            &mut MonoEnumWithTwoVariants.Two { x: x } = &mut e;
+            *move(x) = move(x2);
+            abort 0;
+    }
+}

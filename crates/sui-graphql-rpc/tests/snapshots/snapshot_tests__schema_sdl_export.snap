@@ -102,8 +102,27 @@ type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
 	`AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type AddressConnection {
@@ -176,7 +195,7 @@ type AuthenticatorStateExpireTransaction {
 	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
-	authenticatorObjInitialSharedVersion: Int!
+	authenticatorObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -190,7 +209,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Consensus round of the authenticator state update.
 	"""
-	round: Int!
+	round: UInt53!
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
@@ -198,7 +217,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	The initial version of the authenticator object that it was shared at.
 	"""
-	authenticatorObjInitialSharedVersion: Int!
+	authenticatorObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -220,7 +239,7 @@ type Balance {
 	"""
 	How many coins of this type constitute the balance
 	"""
-	coinObjectCount: Int
+	coinObjectCount: UInt53
 	"""
 	Total balance across all coin objects of the coin type
 	"""
@@ -314,6 +333,14 @@ String representation of an arbitrary width, possibly signed integer.
 scalar BigInt
 
 
+type BridgeCommitteeInitTransaction {
+	bridgeObjInitialSharedVersion: UInt53!
+}
+
+type BridgeStateCreateTransaction {
+	chainId: String!
+}
+
 """
 A system transaction that updates epoch information on-chain (increments the current epoch).
 Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
@@ -329,7 +356,7 @@ type ChangeEpochTransaction {
 	"""
 	The protocol version in effect in the new epoch.
 	"""
-	protocolVersion: Int!
+	protocolVersion: UInt53!
 	"""
 	The total amount of gas charged for storage during the previous epoch (in MIST).
 	"""
@@ -374,7 +401,7 @@ type Checkpoint {
 	This checkpoint's position in the total order of finalized checkpoints, agreed upon by
 	consensus.
 	"""
-	sequenceNumber: Int!
+	sequenceNumber: UInt53!
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus.
 	Transactions that access time in this checkpoint will observe this timestamp.
@@ -392,7 +419,7 @@ type Checkpoint {
 	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
-	networkTotalTransactions: Int
+	networkTotalTransactions: UInt53
 	"""
 	The computation cost, storage cost, storage rebate, and non-refundable storage fee
 	accumulated during this epoch, up to and including this checkpoint. These values increase
@@ -405,8 +432,25 @@ type Checkpoint {
 	epoch: Epoch
 	"""
 	Transactions in this checkpoint.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type CheckpointConnection {
@@ -443,7 +487,7 @@ Filter either by the digest, or the sequence number, or neither, to get the late
 """
 input CheckpointId {
 	digest: String
-	sequenceNumber: Int
+	sequenceNumber: UInt53
 }
 
 """
@@ -483,7 +527,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -513,8 +557,27 @@ type Coin implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -642,7 +705,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -672,8 +735,27 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -757,7 +839,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Consensus round of the commit.
 	"""
-	round: Int!
+	round: UInt53!
 	"""
 	Unix timestamp from consensus.
 	"""
@@ -885,9 +967,10 @@ type DynamicField {
 	"""
 	name: MoveValue
 	"""
-	The actual data stored in the dynamic field.
-	The returned dynamic field is an object if its return type is MoveObject,
-	in which case it is also accessible off-chain via its address.
+	The returned dynamic field is an object if its return type is `MoveObject`,
+	in which case it is also accessible off-chain via its address. Its contents
+	will be from the latest version that is at most equal to its parent object's
+	version
 	"""
 	value: DynamicFieldValue
 }
@@ -947,7 +1030,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -991,7 +1074,7 @@ type Epoch {
 	"""
 	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
-	epochId: Int!
+	epochId: UInt53!
 	"""
 	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
 	"""
@@ -1011,11 +1094,11 @@ type Epoch {
 	"""
 	The total number of checkpoints in this epoch.
 	"""
-	totalCheckpoints: BigInt
+	totalCheckpoints: UInt53
 	"""
 	The total number of transaction blocks in this epoch.
 	"""
-	totalTransactions: Int
+	totalTransactions: UInt53
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
@@ -1068,7 +1151,7 @@ type Epoch {
 	version changes whenever the fields contained in the system state object (held in a dynamic
 	field attached to `0x5`) change.
 	"""
-	systemStateVersion: Int
+	systemStateVersion: UInt53
 	"""
 	Details of the system that are decided during genesis.
 	"""
@@ -1088,8 +1171,25 @@ type Epoch {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range consists of all transactions in this epoch.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
 type Event {
@@ -1176,6 +1276,8 @@ input EventFilter {
 	PTB and emits an event.
 	
 	Modules can be filtered by their package, or package::module.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	emittingModule: String
 	"""
@@ -1251,6 +1353,10 @@ enum Feature {
 	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
+	"""
+	Named packages service (utilizing dotmove package registry).
+	"""
+	MOVE_REGISTRY
 }
 
 
@@ -1333,6 +1439,31 @@ type GenesisTransaction {
 
 
 """
+Interface implemented by all GraphQL types that represent a Move datatype (either structs or
+enums). This interface is used to provide a way to access fields that are shared by both
+structs and enums, e.g., the module that the datatype belongs to, the name of the datatype,
+type parameters etc.
+"""
+interface IMoveDatatype {
+	"""
+	The module that the datatype belongs to.
+	"""
+	module: MoveModule!
+	"""
+	The name of the datatype.
+	"""
+	name: String!
+	"""
+	The abilities of the datatype.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The type parameters of the datatype.
+	"""
+	typeParameters: [MoveStructTypeParameter!]
+}
+
+"""
 This interface is implemented by types that represent a Move object on-chain (A Move value whose
 type has `key`).
 """
@@ -1374,7 +1505,7 @@ Interface implemented by on-chain values that are addressable by an ID (also ref
 address). This includes Move objects and packages.
 """
 interface IObject {
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are: NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or system package upgrade transaction. LIVE, the version returned is the most recent for the object, and it is not deleted or wrapped at that version. HISTORICAL, the object was referenced at a specific version or checkpoint, so is fetched from historical tables and may not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or wrapped and only partial information can be loaded.
 	"""
@@ -1399,7 +1530,7 @@ interface IObject {
 	"""
 	The transaction blocks that sent objects to this object.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1485,7 +1616,7 @@ type Linkage {
 	"""
 	The version of the dependency that this package depends on.
 	"""
-	version: Int!
+	version: UInt53!
 }
 
 """
@@ -1580,9 +1711,126 @@ type MoveData =
   | { String:  string }
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
-  | { Struct:  [{ name: string, value: MoveData }] }
+  | { Struct:  [{ name: string , value: MoveData }] }
+  | { Variant: {
+      name: string,
+      fields: [{ name: string, value: MoveData }],
+  }
 """
 scalar MoveData
+
+"""
+The generic representation of a Move datatype (either a struct or an enum) which exposes common
+fields and information (module, name, abilities, type parameters etc.) that is shared across
+them.
+"""
+type MoveDatatype implements IMoveDatatype {
+	module: MoveModule!
+	name: String!
+	abilities: [MoveAbility!]
+	typeParameters: [MoveStructTypeParameter!]
+	asMoveEnum: MoveEnum
+	asMoveStruct: MoveStruct
+}
+
+type MoveDatatypeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveDatatypeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveDatatype!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveDatatypeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveDatatype!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Description of an enum type, defined in a Move module.
+"""
+type MoveEnum implements IMoveDatatype {
+	"""
+	The module this enum was originally defined in.
+	"""
+	module: MoveModule!
+	"""
+	The enum's (unqualified) type name.
+	"""
+	name: String!
+	"""
+	The enum's abilities.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Constraints on the enum's formal type parameters.  Move bytecode does not name type
+	parameters, so when they are referenced (e.g. in field types) they are identified by their
+	index in this list.
+	"""
+	typeParameters: [MoveStructTypeParameter!]
+	"""
+	The names and types of the enum's fields.  Field types reference type parameters, by their
+	index in the defining enum's `typeParameters` list.
+	"""
+	variants: [MoveEnumVariant!]
+}
+
+type MoveEnumConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveEnumEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveEnum!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveEnumEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveEnum!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type MoveEnumVariant {
+	"""
+	The name of the variant
+	"""
+	name: String!
+	"""
+	The names and types of the variant's fields.  Field types reference type parameters, by their
+	index in the defining enum's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+}
 
 """
 Information for a particular field on a Move struct.
@@ -1695,6 +1943,22 @@ type MoveModule {
 	"""
 	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 	"""
+	Look-up the definition of a enum defined in this module, by its name.
+	"""
+	enum(name: String!): MoveEnum
+	"""
+	Iterate through the enums defined in this module.
+	"""
+	enums(first: Int, after: String, last: Int, before: String): MoveEnumConnection
+	"""
+	Look-up the definition of a datatype (struct or enum) defined in this module, by its name.
+	"""
+	datatype(name: String!): MoveDatatype
+	"""
+	Iterate through the datatypes (enmums and structs) defined in this module.
+	"""
+	datatypes(first: Int, after: String, last: Int, before: String): MoveDatatypeConnection
+	"""
 	Look-up the signature of a function defined in this module, by its name.
 	"""
 	function(name: String!): MoveFunction
@@ -1779,7 +2043,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -1809,8 +2073,27 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -1962,7 +2245,7 @@ type MovePackage implements IObject & IOwner {
 	cannot be owned by an address.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -1998,12 +2281,47 @@ type MovePackage implements IObject & IOwner {
 	The transaction blocks that sent objects to this package.
 	
 	Note that objects that have been sent to a package become inaccessible.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the package's content.
 	"""
 	bcs: Base64
+	"""
+	Fetch another version of this package (the package that shares this package's original ID,
+	but has the specified `version`).
+	"""
+	packageAtVersion(version: Int!): MovePackage
+	"""
+	Fetch all versions of this package (packages that share this package's original ID),
+	optionally bounding the versions exclusively from below with `afterVersion`, or from above
+	with `beforeVersion`.
+	"""
+	packageVersions(first: Int, after: String, last: Int, before: String, filter: MovePackageVersionFilter): MovePackageConnection!
+	"""
+	Fetch the latest version of this package (the package with the highest `version` that shares
+	this packages's original ID)
+	"""
+	latestPackage: MovePackage!
 	"""
 	A representation of the module called `name` in this package, including the
 	structs and functions it defines.
@@ -2026,6 +2344,22 @@ type MovePackage implements IObject & IOwner {
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
 	moduleBcs: Base64
+}
+
+"""
+Filter for paginating `MovePackage`s that were created within a range of checkpoints.
+"""
+input MovePackageCheckpointFilter {
+	"""
+	Fetch packages that were published strictly after this checkpoint. Omitting this fetches
+	packages published since genesis.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Fetch packages that were published strictly before this checkpoint. Omitting this fetches
+	packages published up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
 }
 
 type MovePackageConnection {
@@ -2058,9 +2392,25 @@ type MovePackageEdge {
 }
 
 """
-Description of a type, defined in a Move module.
+Filter for paginating versions of a given `MovePackage`.
 """
-type MoveStruct {
+input MovePackageVersionFilter {
+	"""
+	Fetch versions of this package that are strictly newer than this version. Omitting this
+	fetches versions since the original version.
+	"""
+	afterVersion: UInt53
+	"""
+	Fetch versions of this package that are strictly older than this version. Omitting this
+	fetches versions up to the latest version (inclusive).
+	"""
+	beforeVersion: UInt53
+}
+
+"""
+Description of a struct type, defined in a Move module.
+"""
+type MoveStruct implements IMoveDatatype {
 	"""
 	The module this struct was originally defined in.
 	"""
@@ -2156,6 +2506,14 @@ type MoveTypeLayout =
         fields: [{ name: string, layout: MoveTypeLayout }],
       }
     }
+  | { enum: [{
+          type: string,
+          variants: [{ 
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }] 
+  }
 """
 scalar MoveTypeLayout
 
@@ -2290,7 +2648,7 @@ type Object implements IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -2321,8 +2679,27 @@ type Object implements IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -2489,23 +2866,19 @@ input ObjectFilter {
 
 input ObjectKey {
 	objectId: SuiAddress!
-	version: Int!
+	version: UInt53!
 }
 
 enum ObjectKind {
 	"""
-	The object is loaded from serialized data, such as the contents of a transaction.
+	The object is loaded from serialized data, such as the contents of a transaction that hasn't
+	been indexed yet.
 	"""
 	NOT_INDEXED
 	"""
-	The object is currently live and is not deleted or wrapped.
+	The object is fetched from the index.
 	"""
-	LIVE
-	"""
-	The object is referenced at some version, and thus is fetched from the snapshot or
-	historical objects table.
-	"""
-	HISTORICAL
+	INDEXED
 	"""
 	The object is deleted or wrapped and only partial information can be loaded from the
 	indexer.
@@ -2526,7 +2899,7 @@ input ObjectRef {
 	"""
 	Version or sequence number of the object.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	Digest of the object.
 	"""
@@ -2584,7 +2957,7 @@ type OwnedOrImmutable {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -2768,7 +3141,7 @@ type ProtocolConfigs {
 	The protocol is not required to change on every epoch boundary, so the protocol version
 	tracks which change to the protocol these configs are from.
 	"""
-	protocolVersion: Int!
+	protocolVersion: UInt53!
 	"""
 	List all available feature flags and their values.  Feature flags are a form of boolean
 	configuration that are usually used to gate features while they are in development.  Once a
@@ -2849,12 +3222,49 @@ type Query {
 	non-entry functions, and some other checks.  Defaults to false.
 	"""
 	dryRunTransactionBlock(txBytes: String!, txMeta: TransactionMetadata, skipChecks: Boolean): DryRunResult!
-	owner(address: SuiAddress!): Owner
+	"""
+	Look up an Owner by its SuiAddress.
+	
+	`rootVersion` represents the version of the root object in some nested chain of dynamic
+	fields. It allows consistent historical queries for the case of wrapped objects, which don't
+	have a version. For example, if querying the dynamic field of a table wrapped in a parent
+	object, passing the parent object's version here will ensure we get the dynamic field's
+	state at the moment that parent's version was created.
+	
+	Also, if this Owner is an object itself, `rootVersion` will be used to bound its version
+	from above when querying `Owner.asObject`. This can be used, for example, to get the
+	contents of a dynamic object field when its parent was at `rootVersion`.
+	
+	If `rootVersion` is omitted, dynamic fields will be from a consistent snapshot of the Sui
+	state at the latest checkpoint known to the GraphQL RPC. Similarly, `Owner.asObject` will
+	return the object's version at the latest checkpoint.
+	"""
+	owner(address: SuiAddress!, rootVersion: UInt53): Owner
 	"""
 	The object corresponding to the given address at the (optionally) given version.
 	When no version is given, the latest version is returned.
 	"""
-	object(address: SuiAddress!, version: Int): Object
+	object(address: SuiAddress!, version: UInt53): Object
+	"""
+	The package corresponding to the given address (at the optionally given version).
+	
+	When no version is given, the package is loaded directly from the address given. Otherwise,
+	the address is translated before loading to point to the package whose original ID matches
+	the package at `address`, but whose version is `version`. For non-system packages, this
+	might result in a different address than `address` because different versions of a package,
+	introduced by upgrades, exist at distinct addresses.
+	
+	Note that this interpretation of `version` is different from a historical object read (the
+	interpretation of `version` for the `object` query).
+	"""
+	package(address: SuiAddress!, version: UInt53): MovePackage
+	"""
+	The latest version of the package at `address`.
+	
+	This corresponds to the package with the highest `version` that shares its original ID with
+	the package at `address`.
+	"""
+	latestPackage(address: SuiAddress!): MovePackage
 	"""
 	Look-up an Account by its SuiAddress.
 	"""
@@ -2867,7 +3277,7 @@ type Query {
 	"""
 	Fetch epoch information by ID (defaults to the latest epoch).
 	"""
-	epoch(id: Int): Epoch
+	epoch(id: UInt53): Epoch
 	"""
 	Fetch checkpoint information by sequence number or digest (defaults to the latest available
 	checkpoint).
@@ -2890,10 +3300,31 @@ type Query {
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The transaction blocks that exist in the network.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
-	The events that exist in the network.
+	Query events that are emitted in the network.
+	We currently do not support filtering by emitting module and event type
+	at the same time so if both are provided in one filter, the query will error.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
 	"""
@@ -2901,14 +3332,36 @@ type Query {
 	"""
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	"""
+	The Move packages that exist in the network, optionally filtered to be strictly before
+	`beforeCheckpoint` and/or strictly after `afterCheckpoint`.
+	
+	This query returns all versions of a given user package that appear between the specified
+	checkpoints, but only records the latest versions of system packages.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: MovePackageCheckpointFilter): MovePackageConnection!
+	"""
+	Fetch all versions of package at `address` (packages that share this package's original ID),
+	optionally bounding the versions exclusively from below with `afterVersion`, or from above
+	with `beforeVersion`.
+	"""
+	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: MovePackageVersionFilter): MovePackageConnection!
+	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
 	version known to the GraphQL service).
 	"""
-	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	protocolConfig(protocolVersion: UInt53): ProtocolConfigs!
 	"""
 	Resolves a SuiNS `domain` name to an address, if it has been bound.
 	"""
 	resolveSuinsAddress(domain: String!): Address
+	"""
+	Fetch a package by its name (using dot move service)
+	"""
+	packageByName(name: String!): MovePackage
+	"""
+	Fetch a type that includes dot move service names in it.
+	"""
+	typeByName(name: String!): MoveType!
 	"""
 	The coin metadata associated with the given coin type.
 	"""
@@ -2947,7 +3400,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	Randomness round of the update.
 	"""
-	randomnessRound: Int!
+	randomnessRound: UInt53!
 	"""
 	Updated random bytes, encoded as Base64.
 	"""
@@ -2955,7 +3408,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	The initial version the randomness object was shared at.
 	"""
-	randomnessObjInitialSharedVersion: Int!
+	randomnessObjInitialSharedVersion: UInt53!
 }
 
 """
@@ -2969,7 +3422,7 @@ type Receiving {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -3049,7 +3502,7 @@ type ServiceConfig {
 	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
 	measured in the same units that the database uses in EXPLAIN queries.
 	"""
-	maxDbQueryCost: BigInt!
+	maxDbQueryCost: Int!
 	"""
 	Default number of elements allowed on a single page of a connection.
 	"""
@@ -3059,11 +3512,29 @@ type ServiceConfig {
 	"""
 	maxPageSize: Int!
 	"""
-	Maximum time in milliseconds that will be spent to serve one request.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+	a transaction to execute. Note that the transaction may still succeed even in the case of a
+	timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+	until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
 	requestTimeoutMs: Int!
 	"""
-	Maximum length of a query payload string.
+	The maximum bytes allowed for the `txBytes` and `signatures` fields of the GraphQL mutation
+	`executeTransactionBlock` node, or for the `txBytes` of a `dryRunTransactionBlock`.
+	
+	It is the value of the maximum transaction bytes (including the signatures) allowed by the
+	protocol, plus the Base64 overhead (roughly 1/3 of the original string).
+	"""
+	maxTransactionPayloadSize: Int!
+	"""
+	The maximum bytes allowed for the JSON object in the request body of a GraphQL query, for
+	the read part of the query.
+	In case of mutations or dryRunTransactionBlocks the txBytes and signatures are not
+	included in this limit.
 	"""
 	maxQueryPayloadSize: Int!
 	"""
@@ -3084,6 +3555,14 @@ type ServiceConfig {
 	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
 	"""
 	maxMoveValueDepth: Int!
+	"""
+	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
+	"""
+	maxTransactionIds: Int!
+	"""
+	Maximum number of candidates to scan when gathering a page of results.
+	"""
+	maxScanLimit: Int!
 }
 
 """
@@ -3091,7 +3570,7 @@ A shared object is an object that is shared using the 0x2::transfer::share_objec
 Unlike owned objects, once an object is shared, it stays mutable and is accessible by anyone.
 """
 type Shared {
-	initialSharedVersion: Int!
+	initialSharedVersion: UInt53!
 }
 
 """
@@ -3102,7 +3581,7 @@ type SharedInput {
 	"""
 	The version that this this object was shared at.
 	"""
-	initialSharedVersion: Int!
+	initialSharedVersion: UInt53!
 	"""
 	Controls whether the transaction block can reference the shared object as a mutable
 	reference or by value. This has implications for scheduling: Transactions that just read
@@ -3111,6 +3590,20 @@ type SharedInput {
 	respect to each other.
 	"""
 	mutable: Boolean!
+}
+
+"""
+The transaction accpeted a shared object as input, but its execution was cancelled.
+"""
+type SharedObjectCancelled {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned shared object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: UInt53!
 }
 
 """
@@ -3126,7 +3619,7 @@ type SharedObjectDelete {
 	The version of the shared object that was assigned to this transaction during by consensus,
 	during sequencing.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	Whether this transaction intended to use this shared object mutably or not. See
 	`SharedInput.mutable` for further details.
@@ -3145,7 +3638,7 @@ type SharedObjectRead {
 	"""
 	Version of the object being read.
 	"""
-	version: Int!
+	version: UInt53!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
@@ -3257,7 +3750,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -3287,8 +3780,27 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3459,7 +3971,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
-	version: Int!
+	version: UInt53!
 	"""
 	The current status of the object as read from the off-chain store. The possible states are:
 	NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
@@ -3489,8 +4001,27 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	storageRebate: BigInt
 	"""
 	The transaction blocks that sent objects to this object.
+	
+	`scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+	results. It is required for queries that apply more than two complex filters (on function,
+	kind, sender, recipient, input object, changed object, or ids), and can be at most
+	`serviceConfig.maxScanLimit`.
+	
+	When the scan limit is reached the page will be returned even if it has fewer than `first`
+	results when paginating forward (`last` when paginating backwards). If there are more
+	transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+	`true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+	transaction that was scanned as opposed to the last (or first) transaction in the page.
+	
+	Requesting the next (or previous) page after this cursor will resume the search, scanning
+	the next `scanLimit` many transactions in the direction of pagination, and so on until all
+	transactions in the scanning range have been visited.
+	
+	By default, the scanning range includes all transactions known to GraphQL, but it can be
+	restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+	`afterCheckpoint` and `atCheckpoint` filters.
 	"""
-	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 	"""
 	The Base64-encoded BCS serialization of the object's content.
 	"""
@@ -3585,7 +4116,7 @@ type SystemParameters {
 	"""
 	The epoch at which stake subsidies start being paid out.
 	"""
-	stakeSubsidyStartEpoch: Int
+	stakeSubsidyStartEpoch: UInt53
 	"""
 	The minimum number of active validators that the system supports.
 	"""
@@ -3710,9 +4241,11 @@ type TransactionBlockEffects {
 	The latest version of all objects (apart from packages) that have been created or modified
 	by this transaction, immediately following this transaction.
 	"""
-	lamportVersion: Int!
+	lamportVersion: UInt53!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""
@@ -3764,9 +4297,9 @@ input TransactionBlockFilter {
 	An input filter selecting for either system or programmable transactions.
 	"""
 	kind: TransactionBlockKindInput
-	afterCheckpoint: Int
-	atCheckpoint: Int
-	beforeCheckpoint: Int
+	afterCheckpoint: UInt53
+	atCheckpoint: UInt53
+	beforeCheckpoint: UInt53
 	signAddress: SuiAddress
 	recvAddress: SuiAddress
 	inputObject: SuiAddress
@@ -3834,9 +4367,9 @@ to the sender.
 """
 input TransactionMetadata {
 	sender: SuiAddress
-	gasPrice: Int
+	gasPrice: UInt53
 	gasObjects: [ObjectRef!]
-	gasBudget: Int
+	gasBudget: UInt53
 	gasSponsor: SuiAddress
 }
 
@@ -3874,12 +4407,18 @@ type TypeOrigin {
 }
 
 """
+An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`,
+but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
+"""
+scalar UInt53
+
+"""
 Details pertaining to shared objects that are referenced by but not changed by a transaction.
 This information is considered part of the effects, because although the transaction specifies
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""
@@ -3971,20 +4510,30 @@ type Validator {
 	The validator's current staking pool object, used to track the amount of stake
 	and to compound staking rewards.
 	"""
-	stakingPool: MoveObject
+	stakingPool: MoveObject @deprecated(reason: "The staking pool is a wrapped object. Access its fields directly on the `Validator` type.")
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
 	"""
 	The validator's current exchange object. The exchange rate is used to determine
 	the amount of SUI tokens that each past SUI staker can withdraw in the future.
 	"""
-	exchangeRates: MoveObject
+	exchangeRates: MoveObject @deprecated(reason: "The exchange object is a wrapped object. Access its dynamic fields through the `exchangeRatesTable` query.")
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch
+	number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+	of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Owner
 	"""
 	Number of exchange rates in the table.
 	"""
-	exchangeRatesSize: Int
+	exchangeRatesSize: UInt53
 	"""
 	The epoch at which this pool became active.
 	"""
-	stakingPoolActivationEpoch: Int
+	stakingPoolActivationEpoch: UInt53
 	"""
 	The total number of SUI tokens in this pool.
 	"""
@@ -4038,7 +4587,7 @@ type Validator {
 	The number of epochs for which this validator has been below the
 	low stake threshold.
 	"""
-	atRisk: Int
+	atRisk: UInt53
 	"""
 	The addresses of other validators this validator has reported.
 	"""
@@ -4175,7 +4724,10 @@ type ZkLoginVerifyResult {
 	errors: [String!]!
 }
 
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
 	mutation: Mutation
 }
+

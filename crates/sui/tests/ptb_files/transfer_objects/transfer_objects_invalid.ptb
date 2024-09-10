@@ -9,4 +9,3 @@
 --assign s
 --transfer-objects s @0x1
 
---gas-budget 100

@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module oracle::meta_oracle {
-    use std::option::{Self, Option};
     use std::string::String;
     use std::type_name;
-    use std::vector;
 
     use oracle::data::{Self, Data};
     use oracle::decimal_value::DecimalValue;
@@ -19,7 +17,7 @@ module oracle::meta_oracle {
     const EValidDataSizeLessThanThreshold: u64 = 0;
     const EUnsupportedDataType: u64 = 1;
 
-    struct MetaOracle<T> {
+    public struct MetaOracle<T> {
         oracle_data: vector<Option<Data<T>>>,
         threshold: u64,
         time_window_ms: u64,
@@ -45,16 +43,16 @@ module oracle::meta_oracle {
         vector::push_back(&mut meta_oracle.oracle_data, oracle_data);
     }
 
-    struct TrustedData<T> has copy, drop {
+    public struct TrustedData<T> has copy, drop {
         value: T,
         oracles: vector<address>,
     }
 
     fun combine<T: copy + drop>(meta_oracle: MetaOracle<T>, ): (vector<T>, vector<address>) {
-        let MetaOracle { oracle_data, threshold, time_window_ms, ticker: _, max_timestamp } = meta_oracle;
+        let MetaOracle { mut oracle_data, threshold, time_window_ms, ticker: _, max_timestamp } = meta_oracle;
         let min_timestamp = max_timestamp - time_window_ms;
-        let values = vector<T>[];
-        let oracles = vector<address>[];
+        let mut values = vector<T>[];
+        let mut oracles = vector<address>[];
         while (vector::length(&oracle_data) > 0) {
             let oracle_data = vector::remove(&mut oracle_data, 0);
             if (option::is_some(&oracle_data)) {
@@ -72,18 +70,18 @@ module oracle::meta_oracle {
     /// take the median value
     public fun median<T: copy + drop>(meta_oracle: MetaOracle<T>): TrustedData<T> {
         let (values, oracles) = combine(meta_oracle);
-        let sortedData = quick_sort(values);
+        let mut sortedData = quick_sort(values);
         let i = vector::length(&sortedData) / 2;
         let value = vector::remove(&mut sortedData, i);
         TrustedData { value, oracles }
     }
 
     fun cmp<T: copy + drop>(a: &T, b: &T): u8 {
-        let type = type_name::get<T>();
-        let a = bcs::new(bcs::to_bytes(a));
-        let b = bcs::new(bcs::to_bytes(b));
+        let `type` = type_name::get<T>();
+        let mut a = bcs::new(bcs::to_bytes(a));
+        let mut b = bcs::new(bcs::to_bytes(b));
 
-        if (type == type_name::get<u64>()) {
+        if (`type` == type_name::get<u64>()) {
             let a = bcs::peel_u64(&mut a);
             let b = bcs::peel_u64(&mut b);
             if (a > b) {
@@ -93,7 +91,7 @@ module oracle::meta_oracle {
             } else {
                 return 2
             }
-        } else if (type == type_name::get<u128>()) {
+        } else if (`type` == type_name::get<u128>()) {
             let a = bcs::peel_u128(&mut a);
             let b = bcs::peel_u128(&mut b);
             if (a > b) {
@@ -103,7 +101,7 @@ module oracle::meta_oracle {
             } else {
                 return 2
             }
-        }else if (type == type_name::get<u8>()) {
+        }else if (`type` == type_name::get<u8>()) {
             let a = bcs::peel_u8(&mut a);
             let b = bcs::peel_u8(&mut b);
             if (a > b) {
@@ -113,7 +111,7 @@ module oracle::meta_oracle {
             } else {
                 return 2
             }
-        } else if (type == type_name::get<DecimalValue>()) {
+        } else if (`type` == type_name::get<DecimalValue>()) {
             let a_value = bcs::peel_u64(&mut a);
             let a_decimal = bcs::peel_u8(&mut a);
             let b_value = bcs::peel_u64(&mut b);
@@ -136,15 +134,15 @@ module oracle::meta_oracle {
         0
     }
 
-    public fun quick_sort<T: drop + copy>(data: vector<T>): vector<T> {
+    public fun quick_sort<T: drop + copy>(mut data: vector<T>): vector<T> {
         if (vector::length(&data) <= 1) {
             return data
         };
 
         let pivot = *vector::borrow(&data, 0);
-        let less = vector<T>[];
-        let equal = vector<T>[];
-        let greater = vector<T>[];
+        let mut less = vector<T>[];
+        let mut equal = vector<T>[];
+        let mut greater = vector<T>[];
 
         while (vector::length(&data) > 0) {
             let value = vector::remove(&mut data, 0);
@@ -158,7 +156,7 @@ module oracle::meta_oracle {
             };
         };
 
-        let sortedData = vector<T>[];
+        let mut sortedData = vector<T>[];
         vector::append(&mut sortedData, quick_sort(less));
         vector::append(&mut sortedData, equal);
         vector::append(&mut sortedData, quick_sort(greater));

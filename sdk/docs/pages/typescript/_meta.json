@@ -4,9 +4,14 @@
 	"hello-sui": "Hello, Sui",
 	"faucet": "Faucet",
 	"sui-client": "SuiClient",
+	"graphql": "SuiGraphQLClient",
 	"transaction-building": "Transaction Building",
 	"cryptography": "Cryptography",
 	"utils": "Utils",
 	"bcs": "BCS",
-	"owned-object-pool": "Owned Object Pool"
+	"zklogin": "ZKLogin",
+	"executors": "Transaction Executors",
+	"plugins": "Plugins",
+	"owned-object-pool": "Owned Object Pool",
+	"migrations": "Migrations"
 }

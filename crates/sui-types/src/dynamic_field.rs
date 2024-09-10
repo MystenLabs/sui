@@ -41,6 +41,23 @@ pub struct Field<N, V> {
     pub value: V,
 }
 
+/// Rust version of the Move sui::dynamic_object_field::Wrapper type
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+pub struct DOFWrapper<N> {
+    pub name: N,
+}
+
+impl<N> MoveTypeTagTrait for DOFWrapper<N>
+where
+    N: MoveTypeTagTrait,
+{
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(DynamicFieldInfo::dynamic_object_field_wrapper(
+            N::get_type_tag(),
+        )))
+    }
+}
+
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -223,7 +240,7 @@ fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
     extract_id_value(id_value)
 }
 
-fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
+pub fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
     // the id struct has a single bytes field
     let id_bytes_value = match id_value {
         MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,

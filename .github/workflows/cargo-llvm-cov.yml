@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
 
 env:
   CARGO_TERM_COLOR: always
@@ -36,7 +42,13 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
+      - name: Install Rust
+        run: rustup update stable
+        
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+            ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
       - uses: bmwill/rust-cache@v1
 
       - name: Install cargo-llvm-cov
@@ -49,12 +61,9 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
-
-      - name: Install Rust
-        run: rustup update stable
         
       - name: Run code coverage for nextest
-        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
+        run: RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge)'
 
       - name: Upload report to Codecov for nextest
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
@@ -80,8 +89,10 @@ jobs:
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
-    - name: Checkout sui repo main branch
+    - name: Checkout sui repo
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v3.0.3
+      with:
+        ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
     
     - name: Get sui commit
       env:
@@ -177,7 +188,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
+                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, you are notified to look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions."
                 }
               }
             ]

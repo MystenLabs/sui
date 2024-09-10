@@ -50,10 +50,19 @@ const config = {
   plugins: [
     // ....
     [
+      "posthog-docusaurus",
+      {
+        apiKey: process.env.POSTHOG_API_KEY || 'dev', // required
+        appUrl: "https://us.i.posthog.com", // optional, defaults to "https://us.i.posthog.com"
+        enableInDevelopment: false, // optional
+      },
+    ],
+    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
+    [
       "@graphql-markdown/docusaurus",
       {
         schema:
-          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+          "../../crates/sui-graphql-rpc/schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {
@@ -222,7 +231,7 @@ const config = {
           href: "https://sui.io",
         },
         style: "dark",
-        copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/sui-foundation/sui-docs/blob/main/LICENSE">CC BY 4.0</a>`,
+        copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/MystenLabs/sui/blob/main/docs/site/LICENSE">CC BY 4.0</a>`,
       },
       prism: {
         theme: themes.github,

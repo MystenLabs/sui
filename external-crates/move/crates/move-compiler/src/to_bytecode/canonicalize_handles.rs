@@ -4,11 +4,11 @@
 use std::collections::HashMap;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
-        Bytecode, CodeUnit, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
-        IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken, StructDefinition,
-        StructDefinitionIndex, StructFieldInformation, StructHandleIndex, TableIndex,
+        Bytecode, CodeUnit, DatatypeHandleIndex, EnumDefinition, EnumDefinitionIndex,
+        FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex,
+        ModuleHandleIndex, Signature, SignatureToken, StructDefinition, StructDefinitionIndex,
+        StructFieldInformation, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule,
@@ -31,7 +31,7 @@ use move_symbol_pool::Symbol;
 ///
 /// - Friend Declarations are sorted in lexical order (by address name and module name), followed by
 ///   unnamed addresses in their original order.
-
+///
 /// Key for ordering module handles, distinguishing the module's self handle, handles with names,
 /// and handles without names.
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
@@ -84,8 +84,8 @@ pub fn in_module(
         remap!(IdentifierIndex, fun.name, identifiers);
     }
 
-    for struct_ in &mut module.struct_handles {
-        remap!(IdentifierIndex, struct_.name, identifiers);
+    for datatype in &mut module.datatype_handles {
+        remap!(IdentifierIndex, datatype.name, identifiers);
     }
 
     for def in &mut module.struct_defs {
@@ -94,6 +94,15 @@ pub fn in_module(
                 remap!(IdentifierIndex, field.name, identifiers);
             }
         };
+    }
+
+    for def in &mut module.enum_defs {
+        for variant in &mut def.variants {
+            remap!(IdentifierIndex, variant.variant_name, identifiers);
+            for field in &mut variant.fields {
+                remap!(IdentifierIndex, field.name, identifiers);
+            }
+        }
     }
 
     // 1 (c). Update ordering for identifiers.  Note that updates need to happen before other
@@ -131,22 +140,29 @@ pub fn in_module(
         remap!(ModuleHandleIndex, fun.module, modules);
     }
 
-    for struct_ in &mut module.struct_handles {
+    for struct_ in &mut module.datatype_handles {
         remap!(ModuleHandleIndex, struct_.module, modules);
     }
 
     // 2 (c). Update ordering for module handles.
     apply_permutation(&mut module.module_handles, modules);
 
-    // 3 (a). Choose ordering for struct handles.
+    // 3 (a). Choose ordering for datatype handles.
     let struct_defs = struct_definition_order(&module.struct_defs);
-    let structs = permutation(&module.struct_handles, |ix, handle| {
+    let enums_defs = enum_definition_order(&module.enum_defs);
+    let datatypes = permutation(&module.datatype_handles, |ix, handle| {
         if handle.module == module.self_handle_idx() {
-            // Order structs from this module first, and in definition order
-            let Some(def_position) = struct_defs.get(&StructHandleIndex(ix)) else {
+            // Order structs and enums from this module first, and in definition order
+
+            let ndx_ref = &DatatypeHandleIndex(ix);
+            let Some(ref_key) = struct_defs
+                .get(ndx_ref)
+                .map(|posn| posn.0)
+                .or_else(|| enums_defs.get(ndx_ref).map(|posn| posn.0))
+            else {
                 panic!("ICE struct handle from module without definition: {handle:?}");
             };
-            ReferenceKey::Internal(def_position.0)
+            ReferenceKey::Internal(ref_key)
         } else {
             // Order the remaining handles afterwards, in lexicographical order of module, then
             // struct name.
@@ -157,24 +173,33 @@ pub fn in_module(
         }
     });
 
-    // 3 (b). Update references to struct handles.
+    // 3 (b). Update references to struct and enum handles.
     for def in &mut module.struct_defs {
-        remap!(StructHandleIndex, def.struct_handle, structs);
+        remap!(DatatypeHandleIndex, def.struct_handle, datatypes);
         if let StructFieldInformation::Declared(fields) = &mut def.field_information {
             for field in fields {
-                remap_signature_token(&mut field.signature.0, &structs);
+                remap_signature_token(&mut field.signature.0, &datatypes);
             }
         };
     }
 
-    for Signature(tokens) in &mut module.signatures {
-        for token in tokens {
-            remap_signature_token(token, &structs);
+    for def in &mut module.enum_defs {
+        remap!(DatatypeHandleIndex, def.enum_handle, datatypes);
+        for variant in &mut def.variants {
+            for field in &mut variant.fields {
+                remap_signature_token(&mut field.signature.0, &datatypes);
+            }
         }
     }
 
-    // 3 (c). Update ordering for struct handles.
-    apply_permutation(&mut module.struct_handles, structs);
+    for Signature(tokens) in &mut module.signatures {
+        for token in tokens {
+            remap_signature_token(token, &datatypes);
+        }
+    }
+
+    // 3 (c). Update ordering for datatypes handles.
+    apply_permutation(&mut module.datatype_handles, datatypes);
 
     // 4 (a). Choose ordering for function handles.
     let function_defs = function_definition_order(&module.function_defs);
@@ -233,10 +258,21 @@ pub fn in_module(
 /// defined in a module can be arranged in definition order.
 fn struct_definition_order(
     defs: &[StructDefinition],
-) -> HashMap<StructHandleIndex, StructDefinitionIndex> {
+) -> HashMap<DatatypeHandleIndex, StructDefinitionIndex> {
     defs.iter()
         .enumerate()
         .map(|(ix, def)| (def.struct_handle, StructDefinitionIndex(ix as TableIndex)))
+        .collect()
+}
+
+/// Reverses mapping from `EnumDefinition(Index)` to `DatatypeHandle`, so that handles for structs
+/// defined in a module can be arranged in definition order.
+fn enum_definition_order(
+    defs: &[EnumDefinition],
+) -> HashMap<DatatypeHandleIndex, EnumDefinitionIndex> {
+    defs.iter()
+        .enumerate()
+        .map(|(ix, def)| (def.enum_handle, EnumDefinitionIndex(ix as TableIndex)))
         .collect()
 }
 
@@ -251,9 +287,9 @@ fn function_definition_order(
         .collect()
 }
 
-/// Update references to `StructHandle`s within signatures according to the permutation defined by
+/// Update references to `DatatypeHandle`s within signatures according to the permutation defined by
 /// `structs`.
-fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
+fn remap_signature_token(token: &mut SignatureToken, datatypes: &[TableIndex]) {
     use SignatureToken as T;
     match token {
         T::Bool
@@ -268,16 +304,16 @@ fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
         | T::TypeParameter(_) => (),
 
         T::Vector(token) | T::Reference(token) | T::MutableReference(token) => {
-            remap_signature_token(token, structs)
+            remap_signature_token(token, datatypes)
         }
 
-        T::Struct(handle) => remap!(StructHandleIndex, *handle, structs),
+        T::Datatype(handle) => remap!(DatatypeHandleIndex, *handle, datatypes),
 
-        T::StructInstantiation(struct_inst) => {
-            let (handle, tokens) = Box::as_mut(struct_inst);
-            remap!(StructHandleIndex, *handle, structs);
+        T::DatatypeInstantiation(inst) => {
+            let (handle, tokens) = Box::as_mut(inst);
+            remap!(DatatypeHandleIndex, *handle, datatypes);
             for token in tokens {
-                remap_signature_token(token, structs)
+                remap_signature_token(token, datatypes)
             }
         }
     }
@@ -300,7 +336,7 @@ fn remap_code(code: &mut CodeUnit, functions: &[TableIndex]) {
 ///
 /// is sorted according to `key`.
 fn permutation<'p, T, K: Ord>(
-    pool: &'p Vec<T>,
+    pool: &'p [T],
     key: impl Fn(TableIndex, &'p T) -> K + 'p,
 ) -> Vec<TableIndex> {
     let mut inverse: Vec<_> = (0..pool.len() as TableIndex).collect();
@@ -316,7 +352,7 @@ fn permutation<'p, T, K: Ord>(
 
 /// Re-order `pool` according to the `permutation` array.  `permutation[i]` is the new location of
 /// `pool[i]`.
-fn apply_permutation<T>(pool: &mut Vec<T>, mut permutation: Vec<TableIndex>) {
+fn apply_permutation<T>(pool: &mut [T], mut permutation: Vec<TableIndex>) {
     assert_eq!(pool.len(), permutation.len());
 
     // At every iteration we confirm that one more value is in its final position in the pool,

@@ -3,7 +3,7 @@ title: Debugging
 description: Move does not have a native debugger. You can, however, use the std::debug module to monitor variable values while your code executes.
 ---
 
-Move does not currently have a native debugger. You can use the `std::debug` module, however, to print arbitrary values to the console. Monitoring variable values in this manner can provide insight into the logic of your modules. To do so, first import the debug module in your source file:
+Move does not currently have a native debugger. You can use the `std::debug` module, however, to print arbitrary values to the console. Monitoring variable values in this manner can provide insight into the logic of your modules. To do so, first declare an alias to the debug module in your source file for more concise access:
 
 ```move
 use std::debug;
@@ -69,7 +69,7 @@ Running Move unit tests
 [debug] 0x0::my_module::Forge {
   id: 0x2::object::UID {
     id: 0x2::object::ID {
-      bytes: @<OBJECT-ID>
+      bytes: @0x34401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96
     }
   },
   swords_created: 0
@@ -77,22 +77,22 @@ Running Move unit tests
 [debug] 0x0::my_module::Forge {
   id: 0x2::object::UID {
     id: 0x2::object::ID {
-      bytes: @<OBJECT-ID>
+      bytes: @0x34401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96
     }
   },
   swords_created: 1
 }
 Call Stack:
-    [0] 0000000000000000000000000000000000000000000000000000000000000000::my_module::test_sword_transactions
+    [0] 0000000000000000000000000000000000000000000000000000000000000000::my_module::test_module_init
 
         Code:
-            [19] LdU64(7)
-            [20] MutBorrowLoc(3)
-            [21] Call(14)
-          > [22] Call(4)
-            [23] LdConst(1)
-            [24] CallGeneric(2)
-            [25] ImmBorrowLoc(3)
+            [35] LdU64(7)
+            [36] MutBorrowLoc(3)
+            [37] Call(15)
+          > [38] Call(5)
+            [39] LdConst(0)
+            [40] CallGeneric(2)
+            [41] ImmBorrowLoc(3)
 
         Locals:
             [0] -
@@ -106,6 +106,14 @@ Operand Stack:
 [ PASS    ] 0x0::my_module::test_sword_transactions
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
+
+The output shows the value of the `swords_created` field of the `Forge` change after the increment. The stack trace shows the bytecode instructions that have been executed so far, and the next few instructions to execute. 
+
+:::info
+
+The specific bytecode offsets and the indices of the local variables might vary depending on the version of the Sui toolchain.
+
+:::
 
 ## Related links
 

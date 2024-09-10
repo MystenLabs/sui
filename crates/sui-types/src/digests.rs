@@ -160,7 +160,7 @@ pub struct ChainIdentifier(CheckpointDigest);
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
-/// For testing purposes or bootstrapping regenesis chaing configuration, you can set
+/// For testing purposes or bootstrapping regenesis chain configuration, you can set
 /// this environment variable to force protocol config to use a specific Chain.
 const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
 
@@ -342,7 +342,11 @@ impl std::str::FromStr for CheckpointDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointDigest::new(result))
     }
 }
@@ -392,6 +396,14 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
     }
 }
 
+impl TryFrom<Vec<u8>> for CheckpointContentsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(CheckpointContentsDigest)
+    }
+}
+
 impl From<CheckpointContentsDigest> for [u8; 32] {
     fn from(digest: CheckpointContentsDigest) -> Self {
         digest.into_inner()
@@ -423,7 +435,11 @@ impl std::str::FromStr for CheckpointContentsDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointContentsDigest::new(result))
     }
 }
@@ -493,6 +509,10 @@ impl TransactionDigest {
 
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))
+    }
+
+    pub const fn from_digest(digest: Digest) -> Self {
+        Self(digest)
     }
 
     /// A digest we use to signify the parent transaction was the genesis,
@@ -588,12 +608,24 @@ impl TryFrom<&[u8]> for TransactionDigest {
     }
 }
 
+impl TryFrom<Vec<u8>> for TransactionDigest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionDigest)
+    }
+}
+
 impl std::str::FromStr for TransactionDigest {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(TransactionDigest::new(result))
     }
 }
@@ -642,6 +674,14 @@ impl AsRef<[u8]> for TransactionEffectsDigest {
 impl AsRef<[u8; 32]> for TransactionEffectsDigest {
     fn as_ref(&self) -> &[u8; 32] {
         self.0.as_ref()
+    }
+}
+
+impl TryFrom<Vec<u8>> for TransactionEffectsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionEffectsDigest)
     }
 }
 
@@ -727,12 +767,24 @@ impl AsRef<[u8; 32]> for TransactionEventsDigest {
     }
 }
 
+impl TryFrom<Vec<u8>> for TransactionEventsDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        Digest::try_from(bytes).map(TransactionEventsDigest)
+    }
+}
+
 impl std::str::FromStr for TransactionEventsDigest {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -786,7 +838,11 @@ impl std::str::FromStr for EffectsAuxDataDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -800,6 +856,7 @@ impl ObjectDigest {
     pub const MAX: ObjectDigest = Self::new([u8::MAX; 32]);
     pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
     pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
+    pub const OBJECT_DIGEST_CANCELLED_BYTE_VAL: u8 = 77;
 
     /// A marker that signifies the object is deleted.
     pub const OBJECT_DIGEST_DELETED: ObjectDigest =
@@ -808,6 +865,9 @@ impl ObjectDigest {
     /// A marker that signifies the object is wrapped into another object.
     pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
         Self::new([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; 32]);
+
+    pub const OBJECT_DIGEST_CANCELLED: ObjectDigest =
+        Self::new([Self::OBJECT_DIGEST_CANCELLED_BYTE_VAL; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))
@@ -910,7 +970,11 @@ impl std::str::FromStr for ObjectDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(ObjectDigest::new(result))
     }
 }

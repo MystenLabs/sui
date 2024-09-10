@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
+use crate::crypto::{AuthorityPublicKey, NetworkPublicKey};
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use consensus_config::{
-    Authority, AuthorityPublicKey, Committee as ConsensusCommittee, NetworkPublicKey,
-    ProtocolPublicKey,
-};
-use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
+use consensus_config::{Authority, Committee as ConsensusCommittee};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
 use tracing::{error, warn};
@@ -29,12 +26,10 @@ pub trait EpochStartSystemStateTrait {
     fn get_validator_addresses(&self) -> Vec<SuiAddress>;
     fn get_sui_committee(&self) -> Committee;
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata;
-    fn get_narwhal_committee(&self) -> NarwhalCommittee;
-    fn get_mysticeti_committee(&self) -> ConsensusCommittee;
+    fn get_consensus_committee(&self) -> ConsensusCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
     fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
-    fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache;
 }
 
 /// This type captures the minimum amount of information from SuiSystemState needed by a validator
@@ -73,6 +68,21 @@ impl EpochStartSystemState {
 
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
+    }
+
+    pub fn new_at_next_epoch_for_testing(&self) -> Self {
+        // Only need to support the latest version for testing.
+        match self {
+            Self::V1(state) => Self::V1(EpochStartSystemStateV1 {
+                epoch: state.epoch + 1,
+                protocol_version: state.protocol_version,
+                reference_gas_price: state.reference_gas_price,
+                safe_mode: state.safe_mode,
+                epoch_start_timestamp_ms: state.epoch_start_timestamp_ms,
+                epoch_duration_ms: state.epoch_duration_ms,
+                active_validators: state.active_validators.clone(),
+            }),
+        }
     }
 }
 
@@ -138,14 +148,14 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
     }
 
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata {
-        let (voting_rights, network_metadata) = self
+        let validators = self
             .active_validators
             .iter()
             .map(|validator| {
                 (
-                    (validator.authority_name(), validator.voting_power),
+                    validator.authority_name(),
                     (
-                        validator.authority_name(),
+                        validator.voting_power,
                         NetworkMetadata {
                             network_address: validator.sui_net_address.clone(),
                             narwhal_primary_address: validator.narwhal_primary_address.clone(),
@@ -153,12 +163,9 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                     ),
                 )
             })
-            .unzip();
+            .collect();
 
-        CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights),
-            network_metadata,
-        }
+        CommitteeWithNetworkMetadata::new(self.epoch, validators)
     }
 
     fn get_sui_committee(&self) -> Committee {
@@ -170,23 +177,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         Committee::new(self.epoch, voting_rights)
     }
 
-    fn get_narwhal_committee(&self) -> NarwhalCommittee {
-        let mut committee_builder = CommitteeBuilder::new(self.epoch as narwhal_config::Epoch);
-
-        for validator in self.active_validators.iter() {
-            committee_builder = committee_builder.add_authority(
-                validator.protocol_pubkey.clone(),
-                validator.voting_power as narwhal_config::Stake,
-                validator.narwhal_primary_address.clone(),
-                validator.narwhal_network_pubkey.clone(),
-                validator.hostname.clone(),
-            );
-        }
-
-        committee_builder.build()
-    }
-
-    fn get_mysticeti_committee(&self) -> ConsensusCommittee {
+    fn get_consensus_committee(&self) -> ConsensusCommittee {
         let mut authorities = vec![];
         for validator in self.active_validators.iter() {
             authorities.push(Authority {
@@ -194,9 +185,15 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
                 // TODO(mysticeti): Add EpochStartValidatorInfoV2 with new field for mysticeti address.
                 address: validator.narwhal_primary_address.clone(),
                 hostname: validator.hostname.clone(),
-                authority_key: AuthorityPublicKey::new(validator.protocol_pubkey.clone()),
-                protocol_key: ProtocolPublicKey::new(validator.narwhal_worker_pubkey.clone()),
-                network_key: NetworkPublicKey::new(validator.narwhal_network_pubkey.clone()),
+                authority_key: consensus_config::AuthorityPublicKey::new(
+                    validator.protocol_pubkey.clone(),
+                ),
+                protocol_key: consensus_config::ProtocolPublicKey::new(
+                    validator.narwhal_worker_pubkey.clone(),
+                ),
+                network_key: consensus_config::NetworkPublicKey::new(
+                    validator.narwhal_network_pubkey.clone(),
+                ),
             });
         }
 
@@ -269,41 +266,14 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             })
             .collect()
     }
-
-    #[allow(clippy::mutable_key_type)]
-    fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache {
-        let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let workers = [(
-                    0,
-                    narwhal_config::WorkerInfo {
-                        name: validator.narwhal_worker_pubkey.clone(),
-                        transactions: transactions_address.clone(),
-                        worker_address: validator.narwhal_worker_address.clone(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let worker_index = WorkerIndex(workers);
-
-                (validator.protocol_pubkey.clone(), worker_index)
-            })
-            .collect();
-        WorkerCache {
-            workers,
-            epoch: self.epoch,
-        }
-    }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct EpochStartValidatorInfoV1 {
     pub sui_address: SuiAddress,
-    pub protocol_pubkey: narwhal_crypto::PublicKey,
-    pub narwhal_network_pubkey: narwhal_crypto::NetworkPublicKey,
-    pub narwhal_worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    pub protocol_pubkey: AuthorityPublicKey,
+    pub narwhal_network_pubkey: NetworkPublicKey,
+    pub narwhal_worker_pubkey: NetworkPublicKey,
     pub sui_net_address: Multiaddr,
     pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
@@ -322,13 +292,12 @@ impl EpochStartValidatorInfoV1 {
 mod test {
     use crate::base_types::SuiAddress;
     use crate::committee::CommitteeTrait;
-    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::crypto::{get_key_pair, AuthorityKeyPair, NetworkKeyPair};
     use crate::sui_system_state::epoch_start_sui_system_state::{
         EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
     };
     use fastcrypto::traits::KeyPair;
     use mysten_network::Multiaddr;
-    use narwhal_crypto::NetworkKeyPair;
     use rand::thread_rng;
     use sui_protocol_config::ProtocolVersion;
 
@@ -367,34 +336,34 @@ mod test {
 
         // WHEN
         let sui_committee = state.get_sui_committee();
-        let mysticeti_committee = state.get_mysticeti_committee();
+        let consensus_committee = state.get_consensus_committee();
 
         // THEN
         // assert the validators details
         assert_eq!(sui_committee.num_members(), 10);
-        assert_eq!(sui_committee.num_members(), mysticeti_committee.size());
+        assert_eq!(sui_committee.num_members(), consensus_committee.size());
         assert_eq!(
             sui_committee.validity_threshold(),
-            mysticeti_committee.validity_threshold()
+            consensus_committee.validity_threshold()
         );
         assert_eq!(
             sui_committee.quorum_threshold(),
-            mysticeti_committee.quorum_threshold()
+            consensus_committee.quorum_threshold()
         );
-        assert_eq!(state.epoch, mysticeti_committee.epoch());
+        assert_eq!(state.epoch, consensus_committee.epoch());
 
-        for (authority_index, mysticeti_authority) in mysticeti_committee.authorities() {
+        for (authority_index, consensus_authority) in consensus_committee.authorities() {
             let sui_authority_name = sui_committee
                 .authority_by_index(authority_index.value() as u32)
                 .unwrap();
 
             assert_eq!(
-                mysticeti_authority.authority_key.to_bytes(),
+                consensus_authority.authority_key.to_bytes(),
                 sui_authority_name.0,
                 "Mysten & SUI committee member of same index correspond to different public key"
             );
             assert_eq!(
-                mysticeti_authority.stake,
+                consensus_authority.stake,
                 sui_committee.weight(sui_authority_name),
                 "Mysten & SUI committee member stake differs"
             );

@@ -14,31 +14,44 @@ use tap::Tap;
 use crate::StoreResult;
 use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_metrics::{RegistryID, RegistryService};
 use store::{rocks::DBMap, Map, TypedStoreError::RocksDBError};
 use types::{Certificate, CertificateDigest, Round};
 
-#[derive(Clone)]
 pub struct CertificateStoreCacheMetrics {
+    // Prometheus RegistryService for the metrics
+    registry_service: RegistryService,
+    // The registry id & value, saved for cleaning up the registered metrics
+    // after consensus shuts down.
+    registry: (RegistryID, Registry),
     hit: IntCounter,
     miss: IntCounter,
 }
 
 impl CertificateStoreCacheMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub fn new(registry_service: RegistryService) -> Self {
+        let registry = Registry::new_custom(None, None).unwrap();
+        let registry_id = registry_service.add(registry.clone());
         Self {
+            registry_service,
+            registry: (registry_id, registry.clone()),
             hit: register_int_counter_with_registry!(
                 "certificate_store_cache_hit",
                 "The number of hits in the cache",
-                registry
+                registry,
             )
             .unwrap(),
             miss: register_int_counter_with_registry!(
                 "certificate_store_cache_miss",
                 "The number of miss in the cache",
-                registry
+                registry,
             )
             .unwrap(),
         }
+    }
+
+    pub fn unregister(&self) {
+        self.registry_service.remove(self.registry.0);
     }
 }
 
@@ -72,11 +85,11 @@ pub trait Cache {
 #[derive(Clone)]
 pub struct CertificateStoreCache {
     cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
-    metrics: Option<CertificateStoreCacheMetrics>,
+    metrics: Option<Arc<CertificateStoreCacheMetrics>>,
 }
 
 impl CertificateStoreCache {
-    pub fn new(size: NonZeroUsize, metrics: Option<CertificateStoreCacheMetrics>) -> Self {
+    pub fn new(size: NonZeroUsize, metrics: Option<Arc<CertificateStoreCacheMetrics>>) -> Self {
         Self {
             cache: Arc::new(Mutex::new(LruCache::new(size))),
             metrics,
@@ -171,50 +184,6 @@ impl Cache for CertificateStoreCache {
         for digest in digests {
             let _ = guard.pop(&digest);
         }
-    }
-}
-
-/// An implementation that basically disables the caching functionality when used for CertificateStore.
-#[derive(Clone)]
-struct NoCache {}
-
-impl Cache for NoCache {
-    fn write(&self, _certificate: Certificate) {
-        // no-op
-    }
-
-    fn write_all(&self, _certificate: Vec<Certificate>) {
-        // no-op
-    }
-
-    fn read(&self, _digest: &CertificateDigest) -> Option<Certificate> {
-        None
-    }
-
-    fn read_all(
-        &self,
-        digests: Vec<CertificateDigest>,
-    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
-        digests.into_iter().map(|digest| (digest, None)).collect()
-    }
-
-    fn contains(&self, _digest: &CertificateDigest) -> bool {
-        false
-    }
-
-    fn multi_contains<'a>(
-        &self,
-        digests: impl Iterator<Item = &'a CertificateDigest>,
-    ) -> Vec<bool> {
-        digests.map(|_| false).collect()
-    }
-
-    fn remove(&self, _digest: &CertificateDigest) {
-        // no-op
-    }
-
-    fn remove_all(&self, _digests: Vec<CertificateDigest>) {
-        // no-op
     }
 }
 
@@ -718,7 +687,7 @@ impl<T: Cache> CertificateStore<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::certificate_store::{CertificateStore, NoCache};
+    use crate::certificate_store::CertificateStore;
     use crate::{Cache, CertificateStoreCache};
     use config::AuthorityIdentifier;
     use fastcrypto::hash::Hash;
@@ -735,6 +704,50 @@ mod test {
     };
     use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+
+    /// An implementation that basically disables the caching functionality when used for CertificateStore.
+    #[derive(Clone)]
+    struct NoCache {}
+
+    impl Cache for NoCache {
+        fn write(&self, _certificate: Certificate) {
+            // no-op
+        }
+
+        fn write_all(&self, _certificate: Vec<Certificate>) {
+            // no-op
+        }
+
+        fn read(&self, _digest: &CertificateDigest) -> Option<Certificate> {
+            None
+        }
+
+        fn read_all(
+            &self,
+            digests: Vec<CertificateDigest>,
+        ) -> Vec<(CertificateDigest, Option<Certificate>)> {
+            digests.into_iter().map(|digest| (digest, None)).collect()
+        }
+
+        fn contains(&self, _digest: &CertificateDigest) -> bool {
+            false
+        }
+
+        fn multi_contains<'a>(
+            &self,
+            digests: impl Iterator<Item = &'a CertificateDigest>,
+        ) -> Vec<bool> {
+            digests.map(|_| false).collect()
+        }
+
+        fn remove(&self, _digest: &CertificateDigest) {
+            // no-op
+        }
+
+        fn remove_all(&self, _digests: Vec<CertificateDigest>) {
+            // no-op
+        }
+    }
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
         let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =

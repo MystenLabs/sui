@@ -123,11 +123,16 @@ impl<W: Worker + 'static> WorkerPool<W> {
                         }
                     }
                 }
-                Some(checkpoint) = checkpoint_receiver.recv() => {
+                maybe_checkpoint = checkpoint_receiver.recv() => {
+                    if maybe_checkpoint.is_none() {
+                        break;
+                    }
+                    let checkpoint = maybe_checkpoint.expect("invariant's checked");
                     let sequence_number = checkpoint.checkpoint_summary.sequence_number;
                     if sequence_number < current_checkpoint_number {
                         continue;
                     }
+                    self.worker.preprocess_hook(checkpoint.clone()).expect("failed to preprocess task");
                     if idle.is_empty() {
                         checkpoints.push_back(checkpoint);
                     } else {

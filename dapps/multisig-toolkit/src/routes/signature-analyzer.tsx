@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui.js/cryptography';
-import { parsePartialSignatures } from '@mysten/sui.js/multisig';
-import { toB64 } from '@mysten/sui.js/utils';
-import { publicKeyFromRawBytes } from '@mysten/sui.js/verify';
+import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui/cryptography';
+import { parsePartialSignatures } from '@mysten/sui/multisig';
+import { toB64 } from '@mysten/sui/utils';
+import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 

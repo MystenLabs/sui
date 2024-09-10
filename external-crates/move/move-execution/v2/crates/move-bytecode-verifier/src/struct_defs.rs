@@ -6,13 +6,11 @@
 //! recursive. Since the module dependency graph is acylic by construction, applying this checker to
 //! each module in isolation guarantees that there is no structural recursion globally.
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, SignatureToken, StructDefinitionIndex, StructHandleIndex, TableIndex,
+        CompiledModule, DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
-    views::StructDefinitionView,
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
@@ -37,7 +35,7 @@ impl<'a> RecursiveStructDefChecker<'a> {
         match toposort(&graph, None) {
             Ok(_) => Ok(()),
             Err(cycle) => Err(verification_error(
-                StatusCode::RECURSIVE_STRUCT_DEFINITION,
+                StatusCode::RECURSIVE_DATATYPE_DEFINITION,
                 IndexKind::StructDefinition,
                 cycle.node_id().into_index() as TableIndex,
             )),
@@ -50,7 +48,7 @@ impl<'a> RecursiveStructDefChecker<'a> {
 struct StructDefGraphBuilder<'a> {
     module: &'a CompiledModule,
     /// Used to follow field definitions' signatures' struct handles to their struct definitions.
-    handle_to_def: BTreeMap<StructHandleIndex, StructDefinitionIndex>,
+    handle_to_def: BTreeMap<DatatypeHandleIndex, StructDefinitionIndex>,
 }
 
 impl<'a> StructDefGraphBuilder<'a> {
@@ -88,11 +86,10 @@ impl<'a> StructDefGraphBuilder<'a> {
         idx: StructDefinitionIndex,
     ) -> PartialVMResult<()> {
         let struct_def = self.module.struct_def_at(idx);
-        let struct_def = StructDefinitionView::new(self.module, struct_def);
         // The fields iterator is an option in the case of native structs. Flatten makes an empty
         // iterator for that case
         for field in struct_def.fields().into_iter().flatten() {
-            self.add_signature_token(neighbors, idx, field.signature_token())?
+            self.add_signature_token(neighbors, idx, &field.signature.0)?
         }
         Ok(())
     }
@@ -122,7 +119,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                 )
             }
             T::Vector(inner) => self.add_signature_token(neighbors, cur_idx, inner)?,
-            T::Struct(sh_idx) => {
+            T::Datatype(sh_idx) => {
                 if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
                     neighbors
                         .entry(cur_idx)
@@ -130,7 +127,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                         .insert(*struct_def_idx);
                 }
             }
-            T::StructInstantiation(struct_inst) => {
+            T::DatatypeInstantiation(struct_inst) => {
                 let (sh_idx, inners) = &**struct_inst;
                 if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
                     neighbors

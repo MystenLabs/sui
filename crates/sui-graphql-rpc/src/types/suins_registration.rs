@@ -4,6 +4,7 @@
 use std::str::FromStr;
 
 use super::{
+    available_range::AvailableRange,
     balance::{self, Balance},
     base64::Base64,
     big_int::BigInt,
@@ -14,20 +15,23 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::{MoveObject, MoveObjectImpl},
     move_value::MoveValue,
-    object::{self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus},
+    object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus},
     owner::OwnerImpl,
     stake::StakedSui,
     string_input::impl_string_input,
     sui_address::SuiAddress,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     type_filter::ExactTypeFilter,
+    uint53::UInt53,
 };
 use crate::{
-    consistency::{build_objects_query, consistent_range, View},
+    connection::ScanConnection,
+    consistency::{build_objects_query, View},
     data::{Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{connection::Connection, *};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
@@ -194,7 +198,7 @@ impl SuinsRegistration {
             .await
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub(crate) async fn version(&self) -> UInt53 {
         ObjectImpl(&self.super_.super_).version().await
     }
 
@@ -236,6 +240,25 @@ impl SuinsRegistration {
     }
 
     /// The transaction blocks that sent objects to this object.
+    ///
+    /// `scanLimit` restricts the number of candidate transactions scanned when gathering a page of
+    /// results. It is required for queries that apply more than two complex filters (on function,
+    /// kind, sender, recipient, input object, changed object, or ids), and can be at most
+    /// `serviceConfig.maxScanLimit`.
+    ///
+    /// When the scan limit is reached the page will be returned even if it has fewer than `first`
+    /// results when paginating forward (`last` when paginating backwards). If there are more
+    /// transactions to scan, `pageInfo.hasNextPage` (or `pageInfo.hasPreviousPage`) will be set to
+    /// `true`, and `PageInfo.endCursor` (or `PageInfo.startCursor`) will be set to the last
+    /// transaction that was scanned as opposed to the last (or first) transaction in the page.
+    ///
+    /// Requesting the next (or previous) page after this cursor will resume the search, scanning
+    /// the next `scanLimit` many transactions in the direction of pagination, and so on until all
+    /// transactions in the scanning range have been visited.
+    ///
+    /// By default, the scanning range includes all transactions known to GraphQL, but it can be
+    /// restricted by the `after` and `before` cursors, and the `beforeCheckpoint`,
+    /// `afterCheckpoint` and `atCheckpoint` filters.
     pub(crate) async fn received_transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -244,9 +267,10 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+        scan_limit: Option<u64>,
+    ) -> Result<ScanConnection<String, TransactionBlock>> {
         ObjectImpl(&self.super_.super_)
-            .received_transaction_blocks(ctx, first, after, last, before, filter)
+            .received_transaction_blocks(ctx, first, after, last, before, filter, scan_limit)
             .await
     }
 
@@ -288,7 +312,7 @@ impl SuinsRegistration {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -305,7 +329,7 @@ impl SuinsRegistration {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_.super_)
-            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
+            .dynamic_object_field(ctx, name, Some(self.super_.root_version()))
             .await
     }
 
@@ -328,7 +352,7 @@ impl SuinsRegistration {
                 after,
                 last,
                 before,
-                Some(self.super_.super_.version_impl()),
+                Some(self.super_.root_version()),
             )
             .await
     }
@@ -344,7 +368,7 @@ impl NameService {
     /// the domain name registry, and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
-    /// for, or `None` if the data was requested at the latest checkpoint.
+    /// for.
     ///
     /// The `NameRecord` is returned only if it has not expired as of the `checkpoint_viewed_at` or
     /// latest checkpoint's timestamp.
@@ -353,7 +377,7 @@ impl NameService {
     pub(crate) async fn resolve_to_record(
         ctx: &Context<'_>,
         domain: &Domain,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NameRecord>, Error> {
         // Query for the domain's NameRecord and parent NameRecord if applicable. The checkpoint's
         // timestamp is also fetched. These values are used to determine if the domain is expired.
@@ -399,23 +423,20 @@ impl NameService {
     /// name registry, and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
-    /// for, or `None` if the data was requested at the latest checkpoint.
+    /// for.
     pub(crate) async fn reverse_resolve_to_name(
         ctx: &Context<'_>,
         address: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NativeDomain>, Error> {
-        let config = ctx.data_unchecked::<NameServiceConfig>();
+        let config: &NameServiceConfig = ctx.data_unchecked();
 
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
         let Some(object) = MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             reverse_record_id.into(),
-            match checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            Object::latest_at(checkpoint_viewed_at),
         )
         .await?
         else {
@@ -443,10 +464,10 @@ impl NameService {
     async fn query_domain_expiration(
         ctx: &Context<'_>,
         domain: &Domain,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<DomainExpiration>, Error> {
-        let config = ctx.data_unchecked::<NameServiceConfig>();
-        let db: &crate::data::pg::PgExecutor = ctx.data_unchecked::<Db>();
+        let config: &NameServiceConfig = ctx.data_unchecked();
+        let db: &Db = ctx.data_unchecked();
         // Construct the list of `object_id`s to look up. The first element is the domain's
         // `NameRecord`. If the domain is a subdomain, there will be a second element for the
         // parent's `NameRecord`.
@@ -473,31 +494,34 @@ impl NameService {
             ..Default::default()
         };
 
-        let response = db
+        let Some((checkpoint_timestamp_ms, results)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
+                async move {
+                    let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at).await?
+                    else {
+                        return Ok::<_, diesel::result::Error>(None);
+                    };
 
-                let timestamp_ms = Checkpoint::query_timestamp(conn, rhs)?;
+                    let timestamp_ms =
+                        Checkpoint::query_timestamp(conn, checkpoint_viewed_at).await?;
 
-                let sql = build_objects_query(
-                    View::Consistent,
-                    lhs as i64,
-                    rhs as i64,
-                    &page,
-                    move |query| filter.apply(query),
-                    move |newer| newer,
-                );
+                    let sql = build_objects_query(
+                        View::Consistent,
+                        range,
+                        &page,
+                        move |query| filter.apply(query),
+                        move |newer| newer,
+                    );
 
-                let objects: Vec<StoredHistoryObject> =
-                    conn.results(move || sql.clone().into_boxed())?;
+                    let objects: Vec<StoredHistoryObject> =
+                        conn.results(move || sql.clone().into_boxed()).await?;
 
-                Ok(Some((timestamp_ms, objects)))
+                    Ok(Some((timestamp_ms, objects)))
+                }
+                .scope_boxed()
             })
-            .await?;
-
-        let Some((checkpoint_timestamp_ms, results)) = response else {
+            .await?
+        else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
@@ -513,7 +537,8 @@ impl NameService {
         // name_record. We then assign it to the correct field on `domain_expiration` based on the
         // address.
         for result in results {
-            let object = Object::try_from_stored_history_object(result, None)?;
+            let object =
+                Object::try_from_stored_history_object(result, checkpoint_viewed_at, None)?;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
                     "Expected {0} to be a NameRecord, but it's not a Move Object.",
@@ -540,15 +565,14 @@ impl SuinsRegistration {
     /// where to find the domain name registry and its type.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// queried for. Each entity returned in the connection will inherit this checkpoint, so that
+    /// when viewing that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         config: &NameServiceConfig,
         page: Page<object::Cursor>,
         owner: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, SuinsRegistration>, Error> {
         let type_ = SuinsRegistration::type_(config.package_address.into());
 

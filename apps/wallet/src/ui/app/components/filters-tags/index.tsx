@@ -58,7 +58,7 @@ function FiltersPortal({ tags, callback, firstLastMargin }: Tags) {
 							})}
 						</div>,
 						element,
-				  )
+					)
 				: null}
 		</>
 	);

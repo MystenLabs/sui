@@ -42,31 +42,14 @@ echo "Using most frequent version $TOP_VERSION for compatibility check"
 # TOP_VERSION looks like "1.0.0-ae1212baf8", split out the commit hash
 ORIGIN_COMMIT=$(echo "$TOP_VERSION" | cut -d- -f2)
 
-echo "Checking protocol compatibility with $NETWORK ($ORIGIN_COMMIT)"
-
 git fetch -q || exit 1
+SOURCE_COMMIT=$(git rev-parse HEAD)
+SOURCE_BRANCH=$(git branch -a --contains "$SOURCE_COMMIT" | head -n 1 | cut -d' ' -f2-)
 
-if [ "$NETWORK" == "mainnet" ]; then
-  # expand $ORIGIN_COMMIT to full sha
-  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
+echo "Source commit: $SOURCE_COMMIT"
+echo "Source branch: $SOURCE_BRANCH"
 
-  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
-  # tests fixed.
-  if [ "$ORIGIN_COMMIT" == 5fd1242217d68ff726f9eab1fb7b1a1edac3ce48 -o "$ORIGIN_COMMIT" == cdd690331047d8c19eccc784e1d27ba42a0ed428 ]; then
-    ORIGIN_COMMIT="d951895b90014b58cfd7734e3a5a25d7a37ee9b7"
-  fi
-fi
-
-if [ "$NETWORK" == "testnet" ]; then
-  # expand $ORIGIN_COMMIT to full sha
-  ORIGIN_COMMIT=$(git rev-parse "$ORIGIN_COMMIT") || exit 1
-
-  # HACK: a commit was released with broken snapshot tests. Substitute the commit with the
-  # tests fixed.
-  if [ "$ORIGIN_COMMIT" == 10da1ccdde8b12e700a7bc22dddf2992f532bd00 ]; then
-    ORIGIN_COMMIT="bf41cca24aa65b1a94aef25bc916678ca00f3017"
-  fi
-fi
+echo "Checking protocol compatibility with $NETWORK ($ORIGIN_COMMIT)"
 
 # put code to check if git client is clean into function
 function check_git_clean {
@@ -92,6 +75,19 @@ else
 fi
 
 echo "Checking for changes to snapshot files matching $NETWORK_PATTERN"
+
+# The fields `scoring_decision_mad_divisor`, `scoring_decision_cutoff_value` were removed from the protocol config,
+# but they are still present in older snapshot files. We need to delete them from the snapshot files before 
+# checking if the git repo is clean.
+# TODO: Remove this workaround once commit 3959d9af51172824b0e4f20802c71e416596c7df has been release to all networks.
+SED=$(which gsed)
+if [ -z "$SED" ]; then
+  SED=$(which sed)
+fi
+
+grep -lE 'scoring_decision_mad_divisor|scoring_decision_cutoff_value' crates/sui-protocol-config/src/snapshots/$NETWORK_PATTERN | xargs $SED -Ei '/(scoring_decision_mad_divisor|scoring_decision_cutoff_value)/d'
+git add .
+
 check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release" "$NETWORK_PATTERN"
 
 # remove any snapshot file changes that were ignored

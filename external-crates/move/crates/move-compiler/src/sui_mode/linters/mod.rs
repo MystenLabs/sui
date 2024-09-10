@@ -7,7 +7,7 @@ use crate::{
     diagnostics::codes::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
+    linters::{LintLevel, LinterDiagnosticCategory, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
     naming::ast as N,
     typing::visitor::TypingVisitor,
 };
@@ -18,6 +18,9 @@ pub mod coin_field;
 pub mod collection_equality;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
+pub mod freezing_capability;
+pub mod missing_key;
+pub mod public_mut_tx_context;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
@@ -68,6 +71,9 @@ pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
 pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
 pub const PUBLIC_RANDOM_FILTER_NAME: &str = "public_random";
+pub const MISSING_KEY_FILTER_NAME: &str = "missing_key";
+pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
+pub const PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME: &str = "prefer_mut_tx_context";
 
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
@@ -75,7 +81,8 @@ pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-pub enum LinterDiagCategory {
+#[repr(u8)]
+pub enum LinterDiagnosticCode {
     ShareOwned,
     SelfTransfer,
     CustomStateChange,
@@ -83,74 +90,99 @@ pub enum LinterDiagCategory {
     FreezeWrapped,
     CollectionEquality,
     PublicRandom,
+    MissingKey,
+    FreezingCapability,
+    PreferMutableTxContext,
 }
-
-/// A default code for each linter category (as long as only one code per category is used, no other
-/// codes are needed, otherwise they should be defined to be unique per-category).
-pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     let filters = vec![
         WarningFilter::All(Some(LINT_WARNING_PREFIX)),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::ShareOwned as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::ShareOwned as u8,
             Some(SHARE_OWNED_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::SelfTransfer as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::SelfTransfer as u8,
             Some(SELF_TRANSFER_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CustomStateChange as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::CustomStateChange as u8,
             Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CoinField as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::CoinField as u8,
             Some(COIN_FIELD_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::FreezeWrapped as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::FreezeWrapped as u8,
             Some(FREEZE_WRAPPED_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CollectionEquality as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::CollectionEquality as u8,
             Some(COLLECTION_EQUALITY_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::PublicRandom as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::PublicRandom as u8,
             Some(PUBLIC_RANDOM_FILTER_NAME),
         ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::MissingKey as u8,
+            Some(MISSING_KEY_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::FreezingCapability as u8,
+            Some(FREEZING_CAPABILITY_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagnosticCategory::Sui as u8,
+            LinterDiagnosticCode::PreferMutableTxContext as u8,
+            Some(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
+        ),
     ];
+
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
-            vec![
-                share_owned::ShareOwnedVerifier.visitor(),
-                self_transfer::SelfTransferVerifier.visitor(),
-                custom_state_change::CustomStateChangeVerifier.visitor(),
-                coin_field::CoinFieldVisitor.visitor(),
-                freeze_wrapped::FreezeWrappedVisitor.visitor(),
-                collection_equality::CollectionEqualityVisitor.visitor(),
-                public_random::PublicRandomVisitor.visitor(),
-            ]
+        LintLevel::Default => vec![
+            share_owned::ShareOwnedVerifier.visitor(),
+            self_transfer::SelfTransferVerifier.visitor(),
+            custom_state_change::CustomStateChangeVerifier.visitor(),
+            coin_field::CoinFieldVisitor.visitor(),
+            freeze_wrapped::FreezeWrappedVisitor.visitor(),
+            collection_equality::CollectionEqualityVisitor.visitor(),
+            public_random::PublicRandomVisitor.visitor(),
+            missing_key::MissingKeyVisitor.visitor(),
+        ],
+        LintLevel::All => {
+            let mut visitors = linter_visitors(LintLevel::Default);
+            visitors.extend([
+                freezing_capability::WarnFreezeCapability.visitor(),
+                public_mut_tx_context::PreferMutableTxContext.visitor(),
+            ]);
+            visitors
         }
     }
 }

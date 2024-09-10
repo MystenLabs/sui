@@ -15,8 +15,6 @@ expression: "results.join(\"\\n\")"
 │ move-call     │ 0x1::option::is_none<u64> none │
 │ assign        │ a none                         │
 │ move-call     │ 0x1::option::is_none<u64> a    │
-├───────────────┼────────────────────────────────┤
-│ gas-budget    │ 1000                           │
 ╰───────────────┴────────────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0])

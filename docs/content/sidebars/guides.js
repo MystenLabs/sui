@@ -25,7 +25,6 @@ const guides = [
 					id: 'guides/developer/getting-started',
 				},
 				items: [
-					'guides/developer/getting-started/sui-environment',
 					'guides/developer/getting-started/sui-install',
 					'guides/developer/getting-started/connect',
 					'guides/developer/getting-started/local-network',
@@ -58,20 +57,6 @@ const guides = [
 				},
 				items: [
 					'guides/developer/sui-101/shared-owned',
-					{
-						type: 'category',
-						label: 'Create Coins and Tokens',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/sui-101/create-coin',
-						},
-						items: [
-							'guides/developer/sui-101/create-coin/regulated',
-							'guides/developer/sui-101/create-coin/in-game-token',
-							'guides/developer/sui-101/create-coin/loyalty',
-						],
-					},
-					'guides/developer/sui-101/create-nft',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
@@ -89,6 +74,28 @@ const guides = [
 			},
 			{
 				type: 'category',
+				label: 'Coins and Tokens',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/coin',
+				},
+				items: [
+					'guides/developer/coin/regulated',
+					'guides/developer/coin/in-game-token',
+					'guides/developer/coin/loyalty',
+				],
+			},
+			{
+				type: 'category',
+				label: 'NFTs',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/nft',
+				},
+				items: ['guides/developer/nft/nft-rental', 'guides/developer/nft/asset-tokenization'],
+			},
+			{
+				type: 'category',
 				label: 'Cryptography',
 				link: {
 					type: 'doc',
@@ -99,6 +106,19 @@ const guides = [
 					'guides/developer/cryptography/groth16',
 					'guides/developer/cryptography/hashing',
 					'guides/developer/cryptography/ecvrf',
+					'guides/developer/cryptography/multisig',
+					{
+						type: 'category',
+						label: 'zkLogin Integration Guide',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/cryptography/zklogin-integration',
+						},
+						items: [
+							'guides/developer/cryptography/zklogin-integration/developer-account',
+							'guides/developer/cryptography/zklogin-integration/zklogin-example',
+						],
+					},
 				],
 			},
 			{
@@ -120,8 +140,8 @@ const guides = [
 					},*/
 					'guides/developer/advanced/graphql-migration',
 					'guides/developer/advanced/move-2024-migration',
-					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/custom-indexer',
+					'guides/developer/advanced/randomness-onchain',
 				],
 			},
 			{
@@ -132,10 +152,25 @@ const guides = [
 					id: 'guides/developer/app-examples',
 				},
 				items: [
-					'guides/developer/app-examples/auction',
-					'guides/developer/app-examples/blackjack',
-					'guides/developer/app-examples/coin-flip',
 					'guides/developer/app-examples/e2e-counter',
+					{
+						type: 'category',
+						label: 'Trustless Swap',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/trustless-swap',
+						},
+						items: [
+							'guides/developer/app-examples/trustless-swap/backend',
+							'guides/developer/app-examples/trustless-swap/indexer-api',
+							'guides/developer/app-examples/trustless-swap/frontend',
+						],
+					},
+					'guides/developer/app-examples/coin-flip',
+					'guides/developer/app-examples/reviews-rating',
+					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/plinko',
+					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',
 						label: 'Oracles',
@@ -148,24 +183,10 @@ const guides = [
 							'guides/developer/app-examples/meta-pricing-oracle',
 						],
 					},
-					'guides/developer/app-examples/plinko',
-					'guides/developer/app-examples/recaptcha',
-					'guides/developer/app-examples/tic-tac-toe',
-					{
-						type: 'category',
-						label: 'Trustless Token Swap',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-token-swap',
-						},
-						items: [
-							'guides/developer/app-examples/trustless-token-swap/backend',
-							'guides/developer/app-examples/trustless-token-swap/indexer-api',
-							'guides/developer/app-examples/trustless-token-swap/frontend',
-						],
-					},
-					'guides/developer/app-examples/trusted-swap',
-					'guides/developer/app-examples/turnip-town',
+					// 'guides/developer/app-examples/recaptcha',
+					// 'guides/developer/app-examples/trusted-swap',
+					// 'guides/developer/app-examples/turnip-town',
+					// 'guides/developer/app-examples/auction',
 				],
 			},
 			'guides/developer/starter-templates',

@@ -42,17 +42,6 @@ export default function Home() {
           </div>
         </div>
         <div className="flex flex-row flex-wrap justify-center gap-2 max-w-[1066px] mx-auto">
-          <HomeCard title="About Sui">
-            <Link className={styles.cardLink} to="./concepts/tokenomics">
-              Tokenomics
-            </Link>
-            <Link className={styles.cardLink} to="./concepts/cryptography">
-              Cryptography
-            </Link>
-            <Link className={styles.cardLink} to="standards">
-              Standards
-            </Link>
-          </HomeCard>
           <HomeCard title="Developers">
             <Link
               className={styles.cardLink}
@@ -80,6 +69,17 @@ export default function Home() {
             >
               Run a Sui Full node
               <span className="block bg-auto bg-[url(../static/img/index/right-arrow.svg)]"></span>
+            </Link>
+          </HomeCard>
+          <HomeCard title="About Sui">
+            <Link className={styles.cardLink} to="./concepts/tokenomics">
+              Tokenomics
+            </Link>
+            <Link className={styles.cardLink} to="./concepts/cryptography">
+              Cryptography
+            </Link>
+            <Link className={styles.cardLink} to="standards">
+              Standards
             </Link>
           </HomeCard>
           <HomeCard title="References" aux>

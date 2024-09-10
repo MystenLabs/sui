@@ -8,7 +8,7 @@ For every scenario using Kiosk in dApps, the user who has connected their wallet
 one kiosk already or you must create it for them.
 
 The SDK supports the scenario of `silently` creating the kiosk, as part of our Programmable
-Transaction Blocks.
+Transaction.
 
 Assume that the mint function of the contract is:
 
@@ -33,14 +33,14 @@ const getCap = async () => {
 
 // The mint function could be like the following.
 const mint = async () => {
-    const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap: await getCap() }});
+    const tx = new Transaction();
+    const kioskTx = new KioskTransaction({ kioskClient, transaction: tx, cap: await getCap() }});
 
     // Assume it costs one SUI
-    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
+    let coin = tx.splitCoins(tx.gas, [1_000_000_000]);
 
     // A function that mints directly into the kiosk.
-     txb.moveCall({
+     tx.moveCall({
             target: '0xMyGame::hero::mint',
             arguments: [
                 coin, // the payment
@@ -51,8 +51,8 @@ const mint = async () => {
 
     kioskTx.finalize();
 
-    // Sign and execute transaction block.
-    await signAndExecuteTransactionBlock({ tx: txb });
+    // Sign and execute transaction.
+    await signAndExecuteTransaction({ tx: tx });
 }
 ```
 
@@ -64,17 +64,17 @@ const kioskClient = new KioskClient({...});
 
 // Our mint function.
 const mint = async () => {
-    const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb }});
+    const tx = new Transaction();
+    const kioskTx = new KioskTransaction({ kioskClient, transaction: tx }});
 
     // Creates a kiosk.
     kioskTx.create();
 
     // We'll assume it costs 1 SUI
-    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
+    let coin = tx.splitCoins(tx.gas, [1_000_000_000]);
 
     // A function that mints directly into the kiosk.
-     txb.moveCall({
+     tx.moveCall({
             target: '0xMyGame::hero::mint',
             arguments: [
                 coin, // the payment
@@ -86,8 +86,8 @@ const mint = async () => {
     kioskTx.shareAndTransferCap('0xAddressToTransferCapTo');
     kioskTx.finalize();
 
-    // Sign and execute transaction block.
-    await signAndExecuteTransactionBlock({ tx: txb });
+    // Sign and execute transaction.
+    await signAndExecuteTransaction({ tx: tx });
 }
 ```
 
@@ -96,19 +96,19 @@ const mint = async () => {
 ```typescript
 // A sample function that borrows an item from kiosk and levels it up.
 const levelUp = async (object) => {
-	const txb = new TransactionBlock();
+	const tx = new Transaction();
 
-	new KioskTransaction({ kioskClient, transactionBlock: txb, cap })
+	new KioskTransaction({ kioskClient, transaction: tx, cap })
 		.borrowTx(object, (item) => {
-			txb.moveCall({
+			tx.moveCall({
 				target: '0xMyGame::hero::level_up',
 				arguments: [item],
 			});
 		})
 		.finalize();
 
-	// Sign and execute transaction block.
-	await signAndExecuteTransactionBlock({ tx: txb });
+	// Sign and execute transaction.
+	await signAndExecuteTransaction({ tx: tx });
 };
 
 levelUp({

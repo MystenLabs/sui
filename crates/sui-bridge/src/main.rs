@@ -2,33 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use fastcrypto::traits::KeyPair;
 use mysten_metrics::start_prometheus_server;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 use sui_bridge::config::BridgeNodeConfig;
+use sui_bridge::metrics::start_metrics_push_task;
 use sui_bridge::node::run_bridge_node;
+use sui_bridge::server::BridgeNodePublicMetadata;
 use sui_config::Config;
 use tracing::info;
 
-// TODO consolidate this with sui-node/src/main.rs, but where to put it?
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -58,5 +46,15 @@ async fn main() -> anyhow::Result<()> {
         .with_prom_registry(&prometheus_registry)
         .init();
 
-    run_bridge_node(config).await
+    let metadata =
+        BridgeNodePublicMetadata::new(VERSION.into(), config.metrics_key_pair.public().clone());
+
+    start_metrics_push_task(
+        &config.metrics,
+        config.metrics_key_pair.copy(),
+        registry_service.clone(),
+    );
+    Ok(run_bridge_node(config, metadata, prometheus_registry)
+        .await?
+        .await?)
 }

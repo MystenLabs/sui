@@ -1,0 +1,9 @@
+[package]
+name = "PartialFunction"
+edition = "legacy"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+PartialFunction = "0xCAFE"

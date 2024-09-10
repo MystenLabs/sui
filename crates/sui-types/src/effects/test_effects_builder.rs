@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{ObjectID, SequenceNumber};
-use crate::digests::ObjectDigest;
+use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut, TransactionEffects};
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
@@ -10,7 +10,7 @@ use crate::gas::GasCostSummary;
 use crate::message_envelope::Message;
 use crate::object::Owner;
 use crate::transaction::{InputObjectKind, SenderSignedData, TransactionDataAPI};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub struct TestEffectsBuilder {
     transaction: SenderSignedData,
@@ -18,6 +18,7 @@ pub struct TestEffectsBuilder {
     status: Option<ExecutionStatus>,
     /// Provide the assigned versions for all shared objects.
     shared_input_versions: BTreeMap<ObjectID, SequenceNumber>,
+    events_digest: Option<TransactionEventsDigest>,
 }
 
 impl TestEffectsBuilder {
@@ -26,6 +27,7 @@ impl TestEffectsBuilder {
             transaction: transaction.clone(),
             status: None,
             shared_input_versions: BTreeMap::new(),
+            events_digest: None,
         }
     }
 
@@ -40,6 +42,11 @@ impl TestEffectsBuilder {
     ) -> Self {
         assert!(self.shared_input_versions.is_empty());
         self.shared_input_versions = versions;
+        self
+    }
+
+    pub fn with_events_digest(mut self, digest: TransactionEventsDigest) -> Self {
+        self.events_digest = Some(digest);
         self
     }
 
@@ -125,13 +132,14 @@ impl TestEffectsBuilder {
             })
             .collect();
         let gas_object_id = self.transaction.transaction_data().gas()[0].0;
-        let event_digest = None;
+        let event_digest = self.events_digest;
         let dependencies = vec![];
         TransactionEffects::new_from_execution_v2(
             status,
             executed_epoch,
             GasCostSummary::default(),
             shared_objects,
+            BTreeSet::new(),
             self.transaction.digest(),
             lamport_version,
             changed_objects,

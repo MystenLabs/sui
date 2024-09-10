@@ -1,0 +1,8 @@
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/hlir/dead_code_guard.move:14:30
+   │
+14 │             _ if ({return 0; true}) => 1,
+   │                              ^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

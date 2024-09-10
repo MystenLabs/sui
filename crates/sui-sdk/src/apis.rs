@@ -9,6 +9,7 @@ use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::SuiData;
@@ -19,6 +20,7 @@ use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,
 };
+use sui_json_rpc_types::CheckpointPage;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -28,7 +30,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
     TransactionFilter,
 };
-use sui_json_rpc_types::{CheckpointPage, SuiLoadedChildObjectsResponse};
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldName;
@@ -39,7 +40,9 @@ use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 
-const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
+const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(60);
+const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
+const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The main read API structure with functions for retrieving data about different objects and transactions
 #[derive(Debug)]
@@ -686,23 +689,24 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the loaded child objects response for the provided digest, or an error upon failure.
-    ///
-    /// Loaded child objects ([SuiLoadedChildObject](sui_json_rpc_types::SuiLoadedChildObject)) are the non-input objects that the transaction at the digest loaded
-    /// in response to dynamic field accesses.
-    pub async fn get_loaded_child_objects(
-        &self,
-        digest: TransactionDigest,
-    ) -> SuiRpcResult<SuiLoadedChildObjectsResponse> {
-        Ok(self.api.http.get_loaded_child_objects(digest).await?)
-    }
-
     /// Return the protocol config, or an error upon failure.
     pub async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
     ) -> SuiRpcResult<ProtocolConfigResponse> {
         Ok(self.api.http.get_protocol_config(version).await?)
+    }
+
+    pub async fn try_get_object_before_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> SuiRpcResult<SuiPastObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .try_get_object_before_version(object_id, version)
+            .await?)
     }
 }
 
@@ -1132,39 +1136,49 @@ impl QuorumDriverApi {
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
-        let mut retry_count = 0;
-        let start = Instant::now();
-        while retry_count < WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT {
-            let response: SuiTransactionBlockResponse = self
-                .api
-                .http
-                .execute_transaction_block(
-                    tx_bytes.clone(),
-                    signatures.clone(),
-                    Some(options.clone()),
-                    Some(request_type.clone()),
-                )
-                .await?;
 
-            match request_type {
-                ExecuteTransactionRequestType::WaitForEffectsCert => {
-                    return Ok(response);
-                }
-                ExecuteTransactionRequestType::WaitForLocalExecution => {
-                    if let Some(true) = response.confirmed_local_execution {
-                        return Ok(response);
-                    } else {
-                        // If fullnode executed the cert in the network but did not confirm local
-                        // execution, it must have timed out and hence we could retry.
-                        retry_count += 1;
-                    }
+        let start = Instant::now();
+        let response = self
+            .api
+            .http
+            .execute_transaction_block(
+                tx_bytes.clone(),
+                signatures.clone(),
+                Some(options.clone()),
+                Some(request_type.clone()),
+            )
+            .await?;
+
+        if let ExecuteTransactionRequestType::WaitForEffectsCert = request_type {
+            return Ok(response);
+        }
+
+        // JSON-RPC ignores WaitForLocalExecution, so simulate it by polling for the transaction.
+        let mut poll_response = tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
+            // Apply a short delay to give the full node a chance to catch up.
+            tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
+
+            let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
+            loop {
+                interval.tick().await;
+
+                if let Ok(poll_response) = self
+                    .api
+                    .http
+                    .get_transaction_block(*tx.digest(), Some(options.clone()))
+                    .await
+                {
+                    break poll_response;
                 }
             }
-        }
-        Err(Error::FailToConfirmTransactionStatus(
-            *tx.digest(),
-            start.elapsed().as_secs(),
-        ))
+        })
+        .await
+        .map_err(|_| {
+            Error::FailToConfirmTransactionStatus(*tx.digest(), start.elapsed().as_secs())
+        })?;
+
+        poll_response.confirmed_local_execution = Some(true);
+        Ok(poll_response)
     }
 }
 

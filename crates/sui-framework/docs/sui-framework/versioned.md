@@ -52,7 +52,7 @@ to use mutable reference even if it's a read-only API.
 
 </dd>
 <dt>
-<code>version: u64</code>
+<code>version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -87,7 +87,7 @@ This is to make sure that we always put a new value back.
 
 </dd>
 <dt>
-<code>old_version: u64</code>
+<code>old_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -107,7 +107,7 @@ This is to make sure that we always put a new value back.
 Failed to upgrade the inner object due to invalid capability or new version.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -119,7 +119,7 @@ Failed to upgrade the inner object due to invalid capability or new version.
 Create a new Versioned object that contains a initial value of type <code>T</code> with an initial version.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: u64, init_value: T, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, init_value: T, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>
 </code></pre>
 
 
@@ -128,7 +128,7 @@ Create a new Versioned object that contains a initial value of type <code>T</cod
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: u64, init_value: T, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_create">create</a>&lt;T: store&gt;(init_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, init_value: T, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
     <b>let</b> <b>mut</b> self = <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         version: init_version,
@@ -149,7 +149,7 @@ Create a new Versioned object that contains a initial value of type <code>T</cod
 Get the current version of the inner type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_version">version</a>(self: &<a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_version">version</a>(self: &<a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -158,7 +158,7 @@ Get the current version of the inner type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_version">version</a>(self: &<a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_version">version</a>(self: &<a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.version
 }
 </code></pre>
@@ -258,7 +258,7 @@ Upgrade the inner object with a new version and new value. Must use the capabili
 by calling remove_value_for_upgrade.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>, new_version: u64, new_value: T, cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">versioned::VersionChangeCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a>, new_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, new_value: T, cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">versioned::VersionChangeCap</a>)
 </code></pre>
 
 
@@ -267,7 +267,7 @@ by calling remove_value_for_upgrade.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>, new_version: u64, new_value: T, cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/versioned.md#0x2_versioned_upgrade">upgrade</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="../sui-framework/versioned.md#0x2_versioned_Versioned">Versioned</a>, new_version: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, new_value: T, cap: <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a>) {
     <b>let</b> <a href="../sui-framework/versioned.md#0x2_versioned_VersionChangeCap">VersionChangeCap</a> { versioned_id, old_version } = cap;
     <b>assert</b>!(versioned_id == <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(self), <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
     <b>assert</b>!(old_version &lt; new_version, <a href="../sui-framework/versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);

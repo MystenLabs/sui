@@ -19,7 +19,7 @@ use fastcrypto::ed25519::{
     Ed25519SignatureAsBytes,
 };
 use fastcrypto::encoding::{Base64, Bech32, Encoding, Hex};
-use fastcrypto::error::FastCryptoError;
+use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
@@ -107,8 +107,8 @@ pub fn generate_proof_of_possession(
 /// Verify proof of possession against the expected intent message,
 /// consisting of the protocol pubkey and the authority account address.
 pub fn verify_proof_of_possession(
-    pop: &narwhal_crypto::Signature,
-    protocol_pubkey: &narwhal_crypto::PublicKey,
+    pop: &AuthoritySignature,
+    protocol_pubkey: &AuthorityPublicKey,
     sui_address: SuiAddress,
 ) -> Result<(), SuiError> {
     protocol_pubkey
@@ -148,6 +148,14 @@ impl SuiKeyPair {
             SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().into()),
         }
     }
+
+    pub fn copy(&self) -> Self {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256k1(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256r1(kp) => kp.copy().into(),
+        }
+    }
 }
 
 impl Signer<Signature> for SuiKeyPair {
@@ -165,9 +173,9 @@ impl EncodeDecodeBase64 for SuiKeyPair {
         Base64::encode(self.to_bytes())
     }
 
-    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes = Base64::decode(value).map_err(|e| eyre!("{}", e.to_string()))?;
-        Self::from_bytes(&bytes)
+    fn decode_base64(value: &str) -> FastCryptoResult<Self> {
+        let bytes = Base64::decode(value)?;
+        Self::from_bytes(&bytes).map_err(|_| FastCryptoError::InvalidInput)
     }
 }
 impl SuiKeyPair {
@@ -211,9 +219,18 @@ impl SuiKeyPair {
             _ => Err(eyre!("Invalid bytes")),
         }
     }
+
+    pub fn to_bytes_no_flag(&self) -> Vec<u8> {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256k1(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256r1(kp) => kp.as_bytes().to_vec(),
+        }
+    }
+
     /// Encode a SuiKeyPair as `flag || privkey` in Bech32 starting with "suiprivkey" to a string. Note that the pubkey is not encoded.
     pub fn encode(&self) -> Result<String, eyre::Report> {
-        Bech32::encode(self.to_bytes(), SUI_PRIV_KEY_PREFIX)
+        Bech32::encode(self.to_bytes(), SUI_PRIV_KEY_PREFIX).map_err(|e| eyre!(e))
     }
 
     /// Decode a SuiKeyPair from `flag || privkey` in Bech32 starting with "suiprivkey" to SuiKeyPair. The public key is computed directly from the private key bytes.
@@ -250,6 +267,7 @@ pub enum PublicKey {
     Secp256k1(Secp256k1PublicKeyAsBytes),
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
+    Passkey(Secp256r1PublicKeyAsBytes),
 }
 
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
@@ -276,6 +294,7 @@ impl AsRef<[u8]> for PublicKey {
             PublicKey::Secp256k1(pk) => &pk.0,
             PublicKey::Secp256r1(pk) => &pk.0,
             PublicKey::ZkLogin(z) => &z.0,
+            PublicKey::Passkey(pk) => &pk.0,
         }
     }
 }
@@ -288,30 +307,36 @@ impl EncodeDecodeBase64 for PublicKey {
         Base64::encode(&bytes[..])
     }
 
-    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes = Base64::decode(value).map_err(|e| eyre!("{}", e.to_string()))?;
+    fn decode_base64(value: &str) -> FastCryptoResult<Self> {
+        let bytes = Base64::decode(value)?;
         match bytes.first() {
             Some(x) => {
                 if x == &SignatureScheme::ED25519.flag() {
-                    let pk: Ed25519PublicKey = Ed25519PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk: Ed25519PublicKey =
+                        Ed25519PublicKey::from_bytes(bytes.get(1..).ok_or(
+                            FastCryptoError::InputLengthWrong(Ed25519PublicKey::LENGTH + 1),
+                        )?)?;
                     Ok(PublicKey::Ed25519((&pk).into()))
                 } else if x == &SignatureScheme::Secp256k1.flag() {
-                    let pk = Secp256k1PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk = Secp256k1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256k1PublicKey::LENGTH + 1),
+                    )?)?;
                     Ok(PublicKey::Secp256k1((&pk).into()))
                 } else if x == &SignatureScheme::Secp256r1.flag() {
-                    let pk = Secp256r1PublicKey::from_bytes(
-                        bytes.get(1..).ok_or_else(|| eyre!("Invalid length"))?,
-                    )?;
+                    let pk = Secp256r1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
+                    )?)?;
                     Ok(PublicKey::Secp256r1((&pk).into()))
+                } else if x == &SignatureScheme::PasskeyAuthenticator.flag() {
+                    let pk = Secp256r1PublicKey::from_bytes(bytes.get(1..).ok_or(
+                        FastCryptoError::InputLengthWrong(Secp256r1PublicKey::LENGTH + 1),
+                    )?)?;
+                    Ok(PublicKey::Passkey((&pk).into()))
                 } else {
-                    Err(eyre!("Invalid flag byte"))
+                    Err(FastCryptoError::InvalidInput)
                 }
             }
-            _ => Err(eyre!("Invalid bytes")),
+            _ => Err(FastCryptoError::InvalidInput),
         }
     }
 }
@@ -335,6 +360,9 @@ impl PublicKey {
             SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
                 (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
             )),
+            SignatureScheme::PasskeyAuthenticator => Ok(PublicKey::Passkey(
+                (&Secp256r1PublicKey::from_bytes(key_bytes)?).into(),
+            )),
             _ => Err(eyre!("Unsupported curve")),
         }
     }
@@ -345,6 +373,7 @@ impl PublicKey {
             PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME,
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
+            PublicKey::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
         }
     }
 
@@ -696,8 +725,13 @@ impl Signature {
     where
         T: Serialize,
     {
+        // Compute the BCS hash of the value in intent message. In the case of transaction data,
+        // this is the BCS hash of `struct TransactionData`, different from the transaction digest
+        // itself that computes the BCS hash of the Rust type prefix and `struct TransactionData`.
+        // (See `fn digest` in `impl Message for SenderSignedData`).
         let mut hasher = DefaultHash::default();
-        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        hasher.update(bcs::to_bytes(&value).expect("Message serialization should not fail"));
+
         Signer::sign(secret, &hasher.finalize().digest)
     }
 }
@@ -965,7 +999,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         T: Serialize,
     {
         let mut hasher = DefaultHash::default();
-        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        hasher.update(bcs::to_bytes(&value).expect("Message serialization should not fail"));
         let digest = hasher.finalize().digest;
 
         let (sig, pk) = &self.get_verification_inputs()?;
@@ -1611,7 +1645,16 @@ pub mod bcs_signable_test {
 }
 
 #[derive(
-    Clone, Copy, Deserialize, Serialize, JsonSchema, Debug, EnumString, strum_macros::Display,
+    Clone,
+    Copy,
+    Deserialize,
+    Serialize,
+    JsonSchema,
+    Debug,
+    EnumString,
+    strum_macros::Display,
+    PartialEq,
+    Eq,
 )]
 #[strum(serialize_all = "lowercase")]
 pub enum SignatureScheme {
@@ -1621,6 +1664,7 @@ pub enum SignatureScheme {
     BLS12381, // This is currently not supported for user Sui Address.
     MultiSig,
     ZkLoginAuthenticator,
+    PasskeyAuthenticator,
 }
 
 impl SignatureScheme {
@@ -1632,6 +1676,7 @@ impl SignatureScheme {
             SignatureScheme::MultiSig => 0x03,
             SignatureScheme::BLS12381 => 0x04, // This is currently not supported for user Sui Address.
             SignatureScheme::ZkLoginAuthenticator => 0x05,
+            SignatureScheme::PasskeyAuthenticator => 0x06,
         }
     }
 
@@ -1650,6 +1695,7 @@ impl SignatureScheme {
             0x03 => Ok(SignatureScheme::MultiSig),
             0x04 => Ok(SignatureScheme::BLS12381),
             0x05 => Ok(SignatureScheme::ZkLoginAuthenticator),
+            0x06 => Ok(SignatureScheme::PasskeyAuthenticator),
             _ => Err(SuiError::KeyConversionError(
                 "Invalid key scheme".to_string(),
             )),
@@ -1728,6 +1774,20 @@ impl std::ops::Add<u64> for RandomnessRound {
     type Output = Self;
     fn add(self, other: u64) -> Self {
         Self(self.0 + other)
+    }
+}
+
+impl std::ops::Sub for RandomnessRound {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self(self.0 - other.0)
+    }
+}
+
+impl std::ops::Sub<u64> for RandomnessRound {
+    type Output = Self;
+    fn sub(self, other: u64) -> Self {
+        Self(self.0 - other)
     }
 }
 

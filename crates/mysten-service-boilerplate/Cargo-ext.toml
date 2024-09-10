@@ -1,0 +1,16 @@
+[package]
+name = "mysten-service-boilerplate"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "1.0.79"
+axum = { version = "0.7", features = ["macros"] }
+mysten-service = { git = "https://github.com/mystenlabs/sui.git", branch = "main", package = "mysten-service" }
+prometheus = "0.13.3"
+tracing = "0.1.40"
+serde = { version = "1.0.188", features = ["derive"] }
+tokio = { version = "1.32.0", features = ["full"] }

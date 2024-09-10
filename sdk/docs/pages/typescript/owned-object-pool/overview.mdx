@@ -2,9 +2,14 @@
 
 import { Callout } from 'nextra/components';
 
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
+<Callout type="warning">
+	Sui Owned Object Pools (SuiOOP) will likely be replaced by
+	[`ParallelTransactionExecutor`](../executors#paralleltransactionexecutor) from
+	`@mysten/sui/transactions`
+
+    Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+    development.
+
 </Callout>
 
 Equivocation is a situation where you unintentionally use the same object in more than one
@@ -69,21 +74,21 @@ transaction. If you need SUI for a test network, you can
 [use a faucet](https://docs.sui.io/guides/developer/getting-started/get-coins) to mint some.
 
 ```ts
-import { SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 
 /* HERE ARE DEFINED THE PREPARATORY STEPS IF YOU WANT TO CODE ALONG*/
-// Define the transaction block
-function createPaymentTxb(recipient: string): TransactionBlock {
-	const txb = new TransactionBlock();
-	const [coin] = txb.splitCoins(
-		txb.gas,
-		[txb.pure(1000000)], // Amount to be transferred to the recipient
+// Define the transaction
+function createPaymenttx(recipient: string): Transaction {
+	const tx = new Transaction();
+	const [coin] = tx.splitCoins(
+		tx.gas,
+		[tx.pure(1000000)], // Amount to be transferred to the recipient
 	);
-	txb.transferObjects([coin], txb.pure(recipient));
-	return txb;
+	tx.transferObjects([coin], tx.pure(recipient));
+	return tx;
 }
 // Define your admin keypair and client
 const ADMIN_SECRET_KEY: string = '<your-address-secret-key>';
@@ -105,20 +110,20 @@ import { ExecutorServiceHandler } from 'suioop';
 const eshandler = await ExecutorServiceHandler.initialize(adminKeypair, client);
 // Define the number of transactions to execute
 const promises = [];
-let txb: TransactionBlockWithLambda;
+let tx: TransactionBlockWithLambda;
 for (let i = 0; i < 10; i++) {
-	txb = new TransactionBlockWithLambda(() => ceatePaymentTxb('<recipient-address>'));
-	promises.push(eshandler.execute(txb, client));
+	tx = new TransactionBlockWithLambda(() => ceatePaymenttx('<recipient-address>'));
+	promises.push(eshandler.execute(tx, client));
 }
 
 // Collect the promise results
 const results = await Promise.allSettled(promises);
 ```
 
-Notice the use of `TransactionBlockWithLambda()` instead of `TransactionBlock()`. The
-`TransactionBlockWithLambda` function is a more flexible way of defining transaction blocks. What
-differs is that the transaction block will be created later, just before the transaction execution
-is done by a worker pool.
+Notice the use of `TransactionBlockWithLambda()` instead of `Transaction()`. The
+`TransactionBlockWithLambda` function is a more flexible way of defining transactions. What differs
+is that the transaction will be created later, just before the transaction execution is done by a
+worker pool.
 
 And that's it! 🚀
 

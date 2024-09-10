@@ -16,8 +16,8 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- sources/mod_friend.move
-+++ sources/mod_friend.move
+--- ./sources/mod_friend.move
++++ ./sources/mod_friend.move
 @@ -2,2 +2,2 @@
 -    #[test_only]
 -    friend A::b;
@@ -42,8 +42,8 @@ The following changes will be made.
 -    friend A::e;
 +    ] */
 +    /* friend A::e; */
---- sources/mod_pub_friend.move
-+++ sources/mod_pub_friend.move
+--- ./sources/mod_pub_friend.move
++++ ./sources/mod_pub_friend.move
 @@ -2 +2 @@
 -    public(friend) fun t1() {}
 +    public(package) fun t1() {}
@@ -71,8 +71,8 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/mod_friend.move" . . .
-Updating "sources/mod_pub_friend.move" . . .
+Updating "./sources/mod_friend.move" . . .
+Updating "./sources/mod_pub_friend.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

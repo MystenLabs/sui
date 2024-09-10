@@ -1,7 +1,9 @@
 processed 3 tasks
 
-task 1 'run'. lines 28-42:
+task 1, lines 28-42:
+//# run --args 0 1 b"xyz"
 mutable inputs after call: local#0: 112, local#1: { 224 }, local#2: [120, 0, 122]
 
-task 2 'run'. lines 44-44:
+task 2, line 44:
+//# run 0x42::M::t --args 0 1 b"xyz"
 mutable inputs after call: local#0: 112, local#1: { 224 }, local#2: [120, 0, 122]

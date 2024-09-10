@@ -16,8 +16,8 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- sources/mod0.move
-+++ sources/mod0.move
+--- ./sources/mod0.move
++++ ./sources/mod0.move
 @@ -5,5 +5,5 @@
 -    fun t0(type: u64, enum: S, mut: bool, match: u64, for: u64): u64 {
 -        if (type == match) {
@@ -32,8 +32,8 @@ The following changes will be made.
 @@ -11 +11 @@
 -            enum.n + for
 +            `enum`.n + `for`
---- sources/mod_intermodule_errors.move
-+++ sources/mod_intermodule_errors.move
+--- ./sources/mod_intermodule_errors.move
++++ ./sources/mod_intermodule_errors.move
 @@ -5,5 +5,5 @@
 -    public fun t0(type: u64, enum: S, mut: bool, match: u64, for: u64): u64 {
 -        if (type == match) {
@@ -48,8 +48,8 @@ The following changes will be made.
 @@ -11 +11 @@
 -            enum.n + for
 +            `enum`.n + `for`
---- sources/mod_let.move
-+++ sources/mod_let.move
+--- ./sources/mod_let.move
++++ ./sources/mod_let.move
 @@ -6,6 +6,6 @@
 -        let type = 0;
 -        let enum = 1;
@@ -63,8 +63,8 @@ The following changes will be made.
 +        let `match` = 3;
 +        let `for` = 3;
 +        `type` + `enum` + `mut` + `match` + `for`
---- sources/mod_let_errors.move
-+++ sources/mod_let_errors.move
+--- ./sources/mod_let_errors.move
++++ ./sources/mod_let_errors.move
 @@ -6,6 +6,6 @@
 -        let type = 0;
 -        let enum = 1;
@@ -82,10 +82,10 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/mod0.move" . . .
-Updating "sources/mod_intermodule_errors.move" . . .
-Updating "sources/mod_let.move" . . .
-Updating "sources/mod_let_errors.move" . . .
+Updating "./sources/mod0.move" . . .
+Updating "./sources/mod_intermodule_errors.move" . . .
+Updating "./sources/mod_let.move" . . .
+Updating "./sources/mod_let_errors.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

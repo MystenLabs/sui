@@ -10,19 +10,22 @@ describe('Event Reading API', () => {
 
 	beforeAll(async () => {
 		toolbox = await setup();
+
+		// Wait for next epoch to ensure there are events
+		await new Promise((resolve) => setTimeout(resolve, 60_000));
 	});
 
 	it('Get All Events', async () => {
 		// TODO: refactor so that we can provide None here to signify there's no filter
 		const allEvents = await toolbox.client.queryEvents({
-			query: { All: [] },
+			query: { TimeRange: { startTime: '0', endTime: Date.now().toString() } },
 		});
 		expect(allEvents.data.length).to.greaterThan(0);
 	});
 
 	it('Get all event paged', async () => {
 		const page1 = await toolbox.client.queryEvents({
-			query: { All: [] },
+			query: { TimeRange: { startTime: '0', endTime: Date.now().toString() } },
 			limit: 2,
 		});
 		expect(page1.nextCursor).to.not.equal(null);

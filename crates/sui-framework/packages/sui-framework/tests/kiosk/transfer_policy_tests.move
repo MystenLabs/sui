@@ -42,11 +42,11 @@ module sui::transfer_policy_tests {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = prepare(ctx);
 
-        assert!(policy.rules().size() == 0, 0);
+        assert!(policy.rules().size() == 0);
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        assert!(policy.rules().size() == 1, 1);
+        assert!(policy.rules().size() == 1);
 
         let mut request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
@@ -55,7 +55,7 @@ module sui::transfer_policy_tests {
 
         let profits = wrapup(policy, cap, ctx);
 
-        assert!(profits == 10_000, 0);
+        assert!(profits == 10_000);
     }
 
     #[test]
@@ -64,12 +64,12 @@ module sui::transfer_policy_tests {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = prepare(ctx);
 
-        assert!(policy.rules().size() == 0, 0);
+        assert!(policy.rules().size() == 0);
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        assert!(policy.rules().size() == 1, 0);
+        assert!(policy.rules().size() == 1);
 
         let mut request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
@@ -80,8 +80,8 @@ module sui::transfer_policy_tests {
         let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         policy.confirm_request(request);
 
-        assert!(policy.rules().size() == 0, 0);
-        assert!(wrapup(policy, cap, ctx) == 10_000, 0);
+        assert!(policy.rules().size() == 0);
+        assert!(wrapup(policy, cap, ctx) == 10_000);
     }
 
     #[test]

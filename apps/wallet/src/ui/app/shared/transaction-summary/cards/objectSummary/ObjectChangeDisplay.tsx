@@ -5,7 +5,7 @@ import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { NftImage } from '_src/ui/app/components/nft-display/NftImage';
 import { type SuiObjectChangeWithDisplay } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 
 import { Text } from '../../../text';
 

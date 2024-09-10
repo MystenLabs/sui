@@ -98,6 +98,20 @@ if ! grep -q "Node State has been reconfigured" "$LOG_DIR/fullnode.log"; then
   exit 1
 fi
 
+# ensure that the random beacon's DKG completes on both versions.
+# "random beacon: created" indicates that the random beacon is enabled and started.
+if grep -q "random beacon: created" "$LOG_DIR/node-0.log" && ! grep -q "random beacon: DKG complete" "$LOG_DIR/node-0.log"; then
+  echo "Could not find 'random beacon: DKG complete' in node-0"
+  exit 1
+fi
+
+if grep -q "random beacon: created" "$LOG_DIR/node-2.log" && ! grep -q "random beacon: DKG complete" "$LOG_DIR/node-2.log"; then
+  echo "Could not find 'random beacon: DKG complete' in node-2"
+  exit 1
+fi
+
+
+
 echo "Cluster reconfigured successfully"
 
 exit 0

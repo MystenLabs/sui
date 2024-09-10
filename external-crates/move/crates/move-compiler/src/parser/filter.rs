@@ -58,6 +58,14 @@ pub trait FilterContext {
         }
     }
 
+    fn filter_map_enum(&mut self, enum_def: P::EnumDefinition) -> Option<P::EnumDefinition> {
+        if self.should_remove_by_attributes(&enum_def.attributes) {
+            None
+        } else {
+            Some(enum_def)
+        }
+    }
+
     fn filter_map_use(&mut self, use_decl: P::UseDecl) -> Option<P::UseDecl> {
         if self.should_remove_by_attributes(&use_decl.attributes) {
             None
@@ -185,6 +193,7 @@ fn filter_module<T: FilterContext>(
         name,
         is_spec_module,
         members,
+        definition_mode,
     } = module_def;
 
     let new_members: Vec<_> = members
@@ -199,6 +208,7 @@ fn filter_module<T: FilterContext>(
         name,
         is_spec_module,
         members: new_members,
+        definition_mode,
     })
 }
 
@@ -212,6 +222,7 @@ fn filter_module_member<T: FilterContext>(
         PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
         PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
         x @ PM::Spec(_) => Some(x),
+        PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
         PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
         PM::Friend(friend_decl) => context.filter_map_friend(friend_decl).map(PM::Friend),
         PM::Constant(constant) => context.filter_map_constant(constant).map(PM::Constant),

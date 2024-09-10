@@ -72,7 +72,7 @@ const concepts = [
 					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Package Upgrades',
+						label: 'Packages',
 						link: {
 							type: 'doc',
 							id: 'concepts/sui-move-concepts/packages',
@@ -80,22 +80,7 @@ const concepts = [
 						items: [
 							'concepts/sui-move-concepts/packages/upgrade',
 							'concepts/sui-move-concepts/packages/custom-policies',
-						],
-					},
-					{
-						type: 'category',
-						label: 'Patterns',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/patterns',
-						},
-						items: [
-							'concepts/sui-move-concepts/patterns/capabilities',
-							'concepts/sui-move-concepts/patterns/witness',
-							'concepts/sui-move-concepts/patterns/transferrable-witness',
-							'concepts/sui-move-concepts/patterns/hot-potato',
-							'concepts/sui-move-concepts/patterns/id-pointer',
-							'concepts/sui-move-concepts/patterns/app-extensions',
+							'concepts/sui-move-concepts/packages/automated-address-management',
 						],
 					},
 					'concepts/sui-move-concepts/conventions',
@@ -139,15 +124,7 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			{
-				type: 'category',
-				label: 'zkLogin',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/zklogin',
-				},
-				items: ['concepts/cryptography/zklogin/zklogin-example'],
-			},
+			'concepts/cryptography/zklogin',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -173,6 +150,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
+			'concepts/sui-architecture/sui-storage',
 			'concepts/sui-architecture/sui-security',
 			'concepts/sui-architecture/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',

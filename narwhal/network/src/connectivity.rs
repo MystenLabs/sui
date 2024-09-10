@@ -243,11 +243,11 @@ impl ConnectionMonitor {
         self.connection_metrics
             .network_peer_udp_transmits
             .with_label_values(&[peer_id, "transmitted"])
-            .set(stats.udp_tx.transmits as i64);
+            .set(stats.udp_tx.ios as i64);
         self.connection_metrics
             .network_peer_udp_transmits
             .with_label_values(&[peer_id, "received"])
-            .set(stats.udp_rx.transmits as i64);
+            .set(stats.udp_rx.ios as i64);
     }
 }
 

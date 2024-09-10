@@ -163,12 +163,3 @@ expression: "results.join(\"\\n\")"
     ·                             ╰── Expected '::' but found '>'
     ╰────
 
-  × Error when processing PTB
-    ╭─[18:43]
- 17 │ --make-move-vec <vector<U256>> [vector[0]]
- 18 │ --make-move-vec <vector<i256>> [vector[0]] 
-    ·                                           ▲
-    ·                                           ╰── Gas budget not set.
-    ╰────
-  help: Use --gas-budget <u64> to set a gas budget
-

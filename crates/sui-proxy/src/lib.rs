@@ -40,7 +40,7 @@ mod tests {
     use crate::prom_to_mimir::tests::*;
 
     use crate::{admin::CertKeyPair, config::RemoteWriteConfig, peers::SuiNodeProvider};
-    use axum::http::{header, StatusCode};
+    use axum::http::StatusCode;
     use axum::routing::post;
     use axum::Router;
     use multiaddr::Multiaddr;
@@ -49,7 +49,7 @@ mod tests {
     use protobuf::RepeatedField;
     use std::net::TcpListener;
     use std::time::Duration;
-    use sui_tls::{CertVerifier, TlsAcceptor};
+    use sui_tls::{ClientCertVerifier, TlsAcceptor};
 
     async fn run_dummy_remote_write(listener: TcpListener) {
         /// i accept everything, send me the trash
@@ -61,11 +61,9 @@ mod tests {
         let app = Router::new().route("/v1/push", post(handler));
 
         // run it
-        axum::Server::from_tcp(listener)
-            .unwrap()
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        axum::serve(listener, app).await.unwrap();
     }
 
     /// axum_acceptor is a basic e2e test that creates a mock remote_write post endpoint and has a simple
@@ -91,12 +89,15 @@ mod tests {
 
         // init the tls config and allower
         let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![]);
-        let tls_config = CertVerifier::new(allower.clone())
-            .rustls_server_config(
-                vec![server_priv_cert.rustls_certificate()],
-                server_priv_cert.rustls_private_key(),
-            )
-            .unwrap();
+        let tls_config = ClientCertVerifier::new(
+            allower.clone(),
+            sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        )
+        .rustls_server_config(
+            vec![server_priv_cert.rustls_certificate()],
+            server_priv_cert.rustls_private_key(),
+        )
+        .unwrap();
 
         let client = admin::make_reqwest_client(
             RemoteWriteConfig {
@@ -167,7 +168,7 @@ mod tests {
 
         let res = client
             .post(&server_url)
-            .header(header::CONTENT_TYPE, PROTOBUF_FORMAT)
+            .header(reqwest::header::CONTENT_TYPE, PROTOBUF_FORMAT)
             .body(buf)
             .send()
             .await
@@ -175,6 +176,6 @@ mod tests {
         let status = res.status();
         let body = res.text().await.unwrap();
         assert_eq!("created", body);
-        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(status, reqwest::StatusCode::CREATED);
     }
 }

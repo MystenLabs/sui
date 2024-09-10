@@ -1,33 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::database::Connection;
+use crate::errors::IndexerError;
+use clap::Args;
+use diesel::migration::{Migration, MigrationSource, MigrationVersion};
+use diesel::pg::Pg;
+use diesel::table;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use std::time::Duration;
-
-use anyhow::anyhow;
-use diesel::migration::MigrationSource;
-use diesel::{r2d2::ConnectionManager, PgConnection, RunQueryDsl};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
-use crate::errors::IndexerError;
+table! {
+    __diesel_schema_migrations (version) {
+        version -> VarChar,
+        run_on -> Timestamp,
+    }
+}
 
-pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
-pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
-#[derive(Debug, Clone, Copy)]
-pub struct PgConnectionPoolConfig {
+#[derive(Args, Debug, Clone)]
+pub struct ConnectionPoolConfig {
+    #[arg(long, default_value_t = 100)]
+    #[arg(env = "DB_POOL_SIZE")]
     pub pool_size: u32,
+    #[arg(long, value_parser = parse_duration, default_value = "30")]
+    #[arg(env = "DB_CONNECTION_TIMEOUT")]
     pub connection_timeout: Duration,
+    #[arg(long, value_parser = parse_duration, default_value = "3600")]
+    #[arg(env = "DB_STATEMENT_TIMEOUT")]
     pub statement_timeout: Duration,
 }
 
-impl PgConnectionPoolConfig {
+fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntError> {
+    let seconds = arg.parse()?;
+    Ok(std::time::Duration::from_secs(seconds))
+}
+
+impl ConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: u64 = 3600;
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
     const DEFAULT_STATEMENT_TIMEOUT: u64 = 3600;
 
-    fn connection_config(&self) -> PgConnectionConfig {
-        PgConnectionConfig {
+    pub(crate) fn connection_config(&self) -> ConnectionConfig {
+        ConnectionConfig {
             statement_timeout: self.statement_timeout,
             read_only: false,
         }
@@ -46,140 +65,254 @@ impl PgConnectionPoolConfig {
     }
 }
 
-impl Default for PgConnectionPoolConfig {
+impl Default for ConnectionPoolConfig {
     fn default() -> Self {
-        let db_pool_size = std::env::var("DB_POOL_SIZE")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(Self::DEFAULT_POOL_SIZE);
-        let conn_timeout_secs = std::env::var("DB_CONNECTION_TIMEOUT")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(Self::DEFAULT_CONNECTION_TIMEOUT);
-        let statement_timeout_secs = std::env::var("DB_STATEMENT_TIMEOUT")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(Self::DEFAULT_STATEMENT_TIMEOUT);
-
         Self {
-            pool_size: db_pool_size,
-            connection_timeout: Duration::from_secs(conn_timeout_secs),
-            statement_timeout: Duration::from_secs(statement_timeout_secs),
+            pool_size: Self::DEFAULT_POOL_SIZE,
+            connection_timeout: Duration::from_secs(Self::DEFAULT_CONNECTION_TIMEOUT),
+            statement_timeout: Duration::from_secs(Self::DEFAULT_STATEMENT_TIMEOUT),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PgConnectionConfig {
+pub struct ConnectionConfig {
     pub statement_timeout: Duration,
     pub read_only: bool,
 }
 
-impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
-    fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), diesel::r2d2::Error> {
-        use diesel::sql_query;
-
-        sql_query(format!(
-            "SET statement_timeout = {}",
-            self.statement_timeout.as_millis(),
+/// Checks that the local migration scripts is a prefix of the records in the database.
+/// This allows us run migration scripts against a DB at anytime, without worrying about
+/// existing readers fail over.
+/// We do however need to make sure that whenever we are deploying a new version of either reader or writer,
+/// we must first run migration scripts to ensure that there is not more local scripts than in the DB record.
+pub async fn check_db_migration_consistency(conn: &mut Connection<'_>) -> Result<(), IndexerError> {
+    info!("Starting compatibility check");
+    let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().map_err(|err| {
+        IndexerError::DbMigrationError(format!(
+            "Failed to fetch local migrations from schema: {err}"
         ))
-        .execute(conn)
-        .map_err(diesel::r2d2::Error::QueryError)?;
+    })?;
+    let local_migrations: Vec<_> = migrations
+        .into_iter()
+        .map(|m| m.name().version().as_owned())
+        .collect();
+    check_db_migration_consistency_impl(conn, local_migrations).await?;
+    info!("Compatibility check passed");
+    Ok(())
+}
 
-        if self.read_only {
-            sql_query("SET default_transaction_read_only = 't'")
-                .execute(conn)
-                .map_err(diesel::r2d2::Error::QueryError)?;
+async fn check_db_migration_consistency_impl(
+    conn: &mut Connection<'_>,
+    local_migrations: Vec<MigrationVersion<'_>>,
+) -> Result<(), IndexerError> {
+    use diesel_async::RunQueryDsl;
+
+    // Unfortunately we cannot call applied_migrations() directly on the connection,
+    // since it implicitly creates the __diesel_schema_migrations table if it doesn't exist,
+    // which is a write operation that we don't want to do in this function.
+    let applied_migrations: Vec<MigrationVersion> = __diesel_schema_migrations::table
+        .select(__diesel_schema_migrations::version)
+        .order(__diesel_schema_migrations::version.asc())
+        .load(conn)
+        .await?;
+
+    // We check that the local migrations is a prefix of the applied migrations.
+    if local_migrations.len() > applied_migrations.len() {
+        return Err(IndexerError::DbMigrationError(format!(
+            "The number of local migrations is greater than the number of applied migrations. Local migrations: {:?}, Applied migrations: {:?}",
+            local_migrations, applied_migrations
+        )));
+    }
+    for (local_migration, applied_migration) in local_migrations.iter().zip(&applied_migrations) {
+        if local_migration != applied_migration {
+            return Err(IndexerError::DbMigrationError(format!(
+                "The next applied migration `{:?}` diverges from the local migration `{:?}`",
+                applied_migration, local_migration
+            )));
         }
+    }
+    Ok(())
+}
 
+pub use setup_postgres::{reset_database, run_migrations};
+
+pub mod setup_postgres {
+    use crate::{database::Connection, db::MIGRATIONS};
+    use anyhow::anyhow;
+    use diesel_async::RunQueryDsl;
+    use tracing::info;
+
+    pub async fn reset_database(mut conn: Connection<'static>) -> Result<(), anyhow::Error> {
+        info!("Resetting PG database ...");
+
+        let drop_all_tables = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+            LOOP
+                EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_tables)
+            .execute(&mut conn)
+            .await?;
+        info!("Dropped all tables.");
+
+        let drop_all_procedures = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid)
+                      WHERE ns.nspname = 'public' AND prokind = 'p')
+            LOOP
+                EXECUTE 'DROP PROCEDURE IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_procedures)
+            .execute(&mut conn)
+            .await?;
+        info!("Dropped all procedures.");
+
+        let drop_all_functions = "
+        DO $$ DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN (SELECT proname, oidvectortypes(proargtypes) as argtypes
+                      FROM pg_proc INNER JOIN pg_namespace ON (pg_proc.pronamespace = pg_namespace.oid)
+                      WHERE pg_namespace.nspname = 'public' AND prokind = 'f')
+            LOOP
+                EXECUTE 'DROP FUNCTION IF EXISTS ' || quote_ident(r.proname) || '(' || r.argtypes || ') CASCADE';
+            END LOOP;
+        END $$;";
+        diesel::sql_query(drop_all_functions)
+            .execute(&mut conn)
+            .await?;
+        info!("Dropped all functions.");
+
+        run_migrations(conn).await?;
+        info!("Reset database complete.");
+        Ok(())
+    }
+
+    pub async fn run_migrations(conn: Connection<'static>) -> Result<(), anyhow::Error> {
+        conn.run_pending_migrations(MIGRATIONS)
+            .await
+            .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
         Ok(())
     }
 }
 
-pub fn new_pg_connection_pool(
-    db_url: &str,
-    pool_size: Option<u32>,
-) -> Result<PgConnectionPool, IndexerError> {
-    let pool_config = PgConnectionPoolConfig::default();
-    new_pg_connection_pool_with_config(db_url, pool_size, pool_config)
-}
+#[cfg(feature = "pg_integration")]
+#[cfg(test)]
+mod tests {
+    use crate::database::{Connection, ConnectionPool};
+    use crate::db::{
+        check_db_migration_consistency, check_db_migration_consistency_impl, reset_database,
+        ConnectionPoolConfig, MIGRATIONS,
+    };
+    use crate::tempdb::TempDb;
+    use diesel::migration::{Migration, MigrationSource};
+    use diesel::pg::Pg;
+    use diesel_migrations::MigrationHarness;
 
-pub fn new_pg_connection_pool_with_config(
-    db_url: &str,
-    pool_size: Option<u32>,
-    pool_config: PgConnectionPoolConfig,
-) -> Result<PgConnectionPool, IndexerError> {
-    let manager = ConnectionManager::<PgConnection>::new(db_url);
-
-    let pool_size = pool_size.unwrap_or(pool_config.pool_size);
-    diesel::r2d2::Pool::builder()
-        .max_size(pool_size)
-        .connection_timeout(pool_config.connection_timeout)
-        .connection_customizer(Box::new(pool_config.connection_config()))
-        .build(manager)
-        .map_err(|e| {
-            IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
-                e
-            ))
-        })
-}
-
-pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
-    pool.get().map_err(|e| {
-        IndexerError::PgPoolConnectionError(format!(
-            "Failed to get connection from PG connection pool with error: {:?}",
-            e
-        ))
-    })
-}
-
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-
-/// Resets the database by reverting all migrations and reapplying them.
-///
-/// If `drop_all` is set to `true`, the function will drop all tables in the database before
-/// resetting the migrations. This option is destructive and will result in the loss of all
-/// data in the tables. Use with caution, especially in production environments.
-pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
-    info!("Resetting database ...");
-    if drop_all {
-        drop_all_tables(conn)
-            .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
-    } else {
-        conn.revert_all_migrations(MIGRATIONS)
-            .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
-    }
-    conn.run_migrations(&MIGRATIONS.migrations().unwrap())
-        .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
-    info!("Reset database complete.");
-    Ok(())
-}
-
-fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Error> {
-    info!("Dropping all tables in the database");
-    let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
-        "
-        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-    ",
-    )
-    .load(conn)?;
-
-    for table_name in table_names {
-        let drop_table_query = format!("DROP TABLE IF EXISTS {} CASCADE", table_name);
-        diesel::sql_query(drop_table_query).execute(conn)?;
-    }
-
-    // Recreate the __diesel_schema_migrations table
-    diesel::sql_query(
-        "
-        CREATE TABLE __diesel_schema_migrations (
-            version VARCHAR(50) PRIMARY KEY,
-            run_on TIMESTAMP NOT NULL DEFAULT NOW()
+    // Check that the migration records in the database created from the local schema
+    // pass the consistency check.
+    #[tokio::test]
+    async fn db_migration_consistency_smoke_test() {
+        let database = TempDb::new().unwrap();
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
         )
-    ",
-    )
-    .execute(conn)?;
-    info!("Dropped all tables in the database");
-    Ok(())
+        .await
+        .unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+        check_db_migration_consistency(&mut pool.get().await.unwrap())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn db_migration_consistency_non_prefix_test() {
+        let database = TempDb::new().unwrap();
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+        let mut connection = pool.get().await.unwrap();
+
+        let mut sync_connection_wrapper =
+            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<Connection>::from(
+                pool.dedicated_connection().await.unwrap(),
+            );
+
+        tokio::task::spawn_blocking(move || {
+            sync_connection_wrapper
+                .revert_migration(MIGRATIONS.migrations().unwrap().last().unwrap())
+                .unwrap();
+        })
+        .await
+        .unwrap();
+        // Local migrations is one record more than the applied migrations.
+        // This will fail the consistency check since it's not a prefix.
+        assert!(check_db_migration_consistency(&mut connection)
+            .await
+            .is_err());
+
+        pool.dedicated_connection()
+            .await
+            .unwrap()
+            .run_pending_migrations(MIGRATIONS)
+            .await
+            .unwrap();
+        // After running pending migrations they should be consistent.
+        check_db_migration_consistency(&mut connection)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn db_migration_consistency_prefix_test() {
+        let database = TempDb::new().unwrap();
+        let pool = ConnectionPool::new(
+            database.database().url().to_owned(),
+            ConnectionPoolConfig {
+                pool_size: 2,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        reset_database(pool.dedicated_connection().await.unwrap())
+            .await
+            .unwrap();
+
+        let migrations: Vec<Box<dyn Migration<Pg>>> = MIGRATIONS.migrations().unwrap();
+        let mut local_migrations: Vec<_> = migrations.iter().map(|m| m.name().version()).collect();
+        local_migrations.pop();
+        // Local migrations is one record less than the applied migrations.
+        // This should pass the consistency check since it's still a prefix.
+        check_db_migration_consistency_impl(&mut pool.get().await.unwrap(), local_migrations)
+            .await
+            .unwrap();
+    }
 }

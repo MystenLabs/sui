@@ -242,7 +242,7 @@ async fn check_response(
 async fn convert(
     mfs: Vec<MetricFamily>,
 ) -> Result<impl Iterator<Item = WriteRequest>, (StatusCode, &'static str)> {
-    let result = match tokio::task::spawn_blocking(|| {
+    let result = tokio::task::spawn_blocking(|| {
         let timer = CONSUMER_OPERATION_DURATION
             .with_label_values(&["convert_to_remote_write_task"])
             .start_timer();
@@ -250,8 +250,9 @@ async fn convert(
         timer.observe_duration();
         result.into_iter()
     })
-    .await
-    {
+    .await;
+
+    let result = match result {
         Ok(v) => v,
         Err(err) => {
             error!("unable to convert to remote_write; {err}");

@@ -2,20 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::{DEFAULT_REQUEST_TIMEOUT_MS, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
 use std::{collections::BTreeMap, time::Duration};
-use sui_indexer::db::PgConnectionPoolConfig;
+use sui_indexer::db::ConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
     governance::StakedSui as NativeStakedSui,
-    sui_system_state::sui_system_state_summary::{
-        SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
-    },
+    sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary,
 };
 
 pub(crate) struct PgManager {
@@ -28,60 +24,41 @@ impl PgManager {
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
-        Self::reader_with_config(
-            db_url,
-            DEFAULT_SERVER_DB_POOL_SIZE,
-            DEFAULT_REQUEST_TIMEOUT_MS,
-        )
-    }
-
-    pub(crate) fn reader_with_config(
+    pub(crate) async fn reader_with_config(
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
     ) -> Result<IndexerReader, Error> {
-        let mut config = PgConnectionPoolConfig::default();
+        let mut config = ConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
         IndexerReader::new_with_config(db_url, config)
+            .await
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 }
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    /// Retrieve the validator APYs
-    pub(crate) async fn fetch_validator_apys(
-        &self,
-        address: &NativeSuiAddress,
-    ) -> Result<Option<f64>, Error> {
-        let governance_api = GovernanceReadApi::new(self.inner.clone());
-
-        governance_api
-            .get_validator_apy(address)
-            .await
-            .map_err(|e| Error::Internal(format!("{e}")))
-    }
-
     /// If no epoch was requested or if the epoch requested is in progress,
     /// returns the latest sui system state.
     pub(crate) async fn fetch_sui_system_state(
         &self,
         epoch_id: Option<u64>,
     ) -> Result<NativeSuiSystemStateSummary, Error> {
-        let latest_sui_system_state = self
-            .inner
-            .spawn_blocking(move |this| this.get_latest_sui_system_state())
-            .await?;
+        let latest_sui_system_state = self.inner.get_latest_sui_system_state().await?;
 
-        if epoch_id.is_some_and(|id| id == latest_sui_system_state.epoch) {
-            Ok(latest_sui_system_state)
+        if let Some(epoch_id) = epoch_id {
+            if epoch_id == latest_sui_system_state.epoch {
+                Ok(latest_sui_system_state)
+            } else {
+                Ok(self
+                    .inner
+                    .get_epoch_sui_system_state(Some(epoch_id))
+                    .await?)
+            }
         } else {
-            Ok(self
-                .inner
-                .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
-                .await?)
+            Ok(latest_sui_system_state)
         }
     }
 
@@ -118,27 +95,17 @@ impl PgManager {
 /// `SuiValidatorSummary` was queried for. Each `Validator` will inherit this checkpoint, so that
 /// when viewing the `Validator`'s state, it will be as if it was read at the same checkpoint.
 pub(crate) fn convert_to_validators(
-    validators: Vec<SuiValidatorSummary>,
-    system_state: Option<NativeSuiSystemStateSummary>,
+    system_state_at_requested_epoch: NativeSuiSystemStateSummary,
     checkpoint_viewed_at: u64,
+    requested_for_epoch: u64,
 ) -> Vec<Validator> {
-    let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
-        at_risk_validators,
-        validator_report_records,
-        ..
-    }) = system_state
-    {
-        (
-            BTreeMap::from_iter(at_risk_validators),
-            BTreeMap::from_iter(validator_report_records),
-        )
-    } else {
-        Default::default()
-    };
+    let at_risk = BTreeMap::from_iter(system_state_at_requested_epoch.at_risk_validators);
+    let reports = BTreeMap::from_iter(system_state_at_requested_epoch.validator_report_records);
 
-    validators
+    system_state_at_requested_epoch
+        .active_validators
         .into_iter()
-        .map(|validator_summary| {
+        .map(move |validator_summary| {
             let at_risk = at_risk.get(&validator_summary.sui_address).copied();
             let report_records = reports.get(&validator_summary.sui_address).map(|addrs| {
                 addrs
@@ -146,7 +113,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
-                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                        checkpoint_viewed_at,
                     })
                     .collect()
             });
@@ -156,6 +123,7 @@ pub(crate) fn convert_to_validators(
                 at_risk,
                 report_records,
                 checkpoint_viewed_at,
+                requested_for_epoch,
             }
         })
         .collect()

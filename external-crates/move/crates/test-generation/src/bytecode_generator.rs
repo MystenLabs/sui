@@ -11,14 +11,11 @@ use crate::{
     control_flow_graph::CFG,
     substitute, summaries,
 };
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-        FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
-        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-    },
+use move_binary_format::file_format::{
+    Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+    FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+    FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
+    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
 };
 use move_core_types::u256::U256;
 use rand::{rngs::StdRng, Rng};
@@ -160,7 +157,7 @@ impl FunctionGenerationContext {
 
     pub fn incr_instruction_count(&mut self) -> Option<()> {
         self.bytecode_len += 1;
-        if self.bytecode_len >= (u16::max_value() - 1) as u64 {
+        if self.bytecode_len >= (u16::MAX - 1) as u64 {
             return None;
         }
         Some(())
@@ -360,29 +357,29 @@ impl<'a> BytecodeGenerator<'a> {
                 }
                 BytecodeType::U8(instruction) => {
                     // Generate a random u8 constant to load
-                    Some(instruction(self.rng.gen_range(0..u8::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u8::MAX)))
                 }
                 BytecodeType::U16(instruction) => {
                     // Generate a random u16 constant to load
-                    Some(instruction(self.rng.gen_range(0..u16::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u16::MAX)))
                 }
                 BytecodeType::U32(instruction) => {
                     // Generate a random u32 constant to load
-                    Some(instruction(self.rng.gen_range(0..u32::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u32::MAX)))
                 }
                 BytecodeType::U64(instruction) => {
                     // Generate a random u64 constant to load
-                    Some(instruction(self.rng.gen_range(0..u64::max_value())))
+                    Some(instruction(self.rng.gen_range(0..u64::MAX)))
                 }
                 BytecodeType::U128(instruction) => {
                     // Generate a random u128 constant to load
-                    Some(instruction(Box::new(self.rng.gen_range(0..u128::max_value()))))
+                    Some(instruction(Box::new(self.rng.gen_range(0..u128::MAX))))
                 }
                 BytecodeType::U256(instruction) => {
                     // Generate a random u256 constant to load
-                    Some(instruction(
-                        Box::new(self.rng.gen_range(U256::zero()..U256::max_value())),
-                    ))
+                    Some(instruction(Box::new(
+                        self.rng.gen_range(U256::zero()..U256::max_value()),
+                    )))
                 }
                 BytecodeType::ConstantPoolIndex(instruction) => {
                     // Select a random address from the module's address pool
@@ -443,7 +440,7 @@ impl<'a> BytecodeGenerator<'a> {
                     || unsatisfied_preconditions == 0
                 {
                     // The size of matches cannot be greater than the number of bytecode instructions
-                    debug_assert!(matches.len() < usize::max_value());
+                    debug_assert!(matches.len() < usize::MAX);
                     matches.push((*stack_effect, instruction));
                 }
             }
@@ -573,7 +570,7 @@ impl<'a> BytecodeGenerator<'a> {
         exact: bool,
     ) -> Option<AbstractState> {
         // Bytecode will never be generated this large
-        debug_assert!(bytecode.len() < usize::max_value());
+        debug_assert!(bytecode.len() < usize::MAX);
         debug!("**********************");
         debug!("State1: {}", state);
         debug!("Next instr: {:?}", instruction);
@@ -870,7 +867,7 @@ impl<'a> BytecodeGenerator<'a> {
             SignatureToken::U32 => vec![Bytecode::LdU32(0)],
             SignatureToken::U256 => vec![Bytecode::LdU256(Box::new(U256::zero()))],
             SignatureToken::Bool => vec![Bytecode::LdFalse],
-            SignatureToken::Struct(handle_idx) => {
+            SignatureToken::Datatype(handle_idx) => {
                 let struct_def_idx = module
                     .module
                     .struct_defs()
@@ -898,8 +895,8 @@ impl<'a> BytecodeGenerator<'a> {
                 )));
                 bytecodes
             }
-            SignatureToken::StructInstantiation(struct_inst) => {
-                let (handle_idx, instantiation) = &**struct_inst;
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (handle_idx, instantiation) = &**inst;
                 let struct_def_idx = module
                     .module
                     .struct_defs()

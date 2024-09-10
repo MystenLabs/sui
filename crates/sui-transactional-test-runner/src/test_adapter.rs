@@ -26,12 +26,12 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
+use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
@@ -40,9 +40,6 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -52,7 +49,6 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
@@ -63,17 +59,18 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -93,9 +90,10 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tempfile::NamedTempFile;
+use tempfile::{tempdir, NamedTempFile};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -164,6 +162,7 @@ struct TxnSummary {
     deleted: Vec<ObjectID>,
     unwrapped_then_deleted: Vec<ObjectID>,
     wrapped: Vec<ObjectID>,
+    unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
 }
@@ -175,6 +174,34 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
+
+    fn render_command_input(
+        &self,
+        task: &TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >,
+    ) -> Option<String> {
+        match &task.command {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+                let data_str = std::fs::read_to_string(task.data.as_ref()?)
+                    .ok()?
+                    .trim()
+                    .to_string();
+                Some(format!("{}\n{}", task.task_text, data_str))
+            }
+            TaskCommand::Init(_, _)
+            | TaskCommand::PrintBytecode(_)
+            | TaskCommand::Publish(_, _)
+            | TaskCommand::Run(_, _)
+            | TaskCommand::Subcommand(..) => None,
+        }
+    }
 
     fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
@@ -198,7 +225,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 Self::ExtraInitArgs,
             )>,
         >,
-        path: &Path,
+        _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -215,9 +242,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
+            snapshot_config,
             flavor,
+            epochs_to_keep,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -230,9 +257,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
+                    snapshot_config,
                     flavor,
+                    epochs_to_keep,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -246,7 +273,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     ProtocolConfig::get_for_max_version_UNSAFE()
                 };
                 if let Some(enable) = shared_object_deletion {
-                    protocol_config.set_shared_object_deletion(enable);
+                    protocol_config.set_shared_object_deletion_for_testing(enable);
                 }
                 if let Some(mx_tx_gas_override) = max_gas {
                     if simulator {
@@ -269,9 +296,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
-                    object_snapshot_min_checkpoint_lag,
-                    object_snapshot_max_checkpoint_lag,
+                    snapshot_config,
                     flavor,
+                    epochs_to_keep,
                 )
             }
             None => {
@@ -284,7 +311,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     false,
                     None,
                     None,
-                    None,
+                    SnapshotLagConfig::default(),
                     None,
                     None,
                 )
@@ -309,9 +336,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
-                object_snapshot_min_checkpoint_lag,
-                object_snapshot_max_checkpoint_lag,
-                path.to_path_buf(),
+                snapshot_config,
+                epochs_to_keep,
             )
             .await
         } else {
@@ -332,7 +358,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
-                Some(Edition::E2024_ALPHA),
+                Some(Edition::DEVELOPMENT),
                 flavor.or(Some(Flavor::Sui)),
             ),
             package_upgrade_mapping: BTreeMap::new(),
@@ -389,7 +415,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes).unwrap();
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)
+                    .unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -509,15 +537,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             command_lines_stop,
             stop_line,
             data,
+            task_text,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident, $version:expr) => {{
                 let id = match self.fake_to_real_object_id($fake_id) {
                     None => bail!(
-                        "task {}, lines {}-{}. Unbound fake id {}",
+                        "task {}, lines {}-{}\n{}\n. Unbound fake id {}",
                         number,
                         start_line,
                         command_lines_stop,
+                        task_text,
                         $fake_id
                     ),
                     Some(res) => res,
@@ -532,34 +562,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             }};
         }
         match command {
-            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
-                start_cp,
-                end_cp,
-            }) => {
-                let cluster = self.cluster.as_ref().unwrap();
-                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
-
-                if end_cp > highest_checkpoint {
-                    bail!(
-                        "end_cp {} is greater than highest checkpoint {}",
-                        end_cp,
-                        highest_checkpoint,
-                    );
-                }
-
-                cluster
-                    .force_objects_snapshot_catchup(start_cp, end_cp)
-                    .await;
-
-                Ok(Some(format!(
-                    "Objects snapshot updated to [{} to {})",
-                    start_cp, end_cp
-                )))
-            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
                 show_service_version,
+                wait_for_checkpoint_pruned,
                 cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
@@ -573,6 +580,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                 cluster
                     .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
                     .await;
+
+                if let Some(wait_for_checkpoint_pruned) = wait_for_checkpoint_pruned {
+                    cluster
+                        .wait_for_checkpoint_pruned(
+                            wait_for_checkpoint_pruned,
+                            Duration::from_secs(60),
+                        )
+                        .await;
+                }
 
                 let interpolated =
                     self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
@@ -648,10 +664,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
+                                .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct
@@ -705,11 +722,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
                     0,
                     0,
                     timestamp_ms,
                     ConsensusCommitDigest::default(),
+                    Vec::new(),
                 );
                 let summary = self.execute_txn(transaction.into()).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);
@@ -749,7 +767,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
-                                        m.module.serialize(&mut buf).unwrap();
+                                        m.module
+                                            .serialize_with_version(m.module.version, &mut buf)
+                                            .unwrap();
                                         buf
                                     })
                                     .collect();
@@ -941,7 +961,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .iter()
                     .map(|m| {
                         let mut buf = vec![];
-                        m.module.serialize(&mut buf).unwrap();
+                        m.module
+                            .serialize_with_version(m.module.version, &mut buf)
+                            .unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -1255,7 +1277,8 @@ impl<'a> SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes)?;
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -1438,6 +1461,12 @@ impl<'a> SuiTestAdapter {
             self.enumerate_fake(id);
         }
 
+        let mut unchanged_shared_ids = effects
+            .unchanged_shared_objects()
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).
 
@@ -1448,6 +1477,7 @@ impl<'a> SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => {
@@ -1464,6 +1494,7 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    unchanged_shared: unchanged_shared_ids,
                 })
             }
             ExecutionStatus::Failure { error, command } => {
@@ -1544,6 +1575,8 @@ impl<'a> SuiTestAdapter {
                     deleted: deleted_ids,
                     unwrapped_then_deleted: unwrapped_then_deleted_ids,
                     wrapped: wrapped_ids,
+                    // TODO: Properly propagate unchanged shared objects in dev_inspect.
+                    unchanged_shared: vec![],
                 })
             }
             SuiExecutionStatus::Failure { error } => Err(anyhow::anyhow!(self.stabilize_str(
@@ -1609,6 +1642,7 @@ impl<'a> SuiTestAdapter {
             deleted,
             unwrapped_then_deleted,
             wrapped,
+            unchanged_shared,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -1656,6 +1690,17 @@ impl<'a> SuiTestAdapter {
                 out.push('\n')
             }
             write!(out, "wrapped: {}", self.list_objs(wrapped, summarize)).unwrap();
+        }
+        if !unchanged_shared.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "unchanged_shared: {}",
+                self.list_objs(unchanged_shared, summarize)
+            )
+            .unwrap();
         }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
@@ -1841,6 +1886,13 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "bridge".to_string(),
+        NumericalAddress::new(
+            BRIDGE_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
@@ -1873,14 +1925,26 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         flavor: Flavor::Sui,
         ..Default::default()
     };
+    let bridge_sources = {
+        let mut buf = sui_files.to_path_buf();
+        buf.extend(["packages", "bridge", "sources"]);
+        buf.to_string_lossy().to_string()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
-            paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
+            paths: vec![
+                sui_system_sources,
+                sui_sources,
+                sui_deps,
+                deepbook_sources,
+                bridge_sources,
+            ],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,
         Flags::empty(),
+        None,
     )
     .unwrap();
     match fully_compiled_res {
@@ -2009,9 +2073,8 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
-    object_snapshot_min_checkpoint_lag: Option<usize>,
-    object_snapshot_max_checkpoint_lag: Option<usize>,
-    test_file_path: PathBuf,
+    snapshot_config: SnapshotLagConfig,
+    epochs_to_keep: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2067,41 +2130,24 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-        rng,
-        DEFAULT_CHAIN_START_TIMESTAMP,
-        protocol_config.version,
-        acc_cfgs,
-        key_copy.map(|q| vec![q]),
-        reference_gas_price,
-        None,
-    );
+    let (mut sim, read_replica) =
+        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            DEFAULT_CHAIN_START_TIMESTAMP,
+            protocol_config.version,
+            acc_cfgs,
+            key_copy.map(|q| vec![q]),
+            reference_gas_price,
+            None,
+        );
+    let data_ingestion_path = tempdir().unwrap().into_path();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
 
-    // Hash the file path to create custom unique DB name
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    test_file_path.hash(&mut hasher);
-    let hash = hasher.finish();
-    let db_name = format!("sui_graphql_test_{}", hash);
-
-    // Use the hash as a seed to generate a random port number
-    let base_port = hash as u16 % 8192;
-
-    let graphql_port = 20000 + base_port;
-    let graphql_prom_port = graphql_port + 1;
-    let internal_data_port = graphql_prom_port + 1;
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg_with_db_name(
-            db_name,
-            graphql_port,
-            graphql_prom_port,
-        ),
-        internal_data_port,
         Arc::new(read_replica),
-        Some(SnapshotLagConfig::new(
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
-            Some(1),
-        )),
+        Some(snapshot_config),
+        epochs_to_keep,
+        data_ingestion_path,
     )
     .await;
 
@@ -2225,6 +2271,10 @@ impl ObjectStore for SuiTestAdapter {
 }
 
 impl ReadStore for SuiTestAdapter {
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        self.executor.get_latest_epoch_id()
+    }
+
     fn get_committee(
         &self,
         epoch: sui_types::committee::EpochId,

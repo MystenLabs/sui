@@ -188,11 +188,11 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
     let gas = objects.data.first().unwrap().object().unwrap();
 
-    let compiled_package = BuildConfig::new_for_testing()
-        .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?;
+    let compiled_package =
+        BuildConfig::new_for_testing().build(Path::new("../../examples/move/basics"))?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
@@ -450,10 +450,10 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     // Publish test coin package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "data", "dummy_modules_publish"]);
-    let compiled_package = BuildConfig::new_for_testing().build(path)?;
+    let compiled_package = BuildConfig::new_for_testing().build(&path)?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
@@ -534,10 +534,10 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     // Publish test coin package
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "data", "dummy_modules_publish"]);
-    let compiled_package = BuildConfig::default().build(path)?;
+    let compiled_package = BuildConfig::default().build(&path)?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-    let dependencies = compiled_package.get_dependency_original_package_ids();
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let transaction_bytes: TransactionBlockBytes = http_client
         .publish(

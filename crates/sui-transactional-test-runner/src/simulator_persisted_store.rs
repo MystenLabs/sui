@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
@@ -12,7 +13,7 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::ReadStore;
+use sui_types::storage::{ReadStore, RestStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
@@ -34,12 +35,12 @@ use sui_types::{
 use tempfile::tempdir;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
+use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
     metrics::SamplingInterval,
     rocks::{DBMap, MetricConf},
 };
-use typed_store_derive::DBMapUtils;
 
 use super::SimulatorStore;
 
@@ -312,16 +313,12 @@ impl SimulatorStore for PersistedStore {
     fn insert_committee(&mut self, committee: Committee) {
         let epoch = committee.epoch as usize;
 
-        let mut committees = if let Some(c) = self
+        let mut committees = self
             .read_write
             .epoch_to_committee
             .get(&())
             .expect("Fatal: DB read failed")
-        {
-            c
-        } else {
-            vec![]
-        };
+            .unwrap_or_default();
 
         if committees.get(epoch).is_some() {
             return;
@@ -396,16 +393,12 @@ impl SimulatorStore for PersistedStore {
                 .live_objects
                 .insert(&object_id, &version)
                 .expect("Fatal: DB write failed");
-            let mut q = if let Some(x) = self
+            let mut q = self
                 .read_write
                 .objects
                 .get(&object_id)
                 .expect("Fatal: DB read failed")
-            {
-                x
-            } else {
-                BTreeMap::new()
-            };
+                .unwrap_or_default();
             q.insert(version, object);
             self.read_write
                 .objects
@@ -701,6 +694,66 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> sui_types::storage::error::Result<
         Option<sui_types::messages_checkpoint::FullCheckpointContents>,
     > {
+        todo!()
+    }
+}
+
+impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
+    fn get_chain_identifier(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
+        Ok((*self
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .unwrap()
+            .digest())
+        .into())
+    }
+
+    fn account_owned_objects_info_iter(
+        &self,
+        _owner: SuiAddress,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
+    > {
+        todo!()
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> sui_types::storage::error::Result<
+        Box<
+            dyn Iterator<
+                    Item = (
+                        sui_types::storage::DynamicFieldKey,
+                        sui_types::storage::DynamicFieldIndexInfo,
+                    ),
+                > + '_,
+        >,
+    > {
+        todo!()
+    }
+
+    fn get_coin_info(
+        &self,
+        _coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
         todo!()
     }
 }

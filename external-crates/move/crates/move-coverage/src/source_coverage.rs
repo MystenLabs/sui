@@ -8,7 +8,6 @@ use crate::coverage_map::CoverageMap;
 use codespan::{Files, Span};
 use colored::*;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{CodeOffset, FunctionDefinitionIndex},
     CompiledModule,
 };

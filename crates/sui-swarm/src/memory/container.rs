@@ -43,8 +43,11 @@ impl Container {
     pub async fn spawn(config: NodeConfig, runtime: RuntimeType) -> Self {
         let (startup_sender, startup_receiver) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
+        let name = AuthorityPublicKeyBytes::from(config.protocol_key_pair().public())
+            .concise()
+            .to_string();
 
-        let thread = thread::spawn(move || {
+        let thread = thread::Builder::new().name(name).spawn(move || {
             let span = if get_global_telemetry_config()
                 .map(|c| c.enable_otlp_tracing)
                 .unwrap_or(false)
@@ -66,7 +69,7 @@ impl Container {
                 RuntimeType::MultiThreaded => {
                     thread_local! {
                         static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
-                            std::cell::RefCell::new(None);
+                            const { std::cell::RefCell::new(None) };
                     }
                     let mut builder = tokio::runtime::Builder::new_multi_thread();
                     let span = span.clone();
@@ -103,7 +106,7 @@ impl Container {
 
                 trace!("cancellation received; shutting down thread");
             });
-        });
+        }).unwrap();
 
         let node = startup_receiver.await.unwrap();
 

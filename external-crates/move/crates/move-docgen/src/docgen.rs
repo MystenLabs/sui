@@ -13,8 +13,8 @@ use move_model::{
     code_writer::{CodeWriter, CodeWriterLabel},
     emit, emitln,
     model::{
-        AbilitySet, FunId, FunctionEnv, GlobalEnv, Loc, ModuleEnv, ModuleId, NamedConstantEnv,
-        Parameter, QualifiedId, StructEnv, TypeParameter,
+        AbilitySet, EnumEnv, FunId, FunctionEnv, GlobalEnv, Loc, ModuleEnv, ModuleId,
+        NamedConstantEnv, Parameter, QualifiedId, StructEnv, TypeParameter,
     },
     symbol::Symbol,
     ty::TypeDisplayContext,
@@ -584,6 +584,15 @@ impl<'env> Docgen<'env> {
             }
         }
 
+        if !module_env.get_enums().count() > 0 {
+            for s in module_env
+                .get_enums()
+                .sorted_by(|a, b| Ord::cmp(&a.get_loc(), &b.get_loc()))
+            {
+                self.gen_enum(&s);
+            }
+        }
+
         if module_env.get_named_constant_count() > 0 {
             // Introduce a Constant section
             self.gen_named_constants();
@@ -896,6 +905,28 @@ impl<'env> Docgen<'env> {
         self.decrement_section_nest();
     }
 
+    /// Generates documentation for an enum.
+    fn gen_enum(&self, enum_env: &EnumEnv<'_>) {
+        let name = enum_env.get_name();
+        self.section_header(
+            &format!("Enum `{}`", self.name_string(enum_env.get_name())),
+            &self.label_for_module_item(&enum_env.module_env, name),
+        );
+        self.increment_section_nest();
+        self.doc_text(enum_env.get_doc());
+        self.code_block(&self.enum_header_display(enum_env));
+
+        if self.options.include_impl || (self.options.include_specs && self.options.specs_inlined) {
+            // Include field documentation if either impls or specs are present and inlined,
+            // because they are used by both.
+            self.begin_collapsed("Variants");
+            self.gen_enum_variants(enum_env);
+            self.end_collapsed();
+        }
+
+        self.decrement_section_nest();
+    }
+
     /// Returns "Struct `N`" or "Resource `N`".
     fn struct_title(&self, struct_env: &StructEnv<'_>) -> String {
         // NOTE(mengxu): although we no longer declare structs with the `resource` keyword, it
@@ -956,6 +987,59 @@ impl<'env> Docgen<'env> {
                 ),
                 field.get_doc(),
             );
+        }
+        self.end_definitions();
+    }
+
+    /// Generates code signature for an enum.
+    fn enum_header_display(&self, enum_env: &EnumEnv<'_>) -> String {
+        let name = self.name_string(enum_env.get_name());
+        let type_params = self.type_parameter_list_display(&enum_env.get_named_type_parameters());
+        let ability_tokens = self.ability_tokens(enum_env.get_abilities());
+        if ability_tokens.is_empty() {
+            format!("public enum {}{}", name, type_params)
+        } else {
+            format!(
+                "public enum {}{} has {}",
+                name,
+                type_params,
+                ability_tokens.join(", ")
+            )
+        }
+    }
+
+    fn gen_enum_variants(&self, enum_env: &EnumEnv<'_>) {
+        let tctx = {
+            let type_param_names = Some(
+                enum_env
+                    .get_named_type_parameters()
+                    .iter()
+                    .map(|TypeParameter(name, _)| *name)
+                    .collect_vec(),
+            );
+            TypeDisplayContext::WithEnv {
+                env: self.env,
+                type_param_names,
+            }
+        };
+        self.begin_definitions();
+        for variant_env in enum_env.get_variants() {
+            self.definition_text(
+                &format!("Variant `{}`", self.name_string(variant_env.get_name()),),
+                variant_env.get_doc(),
+            );
+            for field in variant_env.get_fields() {
+                self.begin_definitions();
+                self.definition_text(
+                    &format!(
+                        "`{}: {}`",
+                        self.name_string(field.get_name()),
+                        field.get_type().display(&tctx)
+                    ),
+                    field.get_doc(),
+                );
+                self.end_definitions();
+            }
         }
         self.end_definitions();
     }

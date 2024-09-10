@@ -11,10 +11,10 @@ module sui::clock_tests {
         let mut clock = clock::create_for_testing(&mut ctx);
 
         clock.increment_for_testing(42);
-        assert!(clock.timestamp_ms() == 42, 1);
+        assert!(clock.timestamp_ms() == 42);
 
         clock.set_for_testing(50);
-        assert!(clock.timestamp_ms() == 50, 1);
+        assert!(clock.timestamp_ms() == 50);
 
         clock.destroy_for_testing();
     }

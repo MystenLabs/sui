@@ -90,6 +90,7 @@ async fn get(
         range: 0..meta.size,
         payload: GetResultPayload::Stream(stream),
         meta,
+        attributes: object_store::Attributes::new(),
     })
 }
 
@@ -118,6 +119,7 @@ fn header_meta(location: &Path, headers: &HeaderMap) -> Result<ObjectMeta> {
         last_modified,
         size: content_length,
         e_tag: Some(e_tag.to_string()),
+        version: None,
     })
 }
 

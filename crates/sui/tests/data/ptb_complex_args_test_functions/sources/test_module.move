@@ -8,7 +8,7 @@ module test_functions::test_module {
     use std::ascii::String as AS;
     use std::string::String as US;
 
-    struct Shared has key, store {
+    public struct Shared has key, store {
         id: UID,
     }
 

@@ -6,7 +6,7 @@ use sui_types::display::DisplayVersionUpdatedEvent;
 
 use crate::schema::display;
 
-#[derive(Queryable, Insertable, Debug, Clone)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone)]
 #[diesel(table_name = display)]
 pub struct StoredDisplay {
     pub object_type: String,

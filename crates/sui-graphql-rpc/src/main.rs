@@ -9,30 +9,17 @@ use sui_graphql_rpc::commands::Command;
 use sui_graphql_rpc::config::{
     ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
 };
-use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-// WARNING!!!
-//
-// Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unnecessary builds.
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--abbrev=40", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
 static VERSION: Version = Version {
-    year: env!("CARGO_PKG_VERSION_MAJOR"),
-    month: env!("CARGO_PKG_VERSION_MINOR"),
+    major: env!("CARGO_PKG_VERSION_MAJOR"),
+    minor: env!("CARGO_PKG_VERSION_MINOR"),
     patch: env!("CARGO_PKG_VERSION_PATCH"),
     sha: GIT_REVISION,
     full: const_str::concat!(
@@ -50,42 +37,23 @@ static VERSION: Version = Version {
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
-        Command::GenerateDocsExamples => {
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            // we are looking to put examples content in
-            // sui/docs/content/references/sui-graphql/examples.mdx
-            let filename = "docs/content/references/sui-graphql/examples.mdx";
-            buf.pop();
-            buf.pop();
-            buf.push(filename);
-            let content = sui_graphql_rpc::examples::generate_examples_for_docs()
-                .expect("Generating examples markdown file for docs failed");
-            std::fs::write(buf, content).expect("Writing examples markdown failed");
-            println!("Generated the docs example.mdx file and copied it to {filename}.");
-        }
-        Command::GenerateSchema { file } => {
-            let out = export_schema();
-            if let Some(file) = file {
-                println!("Write schema to file: {:?}", file);
-                std::fs::write(file, &out).unwrap();
+        Command::GenerateConfig { output } => {
+            let config = ServiceConfig::default();
+            let toml = toml::to_string_pretty(&config).expect("Failed to serialize configuration");
+
+            if let Some(path) = output {
+                fs::write(&path, toml).unwrap_or_else(|e| {
+                    panic!("Failed to write configuration to {}: {e}", path.display())
+                });
             } else {
-                println!("{}", &out);
+                println!("{}", toml);
             }
         }
-        Command::GenerateExamples { file } => {
-            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
-                .expect("Generating examples markdown failed");
-            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            buf.push("docs");
-            buf.push("examples.md");
-            let file = file.unwrap_or(buf);
 
-            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
-            println!("Written examples to file: {:?}", file);
-        }
         Command::StartServer {
             ide_title,
             db_url,
+            db_pool_size,
             port,
             host,
             config,
@@ -93,7 +61,8 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
-            let connection = ConnectionConfig::new(port, host, db_url, None, prom_host, prom_port);
+            let connection =
+                ConnectionConfig::new(port, host, db_url, db_pool_size, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()

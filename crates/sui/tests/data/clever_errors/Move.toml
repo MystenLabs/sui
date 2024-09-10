@@ -1,0 +1,6 @@
+[package]
+name = "clever_errors"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+
+[addresses]
+clever_errors = "0x0"

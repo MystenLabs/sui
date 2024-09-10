@@ -11,7 +11,8 @@ use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
+    annotated_value::{MoveTypeLayout, MoveValue},
+    annotated_visitor as AV,
     effects::Op,
     language_storage::StructTag,
     runtime_value as R,
@@ -21,7 +22,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
-use object_store::ChildObjectStore;
+use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -36,9 +37,10 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use tracing::error;
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
@@ -60,6 +62,8 @@ pub(crate) struct TestInventories {
     pub(crate) taken_immutable_values: BTreeMap<Type, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
+    // allocated receiving tickets
+    pub(crate) allocated_tickets: BTreeMap<ObjectID, (DynamicallyLoadedObjectMetadata, Value)>,
 }
 
 pub struct LoadedRuntimeObject {
@@ -198,7 +202,7 @@ impl<'a> ObjectRuntime<'a> {
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction. In that case, we also skip adding it
         // to new_ids.
-        let was_present = self.state.deleted_ids.remove(&id);
+        let was_present = self.state.deleted_ids.shift_remove(&id);
         if !was_present {
             // mark the id as new
             self.state.new_ids.insert(id);
@@ -226,7 +230,7 @@ impl<'a> ObjectRuntime<'a> {
                 ));
         };
 
-        let was_new = self.state.new_ids.remove(&id);
+        let was_new = self.state.new_ids.shift_remove(&id);
         if !was_new {
             self.state.deleted_ids.insert(id);
         }
@@ -253,6 +257,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             SUI_RANDOMNESS_STATE_OBJECT_ID,
             SUI_DENY_LIST_OBJECT_ID,
+            SUI_BRIDGE_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
@@ -397,6 +402,51 @@ impl<'a> ObjectRuntime<'a> {
             .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
+    pub(crate) fn config_setting_unsequenced_read(
+        &mut self,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
+        field_setting_ty: &Type,
+        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_object_type: &MoveObjectType,
+    ) -> Option<Value> {
+        match self.child_object_store.config_setting_unsequenced_read(
+            config_id,
+            name_df_id,
+            field_setting_ty,
+            field_setting_layout,
+            field_setting_object_type,
+        ) {
+            Err(e) => {
+                error!(
+                    "Failed to read config setting.
+                    config_id: {config_id},
+                    name_df_id: {name_df_id},
+                    field_setting_object_type:  {field_setting_object_type:?},
+                    error: {e}"
+                );
+                None
+            }
+            Ok(ObjectResult::MismatchedType) | Ok(ObjectResult::Loaded(None)) => None,
+            Ok(ObjectResult::Loaded(Some(value))) => Some(value),
+        }
+    }
+
+    pub(super) fn config_setting_cache_update(
+        &mut self,
+        config_id: ObjectID,
+        name_df_id: ObjectID,
+        setting_value_object_type: MoveObjectType,
+        value: Option<Value>,
+    ) {
+        self.child_object_store.config_setting_cache_update(
+            config_id,
+            name_df_id,
+            setting_value_object_type,
+            value,
+        )
+    }
+
     // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)
@@ -408,9 +458,7 @@ impl<'a> ObjectRuntime<'a> {
         self.state.finish(loaded_child_objects, child_effects)
     }
 
-    pub(crate) fn all_active_child_objects(
-        &self,
-    ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
+    pub(crate) fn all_active_child_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
         self.child_object_store.all_active_objects()
     }
 
@@ -589,6 +637,10 @@ impl ObjectRuntimeState {
         })
     }
 
+    pub fn events(&self) -> &[(Type, StructTag, Value)] {
+        &self.events
+    }
+
     pub fn total_events_size(&self) -> u64 {
         self.total_events_size
     }
@@ -628,7 +680,6 @@ fn check_circular_ownership(
     Ok(())
 }
 
-// TODO use a custom DeserializerSeed and improve this performance
 /// WARNING! This function assumes that the bcs bytes have already been validated,
 /// and it will give an invariant violation otherwise.
 /// In short, we are relying on the invariant that the bytes are valid for objects
@@ -639,40 +690,35 @@ pub fn get_all_uids(
     bcs_bytes: &[u8],
 ) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
     let mut ids = BTreeSet::new();
-    let v = MoveValue::simple_deserialize(bcs_bytes, fully_annotated_layout)
-        .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
-    get_all_uids_in_value(&mut ids, &v)?;
-    Ok(ids)
-}
+    struct UIDTraversalV2<'i>(&'i mut BTreeSet<ObjectID>);
+    struct UIDCollectorV2<'i>(&'i mut BTreeSet<ObjectID>);
 
-fn get_all_uids_in_value(
-    acc: &mut BTreeSet<ObjectID>,
-    v: &MoveValue,
-) -> Result<(), /* invariant violation */ String> {
-    let mut stack = vec![v];
-    while let Some(cur) = stack.pop() {
-        let s = match cur {
-            MoveValue::Struct(s) => s,
-            MoveValue::Vector(vec) => {
-                stack.extend(vec);
-                continue;
+    impl<'i> AV::Traversal for UIDTraversalV2<'i> {
+        type Error = AV::Error;
+
+        fn traverse_struct(&mut self, driver: &mut AV::StructDriver) -> Result<(), Self::Error> {
+            if driver.struct_layout().type_ == UID::type_() {
+                while driver.next_field(&mut UIDCollectorV2(self.0))?.is_some() {}
+            } else {
+                while driver.next_field(self)?.is_some() {}
             }
-            _ => continue,
-        };
-
-        let MoveStruct { type_, fields } = s;
-        if type_ == &UID::type_() {
-            let inner = match &fields[0].1 {
-                MoveValue::Struct(MoveStruct { fields, .. }) => fields,
-                v => return Err(format!("Unexpected UID layout. {v:?}")),
-            };
-            match &inner[0].1 {
-                MoveValue::Address(id) => acc.insert((*id).into()),
-                v => return Err(format!("Unexpected ID layout. {v:?}")),
-            };
-        } else {
-            stack.extend(fields.iter().map(|(_, v)| v));
+            Ok(())
         }
     }
-    Ok(())
+
+    impl<'i> AV::Traversal for UIDCollectorV2<'i> {
+        type Error = AV::Error;
+        fn traverse_address(&mut self, value: AccountAddress) -> Result<(), Self::Error> {
+            self.0.insert(value.into());
+            Ok(())
+        }
+    }
+
+    MoveValue::visit_deserialize(
+        bcs_bytes,
+        fully_annotated_layout,
+        &mut UIDTraversalV2(&mut ids),
+    )
+    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    Ok(ids)
 }

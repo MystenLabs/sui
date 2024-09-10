@@ -14,14 +14,20 @@ mod checked {
 
     use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
+    use crate::execution_mode::ExecutionMode;
+    use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
+    use crate::execution_value::{
+        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
+        UsageKind,
+    };
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::LinkageView;
+    use crate::type_resolver::TypeTagResolver;
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
     };
-    use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
@@ -36,7 +42,6 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -49,23 +54,14 @@ mod checked {
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
-        execution::{
-            ExecutionResultsV2, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
-            RawValueType, ResultValue, UsageKind,
-        },
+        execution::ExecutionResultsV2,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
         transaction::{Argument, CallArg, ObjectArg},
-        type_resolver::TypeTagResolver,
     };
-    use sui_types::{
-        error::command_argument_error,
-        execution::{CommandKind, ObjectContents, TryFromValue, Value},
-        execution_mode::ExecutionMode,
-        execution_status::CommandArgumentError,
-    };
+    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -548,6 +544,7 @@ mod checked {
             MovePackage::new_initial(
                 modules,
                 self.protocol_config.max_move_package_size(),
+                self.protocol_config.move_binary_format_version(),
                 dependencies,
             )
         }
@@ -1083,7 +1080,7 @@ mod checked {
         }
 
         if type_params.is_empty() {
-            Ok(Type::Struct(idx))
+            Ok(Type::Datatype(idx))
         } else {
             let loaded_type_params = type_params
                 .iter()
@@ -1098,7 +1095,7 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(Box::new((
+            Ok(Type::DatatypeInstantiation(Box::new((
                 idx,
                 loaded_type_params,
             ))))
@@ -1499,21 +1496,8 @@ mod checked {
             }
         }
 
-        //
-        // TODO: later we will clean up the interface with the runtime and the functions below
-        //       will likely be exposed via extensions
-        //
-
-        fn load_resource(
-            &mut self,
-            _addr: AccountAddress,
-            _ty: &Type,
-        ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
-            panic!("load_resource should never be called for LinkageView")
-        }
-
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during executon and publishing this is
+            // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
         }

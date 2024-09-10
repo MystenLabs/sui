@@ -76,7 +76,7 @@
   --sui-white: 255 255 255;
   --sui-card-dark: 13 20 37;
   --sui-card-darker: 0 23 49;
-  --sui-blue-primary: #4da2ff;
+  --sui-blue-primary: 77 162 255;
   --sui-gray: #ABBDCC;
   --sui-white: #f7f7f8;
   --sui-button-hover: #1a88ff;
@@ -113,26 +113,34 @@
 [data-theme='dark'] img.balance-coin-token {
   filter: invert(1);
 }
- 
+
 /** navbar overrides */
 .navbar-sidebar .menu__link {
   color: var(--ifm-navbar-sidebar-link-color);
 }
 
-.navbar-sidebar .menu__link--active {
-  background-color: var(--sui-blue-primary);
-  color: var(--sui-gray-100);
+.navbar-sidebar .menu__link--active, .navbar-sidebar .menu__link--active:hover, [data-theme='dark'] .navbar-sidebar .menu__link--active, [data-theme='dark'] .navbar-sidebar .menu__link--active:hover {
+  @apply !bg-sui-blue-primary text-sui-gray-100
 }
-[data-theme='dark'] .navbar-sidebar .menu__link--active {
-  background-color: var(--sui-blue-primary);
-  color: var(--sui-gray-100);
-}
+
 html[data-theme=dark] {
   background-color: var(--ifm-navbar-background-color);
 }
+
+/* Targeting the docusaurus theme switch */
+button[title^="Switch between dark and light mode"] {
+  @apply !text-white hover:bg-sui-blue-primary
+}
+
+html[data-theme=light] .navbar-sidebar button.clean-btn.menu__caret {
+  @apply bg-sui-gray-65
+}
+
 /** setup global style overrides */
-body { 
+
+body {
   font-family: var(--primaryFont);
+  tab-size: 2;
 }
 
 h1 {
@@ -141,8 +149,8 @@ h1 {
   font-family: var(--primaryFont);
   font-weight: 500;
   letter-spacing: -0.04em;
-  
 }
+
 .h1 {
   letter-spacing: -2.88px;
   margin-top: 0;
@@ -160,6 +168,7 @@ h2 {
   line-height: 2.125rem;
   letter-spacing: -0.04em;
 }
+
 .h2 {
   letter-spacing: -1.62px;
   margin-top: 0;
@@ -203,27 +212,34 @@ h4 {
   line-height: 1.75rem;
   letter-spacing: -2%;
 }
+
 @media screen and (max-width: 767px) {
   h1 , .h1{
     font-size: 3.5rem;
   }
+
   h2, .h2 {
     font-size: 2rem;
   }
+
   h3, .h3 {
     font-size: 1.5rem;
   }
+
   h4, .h4 {
     font-size: 1.2rem;
   }
 }
+
 @media screen and (max-width: 599px) {
   h2, .h2 {
     font-size: 1.7rem;
   }
+
   h3, .h3 {
     font-size: 1.2rem;
   }
+
   h4, .h4 {
     font-size: 1rem;
   }
@@ -231,21 +247,27 @@ h4 {
 
 
 /** Navbar overrides **/
+
 .navbar {
   border-bottom: 1px solid var(--sui-line);
 }
+
 .navbar__title {
   visibility: hidden;
 }
+
 .navbar__toggle path {
   stroke: var(--sui-white);
 }
+
 .navbar__items {
   justify-content: space-between;
 }
+
 .navbar__items .navbar__brand {
   width: 27%;
 }
+
 .navbar__items .navbar__item.navbar__link {
   font-family: var(--headerFont);
   font-size: .9375rem;
@@ -253,17 +275,28 @@ h4 {
   line-height: 1.125rem;
   letter-spacing: -0.02em;
 }
+
+.darkNavbarColorModeToggle {
+  @apply text-sui-white;
+}
+
 @media screen and (min-width: 767px) {
   .navbar__items.navbar__items--right {
     min-width: 325px;
   }
 }
 
+.theme-toggle-wrapper button:hover {
+  @apply !bg-sui-blue-primary
+}
+
 /** navbar search field **/
+
 .DocSearch-Button-Container {
   width: 100%;
   justify-content: space-between;
 }
+
 .DocSearch-Button {
   width: 12.5rem;
   height: 2.625rem !important;
@@ -277,18 +310,22 @@ h4 {
   background: linear-gradient(0deg, rgba(247, 247, 248, 0.1), rgba(247, 247, 248, 0.1)),
   linear-gradient(0deg, rgba(247, 247, 248, 0.05), rgba(247, 247, 248, 0.05)) !important;
 }
+
 @media screen and (max-width: 599px) {
   .DocSearch-Button {
     width: initial;
   }
 }
+
 .DocSearch-Search-Icon {
   order: 2;
   margin-left: auto;
 }
+
 .DocSearch-Search-Icon path {
   stroke: var(--sui-white);
 }
+
 .DocSearch-Button-Keys {
   display: none !important;
 }
@@ -297,32 +334,27 @@ h4 {
   row-gap: 1rem;
   column-gap: 1rem;
 }
+
 .markdown h1:first-child {
   margin-top: 1rem;
 }
 
+/*Targeting the search container so that the "start here" button displays alongside the search bar*/
+[class^="navbarSearchContainer"] {
+  @apply min-[997px]:flex min-[997px]:gap-4
+}
 
 /** Globals **/
 .button-cta {
-  background-color: var(--sui-blue-primary);
-  color: var(--sui-white);
-  letter-spacing: -.3px;
-  cursor: pointer;
-  border-style: none;
-  border-radius: 2.25rem;
-  padding: .75rem 1.125rem;
-  font-family: var(--primaryFont);
-  font-size: 1rem;
-  font-weight: 500;
-  line-height: 1.125rem;
-  transition: background-color .3s;
-  display: inline-block;
+  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out
 }
+
 .button-cta:hover {
   background-color: var(--sui-button-hover);
   color: var(--sui-white);
   text-decoration: none;
 }
+
 @media (max-width: 1050px) {
   .navbar .button-cta {
     display: none;
@@ -330,9 +362,11 @@ h4 {
 }
 
 /** colors **/
+
 .text-white {
   color: var(--sui-white);
 }
+
 .text-gray {
   color: var(--sui-gray);
 }

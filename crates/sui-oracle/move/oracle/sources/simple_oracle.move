@@ -2,23 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module oracle::simple_oracle {
-    use std::option::{Self, Option};
     use std::string;
     use std::string::String;
 
     use oracle::data::{Self, Data};
     use sui::clock::{Self, Clock};
     use sui::dynamic_field as df;
-    use sui::object::{Self, UID};
     use sui::table;
     use sui::table::Table;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     const ESenderNotOracle: u64 = 0;
     const ETickerNotExists: u64 = 1;
 
-    struct SimpleOracle has store, key {
+    public struct SimpleOracle has store, key {
         id: UID,
         /// The address of the oracle.
         address: address,
@@ -30,7 +26,7 @@ module oracle::simple_oracle {
         url: String,
     }
 
-    struct StoredData<T: store> has copy, store, drop {
+    public struct StoredData<T: store> has copy, store, drop {
         value: T,
         sequence_number: u64,
         timestamp: u64,

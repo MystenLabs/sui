@@ -210,10 +210,10 @@ module sui::display_tests {
     #[test]
     fun capy_init() {
         let mut test = test::begin(@0x2);
-        let pub = package::test_claim(CAPY {}, test::ctx(&mut test));
+        let pub = package::test_claim(CAPY {}, test.ctx());
 
         // create a new display object
-        let mut display = display::new<Capy>(&pub, test::ctx(&mut test));
+        let mut display = display::new<Capy>(&pub, test.ctx());
 
         display.add(b"name".to_string(), b"Capy {name}".to_string());
         display.add(b"link".to_string(), b"https://capy.art/capy/{id}".to_string());

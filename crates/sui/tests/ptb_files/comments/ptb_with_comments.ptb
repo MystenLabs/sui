@@ -1,7 +1,6 @@
 # Testing comments, including # "nested" comments
 # This ptb splits a coin into two
 # and then transfers the coin to another address
---gas-budget 100000
 # First split the coin
 --split-coins @0x005 [1000]
 # Then assign the result to variable result

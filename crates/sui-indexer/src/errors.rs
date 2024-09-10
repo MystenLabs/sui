@@ -88,6 +88,9 @@ pub enum IndexerError {
     #[error("Indexer generic error: `{0}`")]
     GenericError(String),
 
+    #[error("GCS error: `{0}`")]
+    GcsError(String),
+
     #[error("Indexer failed to resolve object to move struct with error: `{0}`")]
     ResolveMoveStructError(String),
 
@@ -129,6 +132,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     NameServiceError(#[from] NameServiceError),
+
+    #[error("Inconsistent migration records: {0}")]
+    DbMigrationError(String),
 }
 
 pub trait Context<T> {
@@ -150,5 +156,11 @@ impl From<IndexerError> for RpcError {
 impl From<tokio::task::JoinError> for IndexerError {
     fn from(value: tokio::task::JoinError) -> Self {
         IndexerError::UncategorizedError(anyhow::Error::from(value))
+    }
+}
+
+impl From<diesel_async::pooled_connection::bb8::RunError> for IndexerError {
+    fn from(value: diesel_async::pooled_connection::bb8::RunError) -> Self {
+        Self::PgPoolConnectionError(value.to_string())
     }
 }

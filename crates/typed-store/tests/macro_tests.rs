@@ -21,8 +21,8 @@ use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store_derive::DBMapUtils;
-use typed_store_derive::SallyDB;
+use typed_store::DBMapUtils;
+use typed_store::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -166,13 +166,13 @@ async fn macro_test() {
     // Test pagination
     let m = tbls_secondary.dump("table1", 2, 0).unwrap();
     assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get(&"\"1\"".to_string()).unwrap());
-    assert_eq!(format!("\"2\""), *m.get(&"\"2\"".to_string()).unwrap());
+    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
+    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
 
     let m = tbls_secondary.dump("table1", 3, 2).unwrap();
     assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
-    assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
+    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]
@@ -194,6 +194,37 @@ async fn rename_test() {
         let renamed_db =
             RenameTables2::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
         assert_eq!(renamed_db.renamed_table.get(&key), Ok(Some(value)));
+    }
+}
+
+#[derive(DBMapUtils)]
+struct DeprecatedTables {
+    table1: DBMap<String, String>,
+    #[deprecated]
+    table2: DBMap<i32, String>,
+}
+
+#[tokio::test]
+async fn deprecate_test() {
+    let dbdir = temp_dir();
+    let key = "key".to_string();
+    let value = "value".to_string();
+    {
+        let original_db =
+            Tables::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
+        original_db.table1.insert(&key, &value).unwrap();
+        original_db.table2.insert(&0, &value).unwrap();
+    }
+    for _ in 0..2 {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let db = DeprecatedTables::open_tables_read_write_with_deprecation_option(
+            dbdir.clone(),
+            MetricConf::default(),
+            None,
+            None,
+            true,
+        );
+        assert_eq!(db.table1.get(&key), Ok(Some(value.clone())));
     }
 }
 
@@ -275,13 +306,13 @@ async fn test_sallydb() {
     // Test pagination
     let m = example_db_secondary.dump("col1", 2, 0).unwrap();
     assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get(&"\"1\"".to_string()).unwrap());
-    assert_eq!(format!("\"2\""), *m.get(&"\"2\"".to_string()).unwrap());
+    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
+    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
 
     let m = example_db_secondary.dump("col1", 3, 2).unwrap();
     assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
-    assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
+    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]

@@ -39,14 +39,16 @@ where
     ) -> Self {
         let channel_label = format!("streamer_{}", metrics_label);
         let gauge = if let Some(metrics) = mysten_metrics::get_metrics() {
-            metrics.channels.with_label_values(&[&channel_label])
+            metrics
+                .channel_inflight
+                .with_label_values(&[&channel_label])
         } else {
             // We call init_metrics very early when starting a node. Therefore when this happens,
             // it's probably in a test.
             mysten_metrics::init_metrics(&Registry::default());
             mysten_metrics::get_metrics()
                 .unwrap()
-                .channels
+                .channel_inflight
                 .with_label_values(&[&channel_label])
         };
 

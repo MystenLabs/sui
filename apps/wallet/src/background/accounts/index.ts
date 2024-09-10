@@ -7,7 +7,7 @@ import {
 	type MethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { fromB64 } from '@mysten/sui/utils';
 import Dexie from 'dexie';
 
 import { getAccountSourceByID } from '../account-sources';

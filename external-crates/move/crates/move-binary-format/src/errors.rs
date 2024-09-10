@@ -19,7 +19,6 @@ pub type PartialVMResult<T> = ::std::result::Result<T, PartialVMError>;
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Location {
     Undefined,
-    Script,
     Module(ModuleId),
 }
 
@@ -317,7 +316,6 @@ impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Location::Undefined => write!(f, "UNDEFINED"),
-            Location::Script => write!(f, "Script"),
             Location::Module(id) => write!(f, "Module {:?}", id),
         }
     }

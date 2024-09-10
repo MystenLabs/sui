@@ -4,7 +4,9 @@ title: Publish a Package
 
 Before you can call functions in a Move package (beyond an emulated Sui execution scenario), that package must be available on the Sui network. When you publish a package, you are actually creating an immutable Sui object on the network that anyone can access.
 
-To publish your package to the Sui network, use the `publish` CLI command in the root of your package. Use the `--gas-budget` flag to set a value for the maximum amount of gas the transaction can cost. If the cost of the transaction is more than the budget you set, the transaction fails and your package doesn't publish.  
+To publish your package to the Sui network, use the `publish` CLI command in the root of your package. Use the `--gas-budget` flag to set a value for the maximum amount of gas the transaction can cost. If the cost of the transaction is more than the budget you set, the transaction fails and your package doesn't publish. 
+
+{@include: ../../../snippets/info-gas-budget.mdx}
 
 ```shell
 $ sui client publish --gas-budget 5000000
@@ -80,7 +82,7 @@ flowchart TB
 
 ### Interact with the package
 
-Now that the package is on chain, you can call its functions to interact with the package. You can use the `sui move call` command to make individual calls to package functions, or you can construct more advanced blocks of transactions using the `sui client ptb` command. The `ptb` part of the command stands for [programmable transaction blocks](../../../concepts/transactions/prog-txn-blocks.mdx). In basic terms, PTBs allow you to group commands together in a single transaction for more efficient and cost-effective network activity.
+Now that the package is on chain, you can call its functions to interact with the package. You can use the `sui client call` command to make individual calls to package functions, or you can construct more advanced blocks of transactions using the `sui client ptb` command. The `ptb` part of the command stands for [programmable transaction blocks](../../../concepts/transactions/prog-txn-blocks.mdx). In basic terms, PTBs allow you to group commands together in a single transaction for more efficient and cost-effective network activity.
 
 ```mermaid
 flowchart TB

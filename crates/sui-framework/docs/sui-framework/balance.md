@@ -25,7 +25,9 @@ custom coins with <code><a href="../sui-framework/balance.md#0x2_balance_Supply"
 -  [Function `destroy_supply`](#0x2_balance_destroy_supply)
 
 
-<pre><code><b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
+<b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -49,7 +51,7 @@ Wrapped into a <code>TreasuryCap</code> in the <code>Coin</code> module.
 
 <dl>
 <dt>
-<code>value: u64</code>
+<code>value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -78,7 +80,7 @@ Can be used to store coins which don't need the key ability.
 
 <dl>
 <dt>
-<code>value: u64</code>
+<code>value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
 
@@ -98,7 +100,7 @@ Can be used to store coins which don't need the key ability.
 Sender is not @0x0 the system address.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
 </code></pre>
 
 
@@ -108,7 +110,7 @@ Sender is not @0x0 the system address.
 For when trying to destroy a non-zero balance.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENonZero">ENonZero</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENonZero">ENonZero</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -118,7 +120,17 @@ For when trying to destroy a non-zero balance.
 For when trying to withdraw more than there is.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENotEnough">ENotEnough</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENotEnough">ENotEnough</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
+</code></pre>
+
+
+
+<a name="0x2_balance_ENotSUI"></a>
+
+System operation performed for a coin other than SUI
+
+
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 4;
 </code></pre>
 
 
@@ -128,7 +140,16 @@ For when trying to withdraw more than there is.
 For when an overflow is happening on Supply operations.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_EOverflow">EOverflow</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_EOverflow">EOverflow</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 1;
+</code></pre>
+
+
+
+<a name="0x2_balance_SUI_TYPE_NAME"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 50, 58, 58, 115, 117, 105, 58, 58, 83, 85, 73];
 </code></pre>
 
 
@@ -140,7 +161,7 @@ For when an overflow is happening on Supply operations.
 Get the amount stored in a <code><a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_value">value</a>&lt;T&gt;(self: &<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_value">value</a>&lt;T&gt;(self: &<a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -149,7 +170,7 @@ Get the amount stored in a <code><a href="../sui-framework/balance.md#0x2_balanc
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_value">value</a>&lt;T&gt;(self: &<a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_value">value</a>&lt;T&gt;(self: &<a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     self.value
 }
 </code></pre>
@@ -165,7 +186,7 @@ Get the amount stored in a <code><a href="../sui-framework/balance.md#0x2_balanc
 Get the <code><a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a></code> value.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -174,7 +195,7 @@ Get the <code><a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_supply_value">supply_value</a>&lt;T&gt;(supply: &<a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     supply.value
 }
 </code></pre>
@@ -215,7 +236,7 @@ Create a new supply for type T.
 Increase supply by <code>value</code> and create a new <code><a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;</code> with this value.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, value: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -224,7 +245,7 @@ Increase supply by <code>value</code> and create a new <code><a href="../sui-fra
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;, value: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
     <b>assert</b>!(<a href="../sui-framework/balance.md#0x2_balance_value">value</a> &lt; (18446744073709551615u64 - self.value), <a href="../sui-framework/balance.md#0x2_balance_EOverflow">EOverflow</a>);
     self.value = self.value + value;
     <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value }
@@ -242,7 +263,7 @@ Increase supply by <code>value</code> and create a new <code><a href="../sui-fra
 Burn a Balance<T> and decrease Supply<T>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -251,7 +272,7 @@ Burn a Balance<T> and decrease Supply<T>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_decrease_supply">decrease_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value } = <a href="../sui-framework/balance.md#0x2_balance">balance</a>;
     <b>assert</b>!(self.value &gt;= value, <a href="../sui-framework/balance.md#0x2_balance_EOverflow">EOverflow</a>);
     self.value = self.value - value;
@@ -295,7 +316,7 @@ Create a zero <code><a href="../sui-framework/balance.md#0x2_balance_Balance">Ba
 Join two balances together.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -304,7 +325,7 @@ Join two balances together.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value } = <a href="../sui-framework/balance.md#0x2_balance">balance</a>;
     self.value = self.value + value;
     self.value
@@ -322,7 +343,7 @@ Join two balances together.
 Split a <code><a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a></code> and take a sub balance from it.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, value: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -331,7 +352,7 @@ Split a <code><a href="../sui-framework/balance.md#0x2_balance_Balance">Balance<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, value: u64): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
     <b>assert</b>!(self.value &gt;= value, <a href="../sui-framework/balance.md#0x2_balance_ENotEnough">ENotEnough</a>);
     self.value = self.value - value;
     <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value }
@@ -403,7 +424,7 @@ It should only be called by the epoch change system txn to create staking reward
 and nowhere else.
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -412,8 +433,12 @@ and nowhere else.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64, ctx: &TxContext): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+<pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &TxContext): <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(
+        std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
+        <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>,
+    );
     <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value }
 }
 </code></pre>
@@ -442,6 +467,10 @@ and nowhere else.
 
 <pre><code><b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(
+        std::type_name::get&lt;T&gt;().into_string().into_bytes() == <a href="../sui-framework/balance.md#0x2_balance_SUI_TYPE_NAME">SUI_TYPE_NAME</a>,
+        <a href="../sui-framework/balance.md#0x2_balance_ENotSUI">ENotSUI</a>,
+    );
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Balance">Balance</a> { value: _ } = self;
 }
 </code></pre>
@@ -457,7 +486,7 @@ and nowhere else.
 Destroy a <code><a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a></code> preventing any further minting and burning.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -466,7 +495,7 @@ Destroy a <code><a href="../sui-framework/balance.md#0x2_balance_Supply">Supply<
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a> { value } = self;
     value
 }

@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use diesel::prelude::*;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::MoveStruct;
 use move_core_types::identifier::Identifier;
 
-use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
+use sui_json_rpc_types::{type_and_fields_from_move_event_data, SuiEvent};
+use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::object::MoveObject;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
 use crate::schema::events;
 use crate::types::IndexedEvent;
 
-#[derive(Queryable, QueryableByName, Insertable, Debug, Clone)]
+#[derive(Queryable, QueryableByName, Selectable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
 pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -28,16 +28,13 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub event_sequence_number: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
-
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    pub checkpoint_sequence_number: i64,
 
     #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub package: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::Text)]
@@ -49,9 +46,11 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub bcs: Vec<u8>,
 }
+
+pub type SendersType = Vec<Option<Vec<u8>>>;
 
 impl From<IndexedEvent> for StoredEvent {
     fn from(event: IndexedEvent) -> Self {
@@ -59,7 +58,6 @@ impl From<IndexedEvent> for StoredEvent {
             tx_sequence_number: event.tx_sequence_number as i64,
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
-            checkpoint_sequence_number: event.checkpoint_sequence_number as i64,
             senders: event
                 .senders
                 .into_iter()
@@ -75,9 +73,9 @@ impl From<IndexedEvent> for StoredEvent {
 }
 
 impl StoredEvent {
-    pub fn try_into_sui_event(
+    pub async fn try_into_sui_event(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<SuiEvent, IndexerError> {
         let package_id = ObjectID::from_bytes(self.package.clone()).map_err(|_e| {
             IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -86,13 +84,15 @@ impl StoredEvent {
             ))
         })?;
         // Note: SuiEvent only has one sender today, so we always use the first one.
-        let sender = self.senders.first().ok_or_else(|| {
-            IndexerError::PersistentStorageDataCorruptionError(
-                "Event senders should contain at least one address".to_string(),
-            )
-        })?;
+        let sender = {
+            self.senders.first().ok_or_else(|| {
+                IndexerError::PersistentStorageDataCorruptionError(
+                    "Event senders should contain at least one address".to_string(),
+                )
+            })?
+        };
         let sender = match sender {
-            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
+            Some(ref s) => SuiAddress::from_bytes(s).map_err(|_e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to parse event sender address: {:?}",
                     sender
@@ -106,11 +106,18 @@ impl StoredEvent {
         };
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
-
-        let layout = MoveObject::get_layout_from_struct_tag(type_.clone(), module_cache)?;
-        let move_object = MoveStruct::simple_deserialize(&self.bcs, &layout)
+        let move_type_layout = package_resolver
+            .type_layout(type_.clone().into())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to convert to sui event with Error: {e}",
+                ))
+            })?;
+        let move_object = BoundedVisitor::deserialize_value(&self.bcs, &move_type_layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
-        let parsed_json = SuiMoveStruct::from(move_object).to_json_value();
+        let (_, parsed_json) = type_and_fields_from_move_event_data(move_object)
+            .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let tx_digest =
             TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
                 IndexerError::SerdeError(format!(

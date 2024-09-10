@@ -1,6 +1,7 @@
 [package]
 name = "dep_on_dep"
 version = "0.0.1"
+edition = "2024.beta"
 
 [dependencies]
 dep_on_upgrading_package = { local = "../dep_on_upgrading_package_upgradeable" }

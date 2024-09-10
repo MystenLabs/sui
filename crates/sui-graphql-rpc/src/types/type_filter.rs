@@ -2,23 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{
-    data::{DieselBackend, Query},
-    filter,
-};
 use async_graphql::*;
-use diesel::{
-    expression::{is_aggregate::No, ValidGrouping},
-    query_builder::QueryFragment,
-    sql_types::{Binary, Text},
-    AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
-    TextExpressionMethods,
-};
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};
 use sui_types::{
-    parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_type_tag, TypeTag,
+    parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_struct_tag,
+    parse_sui_type_tag, TypeTag,
 };
 
 /// A GraphQL scalar containing a filter on types that requires an exact match.
@@ -31,14 +22,14 @@ pub(crate) enum TypeFilter {
     /// Filter the type by the package or module it's from.
     ByModule(ModuleFilter),
 
-    /// If the type tag has type parameters, treat it as an exact filter on that instantiation,
+    /// If the struct tag has type parameters, treat it as an exact filter on that instantiation,
     /// otherwise treat it as either a filter on all generic instantiations of the type, or an exact
     /// match on the type with no type parameters. E.g.
     ///
     ///  0x2::coin::Coin
     ///
     /// would match both 0x2::coin::Coin and 0x2::coin::Coin<0x2::sui::SUI>.
-    ByType(TypeTag),
+    ByType(StructTag),
 }
 
 /// GraphQL scalar containing a filter on fully-qualified names.
@@ -69,75 +60,68 @@ pub(crate) enum Error {
 
 impl TypeFilter {
     /// Modify `query` to apply this filter to `field`, returning the new query.
-    pub(crate) fn apply<E, QS, ST, GB>(
+    pub(crate) fn apply_raw(
         &self,
-        query: Query<ST, QS, GB>,
-        field: E,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        E: ExpressionMethods + TextExpressionMethods,
-        E: Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        E: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        E: Clone + Send + 'static,
-        QS: QuerySource,
-    {
+        mut query: RawQuery,
+        type_field: &str,
+        package_field: &str,
+        module_field: &str,
+        name_field: &str,
+    ) -> RawQuery {
         match self {
             TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
-                query.filter(field.like(format!("{p}::%")))
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(p.into_vec())
+                );
+                query = filter!(query, statement);
             }
 
             TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
-                query.filter(field.like(format!("{p}::{m}::%")))
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(p.into_vec())
+                );
+                query = filter!(query, statement);
+                let m = m.to_string();
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
             }
 
             // A type filter without type parameters is interpreted as either an exact match, or a
             // match for all generic instantiations of the type.
-            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
-                let f1 = field.clone();
-                let f2 = field;
-                let exact = tag.to_canonical_string(/* with_prefix */ true);
-                let prefix = format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
-                query.filter(f1.eq(exact).or(f2.like(prefix)))
+            TypeFilter::ByType(tag) if tag.type_params.is_empty() => {
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(tag.address.to_vec())
+                );
+                query = filter!(query, statement);
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
+                let statement = name_field.to_string() + " = {}";
+                query = filter!(query, statement, n);
             }
 
             TypeFilter::ByType(tag) => {
-                let exact = tag.to_canonical_string(/* with_prefix */ true);
-                query.filter(field.eq(exact))
-            }
-        }
-    }
-
-    /// Modify `query` to apply this filter to `field`, returning the new query.
-    pub(crate) fn apply_raw(&self, mut query: RawQuery, field: &str) -> RawQuery {
-        match self {
-            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
-                let pattern = format!("{p}::%");
-                let statement = field.to_string() + " LIKE {}";
-                query = filter!(query, statement, pattern);
-            }
-
-            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
-                let pattern = format!("{p}::{m}::%");
-                let statement = field.to_string() + " LIKE {}";
-                query = filter!(query, statement, pattern);
-            }
-
-            // A type filter without type parameters is interpreted as either an exact match, or a
-            // match for all generic instantiations of the type.
-            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+                let m = tag.module.to_string();
+                let n = tag.name.to_string();
+                let statement = format!(
+                    "{} = '\\x{}'::bytea",
+                    package_field,
+                    hex::encode(tag.address.to_vec())
+                );
+                query = filter!(query, statement);
+                let statement = module_field.to_string() + " = {}";
+                query = filter!(query, statement, m);
+                let statement = name_field.to_string() + " = {}";
+                query = filter!(query, statement, n);
                 let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
-                let generic_pattern =
-                    format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
-
-                let statement = format!("({field} = {{}} OR {field} LIKE {{}})");
-
-                query = filter!(query, statement, exact_pattern, generic_pattern);
-            }
-
-            TypeFilter::ByType(tag) => {
-                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
-                let statement = field.to_string() + " = {}";
+                let statement = type_field.to_string() + " = {}";
                 query = filter!(query, statement, exact_pattern);
             }
         }
@@ -152,84 +136,47 @@ impl TypeFilter {
     pub(crate) fn intersect(self, other: Self) -> Option<Self> {
         use ModuleFilter as M;
         use TypeFilter as T;
-        use TypeTag as TT;
 
         match (&self, &other) {
             (T::ByModule(m), T::ByModule(n)) => m.clone().intersect(n.clone()).map(T::ByModule),
 
-            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if s.type_params.is_empty() => {
+            (T::ByType(s), T::ByType(t)) if s.type_params.is_empty() => {
                 ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
                     .then_some(other)
             }
 
-            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if t.type_params.is_empty() => {
+            (T::ByType(s), T::ByType(t)) if t.type_params.is_empty() => {
                 ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
                     .then_some(self)
             }
 
             // If both sides are type filters, then at this point, we know that if they are both
-            // struct tags, neither has empty type parameters and otherwise, at least one of them is
-            // a primitive type. In either case we can treat both filters as exact type queries
-            // which must be equal to each other to intersect.
+            // struct tags, neither has empty type parameters so we can treat both filters as exact
+            // type queries which must be equal to each other to intersect.
             (T::ByType(_), T::ByType(_)) => (self == other).then_some(self),
 
-            (T::ByType(TT::Struct(s)), T::ByModule(M::ByPackage(q))) => {
+            (T::ByType(s), T::ByModule(M::ByPackage(q))) => {
                 (SuiAddress::from(s.address) == *q).then_some(self)
             }
 
-            (T::ByType(TT::Struct(s)), T::ByModule(M::ByModule(q, n))) => {
+            (T::ByType(s), T::ByModule(M::ByModule(q, n))) => {
                 ((SuiAddress::from(s.address), s.module.as_str()) == (*q, n.as_str()))
                     .then_some(self)
             }
 
-            (T::ByModule(M::ByPackage(p)), T::ByType(TT::Struct(t))) => {
+            (T::ByModule(M::ByPackage(p)), T::ByType(t)) => {
                 (SuiAddress::from(t.address) == *p).then_some(other)
             }
 
-            (T::ByModule(M::ByModule(p, m)), T::ByType(TT::Struct(t))) => {
+            (T::ByModule(M::ByModule(p, m)), T::ByType(t)) => {
                 ((SuiAddress::from(t.address), t.module.as_str()) == (*p, m.as_str()))
                     .then_some(other)
             }
-
-            // Intersecting a module-level filter with a primitive type, which will never work.
-            (T::ByType(_), T::ByModule(_)) | (T::ByModule(_), T::ByType(_)) => None,
         }
     }
 }
 
 impl FqNameFilter {
-    /// Modify `query` to apply this filter, treating `package` as the column containing the package
-    /// address, `module` as the module containing the module name, and `name` as the column
-    /// containing the module member name.
-    pub(crate) fn apply<P, M, N, QS, ST, GB>(
-        &self,
-        query: Query<ST, QS, GB>,
-        package: P,
-        module: M,
-        name: N,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        N: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        P: Send + 'static,
-        M: Send + 'static,
-        N: Send + 'static,
-        QS: QuerySource,
-    {
-        match self {
-            FqNameFilter::ByModule(filter) => filter.apply(query, package, module),
-            FqNameFilter::ByFqName(p, m, n) => query
-                .filter(package.eq(p.into_vec()))
-                .filter(module.eq(m.clone()))
-                .filter(name.eq(n.clone())),
-        }
-    }
-
     /// Try to create a filter whose results are the intersection of the results of the input
     /// filters (`self` and `other`). This may not be possible if the resulting filter is
     /// inconsistent (e.g. a filter that requires the module member's package to be at two different
@@ -257,32 +204,6 @@ impl FqNameFilter {
 }
 
 impl ModuleFilter {
-    /// Modify `query` to apply this filter, treating `package` as the column containing the package
-    /// address and `module` as the module containing the module name.
-    pub(crate) fn apply<P, M, QS, ST, GB>(
-        &self,
-        query: Query<ST, QS, GB>,
-        package: P,
-        module: M,
-    ) -> Query<ST, QS, GB>
-    where
-        Query<ST, QS, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
-        P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
-        P: Send + 'static,
-        M: Send + 'static,
-        QS: QuerySource,
-    {
-        match self {
-            ModuleFilter::ByPackage(p) => query.filter(package.eq(p.into_vec())),
-            ModuleFilter::ByModule(p, m) => query
-                .filter(package.eq(p.into_vec()))
-                .filter(module.eq(m.clone())),
-        }
-    }
-
     /// Try to create a filter whose results are the intersection of the results of the input
     /// filters (`self` and `other`). This may not be possible if the resulting filter is
     /// inconsistent (e.g. a filter that requires the module's package to be at two different
@@ -320,7 +241,7 @@ impl FromStr for ExactTypeFilter {
 impl FromStr for TypeFilter {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Error> {
-        if let Ok(tag) = parse_sui_type_tag(s) {
+        if let Ok(tag) = parse_sui_struct_tag(s) {
             Ok(TypeFilter::ByType(tag))
         } else if let Ok(filter) = ModuleFilter::from_str(s) {
             Ok(TypeFilter::ByModule(filter))
@@ -400,15 +321,9 @@ impl fmt::Display for ExactTypeFilter {
     }
 }
 
-impl From<TypeTag> for TypeFilter {
-    fn from(tag: TypeTag) -> Self {
-        TypeFilter::ByType(tag)
-    }
-}
-
 impl From<StructTag> for TypeFilter {
     fn from(tag: StructTag) -> Self {
-        TypeFilter::ByType(tag.into())
+        TypeFilter::ByType(tag)
     }
 }
 
@@ -431,7 +346,7 @@ mod tests {
         .into_iter();
 
         let filters: Vec<_> = inputs
-            .map(|i| TypeFilter::from_str(i).unwrap().to_string())
+            .map(|i| ExactTypeFilter::from_str(i).unwrap().to_string())
             .collect();
 
         let expect = expect![[r#"
@@ -448,15 +363,10 @@ mod tests {
     #[test]
     fn test_valid_type_filters() {
         let inputs = [
-            "u8",
-            "address",
-            "bool",
             "0x2",
             "0x2::coin",
             "0x2::coin::Coin",
             "0x2::coin::Coin<0x2::sui::SUI>",
-            "vector<u256>",
-            "vector<0x3::staking_pool::StakedSui>",
         ]
         .into_iter();
 
@@ -465,15 +375,10 @@ mod tests {
             .collect();
 
         let expect = expect![[r#"
-            u8
-            address
-            bool
             0x0000000000000000000000000000000000000000000000000000000000000002::
             0x0000000000000000000000000000000000000000000000000000000000000002::coin::
             0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin
-            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
-            vector<u256>
-            vector<0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui>"#]];
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"#]];
         expect.assert_eq(&filters.join("\n"))
     }
 
@@ -575,25 +480,12 @@ mod tests {
 
     #[test]
     fn test_type_intersection() {
-        let address = TypeFilter::from_str("address").unwrap();
-        let vec_u8 = TypeFilter::from_str("vector<u8>").unwrap();
-
         let sui = TypeFilter::from_str("0x2").unwrap();
         let coin_mod = TypeFilter::from_str("0x2::coin").unwrap();
         let coin_typ = TypeFilter::from_str("0x2::coin::Coin").unwrap();
         let coin_sui = TypeFilter::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
         let coin_usd = TypeFilter::from_str("0x2::coin::Coin<0x3::usd::USD>").unwrap();
         let std_utf8 = TypeFilter::from_str("0x1::string::String").unwrap();
-
-        assert_eq!(
-            address.clone().intersect(address.clone()),
-            Some(address.clone())
-        );
-
-        assert_eq!(
-            vec_u8.clone().intersect(vec_u8.clone()),
-            Some(vec_u8.clone())
-        );
 
         assert_eq!(
             sui.clone().intersect(coin_mod.clone()),
@@ -610,8 +502,7 @@ mod tests {
             Some(coin_sui.clone())
         );
 
-        assert_eq!(sui.clone().intersect(vec_u8.clone()), None);
-        assert_eq!(coin_typ.clone().intersect(address.clone()), None);
+        assert_eq!(sui.clone().intersect(std_utf8.clone()), None);
         assert_eq!(coin_sui.clone().intersect(coin_usd.clone()), None);
         assert_eq!(coin_typ.clone().intersect(std_utf8.clone()), None);
         assert_eq!(coin_sui.clone().intersect(std_utf8.clone()), None);

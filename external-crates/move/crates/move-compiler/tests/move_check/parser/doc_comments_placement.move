@@ -3,7 +3,7 @@
 /// Documentation comments can have multiple blocks.
 /** They may use different limiters. */
 module 0x42::M {
-    /** There can be no doc comment on uses. */
+    /** There can be doc comments on uses. */
     use std::option::Option;
 
     /// This is f.

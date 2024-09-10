@@ -1,0 +1,9 @@
+[package]
+name = "Completion"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+Completion = "0xCAFE"

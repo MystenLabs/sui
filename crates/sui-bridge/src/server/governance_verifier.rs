@@ -30,6 +30,10 @@ impl GovernanceVerifier {
 
 #[async_trait::async_trait]
 impl ActionVerifier<BridgeAction> for GovernanceVerifier {
+    fn name(&self) -> &'static str {
+        "GovernanceVerifier"
+    }
+
     async fn verify(&self, key: BridgeAction) -> BridgeResult<BridgeAction> {
         // TODO: an optimization would be to check the current nonce on chain and err for older ones
         if !key.is_governace_action() {
@@ -51,21 +55,20 @@ mod tests {
     use super::*;
     use crate::{
         test_utils::get_test_sui_to_eth_bridge_action,
-        types::{
-            BridgeAction, BridgeChainId, EmergencyAction, EmergencyActionType, LimitUpdateAction,
-        },
+        types::{BridgeAction, EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
+    use sui_types::bridge::BridgeChainId;
 
     #[tokio::test]
     async fn test_governance_verifier() {
         let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Pause,
         });
         let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 1,
             new_usd_limit: 10000,
         });
@@ -81,8 +84,8 @@ mod tests {
         );
 
         let action_3 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 2,
             new_usd_limit: 10000,
         });
@@ -92,7 +95,7 @@ mod tests {
         );
 
         // Token transfer action is not allowed
-        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert!(matches!(
             GovernanceVerifier::new(vec![action_1, action_2, action_4.clone()]).unwrap_err(),
             BridgeError::ActionIsNotGovernanceAction(..)

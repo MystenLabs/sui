@@ -51,7 +51,7 @@ input parameter, unless it is passed by immutable reference.
 
 </dd>
 <dt>
-<code>timestamp_ms: u64</code>
+<code>timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a></code>
 </dt>
 <dd>
  The clock's timestamp, which is set automatically by a
@@ -74,7 +74,7 @@ input parameter, unless it is passed by immutable reference.
 Sender is not @0x0 the system address.
 
 
-<pre><code><b>const</b> <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 0;
 </code></pre>
 
 
@@ -87,7 +87,7 @@ The <code><a href="../sui-framework/clock.md#0x2_clock">clock</a></code>'s curre
 milliseconds since an arbitrary point in the past.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a>
 </code></pre>
 
 
@@ -96,7 +96,7 @@ milliseconds since an arbitrary point in the past.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a>): <a href="../move-stdlib/u64.md#0x1_u64">u64</a> {
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>.timestamp_ms
 }
 </code></pre>
@@ -145,7 +145,7 @@ called exactly once, during genesis.
 
 
 
-<pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -156,7 +156,7 @@ called exactly once, during genesis.
 
 <pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a>,
-    timestamp_ms: u64,
+    timestamp_ms: <a href="../move-stdlib/u64.md#0x1_u64">u64</a>,
     ctx: &TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.

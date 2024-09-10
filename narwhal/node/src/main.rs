@@ -303,7 +303,7 @@ async fn main() -> Result<(), eyre::Report> {
 
 /// Generate all the genesis files required for benchmarks.
 fn benchmark_genesis(
-    ips: &Vec<String>,
+    ips: &[String],
     working_directory: &PathBuf,
     num_workers: usize,
     base_port: usize,
@@ -554,7 +554,7 @@ async fn run(
 
     // Make the data store.
     let certificate_store_cache_metrics =
-        CertificateStoreCacheMetrics::new(&registry_service.default_registry());
+        Arc::new(CertificateStoreCacheMetrics::new(registry_service.clone()));
     let store = NodeStorage::reopen(store_path, Some(certificate_store_cache_metrics.clone()));
 
     let client = NetworkClient::new_from_keypair(&primary_network_keypair);

@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module std::bit_vector {
-    use std::vector;
-
     /// The provided index is out of bounds
     const EINDEX: u64 = 0x20000;
     /// An invalid length of bitvector was given

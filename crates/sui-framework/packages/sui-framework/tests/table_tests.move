@@ -15,23 +15,23 @@ module sui::table_tests {
         table.add(b"hello", 0);
         table.add(b"goodbye", 1);
         // check they exist
-        assert!(table.contains(b"hello"), 0);
-        assert!(table.contains(b"goodbye"), 0);
+        assert!(table.contains(b"hello"));
+        assert!(table.contains(b"goodbye"));
         // check the values
-        assert!(table[b"hello"] == 0, 0);
-        assert!(table[b"goodbye"] == 1, 0);
+        assert!(table[b"hello"] == 0);
+        assert!(table[b"goodbye"] == 1);
         // mutate them
         *&mut table[b"hello"] = table[b"hello"] * 2;
         *&mut table[b"goodbye"] = table[b"goodbye"] * 2;
         // check the new value
-        assert!(table[b"hello"] == 0, 0);
-        assert!(table[b"goodbye"] == 2, 0);
+        assert!(table[b"hello"] == 0);
+        assert!(table[b"goodbye"] == 2);
         // remove the value and check it
-        assert!(table.remove(b"hello") == 0, 0);
-        assert!(table.remove(b"goodbye") == 2, 0);
+        assert!(table.remove(b"hello") == 0);
+        assert!(table.remove(b"goodbye") == 2);
         // verify that they are not there
-        assert!(!table.contains(b"hello"), 0);
-        assert!(!table.contains(b"goodbye"), 0);
+        assert!(!table.contains(b"hello"));
+        assert!(!table.contains(b"goodbye"));
         scenario.end();
         table.destroy_empty();
     }
@@ -93,10 +93,10 @@ module sui::table_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut table = table::new<u64, u64>(scenario.ctx());
-        assert!(!table.contains(0), 0);
+        assert!(!table.contains(0));
         table.add(0, 0);
-        assert!(table.contains<u64, u64>(0), 0);
-        assert!(!table.contains<u64, u64>(1), 0);
+        assert!(table.contains<u64, u64>(0));
+        assert!(!table.contains<u64, u64>(1));
         scenario.end();
         table.drop();
     }
@@ -107,7 +107,7 @@ module sui::table_tests {
         let mut scenario = test_scenario::begin(sender);
         let mut table = table::new<u64, u64>(scenario.ctx());
         table.add(0, 0);
-        assert!(table.length() == 1, 0);
+        assert!(table.length() == 1);
         scenario.end();
         table.drop();
     }
@@ -117,14 +117,14 @@ module sui::table_tests {
         let sender = @0x0;
         let mut scenario = test_scenario::begin(sender);
         let mut table = table::new<u64, u64>(scenario.ctx());
-        assert!(table.is_empty(), 0);
-        assert!(table.length() == 0, 0);
+        assert!(table.is_empty());
+        assert!(table.length() == 0);
         table.add(0, 0);
-        assert!(!table.is_empty(), 0);
-        assert!(table.length() == 1, 0);
+        assert!(!table.is_empty());
+        assert!(table.length() == 1);
         table.add(1, 0);
-        assert!(!table.is_empty(), 0);
-        assert!(table.length() == 2, 0);
+        assert!(!table.is_empty());
+        assert!(table.length() == 2);
         scenario.end();
         table.drop();
     }

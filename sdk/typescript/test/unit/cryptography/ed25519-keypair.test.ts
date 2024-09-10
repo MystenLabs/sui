@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 import { decodeSuiPrivateKey } from '../../../src/cryptography/keypair';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
-import { TransactionBlock } from '../../../src/transactions';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import { Transaction } from '../../../src/transactions';
+import { verifyPersonalMessageSignature, verifyTransactionSignature } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';
 const PRIVATE_KEY_SIZE = 32;
@@ -59,8 +59,8 @@ describe('ed25519-keypair', () => {
 			expect(kp.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
 			// Exported keypair matches the Bech32 encoded secret key.
-			const exported = kp.export();
-			expect(exported.privateKey).toEqual(t[1]);
+			const exported = kp.getSecretKey();
+			expect(exported).toEqual(t[1]);
 		}
 	});
 
@@ -71,10 +71,10 @@ describe('ed25519-keypair', () => {
 		);
 	});
 
-	it('signature of data is valid', () => {
+	it('signature of data is valid', async () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
-		const signature = keypair.signData(signData);
+		const signature = await keypair.sign(signData);
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
@@ -84,11 +84,11 @@ describe('ed25519-keypair', () => {
 		expect(keypair.getPublicKey().verify(signData, signature));
 	});
 
-	it('incorrect coin type node for ed25519 derivation path', () => {
+	it('incorrect coin type node for ed25519 derivation path', async () => {
 		const keypair = Ed25519Keypair.deriveKeypair(TEST_CASES[0][0], `m/44'/784'/0'/0'/0'`);
 
 		const signData = new TextEncoder().encode('hello world');
-		const signature = keypair.signData(signData);
+		const signature = await keypair.sign(signData);
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
@@ -115,31 +115,36 @@ describe('ed25519-keypair', () => {
 		}).toThrow('Invalid mnemonic');
 	});
 
-	it('signs TransactionBlocks', async () => {
+	it('signs Transactions', async () => {
 		const keypair = new Ed25519Keypair();
-		const txb = new TransactionBlock();
-		txb.setSender(keypair.getPublicKey().toSuiAddress());
-		txb.setGasPrice(5);
-		txb.setGasBudget(100);
-		txb.setGasPayment([
+		const tx = new Transaction();
+		tx.setSender(keypair.getPublicKey().toSuiAddress());
+		tx.setGasPrice(5);
+		tx.setGasBudget(100);
+		tx.setGasPayment([
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
-				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+				digest: toB58(
+					new Uint8Array([
+						0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+						9, 1, 2,
+					]),
+				),
 			},
 		]);
 
-		const bytes = await txb.build();
+		const bytes = await tx.build();
 
-		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+		const serializedSignature = (await keypair.signTransaction(bytes)).signature;
 
-		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+		expect(!!(await verifyTransactionSignature(bytes, serializedSignature))).toEqual(true);
 	});
 
 	it('signs PersonalMessages', async () => {
@@ -154,6 +159,6 @@ describe('ed25519-keypair', () => {
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
-		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
+		expect(!!(await verifyPersonalMessageSignature(message, serializedSignature))).toEqual(true);
 	});
 });

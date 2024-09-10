@@ -124,29 +124,35 @@ where
     }
 }
 
-pub struct TemporaryPackageStore<'a, R> {
-    temp_store: &'a InnerTemporaryStore,
-    fallback: R,
-}
-
-impl<'a, R> TemporaryPackageStore<'a, R> {
-    pub fn new(temp_store: &'a InnerTemporaryStore, fallback: R) -> Self {
-        Self {
-            temp_store,
-            fallback,
-        }
+impl BackingPackageStore for InnerTemporaryStore {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        Ok(self
+            .written
+            .get(package_id)
+            .cloned()
+            .map(PackageObject::new))
     }
 }
 
-impl<R> BackingPackageStore for TemporaryPackageStore<'_, R>
+pub struct PackageStoreWithFallback<P, F> {
+    primary: P,
+    fallback: F,
+}
+
+impl<P, F> PackageStoreWithFallback<P, F> {
+    pub fn new(primary: P, fallback: F) -> Self {
+        Self { primary, fallback }
+    }
+}
+
+impl<P, F> BackingPackageStore for PackageStoreWithFallback<P, F>
 where
-    R: BackingPackageStore,
+    P: BackingPackageStore,
+    F: BackingPackageStore,
 {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        // We first check the objects in the temporary store it is possible to read packages that are
-        // just written in the same transaction.
-        if let Some(obj) = self.temp_store.written.get(package_id) {
-            Ok(Some(PackageObject::new(obj.clone())))
+        if let Some(package) = self.primary.get_package_object(package_id)? {
+            Ok(Some(package))
         } else {
             self.fallback.get_package_object(package_id)
         }

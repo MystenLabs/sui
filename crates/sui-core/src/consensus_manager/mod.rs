@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_adapter::SubmitToConsensus;
 use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::mysticeti_manager::MysticetiManager;
-use crate::consensus_manager::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair as _;
@@ -13,14 +14,17 @@ use mysten_metrics::RegistryService;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::committee::EpochId;
+use sui_types::error::SuiResult;
+use sui_types::messages_consensus::ConsensusTransaction;
 use tokio::sync::{Mutex, MutexGuard};
+use tokio::time::{sleep, timeout};
+use tracing::info;
 
 pub mod mysticeti_manager;
-pub mod narwhal_manager;
 
 #[derive(PartialEq)]
 pub(crate) enum Running {
@@ -28,19 +32,12 @@ pub(crate) enum Running {
     False,
 }
 
-/// An enum to easily differentiate between the chosen consensus engine
-#[enum_dispatch]
-pub enum ConsensusManager {
-    Narwhal(NarwhalManager),
-    Mysticeti(MysticetiManager),
-}
-
 #[async_trait]
-#[enum_dispatch(ConsensusManager)]
+#[enum_dispatch(ProtocolManager)]
 pub trait ConsensusManagerTrait {
     async fn start(
         &self,
-        config: &NodeConfig,
+        node_config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
@@ -49,55 +46,182 @@ pub trait ConsensusManagerTrait {
     async fn shutdown(&self);
 
     async fn is_running(&self) -> bool;
-
-    fn get_storage_base_path(&self) -> PathBuf;
 }
 
-impl ConsensusManager {
-    /// Create a new narwhal manager and wrap it around the Manager enum
-    pub fn new_narwhal(
-        config: &NodeConfig,
-        consensus_config: &ConsensusConfig,
-        registry_service: &RegistryService,
-    ) -> Self {
-        let narwhal_config = NarwhalConfiguration {
-            primary_keypair: config.protocol_key_pair().copy(),
-            network_keypair: config.network_key_pair().copy(),
-            worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
-            storage_base_path: consensus_config.db_path().to_path_buf(),
-            parameters: consensus_config.narwhal_config().to_owned(),
-            registry_service: registry_service.clone(),
-        };
+// Wraps the underlying consensus protocol managers to make calling
+// the ConsensusManagerTrait easier.
+#[enum_dispatch]
+enum ProtocolManager {
+    Mysticeti(MysticetiManager),
+}
 
-        let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
-
-        Self::Narwhal(NarwhalManager::new(narwhal_config, metrics))
-    }
-
+impl ProtocolManager {
+    /// Creates a new mysticeti manager.
     pub fn new_mysticeti(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
+        metrics: Arc<ConsensusManagerMetrics>,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
-        let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
-
         Self::Mysticeti(MysticetiManager::new(
             config.worker_key_pair().copy(),
             config.network_key_pair().copy(),
             consensus_config.db_path().to_path_buf(),
-            metrics,
             registry_service.clone(),
+            metrics,
             client,
         ))
+    }
+}
+
+/// Used by Sui validator to start consensus protocol for each epoch.
+pub struct ConsensusManager {
+    consensus_config: ConsensusConfig,
+    mysticeti_manager: ProtocolManager,
+    mysticeti_client: Arc<LazyMysticetiClient>,
+    active: parking_lot::Mutex<bool>,
+    consensus_client: Arc<ConsensusClient>,
+}
+
+impl ConsensusManager {
+    pub fn new(
+        node_config: &NodeConfig,
+        consensus_config: &ConsensusConfig,
+        registry_service: &RegistryService,
+        consensus_client: Arc<ConsensusClient>,
+    ) -> Self {
+        let metrics = Arc::new(ConsensusManagerMetrics::new(
+            &registry_service.default_registry(),
+        ));
+        let mysticeti_client = Arc::new(LazyMysticetiClient::new());
+        let mysticeti_manager = ProtocolManager::new_mysticeti(
+            node_config,
+            consensus_config,
+            registry_service,
+            metrics,
+            mysticeti_client.clone(),
+        );
+        Self {
+            consensus_config: consensus_config.clone(),
+            mysticeti_manager,
+            mysticeti_client,
+            active: parking_lot::Mutex::new(false),
+            consensus_client,
+        }
+    }
+
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.consensus_config.db_path().to_path_buf()
+    }
+}
+
+#[async_trait]
+impl ConsensusManagerTrait for ConsensusManager {
+    async fn start(
+        &self,
+        node_config: &NodeConfig,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_handler_initializer: ConsensusHandlerInitializer,
+        tx_validator: SuiTxValidator,
+    ) {
+        let protocol_manager = {
+            let mut active = self.active.lock();
+            assert!(!*active, "Cannot start consensus. It is already running!");
+            info!("Starting consensus ...");
+            *active = true;
+            self.consensus_client.set(self.mysticeti_client.clone());
+            &self.mysticeti_manager
+        };
+
+        protocol_manager
+            .start(
+                node_config,
+                epoch_store,
+                consensus_handler_initializer,
+                tx_validator,
+            )
+            .await
+    }
+
+    async fn shutdown(&self) {
+        info!("Shutting down consensus ...");
+        let prev_active = {
+            let mut active = self.active.lock();
+            std::mem::replace(&mut *active, false)
+        };
+        if prev_active {
+            self.mysticeti_manager.shutdown().await;
+        }
+        self.consensus_client.clear();
+    }
+
+    async fn is_running(&self) -> bool {
+        let active = self.active.lock();
+        *active
+    }
+}
+
+#[derive(Default)]
+pub struct ConsensusClient {
+    // An extra layer of Arc<> is needed as required by ArcSwapAny.
+    client: ArcSwapOption<Arc<dyn SubmitToConsensus>>,
+}
+
+impl ConsensusClient {
+    pub fn new() -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+        }
+    }
+
+    async fn get(&self) -> Arc<Arc<dyn SubmitToConsensus>> {
+        const START_TIMEOUT: Duration = Duration::from_secs(30);
+        const RETRY_INTERVAL: Duration = Duration::from_millis(100);
+        if let Ok(client) = timeout(START_TIMEOUT, async {
+            loop {
+                let Some(client) = self.client.load_full() else {
+                    sleep(RETRY_INTERVAL).await;
+                    continue;
+                };
+                return client;
+            }
+        })
+        .await
+        {
+            return client;
+        }
+
+        panic!(
+            "Timed out after {:?} waiting for Consensus to start!",
+            START_TIMEOUT,
+        );
+    }
+
+    pub fn set(&self, client: Arc<dyn SubmitToConsensus>) {
+        self.client.store(Some(Arc::new(client)));
+    }
+
+    pub fn clear(&self) {
+        self.client.store(None);
+    }
+}
+
+#[async_trait]
+impl SubmitToConsensus for ConsensusClient {
+    async fn submit_to_consensus(
+        &self,
+        transactions: &[ConsensusTransaction],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        let client = self.get().await;
+        client.submit_to_consensus(transactions, epoch_store).await
     }
 }
 
 pub struct ConsensusManagerMetrics {
     start_latency: IntGauge,
     shutdown_latency: IntGauge,
-    start_primary_retries: IntGauge,
-    start_worker_retries: IntGauge,
 }
 
 impl ConsensusManagerMetrics {
@@ -113,18 +237,6 @@ impl ConsensusManagerMetrics {
                 "consensus_manager_shutdown_latency",
                 "The latency of shutting down consensus nodes",
                 registry,
-            )
-            .unwrap(),
-            start_primary_retries: register_int_gauge_with_registry!(
-                "narwhal_manager_start_primary_retries",
-                "The number of retries took to start narwhal primary node",
-                registry
-            )
-            .unwrap(),
-            start_worker_retries: register_int_gauge_with_registry!(
-                "narwhal_manager_start_worker_retries",
-                "The number of retries took to start narwhal worker node",
-                registry
             )
             .unwrap(),
         }
@@ -175,7 +287,7 @@ impl<'a> RunningLockGuard<'a> {
                 "Shutting down consensus for epoch {epoch:?} & protocol version {version:?}"
             );
         } else {
-            tracing::warn!("Consensus shutdown was called but Narwhal node is not running");
+            tracing::warn!("Consensus shutdown was called but consensus is not running");
             return None;
         }
 

@@ -17,7 +17,7 @@ async fn replay_sandboxes() {
         assert!(path.is_file());
         let cmd = ReplayToolCommand::ReplaySandbox { path };
 
-        execute_replay_command(None, true, true, None, cmd)
+        execute_replay_command(None, true, true, None, None, cmd)
             .await
             .unwrap();
     }

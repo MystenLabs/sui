@@ -16,7 +16,6 @@ better_any.workspace = true
 fail.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true
-sha3.workspace = true
 tracing.workspace = true
 smallvec.workspace = true
 

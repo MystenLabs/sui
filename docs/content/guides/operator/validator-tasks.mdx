@@ -57,15 +57,49 @@ Sui node uses the following ports by default:
 
 | protocol/port | reachability     | purpose                           |
 | ------------- | ---------------- | --------------------------------- |
-| TCP/8080      | inbound          | protocol/transaction interface    |
-| UDP/8081      | inbound/outbound | narwhal primary interface         |
-| UDP/8082      | inbound/outbound | narwhal worker interface          |
-| TCP/8083      | localhost        | sui -> narwhal interface          |
+| TCP/8080      | inbound          | validator/transaction interface   |
+| TCP/8081      | inbound/outbound | consensus interface               |
 | UDP/8084      | inbound/outbound | peer to peer state sync interface |
 | TCP/8443      | outbound         | metrics pushing                   |
 | TCP/9184      | localhost        | metrics scraping                  |
 
 To run a validator successfully, it is critical that ports 8080-8084 are open as outlined, including the specific protocol (TCP/UDP).
+
+## Network Buffer
+From load testing Sui validator networks, it has been determined that the default Linux network buffer sizes are too small.
+We recommend increasing them using one of the following two methods:
+
+### Option 1: With /etc/sysctl.d/
+These settings can be added to a new sysctl file specifically for the sui-node, or appended to an existing file.
+Modifications made in this way will persist across system restarts.
+```shell
+# Create a new sysctl file for the sui-node
+sudo nano /etc/sysctl.d/100-sui-node.conf
+
+# Add these lines to the file, overwriting existing settings if necessary.
+net.core.rmem_max = 104857600
+net.core.wmem_max = 104857600
+net.ipv4.tcp_rmem = 8192 262144 104857600
+net.ipv4.tcp_wmem = 8192 262144 104857600
+
+# Apply the settings immediately, before the next restart
+sudo sysctl --system
+```
+
+### Option 2: With sysctl command
+These modifications do not persist across system restarts. Therefore, the commands should be run each time the host restarts.
+```shell
+sudo sysctl -w net.core.wmem_max=104857600
+sudo sysctl -w net.core.rmem_max=104857600
+sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
+sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
+```
+
+### Verification
+To verify that the system settings have indeed been updated, check the output of the following command:
+```shell
+sudo sysctl -a | egrep [rw]mem
+```
 
 ## Storage
 
@@ -100,10 +134,10 @@ The following keys are used by Sui node:
 
 | key          | scheme   | purpose                         |
 | ------------ | -------- | ------------------------------- |
-| protocol.key | bls12381 | transactions, narwhal consensus |
+| protocol.key | bls12381 | transactions                    |
 | account.key  | ed25519  | controls assets for staking     |
-| network.key  | ed25519  | narwhal primary, sui state sync |
-| worker.key   | ed25519  | validate narwhal workers        |
+| network.key  | ed25519  | state sync                      |
+| worker.key   | ed25519  | consensus (to be migrated)      |
 
 These are configured in the [Sui node configuration file](#configuration).
 
@@ -233,6 +267,8 @@ Other metadata (keys, addresses, and so on) only come into effect at the next ep
 To update metadata, a validator makes a MoveCall transaction that interacts with the System Object. For example:
 
 1. to update name to `new_validator_name`, use the Sui Client CLI to call `sui_system::update_validator_name`:
+
+{@include: ../../snippets/info-gas-budget.mdx}
 
 ```bash
 sui client call --package 0x3 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000

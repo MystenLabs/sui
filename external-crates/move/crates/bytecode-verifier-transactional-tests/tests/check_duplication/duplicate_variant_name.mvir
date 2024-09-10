@@ -1,0 +1,10 @@
+//# publish
+module 0x1.M {
+    // duplicate variant of the same name
+    enum T { 
+        V { },
+        V { f: u64, f: u64 }
+    }
+}
+
+// check: DUPLICATE_ELEMENT

@@ -7,9 +7,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 
 use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{Constant, FunctionDefinitionIndex, StructDefinitionIndex},
-    views::{FunctionHandleView, StructHandleView},
+    file_format::{Constant, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
@@ -24,11 +22,11 @@ use crate::{
     ast::{Attribute, AttributeValue, ModuleName, QualifiedSymbol, Value},
     builder::{
         exp_translator::ExpTranslator,
-        model_builder::{ConstEntry, ModelBuilder},
+        model_builder::{ConstEntry, DatatypeData, ModelBuilder},
     },
     model::{
-        FunId, FunctionData, Loc, ModuleId, NamedConstantData, NamedConstantId, StructData,
-        StructId, SCRIPT_BYTECODE_FUN_NAME,
+        DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
+        NamedConstantId, StructData, SCRIPT_BYTECODE_FUN_NAME,
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
@@ -126,6 +124,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 );
                 (Some(module_name), self.symbol_pool().make(n.value.as_str()))
             }
+            EA::ModuleAccess_::Variant(..) => panic!("Variants are not supported by move model."),
         }
     }
 
@@ -235,6 +234,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                                 self.symbol_pool().make(n.value.as_str()),
                             )
                         }
+                        EA::ModuleAccess_::Variant(..) => {
+                            panic!("Variants are not supported by move model.")
+                        }
                     },
                 };
                 Attribute::Assign(node_id, self.symbol_pool().make(n.value.as_str()), v)
@@ -255,8 +257,13 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         for (name, struct_def) in module_def.structs.key_cloned_iter() {
             self.decl_ana_struct(&name, struct_def);
         }
+        for (name, enum_def) in module_def.enums.key_cloned_iter() {
+            self.decl_ana_enum(&name, enum_def);
+        }
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
-            self.decl_ana_fun(&name, fun_def);
+            if fun_def.macro_.is_none() {
+                self.decl_ana_fun(&name, fun_def);
+            }
         }
         for (name, const_def) in module_def.constants.key_cloned_iter() {
             self.decl_ana_const(&name, const_def, compiled_module, source_map);
@@ -289,9 +296,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .define_const(qsym, ConstEntry { loc, ty, value });
     }
 
-    fn decl_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let struct_id = StructId::new(qsym.symbol);
+        let struct_id = DatatypeId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
         let type_params =
@@ -304,6 +311,24 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             struct_id,
             type_params,
             None, // will be filled in during definition analysis
+        );
+    }
+
+    fn decl_ana_enum(&mut self, name: &PA::DatatypeName, def: &EA::EnumDefinition) {
+        let qsym = self.qualified_by_module_from_name(&name.0);
+        let struct_id = DatatypeId::new(qsym.symbol);
+        let attrs = self.translate_attributes(&def.attributes);
+        let mut et = ExpTranslator::new(self);
+        let type_params =
+            et.analyze_and_add_type_params(def.type_parameters.iter().map(|param| &param.name));
+        et.parent.parent.define_enum(
+            et.to_loc(&def.loc),
+            attrs,
+            qsym,
+            et.parent.module_id,
+            struct_id,
+            type_params,
+            BTreeMap::new(), // will be filled in during definition analysis
         );
     }
 
@@ -338,27 +363,36 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             self.def_ana_struct(&name, def);
         }
 
+        // Analyze all enums.
+        for (name, def) in module_def.enums.key_cloned_iter() {
+            self.def_ana_enum(&name, def);
+        }
+
         // Analyze all functions.
         for (name, fun_def) in module_def.functions.key_cloned_iter() {
-            self.def_ana_fun(&name, &fun_def.body);
+            if fun_def.macro_.is_none() {
+                self.def_ana_fun(&name, &fun_def.body);
+            }
         }
 
         // Propagate the impurity of functions: a Move function which calls an
         // impure Move function is also considered impure.
-        for (name, _) in module_def.functions.key_cloned_iter() {
-            self.qualified_by_module_from_name(&name.0);
+        for (name, f) in module_def.functions.key_cloned_iter() {
+            if f.macro_.is_none() {
+                self.qualified_by_module_from_name(&name.0);
+            }
         }
     }
 }
 
-/// ## Struct Definition Analysis
+/// ## Struct and Enum Definition Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    fn def_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn def_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let type_params = self
             .parent
-            .struct_table
+            .datatype_table
             .get(&qsym)
             .expect("struct invalid")
             .type_params
@@ -391,10 +425,61 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             EA::StructFields::Native(_) => None,
         };
         self.parent
-            .struct_table
+            .datatype_table
             .get_mut(&qsym)
             .expect("struct invalid")
-            .fields = fields;
+            .data = DatatypeData::Struct { fields };
+    }
+
+    fn def_ana_enum(&mut self, name: &PA::DatatypeName, def: &EA::EnumDefinition) {
+        let qsym = self.qualified_by_module_from_name(&name.0);
+        let type_params = self
+            .parent
+            .datatype_table
+            .get(&qsym)
+            .expect("enum invalid")
+            .type_params
+            .clone();
+        let mut et = ExpTranslator::new(self);
+        let loc = et.to_loc(&name.0.loc);
+        for (name, ty) in type_params {
+            et.define_type_param(&loc, name, ty);
+        }
+        let variants: BTreeMap<_, _> = def
+            .variants
+            .key_cloned_iter()
+            .map(|(key, variant)| {
+                let variant_name = et.symbol_pool().make(&key.0.value);
+                let variant_fields = match &variant.fields {
+                    EA::VariantFields::Named(fields) => {
+                        let mut field_map = BTreeMap::new();
+                        for (_name_loc, field_name_, (idx, ty)) in fields {
+                            let field_sym = et.symbol_pool().make(field_name_);
+                            let field_ty = et.translate_type(ty);
+                            field_map.insert(field_sym, (*idx, field_ty));
+                        }
+                        Some(field_map)
+                    }
+                    EA::VariantFields::Positional(tys) => {
+                        let mut field_map = BTreeMap::new();
+                        for (idx, ty) in tys.iter().enumerate() {
+                            let field_name_ = format!("{idx}");
+                            let field_sym = et.symbol_pool().make(&field_name_);
+                            let field_ty = et.translate_type(ty);
+                            field_map.insert(field_sym, (idx, field_ty));
+                        }
+                        Some(field_map)
+                    }
+                    EA::VariantFields::Empty => None,
+                };
+                (variant_name, variant_fields)
+            })
+            .collect();
+        self.parent
+            .datatype_table
+            .get_mut(&qsym)
+            .expect("enum invalid")
+            .data = DatatypeData::Enum { variants };
     }
 }
 
@@ -437,20 +522,19 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         module: CompiledModule,
         source_map: SourceMap,
     ) {
-        let struct_data: BTreeMap<StructId, StructData> = (0..module.struct_defs().len())
+        let struct_data: BTreeMap<DatatypeId, StructData> = (0..module.struct_defs().len())
             .filter_map(|idx| {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
-                let handle = module.struct_handle_at(handle_idx);
-                let view = StructHandleView::new(&module, handle);
-                let name = self.symbol_pool().make(view.name().as_str());
+                let handle = module.datatype_handle_at(handle_idx);
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
-                    .struct_table
+                    .datatype_table
                     .get(&self.qualified_by_module(name))
                 {
                     Some((
-                        StructId::new(name),
+                        DatatypeId::new(name),
                         self.parent.env.create_move_struct_data(
                             &module,
                             def_idx,
@@ -467,20 +551,49 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 }
             })
             .collect();
+        let enum_data: BTreeMap<DatatypeId, EnumData> = (0..module.enum_defs().len())
+            .filter_map(|idx| {
+                let def_idx = EnumDefinitionIndex(idx as u16);
+                let handle_idx = module.enum_def_at(def_idx).enum_handle;
+                let handle = module.datatype_handle_at(handle_idx);
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
+                if let Some(entry) = self
+                    .parent
+                    .datatype_table
+                    .get(&self.qualified_by_module(name))
+                {
+                    Some((
+                        DatatypeId::new(name),
+                        self.parent.env.create_move_enum_data(
+                            &module,
+                            def_idx,
+                            name,
+                            entry.loc.clone(),
+                            Some(&source_map),
+                            entry.attributes.clone(),
+                        ),
+                    ))
+                } else {
+                    self.parent.error(
+                        &self.parent.env.internal_loc(),
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
+                    None
+                }
+            })
+            .collect();
         let function_data: BTreeMap<FunId, FunctionData> = (0..module.function_defs().len())
             .filter_map(|idx| {
                 let def_idx = FunctionDefinitionIndex(idx as u16);
                 let handle_idx = module.function_def_at(def_idx).function;
                 let handle = module.function_handle_at(handle_idx);
-                let view = FunctionHandleView::new(&module, handle);
-                let name_str = view.name().as_str();
+                let name_str = module.identifier_at(handle.name).as_str();
                 let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
                     // This is a pseudo script module, which has exactly one function. Determine
                     // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                    self.parent.fun_table.iter().find_map(|(k, _)| {
                         if k.module_name == self.module_name
                         { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
+                    }).expect("unexpected script with multiple or no functions")
                 } else {
                     self.symbol_pool().make(name_str)
                 };
@@ -529,6 +642,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             source_map,
             named_constants,
             struct_data,
+            enum_data,
             function_data,
         );
     }

@@ -14,7 +14,7 @@
 /// table::add(&mut table2, 0, false);
 /// table::add(&mut table2, 1, true);
 /// // table1 does not equal table2, despite having the same entries
-/// assert!(&table1 != &table2, 0);
+/// assert!(&table1 != &table2);
 /// ```
 module sui::table {
     use sui::dynamic_field as field;

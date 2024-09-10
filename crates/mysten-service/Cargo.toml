@@ -12,6 +12,7 @@ axum.workspace = true
 tokio.workspace = true
 serde.workspace = true
 prometheus.workspace = true
+simple-server-timing-header.workspace = true
 mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true

@@ -23,9 +23,8 @@ expression: "results.join(\"\\n\")"
   × Error when processing PTB
    ╭─[5:20]
  4 │ --assign s
- 5 │ --transfer-objects s @0x1
+ 5 │ --transfer-objects s @0x1 
    ·                    ┬
    ·                    ╰── Expected '[' but found identifier 's'
- 6 │ --gas-budget 100 
    ╰────
 

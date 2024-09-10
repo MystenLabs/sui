@@ -1,11 +1,11 @@
 # BCS
 
-The `@mysten/sui.js/bcs` package extends `@mysten/bcs` with Sui specific scheme definitions.
+The `@mysten/sui/bcs` package extends `@mysten/bcs` with Sui specific scheme definitions.
 
 To learn more about using BCS see the [BCS documentation](/bcs).
 
-the `bcs` export of `@mysten/sui.js/bcs` contains all the same exports as `bcs` from `@mysten/bcs`
-plus the following pre-defined schemes:
+the `bcs` export of `@mysten/sui/bcs` contains all the same exports as `bcs` from `@mysten/bcs` plus
+the following pre-defined schemes:
 
 - `U8`
 - `U16`
@@ -44,7 +44,7 @@ All the upper-cased values are `BcsType` instances, and can be used directly to 
 data.
 
 ```typescript
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 
 bcs.U8.serialize(1);
 bcs.Address.serialize('0x1');

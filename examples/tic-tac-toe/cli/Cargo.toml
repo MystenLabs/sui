@@ -1,0 +1,18 @@
+[package]
+name = "tic-tac-toe"
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+anyhow = "1.0.86"
+bcs = "0.1.6"
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+dirs = "5.0.1"
+fastcrypto = "0.1.8"
+move-core-types = { path = "../../../external-crates/move/crates/move-core-types" }
+serde = { version = "1.0.203", features = ["derive"] }
+shared-crypto = { path = "../../../crates/shared-crypto" }
+sui-keys = { path = "../../../crates/sui-keys" }
+sui-sdk = { path = "../../../crates/sui-sdk" }
+sui-types = { path = "../../../crates/sui-types" }
+tokio = { version = "1.38.0", features = ["time"] }

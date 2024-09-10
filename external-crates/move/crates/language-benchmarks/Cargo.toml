@@ -21,7 +21,11 @@ move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-stdlib.workspace = true
+move-stdlib-natives.workspace = true
+
+[lib]
+bench = false
 
 [[bench]]
-name = "vm_benches"
+name = "criterion"
 harness = false
