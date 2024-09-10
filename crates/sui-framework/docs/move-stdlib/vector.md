@@ -24,6 +24,7 @@ vectors are growable. This module has many native functions.
 -  [Function `remove`](#0x1_vector_remove)
 -  [Function `insert`](#0x1_vector_insert)
 -  [Function `swap_remove`](#0x1_vector_swap_remove)
+-  [Function `flatten`](#0x1_vector_flatten)
 
 
 <pre><code></code></pre>
@@ -504,6 +505,33 @@ Aborts if <code>i</code> is out of bounds.
     <b>let</b> last_idx = v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>() - 1;
     v.<a href="../move-stdlib/vector.md#0x1_vector_swap">swap</a>(i, last_idx);
     v.<a href="../move-stdlib/vector.md#0x1_vector_pop_back">pop_back</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_vector_flatten"></a>
+
+## Function `flatten`
+
+Concatenate the vectors of <code>v</code> into a single vector, keeping the order of the elements.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_flatten">flatten</a>&lt;T&gt;(v: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_flatten">flatten</a>&lt;T&gt;(v: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt; {
+    <b>let</b> <b>mut</b> r = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    v.do!(|u| r.<a href="../move-stdlib/vector.md#0x1_vector_append">append</a>(u));
+    r
 }
 </code></pre>
 
