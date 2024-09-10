@@ -681,20 +681,32 @@ impl AuthorityStorePruner {
                 .unwrap_or_default() as i64,
         );
 
+        let perpetual_db_clone = perpetual_db.clone();
+        let checkpoint_store_clone = checkpoint_store.clone();
+        let rest_index_clone = rest_index.clone();
+        let config_clone = config.clone();
+        let objects_lock_table_clone = objects_lock_table.clone();
+        let metrics_clone = metrics.clone();
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
                     _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rest_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db_clone, &checkpoint_store_clone, rest_index_clone.as_deref(), &objects_lock_table_clone, config_clone.clone(), metrics_clone.clone(), indirect_objects_threshold, epoch_duration_ms).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
+                     _ = &mut recv => break,
+                }
+            }
+        });
+        tokio::task::spawn(async move {
+            loop {
+                tokio::select! {
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
                         if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rest_index.as_deref(), &objects_lock_table, config.clone(), metrics.clone(), indirect_objects_threshold, archive_readers.clone(), epoch_duration_ms).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
-                    _ = &mut recv => break,
                 }
             }
         });
