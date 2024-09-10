@@ -55,6 +55,7 @@ pub type TransactionIndex = u16;
 
 /// Votes on transactions in a specific block.
 /// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
+// TODO: look into making fields `pub`.
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct BlockTransactionVotes {
     pub(crate) block_ref: BlockRef,

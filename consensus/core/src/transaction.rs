@@ -217,6 +217,7 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// Returns indices of transactions to reject.
     /// Currently only uncertified user transactions can be rejected.
     /// The rest of transactions are implicitly voted to accept.
+    // TODO: add a rejection reason.
     fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
 }
 
