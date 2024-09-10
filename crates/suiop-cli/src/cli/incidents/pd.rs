@@ -254,18 +254,18 @@ pub async fn print_recent_incidents(
 }
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
-    let group_map = group_by_similar_title(incidents, 0.9);
-    // let incidents_grouped = incidents
-    // .into_iter()
-    // filter on priority > P3 and any slack channel association
-    // .filter(|i| {
-    // i.priority
-    // .clone()
-    // .filter(|p| !p.name.is_empty() && p.name != "P3")
-    // .is_some()
-    // || i.slack_channel.is_some()
-    // })
-    // .chunk_by(|i| i.title.clone());
+    let incidents_grouped = incidents
+        .into_iter()
+        // filter on priority > P3 and any slack channel association
+        .filter(|i| {
+            i.priority
+                .clone()
+                .filter(|p| !p.name.is_empty() && p.name != "P3")
+                .is_some()
+                || i.slack_channel.is_some()
+        })
+        .collect();
+    let group_map = group_by_similar_title(incidents_grouped, 0.9);
     let mut to_review = vec![];
     let mut excluded = vec![];
     debug!(
