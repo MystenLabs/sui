@@ -48,3 +48,11 @@ To double check your registered the correct metadata onchain, run
 ```
 sui-bridge-cli view-bridge-registration --sui-rpc-url {SUI_FULLNODE_URL}
 ```
+
+### Bridge Node Hardware Requirements
+
+Suggested hardware requirements:
+* CPU: 6 physical cores
+* Memory: 16GB
+* Storage: 200GB
+* Network: 100Mbps
