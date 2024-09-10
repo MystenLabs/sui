@@ -6,7 +6,6 @@ use chrono::Utc;
 use chrono::{DateTime, Local, NaiveDateTime};
 use colored::{ColoredString, Colorize};
 use inquire::Confirm;
-use itertools::Itertools;
 use reqwest;
 use reqwest::header::HeaderMap;
 use reqwest::header::ACCEPT;
@@ -19,7 +18,6 @@ use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
 use crate::cli::incidents::slack::Channel;
-use crate::cli::incidents_cmd;
 use crate::cli::lib::utils::day_of_week;
 use crate::DEBUG_MODE;
 
@@ -306,7 +304,7 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
                 excluded.extend(incident_group.clone());
             }
         } else {
-            for incident in incident_group.into_iter() {
+            for incident in incident_group.iter() {
                 incident.print(false)?;
                 let ans = Confirm::new("Keep this incident for review?")
                     .with_default(false)
@@ -382,7 +380,7 @@ fn group_by_similar_title(
     incidents: Vec<Incident>,
     threshold: f64,
 ) -> HashMap<String, Vec<Incident>> {
-    if threshold < 0.0 || threshold > 1.0 {
+    if !(0.0..=1.0).contains(&threshold) {
         panic!("Threshold must be between 0.0 and 1.0");
     }
 
@@ -408,7 +406,7 @@ fn group_by_similar_title(
         if !found {
             groups
                 .entry(incident.title.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(incident);
         }
     }
