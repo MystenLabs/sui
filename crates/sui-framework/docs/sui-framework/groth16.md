@@ -170,6 +170,15 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
+<a name="0x2_groth16_EInvalidScalar"></a>
+
+
+
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_EInvalidScalar">EInvalidScalar</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 3;
+</code></pre>
+
+
+
 <a name="0x2_groth16_EInvalidVerifyingKey"></a>
 
 
@@ -184,6 +193,15 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 <pre><code><b>const</b> <a href="groth16.md#0x2_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 2;
+</code></pre>
+
+
+
+<a name="0x2_groth16_MaxPublicInputs"></a>
+
+
+
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_MaxPublicInputs">MaxPublicInputs</a>: <a href="../move-stdlib/u64.md#0x1_u64">u64</a> = 8;
 </code></pre>
 
 
@@ -298,7 +316,8 @@ Returns bytes of the four components of the <code><a href="groth16.md#0x2_groth1
 
 ## Function `public_proof_inputs_from_bytes`
 
-Creates a <code><a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a></code> wrapper from bytes.
+Creates a <code><a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a></code> wrapper from bytes. The <code>bytes</code> parameter should be a concatenation of a number of
+32 bytes scalar field elements to be used as public inputs in little-endian format to a circuit.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_public_proof_inputs_from_bytes">public_proof_inputs_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PublicProofInputs">groth16::PublicProofInputs</a>
@@ -311,6 +330,8 @@ Creates a <code><a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofIn
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_public_proof_inputs_from_bytes">public_proof_inputs_from_bytes</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a> {
+    <b>assert</b>!(bytes.length() % 32 == 0, <a href="groth16.md#0x2_groth16_EInvalidScalar">EInvalidScalar</a>);
+    <b>assert</b>!(bytes.length() / 32 &lt;= <a href="groth16.md#0x2_groth16_MaxPublicInputs">MaxPublicInputs</a>, <a href="groth16.md#0x2_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>);
     <a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a> { bytes }
 }
 </code></pre>

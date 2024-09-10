@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 58;
+const MAX_PROTOCOL_VERSION: u64 = 59;
 
 // Record history of protocol version allocations here:
 //
@@ -177,6 +177,7 @@ const MAX_PROTOCOL_VERSION: u64 = 58;
 // Version 58: Optimize boolean binops
 //             Finalize bridge committee on mainnet.
 //             Switch to distributed vote scoring in consensus in devnet
+// Version 59: Validation of public inputs for Groth16 verification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2742,6 +2743,7 @@ impl ProtocolConfig {
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
                 }
+                59 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
