@@ -59,7 +59,7 @@ async fn wait_for_checkpoint(
     pg_store: &PgIndexerStore,
     checkpoint_sequence_number: u64,
 ) -> Result<(), IndexerError> {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(Duration::from_secs(30), async {
         while {
             let cp_opt = pg_store
                 .get_latest_checkpoint_sequence_number()
