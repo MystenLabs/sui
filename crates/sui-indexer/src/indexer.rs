@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use async_trait::async_trait;
+use futures::future::try_join_all;
 use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
@@ -106,20 +107,15 @@ impl Indexer {
                 .await?;
         }
 
-        let cancel_clone = cancel.clone();
-        let (exit_sender, exit_receiver) = oneshot::channel();
-        // Spawn a task that links the cancellation token to the exit sender
-        spawn_monitored_task!(async move {
-            cancel_clone.cancelled().await;
-            let _ = exit_sender.send(());
-        });
-
+        let mut exit_senders = vec![];
+        let mut executors = vec![];
+        let progress_store = ShimIndexerProgressStore::new(vec![
+            ("primary".to_string(), primary_watermark),
+            ("object_snapshot".to_string(), object_snapshot_watermark),
+        ]);
         let mut executor = IndexerExecutor::new(
-            ShimIndexerProgressStore::new(vec![
-                ("primary".to_string(), primary_watermark),
-                ("object_snapshot".to_string(), object_snapshot_watermark),
-            ]),
-            1,
+            progress_store.clone(),
+            2,
             DataIngestionMetrics::new(&Registry::new()),
         );
         let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
@@ -128,18 +124,42 @@ impl Indexer {
             "primary".to_string(),
             config.checkpoint_download_queue_size,
         );
-
         executor.register(worker_pool).await?;
+        let (exit_sender, exit_receiver) = oneshot::channel();
+        executors.push((executor, exit_receiver));
+        exit_senders.push(exit_sender);
+
+        // in a non-colocated setup, start a separate indexer for processing object snapshots
+        if config.sources.data_ingestion_path.is_none() {
+            let executor = IndexerExecutor::new(
+                progress_store,
+                1,
+                DataIngestionMetrics::new(&Registry::new()),
+            );
+            let (exit_sender, exit_receiver) = oneshot::channel();
+            exit_senders.push(exit_sender);
+            executors.push((executor, exit_receiver));
+        }
 
         let worker_pool = WorkerPool::new(
             object_snapshot_worker,
             "object_snapshot".to_string(),
             config.checkpoint_download_queue_size,
         );
-        executor.register(worker_pool).await?;
+        let executor = executors.last_mut().expect("executors is not empty");
+        executor.0.register(worker_pool).await?;
+
+        // Spawn a task that links the cancellation token to the exit sender
+        spawn_monitored_task!(async move {
+            cancel.cancelled().await;
+            for exit_sender in exit_senders {
+                let _ = exit_sender.send(());
+            }
+        });
+
         info!("Starting data ingestion executor...");
-        executor
-            .run(
+        let futures = executors.into_iter().map(|(executor, exit_receiver)| {
+            executor.run(
                 config
                     .sources
                     .data_ingestion_path
@@ -151,10 +171,11 @@ impl Indexer {
                     .as_ref()
                     .map(|url| url.as_str().to_owned()),
                 vec![],
-                extra_reader_options,
+                extra_reader_options.clone(),
                 exit_receiver,
             )
-            .await?;
+        });
+        try_join_all(futures).await?;
         Ok(())
     }
 
@@ -179,6 +200,7 @@ impl Indexer {
     }
 }
 
+#[derive(Clone)]
 struct ShimIndexerProgressStore {
     watermarks: HashMap<String, CheckpointSequenceNumber>,
 }
