@@ -211,13 +211,14 @@ impl TransactionClient {
 /// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
 /// before acceptance of the block.
 pub trait TransactionVerifier: Send + Sync + 'static {
-    /// Determines if this batch of transactions are valid.
+    /// Determines if this batch of transactions is valid.
+    /// Fails if any one of the transactions is invalid.
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError>;
 
     /// Returns indices of transactions to reject.
     /// Currently only uncertified user transactions can be rejected.
     /// The rest of transactions are implicitly voted to accept.
-    // TODO: add a rejection reason.
+    // TODO: add rejection reasons, add VoteError and wrap the return in Result<>.
     fn vote_batch(&self, batch: &[&[u8]]) -> Vec<TransactionIndex>;
 }
 
