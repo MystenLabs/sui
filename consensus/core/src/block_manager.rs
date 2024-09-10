@@ -229,11 +229,26 @@ impl BlockManager {
                     .or_default()
                     .insert(block_ref);
 
+                let ancestor_hostname = &self.context.committee.authority(ancestor.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_manager_missing_ancestors_by_authority
+                    .with_label_values(&[ancestor_hostname])
+                    .inc();
+
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
-                    self.missing_blocks.insert(*ancestor);
                     ancestors_to_fetch.insert(*ancestor);
+                    if self.missing_blocks.insert(*ancestor) {
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .block_manager_missing_blocks_by_authority
+                            .with_label_values(&[ancestor_hostname])
+                            .inc();
+                    }
                 }
             }
         }
