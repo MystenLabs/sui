@@ -1381,6 +1381,9 @@ supply_value
 create_supply
 	public fun
 	0x2::balance
+destroy_zero_supply
+	public fun
+	0x2::balance
 increase_supply
 	public fun
 	0x2::balance

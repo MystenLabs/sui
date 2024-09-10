@@ -13,6 +13,7 @@ custom coins with <code><a href="../sui-framework/balance.md#0x2_balance_Supply"
 -  [Function `value`](#0x2_balance_value)
 -  [Function `supply_value`](#0x2_balance_supply_value)
 -  [Function `create_supply`](#0x2_balance_create_supply)
+-  [Function `destroy_zero_supply`](#0x2_balance_destroy_zero_supply)
 -  [Function `increase_supply`](#0x2_balance_increase_supply)
 -  [Function `decrease_supply`](#0x2_balance_decrease_supply)
 -  [Function `zero`](#0x2_balance_zero)
@@ -222,6 +223,32 @@ Create a new supply for type T.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_create_supply">create_supply</a>&lt;T: drop&gt;(_: T): <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt; {
     <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a> { value: 0 }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_destroy_zero_supply"></a>
+
+## Function `destroy_zero_supply`
+
+Destroy an empty supply
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_zero_supply">destroy_zero_supply</a>&lt;T: drop&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/balance.md#0x2_balance_destroy_zero_supply">destroy_zero_supply</a>&lt;T: drop&gt;(self: <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a>&lt;T&gt;) {
+    <b>assert</b>!(self.value == 0, <a href="../sui-framework/balance.md#0x2_balance_ENonZero">ENonZero</a>);
+    <b>let</b> <a href="../sui-framework/balance.md#0x2_balance_Supply">Supply</a> { value: _ } = self;
 }
 </code></pre>
 
