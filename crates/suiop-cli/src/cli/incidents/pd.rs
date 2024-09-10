@@ -21,7 +21,7 @@ use crate::DEBUG_MODE;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Priority {
-    name: String,
+    pub name: String,
     id: String,
     color: String,
 }
@@ -34,8 +34,8 @@ pub struct Incident {
     created_at: Option<String>,
     resolved_at: Option<String>,
     html_url: String,
-    priority: Option<Priority>,
-    slack_channel: Option<Channel>,
+    pub priority: Option<Priority>,
+    pub slack_channel: Option<Channel>,
 }
 const DATE_FORMAT_IN: &str = "%Y-%m-%dT%H:%M:%SZ";
 const DATE_FORMAT_OUT: &str = "%m/%d/%Y %H:%M";
