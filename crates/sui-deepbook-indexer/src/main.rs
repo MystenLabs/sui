@@ -76,7 +76,10 @@ async fn main() -> Result<()> {
         config.remote_store_url,
         sui_client,
         config.concurrency as usize,
-        config.checkpoints_path.clone().into(),
+        config
+            .checkpoints_path
+            .map(|p| p.into())
+            .unwrap_or(tempfile::tempdir()?.into_path()),
         config.deepbook_genesis_checkpoint,
         ingestion_metrics.clone(),
         indexer_meterics.clone(),
