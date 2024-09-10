@@ -709,7 +709,7 @@ async fn get_move_struct_layout_map(
                         move_core_types::annotated_value::MoveStructLayout,
                     ),
                     IndexerError,
-                >((struct_tag, move_struct_layout))
+                >((struct_tag, *move_struct_layout))
             }
         })
         .collect::<Vec<_>>();

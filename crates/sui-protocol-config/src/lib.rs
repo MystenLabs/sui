@@ -178,6 +178,7 @@ const MAX_PROTOCOL_VERSION: u64 = 59;
 //             Finalize bridge committee on mainnet.
 //             Switch to distributed vote scoring in consensus in devnet
 // Version 59: Validation of public inputs for Groth16 verification.
+//             Enable configuration of maximum number of type nodes in a type layout.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -860,6 +861,9 @@ pub struct ProtocolConfig {
     // than a per-byte cost. checking an object lock should not require loading an
     // entire object, just consulting an ID -> tx digest map
     obj_access_cost_verify_per_byte: Option<u64>,
+
+    // Maximal nodes which are allowed when converting to a type layout.
+    max_type_to_layout_nodes: Option<u64>,
 
     /// === Gas version. gas model ===
 
@@ -1766,6 +1770,7 @@ impl ProtocolConfig {
             max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
+            max_type_to_layout_nodes: None,
 
             max_back_edges_per_function: Some(10_000),
             max_back_edges_per_module: Some(10_000),
@@ -2743,7 +2748,9 @@ impl ProtocolConfig {
                             .consensus_distributed_vote_scoring_strategy = true;
                     }
                 }
-                59 => {}
+                59 => {
+                    cfg.max_type_to_layout_nodes = Some(512);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

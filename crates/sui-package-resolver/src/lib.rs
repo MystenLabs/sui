@@ -1453,10 +1453,10 @@ impl<'l> ResolutionContext<'l> {
                 }
 
                 (
-                    MoveTypeLayout::Struct(MoveStructLayout {
+                    MoveTypeLayout::Struct(Box::new(MoveStructLayout {
                         type_,
-                        fields: resolved_fields,
-                    }),
+                        fields: Box::new(resolved_fields),
+                    })),
                     field_depth + 1,
                 )
             }
@@ -1481,10 +1481,10 @@ impl<'l> ResolutionContext<'l> {
                 }
 
                 (
-                    MoveTypeLayout::Enum(MoveEnumLayout {
+                    MoveTypeLayout::Enum(Box::new(MoveEnumLayout {
                         type_,
                         variants: resolved_variants,
-                    }),
+                    })),
                     field_depth + 1,
                 )
             }
