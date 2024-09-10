@@ -127,7 +127,7 @@ jobs:
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
       - name: Install postgres (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
         shell: bash
         env:
           PQ_LIB_DIR: "$(brew --prefix libpq)/lib"
@@ -138,7 +138,7 @@ jobs:
           brew install postgresql
 
       - name: Remove unused apps (MacOS arm64)
-        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_archive_exist == '' }}
         continue-on-error: true
         shell: bash
         run: |
