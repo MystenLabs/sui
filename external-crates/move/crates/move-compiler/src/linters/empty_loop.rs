@@ -16,15 +16,7 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 
-use super::{LinterDiagnosticCategory, EMPTY_LOOP_DIAG_CODE, LINT_WARNING_PREFIX};
-
-const EMPTY_LOOP_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Complexity as u8,
-    EMPTY_LOOP_DIAG_CODE,
-    "",
-);
+use super::{LinterDiagnosticCategory, StyleCodes, LINT_WARNING_PREFIX};
 
 pub struct EmptyLoop;
 
@@ -41,6 +33,13 @@ impl TypingVisitorConstructor for EmptyLoop {
 }
 
 impl TypingVisitorContext for Context<'_> {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         match &exp.exp.value {
             UnannotatedExp_::Loop {
@@ -63,13 +62,6 @@ impl TypingVisitorContext for Context<'_> {
             _ => {}
         }
         false
-    }
-    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
-        self.env.add_warning_filter_scope(filter)
-    }
-
-    fn pop_warning_filter_scope(&mut self) {
-        self.env.pop_warning_filter_scope()
     }
 }
 
@@ -96,12 +88,6 @@ fn is_condition_always_true(condition: &UnannotatedExp_) -> bool {
 }
 
 fn report_empty_loop(env: &mut CompilationEnv, loc: Loc) {
-    let diag = diag!(
-        EMPTY_LOOP_DIAG,
-        (
-            loc,
-            "Detected an empty loop expression potentially leading to an infinite loop."
-        )
-    );
+    let  diag = diag!(StyleCodes::EmptyLoop.diag_info(), (loc, "Detected an empty loop expression potentially leading to an infinite loop."));
     env.add_diag(diag);
 }
