@@ -274,8 +274,8 @@ impl NodeMetrics {
             ).unwrap(),
             highest_accepted_authority_round: register_int_gauge_vec_with_registry!(
                 "highest_accepted_authority_round",
-                "The highest round where a block has been accepted by author. Resets on restart.",
-                &["author"],
+                "The highest round where a block has been accepted per authority. Resets on restart.",
+                &["authority"],
                 registry,
             ).unwrap(),
             highest_accepted_round: register_int_gauge_with_registry!(
@@ -498,7 +498,7 @@ impl NodeMetrics {
             ).unwrap(),
             block_manager_missing_ancestors_by_authority: register_int_counter_vec_with_registry!(
                 "block_manager_missing_ancestors_by_authority",
-                "The number of missing ancestors by ancestor authority",
+                "The number of missing ancestors by ancestor authority across received blocks",
                 &["authority"],
                 registry,
             ).unwrap(),
