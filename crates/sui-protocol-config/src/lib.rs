@@ -1236,6 +1236,10 @@ pub struct ProtocolConfig {
     /// This config plays the same role as `max_accumulated_txn_cost_per_object_in_narwhal_commit`
     /// but for mysticeti commits due to that mysticeti has higher commit rate.
     max_accumulated_txn_cost_per_object_in_mysticeti_commit: Option<u64>,
+
+    /// Configures the garbage collection depth for consensus. When is unset or `0` then the garbage collection
+    /// is disabled.
+    consensus_gc_depth: Option<u32>,
 }
 
 // feature flags
@@ -1574,6 +1578,10 @@ impl ProtocolConfig {
     pub fn consensus_distributed_vote_scoring_strategy(&self) -> bool {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy
+    }
+
+    pub fn gc_depth(&self) -> u32 {
+        self.consensus_gc_depth.unwrap_or(0)
     }
 }
 
@@ -2087,6 +2095,8 @@ impl ProtocolConfig {
             bridge_should_try_to_finalize_committee: None,
 
             max_accumulated_txn_cost_per_object_in_mysticeti_commit: None,
+
+            consensus_gc_depth: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

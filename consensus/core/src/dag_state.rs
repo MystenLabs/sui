@@ -720,8 +720,7 @@ impl DagState {
     /// information both about the committed leader slot and the corresponding gc round as well.
     pub(crate) fn last_commit_round(&self) -> CommitRound {
         let leader = self.last_commit_leader();
-        let gc_depth = 50;
-        CommitRound::new(leader, gc_depth)
+        CommitRound::new(leader, self.context.protocol_config.gc_depth())
     }
 
     /// Last committed round per authority.
