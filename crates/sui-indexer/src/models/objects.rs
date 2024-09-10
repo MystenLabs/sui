@@ -421,7 +421,7 @@ impl TryFrom<CoinBalance> for Balance {
     }
 }
 
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName, Selectable)]
 #[diesel(table_name = full_objects_history, primary_key(object_id, object_version))]
 pub struct StoredFullHistoryObject {
     pub object_id: Vec<u8>,

@@ -41,8 +41,8 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
-use sui_indexer::schema::{objects_history, objects_version};
+use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject};
+use sui_indexer::schema::{full_objects_history, objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -984,6 +984,19 @@ impl Object {
             }),
         }
     }
+
+    pub(crate) fn new_wrapped_or_deleted(
+        object_id: SuiAddress,
+        object_version: u64,
+        checkpoint_viewed_at: u64,
+    ) -> Self {
+        Self {
+            address: object_id,
+            kind: ObjectKind::WrappedOrDeleted(object_version),
+            checkpoint_viewed_at,
+            root_version: object_version,
+        }
+    }
 }
 
 /// We're deliberately choosing to use a child object's version as the root here, and letting the
@@ -1222,6 +1235,7 @@ impl Loader<HistoricalKey> for Db {
     type Error = Error;
 
     async fn load(&self, keys: &[HistoricalKey]) -> Result<HashMap<HistoricalKey, Object>, Error> {
+        use full_objects_history::dsl as f;
         use objects_history::dsl as h;
         use objects_version::dsl as v;
 
@@ -1230,59 +1244,105 @@ impl Loader<HistoricalKey> for Db {
             .map(|key| (key.id.into_vec(), key.version as i64))
             .collect();
 
-        let objects: Vec<StoredHistoryObject> = self
-            .execute(move |conn| {
-                async {
-                    conn.results(move || {
-                        let mut query = h::objects_history
-                            .inner_join(
-                                v::objects_version.on(v::cp_sequence_number
-                                    .eq(h::checkpoint_sequence_number)
-                                    .and(v::object_id.eq(h::object_id))
-                                    .and(v::object_version.eq(h::object_version))),
-                            )
-                            .select(StoredHistoryObject::as_select())
-                            .into_boxed();
+        let id_versions_clone = id_versions.clone();
+        let indexed_objects_query = self.execute(move |conn| {
+            async {
+                conn.results(move || {
+                    let mut query = h::objects_history
+                        .inner_join(
+                            v::objects_version.on(v::cp_sequence_number
+                                .eq(h::checkpoint_sequence_number)
+                                .and(v::object_id.eq(h::object_id))
+                                .and(v::object_version.eq(h::object_version))),
+                        )
+                        .select(StoredHistoryObject::as_select())
+                        .into_boxed();
 
-                        for (id, version) in id_versions.iter().cloned() {
-                            query = query
-                                .or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
-                        }
+                    for (id, version) in id_versions_clone.iter().cloned() {
+                        query =
+                            query.or_filter(v::object_id.eq(id).and(v::object_version.eq(version)));
+                    }
 
-                        query
-                    })
-                    .await
-                }
-                .scope_boxed()
-            })
-            .await
+                    query
+                })
+                .await
+            }
+            .scope_boxed()
+        });
+        // Use a separate query instead of join since this will be a KV query in the future.
+        let native_object_query = self.execute(move |conn| {
+            async {
+                conn.results(move || {
+                    let mut query = f::full_objects_history
+                        .select(StoredFullHistoryObject::as_select())
+                        .into_boxed();
+
+                    for (id, version) in id_versions.iter().cloned() {
+                        query =
+                            query.or_filter(f::object_id.eq(id).and(f::object_version.eq(version)));
+                    }
+
+                    query
+                })
+                .await
+            }
+            .scope_boxed()
+        });
+        let (indexed_objects_result, native_objects_result) =
+            futures::join!(indexed_objects_query, native_object_query);
+        let indexed_objects: Vec<StoredHistoryObject> = indexed_objects_result
+            .map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?;
+        let native_objects: Vec<StoredFullHistoryObject> = native_objects_result
             .map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?;
 
-        let mut id_version_to_stored = BTreeMap::new();
-        for stored in objects {
-            let key = (addr(&stored.object_id)?, stored.object_version as u64);
-            id_version_to_stored.insert(key, stored);
+        let mut id_version_to_indexed = BTreeMap::new();
+        for indexed in indexed_objects {
+            let key = (addr(&indexed.object_id)?, indexed.object_version as u64);
+            id_version_to_indexed.insert(key, indexed);
+        }
+        let mut id_version_to_native = BTreeMap::new();
+        for native in native_objects {
+            let key = (addr(&native.object_id)?, native.object_version as u64);
+            id_version_to_native.insert(key, native);
         }
 
         let mut result = HashMap::new();
         for key in keys {
-            let Some(stored) = id_version_to_stored.get(&(key.id, key.version)) else {
-                continue;
-            };
+            let indexed_opt = id_version_to_indexed.get(&(key.id, key.version));
 
             // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
             // quite rare that this query actually filters something, but encoding it in SQL is
             // complicated.
-            if key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
-                continue;
-            }
+            let object = if let Some(indexed) = indexed_opt {
+                if key.checkpoint_viewed_at < indexed.checkpoint_sequence_number as u64 {
+                    continue;
+                }
+                Object::try_from_stored_history_object(
+                    indexed.clone(),
+                    key.checkpoint_viewed_at,
+                    // This conversion will use the object's own version as the `Object::root_version`.
+                    None,
+                )?
+            } else {
+                let Some(native) = id_version_to_native.get(&(key.id, key.version)) else {
+                    continue;
+                };
+                if let Some(serialized) = &native.serialized_object {
+                    let object = bcs::from_bytes(serialized).map_err(|_| {
+                        Error::Internal(format!("Failed to deserialize object at {:?}", key))
+                    })?;
+                    Object::from_native(
+                        key.id,
+                        object,
+                        key.checkpoint_viewed_at,
+                        // This conversion will use the object's own version as the `Object::root_version`.
+                        None,
+                    )
+                } else {
+                    Object::new_wrapped_or_deleted(key.id, key.version, key.checkpoint_viewed_at)
+                }
+            };
 
-            let object = Object::try_from_stored_history_object(
-                stored.clone(),
-                key.checkpoint_viewed_at,
-                // This conversion will use the object's own version as the `Object::root_version`.
-                None,
-            )?;
             result.insert(*key, object);
         }
 
