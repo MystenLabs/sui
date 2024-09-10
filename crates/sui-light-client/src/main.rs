@@ -431,12 +431,14 @@ async fn get_verified_effects_and_events(
     let options = SuiTransactionBlockResponseOptions::new();
     let seq = read_api
         .get_transaction_with_options(tid, options)
-        .await.map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
+        .await
+        .map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
         .checkpoint
         .ok_or(anyhow!("Transaction not found"))?;
 
     // Download the full checkpoint for this sequence number
-    let full_check_point = get_full_checkpoint(config, seq).await
+    let full_check_point = get_full_checkpoint(config, seq)
+        .await
         .map_err(|e| anyhow!(format!("Cannot get full checkpoint: {e}")))?;
 
     // Load the list of stored checkpoints
@@ -477,10 +479,10 @@ async fn get_verified_effects_and_events(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?.committee()
+        Genesis::load(&genesis_path)?
+            .committee()
             .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
     };
-
 
     info!("Extracting effects and events for TID: {}", tid);
     extract_verified_effects_and_events(&full_check_point, &committee, tid)

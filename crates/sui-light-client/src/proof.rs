@@ -14,7 +14,6 @@ use sui_types::{
     transaction::Transaction,
 };
 
-
 /// Define aspect of Sui state that need to be certified in a proof
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ProofTarget {
