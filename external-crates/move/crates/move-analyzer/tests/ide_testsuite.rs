@@ -12,7 +12,7 @@ use std::{
 use json_comments::StripComments;
 use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
-    completion::completion_items,
+    completions::compute_completions,
     inlay_hints::inlay_hints_internal,
     symbols::{
         def_info_doc_string, get_symbols, maybe_convert_for_guard, PrecompiledPkgDeps, Symbols,
@@ -189,7 +189,7 @@ impl CompletionTest {
             line: lsp_use_line,
             character: lsp_use_col,
         };
-        let items = completion_items(
+        let items = compute_completions(
             symbols,
             ide_files_root,
             pkg_dependencies,

@@ -8,7 +8,7 @@ extern crate move_ir_types;
 pub mod analysis;
 pub mod analyzer;
 pub mod compiler_info;
-pub mod completion;
+pub mod completions;
 pub mod context;
 pub mod diagnostics;
 pub mod inlay_hints;
