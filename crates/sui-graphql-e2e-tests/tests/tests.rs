@@ -12,7 +12,7 @@ pub const TEST_DIR: &str = "tests";
 
 datatest_stable::harness!(run_test, TEST_DIR, r".*\.(mvir|move)$");
 
-#[cfg_attr(not(msim), tokio::main)]
+#[tokio::main]
 async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     telemetry_subscribers::init_for_testing();
     run_test_impl::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
