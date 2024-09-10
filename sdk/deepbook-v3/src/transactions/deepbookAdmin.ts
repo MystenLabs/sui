@@ -137,4 +137,20 @@ export class DeepBookAdminContract {
 			],
 		});
 	};
+
+	/**
+	 * @description Sets the treasury address where pool creation fees will be sent
+	 * @param {string} treasuryAddress The treasury address
+	 * @returns A function that takes a Transaction object
+	 */
+	setTreasuryAddress = (treasuryAddress: string) => (tx: Transaction) => {
+		tx.moveCall({
+			target: `${this.#config.DEEPBOOK_PACKAGE_ID}::registry::set_treasury_address`,
+			arguments: [
+				tx.object(this.#config.REGISTRY_ID),
+				tx.pure.address(treasuryAddress),
+				tx.object(this.#adminCap()),
+			],
+		});
+	};
 }
