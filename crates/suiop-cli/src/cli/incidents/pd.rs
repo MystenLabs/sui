@@ -23,14 +23,14 @@ use crate::cli::incidents_cmd;
 use crate::cli::lib::utils::day_of_week;
 use crate::DEBUG_MODE;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Priority {
     pub name: String,
     id: String,
     color: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Incident {
     #[serde(rename = "incident_number")]
     number: u64,
@@ -414,4 +414,98 @@ fn group_by_similar_title(
     }
 
     groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_group_by_similar_title() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Another thing entirely".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Another thing entirely 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "A third thing that doesn't look the same".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let groups = group_by_similar_title(incidents, 0.8);
+        println!("{:#?}", groups);
+
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups.get("Incident 1").unwrap().len(), 2);
+        assert!(groups.get("Incident 2").is_none());
+        assert_eq!(groups.get("Another thing entirely").unwrap().len(), 2);
+        assert_eq!(
+            groups
+                .get("A third thing that doesn't look the same")
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_group_by_similar_title_with_similar_titles() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 3".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let groups = group_by_similar_title(incidents, 0.8);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups.get("Incident 1").unwrap().len(), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "Threshold must be between 0.0 and 1.0")]
+    fn test_group_by_similar_title_with_invalid_threshold() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        group_by_similar_title(incidents, -0.5);
+    }
 }
