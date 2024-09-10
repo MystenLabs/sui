@@ -368,10 +368,15 @@ async fn get_full_checkpoint(
     config: &Config,
     checkpoint_number: u64,
 ) -> anyhow::Result<CheckpointData> {
-    let url = Url::parse(&config.object_store_url)?;
+    let url = Url::parse(&config.object_store_url)
+        .map_err(|_| anyhow!("Cannot parse object store URL"))?;
     let (dyn_store, _store_path) = parse_url(&url).unwrap();
     let path = Path::from(format!("{}.chk", checkpoint_number));
-    let response = dyn_store.get(&path).await?;
+    info!("Request full checkpoint: {}", path);
+    let response = dyn_store
+        .get(&path)
+        .await
+        .map_err(|_| anyhow!("Cannot get full checkpoint from object store"))?;
     let bytes = response.bytes().await?;
     let (_, full_checkpoint) = bcs::from_bytes::<(u8, CheckpointData)>(&bytes)?;
     Ok(full_checkpoint)
@@ -421,16 +426,18 @@ async fn get_verified_effects_and_events(
         .unwrap();
     let read_api = sui_mainnet.read_api();
 
+    info!("Getting effects and events for TID: {}", tid);
     // Lookup the transaction id and get the checkpoint sequence number
     let options = SuiTransactionBlockResponseOptions::new();
     let seq = read_api
         .get_transaction_with_options(tid, options)
-        .await?
+        .await.map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
         .checkpoint
         .ok_or(anyhow!("Transaction not found"))?;
 
     // Download the full checkpoint for this sequence number
-    let full_check_point = get_full_checkpoint(config, seq).await?;
+    let full_check_point = get_full_checkpoint(config, seq).await
+        .map_err(|e| anyhow!(format!("Cannot get full checkpoint: {e}")))?;
 
     // Load the list of stored checkpoints
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
@@ -470,10 +477,14 @@ async fn get_verified_effects_and_events(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?.committee()?
+        Genesis::load(&genesis_path)?.committee()
+            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
     };
 
+
+    info!("Extracting effects and events for TID: {}", tid);
     extract_verified_effects_and_events(&full_check_point, &committee, tid)
+        .map_err(|e| anyhow!(format!("Cannot extract effects and events: {e}")))
 }
 
 async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Object> {
@@ -489,14 +500,17 @@ async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Ob
     let read_api = sui_client.read_api();
     let object_json = read_api
         .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
-        .await?;
+        .await
+        .expect("Cannot get object");
     let object = object_json
         .into_object()
         .expect("Cannot make into object data");
     let object: Object = object.try_into().expect("Cannot reconstruct object");
 
     // Need to authenticate this object
-    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction).await?;
+    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction)
+        .await
+        .expect("Cannot get effects and events");
 
     // check that this object ID, version and hash is in the effects
     let target_object_ref = object.compute_object_reference();
@@ -504,7 +518,8 @@ async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Ob
         .all_changed_objects()
         .iter()
         .find(|object_ref| object_ref.0 == target_object_ref)
-        .ok_or(anyhow!("Object not found"))?;
+        .ok_or(anyhow!("Object not found"))
+        .expect("Object not found");
 
     Ok(object)
 }
