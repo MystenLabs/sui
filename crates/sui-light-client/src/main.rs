@@ -20,7 +20,6 @@ use sui_types::{
 
 use sui_config::genesis::Genesis;
 
-use sui_json::{move_value_to_json, SuiJsonValue};
 use sui_package_resolver::Result as ResolverResult;
 use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
@@ -141,7 +140,6 @@ async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyho
         .await
         .expect("Cannot connect to graphql")
         .text()
-        // .json::<HashMap<String, String>>()
         .await
         .expect("Cannot parse response");
 
@@ -417,12 +415,10 @@ async fn get_verified_effects_and_events(
     config: &Config,
     tid: TransactionDigest,
 ) -> anyhow::Result<(TransactionEffects, Option<TransactionEvents>)> {
-    let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
-        SuiClientBuilder::default()
-            .build(config.full_node_url.as_str())
-            .await
-            .unwrap(),
-    );
+    let sui_mainnet: sui_sdk::SuiClient = SuiClientBuilder::default()
+        .build(config.full_node_url.as_str())
+        .await
+        .unwrap();
     let read_api = sui_mainnet.read_api();
 
     // Lookup the transaction id and get the checkpoint sequence number
@@ -560,9 +556,6 @@ pub async fn main() {
 
                     let result = BoundedVisitor::deserialize_value(&event.contents, &type_layout)
                         .expect("Cannot deserialize");
-                    let json = move_value_to_json(&result).expect("Cannot convert to json");
-                    let json_val =
-                        SuiJsonValue::new_unchecked(json).expect("Cannot convert to json");
 
                     println!(
                         "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
@@ -570,7 +563,7 @@ pub async fn main() {
                         event.transaction_module,
                         event.sender,
                         event.type_,
-                        serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                        serde_json::to_string_pretty(&result).unwrap()
                     );
                 }
             } else {
@@ -592,8 +585,6 @@ pub async fn main() {
                 let result =
                     BoundedVisitor::deserialize_value(move_object.contents(), &type_layout)
                         .expect("Cannot deserialize");
-                let json = move_value_to_json(&result).expect("Cannot convert to json");
-                let json_val = SuiJsonValue::new_unchecked(json).expect("Cannot convert to json");
 
                 let (oid, version, hash) = object.compute_object_reference();
                 println!(
@@ -603,7 +594,7 @@ pub async fn main() {
                     hash,
                     object.owner,
                     object_type,
-                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                    serde_json::to_string_pretty(&result).unwrap()
                 );
             }
         }

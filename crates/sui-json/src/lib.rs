@@ -99,10 +99,6 @@ impl SuiJsonValue {
         Ok(Self(json_value))
     }
 
-    pub fn new_unchecked(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {
-        Ok(Self(json_value))
-    }
-
     fn check_value(json_value: &JsonValue) -> Result<(), anyhow::Error> {
         match json_value {
             // No checks needed for Bool and String
@@ -396,7 +392,7 @@ fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
     }
 }
 
-pub fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
+fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
     Some(match move_value {
         MoveValue::Vector(values) => JsonValue::Array(
             values
