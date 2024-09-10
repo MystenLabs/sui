@@ -28,6 +28,6 @@
 		"@mysten/sui": "workspace:*",
 		"@prisma/client": "^5.16.2",
 		"cors": "^2.8.5",
-		"express": "^4.19.2"
+		"express": "^4.20.0"
 	}
 }
