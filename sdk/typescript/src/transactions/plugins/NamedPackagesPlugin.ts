@@ -2,14 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiGraphQLClient } from '../../graphql/client.js';
-import type { NamedPackagesPluginCache, NameResolutionRequest } from '../../utils/move-registry.js';
-import {
-	findTransactionBlockNames,
-	listToRequests,
-	replaceNames,
-} from '../../utils/move-registry.js';
 import type { BuildTransactionOptions } from '../json-rpc-resolver.js';
 import type { TransactionDataBuilder } from '../TransactionData.js';
+import type { NamedPackagesPluginCache, NameResolutionRequest } from './utils.js';
+import { findTransactionBlockNames, listToRequests, replaceNames } from './utils.js';
 
 export type NamedPackagesPluginOptions = {
 	/**

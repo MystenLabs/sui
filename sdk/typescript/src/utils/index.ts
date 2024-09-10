@@ -28,8 +28,4 @@ export {
 	SUI_SYSTEM_STATE_OBJECT_ID,
 } from './constants.js';
 
-export {
-	isValidNamedPackage,
-	isValidNamedType,
-	type NamedPackagesPluginCache,
-} from './move-registry.js';
+export { isValidNamedPackage, isValidNamedType } from './move-registry.js';
