@@ -23,6 +23,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use sui_core::traffic_controller::{metrics::TrafficControllerMetrics, TrafficController};
 use sui_types::{
     bridge::{
         BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
@@ -40,8 +41,9 @@ pub async fn run_bridge_node(
     prometheus_registry: prometheus::Registry,
 ) -> anyhow::Result<JoinHandle<()>> {
     init_all_struct_tags();
-    let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
-    let (server_config, client_config) = config.validate(metrics.clone()).await?;
+    let bridge_metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
+    let tc_metrics = TrafficControllerMetrics::new(&prometheus_registry);
+    let (server_config, client_config) = config.validate(bridge_metrics.clone()).await?;
     let sui_chain_identifier = server_config
         .sui_client
         .get_chain_identifier()
@@ -61,10 +63,17 @@ pub async fn run_bridge_node(
             client_config.is_some(),
         ))
         .unwrap();
+    let traffic_controller = server_config.traffic_policy_config.map(|policy_config| {
+        Arc::new(TrafficController::spawn(
+            policy_config.clone(),
+            tc_metrics,
+            None, // remote firewall config
+        ))
+    });
 
     // Start Client
     let _handles = if let Some(client_config) = client_config {
-        start_client_components(client_config, metrics.clone()).await
+        start_client_components(client_config, bridge_metrics.clone()).await
     } else {
         Ok(vec![])
     }?;
@@ -81,9 +90,10 @@ pub async fn run_bridge_node(
             server_config.sui_client,
             server_config.eth_client,
             server_config.approved_governance_actions,
-            metrics.clone(),
+            traffic_controller,
+            bridge_metrics.clone(),
         ),
-        metrics,
+        bridge_metrics,
         Arc::new(metadata),
     ))
 }
@@ -465,6 +475,7 @@ mod tests {
             db_path: None,
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            traffic_policy_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -530,6 +541,7 @@ mod tests {
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            traffic_policy_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(
@@ -606,6 +618,7 @@ mod tests {
             db_path: Some(db_path),
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,
+            traffic_policy_config: None,
         };
         // Spawn bridge node in memory
         let _handle = run_bridge_node(

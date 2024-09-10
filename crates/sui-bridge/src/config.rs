@@ -34,6 +34,7 @@ use sui_types::crypto::{get_key_pair_from_rng, NetworkKeyPair, SuiKeyPair};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
 use sui_types::object::Owner;
+use sui_types::traffic_control::PolicyConfig;
 use tracing::info;
 
 #[serde_as]
@@ -119,6 +120,9 @@ pub struct BridgeNodeConfig {
     pub metrics_key_pair: NetworkKeyPair,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<MetricsConfig>,
+    /// Traffic control policy configuration
+    #[serde(default)]
+    pub traffic_policy_config: Option<PolicyConfig>,
 }
 
 pub fn default_ed25519_key_pair() -> NetworkKeyPair {
@@ -201,6 +205,7 @@ impl BridgeNodeConfig {
             sui_client: sui_client.clone(),
             eth_client: eth_client.clone(),
             approved_governance_actions,
+            traffic_policy_config: self.traffic_policy_config.clone(),
         };
         if !self.run_client {
             return Ok((bridge_server_config, None));
@@ -389,6 +394,8 @@ pub struct BridgeServerConfig {
     pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
+    /// Traffic control policy configuration
+    pub traffic_policy_config: Option<PolicyConfig>,
 }
 
 // TODO: add gas balance alert threshold

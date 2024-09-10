@@ -14,6 +14,8 @@ use crate::{
         EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction, SignedBridgeAction,
     },
 };
+use axum::extract::ConnectInfo;
+use axum::http::HeaderMap;
 use axum::{
     extract::{Path, State},
     Json,
@@ -25,8 +27,13 @@ use fastcrypto::{
     encoding::{Encoding, Hex},
     traits::ToFromBytes,
 };
+use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::{net::SocketAddr, str::FromStr};
+use sui_core::traffic_controller::policies::TrafficTally;
+use sui_core::traffic_controller::TrafficController;
+use sui_types::traffic_control::Weight;
 use sui_types::{bridge::BridgeChainId, TypeTag};
 use tracing::{info, instrument};
 
@@ -158,11 +165,13 @@ async fn health_check() -> StatusCode {
 }
 
 async fn ping(
+    ConnectInfo(_client_addr): ConnectInfo<SocketAddr>,
     State((_handler, _metrics, metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap,
 ) -> Result<Json<Arc<BridgeNodePublicMetadata>>, BridgeError> {
     Ok(Json(metadata))
 }
@@ -173,175 +182,207 @@ async fn metrics_key_fetch(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<Option<Arc<Ed25519PublicKey>>>, BridgeError> {
     Ok(Json(metadata.metrics_pubkey.clone()))
 }
 
 #[instrument(level = "error", skip_all, fields(tx_hash_hex=tx_hash_hex, event_idx=event_idx))]
 async fn handle_eth_tx_hash(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((tx_hash_hex, event_idx)): Path<(String, u16)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let sig = handler.handle_eth_tx_hash(tx_hash_hex, event_idx).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_eth_tx_hash", future).await
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let sig = handler.handle_eth_tx_hash(tx_hash_hex, event_idx).await?;
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_eth_tx_hash", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(tx_digest_base58=tx_digest_base58, event_idx=event_idx))]
 async fn handle_sui_tx_digest(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((tx_digest_base58, event_idx)): Path<(String, u16)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let sig: Json<SignedBridgeAction> = handler
-            .handle_sui_tx_digest(tx_digest_base58, event_idx)
-            .await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_sui_tx_digest", future).await
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let sig: Json<SignedBridgeAction> = handler
+                .handle_sui_tx_digest(tx_digest_base58, event_idx)
+                .await?;
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_sui_tx_digest", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, blocklist_type=blocklist_type, keys=keys))]
 async fn handle_update_committee_blocklist_action(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, blocklist_type, keys)): Path<(u8, u64, u8, String)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let blocklist_type = BlocklistType::try_from(blocklist_type).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!(
-                "Invalid blocklist action type: {:?}",
-                err
-            ))
-        })?;
-        let members_to_update = keys
-            .split(',')
-            .map(|s| {
-                let bytes = Hex::decode(s).map_err(|e| anyhow::anyhow!("{:?}", e))?;
-                BridgeAuthorityPublicKeyBytes::from_bytes(&bytes)
-                    .map_err(|e| anyhow::anyhow!("{:?}", e))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| BridgeError::InvalidBridgeClientRequest(format!("{:?}", e)))?;
-        let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
-            chain_id,
-            nonce,
-            blocklist_type,
-            members_to_update,
-        });
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let blocklist_type = BlocklistType::try_from(blocklist_type).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!(
+                    "Invalid blocklist action type: {:?}",
+                    err
+                ))
+            })?;
+            let members_to_update = keys
+                .split(',')
+                .map(|s| {
+                    let bytes = Hex::decode(s).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                    BridgeAuthorityPublicKeyBytes::from_bytes(&bytes)
+                        .map_err(|e| anyhow::anyhow!("{:?}", e))
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| BridgeError::InvalidBridgeClientRequest(format!("{:?}", e)))?;
+            let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
+                chain_id,
+                nonce,
+                blocklist_type,
+                members_to_update,
+            });
 
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(
-        metrics.clone(),
-        "handle_update_committee_blocklist_action",
-        future
-    )
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
+        };
+        with_metrics!(
+            metrics.clone(),
+            "handle_update_committee_blocklist_action",
+            future
+        )
+        .await
+    })
     .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, action_type=action_type))]
 async fn handle_emergency_action(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, action_type)): Path<(u8, u64, u8)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let action_type = EmergencyActionType::try_from(action_type).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!(
-                "Invalid emergency action type: {:?}",
-                err
-            ))
-        })?;
-        let action = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id,
-            nonce,
-            action_type,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_emergency_action", future).await
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let action_type = EmergencyActionType::try_from(action_type).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!(
+                    "Invalid emergency action type: {:?}",
+                    err
+                ))
+            })?;
+            let action = BridgeAction::EmergencyAction(EmergencyAction {
+                chain_id,
+                nonce,
+                action_type,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_emergency_action", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, sending_chain_id=sending_chain_id, new_usd_limit=new_usd_limit))]
 async fn handle_limit_update_action(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, sending_chain_id, new_usd_limit)): Path<(u8, u64, u8, u64)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let sending_chain_id = BridgeChainId::try_from(sending_chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id,
-            nonce,
-            sending_chain_id,
-            new_usd_limit,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_limit_update_action", future).await
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let sending_chain_id = BridgeChainId::try_from(sending_chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
+                chain_id,
+                nonce,
+                sending_chain_id,
+                new_usd_limit,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_limit_update_action", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, token_id=token_id, new_usd_price=new_usd_price))]
 async fn handle_asset_price_update_action(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, token_id, new_usd_price)): Path<(u8, u64, u8, u64)>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
-            chain_id,
-            nonce,
-            token_id,
-            new_usd_price,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_asset_price_update_action", future).await
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
+                chain_id,
+                nonce,
+                token_id,
+                new_usd_price,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_asset_price_update_action", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, proxy_address=format!("{:x}", proxy_address), new_impl_address=format!("{:x}", new_impl_address)))]
 async fn handle_evm_contract_upgrade_with_calldata(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, proxy_address, new_impl_address, calldata)): Path<(
         u8,
         u64,
@@ -349,34 +390,38 @@ async fn handle_evm_contract_upgrade_with_calldata(
         EthAddress,
         String,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let call_data = Hex::decode(&calldata).map_err(|e| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid call data: {:?}", e))
-        })?;
-        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            chain_id,
-            nonce,
-            proxy_address,
-            new_impl_address,
-            call_data,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(
-        metrics.clone(),
-        "handle_evm_contract_upgrade_with_calldata",
-        future
-    )
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let call_data = Hex::decode(&calldata).map_err(|e| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid call data: {:?}", e))
+            })?;
+            let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                chain_id,
+                nonce,
+                proxy_address,
+                new_impl_address,
+                call_data,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
+        };
+        with_metrics!(
+            metrics.clone(),
+            "handle_evm_contract_upgrade_with_calldata",
+            future
+        )
+        .await
+    })
     .await
 }
 
@@ -386,6 +431,7 @@ async fn handle_evm_contract_upgrade_with_calldata(
     fields(chain_id, nonce, proxy_address, new_impl_address)
 )]
 async fn handle_evm_contract_upgrade(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, proxy_address, new_impl_address)): Path<(
         u8,
         u64,
@@ -397,27 +443,32 @@ async fn handle_evm_contract_upgrade(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            chain_id,
-            nonce,
-            proxy_address,
-            new_impl_address,
-            call_data: vec![],
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                chain_id,
+                nonce,
+                proxy_address,
+                new_impl_address,
+                call_data: vec![],
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
 
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_evm_contract_upgrade", future).await
+            Ok(sig)
+        };
+        with_metrics!(metrics.clone(), "handle_evm_contract_upgrade", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, native=native, token_ids=token_ids, token_type_names=token_type_names, token_prices=token_prices))]
 async fn handle_add_tokens_on_sui(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, native, token_ids, token_type_names, token_prices)): Path<(
         u8,
         u64,
@@ -431,74 +482,82 @@ async fn handle_add_tokens_on_sui(
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
 
-        if !chain_id.is_sui_chain() {
-            return Err(BridgeError::InvalidBridgeClientRequest(
-                "handle_add_tokens_on_sui only expects Sui chain id".to_string(),
-            ));
-        }
-
-        let native = match native {
-            1 => true,
-            0 => false,
-            _ => {
-                return Err(BridgeError::InvalidBridgeClientRequest(format!(
-                    "Invalid native flag: {}",
-                    native
-                )))
+            if !chain_id.is_sui_chain() {
+                return Err(BridgeError::InvalidBridgeClientRequest(
+                    "handle_add_tokens_on_sui only expects Sui chain id".to_string(),
+                ));
             }
+
+            let native = match native {
+                1 => true,
+                0 => false,
+                _ => {
+                    return Err(BridgeError::InvalidBridgeClientRequest(format!(
+                        "Invalid native flag: {}",
+                        native
+                    )))
+                }
+            };
+            let token_ids = token_ids
+                .split(',')
+                .map(|s| {
+                    s.parse::<u8>().map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token id: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_type_names = token_type_names
+                .split(',')
+                .map(|s| {
+                    TypeTag::from_str(s).map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token type name: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_prices = token_prices
+                .split(',')
+                .map(|s| {
+                    s.parse::<u64>().map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token price: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+                chain_id,
+                nonce,
+                native,
+                token_ids,
+                token_type_names,
+                token_prices,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
         };
-        let token_ids = token_ids
-            .split(',')
-            .map(|s| {
-                s.parse::<u8>().map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_type_names = token_type_names
-            .split(',')
-            .map(|s| {
-                TypeTag::from_str(s).map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!(
-                        "Invalid token type name: {:?}",
-                        err
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_prices = token_prices
-            .split(',')
-            .map(|s| {
-                s.parse::<u64>().map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!(
-                        "Invalid token price: {:?}",
-                        err
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
-            chain_id,
-            nonce,
-            native,
-            token_ids,
-            token_type_names,
-            token_prices,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_add_tokens_on_sui", future).await
+        with_metrics!(metrics.clone(), "handle_add_tokens_on_sui", future).await
+    })
+    .await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, native=native, token_ids=token_ids, token_addresses=token_addresses, token_sui_decimals=token_sui_decimals, token_prices=token_prices))]
 async fn handle_add_tokens_on_evm(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Path((chain_id, nonce, native, token_ids, token_addresses, token_sui_decimals, token_prices)): Path<(
         u8,
         u64,
@@ -507,87 +566,154 @@ async fn handle_add_tokens_on_evm(
         String,
         String,
         String,
-    )>,
+        )>,
     State((handler, metrics, _metadata)): State<(
         Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
         Arc<BridgeMetrics>,
         Arc<BridgeNodePublicMetadata>,
     )>,
+    _headers: HeaderMap, // TODO: add x-forwarded-for header parsing and configuration
 ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-    let future = async {
-        let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
-            BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
-        })?;
-        if chain_id.is_sui_chain() {
-            return Err(BridgeError::InvalidBridgeClientRequest(
-                "handle_add_tokens_on_evm does not expect Sui chain id".to_string(),
-            ));
-        }
-
-        let native = match native {
-            1 => true,
-            0 => false,
-            _ => {
-                return Err(BridgeError::InvalidBridgeClientRequest(format!(
-                    "Invalid native flag: {}",
-                    native
-                )))
+    handle_with_decoration(Some(client_addr.ip()), handler.clone(), || async {
+        let future = async {
+            let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+            })?;
+            if chain_id.is_sui_chain() {
+                return Err(BridgeError::InvalidBridgeClientRequest(
+                    "handle_add_tokens_on_evm does not expect Sui chain id".to_string(),
+                ));
             }
+
+            let native = match native {
+                1 => true,
+                0 => false,
+                _ => {
+                    return Err(BridgeError::InvalidBridgeClientRequest(format!(
+                        "Invalid native flag: {}",
+                        native
+                    )))
+                }
+            };
+            let token_ids = token_ids
+                .split(',')
+                .map(|s| {
+                    s.parse::<u8>().map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token id: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_addresses = token_addresses
+                .split(',')
+                .map(|s| {
+                    EthAddress::from_str(s).map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token address: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_sui_decimals = token_sui_decimals
+                .split(',')
+                .map(|s| {
+                    s.parse::<u8>().map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token sui decimals: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let token_prices = token_prices
+                .split(',')
+                .map(|s| {
+                    s.parse::<u64>().map_err(|err| {
+                        BridgeError::InvalidBridgeClientRequest(format!(
+                            "Invalid token price: {:?}",
+                            err
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let action = BridgeAction::AddTokensOnEvmAction(AddTokensOnEvmAction {
+                chain_id,
+                nonce,
+                native,
+                token_ids,
+                token_addresses,
+                token_sui_decimals,
+                token_prices,
+            });
+            let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+            Ok(sig)
         };
-        let token_ids = token_ids
-            .split(',')
-            .map(|s| {
-                s.parse::<u8>().map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_addresses = token_addresses
-            .split(',')
-            .map(|s| {
-                EthAddress::from_str(s).map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!(
-                        "Invalid token address: {:?}",
-                        err
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_sui_decimals = token_sui_decimals
-            .split(',')
-            .map(|s| {
-                s.parse::<u8>().map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!(
-                        "Invalid token sui decimals: {:?}",
-                        err
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_prices = token_prices
-            .split(',')
-            .map(|s| {
-                s.parse::<u64>().map_err(|err| {
-                    BridgeError::InvalidBridgeClientRequest(format!(
-                        "Invalid token price: {:?}",
-                        err
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let action = BridgeAction::AddTokensOnEvmAction(AddTokensOnEvmAction {
-            chain_id,
-            nonce,
-            native,
-            token_ids,
-            token_addresses,
-            token_sui_decimals,
-            token_prices,
-        });
-        let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
-        Ok(sig)
-    };
-    with_metrics!(metrics.clone(), "handle_add_tokens_on_evm", future).await
+        with_metrics!(metrics.clone(), "handle_add_tokens_on_evm", future).await
+    })
+    .await
+}
+
+async fn handle_traffic_req(
+    traffic_controller: Arc<TrafficController>,
+    client: &Option<IpAddr>,
+) -> Result<(), BridgeError> {
+    if !traffic_controller.check(client, &None).await {
+        // Entity in blocklist or not in allowlist
+        Err(BridgeError::TooManyRequests)
+    } else {
+        Ok(())
+    }
+}
+
+fn handle_traffic_resp(
+    traffic_controller: Arc<TrafficController>,
+    client: Option<IpAddr>,
+    response: Result<Json<SignedBridgeAction>, BridgeError>,
+) {
+    traffic_controller.tally(TrafficTally {
+        direct: client,
+        through_fullnode: None,
+        error_weight: response.err().map(normalize).unwrap_or(Weight::zero()),
+        // For now, count everything as spam. Later, we may want to
+        // define a distribution based on the endpoint being called
+        spam_weight: Weight::one(),
+        timestamp: SystemTime::now(),
+    });
+}
+
+fn normalize(error_code: BridgeError) -> Weight {
+    match error_code {
+        // TODO: for now, we weight all error types equally.
+        // Later we may want to provide a weight distribution
+        // based on the error type.
+        _ => Weight::one(),
+    }
+}
+
+async fn handle_with_decoration<F, Fut>(
+    client: Option<IpAddr>,
+    bridge_req_handler: Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
+    fn_handler: F,
+) -> Result<Json<SignedBridgeAction>, BridgeError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Json<SignedBridgeAction>, BridgeError>>,
+{
+    if let Some(traffic_controller) = bridge_req_handler.traffic_controller() {
+        if let Err(blocked_response) = handle_traffic_req(traffic_controller.clone(), &client).await
+        {
+            return Err(blocked_response);
+        }
+    }
+
+    let response = fn_handler().await;
+    if let Some(traffic_controller) = bridge_req_handler.traffic_controller() {
+        handle_traffic_resp(traffic_controller.clone(), client, response.clone());
+    }
+    response
 }
 
 #[macro_export]

@@ -69,6 +69,8 @@ pub enum BridgeError {
     RestAPIError(String),
     // Uncategorized error
     Generic(String),
+    // Rate limiting
+    TooManyRequests,
 }
 
 pub type BridgeResult<T> = Result<T, BridgeError>;

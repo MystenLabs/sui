@@ -17,6 +17,7 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_core::traffic_controller::TrafficController;
 use sui_types::digests::TransactionDigest;
 use tap::TapFallible;
 use tokio::sync::{oneshot, Mutex};
@@ -42,12 +43,13 @@ pub trait BridgeRequestHandlerTrait {
         tx_digest_base58: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
-
     /// Handles a request to sign a governance action.
     async fn handle_governance_action(
         &self,
         action: BridgeAction,
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
+    /// Returns the traffic controller
+    fn traffic_controller(&self) -> Option<Arc<TrafficController>>;
 }
 
 #[async_trait::async_trait]
@@ -225,6 +227,7 @@ pub struct BridgeRequestHandler {
         BridgeAction,
         oneshot::Sender<BridgeResult<SignedBridgeAction>>,
     )>,
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 impl BridgeRequestHandler {
@@ -236,6 +239,7 @@ impl BridgeRequestHandler {
         sui_client: Arc<SuiClient<SC>>,
         eth_client: Arc<EthClient<EP>>,
         approved_governance_actions: Vec<BridgeAction>,
+        traffic_controller: Option<Arc<TrafficController>>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
         let (sui_signer_tx, sui_rx) = mysten_metrics::metered_channel::channel(
@@ -284,6 +288,7 @@ impl BridgeRequestHandler {
             sui_signer_tx,
             eth_signer_tx,
             governance_signer_tx,
+            traffic_controller,
         }
     }
 }
@@ -342,6 +347,10 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             panic!("Server governance action task's oneshot channel is dropped")
         })?;
         Ok(Json(signed_action))
+    }
+
+    fn traffic_controller(&self) -> Option<Arc<TrafficController>> {
+        self.traffic_controller.clone()
     }
 }
 
