@@ -4,7 +4,7 @@
 use mysten_metrics::RegistryService;
 use prometheus::Encoder;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub struct MetricsPushClient {
     certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
@@ -44,6 +44,8 @@ pub async fn push_metrics(
     url: &reqwest::Url,
     registry: &RegistryService,
 ) -> Result<(), anyhow::Error> {
+    info!(push_url =% url, "pushing metrics to remote");
+
     // now represents a collection timestamp for all of the metrics we send to the proxy
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
