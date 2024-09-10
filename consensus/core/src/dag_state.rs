@@ -24,7 +24,6 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
-    linearizer::CommitRound,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
     CommittedSubDag,
@@ -352,7 +351,7 @@ impl DagState {
     /// Gets all uncommitted blocks in a round.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        if round <= self.last_commit_round().commit_round() {
+        if round <= self.last_commit_round() {
             panic!("Round {} have committed blocks!", round);
         }
 
@@ -716,16 +715,26 @@ impl DagState {
         }
     }
 
-    /// The last (highest) committed round which is in practice the last leader's round. The commit round contains
-    /// information both about the committed leader slot and the corresponding gc round as well.
-    pub(crate) fn last_commit_round(&self) -> CommitRound {
-        let leader = self.last_commit_leader();
-        CommitRound::new(leader, self.context.protocol_config.gc_depth())
+    /// Highest round where a block is committed, which is last commit's leader round.
+    pub(crate) fn last_commit_round(&self) -> Round {
+        match &self.last_commit {
+            Some(commit) => commit.leader().round,
+            None => 0,
+        }
     }
 
     /// Last committed round per authority.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
         self.last_committed_rounds.clone()
+    }
+
+    pub(crate) fn gc_round(&self) -> Round {
+        self.last_commit_round()
+            .saturating_sub(self.context.protocol_config.gc_depth())
+    }
+
+    pub(crate) fn gc_enabled(&self) -> bool {
+        self.context.protocol_config.gc_depth() > 0
     }
 
     /// After each flush, DagState becomes persisted in storage and it expected to recover

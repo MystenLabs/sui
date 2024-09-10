@@ -7,66 +7,12 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, Slot, VerifiedBlock},
+    block::{BlockAPI, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
     Round,
 };
-
-#[derive(Clone)]
-pub(crate) struct CommitRound {
-    leader: Slot,
-    gc_round: Round,
-    gc_depth: u32,
-}
-
-impl CommitRound {
-    pub fn new(leader: Slot, gc_depth: u32) -> Self {
-        Self {
-            leader,
-            gc_round: Self::calculate_gc_round(leader, gc_depth),
-            gc_depth,
-        }
-    }
-
-    pub fn commit_round(&self) -> Round {
-        self.leader.round
-    }
-
-    #[allow(unused)]
-    pub fn gc_round(&self) -> Round {
-        self.gc_round
-    }
-
-    #[allow(unused)]
-    pub fn gc_depth(&self) -> u32 {
-        self.gc_depth
-    }
-
-    /// Calculates the latest CommitRound by providing the new latest committed leader.
-    /// The method will consume the current CommitRound and return a new one.
-    #[allow(unused)]
-    fn update(self, leader: Slot) -> Self {
-        // TODO: if we ever support multiple leaders we need to relax that rule
-        assert!(
-            leader.round > self.leader.round,
-            "Attempted to update commit round for leader of same round."
-        );
-        let gc_round = Self::calculate_gc_round(leader, self.gc_depth);
-
-        CommitRound {
-            leader,
-            gc_round,
-            gc_depth: self.gc_depth,
-        }
-    }
-
-    /// Calculates the GC round given a commit round and the gc_depth
-    fn calculate_gc_round(leader: Slot, gc_depth: u32) -> Round {
-        leader.round.saturating_sub(gc_depth)
-    }
-}
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[derive(Clone)]
@@ -100,7 +46,8 @@ impl Linearizer {
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
-        let mut _last_committed_round = dag_state.last_commit_round();
+        let gc_enabled = dag_state.gc_enabled();
+        let gc_round: Round = dag_state.gc_round();
 
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
@@ -124,6 +71,11 @@ impl Linearizer {
                             !committed.contains(ancestor)
                                 && last_committed_rounds[ancestor.author] < ancestor.round
                         })
+                        .filter(|ancestor| {
+                            // Keep the block if GC is not enabled or it is enabled and the block is above the gc_round. We do this
+                            // to stop the recursion early and avoid going to deep when it's unnecessary.
+                            !gc_enabled || ancestor.round > gc_round
+                        })
                         .collect::<Vec<_>>(),
                 )
                 .into_iter()
@@ -139,6 +91,12 @@ impl Linearizer {
         }
 
         drop(dag_state);
+
+        // The above code should have not yielded any blocks that are <= gc_round, but just to make sure that we'll never
+        // commit anything that should be garbage collected we attempt to prune here as well.
+        if gc_enabled {
+            to_commit.retain(|block| block.round() > gc_round);
+        }
 
         // Sort the blocks of the sub-dag blocks
         sort_sub_dag_blocks(&mut to_commit);
