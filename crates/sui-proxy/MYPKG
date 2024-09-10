@@ -1,0 +1,15 @@
+rust_binary(
+    name="sui-proxy",
+    command="cargo build",
+    profile="release",
+)
+mypkg(
+    name="sui-proxy",
+    version="e9dde845342a0e5a92db22beb79bb5ef",
+)
+podman_build(
+    name="sui-proxy-image",
+    registry="docker//us-central1-docker.pkg.dev/cryptic-bolt-398315/sui-proxy",
+    dockerfile="sui_proxy_dockerfile",
+    resources=[":sui-proxy"],
+)
