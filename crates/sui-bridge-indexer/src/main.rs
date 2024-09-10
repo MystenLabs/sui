@@ -24,13 +24,17 @@ use sui_bridge_indexer::config::IndexerConfig;
 use sui_bridge_indexer::eth_bridge_indexer::EthDataMapper;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::{get_connection_pool, read_sui_progress_store};
-use sui_bridge_indexer::sui_bridge_indexer::{PgBridgePersistent, SuiBridgeDataMapper};
+use sui_bridge_indexer::storage::PgBridgePersistent;
+use sui_bridge_indexer::sui_bridge_indexer::SuiBridgeDataMapper;
+use sui_bridge_indexer::sui_datasource::SuiCheckpointDatasource;
 use sui_bridge_indexer::sui_transaction_handler::handle_sui_transactions_loop;
 use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_config::Config;
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::sui_datasource::SuiCheckpointDatasource;
+use sui_indexer_builder::progress::{
+    OutOfOrderSaveAfterDurationPolicy, ProgressSavingPolicy, SaveAfterDurationPolicy,
+};
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -71,7 +75,20 @@ async fn main() -> Result<()> {
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     let db_url = config.db_url.clone();
-    let datastore = PgBridgePersistent::new(get_connection_pool(db_url.clone()).await);
+    let datastore = PgBridgePersistent::new(
+        get_connection_pool(db_url.clone()).await,
+        ProgressSavingPolicy::SaveAfterDuration(SaveAfterDurationPolicy::new(
+            tokio::time::Duration::from_secs(30),
+        )),
+        indexer_meterics.clone(),
+    );
+    let datastore_with_out_of_order_source = PgBridgePersistent::new(
+        get_connection_pool(db_url.clone()).await,
+        ProgressSavingPolicy::OutOfOrderSaveAfterDuration(OutOfOrderSaveAfterDurationPolicy::new(
+            tokio::time::Duration::from_secs(30),
+        )),
+        indexer_meterics.clone(),
+    );
 
     let eth_client: Arc<EthClient<MeteredEthHttpProvier>> = Arc::new(
         EthClient::<MeteredEthHttpProvier>::new(
@@ -118,7 +135,7 @@ async fn main() -> Result<()> {
         EthDataMapper {
             metrics: indexer_meterics.clone(),
         },
-        datastore.clone(),
+        datastore,
     )
     .with_backfill_strategy(BackfillStrategy::Partitioned { task_size: 1000 })
     .disable_live_task()
@@ -137,6 +154,7 @@ async fn main() -> Result<()> {
         config.checkpoints_path.clone().into(),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics.clone(),
+        indexer_meterics.clone(),
     );
     let indexer = IndexerBuilder::new(
         "SuiBridgeIndexer",
@@ -144,7 +162,7 @@ async fn main() -> Result<()> {
         SuiBridgeDataMapper {
             metrics: indexer_meterics.clone(),
         },
-        datastore,
+        datastore_with_out_of_order_source,
     )
     .build();
     indexer.start().await?;

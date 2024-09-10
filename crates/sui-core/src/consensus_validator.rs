@@ -89,6 +89,10 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+
+                ConsensusTransactionKind::UserTransaction(_tx) => {
+                    // TODO: implement verification for uncertified user transactions if needed
+                }
             }
         }
 

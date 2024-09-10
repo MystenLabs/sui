@@ -52,7 +52,7 @@ impl IndexerApi {
         let options = options.unwrap_or_default();
         let objects = self
             .inner
-            .get_owned_objects_in_blocking_task(address, filter, cursor, limit + 1)
+            .get_owned_objects(address, filter, cursor, limit + 1)
             .await?;
 
         let mut object_futures = vec![];
@@ -161,7 +161,7 @@ impl IndexerApiServer for IndexerApi {
         }
         let mut results = self
             .inner
-            .query_transaction_blocks_in_blocking_task(
+            .query_transaction_blocks(
                 query.filter,
                 query.options.unwrap_or_default(),
                 cursor,
@@ -196,7 +196,7 @@ impl IndexerApiServer for IndexerApi {
         let descending_order = descending_order.unwrap_or(false);
         let mut results = self
             .inner
-            .query_events_in_blocking_task(query, cursor, limit + 1, descending_order)
+            .query_events(query, cursor, limit + 1, descending_order)
             .await?;
 
         let has_next_page = results.len() > limit;
@@ -221,7 +221,7 @@ impl IndexerApiServer for IndexerApi {
         }
         let mut results = self
             .inner
-            .get_dynamic_fields_in_blocking_task(parent_object_id, cursor, limit + 1)
+            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
             .await?;
 
         let has_next_page = results.len() > limit;
@@ -249,7 +249,7 @@ impl IndexerApiServer for IndexerApi {
         .expect("deriving dynamic field id can't fail");
 
         let options = sui_json_rpc_types::SuiObjectDataOptions::full_content();
-        match self.inner.get_object_read_in_blocking_task(id).await? {
+        match self.inner.get_object_read(id).await? {
             sui_types::object::ObjectRead::NotExists(_)
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {
@@ -269,11 +269,7 @@ impl IndexerApiServer for IndexerApi {
             &name_bcs_value,
         )
         .expect("deriving dynamic field id can't fail");
-        match self
-            .inner
-            .get_object_read_in_blocking_task(dynamic_object_field_id)
-            .await?
-        {
+        match self.inner.get_object_read(dynamic_object_field_id).await? {
             sui_types::object::ObjectRead::NotExists(_)
             | sui_types::object::ObjectRead::Deleted(_) => {}
             sui_types::object::ObjectRead::Exists(object_ref, o, layout) => {
@@ -309,11 +305,7 @@ impl IndexerApiServer for IndexerApi {
         let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
 
         // get latest timestamp to check expiration.
-        let current_timestamp = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_checkpoint())
-            .await?
-            .timestamp_ms;
+        let current_timestamp = self.inner.get_latest_checkpoint().await?.timestamp_ms;
 
         // gather the requests to fetch in the multi_get_objs.
         let mut requests = vec![record_id];
@@ -327,7 +319,7 @@ impl IndexerApiServer for IndexerApi {
         // We do this as we do not know if the subdomain is a node or leaf record.
         let domains: Vec<_> = self
             .inner
-            .multi_get_objects_in_blocking_task(requests)
+            .multi_get_objects(requests)
             .await?
             .into_iter()
             .map(|o| sui_types::object::Object::try_from(o).ok())
@@ -391,10 +383,8 @@ impl IndexerApiServer for IndexerApi {
             has_next_page: false,
         };
 
-        let Some(field_reverse_record_object) = self
-            .inner
-            .get_object_in_blocking_task(reverse_record_id)
-            .await?
+        let Some(field_reverse_record_object) =
+            self.inner.get_object(&reverse_record_id, None).await?
         else {
             return Ok(result);
         };

@@ -7,6 +7,7 @@ use crate::error::Error;
 use super::checkpoint::{Checkpoint, CheckpointId};
 use async_graphql::*;
 use diesel::{CombineDsl, ExpressionMethods, QueryDsl, QueryResult};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer::schema::{checkpoints, objects_snapshot};
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
@@ -35,7 +36,9 @@ impl AvailableRange {
     /// Look up the available range when viewing the data consistently at `checkpoint_viewed_at`.
     pub(crate) async fn query(db: &Db, checkpoint_viewed_at: u64) -> Result<Self, Error> {
         let Some(range): Option<Self> = db
-            .execute(move |conn| Self::result(conn, checkpoint_viewed_at))
+            .execute(move |conn| {
+                async move { Self::result(conn, checkpoint_viewed_at).await }.scope_boxed()
+            })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch available range: {e}")))?
         else {
@@ -54,23 +57,29 @@ impl AvailableRange {
     /// Returns an error if there was an issue querying the database, Ok(None) if the checkpoint
     /// being viewed is not in the database's available range, or Ok(Some(AvailableRange))
     /// otherwise.
-    pub(crate) fn result(conn: &mut Conn, checkpoint_viewed_at: u64) -> QueryResult<Option<Self>> {
+    pub(crate) async fn result(
+        conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
+    ) -> QueryResult<Option<Self>> {
         use checkpoints::dsl as checkpoints;
         use objects_snapshot::dsl as snapshots;
 
-        let checkpoint_range: Vec<i64> = conn.results(move || {
-            let rhs = checkpoints::checkpoints
-                .select(checkpoints::sequence_number)
-                .order(checkpoints::sequence_number.desc())
-                .limit(1);
+        let checkpoint_range: Vec<i64> = conn
+            .results(move || {
+                let rhs = checkpoints::checkpoints
+                    .select(checkpoints::sequence_number)
+                    .order(checkpoints::sequence_number.desc())
+                    .limit(1);
 
-            let lhs = snapshots::objects_snapshot
-                .select(snapshots::checkpoint_sequence_number)
-                .order(snapshots::checkpoint_sequence_number.desc())
-                .limit(1);
+                let lhs = snapshots::objects_snapshot
+                    .select(snapshots::checkpoint_sequence_number)
+                    .order(snapshots::checkpoint_sequence_number.desc())
+                    .limit(1);
 
-            lhs.union(rhs)
-        })?;
+                // We need to use `union_all` in case `lhs` and `rhs` have the same value.
+                lhs.union_all(rhs)
+            })
+            .await?;
 
         let (first, mut last) = match checkpoint_range.as_slice() {
             [] => (0, 0),

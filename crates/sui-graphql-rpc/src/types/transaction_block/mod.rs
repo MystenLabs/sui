@@ -23,6 +23,7 @@ use async_graphql::{connection::CursorType, dataloader::Loader, *};
 use connection::Edge;
 use cursor::TxLookup;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -333,56 +334,70 @@ impl TransactionBlock {
             Option<TxBounds>,
         ) = db
             .execute_repeatable(move |conn| {
-                let Some(tx_bounds) = TxBounds::query(
-                    conn,
-                    filter.after_checkpoint.map(u64::from),
-                    filter.at_checkpoint.map(u64::from),
-                    filter.before_checkpoint.map(u64::from),
-                    checkpoint_viewed_at,
-                    scan_limit,
-                    &page,
-                )?
-                else {
-                    return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
-                };
-
-                // If no filters are selected, or if the filter is composed of only checkpoint
-                // filters, we can directly query the main `transactions` table. Otherwise, we first
-                // fetch the set of `tx_sequence_number` from a join over relevant lookup tables,
-                // and then issue a query against the `transactions` table to fetch the remaining
-                // contents.
-                let (prev, next, transactions) = if !filter.has_filters() {
-                    let (prev, next, iter) = page.paginate_query::<StoredTransaction, _, _, _>(
+                async move {
+                    let Some(tx_bounds) = TxBounds::query(
                         conn,
+                        filter.after_checkpoint.map(u64::from),
+                        filter.at_checkpoint.map(u64::from),
+                        filter.before_checkpoint.map(u64::from),
                         checkpoint_viewed_at,
-                        move || {
-                            tx::transactions
-                                .filter(tx::tx_sequence_number.ge(tx_bounds.scan_lo() as i64))
-                                .filter(tx::tx_sequence_number.lt(tx_bounds.scan_hi() as i64))
-                                .into_boxed()
-                        },
-                    )?;
+                        scan_limit,
+                        &page,
+                    )
+                    .await?
+                    else {
+                        return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
+                    };
 
-                    (prev, next, iter.collect())
-                } else {
-                    let subquery = subqueries(&filter, tx_bounds).unwrap();
-                    let (prev, next, results) =
-                        page.paginate_raw_query::<TxLookup>(conn, checkpoint_viewed_at, subquery)?;
+                    // If no filters are selected, or if the filter is composed of only checkpoint
+                    // filters, we can directly query the main `transactions` table. Otherwise, we first
+                    // fetch the set of `tx_sequence_number` from a join over relevant lookup tables,
+                    // and then issue a query against the `transactions` table to fetch the remaining
+                    // contents.
+                    let (prev, next, transactions) = if !filter.has_filters() {
+                        let (prev, next, iter) = page
+                            .paginate_query::<StoredTransaction, _, _, _>(
+                                conn,
+                                checkpoint_viewed_at,
+                                move || {
+                                    tx::transactions
+                                        .filter(
+                                            tx::tx_sequence_number.ge(tx_bounds.scan_lo() as i64),
+                                        )
+                                        .filter(
+                                            tx::tx_sequence_number.lt(tx_bounds.scan_hi() as i64),
+                                        )
+                                        .into_boxed()
+                                },
+                            )
+                            .await?;
 
-                    let tx_sequence_numbers = results
-                        .into_iter()
-                        .map(|x| x.tx_sequence_number)
-                        .collect::<Vec<i64>>();
+                        (prev, next, iter.collect())
+                    } else {
+                        let subquery = subqueries(&filter, tx_bounds).unwrap();
+                        let (prev, next, results) = page
+                            .paginate_raw_query::<TxLookup>(conn, checkpoint_viewed_at, subquery)
+                            .await?;
 
-                    let transactions = conn.results(move || {
-                        tx::transactions
-                            .filter(tx::tx_sequence_number.eq_any(tx_sequence_numbers.clone()))
-                    })?;
+                        let tx_sequence_numbers = results
+                            .into_iter()
+                            .map(|x| x.tx_sequence_number)
+                            .collect::<Vec<i64>>();
 
-                    (prev, next, transactions)
-                };
+                        let transactions = conn
+                            .results(move || {
+                                tx::transactions.filter(
+                                    tx::tx_sequence_number.eq_any(tx_sequence_numbers.clone()),
+                                )
+                            })
+                            .await?;
 
-                Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
+                        (prev, next, transactions)
+                    };
+
+                    Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
+                }
+                .scope_boxed()
             })
             .await?;
 
@@ -431,14 +446,18 @@ impl Loader<DigestKey> for Db {
 
         let transactions: Vec<StoredTransaction> = self
             .execute(move |conn| {
-                conn.results(move || {
-                    let join = ds::tx_sequence_number.eq(tx::tx_sequence_number);
+                async move {
+                    conn.results(move || {
+                        let join = ds::tx_sequence_number.eq(tx::tx_sequence_number);
 
-                    tx::transactions
-                        .inner_join(ds::tx_digests.on(join))
-                        .select(StoredTransaction::as_select())
-                        .filter(ds::tx_digest.eq_any(digests.clone()))
-                })
+                        tx::transactions
+                            .inner_join(ds::tx_digests.on(join))
+                            .select(StoredTransaction::as_select())
+                            .filter(ds::tx_digest.eq_any(digests.clone()))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;

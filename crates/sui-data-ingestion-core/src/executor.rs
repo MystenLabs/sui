@@ -67,6 +67,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
+        let upper_limit = reader_options.upper_limit;
         let (checkpoint_reader, mut checkpoint_recv, gc_sender, _exit_sender) =
             CheckpointReader::initialize(
                 path,
@@ -93,6 +94,11 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                     self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
                 Some(checkpoint) = checkpoint_recv.recv() => {
+                    if let Some(limit) = upper_limit {
+                        if checkpoint.checkpoint_summary.sequence_number > limit {
+                            break;
+                        }
+                    }
                     for sender in &self.pool_senders {
                         sender.send(checkpoint.clone()).await?;
                     }

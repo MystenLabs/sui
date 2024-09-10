@@ -115,4 +115,35 @@ module std::macros {
     public macro fun do_eq($stop: _, $f: |_|) {
         range_do_eq!(0, $stop, $f)
     }
+
+    public macro fun try_as_u8($x: _): Option<u8> {
+        let x = $x;
+        if (x > 0xFF) option::none()
+        else option::some(x as u8)
+    }
+
+    public macro fun try_as_u16($x: _): Option<u16> {
+        let x = $x;
+        if (x > 0xFFFF) option::none()
+        else option::some(x as u16)
+    }
+
+    public macro fun try_as_u32($x: _): Option<u32> {
+        let x = $x;
+        if (x > 0xFFFF_FFFF) option::none()
+        else option::some(x as u32)
+    }
+
+    public macro fun try_as_u64($x: _): Option<u64> {
+        let x = $x;
+        if (x > 0xFFFF_FFFF_FFFF_FFFF) option::none()
+        else option::some(x as u64)
+    }
+
+    public macro fun try_as_u128($x: _): Option<u128> {
+        let x = $x;
+        if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none()
+        else option::some(x as u128)
+    }
+
 }

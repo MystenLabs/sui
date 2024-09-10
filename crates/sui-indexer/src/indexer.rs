@@ -19,7 +19,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
 use crate::config::{IngestionConfig, JsonRpcConfig, PruningOptions, SnapshotLagConfig};
-use crate::db::ConnectionPool;
+use crate::database::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::checkpoint_handler::new_handlers;
 use crate::handlers::objects_snapshot_processor::start_objects_snapshot_processor;
@@ -101,7 +101,9 @@ impl Indexer {
         // Otherwise, we would do the persisting in `commit_checkpoint` while the first cp is
         // being indexed.
         if let Some(chain_id) = IndexerStore::get_chain_identifier(&store).await? {
-            store.persist_protocol_configs_and_feature_flags(chain_id)?;
+            store
+                .persist_protocol_configs_and_feature_flags(chain_id)
+                .await?;
         }
 
         let cancel_clone = cancel.clone();
@@ -159,13 +161,13 @@ impl Indexer {
     pub async fn start_reader(
         config: &JsonRpcConfig,
         registry: &Registry,
-        connection_pool: ConnectionPool,
+        pool: ConnectionPool,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let indexer_reader = IndexerReader::new(connection_pool);
+        let indexer_reader = IndexerReader::new(pool);
         let handle = build_json_rpc_server(registry, indexer_reader, config)
             .await
             .expect("Json rpc server should not run into errors upon start.");

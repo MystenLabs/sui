@@ -41,9 +41,9 @@ impl TypingVisitorContext for Context<'_> {
         &mut self,
         _module: ModuleIdent,
         _function_name: FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
-        if let T::FunctionBody_::Defined((_, seq)) = &mut fdef.body.value {
+        if let T::FunctionBody_::Defined((_, seq)) = &fdef.body.value {
             tail_block(self, seq);
         };
         true

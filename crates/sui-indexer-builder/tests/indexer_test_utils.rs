@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
+use prometheus::{IntCounterVec, IntGaugeVec};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -15,12 +16,14 @@ use mysten_metrics::spawn_monitored_task;
 use sui_indexer_builder::indexer_builder::{
     DataMapper, DataSender, Datasource, IndexerProgressStore, Persistent,
 };
-use sui_indexer_builder::Task;
+use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
 
 pub struct TestDatasource<T> {
     pub data: Vec<T>,
     pub live_task_starting_checkpoint: u64,
     pub genesis_checkpoint: u64,
+    pub gauge_metric: IntGaugeVec,
+    pub counter_metric: IntCounterVec,
 }
 
 #[async_trait]
@@ -30,14 +33,13 @@ where
 {
     async fn start_data_retrieval(
         &self,
-        starting_checkpoint: u64,
-        _target_checkpoint: u64,
+        task: Task,
         data_sender: DataSender<T>,
     ) -> Result<JoinHandle<Result<(), Error>>, Error> {
         let data_clone = self.data.clone();
 
         Ok(spawn_monitored_task!(async {
-            let mut cp = starting_checkpoint;
+            let mut cp = task.start_checkpoint;
             while cp < data_clone.len() as u64 {
                 data_sender
                     .send((cp, vec![data_clone[cp as usize].clone()]))
@@ -54,6 +56,16 @@ where
 
     fn get_genesis_height(&self) -> u64 {
         self.genesis_checkpoint
+    }
+
+    fn get_tasks_remaining_checkpoints_metric(&self) -> &IntGaugeVec {
+        // This is dummy
+        &self.gauge_metric
+    }
+
+    fn get_tasks_processed_checkpoints_metric(&self) -> &IntCounterVec {
+        // This is dummy
+        &self.counter_metric
     }
 }
 
@@ -81,7 +93,7 @@ impl<T> InMemoryPersistent<T> {
             .filter(|task| task.task_name.starts_with(task_prefix))
             .cloned()
             .collect::<Vec<_>>();
-        tasks.sort_by(|t1, t2| t2.checkpoint.cmp(&t1.checkpoint));
+        tasks.sort_by(|t1, t2| t2.start_checkpoint.cmp(&t1.start_checkpoint));
         Ok(tasks)
     }
 }
@@ -95,35 +107,37 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             .await
             .get(&task_name)
             .unwrap()
-            .checkpoint)
+            .start_checkpoint)
     }
 
     async fn save_progress(
         &mut self,
         task_name: String,
-        checkpoint_number: u64,
-    ) -> anyhow::Result<()> {
+        checkpoint_numbers: &[u64],
+        _start_checkpoint_number: u64,
+        _target_checkpoint_number: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let checkpoint_number = *checkpoint_numbers.last().unwrap();
         self.progress_store
             .lock()
             .await
             .get_mut(&task_name)
             .unwrap()
-            .checkpoint = checkpoint_number;
-        Ok(())
+            .start_checkpoint = checkpoint_number;
+        Ok(Some(checkpoint_number))
     }
 
-    async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Vec<Task>, Error> {
-        let mut tasks = self
+    async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Tasks, Error> {
+        let tasks = self
             .progress_store
             .lock()
             .await
             .values()
             .filter(|task| task.task_name.starts_with(task_prefix))
-            .filter(|task| task.checkpoint.lt(&task.target_checkpoint))
+            .filter(|task| task.start_checkpoint.lt(&task.target_checkpoint))
             .cloned()
             .collect::<Vec<_>>();
-        tasks.sort_by(|t1, t2| t2.checkpoint.cmp(&t1.checkpoint));
-        Ok(tasks)
+        Tasks::new(tasks)
     }
 
     async fn get_largest_backfill_task_target_checkpoint(
@@ -151,9 +165,31 @@ impl<T: Send + Sync> IndexerProgressStore for InMemoryPersistent<T> {
             task_name.clone(),
             Task {
                 task_name: task_name.clone(),
-                checkpoint,
+                start_checkpoint: checkpoint,
                 target_checkpoint,
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
+                is_live_task: false,
+            },
+        );
+        if existing.is_some() {
+            return Err(anyhow!("Task {task_name} already exists"));
+        }
+        Ok(())
+    }
+
+    async fn register_live_task(
+        &mut self,
+        task_name: String,
+        checkpoint: u64,
+    ) -> Result<(), Error> {
+        let existing = self.progress_store.lock().await.insert(
+            task_name.clone(),
+            Task {
+                task_name: task_name.clone(),
+                start_checkpoint: checkpoint,
+                target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
+                timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64,
+                is_live_task: true,
             },
         );
         if existing.is_some() {

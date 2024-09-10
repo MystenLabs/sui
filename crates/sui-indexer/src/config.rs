@@ -80,7 +80,7 @@ pub struct JsonRpcConfig {
     pub rpc_address: SocketAddr,
 
     #[clap(long)]
-    pub rpc_client_url: Url,
+    pub rpc_client_url: String,
 }
 
 #[derive(Args, Debug, Default, Clone)]
@@ -152,12 +152,16 @@ pub enum Command {
         snapshot_config: SnapshotLagConfig,
         #[command(flatten)]
         pruning_options: PruningOptions,
+        #[command(flatten)]
+        restore_config: RestoreConfig,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
         #[clap(long)]
         force: bool,
     },
+    /// Run through the migration scripts.
+    RunMigrations,
 }
 
 #[derive(Args, Default, Debug, Clone)]
@@ -169,18 +173,11 @@ pub struct PruningOptions {
 #[derive(Args, Debug, Clone)]
 pub struct SnapshotLagConfig {
     #[arg(
-        long = "object-snapshot-min-checkpoint-lag",
+        long = "objects-snapshot-min-checkpoint-lag",
         default_value_t = Self::DEFAULT_MIN_LAG,
         env = "OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG",
     )]
     pub snapshot_min_lag: usize,
-
-    #[arg(
-        long = "object-snapshot-max-checkpoint-lag",
-        default_value_t = Self::DEFAULT_MAX_LAG,
-        env = "OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG",
-    )]
-    pub snapshot_max_lag: usize,
 
     #[arg(
         long = "objects-snapshot-sleep-duration",
@@ -190,7 +187,6 @@ pub struct SnapshotLagConfig {
 }
 
 impl SnapshotLagConfig {
-    const DEFAULT_MAX_LAG: usize = 900;
     const DEFAULT_MIN_LAG: usize = 300;
     const DEFAULT_SLEEP_DURATION_SEC: u64 = 5;
 }
@@ -198,11 +194,18 @@ impl SnapshotLagConfig {
 impl Default for SnapshotLagConfig {
     fn default() -> Self {
         SnapshotLagConfig {
-            snapshot_min_lag: Self::DEFAULT_MAX_LAG,
-            snapshot_max_lag: Self::DEFAULT_MIN_LAG,
+            snapshot_min_lag: Self::DEFAULT_MIN_LAG,
             sleep_duration: Self::DEFAULT_SLEEP_DURATION_SEC,
         }
     }
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct RestoreConfig {
+    #[arg(long, env = "GCS_CRED_PATH")]
+    pub gcs_cred_path: Option<String>,
+    #[arg(long, env = "GCS_DISPLAY_BUCKET")]
+    pub gcs_display_bucket: Option<String>,
 }
 
 #[cfg(test)]

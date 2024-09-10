@@ -7,6 +7,7 @@ use std::sync::Arc;
 use async_graphql::dataloader::Loader;
 use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::account_address::AccountAddress;
 use sui_indexer::models::packages::StoredPackage;
 use sui_indexer::schema::packages;
@@ -59,14 +60,18 @@ impl Loader<PackageKey> for Db {
         let ids: BTreeSet<_> = keys.iter().map(|PackageKey(id)| id.to_vec()).collect();
         let stored_packages: Vec<StoredPackage> = self
             .execute(move |conn| {
-                conn.results(move || {
-                    dsl::packages.filter(dsl::package_id.eq_any(ids.iter().cloned()))
-                })
+                async move {
+                    conn.results(move || {
+                        dsl::packages.filter(dsl::package_id.eq_any(ids.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
             })
             .await
             .map_err(|e| PackageResolverError::Store {
                 store: STORE,
-                source: Arc::new(e),
+                error: e.to_string(),
             })?;
 
         let mut id_to_package = HashMap::new();

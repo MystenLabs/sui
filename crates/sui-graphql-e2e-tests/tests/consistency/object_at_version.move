@@ -9,12 +9,10 @@
 // 3  | 5
 // 4  | 6
 // 5  | 7
-// Verify that the object is returned in its WrappedOrDeleted or Historical state. Increment
-// objects_snapshot to [0, 5). This coalesces objects in objects_snapshot to its verson at
-// checkpoint 4. The object would only be visible at version 6 from objects_snapshot, and at version
-// 7 from objects_history.
+// Then have objects snapshot processor update `objects_snapshot` so that the available range is between checkpoints 7 and 11.
+// The object should still be accessible through point lookups at all versions.
 
-//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 51 --addresses Test=0x0 --accounts A --simulator --objects-snapshot-min-checkpoint-lag 5
 
 //# publish
 module Test::M1 {
@@ -214,14 +212,46 @@ module Test::M1 {
   }
 }
 
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 5
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 0 @A
+
+//# create-checkpoint
+
+//# advance-clock --duration-ns 1
 
 //# create-checkpoint
 
 //# run-graphql
 # Querying objects by version doesn't require it to be in the snapshot table.
 {
-  object_within_available_range: object(
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
+  indexed_object: object(
     address: "@{obj_2_0}"
     version: 6
   ) {
@@ -233,7 +263,7 @@ module Test::M1 {
       }
     }
   }
-  object_outside_available_range: object(
+  wrapped_or_deleted_object: object(
     address: "@{obj_2_0}"
     version: 5
   ) {
@@ -254,6 +284,28 @@ module Test::M1 {
     asMoveObject {
       contents {
         json
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors @{obj_1_0,6}
+# But it would no longer be possible to try to paginate using a cursor that falls outside the available range
+{
+  availableRange {
+    first {
+      sequenceNumber
+    }
+    last {
+      sequenceNumber
+    }
+  }
+  objects(after: "@{cursor_0}") {
+    nodes {
+      asMoveObject {
+        contents {
+          json
+        }
       }
     }
   }

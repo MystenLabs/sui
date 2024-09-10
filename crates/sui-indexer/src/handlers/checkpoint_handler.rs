@@ -33,7 +33,6 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::db::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
 use crate::handlers::tx_processor::IndexingPackageBuffer;
@@ -154,8 +153,7 @@ impl CheckpointHandler {
         package_tx: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Self {
         let package_buffer = IndexingPackageBuffer::start(package_tx);
-        let pg_blocking_cp = Self::pg_blocking_cp(state.clone()).unwrap();
-        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
+        let package_db_resolver = IndexerStorePackageResolver::new(state.pool());
         let in_mem_package_resolver = InterimPackageResolver::new(
             package_db_resolver,
             package_buffer.clone(),
@@ -664,10 +662,6 @@ impl CheckpointHandler {
             })
             .collect()
     }
-
-    pub(crate) fn pg_blocking_cp(state: PgIndexerStore) -> Result<ConnectionPool, IndexerError> {
-        Ok(state.blocking_cp())
-    }
 }
 
 async fn get_move_struct_layout_map(
@@ -751,18 +745,18 @@ fn try_create_dynamic_field_info(
             ))
         })?;
     let move_struct = move_object.to_move_struct(&move_struct_layout)?;
-    let (name_value, type_, object_id) =
+    let (move_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
     let name_type = move_object.type_().try_extract_field_name(&type_)?;
-    let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
+    let bcs_name = bcs::to_bytes(&move_value.clone().undecorate()).map_err(|e| {
         IndexerError::SerdeError(format!(
             "Failed to serialize dynamic field name {:?}: {e}",
-            name_value
+            move_value
         ))
     })?;
     let name = DynamicFieldName {
         type_: name_type,
-        value: SuiMoveValue::from(name_value).to_json_value(),
+        value: SuiMoveValue::from(move_value).to_json_value(),
     };
     Ok(Some(match type_ {
         DynamicFieldType::DynamicObject => {

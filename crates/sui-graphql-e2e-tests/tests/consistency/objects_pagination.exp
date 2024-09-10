@@ -1,4 +1,4 @@
-processed 24 tasks
+processed 26 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -509,15 +509,15 @@ task 18, line 221:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 19, line 223:
-//# force-object-snapshot-catchup --start-cp 0 --end-cp 4
-Objects snapshot updated to [0 to 4)
-
 task 20, line 225:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 21, lines 227-242:
+task 22, line 229:
+//# create-checkpoint
+Checkpoint created: 7
+
+task 23, lines 231-255:
 //# run-graphql --cursors @{obj_6_0,2}
 Response: {
   "data": null,
@@ -526,7 +526,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 2,
+          "line": 11,
           "column": 3
         }
       ],
@@ -540,7 +540,7 @@ Response: {
   ]
 }
 
-task 22, lines 244-260:
+task 24, lines 257-273:
 //# run-graphql
 Response: {
   "data": {
@@ -601,7 +601,7 @@ Response: {
   }
 }
 
-task 23, lines 262-288:
+task 25, lines 275-301:
 //# run-graphql
 Response: {
   "data": {

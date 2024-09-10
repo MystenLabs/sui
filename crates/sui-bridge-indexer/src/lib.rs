@@ -13,12 +13,14 @@ pub mod metrics;
 pub mod models;
 pub mod postgres_manager;
 pub mod schema;
+pub mod storage;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
 pub mod types;
 
 pub mod eth_bridge_indexer;
 pub mod sui_bridge_indexer;
+pub mod sui_datasource;
 
 #[derive(Clone)]
 pub enum ProcessedTxnData {

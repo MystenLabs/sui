@@ -49,3 +49,4 @@ test-cluster.workspace = true
 tempfile.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+move-cli.workspace = true

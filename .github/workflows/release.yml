@@ -1,14 +1,17 @@
 name: Attach Sui binaries to a release
+run-name: Attach Sui binaries to a ${{ inputs.sui_tag }} release
 
 on:
   release:
-    types: [ published, prereleased ]
+    types: [ created, prereleased, released, published  ]
   workflow_dispatch:
     inputs:
       sui_tag:
         description: 'Sui repo tag to build from'
         type: string
         required: true
+
+concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref }}
 
 env:
   TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
@@ -38,7 +41,7 @@ env:
 jobs:
   release-build:
     name: Build & Publish Binaries
-    timeout-minutes: 80
+    timeout-minutes: 120
     strategy:
       matrix:
         os:
@@ -123,7 +126,7 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install postgres (Mac arm64)
+      - name: Install postgres (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
         shell: bash
         env:
@@ -133,6 +136,19 @@ jobs:
           PATH: "/opt/homebrew/bin:$PATH"
         run: |
           brew install postgresql
+
+      - name: Remove unused apps (MacOS arm64)
+        if: ${{ matrix.os == 'macos-latest-xlarge' && env.gcloud_archive_exist == '' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          # MacOS arm64 runner only has 14GB avaialble, which is too small for our builds, so removing unused softwared.
+          df -h /
+          sudo rm -rf /Applications/Xcode*.app
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
+          df -h /
 
       - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}

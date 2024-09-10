@@ -93,11 +93,7 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
 }
 
 impl<'a> TypingVisitorContext for Context<'a> {
-    fn visit_module_custom(
-        &mut self,
-        _ident: E::ModuleIdent,
-        mdef: &mut T::ModuleDefinition,
-    ) -> bool {
+    fn visit_module_custom(&mut self, _ident: E::ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         // skips if true
         mdef.attributes.is_test_or_test_only()
     }
@@ -106,13 +102,13 @@ impl<'a> TypingVisitorContext for Context<'a> {
         &mut self,
         _module: E::ModuleIdent,
         _function_name: P::FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         // skips if true
         fdef.attributes.is_test_or_test_only()
     }
 
-    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         if let E::ModuleCall(fun) = &exp.exp.value {
             if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {

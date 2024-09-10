@@ -2074,7 +2074,17 @@ fn file_sources(
 pub fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
-        A::Numerical { value, .. } => format!("{value}::{}", mod_ident.module).to_string(),
+        A::Numerical {
+            name,
+            value,
+            name_conflict: _,
+        } => {
+            if let Some(n) = name {
+                format!("({n}={value})::{}", mod_ident.module).to_string()
+            } else {
+                format!("{value}::{}", mod_ident.module).to_string()
+            }
+        }
         A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
@@ -2090,7 +2100,14 @@ pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap)
         P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
         P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
         P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
-            Some(addr) => E::Address::anonymous(loc, addr),
+            // set `name_conflict` to `true` to force displaying (addr==pkg_name) so that the string
+            // representing map key is consistent with what's generated for expansion ModuleIdent in
+            // `expansion_mod_ident_to_map_key`
+            Some(addr) => E::Address::Numerical {
+                name: Some(name),
+                value: sp(loc, addr),
+                name_conflict: true,
+            },
             None => E::Address::NamedUnassigned(name),
         },
     }
@@ -2103,7 +2120,8 @@ pub fn parsing_leading_and_mod_names_to_map_key(
     ln: P::LeadingNameAccess,
     name: P::ModuleName,
 ) -> String {
-    format!("{}::{}", parsed_address(ln, pkg_addresses), name).to_string()
+    let parsed_addr = parsed_address(ln, pkg_addresses);
+    format!("{}::{}", parsed_addr, name).to_string()
 }
 
 /// Produces module ident string of the form pkg::module to be used as a map key.

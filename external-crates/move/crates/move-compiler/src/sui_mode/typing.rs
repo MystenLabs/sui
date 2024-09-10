@@ -106,7 +106,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
+    fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
             // Skip if not sui
@@ -157,7 +157,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         &mut self,
         module: ModuleIdent,
         name: FunctionName,
-        fdef: &mut T::Function,
+        fdef: &T::Function,
     ) -> bool {
         debug_assert!(self.current_module.as_ref() == Some(&module));
         function(self, name, fdef);
@@ -165,7 +165,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         true
     }
 
-    fn visit_exp_custom(&mut self, e: &mut T::Exp) -> bool {
+    fn visit_exp_custom(&mut self, e: &T::Exp) -> bool {
         exp(self, e);
         // do not skip recursion
         false
@@ -269,7 +269,7 @@ fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition)
 // Functions
 //**********************************************************************************************
 
-fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
+fn function(context: &mut Context, name: FunctionName, fdef: &T::Function) {
     let T::Function {
         compiled_visibility: _,
         visibility,

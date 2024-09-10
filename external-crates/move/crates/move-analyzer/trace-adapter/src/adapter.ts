@@ -88,7 +88,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         response.body.supportsEvaluateForHovers = false;
 
         // make VS Code show a 'step back' button
-        response.body.supportsStepBack = false;
+        response.body.supportsStepBack = true;
 
         // make VS Code support data breakpoints
         response.body.supportsDataBreakpoints = false;
@@ -205,9 +205,25 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
-        this.runtime.stepOut();
+        try {
+            this.runtime.stepOut();
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
         this.sendResponse(response);
     }
+
+    protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
+        try {
+            this.runtime.stepBack();
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
+        this.sendResponse(response);
+    }
+
 
     protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments): void {
         // Cleanup and terminate the debug session

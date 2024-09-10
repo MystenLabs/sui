@@ -89,7 +89,7 @@ impl BenchMetrics {
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload"],
+                &["workload", "type"],
                 registry,
             )
             .unwrap(),
@@ -724,11 +724,6 @@ async fn run_bench_worker(
                     .latency_squared_s
                     .with_label_values(&[&payload.to_string()])
                     .inc_by(square_latency_ms);
-
-                metrics_cloned
-                    .num_success
-                    .with_label_values(&[&payload.to_string()])
-                    .inc();
                 metrics_cloned
                     .num_in_flight
                     .with_label_values(&[&payload.to_string()])
@@ -736,10 +731,22 @@ async fn run_bench_worker(
 
                 let num_commands =
                     transaction.data().transaction_data().kind().num_commands() as u16;
-                metrics_cloned
-                    .num_success_cmds
-                    .with_label_values(&[&payload.to_string()])
-                    .inc_by(num_commands as u64);
+
+                if effects.is_ok() {
+                    metrics_cloned
+                        .num_success
+                        .with_label_values(&[&payload.to_string()])
+                        .inc();
+                    metrics_cloned
+                        .num_success_cmds
+                        .with_label_values(&[&payload.to_string()])
+                        .inc_by(num_commands as u64);
+                } else {
+                    metrics_cloned
+                        .num_error
+                        .with_label_values(&[&payload.to_string(), "execution"])
+                        .inc();
+                }
 
                 if let Some(sig_info) = effects.quorum_sig() {
                     sig_info.authorities(&committee).for_each(|name| {
@@ -778,7 +785,7 @@ async fn run_bench_worker(
                 } else {
                     metrics_cloned
                         .num_error
-                        .with_label_values(&[&payload.to_string()])
+                        .with_label_values(&[&payload.to_string(), "rpc"])
                         .inc();
                     NextOp::Retry(Box::new((transaction, payload)))
                 }

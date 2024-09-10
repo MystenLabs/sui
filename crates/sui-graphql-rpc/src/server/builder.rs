@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::compatibility_check::check_all_tables;
 use super::exchange_rates_task::TriggerExchangeRatesTask;
 use super::system_package_task::SystemPackageTask;
 use super::watermark_task::{ChainIdentifierLock, Watermark, WatermarkLock, WatermarkTask};
@@ -58,6 +57,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::LIMITS_HEADER;
+use sui_indexer::db::check_db_migration_consistency;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::join;
@@ -88,10 +88,14 @@ impl Server {
     pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        // Compatibility check
-        info!("Starting compatibility check");
-        check_all_tables(&self.db_reader).await?;
-        info!("Compatibility check passed");
+        let mut connection = self
+            .db_reader
+            .inner
+            .pool()
+            .get()
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
+        check_db_migration_consistency(&mut connection).await?;
 
         // A handle that spawns a background task to periodically update the `Watermark`, which
         // consists of the checkpoint upper bound and current epoch.
@@ -420,6 +424,7 @@ impl ServerBuilder {
             // time).
             config.service.limits.request_timeout_ms.into(),
         )
+        .await
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
@@ -544,7 +549,7 @@ async fn graphql_handler(
 
     let result = schema.execute(req).await;
 
-    // If there are errors, insert them as an extention so that the Metrics callback handler can
+    // If there are errors, insert them as an extension so that the Metrics callback handler can
     // pull it out later.
     let mut extensions = axum::http::Extensions::new();
     if result.is_err() {
@@ -698,7 +703,7 @@ pub mod tests {
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
     /// further extended with `context_data` and `extension` for testing.
-    fn prep_schema(db_url: String, service_config: Option<ServiceConfig>) -> ServerBuilder {
+    async fn prep_schema(db_url: String, service_config: Option<ServiceConfig>) -> ServerBuilder {
         let connection_config = ConnectionConfig {
             port: get_available_port(),
             host: "127.0.0.1".to_owned(),
@@ -714,6 +719,7 @@ pub mod tests {
             connection_config.db_pool_size,
             service_config.limits.request_timeout_ms.into(),
         )
+        .await
         .expect("Failed to create pg connection pool");
 
         let version = Version::for_testing();
@@ -774,7 +780,7 @@ pub mod tests {
         cluster
             .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
             .await;
-        // timeout test includes mutation timeout, which requies a [SuiClient] to be able to run
+        // timeout test includes mutation timeout, which requires a [SuiClient] to be able to run
         // the test, and a transaction. [WalletContext] gives access to everything that's needed.
         let wallet = &cluster.network.validator_fullnode_handle.wallet;
         let db_url = cluster.network.graphql_connection_config.db_url.clone();
@@ -816,6 +822,7 @@ pub mod tests {
             cfg.limits.mutation_timeout_ms = timeout.as_millis() as u32;
 
             let schema = prep_schema(db_url, Some(cfg))
+                .await
                 .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
@@ -909,6 +916,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(db_url, Some(service_config))
+                .await
                 .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
@@ -967,6 +975,7 @@ pub mod tests {
             };
 
             let schema = prep_schema(db_url, Some(service_config))
+                .await
                 .context_data(PayloadSize(100))
                 .extension(QueryLimitsChecker)
                 .build_schema();
@@ -1023,7 +1032,9 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let schema = prep_schema(db_url, Some(service_config)).build_schema();
+        let schema = prep_schema(db_url, Some(service_config))
+            .await
+            .build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -1065,7 +1076,7 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = prep_executor_cluster().await;
         let db_url = cluster.graphql_connection_config.db_url.clone();
-        let schema = prep_schema(db_url, None).build_schema();
+        let schema = prep_schema(db_url, None).await.build_schema();
 
         schema
             .execute("{ objects(first: 1) { nodes { version } } }")
@@ -1093,7 +1104,9 @@ pub mod tests {
         telemetry_subscribers::init_for_testing();
         let cluster = prep_executor_cluster().await;
         let db_url = cluster.graphql_connection_config.db_url.clone();
-        let server_builder = prep_schema(db_url, None).context_data(PayloadSize(100));
+        let server_builder = prep_schema(db_url, None)
+            .await
+            .context_data(PayloadSize(100));
         let metrics = server_builder.state.metrics.clone();
         let schema = server_builder
             .extension(QueryLimitsChecker) // QueryLimitsChecker is where we actually set the metrics
@@ -1153,6 +1166,7 @@ pub mod tests {
         };
 
         let schema = prep_schema(db_url.to_owned(), Some(service_config))
+            .await
             .context_data(PayloadSize(
                 // Payload size is usually set per request, and it is the size of the raw HTTP
                 // request, which includes the query, variables, and surrounding JSON. Simulate for
@@ -1675,7 +1689,7 @@ pub mod tests {
         // Test that when variables are re-used as execution params, the size of the variable is
         // only counted once.
 
-        // First, check that `eror_passed_tx_checks` is working, by submitting a request that will
+        // First, check that `error_passed_tx_checks` is working, by submitting a request that will
         // fail the initial payload check.
         assert!(!passed_tx_checks(
             &execute_for_error(
