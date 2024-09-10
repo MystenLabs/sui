@@ -45,6 +45,8 @@ static JSON_RPC_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
 /// AllowedPeers is a mapping of public key to AllowedPeer data
 pub type AllowedPeers = Arc<RwLock<HashMap<Ed25519PublicKey, AllowedPeer>>>;
 
+type MetricsPubKeys = Arc<RwLock<HashMap<String, Ed25519PublicKey>>>;
+
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AllowedPeer {
     pub name: String,
@@ -266,10 +268,10 @@ impl SuiNodeProvider {
         };
     }
 
-    async fn update_bridge_validator_set(&self, metrics_keys: Arc<HashMap<String, String>>) {
+    async fn update_bridge_validator_set(&self, metrics_keys: MetricsPubKeys) {
         match Self::get_bridge_validators(self.rpc_url.to_owned()).await {
             Ok(summary) => {
-                let validators = extract_bridge(summary).await;
+                let validators = extract_bridge(summary, metrics_keys).await;
                 let mut allow = self.bridge_nodes.write().unwrap();
                 allow.clear();
                 allow.extend(validators);
@@ -292,7 +294,7 @@ impl SuiNodeProvider {
 
         let rpc_poll_interval = self.rpc_poll_interval;
         let cloned_self = self.clone();
-        let bridge_metrics_keys: Arc<HashMap<String, String>> = Arc::new(HashMap::new());
+        let bridge_metrics_keys: MetricsPubKeys = Arc::new(RwLock::new(HashMap::new()));
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(rpc_poll_interval);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -340,12 +342,26 @@ fn extract(
         }
     })
 }
+async fn extract_bridge(
+    summary: BridgeSummary,
+    metrics_keys: MetricsPubKeys,
+) -> Vec<(Ed25519PublicKey, AllowedPeer)> {
+    {
+        // Clean up the cache: retain only the metrics keys of the up-to-date bridge validator set
+        let mut metrics_keys_write = metrics_keys.write().unwrap();
+        metrics_keys_write.retain(|url, _| {
+            summary.committee.members.iter().any(|(_, cm)| {
+                String::from_utf8(cm.http_rest_url.clone()).ok().as_ref() == Some(url)
+            })
+        });
+    }
 
-async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, AllowedPeer)> {
     let client = reqwest::Client::builder().build().unwrap();
-    let results: Vec<_> = stream::iter(summary.committee.members)
+    let committee_members = summary.committee.members.clone();
+    let results: Vec<_> = stream::iter(committee_members)
         .filter_map(|(_, cm)| {
             let client = client.clone();
+            let metrics_keys = metrics_keys.clone();
             async move {
                 debug!(
                     address =% cm.sui_address,
@@ -373,7 +389,7 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                 };
                 bridge_url.set_path("/metrics_pub_key");
 
-                // use the host portion of the http_rest_url as the "name"
+                // Use the host portion of the http_rest_url as the "name"
                 let bridge_host = match bridge_url.host_str() {
                     Some(host) => host,
                     None => {
@@ -384,45 +400,65 @@ async fn extract_bridge(summary: BridgeSummary) -> Vec<(Ed25519PublicKey, Allowe
                 let bridge_name = String::from(bridge_host);
                 let bridge_request_url = bridge_url.as_str();
 
-                let response = client.get(bridge_request_url).send().await.ok()?;
-                let raw = response.bytes().await.ok()?;
-                // Try to deserialize the raw bytes into a string
-                let metrics_pub_key: String = match serde_json::from_slice(&raw) {
-                    Ok(key) => key,
-                    Err(error) => {
-                        error!(?error, "Failed to deserialize response");
-                        return None;
+                let metrics_pub_key = match client.get(bridge_request_url).send().await {
+                    Ok(response) => {
+                        let raw = response.bytes().await.ok()?;
+                        let metrics_pub_key: String = match serde_json::from_slice(&raw) {
+                            Ok(key) => key,
+                            Err(error) => {
+                                error!(?error, "Failed to deserialize response");
+                                return None;
+                            }
+                        };
+                        let metrics_bytes = match Base64::decode(&metrics_pub_key) {
+                            Ok(pubkey_bytes) => pubkey_bytes,
+                            Err(error) => {
+                                error!(
+                                    ?error,
+                                    bridge_name, "unable to decode public key for bridge node",
+                                );
+                                return None;
+                            }
+                        };
+                        match Ed25519PublicKey::from_bytes(&metrics_bytes) {
+                            Ok(pubkey) => {
+                                // Successfully fetched the key, update the cache
+                                let mut metrics_keys_write = metrics_keys.write().unwrap();
+                                metrics_keys_write.insert(url_str.clone(), pubkey.clone());
+                                pubkey
+                            }
+                            Err(error) => {
+                                error!(
+                                    ?error,
+                                    bridge_request_url,
+                                    "unable to decode public key for bridge node",
+                                );
+                                return None;
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback to cached key if network request fails
+                        let metrics_keys_read = metrics_keys.read().unwrap();
+                        if let Some(cached_key) = metrics_keys_read.get(&url_str) {
+                            debug!(url_str, "Using cached metrics public key");
+                            cached_key.clone()
+                        } else {
+                            error!(
+                                url_str,
+                                "Failed to fetch public key and no cached key available"
+                            );
+                            return None;
+                        }
                     }
                 };
-                let metrics_bytes = match Base64::decode(&metrics_pub_key) {
-                    Ok(pubkey_bytes) => pubkey_bytes,
-                    Err(error) => {
-                        error!(
-                            ?error,
-                            bridge_name, "unable to decode public key for bridge node",
-                        );
-                        return None;
-                    }
-                };
-                match Ed25519PublicKey::from_bytes(&metrics_bytes) {
-                    Ok(metrics_key) => {
-                        debug!(bridge_request_url, ?metrics_key, "adding metrics key");
-                        Some((
-                            metrics_key.clone(),
-                            AllowedPeer {
-                                public_key: metrics_key.clone(),
-                                name: bridge_name,
-                            },
-                        ))
-                    }
-                    Err(error) => {
-                        error!(
-                            ?error,
-                            bridge_request_url, "unable to decode public key for bridge node",
-                        );
-                        None
-                    }
-                }
+                Some((
+                    metrics_pub_key.clone(),
+                    AllowedPeer {
+                        public_key: metrics_pub_key,
+                        name: bridge_name,
+                    },
+                ))
             }
         })
         .collect()
