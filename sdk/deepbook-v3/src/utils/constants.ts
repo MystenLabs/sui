@@ -57,17 +57,27 @@ export const mainnetCoins: CoinMap = {
 		type: `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`,
 		scalar: 1000000000,
 	},
-	USDC: {
+	WUSDC: {
 		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,
 		type: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN`,
 		scalar: 1000000,
+	},
+	USDC: {
+		address: ``,
+		type: ``,
+		scalar: 0,
 	},
 	WETH: {
 		address: `0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5`,
 		type: `0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN`,
 		scalar: 100000000,
 	},
-	USDT: {
+	WBTC: {
+		address: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881`,
+		type: `0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN`,
+		scalar: 0,
+	},
+	WUSDT: {
 		address: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c`,
 		type: `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN`,
 		scalar: 1000000,
