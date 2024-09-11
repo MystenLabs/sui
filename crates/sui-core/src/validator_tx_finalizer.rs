@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::execution_cache::TransactionCacheRead;
@@ -177,11 +178,15 @@ where
     pub async fn track_signed_tx(
         &self,
         cache_read: Arc<dyn TransactionCacheRead>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx: VerifiedSignedTransaction,
     ) {
         let tx_digest = *tx.digest();
         trace!(?tx_digest, "Tracking signed transaction");
-        match self.delay_and_finalize_tx(cache_read, tx).await {
+        match self
+            .delay_and_finalize_tx(cache_read, epoch_store, tx)
+            .await
+        {
             Ok(did_run) => {
                 if did_run {
                     debug!(?tx_digest, "Transaction finalized");
@@ -196,6 +201,7 @@ where
     async fn delay_and_finalize_tx(
         &self,
         cache_read: Arc<dyn TransactionCacheRead>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx: VerifiedSignedTransaction,
     ) -> anyhow::Result<bool> {
         let tx_digest = *tx.digest();
@@ -211,6 +217,14 @@ where
                 trace!(?tx_digest, "Transaction already finalized");
                 return Ok(false);
             }
+        }
+
+        if epoch_store.is_pending_consensus_certificate(&tx_digest) {
+            trace!(
+                ?tx_digest,
+                "Transaction has been submitted to consensus, no need to help drive finality"
+            );
+            return Ok(false);
         }
 
         self.metrics
@@ -419,9 +433,12 @@ mod tests {
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
         let cache_read = states[0].get_transaction_cache_reader().clone();
+        let epoch_store = states[0].epoch_store_for_testing();
         let metrics = finalizer1.metrics.clone();
         let handle = tokio::spawn(async move {
-            finalizer1.track_signed_tx(cache_read, signed_tx).await;
+            finalizer1
+                .track_signed_tx(cache_read, &epoch_store, signed_tx)
+                .await;
         });
         handle.await.unwrap();
         check_quorum_execution(&auth_agg.load(), &clients, &tx_digest, true);
@@ -452,7 +469,7 @@ mod tests {
         let metrics = finalizer1.metrics.clone();
         let handle = tokio::spawn(async move {
             let _ = epoch_store
-                .within_alive_epoch(finalizer1.track_signed_tx(cache_read, signed_tx))
+                .within_alive_epoch(finalizer1.track_signed_tx(cache_read, &epoch_store, signed_tx))
                 .await;
         });
         states[0].reconfigure_for_testing().await;
@@ -499,12 +516,13 @@ mod tests {
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
         let cache_read = states[0].get_transaction_cache_reader().clone();
+        let epoch_store = states[0].epoch_store_for_testing();
 
         let metrics = finalizer1.metrics.clone();
         let signed_tx_clone = signed_tx.clone();
         let handle = tokio::spawn(async move {
             finalizer1
-                .track_signed_tx(cache_read, signed_tx_clone)
+                .track_signed_tx(cache_read, &epoch_store, signed_tx_clone)
                 .await;
         });
         auth_agg
@@ -537,6 +555,7 @@ mod tests {
         let signed_tx = create_tx(&clients, &states[0], sender, &keypair, gas_object_id).await;
         let tx_digest = *signed_tx.digest();
         let cache_read = states[0].get_transaction_cache_reader().clone();
+        let epoch_store = states[0].epoch_store_for_testing();
         for client in clients.values() {
             client.inject_fault.store(true, Relaxed);
         }
@@ -545,7 +564,7 @@ mod tests {
         let signed_tx_clone = signed_tx.clone();
         let handle = tokio::spawn(async move {
             finalizer1
-                .track_signed_tx(cache_read, signed_tx_clone)
+                .track_signed_tx(cache_read, &epoch_store, signed_tx_clone)
                 .await;
         });
         handle.await.unwrap();
