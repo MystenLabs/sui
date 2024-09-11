@@ -2914,6 +2914,10 @@ impl ProtocolConfig {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
     }
+
+    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
+        self.consensus_gc_depth = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

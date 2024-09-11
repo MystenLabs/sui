@@ -481,4 +481,65 @@ mod tests {
             assert!(block.round() <= expected_second_commit.leader().round);
         }
     }
+
+    #[tokio::test]
+    async fn test_handle_commit_with_gc() {
+        telemetry_subscribers::init_for_testing();
+
+        // We set the GC to 2
+        const GC_DEPTH: u32 = 2;
+
+        let num_authorities = 4;
+        let (mut context, keys) = Context::new_for_test(num_authorities);
+        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+        let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule);
+
+        // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 2.
+        // For authority 3 we create blocks that connect to all the other authorities, but no authority is including its blocks until round 3.
+        // On round 4 we finally make the other authorities see the blocks of authority 3.
+        let num_rounds: u32 = 6;
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layer(1).build();
+        dag_builder.layers(2..=3).authorities(vec![AuthorityIndex::new_for_test(0),
+        AuthorityIndex::new_for_test(1),
+        AuthorityIndex::new_for_test(2)]).skip_ancestor_links(vec![AuthorityIndex::new_for_test(3)]).build();
+        dag_builder.layers(4..=num_rounds).build();
+        dag_builder.persist_all_blocks(dag_state.clone()); 
+
+        dag_builder.print();
+
+        let leaders = dag_builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
+
+        let commits = linearizer.handle_commit(leaders.clone());
+        for (idx, subdag) in commits.into_iter().enumerate() {
+            tracing::info!("{subdag:?}");
+            assert_eq!(subdag.leader, leaders[idx].reference());
+            assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
+            if idx == 0 {
+                // First subdag includes the leader block only
+                assert_eq!(subdag.blocks.len(), 1);
+            } else {
+                // Every subdag after will be missing the leader block from the previous
+                // committed subdag
+                assert_eq!(subdag.blocks.len(), num_authorities);
+            }
+            for block in subdag.blocks.iter() {
+                assert!(block.round() <= leaders[idx].round());
+            }
+            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+        }
+    }
 }
