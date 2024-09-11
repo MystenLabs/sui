@@ -17,9 +17,10 @@ use std::env;
 use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
-use crate::cli::incidents::slack::Channel;
 use crate::cli::lib::utils::day_of_week;
 use crate::DEBUG_MODE;
+
+use super::slack_api::{Channel, User};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Priority {
@@ -36,6 +37,8 @@ pub struct Incident {
     created_at: Option<String>,
     resolved_at: Option<String>,
     html_url: String,
+    /// The slack users responsible for reporting
+    poc_users: Option<Vec<User>>,
     pub priority: Option<Priority>,
     pub slack_channel: Option<Channel>,
 }
