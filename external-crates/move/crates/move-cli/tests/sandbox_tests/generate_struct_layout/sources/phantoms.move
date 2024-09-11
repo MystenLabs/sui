@@ -1,5 +1,5 @@
 #[allow(unused_field)]
-module 0x1::phantoms {
+module 0x6::phantoms {
     public struct A<phantom T> {}
 
     public struct B<phantom T1, phantom T2> {}

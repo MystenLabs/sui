@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Test {
+module 0x6.Test {
     struct X { b: bool }
     struct T { i: u64, x: Self.X }
 

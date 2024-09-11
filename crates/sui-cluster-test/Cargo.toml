@@ -42,7 +42,3 @@ telemetry-subscribers.workspace = true
 
 test-cluster.workspace = true
 move-core-types.workspace = true
-
-[features]
-default = []
-pg_integration = []

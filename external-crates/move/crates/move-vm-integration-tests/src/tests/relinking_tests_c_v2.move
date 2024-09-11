@@ -1,5 +1,5 @@
 /// Dependencies: []
-module 0x2::c {
+module 0x7::c {
     public struct S { x: u64 }
     public struct R { x: u64, y: u64 }
     public struct Q { x: u64, y: u64, z: u64 }

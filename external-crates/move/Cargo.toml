@@ -63,6 +63,7 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 hkdf = "0.10.0"
 im = "15.1.0"
+indexmap = "2.1.0"
 internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
 json_comments = "0.2.2"
@@ -138,6 +139,7 @@ module-generation = { path = "crates/module-generation" }
 move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "crates/move-abstract-stack" }
 move-binary-format = { path = "crates/move-binary-format" }
+move-trace-format = { path = "crates/move-trace-format" }
 move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }

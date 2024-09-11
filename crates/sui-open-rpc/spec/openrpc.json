@@ -1293,7 +1293,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "58",
+              "maxSupportedProtocolVersion": "59",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1814,6 +1814,7 @@
                 "max_type_nodes": {
                   "u64": "256"
                 },
+                "max_type_to_layout_nodes": null,
                 "max_value_stack_size": {
                   "u64": "1024"
                 },

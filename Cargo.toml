@@ -365,7 +365,7 @@ inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
-itertools = "0.10.5"
+itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
     "server",
@@ -572,10 +572,10 @@ move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f2c63266a065996d53f98156f0412782b468597", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d75fa1706f06ecb5471b1c9bd200f7c84e277bfd" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d75fa1706f06ecb5471b1c9bd200f7c84e277bfd" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d75fa1706f06ecb5471b1c9bd200f7c84e277bfd", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d75fa1706f06ecb5471b1c9bd200f7c84e277bfd", features = [
     "experimental",
 ] }
 passkey-types = { version = "0.2.0" }

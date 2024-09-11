@@ -1,7 +1,7 @@
 // Tests that mutable borrows from enum variants work correctly.
 
 //# print-bytecode
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
@@ -50,7 +50,7 @@ module 0x1.MonomorphicEnums {
 }
 
 //# publish
-module 0x1.MonomorphicEnums {
+module 0x6.MonomorphicEnums {
     enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
@@ -99,8 +99,8 @@ module 0x1.MonomorphicEnums {
 }
 
 //# run
-module 0x2.m {
-import 0x1.MonomorphicEnums;
+module 0x7.m {
+import 0x6.MonomorphicEnums;
 entry foo() {
     let x: MonomorphicEnums.EnumWithTwoVariants;
     let y: &u64;
