@@ -22,7 +22,7 @@ use sui_sdk::rpc_types::{
     SuiTransactionBlockKind, SuiTransactionBlockResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::gas_coin::{GasCoin, GAS};
+use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -30,10 +30,10 @@ use sui_types::transaction::TransactionData;
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
-    OperationIdentifier, OperationStatus, OperationType,
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, Currency,
+    InternalOperation, OperationIdentifier, OperationStatus, OperationType,
 };
-use crate::Error;
+use crate::{CoinMetadataCache, Error, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/operations_tests.rs"]
@@ -101,6 +101,7 @@ impl Operations {
             .ok_or_else(|| Error::MissingInput("Operation type".into()))?;
         match type_ {
             OperationType::PaySui => self.pay_sui_ops_to_internal(),
+            OperationType::PayCoin => self.pay_coin_ops_to_internal(),
             OperationType::Stake => self.stake_ops_to_internal(),
             OperationType::WithdrawStake => self.withdraw_stake_ops_to_internal(),
             op => Err(Error::UnsupportedOperation(op)),
@@ -132,6 +133,38 @@ impl Operations {
             sender,
             recipients,
             amounts,
+        })
+    }
+
+    fn pay_coin_ops_to_internal(self) -> Result<InternalOperation, Error> {
+        let mut recipients = vec![];
+        let mut amounts = vec![];
+        let mut sender = None;
+        let mut currency = None;
+        for op in self {
+            if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
+                currency = currency.or(Some(amount.currency));
+                if amount.value.is_negative() {
+                    sender = Some(account.address)
+                } else {
+                    recipients.push(account.address);
+                    let amount = amount.value.abs();
+                    if amount > u64::MAX as i128 {
+                        return Err(Error::InvalidInput(
+                            "Input amount exceed u64::MAX".to_string(),
+                        ));
+                    }
+                    amounts.push(amount as u64)
+                }
+            }
+        }
+        let sender = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
+        let currency = currency.ok_or_else(|| Error::MissingInput("Currency".to_string()))?;
+        Ok(InternalOperation::PayCoin {
+            sender,
+            recipients,
+            amounts,
+            currency,
         })
     }
 
@@ -259,7 +292,7 @@ impl Operations {
                 }
                 SuiArgument::GasCoin => (),
                 // Might not be a SUI coin
-                SuiArgument::Input(_) => return None,
+                SuiArgument::Input(_) => (),
             };
             let amounts = amounts
                 .iter()
@@ -366,6 +399,7 @@ impl Operations {
         let mut needs_generic = false;
         let mut operations = vec![];
         let mut stake_ids = vec![];
+        let mut currency: Option<Currency> = None;
         for command in commands {
             let result = match command {
                 SuiCommand::SplitCoins(coin, amounts) => {
@@ -380,7 +414,7 @@ impl Operations {
                 ),
                 SuiCommand::MoveCall(m) if Self::is_stake_call(m) => {
                     stake_call(inputs, &known_results, m)?.map(|(amount, validator)| {
-                        let amount = amount.map(|amount| Amount::new(-(amount as i128)));
+                        let amount = amount.map(|amount| Amount::new(-(amount as i128), None));
                         operations.push(Operation {
                             operation_identifier: Default::default(),
                             type_: OperationType::Stake,
@@ -414,10 +448,43 @@ impl Operations {
                 aggregated_recipients
                     .into_iter()
                     .map(|(recipient, amount)| {
-                        Operation::pay_sui(status, recipient, amount.into())
+                        currency = inputs.iter().last().and_then(|arg| {
+                            if let SuiCallArg::Pure(value) = arg {
+                                let bytes = value
+                                    .value()
+                                    .to_json_value()
+                                    .as_array()?
+                                    .clone()
+                                    .into_iter()
+                                    .map(|v| v.as_u64().map(|n| n as u8))
+                                    .collect::<Option<Vec<u8>>>()?;
+                                bcs::from_bytes::<String>(&bytes)
+                                    .ok()
+                                    .and_then(|bcs_str| serde_json::from_str(&bcs_str).ok())
+                            } else {
+                                None
+                            }
+                        });
+                        match currency {
+                            Some(_) => Operation::pay_coin(
+                                status,
+                                recipient,
+                                amount.into(),
+                                currency.clone(),
+                            ),
+                            None => Operation::pay_sui(status, recipient, amount.into()),
+                        }
                     }),
             );
-            operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
+            match currency {
+                Some(_) => operations.push(Operation::pay_coin(
+                    status,
+                    sender,
+                    -(total_paid as i128),
+                    currency.clone(),
+                )),
+                _ => operations.push(Operation::pay_sui(status, sender, -(total_paid as i128))),
+            }
         } else if !stake_ids.is_empty() {
             let stake_ids = stake_ids.into_iter().flatten().collect::<Vec<_>>();
             let metadata = stake_ids
@@ -458,28 +525,28 @@ impl Operations {
     fn process_balance_change(
         gas_owner: SuiAddress,
         gas_used: i128,
-        balance_changes: &[BalanceChange],
+        balance_changes: Vec<(BalanceChange, Currency)>,
         status: Option<OperationStatus>,
-        balances: HashMap<SuiAddress, i128>,
+        balances: HashMap<(SuiAddress, Currency), i128>,
     ) -> impl Iterator<Item = Operation> {
-        let mut balances = balance_changes
-            .iter()
-            .fold(balances, |mut balances, balance_change| {
-                // Rosetta only care about address owner
-                if let Owner::AddressOwner(owner) = balance_change.owner {
-                    if balance_change.coin_type == GAS::type_tag() {
-                        *balances.entry(owner).or_default() += balance_change.amount;
+        let mut balances =
+            balance_changes
+                .iter()
+                .fold(balances, |mut balances, (balance_change, ccy)| {
+                    // Rosetta only care about address owner
+                    if let Owner::AddressOwner(owner) = balance_change.owner {
+                        *balances.entry((owner, ccy.clone())).or_default() += balance_change.amount;
                     }
-                }
-                balances
-            });
+                    balances
+                });
         // separate gas from balances
-        *balances.entry(gas_owner).or_default() -= gas_used;
+        *balances.entry((gas_owner, SUI.clone())).or_default() -= gas_used;
 
-        let balance_change = balances
-            .into_iter()
-            .filter(|(_, amount)| *amount != 0)
-            .map(move |(addr, amount)| Operation::balance_change(status, addr, amount));
+        let balance_change = balances.into_iter().filter(|(_, amount)| *amount != 0).map(
+            move |((addr, currency), amount)| {
+                Operation::balance_change(status, addr, amount, currency)
+            },
+        );
 
         let gas = if gas_used != 0 {
             vec![Operation::gas(gas_owner, gas_used)]
@@ -502,10 +569,11 @@ impl TryFrom<SuiTransactionBlockData> for Operations {
         )?))
     }
 }
-
-impl TryFrom<SuiTransactionBlockResponse> for Operations {
-    type Error = Error;
-    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
+impl Operations {
+    pub async fn try_from_response(
+        response: SuiTransactionBlockResponse,
+        cache: &CoinMetadataCache,
+    ) -> Result<Self, Error> {
         let tx = response
             .transaction
             .ok_or_else(|| anyhow!("Response input should not be empty"))?;
@@ -532,7 +600,9 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
                     if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
                         (&op.account, &op.amount, &op.status)
                     {
-                        *balances.entry(acc.address).or_default() -= amount.value;
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() -= amount.value;
                     }
                     balances
                 });
@@ -564,8 +634,8 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
             }
         }
         let staking_balance = if principal_amounts != 0 {
-            *accounted_balances.entry(sender).or_default() -= principal_amounts;
-            *accounted_balances.entry(sender).or_default() -= reward_amounts;
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= principal_amounts;
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= reward_amounts;
             vec![
                 Operation::stake_principle(status, sender, principal_amounts),
                 Operation::stake_reward(status, sender, reward_amounts),
@@ -574,22 +644,75 @@ impl TryFrom<SuiTransactionBlockResponse> for Operations {
             vec![]
         };
 
+        let mut balance_changes = vec![];
+
+        for balance_change in &response
+            .balance_changes
+            .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?
+        {
+            if let Ok(currency) = cache.get_currency(&balance_change.coin_type).await {
+                balance_changes.push((balance_change.clone(), currency));
+            }
+        }
+
         // Extract coin change operations from balance changes
         let coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
-            &response
-                .balance_changes
-                .ok_or_else(|| anyhow!("Response balance changes should not be empty."))?,
+            balance_changes,
             status,
             accounted_balances,
         );
 
-        Ok(ops
+        let ops: Operations = ops
             .into_iter()
             .chain(coin_change_operations)
             .chain(staking_balance)
-            .collect())
+            .collect();
+
+        // This is a workaround for the payCoin cases that are mistakenly considered to be paySui operations
+        // In this case we remove any irrelevant, SUI specific operation entries that sum up to 0 balance changes per address
+        // and keep only the actual entries for the right coin type transfers, as they have been extracted from the transaction's
+        // balance changes section.
+        let mutually_cancelling_balances: HashMap<_, _> = ops
+            .clone()
+            .into_iter()
+            .fold(
+                HashMap::new(),
+                |mut balances: HashMap<(SuiAddress, Currency), i128>, op| {
+                    if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
+                        (&op.account, &op.amount, &op.status)
+                    {
+                        if op.type_ != OperationType::Gas {
+                            *balances
+                                .entry((acc.address, amount.clone().currency))
+                                .or_default() += amount.value;
+                        }
+                    }
+                    balances
+                },
+            )
+            .into_iter()
+            .filter(|balance| {
+                let (_, amount) = balance;
+                *amount == 0
+            })
+            .collect();
+
+        let ops: Operations = ops
+            .clone()
+            .into_iter()
+            .filter(|op| {
+                if let (Some(acc), Some(amount)) = (&op.account, &op.amount) {
+                    return op.type_ == OperationType::Gas
+                        || !mutually_cancelling_balances
+                            .contains_key(&(acc.address, amount.clone().currency));
+                }
+                true
+            })
+            .collect();
+
+        Ok(ops)
     }
 }
 
@@ -672,7 +795,7 @@ impl Operation {
             type_: OperationType::Genesis,
             status: Some(OperationStatus::Success),
             account: Some(sender.into()),
-            amount: Some(Amount::new(coin.value().into())),
+            amount: Some(Amount::new(coin.value().into(), None)),
             coin_change: Some(CoinChange {
                 coin_identifier: CoinIdentifier {
                     identifier: CoinID {
@@ -692,19 +815,41 @@ impl Operation {
             type_: OperationType::PaySui,
             status,
             account: Some(address.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
     }
 
-    fn balance_change(status: Option<OperationStatus>, addr: SuiAddress, amount: i128) -> Self {
+    fn pay_coin(
+        status: Option<OperationStatus>,
+        address: SuiAddress,
+        amount: i128,
+        currency: Option<Currency>,
+    ) -> Self {
+        Operation {
+            operation_identifier: Default::default(),
+            type_: OperationType::PayCoin,
+            status,
+            account: Some(address.into()),
+            amount: Some(Amount::new(amount, currency)),
+            coin_change: None,
+            metadata: None,
+        }
+    }
+
+    fn balance_change(
+        status: Option<OperationStatus>,
+        addr: SuiAddress,
+        amount: i128,
+        currency: Currency,
+    ) -> Self {
         Self {
             operation_identifier: Default::default(),
             type_: OperationType::SuiBalanceChange,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, Some(currency))),
             coin_change: None,
             metadata: None,
         }
@@ -715,7 +860,7 @@ impl Operation {
             type_: OperationType::Gas,
             status: Some(OperationStatus::Success),
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -726,7 +871,7 @@ impl Operation {
             type_: OperationType::StakeReward,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -737,7 +882,7 @@ impl Operation {
             type_: OperationType::StakePrinciple,
             status,
             account: Some(addr.into()),
-            amount: Some(Amount::new(amount)),
+            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
