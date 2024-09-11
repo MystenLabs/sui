@@ -1,4 +1,4 @@
-module 0x1::ReturnRefsSafe {
+module 0x6::ReturnRefsSafe {
     // Make sure the analysis doesn't complain about returning
     // refs to formals or their children
 
