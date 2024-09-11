@@ -1,6 +1,6 @@
 /// Dependencies: [C v0+]
-module 0x2::b {
+module 0x7::b {
     public fun b(): u64 {
-        0x2::c::c() + 1
+        0x7::c::c() + 1
     }
 }

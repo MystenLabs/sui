@@ -1,5 +1,5 @@
 //# run
-module 0x1.m {
+module 0x6.m {
 
 entry foo() {
     let x: vector<u64>;
@@ -16,7 +16,7 @@ entry foo() {
 
 }
 //# run
-module 0x2.m {
+module 0x7.m {
 
 entry foo() {
     let x: vector<u64>;

@@ -53,7 +53,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::main {
+module 0x43::main {
     use 0x42::m::{a, b, c};
     fun main() {
         let mut x = 43;
