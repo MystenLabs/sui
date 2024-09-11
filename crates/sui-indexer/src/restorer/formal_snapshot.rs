@@ -18,6 +18,7 @@ use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::LiveObject;
 use sui_snapshot::reader::{download_bytes, LiveObjectIter, StateSnapshotReaderV1};
 use sui_snapshot::FileMetadata;
+use sui_storage::object_store::util::get;
 use sui_storage::object_store::ObjectStoreGetExt;
 use sui_types::accumulator::Accumulator;
 
@@ -122,6 +123,8 @@ impl IndexerFormalSnapshotRestorer {
         )
         .await?;
         info!("Finished restoring move objects");
+        self.restore_display_table().await?;
+        info!("Finished restoring display table");
         Ok(())
     }
 
@@ -243,5 +246,27 @@ impl IndexerFormalSnapshotRestorer {
             abort_registration,
         )
         .await?
+    }
+
+    async fn restore_display_table(&self) -> std::result::Result<(), anyhow::Error> {
+        let cred_path = self.restore_config.gcs_cred_path.clone();
+        let bucket = self.restore_config.gcs_display_bucket.clone();
+        let start_epoch = self.restore_config.start_epoch;
+
+        let remote_store_config = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::GCS),
+            bucket: Some(bucket),
+            google_service_account: Some(cred_path),
+            object_store_connection_limit: 200,
+            no_sign_request: false,
+            ..Default::default()
+        };
+        let remote_store = remote_store_config.make().map_err(|e| {
+            IndexerError::GcsError(format!("Failed to make GCS remote store: {}", e))
+        })?;
+        let path = Path::from(format!("display_{}.csv", start_epoch).as_str());
+        let bytes: bytes::Bytes = get(&remote_store, &path).await?;
+        self.store.restore_display(bytes).await?;
+        Ok(())
     }
 }
