@@ -326,10 +326,8 @@ pub trait IndexerProgressStore: Send {
     /// to see if we have reached the target checkpoint.
     async fn save_progress(
         &mut self,
-        task_name: String,
+        task: &Task,
         checkpoint_numbers: &[u64],
-        start_checkpoint_number: u64,
-        target_checkpoint_number: u64,
     ) -> anyhow::Result<Option<u64>>;
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Tasks, Error>;
@@ -368,6 +366,8 @@ pub trait Datasource<T: Send>: Sync + Send {
         P: Persistent<R>,
     {
         let task_name = task.task_name.clone();
+        let task_name_prefix = task.name_prefix();
+        let task_type_label = task.type_str();
         let starting_checkpoint = task.start_checkpoint;
         let target_checkpoint = task.target_checkpoint;
         let ingestion_batch_size = std::env::var("INGESTION_BATCH_SIZE")
@@ -391,18 +391,20 @@ pub trait Datasource<T: Send>: Sync + Send {
             &mysten_metrics::get_metrics()
                 .unwrap()
                 .channel_inflight
-                .with_label_values(&[&task_name]),
+                // This metric works now when there is only 1 backfill task running per task name.
+                // It will be unusable when there are parallel backfill tasks per task name.
+                .with_label_values(&[&format!("{}-{}", task_name_prefix, task_type_label)]),
         );
         let is_live_task = task.is_live_task;
-        let join_handle = self.start_data_retrieval(task, data_sender).await?;
+        let join_handle = self.start_data_retrieval(task.clone(), data_sender).await?;
         let processed_checkpoints_metrics = self
             .get_tasks_processed_checkpoints_metric()
-            .with_label_values(&[&task_name]);
+            .with_label_values(&[task_name_prefix, task_type_label]);
         // track remaining checkpoints per task, except for live task
         let remaining_checkpoints_metric = if !is_live_task {
             let remaining = self
                 .get_tasks_remaining_checkpoints_metric()
-                .with_label_values(&[&task_name]);
+                .with_label_values(&[task_name_prefix]);
             remaining.set((target_checkpoint - starting_checkpoint + 1) as i64);
             Some(remaining)
         } else {
@@ -463,14 +465,7 @@ pub trait Datasource<T: Send>: Sync + Send {
                     timer.elapsed().as_millis(),
                 );
             }
-            last_saved_checkpoint = storage
-                .save_progress(
-                    task_name.clone(),
-                    &heights,
-                    starting_checkpoint,
-                    target_checkpoint,
-                )
-                .await?;
+            last_saved_checkpoint = storage.save_progress(&task, &heights).await?;
             tracing::debug!(
                 task_name,
                 max_height,
