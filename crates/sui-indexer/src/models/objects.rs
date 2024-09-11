@@ -18,7 +18,7 @@ use sui_types::object::Object;
 use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema::{objects, objects_history, objects_snapshot};
+use crate::schema::{full_objects_history, objects, objects_history, objects_snapshot};
 use crate::types::{owner_to_owner_info, IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
@@ -541,6 +541,35 @@ impl TryFrom<CoinBalance> for Balance {
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
         })
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = full_objects_history, primary_key(object_id, object_version))]
+pub struct StoredFullHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub serialized_object: Option<Vec<u8>>,
+}
+
+impl From<IndexedObject> for StoredFullHistoryObject {
+    fn from(o: IndexedObject) -> Self {
+        let object = o.object;
+        Self {
+            object_id: object.id().to_vec(),
+            object_version: object.version().value() as i64,
+            serialized_object: Some(bcs::to_bytes(&object).unwrap()),
+        }
+    }
+}
+
+impl From<IndexedDeletedObject> for StoredFullHistoryObject {
+    fn from(o: IndexedDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
+            serialized_object: None,
+        }
     }
 }
 
