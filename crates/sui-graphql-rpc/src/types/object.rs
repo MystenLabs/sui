@@ -41,6 +41,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
+use sui_indexer::models::obj_indices::StoredObjectVersion;
 use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject};
 use sui_indexer::schema::{full_objects_history, objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
@@ -1386,19 +1387,12 @@ impl Loader<ParentVersionKey> for Db {
             .map(|(group_key, ids)| {
                 self.execute(move |conn| {
                     async move {
-                        let stored: Vec<StoredHistoryObject> = conn
+                        let stored: Vec<StoredObjectVersion> = conn
                             .results(move || {
-                                use objects_history::dsl as h;
                                 use objects_version::dsl as v;
 
-                                h::objects_history
-                                    .inner_join(
-                                        v::objects_version.on(v::cp_sequence_number
-                                            .eq(h::checkpoint_sequence_number)
-                                            .and(v::object_id.eq(h::object_id))
-                                            .and(v::object_version.eq(h::object_version))),
-                                    )
-                                    .select(StoredHistoryObject::as_select())
+                                v::objects_version
+                                    .select(StoredObjectVersion::as_select())
                                     .filter(v::object_id.eq_any(ids.iter().cloned()))
                                     .filter(v::object_version.le(group_key.parent_version as i64))
                                     .distinct_on(v::object_id)
@@ -1419,37 +1413,45 @@ impl Loader<ParentVersionKey> for Db {
                 })
             });
 
-        // Wait for the reads to all finish, and gather them into the result map.
         let groups = futures::future::join_all(futures).await;
-
-        let mut results = HashMap::new();
+        let mut group_map = HashMap::new();
+        let mut historical_keys = vec![];
         for group in groups {
             for (group_key, stored) in
                 group.map_err(|e| Error::Internal(format!("Failed to fetch objects: {e}")))?
             {
                 // This particular object is invalid -- it didn't exist at the checkpoint we are
                 // viewing at.
-                if group_key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
+                if group_key.checkpoint_viewed_at < stored.cp_sequence_number as u64 {
                     continue;
                 }
-
-                let object = Object::try_from_stored_history_object(
-                    stored,
-                    group_key.checkpoint_viewed_at,
-                    // If `LatestAtKey::parent_version` is set, it must have been correctly
-                    // propagated from the `Object::root_version` of some object.
-                    Some(group_key.parent_version),
-                )?;
+                let id = addr(&stored.object_id)?;
+                let historical_key = HistoricalKey {
+                    id,
+                    version: stored.object_version as u64,
+                    checkpoint_viewed_at: group_key.checkpoint_viewed_at,
+                };
+                historical_keys.push(historical_key);
 
                 let key = ParentVersionKey {
-                    id: object.address,
+                    id,
                     checkpoint_viewed_at: group_key.checkpoint_viewed_at,
                     parent_version: group_key.parent_version,
                 };
-
-                results.insert(key, object);
+                group_map.entry(key).or_insert(vec![]).push(historical_key);
             }
         }
+        let objects = self.load(&historical_keys).await?;
+        let results = group_map
+            .into_iter()
+            .filter_map(|(parent_key, historical_key)| {
+                let mut object = objects.get(&historical_key[0]).cloned()?;
+                // If `LatestAtKey::parent_version` is set, it must have been correctly
+                // propagated from the `Object::root_version` of some object.
+                object.root_version = parent_key.parent_version;
+                Some((parent_key, object))
+            })
+            .collect();
 
         Ok(results)
     }
