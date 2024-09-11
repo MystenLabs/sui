@@ -941,15 +941,8 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        // The should_accept_user_certs check here is best effort, because
-        // between a validator signs a tx and a cert is formed, the validator
-        // could close the window.
-        if !epoch_store
-            .get_reconfig_state_read_lock_guard()
-            .should_accept_user_certs()
-        {
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
+        // Ensure that validator cannot reconfigure while we are signing the tx
+        let _execution_lock = self.execution_lock_for_signing().await;
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
@@ -2883,6 +2876,11 @@ impl AuthorityState {
                 actual_epoch: transaction.auth_sig().epoch(),
             })
         }
+    }
+
+    pub async fn execution_lock_for_signing(&self) -> ExecutionLockReadGuard {
+        // No need to check epoch here - current epoch is always correct for signing
+        self.execution_lock.read().await
     }
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
