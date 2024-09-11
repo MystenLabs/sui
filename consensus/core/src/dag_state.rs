@@ -728,10 +728,9 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
-    /// The latest round that has been garbage collected.
+    /// The latest Garbage Collection (GC) round that is calculated based on the latest committed leader round. When GC is disabled that will return the genesis round.
     pub(crate) fn gc_round(&self) -> Round {
         let gc_depth = self.context.protocol_config.gc_depth();
-
         if gc_depth > 0 {
             // GC is enabled, only then calculate the diff
             self.last_commit_round().saturating_sub(gc_depth)
