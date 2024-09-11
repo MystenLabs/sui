@@ -12,6 +12,7 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
 import { Runtime, RuntimeEvents, IRuntimeStack } from './runtime';
+import { log } from 'console';
 
 const enum LogLevel {
     Log = 'log',
@@ -197,7 +198,7 @@ export class MoveDebugSession extends LoggingDebugSession {
 
     protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
         try {
-            this.runtime.step(true);
+            this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -208,7 +209,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
         let terminate = false;
         try {
-            terminate = this.runtime.step(false);
+            terminate = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -220,11 +221,15 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
+        let terminate = false;
         try {
-            this.runtime.stepOut();
+            terminate = this.runtime.stepOut();
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
+        }
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
         }
         this.sendResponse(response);
     }
@@ -239,6 +244,33 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
+        let terminate = false;
+        try {
+            terminate = this.runtime.continue(/* reverse */ false);
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
+        }
+        this.sendResponse(response);
+    }
+
+    protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void {
+        let terminate = false;
+        try {
+            terminate = this.runtime.continue(/* reverse */ true);
+        } catch (err) {
+            response.success = false;
+            response.message = err instanceof Error ? err.message : String(err);
+        }
+        if (terminate) {
+            this.sendEvent(new TerminatedEvent());
+        }
+        this.sendResponse(response);
+    }
 
     protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments): void {
         // Cleanup and terminate the debug session
