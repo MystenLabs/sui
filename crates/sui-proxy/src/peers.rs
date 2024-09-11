@@ -406,8 +406,12 @@ async fn extract_bridge(
                         let metrics_pub_key: String = match serde_json::from_slice(&raw) {
                             Ok(key) => key,
                             Err(error) => {
-                                error!(?error, "Failed to deserialize response");
-                                return None;
+                                error!(?error, url_str, "Failed to deserialize response");
+                                return fallback_to_cached_key(
+                                    &metrics_keys,
+                                    &url_str,
+                                    &bridge_name,
+                                );
                             }
                         };
                         let metrics_bytes = match Base64::decode(&metrics_pub_key) {
@@ -438,18 +442,7 @@ async fn extract_bridge(
                         }
                     }
                     Err(_) => {
-                        // Fallback to cached key if network request fails
-                        let metrics_keys_read = metrics_keys.read().unwrap();
-                        if let Some(cached_key) = metrics_keys_read.get(&url_str) {
-                            debug!(url_str, "Using cached metrics public key");
-                            cached_key.clone()
-                        } else {
-                            error!(
-                                url_str,
-                                "Failed to fetch public key and no cached key available"
-                            );
-                            return None;
-                        }
+                        return fallback_to_cached_key(&metrics_keys, &url_str, &bridge_name);
                     }
                 };
                 Some((
@@ -467,11 +460,40 @@ async fn extract_bridge(
     results
 }
 
+fn fallback_to_cached_key(
+    metrics_keys: &MetricsPubKeys,
+    url_str: &str,
+    bridge_name: &str,
+) -> Option<(Ed25519PublicKey, AllowedPeer)> {
+    let metrics_keys_read = metrics_keys.read().unwrap();
+    if let Some(cached_key) = metrics_keys_read.get(url_str) {
+        debug!(
+            url_str,
+            "Using cached metrics public key after request failure"
+        );
+        Some((
+            cached_key.clone(),
+            AllowedPeer {
+                public_key: cached_key.clone(),
+                name: bridge_name.to_string(),
+            },
+        ))
+    } else {
+        error!(
+            url_str,
+            "Failed to fetch public key and no cached key available"
+        );
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::admin::{generate_self_cert, CertKeyPair};
     use serde::Serialize;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::{BridgeCommitteeSummary, BridgeSummary, MoveTypeCommitteeMember};
     use sui_types::sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary, SuiValidatorSummary,
     };
@@ -507,5 +529,85 @@ mod tests {
 
         let peers = extract(deserialized.result);
         assert_eq!(peers.count(), 1, "peers should have been a length of 1");
+    }
+
+    #[tokio::test]
+    async fn test_extract_bridge_invalid_bridge_url() {
+        let summary = BridgeSummary {
+            committee: BridgeCommitteeSummary {
+                members: vec![(
+                    vec![],
+                    MoveTypeCommitteeMember {
+                        sui_address: SuiAddress::ZERO,
+                        http_rest_url: "invalid_bridge_url".as_bytes().to_vec(),
+                        ..Default::default()
+                    },
+                )],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let metrics_keys = Arc::new(RwLock::new(HashMap::new()));
+        {
+            let mut cache = metrics_keys.write().unwrap();
+            cache.insert(
+                "invalid_bridge_url".to_string(),
+                Ed25519PublicKey::from_bytes(&[1u8; 32]).unwrap(),
+            );
+        }
+        let result = extract_bridge(summary, metrics_keys.clone()).await;
+
+        assert_eq!(
+            result.len(),
+            0,
+            "Should not fall back on cache if invalid bridge url is set"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_extract_bridge_interrupted_response() {
+        let summary = BridgeSummary {
+            committee: BridgeCommitteeSummary {
+                members: vec![(
+                    vec![],
+                    MoveTypeCommitteeMember {
+                        sui_address: SuiAddress::ZERO,
+                        http_rest_url: "https://unresponsive_bridge_url".as_bytes().to_vec(),
+                        ..Default::default()
+                    },
+                )],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let metrics_keys = Arc::new(RwLock::new(HashMap::new()));
+        {
+            let mut cache = metrics_keys.write().unwrap();
+            cache.insert(
+                "https://unresponsive_bridge_url".to_string(),
+                Ed25519PublicKey::from_bytes(&[1u8; 32]).unwrap(),
+            );
+        }
+        let result = extract_bridge(summary, metrics_keys.clone()).await;
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should fall back on cache if invalid response occurs"
+        );
+        let allowed_peer = &result[0].1;
+        assert_eq!(
+            allowed_peer.public_key.as_bytes(),
+            &[1u8; 32],
+            "Should fall back to the cached public key"
+        );
+
+        let cache = metrics_keys.read().unwrap();
+        assert!(
+            cache.contains_key("https://unresponsive_bridge_url"),
+            "Cache should still contain the original key"
+        );
     }
 }
