@@ -1604,6 +1604,7 @@ name = "move-bytecode-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "indexmap 2.2.6",
  "move-binary-format",
  "move-core-types",
  "petgraph",

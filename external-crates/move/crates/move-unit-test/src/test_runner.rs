@@ -62,13 +62,11 @@ pub struct TestRunner {
 /// Setup storage state with the set of modules that will be needed for all tests
 fn setup_test_storage<'a>(
     modules: impl Iterator<Item = &'a CompiledModule>,
+    bytecode_deps_modules: impl Iterator<Item = &'a CompiledModule>,
 ) -> Result<InMemoryStorage> {
     let mut storage = InMemoryStorage::new();
-    let modules = Modules::new(modules);
-    for module in modules
-        .compute_dependency_graph()
-        .compute_topological_order()?
-    {
+    let modules = Modules::new(modules.chain(bytecode_deps_modules));
+    for module in modules.compute_topological_order()? {
         let module_id = module.self_id();
         let mut module_bytes = Vec::new();
         module.serialize_with_version(module.version, &mut module_bytes)?;
@@ -121,7 +119,8 @@ impl TestRunner {
         cost_table: Option<CostTable>,
     ) -> Result<Self> {
         let modules = tests.module_info.values().map(|info| &info.module);
-        let starting_storage_state = setup_test_storage(modules)?;
+        let starting_storage_state =
+            setup_test_storage(modules, tests.bytecode_deps_modules.iter())?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
