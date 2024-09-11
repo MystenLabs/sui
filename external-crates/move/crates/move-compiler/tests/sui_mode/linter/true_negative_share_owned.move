@@ -86,21 +86,21 @@ module sui::object {
         id: address,
     }
     public fun delete(_: UID) {
-        abort 0
+        loop {}
     }
     public fun new(_: &mut sui::tx_context::TxContext): UID {
-        abort 0
+        loop {}
     }
 }
 
 module sui::transfer {
     public fun transfer<T: key>(_: T, _: address) {
-        abort 0
+        loop {}
     }
     public fun share_object<T: key>(_: T) {
-        abort 0
+        loop {}
     }
     public fun public_share_object<T: key>(_: T) {
-        abort 0
+        loop {}
     }
 }
