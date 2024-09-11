@@ -120,9 +120,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         &self,
         peer: AuthorityIndex,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Round>> {
-        unimplemented!("Unimplemented")
-    }
+    ) -> ConsensusResult<Vec<Round>>;
 }
 
 /// Network service for handling requests from peers.

@@ -171,6 +171,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
+    pub(crate) round_prober_quorum_gaps: IntGaugeVec,
+    pub(crate) round_prober_propagation_delay: IntGauge,
     pub(crate) uptime: Histogram,
 }
 
@@ -591,6 +593,17 @@ impl NodeMetrics {
                 "commit_sync_fetch_once_errors",
                 "Number of errors when attempting to fetch commits and blocks from single authority during commit sync.",
                 &["error"],
+                registry
+            ).unwrap(),
+            round_prober_quorum_gaps: register_int_gauge_vec_with_registry!(
+                "round_prober_quorum_gaps",
+                "Round gaps among peers for blocks proposed from each authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            round_prober_propagation_delay: register_int_gauge_with_registry!(
+                "round_prober_propagation_delay",
+                "Round gap between own last proposed block and the low watermark of quorum round",
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

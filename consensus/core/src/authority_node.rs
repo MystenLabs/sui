@@ -28,6 +28,7 @@ use crate::{
         anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
         NetworkManager,
     },
+    round_prober::{RoundProber, RoundProberHandle},
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -137,6 +138,7 @@ where
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
     commit_syncer_handle: CommitSyncerHandle,
+    round_prober_handle: RoundProberHandle,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -287,6 +289,14 @@ where
         )
         .start();
 
+        let round_prober_handle = RoundProber::new(
+            context.clone(),
+            core_dispatcher.clone(),
+            dag_state.clone(),
+            network_client.clone(),
+        )
+        .start();
+
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -328,6 +338,7 @@ where
             transaction_client: Arc::new(tx_client),
             synchronizer,
             commit_syncer_handle,
+            round_prober_handle,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -354,6 +365,7 @@ where
             );
         };
         self.commit_syncer_handle.stop().await;
+        self.round_prober_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
