@@ -182,6 +182,8 @@ impl Linearizer {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
     use crate::{
         commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
@@ -189,6 +191,7 @@ mod tests {
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
+        test_dag_parser::parse_dag,
         CommitIndex,
     };
 
@@ -482,16 +485,16 @@ mod tests {
         }
     }
 
+    /// This test will run the linearizer with GC disabled (gc_depth = 0) and gc enabled (gc_depth = 3) and make
+    /// sure that for the exact same DAG the linearizer will commit different blocks according to the rules.
+    #[rstest]
     #[tokio::test]
-    async fn test_handle_commit_with_gc() {
+    async fn test_handle_commit_with_gc_simple(#[values(0, 3)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
 
-        // We set the GC to 2
-        const GC_DEPTH: u32 = 2;
-
         let num_authorities = 4;
-        let (mut context, keys) = Context::new_for_test(num_authorities);
-        context.protocol_config.set_gc_depth_for_testing(GC_DEPTH);
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context.protocol_config.set_gc_depth_for_testing(gc_depth);
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -503,24 +506,42 @@ mod tests {
         ));
         let mut linearizer = Linearizer::new(dag_state.clone(), leader_schedule);
 
-        // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 2.
-        // For authority 3 we create blocks that connect to all the other authorities, but no authority is including its blocks until round 3.
-        // On round 4 we finally make the other authorities see the blocks of authority 3.
-        let num_rounds: u32 = 6;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layer(1).build();
-        dag_builder.layers(2..=3).authorities(vec![AuthorityIndex::new_for_test(0),
-        AuthorityIndex::new_for_test(1),
-        AuthorityIndex::new_for_test(2)]).skip_ancestor_links(vec![AuthorityIndex::new_for_test(3)]).build();
-        dag_builder.layers(4..=num_rounds).build();
-        dag_builder.persist_all_blocks(dag_state.clone()); 
+        // Authorities of index 0->2 will always creates blocks that see each other, but until round 5 they won't see the blocks of authority 3.
+        // For authority 3 we create blocks that connect to all the other authorities.
+        // On round 5 we finally make the other authorities see the blocks of authority 3.
+        // Practically we "simulate" here a long chain created by authority 3 that is visible in round 5, but due to GC blocks of only round >=2 will
+        // be committed, when GC is enabled. When GC is disabled all blocks will be committed for rounds >= 1.
+        let dag_str = "DAG {
+                Round 0 : { 4 },
+                Round 1 : { * },
+                Round 2 : {
+                    A -> [-D1],
+                    B -> [-D1],
+                    C -> [-D1],
+                    D -> [*],
+                },
+                Round 3 : {
+                    A -> [-D2],
+                    B -> [-D2],
+                    C -> [-D2],
+                },
+                Round 4 : { 
+                    A -> [-D3],
+                    B -> [-D3],
+                    C -> [-D3],
+                    D -> [A3, B3, C3, D2],
+                },
+                Round 5 : { * },
+            }";
 
+        let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
         dag_builder.print();
+        dag_builder.persist_all_blocks(dag_state.clone());
 
         let leaders = dag_builder
-            .leader_blocks(1..=num_rounds)
+            .leader_blocks(1..=6)
             .into_iter()
-            .map(Option::unwrap)
+            .flatten()
             .collect::<Vec<_>>();
 
         let commits = linearizer.handle_commit(leaders.clone());
@@ -531,10 +552,41 @@ mod tests {
             if idx == 0 {
                 // First subdag includes the leader block only
                 assert_eq!(subdag.blocks.len(), 1);
+            } else if idx == 1 {
+                assert_eq!(subdag.blocks.len(), 3);
+            } else if idx == 2 {
+                // We commit:
+                // * 1 block on round 4, the leader block
+                // * 3 blocks on round 3, as no commit happened on round 3 since the leader was missing
+                // * 2 blocks on round 2, again as no commit happened on round 3, we commit the "sub dag" of leader of round 3, which will be another 2 blocks
+                assert_eq!(subdag.blocks.len(), 6);
             } else {
-                // Every subdag after will be missing the leader block from the previous
-                // committed subdag
-                assert_eq!(subdag.blocks.len(), num_authorities);
+                // GC is enabled, so we expect to see only blocks of round >= 2
+                if gc_depth > 0 {
+                    // Now it's going to be the first time that a leader will see the blocks of authority 3 and will attempt to commit
+                    // the long chain. However, due to GC it will only commit blocks of round > 1. That's because it will commit blocks
+                    // up to previous leader's round (round = 4) minus the gc_depth = 3, so that will be gc_round = 4 - 3 = 1. So we expect
+                    // to see on the sub dag committed blocks of round >= 2.
+                    assert_eq!(subdag.blocks.len(), 5);
+
+                    assert!(
+                        subdag.blocks.iter().all(|block| block.round() >= 2),
+                        "Found blocks that are of round < 2."
+                    );
+
+                    // Also ensure that gc_round has advanced with the latest committed leader
+                    assert_eq!(dag_state.read().gc_round(), subdag.leader.round - gc_depth);
+                } else {
+                    // GC is disabled, so we expect to see all blocks of round >= 1
+                    assert_eq!(subdag.blocks.len(), 6);
+                    assert!(
+                        subdag.blocks.iter().all(|block| block.round() >= 1),
+                        "Found blocks that are of round < 1."
+                    );
+
+                    // GC round should never have moved
+                    assert_eq!(dag_state.read().gc_round(), 0);
+                }
             }
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());

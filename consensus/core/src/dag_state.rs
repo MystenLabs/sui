@@ -730,8 +730,16 @@ impl DagState {
 
     /// The latest round that has been garbage collected.
     pub(crate) fn gc_round(&self) -> Round {
-        self.last_commit_round()
-            .saturating_sub(self.context.protocol_config.gc_depth())
+        let gc_depth = self.context.protocol_config.gc_depth();
+
+        if gc_depth > 0 {
+            // GC is enabled, only then calculate the diff
+            self.last_commit_round().saturating_sub(gc_depth)
+        } else {
+            // Otherwise just return genesis round. That also acts as a safety mechanism so we never attempt to truncate anything
+            // even accidentally.
+            GENESIS_ROUND
+        }
     }
 
     pub(crate) fn gc_enabled(&self) -> bool {
