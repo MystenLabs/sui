@@ -138,7 +138,7 @@ where
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
     commit_syncer_handle: CommitSyncerHandle,
-    round_prober_handle: RoundProberHandle,
+    round_prober_handle: Option<RoundProberHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -289,13 +289,19 @@ where
         )
         .start();
 
-        let round_prober_handle = RoundProber::new(
-            context.clone(),
-            core_dispatcher.clone(),
-            dag_state.clone(),
-            network_client.clone(),
-        )
-        .start();
+        let round_prober_handle = if context.protocol_config.consensus_round_prober() {
+            Some(
+                RoundProber::new(
+                    context.clone(),
+                    core_dispatcher.clone(),
+                    dag_state.clone(),
+                    network_client.clone(),
+                )
+                .start(),
+            )
+        } else {
+            None
+        };
 
         let network_service = Arc::new(AuthorityService::new(
             context.clone(),
@@ -365,7 +371,9 @@ where
             );
         };
         self.commit_syncer_handle.stop().await;
-        self.round_prober_handle.stop().await;
+        if let Some(round_prober_handle) = self.round_prober_handle.take() {
+            round_prober_handle.stop().await;
+        }
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.

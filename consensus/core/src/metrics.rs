@@ -174,6 +174,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) round_prober_quorum_gaps: IntGaugeVec,
     pub(crate) round_prober_propagation_delay: IntGauge,
+    pub(crate) round_prober_request_timeouts: IntCounter,
     pub(crate) uptime: Histogram,
 }
 
@@ -611,6 +612,11 @@ impl NodeMetrics {
             round_prober_propagation_delay: register_int_gauge_with_registry!(
                 "round_prober_propagation_delay",
                 "Round gap between own last proposed block and the low watermark of quorum round",
+                registry
+            ).unwrap(),
+            round_prober_request_timeouts: register_int_counter_with_registry!(
+                "round_prober_request_timeouts",
+                "Number of timeouts when probing against peers",
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

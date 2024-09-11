@@ -124,7 +124,7 @@ impl Parameters {
 
     pub(crate) fn default_propagation_delay_stop_proposal_threshold() -> u32 {
         // In experiments, propagation delay is usually 0 round.
-        10
+        5
     }
 
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {

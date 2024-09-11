@@ -73,7 +73,7 @@ impl<C: NetworkClient> RoundProber<C> {
         let shutdown_notif = self.shutdown_notif.clone();
         let loop_shutdown_notif = shutdown_notif.clone();
         let prober_task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
             interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
             loop {
                 tokio::select! {
@@ -133,9 +133,11 @@ impl<C: NetworkClient> RoundProber<C> {
                             highest_received_rounds[peer] = rounds;
                         }
                         Ok(Err(err)) => {
+                            self.context.metrics.node_metrics.round_prober_request_timeouts.inc();
                             tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
                         }
                         Err(_) => {
+                            self.context.metrics.node_metrics.round_prober_request_timeouts.inc();
                             tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
                         }
                     }
