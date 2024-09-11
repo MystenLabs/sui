@@ -12,21 +12,23 @@ use reqwest::header::ACCEPT;
 use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::env;
+use strsim::normalized_damerau_levenshtein;
 use tracing::debug;
 
 use crate::cli::incidents::slack::Channel;
 use crate::cli::lib::utils::day_of_week;
 use crate::DEBUG_MODE;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Priority {
     pub name: String,
     id: String,
     color: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Incident {
     #[serde(rename = "incident_number")]
     number: u64,
@@ -118,6 +120,29 @@ impl Incident {
             Some("P4") => "P4".white(),
             _ => "".white(),
         }
+    }
+
+    fn short_fmt(&self) -> String {
+        format!(
+            "• {} {} {} {}",
+            if let Some(channel) = self.slack_channel.clone() {
+                format!("{} ({})", self.number, channel.url())
+            } else {
+                self.number.to_string()
+            },
+            self.resolved_at
+                .clone()
+                .map(|c| NaiveDateTime::parse_from_str(&c, DATE_FORMAT_IN)
+                    .expect("parsing closed date")
+                    .format(DATE_FORMAT_OUT_SHORT)
+                    .to_string())
+                .unwrap_or("".to_owned()),
+            self.title,
+            self.slack_channel
+                .clone()
+                .map(|c| c.name)
+                .unwrap_or("".to_string()),
+        )
     }
 }
 
@@ -227,18 +252,70 @@ pub async fn print_recent_incidents(
 }
 
 pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
+    let incidents_grouped = incidents
+        .into_iter()
+        // filter on priority > P3 and any slack channel association
+        .filter(|i| {
+            i.priority
+                .clone()
+                .filter(|p| !p.name.is_empty() && p.name != "P3")
+                .is_some()
+                || i.slack_channel.is_some()
+        })
+        .collect();
+    let group_map = group_by_similar_title(incidents_grouped, 0.9);
     let mut to_review = vec![];
     let mut excluded = vec![];
-    for incident in incidents {
-        incident.print(false)?;
-        let ans = Confirm::new("Keep this incident for review?")
-            .with_default(false)
-            .prompt()
-            .expect("Unexpected response");
-        if ans {
-            to_review.push(incident);
+    debug!(
+        "map: {:#?}",
+        group_map
+            .iter()
+            .map(|(k, v)| (k, v.len()))
+            .collect::<Vec<_>>()
+    );
+    for (title, incident_group) in group_map.iter() {
+        let treat_as_one = if incident_group.len() > 1 {
+            println!(
+                "There are {} incidents with a title similar to this: {}",
+                &incident_group.len(),
+                title
+            );
+            println!("All incidents with a similar title:");
+            for i in incident_group {
+                i.print(false)?;
+            }
+            Confirm::new("Treat them as one?")
+                .with_default(true)
+                .prompt()
+                .expect("Unexpected response")
         } else {
-            excluded.push(incident);
+            false
+        };
+        if treat_as_one {
+            let ans = Confirm::new("Keep these incidents for review?")
+                .with_default(false)
+                .prompt()
+                .expect("Unexpected response");
+            if ans {
+                println!("{:?} added to review", to_review);
+                to_review.extend(incident_group.clone());
+                println!("{:?} added to review", to_review);
+            } else {
+                excluded.extend(incident_group.clone());
+            }
+        } else {
+            for incident in incident_group.iter() {
+                incident.print(false)?;
+                let ans = Confirm::new("Keep this incident for review?")
+                    .with_default(false)
+                    .prompt()
+                    .expect("Unexpected response");
+                if ans {
+                    to_review.push(incident.clone());
+                } else {
+                    excluded.push(incident.clone());
+                }
+            }
         }
     }
     println!(
@@ -249,29 +326,6 @@ pub async fn review_recent_incidents(incidents: Vec<Incident>) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
-
-    fn short_print(i: &Incident) -> String {
-        format!(
-            "• {} {} {} {}",
-            if let Some(channel) = i.slack_channel.clone() {
-                format!("{} ({})", i.number, channel.url())
-            } else {
-                i.number.to_string()
-            },
-            i.resolved_at
-                .clone()
-                .map(|c| NaiveDateTime::parse_from_str(&c, DATE_FORMAT_IN)
-                    .expect("parsing closed date")
-                    .format(DATE_FORMAT_OUT_SHORT)
-                    .to_string())
-                .unwrap_or("".to_owned()),
-            i.title,
-            i.slack_channel
-                .clone()
-                .map(|c| c.name)
-                .unwrap_or("".to_string()),
-        )
-    }
 
     let message = format!(
         "
@@ -287,12 +341,12 @@ Please comment in the thread to request an adjustment to the list.",
         day_of_week(),
         to_review
             .iter()
-            .map(short_print)
+            .map(Incident::short_fmt)
             .collect::<Vec<_>>()
             .join("\n"),
         excluded
             .iter()
-            .map(short_print)
+            .map(Incident::short_fmt)
             .collect::<Vec<_>>()
             .join("\n")
     );
@@ -320,4 +374,136 @@ Please comment in the thread to request an adjustment to the list.",
     }
     // post to https://slack.com/api/chat.postMessage with message
     Ok(())
+}
+
+fn group_by_similar_title(
+    incidents: Vec<Incident>,
+    threshold: f64,
+) -> HashMap<String, Vec<Incident>> {
+    if !(0.0..=1.0).contains(&threshold) {
+        panic!("Threshold must be between 0.0 and 1.0");
+    }
+
+    let mut groups: HashMap<String, Vec<Incident>> = HashMap::new();
+
+    for incident in incidents {
+        // Try to find an existing title that is similar enough
+        let mut found = false;
+        for (existing_title, group) in groups.iter_mut() {
+            if normalized_damerau_levenshtein(
+                &incident.title.chars().take(20).collect::<String>(),
+                &existing_title.chars().take(20).collect::<String>(),
+            ) >= threshold
+            {
+                // If similar, add it to this group
+                group.push(incident.clone());
+                found = true;
+                break;
+            }
+        }
+
+        // If no similar title found, add a new group
+        if !found {
+            groups
+                .entry(incident.title.clone())
+                .or_default()
+                .push(incident);
+        }
+    }
+
+    groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_group_by_similar_title() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Another thing entirely".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Another thing entirely 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "A third thing that doesn't look the same".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let groups = group_by_similar_title(incidents, 0.8);
+        println!("{:#?}", groups);
+
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups.get("Incident 1").unwrap().len(), 2);
+        assert!(groups.get("Incident 2").is_none());
+        assert_eq!(groups.get("Another thing entirely").unwrap().len(), 2);
+        assert_eq!(
+            groups
+                .get("A third thing that doesn't look the same")
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_group_by_similar_title_with_similar_titles() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 3".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let groups = group_by_similar_title(incidents, 0.8);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups.get("Incident 1").unwrap().len(), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "Threshold must be between 0.0 and 1.0")]
+    fn test_group_by_similar_title_with_invalid_threshold() {
+        let incidents = vec![
+            Incident {
+                title: "Incident 1".to_string(),
+                ..Default::default()
+            },
+            Incident {
+                title: "Incident 2".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        group_by_similar_title(incidents, -0.5);
+    }
 }
