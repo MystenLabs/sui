@@ -5,7 +5,7 @@
 // dep: ../move-stdlib/sources/string.move
 // dep: ../move-stdlib/sources/vector.move
 
-module 0x2::MultiLayerCalling {
+module 0x7::MultiLayerCalling {
 
     public struct HasVector {
         v: vector<HasAnotherVector>,

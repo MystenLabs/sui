@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Test {
+module 0x6.Test {
     struct X { b: bool }
     enum T { V{ i: u64, x: Self.X } }
 
@@ -23,7 +23,7 @@ module 0x1.Test {
 }
 
 //# publish
-module 0x1.Test {
+module 0x7.Test {
     struct X { b: bool }
     enum T<H> { V{ i: H, x: Self.X } }
 
@@ -46,7 +46,7 @@ module 0x1.Test {
 }
 
 //# publish
-module 0x1.Test {
+module 0x8.Test {
     struct X { b: bool }
     enum T<H> { V{ i: H, x: Self.X } }
 
@@ -69,7 +69,7 @@ module 0x1.Test {
 }
 
 //# publish
-module 0x1.Test {
+module 0x9.Test {
     struct X { b: bool }
     enum T<H> { V{ i: H, x: Self.X } }
 

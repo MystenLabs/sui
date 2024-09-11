@@ -1,4 +1,4 @@
-module 0x1::random_test {
+module 0x6::random_test {
     #[random_test]
     fun should_fail_test_div_mod_10(x: u64) {
         x / (x % 10);

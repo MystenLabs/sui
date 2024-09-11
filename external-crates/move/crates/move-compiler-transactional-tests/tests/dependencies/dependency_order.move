@@ -8,14 +8,14 @@ module 0x42::C {
 
 //# publish
 // names used to try to force an ordering of depedencies
-module 0x42::B {
+module 0x43::B {
     public fun foo(): 0x42::C::T {
         0x42::C::foo()
     }
 }
 
 //# publish
-module 0x42::A {
+module 0x44::A {
     struct T {
         t_b: 0x42::C::T,
         t_c: 0x42::C::T,
@@ -23,7 +23,7 @@ module 0x42::A {
     public fun foo(): T {
         T {
             t_c: 0x42::C::foo(),
-            t_b: 0x42::B::foo()
+            t_b: 0x43::B::foo()
         }
     }
 }

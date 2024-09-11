@@ -1,5 +1,5 @@
 //# publish
-module 0x1.A {
+module 0x5.A {
     public div_by_two(v: u64): bool {
     label b0:
         jump_if (move(v) % 2 == 0) b2;
@@ -27,7 +27,7 @@ module 0x1.A {
 
 //# run
 module 0x42.m {
-import 0x1.A;
+import 0x5.A;
 
 entry foo() {
     let x: u64;

@@ -1,4 +1,4 @@
-module 0x2::M {
+module 0x7::M {
     use std::debug;
 
     public fun sum(n: u64): u64 {
