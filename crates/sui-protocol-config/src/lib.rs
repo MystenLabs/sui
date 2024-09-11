@@ -2946,6 +2946,10 @@ impl ProtocolConfig {
     pub fn set_consensus_round_prober_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_round_prober = val;
     }
+
+    pub fn set_gc_depth_for_testing(&mut self, val: u32) {
+        self.consensus_gc_depth = Some(val);
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

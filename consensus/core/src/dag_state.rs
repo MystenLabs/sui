@@ -728,6 +728,7 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
+    /// The latest round that has been garbage collected.
     pub(crate) fn gc_round(&self) -> Round {
         self.last_commit_round()
             .saturating_sub(self.context.protocol_config.gc_depth())
