@@ -32,7 +32,7 @@ interface IRuntimeStackFrame {
  * Describes the runtime stack during trace viewing session
  * (oldest frame is at the bottom of the stack at index 0).
  */
-interface IRuntimeStack {
+export interface IRuntimeStack {
     frames: IRuntimeStackFrame[];
 }
 
