@@ -228,7 +228,7 @@ impl ServerBuilder {
         self
     }
 
-    #[cfg(all(test, feature = "pg_integration"))]
+    #[cfg(test)]
     fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
@@ -678,7 +678,7 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-#[cfg(all(test, feature = "pg_integration"))]
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::test_infra::cluster::{prep_executor_cluster, start_cluster};
