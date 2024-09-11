@@ -57,15 +57,15 @@ export const mainnetCoins: CoinMap = {
 		type: `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`,
 		scalar: 1000000000,
 	},
-	WUSDC: {
-		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,
-		type: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN`,
-		scalar: 1000000,
-	},
 	USDC: {
 		address: ``,
 		type: ``,
 		scalar: 0,
+	},
+	WUSDC: {
+		address: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf`,
+		type: `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN`,
+		scalar: 1000000,
 	},
 	WETH: {
 		address: `0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5`,
