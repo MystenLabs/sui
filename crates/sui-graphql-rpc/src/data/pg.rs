@@ -240,7 +240,7 @@ mod query_cost {
     }
 }
 
-#[cfg(all(test, feature = "pg_integration"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use diesel::QueryDsl;
