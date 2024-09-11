@@ -124,8 +124,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -276,8 +278,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -428,8 +432,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -580,8 +586,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -732,8 +740,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -884,8 +894,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -1036,8 +1048,10 @@ validator_configs:
         - Kakao
         - KarrierOne
         - Microsoft
+        - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
