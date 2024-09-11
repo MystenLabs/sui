@@ -4177,9 +4177,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.11.3"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b35839ba51819680ba087cd351788c9a3c476841207e0b8cee0b04722343b9"
+checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -6705,9 +6705,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 dependencies = [
  "serde",
 ]
@@ -13886,19 +13886,23 @@ dependencies = [
  "bcs",
  "bytes",
  "clap",
+ "env_logger",
+ "log",
  "move-binary-format",
  "move-core-types",
+ "object_store",
+ "reqwest 0.12.5",
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-config",
- "sui-json",
  "sui-json-rpc-types",
  "sui-package-resolver",
  "sui-rest-api",
  "sui-sdk 1.34.0",
  "sui-types",
  "tokio",
+ "url",
 ]
 
 [[package]]

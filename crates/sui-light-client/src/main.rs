@@ -4,9 +4,9 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
 
-use sui_rest_api::{CheckpointData, Client};
+use sui_rest_api::CheckpointData;
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,
@@ -15,19 +15,25 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
-    object::{Data, Object},
+    object::{bounded_visitor::BoundedVisitor, Data, Object},
 };
 
 use sui_config::genesis::Genesis;
 
-use sui_json::SuiJsonValue;
 use sui_package_resolver::Result as ResolverResult;
 use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
-use std::{fs, io::Write, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fs, io::Write, path::PathBuf, str::FromStr, sync::Mutex};
 use std::{io::Read, sync::Arc};
+
+use log::info;
+use object_store::parse_url;
+use object_store::path::Path;
+use serde_json::json;
+use serde_json::Value;
+use url::Url;
 
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
@@ -43,11 +49,15 @@ struct Args {
 
 struct RemotePackageStore {
     config: Config,
+    cache: Mutex<HashMap<AccountAddress, Arc<Package>>>,
 }
 
 impl RemotePackageStore {
     pub fn new(config: Config) -> Self {
-        Self { config }
+        Self {
+            config,
+            cache: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -56,9 +66,21 @@ impl PackageStore for RemotePackageStore {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
+        // Check if we have it in the cache
+        if let Some(package) = self.cache.lock().unwrap().get(&id) {
+            info!("Fetch Package: {} cache hit", id);
+            return Ok(package.clone());
+        }
+
+        info!("Fetch Package: {}", id);
+
         let object = get_verified_object(&self.config, id.into()).await.unwrap();
-        let package = Package::read_from_object(&object).unwrap();
-        Ok(Arc::new(package))
+        let package = Arc::new(Package::read_from_object(&object).unwrap());
+
+        // Add to the cache
+        self.cache.lock().unwrap().insert(id, package.clone());
+
+        Ok(package)
     }
 }
 
@@ -93,12 +115,41 @@ struct Config {
 
     //  Genesis file name
     genesis_filename: PathBuf,
+
+    /// Object store url
+    object_store_url: String,
+
+    /// GraphQL endpoint
+    graphql_url: String,
 }
 
-impl Config {
-    pub fn rest_url(&self) -> &str {
-        &self.full_node_url
-    }
+async fn query_last_checkpoint_of_epoch(config: &Config, epoch_id: u64) -> anyhow::Result<u64> {
+    // GraphQL query to get the last checkpoint of an epoch
+    let query = json!({
+        "query": "query ($epochID: Int) { epoch(id: $epochID) { checkpoints(last: 1) { nodes { sequenceNumber } } } }",
+        "variables": { "epochID": epoch_id }
+    });
+
+    // Submit the query by POSTing to the GraphQL endpoint
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&config.graphql_url)
+        .header("Content-Type", "application/json")
+        .body(query.to_string())
+        .send()
+        .await
+        .expect("Cannot connect to graphql")
+        .text()
+        .await
+        .expect("Cannot parse response");
+
+    // Parse the JSON response to get the last checkpoint of the epoch
+    let v: Value = serde_json::from_str(resp.as_str()).expect("Incorrect JSON response");
+    let checkpoint_number = v["data"]["epoch"]["checkpoints"]["nodes"][0]["sequenceNumber"]
+        .as_u64()
+        .unwrap();
+
+    Ok(checkpoint_number)
 }
 
 // The list of checkpoints at the end of each epoch
@@ -182,11 +233,19 @@ fn write_checkpoint_list(
 
 async fn download_checkpoint_summary(
     config: &Config,
-    seq: u64,
+    checkpoint_number: u64,
 ) -> anyhow::Result<CertifiedCheckpointSummary> {
     // Download the checkpoint from the server
-    let client = Client::new(config.rest_url());
-    client.get_checkpoint_summary(seq).await.map_err(Into::into)
+
+    let url = Url::parse(&config.object_store_url)?;
+    let (dyn_store, _store_path) = parse_url(&url).unwrap();
+    let path = Path::from(format!("{}.chk", checkpoint_number));
+    let response = dyn_store.get(&path).await?;
+    let bytes = response.bytes().await?;
+    let (_, blob) = bcs::from_bytes::<(u8, CheckpointData)>(&bytes)?;
+
+    info!("Downloaded checkpoint summary: {}", checkpoint_number);
+    Ok(blob.checkpoint_summary)
 }
 
 /// Run binary search to for each end of epoch checkpoint that is missing
@@ -202,73 +261,58 @@ async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<()> {
     // Download the latest in list checkpoint
     let summary = download_checkpoint_summary(config, *latest_in_list).await?;
     let mut last_epoch = summary.epoch();
-    let mut last_checkpoint_seq = summary.sequence_number;
 
     // Download the very latest checkpoint
-    let client = Client::new(config.rest_url());
-    let latest = client.get_latest_checkpoint().await?;
+    let client = SuiClientBuilder::default()
+        .build(config.full_node_url.as_str())
+        .await
+        .expect("Cannot connect to full node");
 
-    // Binary search to find missing checkpoints
+    let latest_seq = client
+        .read_api()
+        .get_latest_checkpoint_sequence_number()
+        .await?;
+    let latest = download_checkpoint_summary(config, latest_seq).await?;
+
+    // Sequentially record all the missing end of epoch checkpoints numbers
     while last_epoch + 1 < latest.epoch() {
-        let mut start = last_checkpoint_seq;
-        let mut end = latest.sequence_number;
-
         let target_epoch = last_epoch + 1;
-        // Print target
-        println!("Target Epoch: {}", target_epoch);
-        let mut found_summary = None;
+        let target_last_checkpoint_number =
+            query_last_checkpoint_of_epoch(config, target_epoch).await?;
 
-        while start < end {
-            let mid = (start + end) / 2;
-            let summary = download_checkpoint_summary(config, mid).await?;
+        // Add to the list
+        checkpoints_list
+            .checkpoints
+            .push(target_last_checkpoint_number);
+        write_checkpoint_list(config, &checkpoints_list)?;
 
-            // print summary epoch and seq
-            println!(
-                "Epoch: {} Seq: {}: {}",
-                summary.epoch(),
-                summary.sequence_number,
-                summary.end_of_epoch_data.is_some()
-            );
+        // Update
+        last_epoch = target_epoch;
 
-            if summary.epoch() == target_epoch && summary.end_of_epoch_data.is_some() {
-                found_summary = Some(summary);
-                break;
-            }
-
-            if summary.epoch() <= target_epoch {
-                start = mid + 1;
-            } else {
-                end = mid;
-            }
-        }
-
-        if let Some(summary) = found_summary {
-            // Note: Do not write summary to file, since we must only persist
-            //       checkpoints that have been verified by the previous committee
-
-            // Add to the list
-            checkpoints_list.checkpoints.push(summary.sequence_number);
-            write_checkpoint_list(config, &checkpoints_list)?;
-
-            // Update
-            last_epoch = summary.epoch();
-            last_checkpoint_seq = summary.sequence_number;
-        }
+        println!(
+            "Last Epoch: {} Last Checkpoint: {}",
+            target_epoch, target_last_checkpoint_number
+        );
     }
 
     Ok(())
 }
 
 async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
-    sync_checkpoint_list_to_latest(config).await?;
+    sync_checkpoint_list_to_latest(config)
+        .await
+        .map_err(|e| anyhow!(format!("Cannot refresh list: {e}")))?;
 
     // Get the local checkpoint list
-    let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
+    let checkpoints_list: CheckpointsList = read_checkpoint_list(config)
+        .map_err(|e| anyhow!(format!("Cannot read checkpoint list: {e}")))?;
 
     // Load the genesis committee
     let mut genesis_path = config.checkpoint_summary_dir.clone();
     genesis_path.push(&config.genesis_filename);
-    let genesis_committee = Genesis::load(&genesis_path)?.committee()?;
+    let genesis_committee = Genesis::load(&genesis_path)?
+        .committee()
+        .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?;
 
     // Check the signatures of all checkpoints
     // And download any missing ones
@@ -281,10 +325,13 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
 
         // If file exists read the file otherwise download it from the server
         let summary = if checkpoint_path.exists() {
-            read_checkpoint(config, *ckp_id)?
+            read_checkpoint(config, *ckp_id)
+                .map_err(|e| anyhow!(format!("Cannot read checkpoint: {e}")))?
         } else {
             // Download the checkpoint from the server
-            let summary = download_checkpoint_summary(config, *ckp_id).await?;
+            let summary = download_checkpoint_summary(config, *ckp_id)
+                .await
+                .map_err(|e| anyhow!(format!("Cannot download summary: {e}")))?;
             summary.clone().try_into_verified(&prev_committee)?;
             // Write the checkpoint summary to a file
             write_checkpoint(config, &summary)?;
@@ -317,11 +364,21 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<CheckpointData> {
-    // Downloading the checkpoint from the server
-    let client: Client = Client::new(config.rest_url());
-    let full_checkpoint = client.get_full_checkpoint(seq).await?;
-
+async fn get_full_checkpoint(
+    config: &Config,
+    checkpoint_number: u64,
+) -> anyhow::Result<CheckpointData> {
+    let url = Url::parse(&config.object_store_url)
+        .map_err(|_| anyhow!("Cannot parse object store URL"))?;
+    let (dyn_store, _store_path) = parse_url(&url).unwrap();
+    let path = Path::from(format!("{}.chk", checkpoint_number));
+    info!("Request full checkpoint: {}", path);
+    let response = dyn_store
+        .get(&path)
+        .await
+        .map_err(|_| anyhow!("Cannot get full checkpoint from object store"))?;
+    let bytes = response.bytes().await?;
+    let (_, full_checkpoint) = bcs::from_bytes::<(u8, CheckpointData)>(&bytes)?;
     Ok(full_checkpoint)
 }
 
@@ -363,24 +420,26 @@ async fn get_verified_effects_and_events(
     config: &Config,
     tid: TransactionDigest,
 ) -> anyhow::Result<(TransactionEffects, Option<TransactionEvents>)> {
-    let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
-        SuiClientBuilder::default()
-            .build(config.full_node_url.as_str())
-            .await
-            .unwrap(),
-    );
+    let sui_mainnet: sui_sdk::SuiClient = SuiClientBuilder::default()
+        .build(config.full_node_url.as_str())
+        .await
+        .unwrap();
     let read_api = sui_mainnet.read_api();
 
+    info!("Getting effects and events for TID: {}", tid);
     // Lookup the transaction id and get the checkpoint sequence number
     let options = SuiTransactionBlockResponseOptions::new();
     let seq = read_api
         .get_transaction_with_options(tid, options)
-        .await?
+        .await
+        .map_err(|e| anyhow!(format!("Cannot get transaction: {e}")))?
         .checkpoint
         .ok_or(anyhow!("Transaction not found"))?;
 
     // Download the full checkpoint for this sequence number
-    let full_check_point = get_full_checkpoint(config, seq).await?;
+    let full_check_point = get_full_checkpoint(config, seq)
+        .await
+        .map_err(|e| anyhow!(format!("Cannot get full checkpoint: {e}")))?;
 
     // Load the list of stored checkpoints
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
@@ -420,31 +479,57 @@ async fn get_verified_effects_and_events(
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
         genesis_path.push(&config.genesis_filename);
-        Genesis::load(&genesis_path)?.committee()?
+        Genesis::load(&genesis_path)?
+            .committee()
+            .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?
     };
 
+    info!("Extracting effects and events for TID: {}", tid);
     extract_verified_effects_and_events(&full_check_point, &committee, tid)
+        .map_err(|e| anyhow!(format!("Cannot extract effects and events: {e}")))
 }
 
 async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Object> {
-    let client: Client = Client::new(config.rest_url());
-    let object = client.get_object(id).await?;
+    let sui_client: Arc<sui_sdk::SuiClient> = Arc::new(
+        SuiClientBuilder::default()
+            .build(config.full_node_url.as_str())
+            .await
+            .unwrap(),
+    );
+
+    info!("Getting object: {}", id);
+
+    let read_api = sui_client.read_api();
+    let object_json = read_api
+        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
+        .await
+        .expect("Cannot get object");
+    let object = object_json
+        .into_object()
+        .expect("Cannot make into object data");
+    let object: Object = object.try_into().expect("Cannot reconstruct object");
 
     // Need to authenticate this object
-    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction).await?;
+    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction)
+        .await
+        .expect("Cannot get effects and events");
 
     // check that this object ID, version and hash is in the effects
+    let target_object_ref = object.compute_object_reference();
     effects
         .all_changed_objects()
         .iter()
-        .find(|object_ref| object_ref.0 == object.compute_object_reference())
-        .ok_or(anyhow!("Object not found"))?;
+        .find(|object_ref| object_ref.0 == target_object_ref)
+        .ok_or(anyhow!("Object not found"))
+        .expect("Object not found");
 
     Ok(object)
 }
 
 #[tokio::main]
 pub async fn main() {
+    env_logger::init();
+
     // Command line arguments and config loading
     let args = Args::parse();
 
@@ -479,23 +564,27 @@ pub async fn main() {
                 exec_digests.transaction, exec_digests.effects
             );
 
-            for event in events.as_ref().unwrap().data.iter() {
-                let type_layout = resolver
-                    .type_layout(event.type_.clone().into())
-                    .await
-                    .unwrap();
+            if events.is_some() {
+                for event in events.as_ref().unwrap().data.iter() {
+                    let type_layout = resolver
+                        .type_layout(event.type_.clone().into())
+                        .await
+                        .unwrap();
 
-                let json_val =
-                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
+                    let result = BoundedVisitor::deserialize_value(&event.contents, &type_layout)
+                        .expect("Cannot deserialize");
 
-                println!(
-                    "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
-                    event.package_id,
-                    event.transaction_module,
-                    event.sender,
-                    event.type_,
-                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
-                );
+                    println!(
+                        "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
+                        event.package_id,
+                        event.transaction_module,
+                        event.sender,
+                        event.type_,
+                        serde_json::to_string_pretty(&result).unwrap()
+                    );
+                }
+            } else {
+                println!("No events found");
             }
         }
         Some(SCommands::Object { oid }) => {
@@ -510,9 +599,9 @@ pub async fn main() {
                     .await
                     .unwrap();
 
-                let json_val =
-                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), move_object.contents())
-                        .unwrap();
+                let result =
+                    BoundedVisitor::deserialize_value(move_object.contents(), &type_layout)
+                        .expect("Cannot deserialize");
 
                 let (oid, version, hash) = object.compute_object_reference();
                 println!(
@@ -522,7 +611,7 @@ pub async fn main() {
                     hash,
                     object.owner,
                     object_type,
-                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                    serde_json::to_string_pretty(&result).unwrap()
                 );
             }
         }
