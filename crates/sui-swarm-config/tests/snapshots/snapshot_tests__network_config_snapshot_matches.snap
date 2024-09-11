@@ -127,6 +127,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -280,6 +281,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -433,6 +435,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -586,6 +589,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -739,6 +743,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -892,6 +897,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
@@ -1045,6 +1051,7 @@ validator_configs:
         - Playtron
         - Slack
         - TestIssuer
+        - Threedos
         - Twitch
     authority-overload-config:
       max-txn-age-in-queue:
