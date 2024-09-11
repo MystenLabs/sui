@@ -1,4 +1,4 @@
-module 0x1::B {
+module 0x6::B {
     #[test_only]
     public struct TestingStruct has drop { x: u64 }
 
@@ -13,9 +13,9 @@ module 0x1::B {
     }
 }
 
-module 0x1::M {
+module 0x7::M {
     #[test_only]
-    use 0x1::B;
+    use 0x6::B;
 
     #[test]
     fun make_sure_number_matches() {
